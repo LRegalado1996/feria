@@ -15,6 +15,14 @@ reviews:
   # thread is resolved.
   request_changes_workflow: true
 
+  # Dependency updates are not reviewed: CI is what vouches for a version bump,
+  # and each review is paid for. Both labels are listed because the account
+  # shows up with and without the `[bot]` suffix depending on the API.
+  auto_review:
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "dependabot"
+
   # Generated output nobody reviews line by line.
   path_filters:
     - "!**/drizzle/meta/**"
