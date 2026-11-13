@@ -10,8 +10,7 @@ import { APP_LOCALE } from "@/lib/utils/format";
 
 export const metadata: Metadata = {
   title: "Feria",
-  description:
-    "Small stores, one fair: browse the catalog and order from your phone",
+  description: "The base of Feria, an online store for small businesses",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

@@ -30,17 +30,22 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
 
           # A promotion carries changes that were already shown in their own
           # PRs, and so does the merge-back of a hotfix shown in its PR into main.
-          if [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; then
+          # Only this repository's own branches: a fork's `qa` or `main` is
+          # somebody's work, not a promotion.
+          if [ "$HEAD_REPO" != "$REPO" ]; then
+            echo "Head is a fork: no promotion exemption."
+          elif [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; then
             echo "Promotion from qa to main: nothing to check."
             exit 0
-          fi
-          if [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; then
+          elif [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; then
             echo "Merge-back from main to qa: nothing to check."
             exit 0
           fi
@@ -48,6 +53,14 @@ jobs:
           # The paginated file list, not `gh pr diff`: the diff endpoint
           # refuses a pull request with more than 300 files.
           files="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')"
+
+          # The endpoint stops at 3000 files. A list shorter than the pull
+          # request could hide a visual file, so it fails instead of passing.
+          listed="$(grep -c . <<< "$files" || true)"
+          if [ "$listed" -ne "$CHANGED_FILES" ]; then
+            echo "::error::Listed $listed of $CHANGED_FILES changed files, so the check cannot tell whether the interface changed. Split the pull request."
+            exit 1
+          fi
 
           # Paths where a change can alter what a person sees.
           visual="$(printf '%s\n' "$files" \
@@ -63,13 +76,16 @@ jobs:
           printf '%s\n' "$visual"
 
           has_media='!\[[^]]*\]\([^)]+\)|<img[^>]+src=|<video|https://github\.com/user-attachments/assets/'
-          if printf '%s' "$PR_BODY" | grep -qiE "$has_media"; then
+          # Here-strings, not a pipe: `grep -q` exits at the first match, and a
+          # writer still sending a long description would die of SIGPIPE, which
+          # `pipefail` reports as "no match".
+          if grep -qiE "$has_media" <<< "$PR_BODY"; then
             echo "The description includes an image or a recording."
             exit 0
           fi
 
           # The author states there is nothing to see (a refactor, a renamed prop).
-          if printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*-[[:space:]]*\[x\][[:space:]]*No visible change'; then
+          if grep -qiE '^[[:space:]]*-[[:space:]]*\[x\][[:space:]]*No visible change' <<< "$PR_BODY"; then
             echo "The author declared no visible change."
             exit 0
           fi

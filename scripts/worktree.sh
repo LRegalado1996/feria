@@ -191,7 +191,7 @@ generate_env() {
   set_env_var "$env_file" "E2E_BASE_URL" "\"${url}\""
 }
 
-env_targets_this_worktree() { grep -q ":${PG_PORT}/" "$PROJECT_ROOT/.env" 2>/dev/null; }
+env_targets_this_worktree() { grep -qF "\"${DB_URL}\"" "$PROJECT_ROOT/.env" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------
 # Docker
@@ -679,9 +679,9 @@ cmd_doctor() {
   if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
     doctor_check env.file warn ".env missing: pnpm wt:provision (or any db command) creates it"
   elif env_targets_this_worktree; then
-    doctor_check env.file pass ".env targets this worktree's Postgres port $PG_PORT"
+    doctor_check env.file pass ".env targets this worktree's database on port $PG_PORT"
   else
-    doctor_check env.file fail ".env DATABASE_URL does not use port $PG_PORT: pnpm wt:env"
+    doctor_check env.file fail ".env DATABASE_URL is not this worktree's database on port $PG_PORT: pnpm wt:env"
   fi
 
   if [[ -x "$PROJECT_ROOT/node_modules/.bin/drizzle-kit" && -x "$PROJECT_ROOT/node_modules/.bin/next" ]]; then

@@ -30,11 +30,19 @@ git status --porcelain
 
 ### 2. Stage files (if needed)
 
-One logical change per commit. If nothing is staged, or the staged files mix
-two changes, stage by path:
+One logical change per commit. If nothing is staged, stage by path:
 
 ```bash
 git add path/to/file1 path/to/file2
+```
+
+If the index already mixes two changes, `git add` does not help: it only adds.
+Unstage what belongs to the other change first (the edits stay in the working
+tree), then read the staged diff again:
+
+```bash
+git restore --staged path/to/unrelated-file
+git diff --staged
 ```
 
 **Never commit secrets** (`.env`, credentials, private keys).

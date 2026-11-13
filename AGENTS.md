@@ -202,7 +202,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 ## Agent tooling
 
 - Skills live in `.agents/skills/` (`.claude/skills/` symlinks into it): `conventional-commits`, `git-commit`, `create-pr`, `pr-description`, `review-loop`, `slack-reporting`, `gh-stack`, `git-rebase`, `orpc`, `agent-browser` (check the running app by hand), `worktree-env`, `design-feedback`, `analyze-logs`.
-- The vendored `gh-stack` and `git-rebase` skills use `main` as their example trunk. Here the trunk is `qa`; `main` is production and never a base for work.
+- The vendored `gh-stack` and `git-rebase` skills use `main` as their example trunk. Here the trunk is `qa`; `main` is production and never a base for regular work. Hotfixes are the exception and branch off `main` (`docs/agents/ci.md` § Releases).
 - These rules outrank any skill or plugin. Behaviour that must hold in every session is a rule here or a hook, never a skill.
 
 ## Changing these rules

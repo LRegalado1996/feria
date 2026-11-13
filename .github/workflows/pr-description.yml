@@ -32,6 +32,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
@@ -40,7 +41,10 @@ jobs:
 
           # The pattern in .agents/skills/conventional-commits/SKILL.md.
           title_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [a-z0-9].*[^.]$'
-          if ! printf '%s' "$PR_TITLE" | grep -qE "$title_pattern"; then
+          # Here-strings, not pipes: `grep -q` exits at the first match, and a
+          # writer still sending a long description would die of SIGPIPE, which
+          # `pipefail` reports as "no match".
+          if ! grep -qE "$title_pattern" <<< "$PR_TITLE"; then
             echo "::error::The title is not a Conventional Commits message: '$PR_TITLE'. See the conventional-commits skill."
             failed=1
           fi
@@ -49,9 +53,10 @@ jobs:
             failed=1
           fi
 
-          # Generated bodies: promotions, merge-backs and bots.
-          if { [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
-            || { [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; } \
+          # Generated bodies: promotions and merge-backs between this
+          # repository's own branches (a fork's `qa` is somebody's work), and bots.
+          if { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
+            || { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; } \
             || [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
             echo "Generated description: only the title is checked."
             exit "$failed"
@@ -67,13 +72,13 @@ jobs:
           body="$(printf '%s' "$PR_BODY" | tr -d '\r')"
 
           while IFS= read -r heading; do
-            if ! printf '%s\n' "$body" | grep -qxF "$heading"; then
+            if ! grep -qxF "$heading" <<< "$body"; then
               echo "::error::The description is missing the section '$heading'. Keep every heading of the PR template; write N/A and why when one does not apply."
               failed=1
             fi
-          done < <(printf '%s\n' "$template" | grep -E '^## ')
+          done < <(grep -E '^## ' <<< "$template")
 
-          if ! printf '%s\n' "$body" | grep -qE '^Model: .*[^[:space:]·].* · Harness: .*[^[:space:]]'; then
+          if ! grep -qE '^Model: .*[^[:space:]·].* · Harness: .*[^[:space:]]' <<< "$body"; then
             echo "::error::Fill the last line of the template: 'Model: <model> · Harness: <harness>'."
             failed=1
           fi
