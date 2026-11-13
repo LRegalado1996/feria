@@ -13,7 +13,9 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 
 - Add the GitHub secrets and variables the workflows read (Vercel, Neon, Sentry). `docs/agents/ci.md` lists them.
 - Create the Sentry project and set its DSN and auth token per environment.
-- Decide which optional workflows stay for a one-person project (CodeRabbit, Dependabot auto-merge, auto-promotion PR) and remove or disable the rest, updating `docs/agents/ci.md` and its policy tests.
+- CodeRabbit reviews every PR. Lucas installs the GitHub app on this repo (14-day free trial from the install date; decide before it ends whether to keep it, and write the date here). Adapt the template's `.coderabbit.yaml` to this project: point it at `AGENTS.md`, `design.md` and `docs/agents/` so its suggestions follow our rules, and have it review PRs into `qa` and skip the promotion PR into `main`.
+- The local agent answers CodeRabbit following the `review-loop` skill. Prove the loop on the first real PR.
+- Decide which other optional workflows stay for a one-person project (Dependabot auto-merge, auto-promotion PR) and remove or disable the rest, updating `docs/agents/ci.md` and its policy tests.
 - Open a throwaway PR to prove the pipeline end to end, then close it.
 
 ## Acceptance criteria
