@@ -5,7 +5,7 @@ description: Work a pull request through CodeRabbit's review until it is ready t
 
 # Review loop with CodeRabbit
 
-CodeRabbit reviews every pull request in this repo. The local agent answers it.
+CodeRabbit reviews every pull request into `qa`. The local agent answers it.
 Neither side is right by default: the goal is a PR that is correct, not a PR
 with no comments. Agreeing to end the argument is a failure; so is refusing a
 valid point.
@@ -48,6 +48,13 @@ valid point.
 
 6. **Stop when** every thread is resolved with a fix or an accepted reason, all
    required checks are green, and a visible change has its visual proof.
+
+## Promotion PRs
+
+The PR from `qa` into `main` is not part of this loop. CodeRabbit is configured
+to skip it, because every change in it was reviewed in its own PR. Do not wait
+for a review there: check that the required checks are green, that `qa` is
+stable, and ask Lucas for the go-ahead.
 
 ## Limits
 
