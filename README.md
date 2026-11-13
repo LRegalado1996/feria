@@ -173,11 +173,33 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
    - Default workflow permissions are read.
    - The labels `deploy:preview` and `size:XS` through `size:XXL` exist.
    - Optional: a GitHub App with the `BOT_APP_ID` variable and the `BOT_APP_PRIVATE_KEY` secret, so promotion PRs and bot merges start their checks by themselves. Without it, a promotion PR needs a close and reopen to start them.
-2. **Vercel project:**
-   - Import the repository; `main` is the production branch.
-   - Turn on Skew Protection (Settings → Advanced) and Analytics and Speed Insights.
-   - Keep the function region next to the database (`regions` in [`vercel.json`](vercel.json), `iad1` by default).
-3. **Environment variables:** `DATABASE_URL` and `BETTER_AUTH_SECRET` in each environment. Previews must never share a real database: see [`docs/agents/database.md`](docs/agents/database.md) § Preview databases.
+2. **Vercel project** `feria`, connected to this repository ([FER-002](docs/tickets/FER-002-vercel-neon-blob.md)). `main` is the production branch. The plan has no custom environments, so QA is the Preview environment's `qa` branch: its variables are scoped to that branch.
+
+   | Environment | Branch | URL                                                       | Database (Neon) | Images (Blob)     |
+   | ----------- | ------ | --------------------------------------------------------- | --------------- | ----------------- |
+   | Production  | `main` | <https://feria-blond.vercel.app>                          | `feria-db`      | `feria-images`    |
+   | QA          | `qa`   | <https://feria-git-qa-lucas-projects-628ba363.vercel.app> | `feria-db-qa`   | `feria-images-qa` |
+   - The two databases are separate Neon projects, installed from the Vercel Marketplace: nothing written in QA can reach production. The production one is connected to Production only, the QA one to Preview only.
+   - QA and every preview sit behind Vercel Authentication: open them signed in to Vercel, or with `vercel curl <url>/api/health`. Production is public.
+   - The build migrates before it compiles (`buildCommand` in [`vercel.json`](vercel.json)). Check a deployment with `/api/health`, which answers `{"db":"ok"}`.
+   - Node follows [`.nvmrc`](.nvmrc) (24.x). Keep the function region next to the databases (`regions` in `vercel.json`, `iad1`).
+   - Still to turn on: Skew Protection (Settings → Advanced), Analytics and Speed Insights.
+
+3. **Environment variables**, set in Vercel and listed with a comment each in [`.env.example`](.env.example):
+
+   | Variable                                    | Production                | QA (`qa` branch)          | Previews           | Development (`vercel env pull`) |
+   | ------------------------------------------- | ------------------------- | ------------------------- | ------------------ | ------------------------------- |
+   | `PRODUCTION_DATABASE_URL`/`QA_DATABASE_URL` | `feria-db`, pooled        | `feria-db-qa`, pooled     | not set            | not set                         |
+   | `MIGRATION_DATABASE_URL`                    | `feria-db`, direct        | `feria-db-qa`, direct     | not set            | not set                         |
+   | `DATABASE_URL`                              | written by Neon, not read | written by Neon, not read | written by Neon    | the local Postgres              |
+   | `NEON_PREVIEW_BRANCHES`                     | `1`                       | `1`                       | `1`                | not set                         |
+   | `BETTER_AUTH_URL`                           | the production URL        | the QA URL                | derived per deploy | `http://localhost:3000`         |
+   | `BETTER_AUTH_SECRET`                        | its own                   | shared with previews      | shared with QA     | its own                         |
+   | `BLOB_READ_WRITE_TOKEN`                     | `feria-images`            | `feria-images-qa`         | `feria-images-qa`  | `feria-images-qa`               |
+   - Why production and QA read a dedicated database variable: [`docs/agents/database.md`](docs/agents/database.md) § Preview databases. Previews must never share a real database: until the Neon integration branches per preview (FER-003), a preview would migrate the QA database, so none is deployed.
+   - Vercel AI Gateway needs no variable on a deployment: it authenticates with the OIDC token Vercel injects. The project has a budget of USD 5 per month (`vercel ai-gateway budgets list`); at the limit the calls stop until the next month.
+   - **Someone new:** `vercel link --yes --project feria`, `vercel env pull .env`, then `pnpm wt:provision`, which points `DATABASE_URL` and `BETTER_AUTH_URL` at this worktree. `.env` then holds the QA image store's token and a short-lived `VERCEL_OIDC_TOKEN` for the gateway; pull again when it expires.
+
 4. **Optional services**, each inert until configured:
    - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
    - `HEALTH_SECRET` for the health probe.
