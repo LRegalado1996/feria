@@ -35,3 +35,7 @@ When enabled, the shopper receives a code by WhatsApp after placing the order an
 ## Notes
 
 Meta's approval time is outside our control, which is why this is P2 and designed as an addition. If approval lands before December 5, part 2 is about two days of work.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

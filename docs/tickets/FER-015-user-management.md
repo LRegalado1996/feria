@@ -26,3 +26,7 @@ Superadmins manage every login; store members manage the logins of their own sto
 ## Notes
 
 Until this ships, users are created with the seed script from FER-009. That is enough for the fair if time runs short.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

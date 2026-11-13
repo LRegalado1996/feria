@@ -31,3 +31,7 @@ The backend can take an order from an anonymous shopper safely and track it thro
 ## Notes
 
 `phoneVerifiedAt` exists from the start and stays null until FER-028.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

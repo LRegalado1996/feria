@@ -1,0 +1,12 @@
+# A rejection handler that discards the error
+#
+# `.catch(() => undefined)` is the other way to swallow a failure, and it looks deliberate: the error could be bound and was dropped, so Sentry never learns the promise rejected. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: AGENTS.md § Error reporting: every client catch reports or is provably a heartbeat
+# Fix:       Bind the error and report it: `.catch((error: unknown) => { reportError(error, { action: "Domain.snake_action" }); })`. An offline-tolerant heartbeat or poll keeps the discard with `// heartbeat: offline-tolerant` on the same line.
+#
+# 0 file(s), 0 occurrence(s) remaining.

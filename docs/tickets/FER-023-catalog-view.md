@@ -26,3 +26,7 @@ A shopper finds an article by browsing a category or typing a few letters.
 - Search is debounced, does not lose focus while results update, and the back button restores the previous filter and scroll position.
 - Opening a shared link such as `?category=collares&color=dorado` shows exactly that selection on first load, in either language.
 - E2E: filter by category and color, share the link, open it fresh, search, paginate, add to cart from the grid.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

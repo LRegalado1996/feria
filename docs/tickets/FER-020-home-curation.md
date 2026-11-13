@@ -26,3 +26,7 @@ The store decides what its home shows: the promo banners, the "best sellers" lis
 ## Notes
 
 The fair banners ("find us at the fair, December 5 to January 5") are content created here in FER-031, not code.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

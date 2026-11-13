@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "oxc.oxc-vscode",
+    "eamodio.gitlens",
+    "usernamehw.errorlens",
+    "yoavbls.pretty-ts-errors",
+    "mikestead.dotenv",
+    "ms-azuretools.vscode-docker",
+    "github.vscode-pull-request-github",
+    "redhat.vscode-yaml",
+    "mskelton.npm-outdated",
+    "pkief.material-icon-theme",
+    "editorconfig.editorconfig"
+  ]
+}

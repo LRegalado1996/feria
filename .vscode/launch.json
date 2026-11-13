@@ -1,0 +1,110 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev Server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm dev"
+    },
+    {
+      "name": "Build",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm build"
+    },
+    {
+      "name": "Start",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm start"
+    },
+    {
+      "name": "Test (Watch)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm test"
+    },
+    {
+      "name": "Test (Single Run)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm test:run"
+    },
+    {
+      "name": "Test (Coverage)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm test:coverage"
+    },
+    {
+      "name": "E2E Tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm e2e"
+    },
+    {
+      "name": "E2E Tests (UI)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm e2e:ui"
+    },
+    {
+      "name": "Typecheck",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm typecheck"
+    },
+    {
+      "name": "Lint & Format",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm check"
+    },
+    {
+      "name": "DB Push",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm db:push"
+    },
+    {
+      "name": "DB Seed",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm db:seed"
+    },
+    {
+      "name": "DB Studio",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm db:studio"
+    },
+    {
+      "name": "Debug: server-side",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm dev --inspect"
+    },
+    {
+      "name": "Debug: client-side",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000"
+    },
+    {
+      "name": "Debug: full stack",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/next/dist/bin/next",
+      "runtimeArgs": ["--inspect"],
+      "skipFiles": ["<node_internals>/**"],
+      "serverReadyAction": {
+        "action": "debugWithChrome",
+        "killOnServerStop": true,
+        "pattern": "- Local:.+(https?://.+)",
+        "uriFormat": "%s",
+        "webRoot": "${workspaceFolder}"
+      }
+    }
+  ]
+}

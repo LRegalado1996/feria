@@ -27,3 +27,7 @@ The storefront has its own visual system in the Volt language, documented and bu
 ## Notes
 
 Take the language of landonorris.com, never its material: no logos, photos, copy, fonts files or code from that site. Fonts load through `next/font`.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

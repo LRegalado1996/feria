@@ -29,3 +29,7 @@ Generating a post image from an article inside the admin. Worth a ticket after l
 ## Notes
 
 The QR must point at the final custom domain, so print after FER-032, or encode a URL that redirects.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -27,3 +27,7 @@ The production store is full and looks alive on opening day.
 ## Notes
 
 Photo tips for the stall: daylight, plain background, one photo of the article in use. Good photos do more for the AI's output than any prompt change.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

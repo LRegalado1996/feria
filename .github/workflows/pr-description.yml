@@ -1,0 +1,89 @@
+name: PR description
+
+# Every pull request reads the same way: a Conventional Commits title and the
+# sections of .github/pull_request_template.md. How to fill them is in the
+# `pr-description` skill. Runs again when the description is edited, so fixing
+# it turns the check green without a new commit.
+
+on:
+  pull_request:
+    branches: [qa, main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-description-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-description:
+    name: pr-description
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require the title format and the template's sections
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          failed=0
+
+          # The pattern in .agents/skills/conventional-commits/SKILL.md.
+          title_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [a-z0-9].*[^.]$'
+          # Here-strings, not pipes: `grep -q` exits at the first match, and a
+          # writer still sending a long description would die of SIGPIPE, which
+          # `pipefail` reports as "no match".
+          if ! grep -qE "$title_pattern" <<< "$PR_TITLE"; then
+            echo "::error::The title is not a Conventional Commits message: '$PR_TITLE'. See the conventional-commits skill."
+            failed=1
+          fi
+          if [ "${#PR_TITLE}" -gt 72 ]; then
+            echo "::error::The title is ${#PR_TITLE} characters; the limit is 72."
+            failed=1
+          fi
+
+          # Generated bodies: promotions and merge-backs between this
+          # repository's own branches (a fork's `qa` is somebody's work), and bots.
+          if { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
+            || { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; } \
+            || [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "Generated description: only the title is checked."
+            exit "$failed"
+          fi
+
+          # The template at the PR's head is the form in force for it. It is
+          # read as data through the API: nothing from the PR is checked out
+          # or run.
+          template="$(gh api "repos/$REPO/contents/.github/pull_request_template.md?ref=$HEAD_SHA" \
+            -H 'Accept: application/vnd.github.raw')"
+
+          # CRLF arrives from the web editor.
+          body="$(printf '%s' "$PR_BODY" | tr -d '\r')"
+
+          while IFS= read -r heading; do
+            if ! grep -qxF "$heading" <<< "$body"; then
+              echo "::error::The description is missing the section '$heading'. Keep every heading of the PR template; write N/A and why when one does not apply."
+              failed=1
+            fi
+          done < <(grep -E '^## ' <<< "$template")
+
+          if ! grep -qE '^Model: .*[^[:space:]·].* · Harness: .*[^[:space:]]' <<< "$body"; then
+            echo "::error::Fill the last line of the template: 'Model: <model> · Harness: <harness>'."
+            failed=1
+          fi
+
+          if [ "$failed" -eq 0 ]; then
+            echo "Title and sections are in place."
+          fi
+          exit "$failed"

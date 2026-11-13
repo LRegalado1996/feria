@@ -1,0 +1,29 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // `pnpm check` runs `knip --include files,dependencies`; the export audit
+  // (`pnpm knip:exports`) is advisory. See docs/agents/ci.md § Checks.
+  "entry": [
+    "src/app/**/{page,layout,loading,error,not-found,template,default,route}.{ts,tsx}",
+    // Read by next.config.ts; a `.js` file, so it needs its own entry.
+    "src/env.js",
+    "src/server/db/run-seed.ts",
+    "src/e2e/playwright.config.ts",
+    "src/e2e/**/*.setup.ts",
+    "src/e2e/**/*.e2e.ts",
+    // Run by `node`/`node --test` from package.json and the workflows.
+    ".github/scripts/*.mjs",
+  ],
+  "project": ["src/**/*.{ts,tsx,js}", ".github/scripts/*.mjs"],
+  "ignore": [
+    // Barrels are mandated at every component and hook level while callers
+    // import the component's own directory, so most are never imported whole.
+    // knip still resolves imports THROUGH them: a dead component that only a
+    // barrel re-exports is still reported.
+    "src/**/index.ts",
+  ],
+  "ignoreDependencies": [
+    // Only a CSS `@import` names these; knip does not read CSS.
+    "tailwindcss",
+    "tw-animate-css",
+  ],
+}

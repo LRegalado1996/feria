@@ -23,3 +23,7 @@ Every public page of a store shares one header, footer and feel.
 - Social links appear only when the store has them set.
 - Lighthouse on mobile for an empty store: performance and accessibility at 95 or above.
 - E2E: navigation, mobile menu, locale toggle keeping the store.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

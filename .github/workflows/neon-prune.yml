@@ -1,0 +1,92 @@
+name: Neon Preview Prune
+
+# Deletes the `preview/*` Neon branches whose PR is no longer open: what
+# neon-cleanup.yml missed, such as a close whose run had no secrets (Dependabot)
+# or a failed call. Daily; a manual run is a dry run unless `dry_run` is
+# unticked. Without NEON_API_KEY and NEON_PROJECT_ID it does nothing.
+on:
+    schedule:
+        - cron: "17 6 * * *"
+    workflow_dispatch:
+        inputs:
+            dry_run:
+                description: List what would be deleted, delete nothing
+                type: boolean
+                default: true
+
+# Reads the open PRs; the deletions go to Neon.
+permissions:
+    pull-requests: read
+
+jobs:
+    prune:
+        name: Prune preview database branches
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        concurrency:
+            group: neon-prune
+        env:
+            NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+            NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+            GH_TOKEN: ${{ github.token }}
+            # The schedule deletes; a manual run defaults to a dry run.
+            DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        steps:
+            # Tested by .github/scripts/ci-neon-policy.test.mjs.
+            - name: Delete preview branches without an open PR
+              run: |
+                  set -euo pipefail
+                  if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+                    echo "::notice::NEON_API_KEY or NEON_PROJECT_ID is not set: no Neon preview branches to prune."
+                    exit 0
+                  fi
+                  api="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+                  auth="Authorization: Bearer $NEON_API_KEY"
+
+                  # A list cut at --limit would make a live preview look stale:
+                  # stop instead of guessing.
+                  limit=1000
+                  open="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit "$limit" --json headRefName --jq '.[].headRefName')"
+                  if (($(grep -c . <<< "$open" || true) >= limit)); then
+                    echo "::error::$limit or more open PRs: the list may be truncated, so nothing is deleted."
+                    exit 1
+                  fi
+
+                  # Grace window: a branch younger than two days keeps its
+                  # database even before its PR is open.
+                  cutoff="$(jq -rn 'now - 2 * 86400 | strftime("%Y-%m-%dT%H:%M:%SZ")')"
+                  candidates="$RUNNER_TEMP/neon-preview-branches.txt"
+                  curl -fsS --max-time 30 -H "$auth" "$api?limit=10000" |
+                    jq -r --arg cutoff "$cutoff" '.branches[] | select((.name | startswith("preview/")) and .created_at < $cutoff) | "\(.id) \(.name)"' > "$candidates"
+
+                  stale=0
+                  failed=0
+                  while read -r id name; do
+                    keep=false
+                    while IFS= read -r ref; do
+                      # Neon may cut a long name short, so a prefix of
+                      # preview/<ref> is that PR's branch too.
+                      if [[ -n "$ref" && "preview/$ref" == "$name"* ]]; then
+                        keep=true
+                        break
+                      fi
+                    done <<< "$open"
+                    if [[ "$keep" == true ]]; then
+                      echo "keep          $name"
+                      continue
+                    fi
+                    stale=$((stale + 1))
+                    if [[ "$DRY_RUN" == true ]]; then
+                      echo "would delete  $name"
+                    elif curl -fsS --max-time 30 -X DELETE -H "$auth" "$api/$id" > /dev/null; then
+                      echo "deleted       $name"
+                    else
+                      echo "::warning::Could not delete Neon branch $name ($id)."
+                      failed=$((failed + 1))
+                    fi
+                  done < "$candidates"
+
+                  echo "Stale preview branches: $stale (dry run: $DRY_RUN, failed deletions: $failed)."
+                  # A sweep that cannot delete must turn the run red, or the
+                  # branches pile up unseen.
+                  ((failed == 0))

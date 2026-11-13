@@ -23,3 +23,7 @@ The template's demo is gone and the catalog is the reference implementation the 
 ## Notes
 
 Done after the catalog and admin shell exist, so the examples are never missing while work is in flight.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

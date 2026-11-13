@@ -31,3 +31,7 @@ Loading an article is the product's showpiece: photos in, a published article ou
 ## Notes
 
 Build with react-hook-form and zod as the template requires; autosave goes through a hook with optimistic updates, modelled on the template's create hook.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

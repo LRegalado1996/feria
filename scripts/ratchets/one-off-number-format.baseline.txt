@@ -1,0 +1,12 @@
+# A one-off Intl formatter or toLocaleString() outside src/lib/utils/format.ts
+#
+# One module owns the locale, the time zone and the cached Intl instances, so every figure and date on screen agrees on grouping, precision and zone, and the server and the browser print the same text. A formatter built in place drifts from them, and constructing one is the slow part of formatting. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Typography and copy: numbers and dates go through src/lib/utils/format.ts
+# Fix:       Add or reuse a formatter in src/lib/utils/format.ts and call it; components never build Intl.* or call toLocaleString().
+#
+# 0 file(s), 0 occurrence(s) remaining.

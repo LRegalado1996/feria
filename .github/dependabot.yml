@@ -1,0 +1,133 @@
+version: 2
+
+# One batch a week, Monday, for both ecosystems: every Dependabot PR costs a full
+# CI run, and a daily cadence re-cuts a group PR whenever any member publishes.
+# Never use a `cron` interval whose runs are less than 24 hours apart: Dependabot
+# rejects it, and that invalidates this whole file, which stops every update.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Montevideo"
+    target-branch: qa
+    # Supply-chain cooldown. GitHub Actions supports only `default-days`.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Montevideo"
+    # With one run a week, this limit is the weekly throughput.
+    open-pull-requests-limit: 10
+    # Keep it even though qa is the default branch: with `target-branch` set, this
+    # entry's options (an `ignore` included) stop applying to security updates.
+    target-branch: qa
+    versioning-strategy: increase
+    # Supply-chain cooldown: skip fresh releases until compromised versions are
+    # typically detected and unpublished. Security updates are exempt.
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
+    # A dependency joins the FIRST group whose patterns match, so specific groups
+    # stay above broad ones. Every dependency belongs to an area group: one added
+    # to package.json opens a PR of its own every week until it is added here.
+    groups:
+      framework:
+        patterns:
+          - "next"
+          - "react"
+          - "react-dom"
+        update-types:
+          - "minor"
+          - "patch"
+      database:
+        patterns:
+          - "drizzle-orm"
+          - "drizzle-kit"
+          - "pg"
+      orpc:
+        patterns:
+          - "@orpc/*"
+      auth:
+        patterns:
+          - "better-auth"
+          - "@better-auth/*"
+      tanstack:
+        patterns:
+          - "@tanstack/*"
+      ui:
+        patterns:
+          - "@radix-ui/*"
+          - "radix-ui"
+          - "lucide-react"
+          - "class-variance-authority"
+          - "clsx"
+          - "tailwind-merge"
+      forms:
+        patterns:
+          - "react-hook-form"
+          - "@hookform/*"
+          - "zod"
+      vercel:
+        patterns:
+          - "@vercel/*"
+      server:
+        patterns:
+          - "@t3-oss/env-nextjs"
+          - "dotenv"
+          - "server-only"
+      testing:
+        dependency-type: "development"
+        patterns:
+          - "@testing-library/*"
+          - "@playwright/*"
+          - "happy-dom"
+          - "msw"
+          - "vitest"
+          - "@vitest/*"
+      styling:
+        dependency-type: "development"
+        patterns:
+          - "@tailwindcss/*"
+          - "tailwindcss"
+          - "postcss"
+          - "tw-animate-css"
+      # The lint toolchain on its own: a preset bump that needs conformance work
+      # goes red, and must not hold a TypeScript bump hostage.
+      lint:
+        dependency-type: "development"
+        patterns:
+          - "ultracite"
+          - "oxlint"
+          - "oxfmt"
+          - "oxlint-tsgolint"
+          - "knip"
+          - "konsistent"
+      tooling:
+        dependency-type: "development"
+        patterns:
+          - "husky"
+          - "lint-staged"
+          - "tsx"
+          - "typescript"
+          # why: each tsrs release is built against one TypeScript version, so
+          # it is reviewed next to `typescript`. A group batches updates; it does
+          # not force the two to move together.
+          - "tsrs"
+      types:
+        dependency-type: "development"
+        patterns:
+          - "@types/*"

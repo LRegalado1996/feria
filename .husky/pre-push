@@ -1,0 +1,4 @@
+# The checks CI's static and unit jobs run, so their failures surface before
+# the push instead of a CI run later. Not the whole gate: integration, e2e and
+# build run only in CI (docs/agents/ci.md § Push discipline).
+pnpm verify

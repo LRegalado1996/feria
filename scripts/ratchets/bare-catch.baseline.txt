@@ -1,0 +1,12 @@
+# A catch block that discards the error
+#
+# A bare `} catch {` has no error binding, so it cannot report: the failure is swallowed and Sentry never learns it happened. It is the shape that turns a broken flow into a silent blank screen.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: AGENTS.md § Error reporting: every client catch reports or is provably a heartbeat
+# Fix:       Bind the error and call reportError(error, { action: "Domain.snake_action" }) from @/lib/errors/client, even when the UI also shows a message. An offline-tolerant heartbeat or poll keeps the bare catch with `// heartbeat: offline-tolerant` as a trailing comment on the catch line or as the first line inside the block; anywhere else it exempts nothing.
+#
+# 0 file(s), 0 occurrence(s) remaining.

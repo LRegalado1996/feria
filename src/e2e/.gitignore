@@ -1,0 +1,10 @@
+# Auth state files (contain session tokens)
+.auth/
+
+# Test results and reports
+test-results/
+playwright-report/
+blob-report/
+
+# Playwright traces
+*.zip

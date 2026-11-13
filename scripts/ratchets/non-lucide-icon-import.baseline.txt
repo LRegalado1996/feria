@@ -1,0 +1,12 @@
+# An icon import from a package other than lucide-react
+#
+# Lucide is the only icon set: mixed icon styles read as unfinished, and a second icon package is a bundle nobody priced in. None of these packages is installed; the ratchet makes the first PR that adds one fail before the dependency debate is skipped. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Components: icons are lucide-react only
+# Fix:       Use the lucide-react equivalent. A genuinely missing glyph is a design.md conversation, not a new dependency.
+#
+# 0 file(s), 0 occurrence(s) remaining.

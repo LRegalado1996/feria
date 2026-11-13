@@ -28,3 +28,7 @@ Until launch, anyone who opens the production URL sees a good-looking "opening s
 ## Notes
 
 The logo slot uses the wordmark in display type until FER-006 delivers the real logo.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.
