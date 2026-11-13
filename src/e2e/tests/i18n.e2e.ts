@@ -1,4 +1,4 @@
-import { expect, test } from "../fixtures";
+import { expect, requireBaseURL, test } from "../fixtures";
 import { completeRpcAction } from "../fixtures/complete-rpc-action";
 import { HomePage } from "../page-objects/home.page";
 
@@ -83,37 +83,40 @@ test.describe("Languages, signed out", () => {
     { path: "/en", canonical: "/en" },
   ]) {
     test(`${path} declares itself canonical and names both languages to search engines`, async ({
+      baseURL,
       page,
     }) => {
+      const origin = requireBaseURL(baseURL);
       await page.goto(path);
 
       // <head> metadata has no role, label or test id to be found by. Every
       // match is read: the prerendered shell and the request each write the
       // tags, and React merges them only when they are identical, which they
       // are not when a build and its server disagree on the origin (as
-      // `pnpm e2e:ci` does on purpose). The path must agree in all of them.
-      const pathsOf = async (selector: string) => [
-        ...new Set(
-          await page
-            .locator(selector)
-            .evaluateAll((links) =>
-              links.map(
-                (link) => new URL(link.getAttribute("href") ?? "").pathname
-              )
-            )
-        ),
-      ];
+      // `pnpm e2e:ci` does on purpose). So the tag this server wrote must be
+      // the page's full URL on this origin, and no tag may name another page.
+      const hrefsOf = async (selector: string) =>
+        await page
+          .locator(selector)
+          .evaluateAll((links) =>
+            links.map((link) => new URL(link.getAttribute("href") ?? "").href)
+          );
+      const expectLinks = async (selector: string, pathname: string) => {
+        const hrefs = await hrefsOf(selector);
 
-      expect(await pathsOf('head link[rel="canonical"]')).toEqual([canonical]);
-      expect(
-        await pathsOf('head link[rel="alternate"][hreflang="es"]')
-      ).toEqual(["/"]);
-      expect(
-        await pathsOf('head link[rel="alternate"][hreflang="en"]')
-      ).toEqual(["/en"]);
-      expect(
-        await pathsOf('head link[rel="alternate"][hreflang="x-default"]')
-      ).toEqual(["/"]);
+        expect(hrefs).toContain(new URL(pathname, origin).href);
+        expect([
+          ...new Set(hrefs.map((href) => new URL(href).pathname)),
+        ]).toEqual([pathname]);
+      };
+
+      await expectLinks('head link[rel="canonical"]', canonical);
+      await expectLinks('head link[rel="alternate"][hreflang="es"]', "/");
+      await expectLinks('head link[rel="alternate"][hreflang="en"]', "/en");
+      await expectLinks(
+        'head link[rel="alternate"][hreflang="x-default"]',
+        "/"
+      );
     });
   }
 
