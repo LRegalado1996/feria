@@ -49,7 +49,9 @@ Follow these steps to create a Pull Request:
 4.  **Read Template**: Read the content of the identified template file.
 
 5.  **Draft Description**: Create a PR description that strictly follows the
-    template's structure.
+    template's structure. What goes in each section, and the style every
+    description shares, is in the `pr-description` skill; the `pr-description`
+    check fails a PR that is missing a section.
     - **Headings**: Keep all headings from the template.
     - **Checklists**: Review each item. Mark with `[x]` if completed. If an item
       is not applicable, leave it unchecked or mark as `[ ]` (depending on the

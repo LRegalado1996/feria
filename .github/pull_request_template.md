@@ -11,8 +11,9 @@ No em dashes anywhere in the description: use a colon, a comma, a full stop or
 parentheses. They are the clearest tell of unedited generated prose, and a
 description nobody edited is a description nobody checked.
 
-Delete a section only when it does not apply, and say why. A blank section
-reads as "not considered".
+Keep every heading: the `pr-description` check fails without them. When a
+section does not apply, write N/A and say why. A blank section reads as "not
+considered". How to fill each one: .agents/skills/pr-description/SKILL.md.
 -->
 
 ## In plain language

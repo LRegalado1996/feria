@@ -157,7 +157,8 @@ Not valid, and why:
   say why only when that is true.
 - **Title**: a valid message first line, as above. It is what lands on the base
   branch.
-- **Description**: fill `.github/pull_request_template.md`. The parts of a
+- **Description**: fill `.github/pull_request_template.md` as the
+  `pr-description` skill says. The parts of a
   commit body still apply: why, what changed, how it was checked. The footers
   (`Closes: FER-0xx`, any `BREAKING CHANGE:`) go in its "Ticket and footers"
   section, and the body ends with the `Model: · Harness:` line and the

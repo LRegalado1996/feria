@@ -154,7 +154,7 @@ docs/agents/            depth per area
 | `main`          | production. `chore(release): promote qa to main` opens by itself when `qa` has something new; merge it with a merge commit |
 | `hotfix/<slug>` | off `main`, only when `qa` cannot carry the fix; it owes a merge-back to `qa`                                              |
 
-CI classifies the change, then runs Static Checks, Unit Tests, Integration Tests and Build in parallel, then E2E in the pinned Playwright container against that build, with Gitleaks alongside. `CI Success` is the merge gate into `qa`, next to `visual-proof`: a pull request that changes what people see must carry a screenshot or a recording in its description. A release into `main` must pass `Promotion Verified`, which accepts only a tree that already passed CI on `qa`, so production runs exactly what was tested.
+CI classifies the change, then runs Static Checks, Unit Tests, Integration Tests and Build in parallel, then E2E in the pinned Playwright container against that build, with Gitleaks alongside. `CI Success` is the merge gate into `qa`, next to `visual-proof`: a pull request that changes what people see must carry a screenshot or a recording in its description. `pr-description` holds every pull request to the same title format and the same sections. A release into `main` must pass `Promotion Verified`, which accepts only a tree that already passed CI on `qa`, so production runs exactly what was tested.
 
 A pull request that touches only Markdown or `docs/` skips the runtime jobs, and a draft runs only the static checks. Vercel deploys `qa` and `main` through its Git integration. Previews are opt-in: add the `deploy:preview` label. Dependabot opens grouped updates once a week, after a cooldown, and merges patch and minor ones once CI passes; major versions wait for a person. The details are in [`docs/agents/ci.md`](docs/agents/ci.md).
 
@@ -169,7 +169,7 @@ What this project changed on the way in: the production branch is `main` (upstre
 What the repository needs outside the code. The hosting half is [FER-002](docs/tickets/FER-002-vercel-neon-blob.md) and [FER-003](docs/tickets/FER-003-ci-and-previews.md).
 
 1. **GitHub settings:**
-   - `qa` (the default branch) and `main` are protected: pull requests only, for admins too. `qa` requires `CI Success` and `visual-proof`; `main` requires `Promotion Verified` and `visual-proof`.
+   - `qa` (the default branch) and `main` are protected: pull requests only, for admins too. `qa` requires `CI Success`, `visual-proof` and `pr-description`; `main` requires `Promotion Verified`, `visual-proof` and `pr-description`.
    - Default workflow permissions are read.
    - The labels `deploy:preview` and `size:XS` through `size:XXL` exist.
    - Optional: a GitHub App with the `BOT_APP_ID` variable and the `BOT_APP_PRIVATE_KEY` secret, so promotion PRs and bot merges start their checks by themselves. Without it, a promotion PR needs a close and reopen to start them.

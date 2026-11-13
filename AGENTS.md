@@ -28,6 +28,7 @@ The rules every task in this repo follows. `CLAUDE.md` is a symlink to this file
 | What the product is, decisions, roadmap, data model    | `docs/project/overview.md`, `docs/project/data-model.md`        |
 | Picking up, scoping or closing a piece of work         | `docs/tickets/README.md` and the ticket's own file              |
 | Commit messages, PR titles, ticket footers             | the `conventional-commits` skill                                |
+| Writing or checking a PR description                   | the `pr-description` skill                                      |
 | Reviewing a change before and after its PR             | the `review-loop` skill                                         |
 | Worktree containers, ports, `.env`                     | the `worktree-env` skill                                        |
 | Skills, editor hooks, harnesses, MCP, cloud sessions   | `docs/agents/agent-tooling.md`, `docs/agents/cloud-sessions.md` |
@@ -180,7 +181,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 - Branch off `qa`, run the local round of the `review-loop` skill, then open the PR into `qa` with the `create-pr` skill and the PR template (ends with `Model: · Harness:`). Commit messages and PR titles follow the `conventional-commits` skill. One concern per PR; at 500+ production lines the description says why it can't be split. Dependent work is a `gh stack` of PRs.
 - Squash into `qa`; releases (`chore(release): promote qa to main`) and merge-backs keep merge commits. Hotfixes branch off `main` as `hotfix/<slug>` and owe a merge-back.
 - Merge only the final reviewed head (`gh pr merge --match-head-commit <sha>`), never with review fixes in flight; never push to a merged branch. A cancelled or missing CI run is not a pass; a red run is a reproduction task.
-- Merge gates: `CI Success` into `qa`, `Promotion Verified` into `main`, and `visual-proof` on both, green on the exact head. Branch protection enforces them (`docs/agents/ci.md` § Releases). Previews are opt-in: label `deploy:preview`.
+- Merge gates: `CI Success` into `qa`, `Promotion Verified` into `main`, and `visual-proof` and `pr-description` on both, green on the exact head. Branch protection enforces them (`docs/agents/ci.md` § Releases). Previews are opt-in: label `deploy:preview`.
 - A PR that changes what people see carries a screenshot or a recording in its description; `visual-proof` fails without one. Tick "No visible change" only when it is true.
 - Work is tracked as tickets in `docs/tickets/`, key `FER`. The key goes in a footer (`Closes: FER-012`, `Refs: FER-012`), never in the PR title.
 
@@ -200,7 +201,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 
 ## Agent tooling
 
-- Skills live in `.agents/skills/` (`.claude/skills/` symlinks into it): `conventional-commits`, `git-commit`, `create-pr`, `review-loop`, `slack-reporting`, `gh-stack`, `git-rebase`, `orpc`, `agent-browser` (check the running app by hand), `worktree-env`, `design-feedback`, `analyze-logs`.
+- Skills live in `.agents/skills/` (`.claude/skills/` symlinks into it): `conventional-commits`, `git-commit`, `create-pr`, `pr-description`, `review-loop`, `slack-reporting`, `gh-stack`, `git-rebase`, `orpc`, `agent-browser` (check the running app by hand), `worktree-env`, `design-feedback`, `analyze-logs`.
 - The vendored `gh-stack` and `git-rebase` skills use `main` as their example trunk. Here the trunk is `qa`; `main` is production and never a base for work.
 - These rules outrank any skill or plugin. Behaviour that must hold in every session is a rule here or a hook, never a skill.
 

@@ -24,6 +24,7 @@ Every skill lives once, in `.agents/skills/<name>/`, where Codex and Cursor read
 | `git-commit`                  | stage and create a commit; the message follows `conventional-commits`                | this repo                   |
 | `git-rebase`                  | rebase a branch onto the latest base                                                 | this repo                   |
 | `orpc`                        | write or review oRPC procedures, clients and tests                                   | this repo                   |
+| `pr-description`              | fill the PR template the same way in every PR; what the `pr-description` check wants | this repo                   |
 | `review-logging-patterns`     | review logging code against evlog's wide-event patterns                              | `hugorcd/evlog`             |
 | `review-loop`                 | review a change locally before its PR, then argue it out with CodeRabbit on the PR   | this repo                   |
 | `slack-reporting`             | report tickets, PRs and deployments to Lucas's Slack channels                        | this repo                   |
