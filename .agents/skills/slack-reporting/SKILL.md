@@ -47,7 +47,7 @@ If an app misses an event it owns, the agent posts it and says so.
 - **One event, one message.** Follow-ups to the same ticket or PR go in that
   message's thread, so each channel reads as a list of events.
 - **Lead with the fact**, then the link. No greetings, no emojis, no filler.
-  Two or three lines at most; the detail is behind the link.
+  Three lines at most after the title line; the detail is behind the link.
 - **Always a link**: the ticket file, the PR, the deployment URL.
 - **Say what is needed from Lucas** in the first line when something is
   ("Necesito tu decisión: ..."), and post it in `#feria-general` as well.
@@ -88,8 +88,7 @@ https://feria-git-qa-....vercel.app · chequeo de salud OK
 #feria-general
 Resumen de la sesión (13 nov)
 Hecho: FER-001, FER-004. En curso: FER-005. Bloqueado: nada.
-Necesito de vos: instalar CodeRabbit en el repo.
-Estado de los tickets: https://github.com/LRegalado1996/feria/blob/qa/docs/tickets/README.md
+Necesito de vos: instalar CodeRabbit en el repo. Tickets: https://github.com/LRegalado1996/feria/blob/qa/docs/tickets/README.md
 ```
 
 ## How to post

@@ -12,7 +12,7 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 ## Scope
 
 - Add the GitHub secrets and variables the workflows read (Vercel, Neon, Sentry). `docs/agents/ci.md` lists them.
-- Slack: Lucas installs the GitHub app for Slack and subscribes `#feria-prs` to this repo's pull requests, and the Vercel app and points its deployment notifications at `#feria-deploys`, so those events post themselves. From then on the integrations own "PR opened", "PR merged" and every deployment message, and the agent stops posting them: update the ownership table in the `slack-reporting` skill in the same PR. Add a Slack connector to Claude Code so the agent's own reports no longer go through the browser.
+- Slack: Lucas installs the GitHub app for Slack and subscribes `#feria-prs` to this repo's pull requests only (the app's default subscription also includes deployments, issues, commits and releases: turn those off, or each deployment shows up in both channels), and the Vercel app and points its deployment notifications at `#feria-deploys`, so those events post themselves. From then on the integrations own "PR opened", "PR merged" and every deployment message, and the agent stops posting them: update the ownership table in the `slack-reporting` skill in the same PR. Add a Slack connector to Claude Code so the agent's own reports no longer go through the browser.
 - Create the Sentry project and set its DSN and auth token per environment.
 - Decide which optional workflows stay for a one-person project (CodeRabbit, Dependabot auto-merge, auto-promotion PR) and remove or disable the rest, updating `docs/agents/ci.md` and its policy tests.
 - Open a throwaway PR to prove the pipeline end to end, then close it.
