@@ -39,11 +39,22 @@ jobs:
 
           failed=0
 
-          # A bot writes its own title. Dependabot's is "chore(deps): Bump x
-          # from 1 to 2 in the y group": the type and scope are ours
+          # Promotions and merge-backs between this repository's own branches
+          # (a fork's `qa` is somebody's work). Their title is ours, written by
+          # auto-promotion-pr.yml, so it gets the full rule whoever opens them.
+          promotion=false
+          if [ "$HEAD_REPO" = "$REPO" ]; then
+            if { [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
+              || { [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; }; then
+              promotion=true
+            fi
+          fi
+
+          # Any other bot writes its own title. Dependabot's is "chore(deps):
+          # Bump x from 1 to 2 in the y group": the type and scope are ours
           # (dependabot.yml), the capital and the length are not. Hold it to
           # the type prefix and leave the rest alone.
-          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ] && [ "$promotion" = false ]; then
             bot_title_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
             if ! grep -qE "$bot_title_pattern" <<< "$PR_TITLE"; then
               echo "::error::The title does not start with a Conventional Commits type: '$PR_TITLE'."
@@ -67,10 +78,8 @@ jobs:
             failed=1
           fi
 
-          # Generated bodies: promotions and merge-backs between this
-          # repository's own branches (a fork's `qa` is somebody's work).
-          if { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
-            || { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; }; then
+          # A promotion's body is generated.
+          if [ "$promotion" = true ]; then
             echo "Generated description: only the title is checked."
             exit "$failed"
           fi
