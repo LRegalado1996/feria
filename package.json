@@ -86,7 +86,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
-    "@tailwindcss/postcss": "4.3.3",
+    "@tailwindcss/postcss": "4.3.5",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
@@ -107,7 +107,7 @@
     "oxlint": "1.89.0",
     "oxlint-tsgolint": "7.0.2005",
     "postcss": "8.5.32",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.5",
     "tsrs": "0.20.1-ts7.1.0-beta",
     "tsx": "4.23.15",
     "turbo": "2.11.10",
