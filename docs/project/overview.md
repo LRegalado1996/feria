@@ -83,7 +83,7 @@ Each amendment is made in the ticket named, in the same PR as the code that need
 ## Still assumed
 
 - `/` redirects to Lucas's store until there is a reason for a platform landing page.
-- Peso prices show without cents; dollar prices show cents only when they are not zero.
+- A price shows cents only when it has any, in either currency, and is never rounded on screen. Spanish shows the local symbol (`$ 1.290`, `US$ 12,50`); English shows the ISO code (`UYU 1,290`, `USD 12.50`), because a bare `$` does not tell a visitor from abroad pesos from dollars.
 
 ## Roadmap
 

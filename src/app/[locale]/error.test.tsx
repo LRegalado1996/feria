@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+
+import { renderWithI18n } from "@/test/i18n";
 
 import ErrorPage from "./error";
 
@@ -10,12 +12,15 @@ const { reportError } = vi.hoisted(() => ({
 
 vi.mock("@/lib/errors/client", () => ({ reportError }));
 
-function setup({ eventId = "event-42" }: { eventId?: string | null } = {}) {
+function setup({
+  eventId = "event-42",
+  locale = "en",
+}: { eventId?: string | null; locale?: "en" | "es" } = {}) {
   reportError.mockReturnValue(eventId);
   const error = new Error("render failed");
   const retry = vi.fn<() => void>();
 
-  render(<ErrorPage error={error} retry={retry} />);
+  renderWithI18n(<ErrorPage error={error} retry={retry} />, { locale });
 
   return { error, retry };
 }
@@ -48,6 +53,25 @@ describe("ErrorPage", () => {
 
     expect(retry).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ type: "click" })
+    );
+  });
+
+  test("speaks Spanish on a Spanish page", async () => {
+    setup({ locale: "es" });
+
+    expect(
+      screen.getByRole("heading", { name: "Algo salió mal" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Esta página no se pudo cargar. Probá de nuevo en un momento."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reintentar" })
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Código de soporte:/)).toHaveTextContent(
+      "Código de soporte: event-42"
     );
   });
 });

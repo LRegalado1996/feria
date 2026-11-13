@@ -25,6 +25,7 @@ The rules every task in this repo follows. `CLAUDE.md` is a symlink to this file
 | Releases while tabs stay open, the oRPC deployment pin | `docs/agents/skew-protection.md`                                |
 | UI: components, pages, styles, copy, accessibility     | `design.md`                                                     |
 | CI, git hooks, PRs, releases, previews, Dependabot     | `docs/agents/ci.md`                                             |
+| Interface text, languages, links, prices, dates        | `docs/agents/i18n.md`                                           |
 | What the product is, decisions, roadmap, data model    | `docs/project/overview.md`, `docs/project/data-model.md`        |
 | Picking up, scoping or closing a piece of work         | `docs/tickets/README.md` and the ticket's own file              |
 | Commit messages, PR titles, ticket footers             | the `conventional-commits` skill                                |
@@ -93,14 +94,17 @@ Every change meets all of these; don't ask whether they apply.
 ## Architecture
 
 - **Server-first:** RSC default. Minimize `"use client"`, `useEffect`, `useState`.
-- **URL-first context:** derive context from URL/search params, not cookies/session. Bookmarkable, multi-tab safe.
+- **URL-first context:** derive context from URL/search params, not cookies/session. Bookmarkable, multi-tab safe. The language is part of it: no prefix is Spanish, `/en/...` is English, and internal paths are built with `localizePath()`.
 - **Layouts are UI chrome only.** Never enforce auth in a layout (it does not re-render on navigation): auth per page and per procedure.
 - **Greenfield.** No legacy. Destructive refactors > incremental patches.
 
 ```
+src/app/[locale]/                                  every page, under the root layout that sets <html lang>
 src/app/_components/{atoms,molecules,organisms}/   atomic design
 src/app/api/{auth,orpc,health,docs}/               Better Auth, oRPC, DB probe, OpenAPI reference
+src/content/{es,en}/                               interface text, one file per area, typed against Spanish
 src/lib/{hooks,orpc,schemas,utils,errors}/         client hooks per domain, oRPC clients, zod, format.ts, reportError
+src/lib/i18n/                                      locales, localized paths, alternates, the dictionary provider
 src/server/api/{orpc,routers}/, root.ts            procedure builders + context, domain routers
 src/server/services/                               domain services: every query
 src/server/{better-auth,db,test}/                  auth config, Drizzle client + schema + drizzle/ migrations + seed, test doubles
@@ -131,7 +135,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 - `noUncheckedIndexedAccess` is on. No `any`; no type assertion to silence an error: narrow, fix the schema or fix the source type (the mock-context cast in tests is the one exception).
 - Source types over custom types: Drizzle inferred types, `ReturnType<>`, `Pick<>`, `Awaited<>`. `import type` when every specifier is a type, inline `type` only in a mixed import.
 - **Boundaries:** schemas model what forms and HTTP actually send (`""`, strings); required text is `.trim().min(1)`; reject empty input before any numeric coercion (`Number("")` is `0`).
-- **Language (Non-Negotiable):** code, comments, commits, PRs, branch names and test titles are English; only user-facing copy is the product's language (`design.md`).
+- **Language (Non-Negotiable):** code, comments, commits, PRs, branch names and test titles are English. User-facing copy is Spanish and English and never sits in a component, a hook or a schema: it lives in `src/content/{es,en}/` (`docs/agents/i18n.md`).
 - **Comments** say why, never what; no commented-out code; a `TODO` carries its ticket (`TODO(KEY-123)`); update or delete a comment with the code it describes.
 - **Lint:** Ultracite (oxlint type-aware + oxfmt) does mechanical style; run repo tools through scripts or `pnpm exec`, never `pnpm dlx`; read every `pnpm fix` diff (fixers can change behaviour); every disabled rule carries its reason and measured count; never run `ultracite init`. Add a blank line between multiline blocks.
 
@@ -151,6 +155,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 - Schema with inferred type: `src/lib/schemas/post/index.ts` · Drizzle table: `src/server/db/schema/post.ts`
 - Form: `src/app/_components/organisms/auth-form/auth-form.tsx`
 - Hooks: `src/lib/hooks/post/use-get-posts.ts`, `use-create-post.ts` (optimistic; test over MSW)
+- Text in both languages: `src/content/es/auth.ts` · `src/content/en/auth.ts`, read by `organisms/auth-form` (client) and `src/app/[locale]/page.tsx` (server)
 - Test doubles: `src/server/test/context.ts` (`createMockDatabase`)
 
 ## Naming
@@ -167,7 +172,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 
 - **Structure (Non-Negotiable):** `test()`, never `it()`. A test takes its state from a `setup()` it calls first; no mutable `describe`-scope `let`; `beforeEach`/`afterEach` only clean up; a literal used in more than 2 tests becomes a factory; data-only variants are one `test.each`.
 - **Falsifiability (Non-Negotiable):** a test fails if the rule it names is deleted or inverted. No argument-blind spies, error-class-only `rejects`, label-only or shape-only assertions, no snapshots; test both sides of every boundary; freeze the clock. The PR names the mutation that turns each new test red.
-- Helpers (MSW, oRPC handlers, query wrapper, mock database), integration databases and e2e rules: `docs/agents/testing.md`, `src/e2e/AGENTS.md`.
+- Helpers (MSW, oRPC handlers, query wrapper, i18n wrapper, mock database), integration databases and e2e rules: `docs/agents/testing.md`, `src/e2e/AGENTS.md`.
 
 ## Error reporting
 

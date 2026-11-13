@@ -1,25 +1,56 @@
 import { dehydrate, HydrationBoundary, noop } from "@tanstack/react-query";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { AuthForm } from "@/app/_components/organisms/auth-form";
 import { Navbar } from "@/app/_components/organisms/navbar";
 import { PostFeed } from "@/app/_components/organisms/post-feed";
+import { type Dictionary, getDictionary } from "@/content";
+import { isLocale, type Locale } from "@/lib/i18n/config";
+import { buildAlternates } from "@/lib/i18n/metadata";
 import { getQueryClient, orpc } from "@/lib/orpc/server";
 import type { GetPostsValues } from "@/lib/schemas/post";
 import { getGravatarUrl } from "@/lib/utils/get-gravatar-url";
 import { getSession } from "@/server/better-auth/server";
 
+interface HomeProps {
+  params: Promise<{ locale: string }>;
+}
+
+/** The route's language, or a 404 for a segment that is not one. */
+async function readLocale(params: HomeProps["params"]): Promise<Locale> {
+  const { locale } = await params;
+
+  if (!isLocale(locale)) {
+    notFound();
+  }
+
+  return locale;
+}
+
+export async function generateMetadata({
+  params,
+}: HomeProps): Promise<Metadata> {
+  return { alternates: buildAlternates("/", await readLocale(params)) };
+}
+
 /**
- * The shell is static and prerendered; whether the visitor sees the sign-in
- * form or the feed depends on the session, a request-time read, so that
- * decision happens inside the boundary (docs/agents/nextjs.md § Layouts and
- * pages).
+ * The shell is static and prerendered, once per language: the locale is a
+ * build-time param, so awaiting it here holds nothing behind a request.
+ * Whether the visitor sees the sign-in form or the feed depends on the
+ * session, a request-time read, so that decision happens inside the boundary
+ * (docs/agents/nextjs.md § Layouts and pages).
  */
-export default function Home() {
+export default async function Home({ params }: HomeProps) {
+  const locale = await readLocale(params);
+  const dictionary = getDictionary(locale);
+
   return (
-    <Suspense fallback={<HomeSkeleton />}>
-      <HomeResolver />
+    <Suspense fallback={<HomeSkeleton label={dictionary.common.loading} />}>
+      <HomeResolver dictionary={dictionary} />
     </Suspense>
   );
 }
@@ -28,10 +59,10 @@ export default function Home() {
  * Both outcomes share nothing visible, so the fallback is an empty canvas
  * rather than one of them: a feed skeleton would lie to a signed-out visitor.
  */
-function HomeSkeleton() {
+function HomeSkeleton({ label }: { label: string }) {
   return (
     <div aria-busy="true" className="min-h-screen" data-testid="home-skeleton">
-      <output className="sr-only">Loading</output>
+      <output className="sr-only">{label}</output>
     </div>
   );
 }
@@ -46,21 +77,28 @@ async function readRenderInstant() {
   return Date.now();
 }
 
-export async function HomeResolver() {
+export async function HomeResolver({ dictionary }: { dictionary: Dictionary }) {
   const session = await getSession();
 
   if (!session) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="w-full max-w-sm space-y-6 px-4">
-          <div className="space-y-2 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in to your account to continue
-            </p>
+      <div className="flex min-h-screen flex-col">
+        <header className="flex justify-end p-4">
+          <LocaleToggle />
+        </header>
+        <main className="flex flex-1 items-center justify-center pb-16">
+          <div className="w-full max-w-sm space-y-6 px-4">
+            <div className="space-y-2 text-center">
+              <h1 className="text-2xl font-bold tracking-tight">
+                {dictionary.auth.welcome.title}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {dictionary.auth.welcome.subtitle}
+              </p>
+            </div>
+            <AuthForm />
           </div>
-          <AuthForm />
-        </div>
+        </main>
       </div>
     );
   }
@@ -83,7 +121,7 @@ export async function HomeResolver() {
   const renderedAt = await readRenderInstant();
   const user = {
     id: session.user.id,
-    name: session.user?.name ?? "User",
+    name: session.user?.name ?? dictionary.common.userFallbackName,
     image: session.user?.image ?? getGravatarUrl(session.user?.email ?? ""),
   };
 

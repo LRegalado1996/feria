@@ -4,11 +4,17 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { describe, expect, test } from "vitest";
 
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import type { Locale } from "@/lib/i18n/config";
+import { DICTIONARIES } from "@/test/i18n";
+
 import { AppProviders } from "./app-providers";
 
 function Consumer() {
   const queryClient = useQueryClient();
   const { setTheme, theme } = useTheme();
+  const { common } = useDictionary();
+  const locale = useLocale();
 
   return (
     <button
@@ -17,18 +23,18 @@ function Consumer() {
       }}
       type="button"
     >
-      {`theme:${theme ?? "none"} queries:${String(Boolean(queryClient))}`}
+      {`theme:${theme ?? "none"} queries:${String(Boolean(queryClient))} ${locale}:${common.tryAgain}`}
     </button>
   );
 }
 
-function setup() {
+function setup(locale: Locale = "en") {
   // next-themes remembers a choice in localStorage and as a class on <html>.
   localStorage.clear();
   document.documentElement.className = "";
 
   return render(
-    <AppProviders>
+    <AppProviders dictionary={DICTIONARIES[locale]} locale={locale}>
       <Consumer />
     </AppProviders>
   );
@@ -46,6 +52,18 @@ describe("AppProviders", () => {
       "app-providers"
     );
   });
+
+  test.each([
+    ["es", "es:Reintentar"],
+    ["en", "en:Try again"],
+  ] as const)(
+    "gives its children the %s locale and its interface text",
+    (locale, expected) => {
+      setup(locale);
+
+      expect(screen.getByRole("button")).toHaveTextContent(expected);
+    }
+  );
 
   test("applies a chosen theme as a class on <html>", () => {
     setup();

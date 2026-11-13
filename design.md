@@ -28,9 +28,9 @@ Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `
 | Prose; inputs on mobile | `text-base`                                               |
 | Caption, helper, badge  | `text-xs text-muted-foreground`                           |
 
-No arbitrary sizes or off-scale weights; text that doesn't fit is rewritten or reflowed, never shrunk. Aligned figures are `tabular-nums`, right-aligned, peers at equal precision. Numbers and dates go through `src/lib/utils/format.ts`, which owns the locale (`APP_LOCALE`, also `<html lang>`), the time zone and the cached `Intl` instances; components never build `Intl.*` or call `toLocaleString()`.
+No arbitrary sizes or off-scale weights; text that doesn't fit is rewritten or reflowed, never shrunk. Aligned figures are `tabular-nums`, right-aligned, peers at equal precision. Numbers, prices and dates go through `src/lib/utils/format.ts`, which owns the time zone (the store's, `America/Montevideo`) and the cached `Intl` instances; every formatter takes the page's locale as an argument, and components never build `Intl.*` or call `toLocaleString()`. A price names its currency: `$ 1.290` and `US$ 12,50` in Spanish, `UYU 1,290` and `USD 12.50` in English, cents only when the amount has any.
 
-**One product language per app** (today: English; FER-004 makes it Spanish by default with an English toggle); code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows. Headings state the task or fact; a toast says what happened. Hidden strings (sr-only labels, `aria-label`) use the product language. Never show raw `error.message`, enum values or schema field names.
+**Two product languages: Spanish by default, English behind a toggle**, in the storefront and the admin alike. The URL decides: no prefix is Spanish, `/en/...` is English, and `<html lang>` follows it. No interface text is written in a component: every string, hidden ones included (sr-only labels, `aria-label`, placeholders, toasts, validation messages), lives in `src/content/{es,en}/` and reaches the screen through `getDictionary(locale)` or `useDictionary()`, so both languages always have it (`docs/agents/i18n.md`). Spanish uses the Rioplatense voseo ("Probá de nuevo"). The locale toggle (`molecules/locale-toggle`) names the language it leads to, in that language, and keeps the path and the query string. Code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows. Headings state the task or fact; a toast says what happened. Never show raw `error.message`, enum values or schema field names.
 
 ## Color and surfaces
 
@@ -59,10 +59,10 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - `data-slot` on every root (a fragment gets a wrapper); `data-variant`/`data-size` where variants exist.
 - **Leaf-subpath imports** (`@/app/_components/atoms/button`), never an aggregate: one heavy re-export leaks into every page's bundle.
 - **Consumer or it doesn't ship:** a component, hook or helper lands with the code that uses it. Its own test makes an unrendered component look used.
-- After `shadcn add`: translate default strings; apply the layout rules above.
+- After `shadcn add`: move default strings into the dictionaries, in both languages; apply the layout rules above.
 - Key lists by stable id (`kind:id` when a list mixes entities), never index. One label map per enum, `satisfies Record<…>`.
 - Icons: `lucide-react` only, default stroke; `size-4` default, `size-3.5` dense, `size-6` headers, `size-12` empty states. Decorative ones get `aria-hidden`; meaningful ones a name. No icon tiles.
-- References: `atoms/button` (variants, focus ring), `atoms/input`, `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
+- References: `atoms/button` (variants, focus ring), `atoms/input`, `molecules/locale-toggle` (a link styled as a button, `lang` on its label), `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
 
 ## Data
 
@@ -80,7 +80,7 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - **Never discard typed input.** Reset only on success (`onSuccess`, or after `mutateAsync` resolves); a failure keeps the text and says why. Never silently clamp or default.
 - After a save, `form.reset(storedRow)` and key the form by entity: react-hook-form ignores new `defaultValues`.
 - An error on a hidden tab or step brings the user to it; `noValidate` so zod owns messages.
-- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing; the decimal separator follows the locale.
+- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing; the decimal separator follows the page's language (a comma in Spanish, a dot in English).
 - **Narrow Radix values:** `onValueChange` returns any string. `safeParse` it and ignore unknowns and the `""` echo.
 - Never ask users to type internal ids; don't prefill fields that decide money or dates.
 

@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 
+import { useDictionary } from "@/lib/hooks/i18n";
 import { type client, orpc } from "@/lib/orpc/client";
 
 // One page of the feed, as `post.getAll` returns it.
@@ -16,6 +17,7 @@ interface UseCreatePostOptions {
 
 export function useCreatePost({ queryKey, currentUser }: UseCreatePostOptions) {
   const queryClient = useQueryClient();
+  const { common } = useDictionary();
 
   const createPost = useMutation({
     ...orpc.post.create.mutationOptions(),
@@ -42,7 +44,7 @@ export function useCreatePost({ queryKey, currentUser }: UseCreatePostOptions) {
             createdById: "optimistic",
             createdBy: {
               id: "optimistic",
-              name: currentUser?.name ?? "User",
+              name: currentUser?.name ?? common.userFallbackName,
               image: currentUser?.image ?? "",
             },
           };

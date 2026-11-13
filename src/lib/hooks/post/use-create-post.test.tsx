@@ -1,8 +1,11 @@
 import type { InfiniteData } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { Locale } from "@/lib/i18n/config";
 import type { client } from "@/lib/orpc/client";
+import { createI18nWrapper } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
@@ -41,12 +44,15 @@ interface SetupOptions {
   anonymous?: boolean;
   /** The cached feed; `null` for none yet. */
   feed?: Feed | null;
+  /** The language of the page the hook runs on. */
+  locale?: Locale;
 }
 
 function setup({
   answer = { id: 2, name: "Hello" },
   anonymous = false,
   feed = FEED,
+  locale = "en",
 }: SetupOptions = {}) {
   vi.setSystemTime(NOW);
   const createPost = vi.fn(async (_input: unknown) =>
@@ -68,13 +74,24 @@ function setup({
   }
 
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
+  const I18n = createI18nWrapper(locale);
+  const Query = wrapper;
+
+  function Providers({ children }: { children: ReactNode }) {
+    return (
+      <Query>
+        <I18n>{children}</I18n>
+      </Query>
+    );
+  }
+
   const { result } = renderHook(
     () =>
       useCreatePost({
         queryKey: QUERY_KEY,
         currentUser: anonymous ? undefined : { name: "Alice", image: null },
       }),
-    { wrapper }
+    { wrapper: Providers }
   );
 
   const feedNow = () => wrapper.queryClient.getQueryData<Feed>(QUERY_KEY);
@@ -128,22 +145,29 @@ describe("useCreatePost", () => {
     });
   });
 
-  test("signs an optimistic post as User when nobody is known", async () => {
-    const { feedNow, result } = setup({
-      answer: "hang",
-      anonymous: true,
-    });
-
-    void result.current.mutateAsync({ name: "Post" });
-
-    await waitFor(() => {
-      expect(feedNow()?.pages[0]?.items[0]?.createdBy).toEqual({
-        id: "optimistic",
-        name: "User",
-        image: "",
+  test.each([
+    ["es", "Usuario"],
+    ["en", "User"],
+  ] as const)(
+    "on a %s page, signs an optimistic post as %s when nobody is known",
+    async (locale, placeholder) => {
+      const { feedNow, result } = setup({
+        answer: "hang",
+        anonymous: true,
+        locale,
       });
-    });
-  });
+
+      void result.current.mutateAsync({ name: "Post" });
+
+      await waitFor(() => {
+        expect(feedNow()?.pages[0]?.items[0]?.createdBy).toEqual({
+          id: "optimistic",
+          name: placeholder,
+          image: "",
+        });
+      });
+    }
+  );
 
   test("rejects and puts the feed back when the server refuses", async () => {
     const { feedNow, invalidateQueries, result } = setup({ answer: "fail" });

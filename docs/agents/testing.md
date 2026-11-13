@@ -78,6 +78,7 @@ And required:
 - HTTP goes through MSW: never stub `fetch` or fake a client's responses inside a `vi.mock` factory. `setup-common.ts` starts the server once and resets handlers after every test, so a file never calls `listen`/`close`; it adds handlers with `server.use(...)` from `@/test/msw`. A request no handler answers fails the test. Defaults: Better Auth's `get-session` answers `null` (signed out), sign-in and sign-up succeed.
 - oRPC from hooks and components: mock `@/lib/orpc/client` with `orpcClientMock` from `@/test/mocks/orpc-client`, whose calls are real requests, and answer them with `createOrpcHandler("post.create", resolve)` or `createOrpcErrorHandler(path, { code, message, status, data })`. A `vi.fn()` resolver is the spy on the input the client sent. The mock keeps the hook's own `onMutate`/`onSettled`, so cache effects stay testable.
 - Hooks: `createQueryWrapper()` from `@/test/setup-helpers`, a fresh QueryClient with retries off, exposed as `wrapper.queryClient`.
+- Languages: a component or hook that reads `useDictionary()` or `useLocale()` renders through `renderWithI18n(ui, { locale })` or `createI18nWrapper(locale)` from `@/test/i18n`; English unless the test says otherwise, and one case per component in Spanish, so a string hardcoded in either language fails. A server component's test mocks `server-only` and passes the locale in (`docs/agents/i18n.md` § Tests).
 - Navigation: spy on `window.location.assign` (`vi.spyOn(window.location, "assign").mockImplementation(() => undefined)`); auth changes reload the page instead of calling the router (`docs/agents/nextjs.md` § Navigation).
 - Module mocking: `vi.mock()`, which Vitest hoists above the imports, so the module under test is imported statically. A value the factory uses comes from `vi.hoisted()`.
 - Clock: `vi.setSystemTime(date)` freezes `Date` for the test; `setup-common.ts` restores it.
@@ -103,6 +104,7 @@ Readiness helpers, the interaction races and how to diagnose a failing spec: `sr
 - Page objects in `src/e2e/page-objects/`, fixtures in `src/e2e/fixtures/`, tests in `src/e2e/tests/`.
 - Test files: `*.e2e.ts`.
 - Preferred selector: `getByTestId`. If the target element lacks a `data-testid`, add one to the component first.
+- Page objects read the interface in Spanish, the language of an unprefixed URL; `tests/i18n.e2e.ts` covers English and the toggle.
 - Also use `getByRole`, `getByLabel`, `getByText` where semantically appropriate. Never raw CSS selectors.
 - No fixed waits: `page.waitForTimeout` proves nothing finished. Wait for the rendered result or the completed response. Only when elapsed time is itself the assertion, keep the window with a trailing `// e2e-elapsed-time: <why>`. The `e2e-fixed-delay` ratchet enforces it (`docs/agents/ci.md` § Structure and ratchets), and `e2e-networkidle` keeps `networkidle` out: an idle network is not a hydrated page.
 - Fully parallel, one user per worker (`fixtures/user.fixture.ts`): a spec asserts only on rows it created and the `db` fixture deletes them by their captured ids (`src/e2e/AGENTS.md`).

@@ -4,6 +4,7 @@ import { XIcon } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import type * as React from "react";
 
+import { useDictionary } from "@/lib/hooks/i18n";
 import { cn } from "@/lib/utils";
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -20,6 +21,8 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const { common } = useDictionary();
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
@@ -41,7 +44,7 @@ function DialogContent({
           data-slot="dialog-close"
         >
           <XIcon aria-hidden="true" />
-          <span className="sr-only">Close dialog</span>
+          <span className="sr-only">{common.closeDialog}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

@@ -9,6 +9,7 @@ function setup(overrides: Partial<PostCardProps> = {}) {
   const props: PostCardProps = {
     author: { name: "Alice", image: null },
     content: "Hello world",
+    locale: "en",
     now: NOW,
     timestamp: new Date(NOW - 5 * 60 * 1000),
     ...overrides,
@@ -45,6 +46,15 @@ describe("PostCard", () => {
     const time = screen.getByText("1 hour ago");
     expect(time.tagName).toBe("TIME");
     expect(time).toHaveAttribute("dateTime", "2024-06-15T11:55:00.000Z");
+  });
+
+  test.each([
+    ["es", "hace 5 minutos"],
+    ["en", "5 minutes ago"],
+  ] as const)("writes the age in %s", (locale, age) => {
+    setup({ locale });
+
+    expect(screen.getByRole("time")).toHaveTextContent(age);
   });
 
   test("shows the row menu it is given", () => {

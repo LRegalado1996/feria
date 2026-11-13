@@ -4,13 +4,28 @@ import { describe, expect, test, vi } from "vitest";
 import { config, proxy } from "./proxy";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ORIGIN = "http://localhost:3000";
 
-describe("proxy", () => {
+/** What the proxy did with a page request: the three outcomes it has. */
+async function route(path: string) {
+  const response = await proxy(new NextRequest(`${ORIGIN}${path}`));
+
+  return {
+    // evlog types its response by the two header methods it uses.
+    status: "status" in response ? response.status : null,
+    redirectedTo: response.headers.get("location"),
+    rewrittenTo: response.headers.get("x-middleware-rewrite"),
+    passedThrough: response.headers.get("x-middleware-next") === "1",
+    requestId: response.headers.get("x-request-id"),
+  };
+}
+
+describe("proxy: /api requests", () => {
   test("stamps a request id and the start time on the forwarded request and the response", async () => {
     vi.setSystemTime(new Date("2024-06-15T12:00:00.000Z"));
 
     const response = await proxy(
-      new NextRequest("http://localhost:3000/api/orpc/post/create")
+      new NextRequest(`${ORIGIN}/api/orpc/post/create`)
     );
     const requestId = response.headers.get("x-request-id");
 
@@ -25,7 +40,7 @@ describe("proxy", () => {
 
   test("keeps the request id a caller already sent", async () => {
     const response = await proxy(
-      new NextRequest("http://localhost:3000/api/health", {
+      new NextRequest(`${ORIGIN}/api/health`, {
         headers: { "x-request-id": "upstream-42" },
       })
     );
@@ -36,7 +51,99 @@ describe("proxy", () => {
     );
   });
 
-  test("runs on /api only", () => {
-    expect(config.matcher).toEqual(["/api/:path*"]);
+  test.each(["/api", "/api/health", "/api/orpc/post/create"])(
+    "never gives %s a language: it is stamped and passed through as it is",
+    async (path) => {
+      const outcome = await route(path);
+
+      expect(outcome).toEqual({
+        status: 200,
+        redirectedTo: null,
+        rewrittenTo: null,
+        passedThrough: true,
+        requestId: expect.stringMatching(UUID),
+      });
+    }
+  );
+});
+
+describe("proxy: page requests", () => {
+  test.each([
+    ["/", "/es"],
+    ["/products", "/es/products"],
+    ["/products/chain-1?color=dorado", "/es/products/chain-1?color=dorado"],
+    // Not a locale, so it is a Spanish path like any other (and a 404 there).
+    ["/english", "/es/english"],
+    ["/EN", "/es/EN"],
+    // `/api` is a prefix only as a whole segment.
+    ["/apiary", "/es/apiary"],
+  ])(
+    "serves %s in Spanish by rewriting it to %s, without a request id",
+    async (path, rewritten) => {
+      expect(await route(path)).toEqual({
+        status: 200,
+        redirectedTo: null,
+        rewrittenTo: `${ORIGIN}${rewritten}`,
+        passedThrough: false,
+        requestId: null,
+      });
+    }
+  );
+
+  test.each(["/en", "/en/products", "/en/products?color=dorado"])(
+    "lets %s through to its English route untouched",
+    async (path) => {
+      expect(await route(path)).toEqual({
+        status: 200,
+        redirectedTo: null,
+        rewrittenTo: null,
+        passedThrough: true,
+        requestId: null,
+      });
+    }
+  );
+
+  test.each([
+    ["/es", "/"],
+    ["/es/", "/"],
+    ["/es/products", "/products"],
+    ["/es/products?color=dorado&page=2", "/products?color=dorado&page=2"],
+    // Not an open redirect: the target stays a path on this origin.
+    ["/es//evil.example/x", "/evil.example/x"],
+  ])(
+    "permanently redirects %s to %s, the one address of a Spanish page",
+    async (path, target) => {
+      expect(await route(path)).toEqual({
+        status: 308,
+        redirectedTo: `${ORIGIN}${target}`,
+        rewrittenTo: null,
+        passedThrough: false,
+        requestId: null,
+      });
+    }
+  );
+});
+
+describe("proxy matcher", () => {
+  // Next compiles each matcher to a regular expression anchored at both ends.
+  const matches = (path: string) =>
+    config.matcher.some((source) => new RegExp(`^${source}$`).test(path));
+
+  test.each(["/", "/en", "/products/chain-1", "/api/health", "/es/cart"])(
+    "runs on %s",
+    (path) => {
+      expect(matches(path)).toBe(true);
+    }
+  );
+
+  test.each([
+    "/_next/static/chunks/main.js",
+    "/_next/image",
+    "/_vercel/insights/script.js",
+    "/monitoring",
+    "/favicon.ico",
+    "/images/logo.png",
+  ])("stays off %s, which has no language", (path) => {
+    expect(matches(path)).toBe(false);
   });
 });
