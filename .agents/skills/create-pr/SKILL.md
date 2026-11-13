@@ -132,8 +132,10 @@ Follow these steps to create a Pull Request:
     - **Visual proof image**: add `--attach '<image_path>#<alt text>'` to that
       same `gh pr create`. `gh` uploads the file and appends its link at the
       end of the body: move the link into the "Visual proof" section with
-      `gh pr edit <number> --body-file`, and use `gh pr edit --attach` to
-      replace the image later.
+      `gh pr edit <number> --body-file`. To change the image later, attach
+      the new one with `gh pr edit --attach` and edit the body again: the new
+      link replaces the old one in the section, so the description never
+      shows two versions of the proof.
     - If your `gh` has no attachment flag (`gh pr create --help`), create the
       PR, give the file to the user and ask them to drag it into the "Visual
       proof" section. The `visual-proof` check stays red until they do, so

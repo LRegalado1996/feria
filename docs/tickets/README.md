@@ -7,7 +7,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 - Take tickets in order unless a dependency says otherwise. One ticket, one branch (`fer-012-short-name`), one PR into `qa`.
 - `qa` and `main` accept pull requests only. `main` is production and receives promotion PRs from `qa` once `qa` is stable.
 - CodeRabbit reviews each PR into `qa` (not the promotion PR into `main`, whose changes were already reviewed) and the local agent answers it until every thread is settled (the `review-loop` skill). Lucas gives the word to merge.
-- A PR with a visible change includes one image of the result in its description (before and after only for a bug fix), or a recording when the change is a gesture or a timing. The `visual-proof` check fails without one.
+- A PR with a visible change includes one image of the result in its description (before and after only for a bug fix), or a recording when the change is a gesture or a timing. The `visual-proof` check fails when there is no image or recording at all; whether it is the right proof is for the reviewer.
 - Commit messages and PR titles follow Conventional Commits, with the ticket in a `Refs: FER-012` footer. The rules are in the `conventional-commits` skill (`.agents/skills/conventional-commits/SKILL.md`).
 - A ticket is done when its acceptance criteria hold and the template's definition of done passes (`AGENTS.md`).
 - Update the `Status` line in the ticket and the table below in the same PR: `todo`, `in progress`, `done`.
