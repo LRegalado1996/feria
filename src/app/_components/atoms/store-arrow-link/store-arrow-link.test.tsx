@@ -58,10 +58,14 @@ describe("StoreArrowLink", () => {
   test("the arrow's nudge is dropped under reduced motion", () => {
     const { arrow } = setup();
 
-    expect(arrow?.querySelector("svg")).toHaveClass(
-      "group-hover:translate-x-1",
-      "motion-reduce:transition-none"
+    const icon = arrow?.querySelector("svg");
+
+    expect(icon).toHaveClass(
+      "motion-safe:group-hover:translate-x-1",
+      "motion-safe:transition-transform"
     );
+    // Ungated, it would still jump under reduced motion.
+    expect(icon).not.toHaveClass("group-hover:translate-x-1");
   });
 
   test("keeps a caller's class", () => {

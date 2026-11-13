@@ -39,6 +39,13 @@ export class DesignPage extends BasePage {
       .first();
   }
 
+  /** The first marquee's moving track. */
+  getMarqueeTrack(): Locator {
+    return this.getSection("marquee")
+      .getByTestId("store-marquee-track")
+      .first();
+  }
+
   getSliderTrack(): Locator {
     return this.getSection("cards").getByRole("region", {
       name: "Artículos de muestra",

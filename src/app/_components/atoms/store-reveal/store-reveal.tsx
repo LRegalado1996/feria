@@ -5,7 +5,9 @@ import type { ComponentProps } from "react";
 import { useScrollEntry } from "@/lib/hooks/ui";
 import { cn } from "@/lib/utils";
 
-export type StoreRevealProps = ComponentProps<"div">;
+// No `ref`: the component needs its own to watch itself, and a caller's
+// would replace it and leave the block unwatched.
+export type StoreRevealProps = Omit<ComponentProps<"div">, "ref">;
 
 /**
  * Fades and lifts its content into place once, when it scrolls into view.

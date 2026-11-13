@@ -204,13 +204,38 @@ describe("StoreSlider", () => {
     expect(next).toHaveAttribute("aria-disabled", "true");
   });
 
-  test("an empty track at its end never reads a position below the first", () => {
-    const { next, position, scrollTo } = setup({ count: 0 });
+  test("an empty slider reads 0 / 0: there is no first slide", () => {
+    const { next, position, previous } = setup({ count: 0 });
+
+    expect(position()).toBe("0 / 0");
+    expect(previous).toHaveAttribute("aria-disabled", "true");
+    expect(next).toHaveAttribute("aria-disabled", "true");
+  });
+
+  test("an empty track scrolled to its end never reads a position below zero", () => {
+    const { position, scrollTo } = setup({ count: 0 });
 
     scrollTo(5);
 
-    expect(position()).toBe("1 / 0");
+    expect(position()).toBe("0 / 0");
+  });
+
+  test("measures again when slides are added, with no scroll or resize", () => {
+    const { next, position, track, view } = setup({ count: 1 });
     expect(next).toHaveAttribute("aria-disabled", "true");
+
+    view.rerender(
+      <StoreSlider label="Sample articles" slides={makeSlides(6)} />
+    );
+    layOut(track, 6);
+    // The layout stub lands after the commit; one more slide triggers the
+    // measure against it.
+    view.rerender(
+      <StoreSlider label="Sample articles" slides={makeSlides(7)} />
+    );
+
+    expect(position()).toBe("1 / 7");
+    expect(next).toHaveAttribute("aria-disabled", "false");
   });
 
   test("next moves forward by most of a screenful, previous moves back", async () => {

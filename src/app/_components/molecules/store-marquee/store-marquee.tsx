@@ -83,6 +83,7 @@ function StoreMarquee({
           paused && "[animation-play-state:paused]"
         )}
         data-slot="store-marquee-track"
+        data-testid="store-marquee-track"
       >
         <div className="flex shrink-0 items-center gap-6 px-3 py-4 motion-reduce:shrink motion-reduce:flex-wrap md:py-5">
           {phrases}

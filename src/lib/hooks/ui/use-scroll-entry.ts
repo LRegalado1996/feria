@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Where an element stands against the viewport since the page loaded:
@@ -25,9 +25,18 @@ export type ScrollEntryState = "entered" | "idle" | "pending";
 export function useScrollEntry() {
   const [element, setElement] = useState<Element | null>(null);
   const [state, setState] = useState<ScrollEntryState>("idle");
+  // Once it has been on screen there is nothing left to decide. The effect
+  // runs again when a route kept hidden comes back (Cache Components keeps
+  // routes mounted): without this, a block the visitor already saw and then
+  // scrolled past would be found off screen and hidden.
+  const seen = useRef(false);
 
   useEffect(() => {
-    if (!element || typeof IntersectionObserver === "undefined") {
+    if (
+      !element ||
+      seen.current ||
+      typeof IntersectionObserver === "undefined"
+    ) {
       return undefined;
     }
 
@@ -43,6 +52,7 @@ export function useScrollEntry() {
       });
 
       if (visible) {
+        seen.current = true;
         observer.disconnect();
       }
     });

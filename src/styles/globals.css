@@ -147,14 +147,25 @@
   /*
    * The storefront's five colors: the LR Market palette by default, and what
    * a store overrides on its own pages. They have no dark value: a store's
-   * palette is its identity, not a theme. The three below them are derived,
-   * so an override never has to supply them.
+   * palette is its identity, not a theme.
    */
   --store-background: #f2f3f0;
   --store-surface: #ffffff;
   --store-foreground: #111312;
   --store-contrast: #111312;
   --store-accent: #c8f31d;
+}
+
+/*
+ * Three colors derived from the five, so an override never supplies them. A
+ * custom property is computed on the element that declares it and inherited
+ * as a finished color: declared on `:root` alone, these would keep the
+ * default palette under a store that overrides the five lower in the tree.
+ * So the element that overrides the palette carries `data-store-palette`,
+ * and they are computed again there.
+ */
+:root,
+[data-store-palette] {
   /* Small text on the background: 5.9:1 with the default palette. */
   --store-muted: color-mix(
     in srgb,

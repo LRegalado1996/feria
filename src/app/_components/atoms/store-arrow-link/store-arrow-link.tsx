@@ -59,7 +59,7 @@ function StoreArrowLink({
         className={arrowBoxVariants({ tone })}
         data-slot="store-arrow-link-arrow"
       >
-        <ArrowRight className="size-5 transition-transform group-hover:translate-x-1 motion-reduce:transition-none" />
+        <ArrowRight className="size-5 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" />
       </span>
     </Link>
   );

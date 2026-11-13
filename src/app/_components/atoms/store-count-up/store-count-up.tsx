@@ -37,10 +37,20 @@ function StoreCountUp({
   const reducedMotion = usePrefersReducedMotion();
   const [ref, state] = useScrollEntry();
   const [progress, setProgress] = useState(0);
-  const counting = state !== "idle" && !reducedMotion;
+  // The count plays once. Finished, or skipped because motion was reduced
+  // when the figure came in, it never starts again: a visitor who changes
+  // the setting afterwards must not see a final figure fall back to zero.
+  const [settled, setSettled] = useState(false);
+  const counting = state !== "idle" && !reducedMotion && !settled;
+
+  // Decided while rendering, not in an effect: the skipped count is settled
+  // in the same render that learns of it.
+  if (state === "entered" && reducedMotion && !settled) {
+    setSettled(true);
+  }
 
   useEffect(() => {
-    if (state !== "entered" || reducedMotion) {
+    if (state !== "entered" || settled || reducedMotion) {
       return undefined;
     }
 
@@ -51,13 +61,15 @@ function StoreCountUp({
 
       if (elapsed < 1) {
         frame = requestAnimationFrame(tick);
+      } else {
+        setSettled(true);
       }
     });
 
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [state, reducedMotion]);
+  }, [state, reducedMotion, settled]);
 
   const shown = counting ? Math.round(value * easeOutCubic(progress)) : value;
 

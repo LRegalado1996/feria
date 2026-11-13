@@ -101,11 +101,20 @@ describe("StoreCountUp", () => {
   });
 
   test("what a screen reader gets never changes while the digits run", () => {
-    const { emit, root } = setup();
+    const { advance, emit, figure, root } = setup();
+    const spoken = () => root?.querySelector(".sr-only")?.textContent;
 
     emit(false);
+    expect(spoken()).toBe("1,280");
 
-    expect(root?.querySelector(".sr-only")?.textContent).toBe("1,280");
+    emit(true);
+    advance(300);
+    expect(figure()).not.toBe("1,280");
+    expect(spoken()).toBe("1,280");
+
+    advance(1000);
+    expect(figure()).toBe("1,280");
+    expect(spoken()).toBe("1,280");
     expect(
       root?.querySelector('[data-slot="store-count-up-figure"]')
     ).toHaveAttribute("aria-hidden", "true");
@@ -119,6 +128,37 @@ describe("StoreCountUp", () => {
 
     emit(true);
     advance(600);
+    expect(figure()).toBe("1,280");
+  });
+
+  test("a finished count stays finished when the motion setting is switched on and off", () => {
+    const { advance, emit, figure, motion } = setup();
+    emit(false);
+    emit(true);
+    advance(1300);
+    expect(figure()).toBe("1,280");
+
+    act(() => {
+      motion.set(true);
+    });
+    act(() => {
+      motion.set(false);
+    });
+    advance(100);
+
+    expect(figure()).toBe("1,280");
+  });
+
+  test("a count skipped under reduced motion does not start when motion comes back", () => {
+    const { advance, emit, figure, motion } = setup({ reducedMotion: true });
+    emit(false);
+    emit(true);
+
+    act(() => {
+      motion.set(false);
+    });
+    advance(100);
+
     expect(figure()).toBe("1,280");
   });
 

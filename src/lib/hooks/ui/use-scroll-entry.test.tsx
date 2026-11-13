@@ -22,9 +22,9 @@ function setup({ intersectionObserver = true } = {}) {
   const element = document.createElement("div");
   const view = renderHook(() => useScrollEntry());
 
-  const attach = () => {
+  const attach = (target: Element | null = element) => {
     act(() => {
-      view.result.current[0](element);
+      view.result.current[0](target);
     });
   };
   const emit = (isIntersecting: boolean) => {
@@ -86,6 +86,40 @@ describe("useScrollEntry", () => {
 
     expect(state()).toBe("idle");
     expect(observers.active()).toBeUndefined();
+  });
+
+  test.each([
+    ["was on screen at load", [true], "idle"],
+    ["scrolled in", [false, true], "entered"],
+  ] as const)(
+    "what %s is not watched again when its effect restarts, so it is never hidden",
+    (_label, events, state) => {
+      const slider = setup();
+      slider.attach();
+      for (const isIntersecting of events) {
+        slider.emit(isIntersecting);
+      }
+
+      // What a route coming back from hidden does: the effect runs again.
+      slider.attach(null);
+      slider.attach();
+
+      expect(slider.observers.instances).toHaveLength(1);
+      expect(slider.observers.instances[0]?.disconnected).toBe(true);
+      expect(slider.state()).toBe(state);
+    }
+  );
+
+  test("what never came on screen is watched again when its effect restarts", () => {
+    const { attach, emit, observers, state } = setup();
+    attach();
+    emit(false);
+
+    attach(null);
+    attach();
+
+    expect(observers.instances[1]?.disconnected).toBe(false);
+    expect(state()).toBe("pending");
   });
 
   test("stops watching on unmount", () => {

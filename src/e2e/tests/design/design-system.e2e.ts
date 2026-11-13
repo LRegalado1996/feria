@@ -68,6 +68,17 @@ test.describe("Storefront design system", () => {
     );
   });
 
+  test("with motion allowed the marquee moves", async ({ page }) => {
+    const designPage = new DesignPage(page);
+
+    await designPage.goto();
+
+    await expect(designPage.getMarqueeTrack()).toHaveCSS(
+      "animation-name",
+      "store-marquee"
+    );
+  });
+
   test("the marquee stops and starts again from its pause button", async ({
     page,
   }) => {
@@ -99,6 +110,10 @@ test.describe("Storefront design system", () => {
     await designPage.goto();
 
     await expect(designPage.getMarqueePause()).toBeHidden();
+    await expect(designPage.getMarqueeTrack()).toHaveCSS(
+      "animation-name",
+      "none"
+    );
     await designPage.expectNoHorizontalScroll();
   });
 
@@ -115,18 +130,25 @@ test.describe("Storefront design system", () => {
     await expect(designPage.getSliderPosition()).toHaveText("1 / 6");
     await expect(previous).toHaveAttribute("aria-disabled", "true");
 
-    // Another "next" on a slider that has not moved yet is harmless.
+    // A click before React owns the button is lost. It is repeated only
+    // while the slider has not left the start, so exactly one lands.
     await expect(async () => {
-      await next.click();
+      const scrolled = await designPage
+        .getSliderTrack()
+        .evaluate((track) => track.scrollLeft);
+
+      if (scrolled === 0) {
+        await next.click();
+      }
+
       await expect(previous).toHaveAttribute("aria-disabled", "false", {
         timeout: 1000,
       });
     }).toPass();
     await expect(designPage.getSliderPosition()).not.toHaveText("1 / 6");
 
-    await designPage.getSliderTrack().evaluate((track) => {
-      track.scrollTo({ behavior: "instant", left: 0 });
-    });
+    // One "next" moved less than a screenful, so one "previous" undoes it.
+    await previous.click();
 
     await expect(designPage.getSliderPosition()).toHaveText("1 / 6");
     await expect(previous).toHaveAttribute("aria-disabled", "true");

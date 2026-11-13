@@ -28,7 +28,7 @@ interface SliderPosition {
 
 const AT_START: SliderPosition = { atEnd: false, atStart: true, index: 0 };
 
-function readPosition(scroller: HTMLElement): SliderPosition {
+function readPosition(scroller: HTMLElement, total: number): SliderPosition {
   const slides = scroller.querySelectorAll<HTMLElement>(SLIDE_SELECTOR);
   const origin = slides[0]?.offsetLeft ?? 0;
   const atStart = scroller.scrollLeft <= EDGE_TOLERANCE_PX;
@@ -43,7 +43,7 @@ function readPosition(scroller: HTMLElement): SliderPosition {
   // The last slides cannot reach the left edge: at the end of the track the
   // position is the last one, not the one that happens to be leftmost.
   if (atEnd) {
-    return { atEnd, atStart, index: Math.max(slides.length - 1, 0) };
+    return { atEnd, atStart, index: Math.max(total - 1, 0) };
   }
 
   let index = 0;
@@ -78,6 +78,7 @@ function StoreSlider({ className, heading, label, slides }: StoreSliderProps) {
   const { slider } = useDictionary().storefront;
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState(AT_START);
+  const total = slides.length;
 
   useEffect(() => {
     if (!scroller) {
@@ -85,7 +86,7 @@ function StoreSlider({ className, heading, label, slides }: StoreSliderProps) {
     }
 
     const update = () => {
-      const next = readPosition(scroller);
+      const next = readPosition(scroller, total);
 
       // A scroll fires many events between two slides: keep the same object,
       // and skip the render, until something the interface shows changes.
@@ -106,7 +107,9 @@ function StoreSlider({ className, heading, label, slides }: StoreSliderProps) {
       scroller.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, [scroller]);
+    // Slides added or removed change where the end is without a scroll or a
+    // resize to announce it: their count re-runs the measure.
+  }, [scroller, total]);
 
   const move = (direction: -1 | 1) => {
     scroller?.scrollBy({
@@ -130,8 +133,9 @@ function StoreSlider({ className, heading, label, slides }: StoreSliderProps) {
             data-slot="store-slider-position"
           >
             {interpolate(slider.position, {
-              current: position.index + 1,
-              total: slides.length,
+              // An empty slider has no first slide: "0 / 0", not "1 / 0".
+              current: Math.min(position.index + 1, total),
+              total,
             })}
           </p>
           {/* `aria-disabled`, not `disabled`: a button that disables itself
