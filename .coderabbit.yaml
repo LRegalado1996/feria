@@ -24,7 +24,8 @@ reviews:
     # otherwise be reviewed): a bot pass over a whole release is where empty,
     # rate-limited "approvals" come from.
     ignore_title_keywords:
-      - "chore(release)"
+      - "promote qa to main"
+      - "merge main back into qa"
     ignore_usernames:
       - "dependabot[bot]"
       - "dependabot"

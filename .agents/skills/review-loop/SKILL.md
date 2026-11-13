@@ -115,7 +115,7 @@ Point the base back to `qa` before merging and delete the import branch after.
 
 The PR from `qa` into `main` is not part of this loop, and neither is the
 merge-back from `main` into `qa`. CodeRabbit skips both by their
-`chore(release)` title, because every change in them was reviewed in its own PR. Do not wait
+exact titles, because every change in them was reviewed in its own PR. Do not wait
 for a review there: check that the required checks are green, that `qa` is
 stable, and ask Lucas for the go-ahead.
 
