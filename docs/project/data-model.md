@@ -24,6 +24,18 @@ First draft. Each table is finalized in the ticket that creates it. Template rul
 | `product_image` | `productId`, `url`, `width`, `height`, `position` | First by position is the cover. |
 | `product_image_translation` | `productImageId`, `locale`, `altText` | |
 
+## Filters
+
+A store's own way of tagging articles, such as Color or Material. See [FER-033](../tickets/FER-033-article-filters.md).
+
+| Table | Columns | Notes |
+| --- | --- | --- |
+| `attribute` | `storeId`, `slug`, `position` | Slug unique per store; it is the URL parameter name. |
+| `attribute_translation` | `attributeId`, `locale`, `name` | |
+| `attribute_value` | `attributeId`, `slug`, `swatchColor` (nullable), `position` | Slug unique per attribute. |
+| `attribute_value_translation` | `attributeValueId`, `locale`, `name` | |
+| `product_attribute_value` | `productId`, `attributeValueId` | Unique pair. An article can hold several values of one attribute. |
+
 ## Home curation
 
 | Table | Columns | Notes |

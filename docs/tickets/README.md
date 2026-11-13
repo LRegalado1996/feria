@@ -39,6 +39,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-010](FER-010-catalog-domain.md) | Catalog domain: categories, articles, translations | P0 | todo |
 | [FER-011](FER-011-image-uploads.md) | Image upload pipeline | P0 | todo |
 | [FER-012](FER-012-remove-post-demo.md) | Remove the posts demo | P1 | todo |
+| [FER-033](FER-033-article-filters.md) | Article filters: color and other attributes | P0 | todo |
 
 ### M3 Admin
 
@@ -88,6 +89,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 002 → 008 → 009 → 013 → 014, 015
 008 → 010 → 011 → 017 → 018
 010 → 016, 019, 020
+010 → 033 → 017, 023
 005, 008 → 021 → 022, 023, 024
 010 → 025 → 026 → 027 → 028
 024 → 029 → 030

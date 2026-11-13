@@ -12,7 +12,7 @@ One button turns the uploaded photos into a complete article in both languages. 
 ## Scope
 
 - A "fill with AI" button in the wizard, enabled once a photo is uploaded. An optional one-line hint ("silver chain, 45 cm") improves the result.
-- A server procedure sends the photos and the store's context (name, category list, tone, currency) to Claude through Vercel AI Gateway and asks for structured output validated by zod: title, description, suggested category (one of the store's, or a proposed new one), SEO title and description, alt text per photo, all in Spanish and English.
+- A server procedure sends the photos and the store's context (name, category list, tone, currency) to Claude through Vercel AI Gateway and asks for structured output validated by zod: title, description, suggested category (one of the store's, or a proposed new one), filter values chosen from the store's own lists (the colors it sees in the photos, the material when it is evident), SEO title and description, alt text per photo, all in Spanish and English. A color the store does not have yet is offered as a suggestion to add, never created silently.
 - The price is never invented. It stays empty unless the hint states one.
 - The prompt lives in one versioned file with its own tests against recorded responses. It writes for Uruguayan shoppers: natural rioplatense Spanish, no exaggerated claims, no materials or certifications that cannot be seen in the photo.
 - Results stream into the form field by field. Every field stays editable, each can be regenerated on its own, and "undo" restores what was there before.

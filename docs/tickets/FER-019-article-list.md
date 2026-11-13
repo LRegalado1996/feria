@@ -12,7 +12,9 @@ A store member finds any article quickly and makes the common changes without op
 ## Scope
 
 - List with cover, title, category, price, status and availability; cards on mobile, a table on desktop.
-- Search by title, filters by category, status and availability, all in the URL.
+- Search by title, filters by category, status, availability and the store's own filters (FER-033), all in the URL.
+- "Share this selection": with a category or filter applied, one button copies the matching storefront link or opens WhatsApp with it, so the owner answers "what do you have in purple?" in two taps.
+- Bulk edit: select several articles and add or remove a filter value, for tagging the existing catalog quickly.
 - Inline actions: toggle available, edit price, publish or unpublish, duplicate, delete with confirmation.
 - Infinite scroll on the template's keyset pagination.
 - The primary action is always "new article", leading to the wizard.

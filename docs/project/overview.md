@@ -28,6 +28,7 @@ A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's ow
 | Buying | Cart in the browser, no customer accounts. The customer enters name and phone and the order is saved. The store sees incoming orders in the admin's orders section; no WhatsApp message carries the order. |
 | Phone verification | The only use of WhatsApp messaging. Optional and feature-flagged. When enabled, the customer gets a code by WhatsApp and a form to enter it. The order exists before the code; the admin sees a "phone confirmed" flag. Never a blocker. |
 | Order states | `received`, `packed`, `delivered`, `undeliverable`. |
+| Filters | Besides its category, an article carries values from filters the store defines (Color, Material). Any combination is a shareable catalog link, such as `/{store}/products?category=collares&color=dorado`, made to be sent by WhatsApp. |
 | Stock | None. An article is available or not. No variants. |
 | Currency | Each store works in one currency, chosen in its settings: Uruguayan pesos (`UYU`) or US dollars (`USD`). Amounts are stored as integers in minor units. |
 | Commits and PRs | Conventional Commits 1.0.0, as written in the `conventional-commits` skill. |
@@ -39,7 +40,7 @@ A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's ow
 | View | Route (Spanish / English) | Contents |
 | --- | --- | --- |
 | Home | `/{store}` · `/en/{store}` | Promo banners, social links, a slider per category, a curated "best sellers" ranking, a couple of featured articles. |
-| Catalog | `/{store}/products` | Grid with category filter and search, both in the URL. |
+| Catalog | `/{store}/products` | Grid with category, color and other filters plus search, all in the URL, and a button to share the filtered view. |
 | Article | `/{store}/products/{slug}` | Gallery, price, description, add to cart, related articles. |
 
 Supporting flow, not counted as views: cart drawer, checkout form, and the order confirmation page `/{store}/orders/{token}` (which also hosts the code form when verification is on).
