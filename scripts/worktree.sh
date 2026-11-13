@@ -191,7 +191,17 @@ generate_env() {
   set_env_var "$env_file" "E2E_BASE_URL" "\"${url}\""
 }
 
-env_targets_this_worktree() { grep -qF "\"${DB_URL}\"" "$PROJECT_ROOT/.env" 2>/dev/null; }
+# True when .env's DATABASE_URL is this worktree's database: the whole URL,
+# not only the port, and quoted either way or not at all.
+env_targets_this_worktree() {
+  local value
+  value="$(sed -n 's/^DATABASE_URL=//p' "$PROJECT_ROOT/.env" 2>/dev/null | tail -n 1)"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  [[ "$value" == "$DB_URL" ]]
+}
 
 # ---------------------------------------------------------------------------
 # Docker
