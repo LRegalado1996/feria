@@ -39,6 +39,20 @@ jobs:
 
           failed=0
 
+          # A bot writes its own title. Dependabot's is "chore(deps): Bump x
+          # from 1 to 2 in the y group": the type and scope are ours
+          # (dependabot.yml), the capital and the length are not. Hold it to
+          # the type prefix and leave the rest alone.
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            bot_title_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
+            if ! grep -qE "$bot_title_pattern" <<< "$PR_TITLE"; then
+              echo "::error::The title does not start with a Conventional Commits type: '$PR_TITLE'."
+              exit 1
+            fi
+            echo "Bot pull request: the title has a type prefix; nothing else is checked."
+            exit 0
+          fi
+
           # The pattern in .agents/skills/conventional-commits/SKILL.md.
           title_pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: [a-z0-9].*[^.]$'
           # Here-strings, not pipes: `grep -q` exits at the first match, and a
@@ -54,10 +68,9 @@ jobs:
           fi
 
           # Generated bodies: promotions and merge-backs between this
-          # repository's own branches (a fork's `qa` is somebody's work), and bots.
+          # repository's own branches (a fork's `qa` is somebody's work).
           if { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; } \
-            || { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; } \
-            || [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            || { [ "$HEAD_REPO" = "$REPO" ] && [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; }; then
             echo "Generated description: only the title is checked."
             exit "$failed"
           fi
