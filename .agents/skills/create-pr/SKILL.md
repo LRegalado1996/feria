@@ -95,21 +95,31 @@ Follow these steps to create a Pull Request:
     git push -u origin HEAD
     ```
 
-8.  **Visual proof**: for a user-facing change, capture the same screen at
-    the same size before and after, using `agent-browser` (see
-    `docs/agents/agent-tooling.md` § Live testing). Skip it when the change has
-    no visual surface; for a backend change, show the behaviour difference
-    instead (response, output). It is a gate: the `visual-proof` check fails
-    when the PR touches files that affect the interface and the description has
-    neither an image or a recording nor the "No visible change" box ticked.
-    Tick that box, with one line on why, only when it is true.
-    - **Before**: the deployed base (`qa`), or this branch with your change
-      stashed. It must show the old behaviour.
-    - **After**: this branch, served on this worktree's port (`pnpm wt:ports`),
-      or the branch's preview deployment.
-    - Never commit media into the repo. If your `gh` has no attachment flag
-      (`gh pr create --help`), upload the images by dragging them into the PR
-      on GitHub, or hand the files to the user and say so in the section.
+8.  **Visual proof**: for a user-facing change, show the result in **one
+    image**: capture each screen that changed from this branch (served on this
+    worktree's port, `pnpm wt:ports`, or the branch's preview deployment) with
+    `agent-browser` (see `docs/agents/agent-tooling.md` § Live testing), and
+    compose the captures into a single labelled image, phone and desktop width
+    side by side when layout changed. A description with a row of separate
+    screenshots is not read; one image is.
+    - **Only the result.** Show how it is now, not how it was. A reviewer
+      judges the new screen, and the old one is on `qa`.
+    - **A bug fix is the exception:** show before and after of the same screen
+      at the same size, still in that one image, because the difference is the
+      proof. Before is the deployed base (`qa`) or the base checked out
+      locally; it must show the bug.
+    - A gesture or a timing is a recording instead of an image.
+    - Skip it when the change has no visual surface; for a backend change,
+      show the behaviour difference instead (response, output).
+    - It is a gate: the `visual-proof` check fails when the PR touches files
+      that affect the interface and the description has neither an image or a
+      recording nor the "No visible change" box ticked. Tick that box, with
+      one line on why, only when it is true.
+    - Never commit media into the repo. Attach the image with
+      `gh pr create --attach` (or `gh pr edit --attach`) and move its link
+      into the "Visual proof" section; if your `gh` has no attachment flag,
+      drag it into the PR on GitHub, or hand the file to the user and say so
+      in the section.
 
 9.  **Create PR**: Use the `gh` CLI to create the PR against `qa`. To avoid
     shell escaping issues with multi-line Markdown, write the description to a
