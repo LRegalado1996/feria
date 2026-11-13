@@ -84,6 +84,7 @@ And required:
 - Clock: `vi.setSystemTime(date)` freezes `Date` for the test; `setup-common.ts` restores it.
 - Hydration: `collectHydrationErrors(element, { serverNowMs, clientNowMs })` from `@/test/hydration` server-renders at one instant, hydrates at a later one and returns React's mismatch errors; `render` never hydrates (`docs/agents/nextjs.md` § Hydration).
 - Globals happy-dom lacks: `stubIntersectionObserver()` from `@/test/intersection-observer` returns the observers to drive by hand. `vi.stubGlobal` ends with its test (`unstubGlobals`).
+- Reduced motion: `stubReducedMotion(initial)` from `@/test/reduced-motion` answers `matchMedia` and flips the setting with `set()`. happy-dom lays nothing out, so a component that reads geometry (`molecules/store-slider`) gets `clientWidth`, `scrollWidth` and `offsetLeft` defined by hand in its test.
 - oRPC procedures: `call()` from `@orpc/server` with a mock context.
 
 ## Integration tests

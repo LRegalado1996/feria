@@ -7,6 +7,33 @@
   --font-sans:
     var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  /*
+   * Storefront only (design.md § Storefront). The display face is condensed
+   * and always set uppercase and tight, so its fallbacks are condensed too.
+   */
+  --font-display:
+    var(--font-anton), Impact, "Arial Narrow Bold", "Arial Narrow", sans-serif;
+  --leading-display: 0.92;
+  --tracking-display: 0.01em;
+  --tracking-eyebrow: 0.08em;
+
+  --animate-store-marquee: store-marquee var(--store-marquee-duration, 30s)
+    linear infinite;
+  --animate-store-line: store-line 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  /* The track holds two copies of its content, so half its width is one lap. */
+  @keyframes store-marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  @keyframes store-line {
+    from {
+      transform: translateY(105%);
+    }
+  }
 }
 
 @theme inline {
@@ -45,6 +72,42 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-store-background: var(--store-background);
+  --color-store-surface: var(--store-surface);
+  --color-store-foreground: var(--store-foreground);
+  --color-store-contrast: var(--store-contrast);
+  --color-store-accent: var(--store-accent);
+  --color-store-muted: var(--store-muted);
+  --color-store-contrast-muted: var(--store-contrast-muted);
+  --color-store-line: var(--store-line);
+}
+
+/*
+ * Storefront type roles. Fluid sizes are utilities of their own rather than
+ * `text-*` theme keys: tailwind-merge reads an unknown `text-…` class as a
+ * color and would drop the real color next to it.
+ */
+@utility store-display-hero {
+  font-size: clamp(3.4rem, 12vw, 9.5rem);
+}
+
+@utility store-display-section {
+  font-size: clamp(2.6rem, 7vw, 5.5rem);
+}
+
+@utility store-display-title {
+  font-size: clamp(1.5rem, 1.1rem + 1vw, 1.75rem);
+}
+
+@utility store-display-figure {
+  font-size: clamp(5.5rem, 4.5rem + 4vw, 6rem);
+}
+
+@utility store-eyebrow {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
 }
 
 :root {
@@ -80,6 +143,47 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /*
+   * The storefront's five colors: the LR Market palette by default, and what
+   * a store overrides on its own pages. They have no dark value: a store's
+   * palette is its identity, not a theme.
+   */
+  --store-background: #f2f3f0;
+  --store-surface: #ffffff;
+  --store-foreground: #111312;
+  --store-contrast: #111312;
+  --store-accent: #c8f31d;
+}
+
+/*
+ * Three colors derived from the five, so an override never supplies them. A
+ * custom property is computed on the element that declares it and inherited
+ * as a finished color: declared on `:root` alone, these would keep the
+ * default palette under a store that overrides the five lower in the tree.
+ * So the element that overrides the palette carries `data-store-palette`,
+ * and they are computed again there.
+ */
+:root,
+[data-store-palette] {
+  /* Small text on the background: 5.9:1 with the default palette. */
+  --store-muted: color-mix(
+    in srgb,
+    var(--store-foreground) 68%,
+    var(--store-background)
+  );
+  /* Small text on a contrast block: 9.6:1 with the default palette. */
+  --store-contrast-muted: color-mix(
+    in srgb,
+    var(--store-background) 74%,
+    var(--store-contrast)
+  );
+  /* Hairlines and the surface behind a photo that has not loaded. */
+  --store-line: color-mix(
+    in srgb,
+    var(--store-foreground) 11%,
+    var(--store-background)
+  );
 }
 
 .dark {
@@ -138,4 +242,15 @@
       animation: none !important;
     }
   }
+}
+
+/*
+ * A heading inside a block that waits below the fold holds its lines still
+ * until the block is revealed: taking the animation away and giving it back
+ * is what restarts it. Outside every layer on purpose: the animation is a
+ * utility, and a rule in the base layer would lose to it.
+ */
+[data-slot="store-reveal"][data-state="pending"]
+  [data-slot="store-heading-line-text"] {
+  animation: none;
 }

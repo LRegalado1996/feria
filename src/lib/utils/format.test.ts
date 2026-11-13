@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   APP_TIME_ZONE,
   formatDate,
+  formatInteger,
   formatPrice,
   formatRelativeTime,
   fromPlainNumberText,
@@ -95,6 +96,27 @@ describe("formatPrice", () => {
     (amount, currency, spanish, english) => {
       expect(formatPrice(amount, currency, "es")).toBe(spanish);
       expect(formatPrice(amount, currency, "en")).toBe(english);
+    }
+  );
+});
+
+describe("formatInteger", () => {
+  test.each([
+    [0, "0", "0"],
+    [128, "128", "128"],
+    // es-UY groups from four digits on; a locale that waits for five would
+    // print 1280.
+    [1280, "1.280", "1,280"],
+    [1_234_567, "1.234.567", "1,234,567"],
+    [-1280, "-1.280", "-1,280"],
+    // A count has no fraction: both sides of the half.
+    [12.4, "12", "12"],
+    [12.6, "13", "13"],
+  ] as const)(
+    "%d reads %j in Spanish and %j in English",
+    (value, spanish, english) => {
+      expect(formatInteger(value, "es")).toBe(spanish);
+      expect(formatInteger(value, "en")).toBe(english);
     }
   );
 });
