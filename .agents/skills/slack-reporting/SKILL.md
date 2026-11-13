@@ -75,7 +75,9 @@ Necesito de vos: instalar CodeRabbit en el repo.
 
 ## How to post
 
-1. Use a Slack connector's tools when the session has one.
+1. Use the Slack connector's tools. It is the official `slack` plugin for
+   Claude Code (`claude plugin install slack@claude-plugins-official`), signed
+   in from `/mcp`.
 2. Otherwise use the browser (Claude in Chrome) on the channel links above.
    Messages then appear under Lucas's own name; start those with `[Claude]`.
 3. If neither works, do not skip silently: list the messages that could not be
