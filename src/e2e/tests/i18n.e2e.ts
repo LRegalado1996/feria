@@ -112,6 +112,8 @@ test.describe("Languages, signed out", () => {
               url.protocol !== expected.protocol ||
               url.hostname !== expected.hostname ||
               url.pathname !== expected.pathname ||
+              url.username !== "" ||
+              url.password !== "" ||
               url.search !== "" ||
               url.hash !== ""
           )
