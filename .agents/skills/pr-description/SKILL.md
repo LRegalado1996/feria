@@ -71,4 +71,7 @@ line the harness asks for.
 
 The two pull requests `auto-promotion-pr.yml` opens (`qa` into `main`, `main`
 into `qa`) and the ones bots open (Dependabot) carry their own generated body.
-The check lets them through; their titles still follow Conventional Commits.
+The check lets their bodies through. A promotion's title still follows
+Conventional Commits in full. A bot's title is held to the type prefix only
+(`chore(deps): ...`): Dependabot capitalises "Bump" and writes long titles, and
+neither can be configured.
