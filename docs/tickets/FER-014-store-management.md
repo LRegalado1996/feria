@@ -24,3 +24,7 @@ Lucas can create a new store in a few minutes, and each store can keep its own d
 - A member can edit their own store's settings but cannot change the slug or deactivate the store; only a superadmin can.
 - A deactivated store's public pages answer 404 and its admin stays reachable to superadmins.
 - E2E: create a store, change its accent color, see it on the storefront.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

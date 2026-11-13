@@ -36,3 +36,7 @@ Price ranges and numeric filters. Variants with their own price or stock.
 ## Notes
 
 The storefront UI and the share button are in FER-023, the picker in the wizard in FER-017, the AI suggestion in FER-018, and the "copy link" for the owner in FER-019.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

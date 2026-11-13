@@ -33,3 +33,7 @@ The custom domain (FER-032). Sentry and CI secrets (FER-003).
 ## Notes
 
 Needs Lucas for the interactive steps: Vercel login, Marketplace terms, billing confirmation.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

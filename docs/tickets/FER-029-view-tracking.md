@@ -26,3 +26,7 @@ We know which articles people look at, per store and per day, without slowing th
 ## Notes
 
 Vercel Analytics stays on for traffic sources and web vitals. This table exists because the dashboard needs per-article numbers joined with our own data.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

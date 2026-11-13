@@ -27,3 +27,7 @@ Only invited people can sign in, and every admin action is authorized against th
 ## Notes
 
 Buyers never have an account. Nothing in the storefront depends on a session.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

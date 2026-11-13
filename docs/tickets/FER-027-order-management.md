@@ -27,3 +27,7 @@ The store sees every order and moves it through its states with one tap, from th
 ## Out of scope
 
 Push, email or WhatsApp notifications for new orders: worth a follow-up ticket if orders get missed at the stall. Exports and sales reports.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

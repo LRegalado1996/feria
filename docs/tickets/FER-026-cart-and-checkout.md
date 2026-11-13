@@ -30,3 +30,7 @@ A shopper goes from "I want this" to a confirmed order in under a minute, withou
 ## Notes
 
 The order page is reached without a login, so it is addressed by `token`, is not indexed, and shows the phone number partly masked.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

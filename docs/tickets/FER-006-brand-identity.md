@@ -30,3 +30,7 @@ Post templates and print pieces (FER-007).
 ## Notes
 
 Show two or three logo directions as an Artifact before committing to one.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -31,3 +31,7 @@ The admin screens that edit a store (FER-014). Custom domains per store.
 ## Notes
 
 Every later query for catalog, orders or metrics filters by `storeId` taken from the resolved store, never from client input alone.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

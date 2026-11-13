@@ -12,6 +12,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 - A ticket is done when its acceptance criteria hold and the template's definition of done passes (`AGENTS.md`).
 - Update the `Status` line in the ticket and the table below in the same PR: `todo`, `in progress`, `done`.
 - New work found along the way becomes a new ticket with the next free number. Tickets are never renumbered.
+- Progress is reported in Slack, one message per event, following the `slack-reporting` skill: `#feria-tickets`, `#feria-prs`, `#feria-deploys`, and `#feria-general` for decisions and the end-of-session summary.
 - **P0** is needed for the fair on December 5. **P1** should make it. **P2** can follow the launch.
 
 ## Index

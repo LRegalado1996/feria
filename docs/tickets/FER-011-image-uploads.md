@@ -27,3 +27,7 @@ A store member can upload phone photos straight from the browser, and the storef
 ## Notes
 
 Function bodies are capped at 4.5 MB on Vercel, which is why the file never passes through our own route.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -29,3 +29,7 @@ One page tells Lucas how each store is doing and whether the AI feature earns it
 ## Notes
 
 Load the `dataviz` skill before building charts. A per-store version for store owners is a natural follow-up ticket.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -32,3 +32,7 @@ Translating database content (handled by `*_translation` tables in FER-008 and F
 ## Notes
 
 Prefer our own dictionaries over a library: the copy volume is small and the template pins and vets every dependency. Revisit if plurals or rich text get painful.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -29,3 +29,7 @@ An article page convinces, loads instantly from a shared link, and is fully read
 ## Notes
 
 Read the `seo-ai-visibility` skill in `this-is-pepe` before starting.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

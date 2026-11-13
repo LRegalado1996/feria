@@ -33,3 +33,7 @@ Uploads (FER-011) and all UI.
 ## Notes
 
 "Article" is the word in the interface (artículo). The code and tables use `product`.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

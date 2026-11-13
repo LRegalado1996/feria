@@ -35,3 +35,7 @@ Removing the posts demo (FER-012). Any product code.
 ## Notes
 
 The zip is a snapshot of the template's `qa` branch. Record its commit id (shown in the archive comment) in the README so later template updates can be diffed against it.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

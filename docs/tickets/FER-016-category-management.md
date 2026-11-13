@@ -22,3 +22,7 @@ A store member keeps the store's categories in order without leaving the page.
 - Reordering persists and shows on the storefront without a redeploy.
 - A duplicate name in the same store is refused with a message on the field.
 - E2E: create, reorder, delete with reassignment.
+
+## Reporting
+
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.
