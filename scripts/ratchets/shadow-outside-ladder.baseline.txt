@@ -1,0 +1,12 @@
+# A shadow outside the xs/sm/lg role ladder
+#
+# Shadows are used by role: shadow-xs on controls, shadow-sm on cards, shadow-lg on overlays. Intermediate and arbitrary values create elevation levels the system does not define, so surfaces stop reading consistently. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Foundations: shadows by role
+# Fix:       Pick the role's shadow: shadow-xs (control), shadow-sm (card), shadow-lg (overlay). A 1px ring drawn as a shadow is a border or ring-1.
+#
+# 0 file(s), 0 occurrence(s) remaining.

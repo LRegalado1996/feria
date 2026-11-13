@@ -1,0 +1,205 @@
+{
+  "$comment": "Rules the tree may not grow, frozen so they bind NEW code at once while any old sites drain. Engine: scripts/ratchet.mjs. Each baseline may only shrink. How to add a rule: docs/agents/ci.md § Structure and ratchets.",
+  "rules": [
+    {
+      "id": "e2e-fixed-delay",
+      "title": "A fixed delay used to synchronize an E2E test",
+      "rationale": "A fixed delay cannot prove that hydration, a debounced query or a dialog transition finished: it passes on a fast machine and flakes on a slow one, and a negative assertion behind it can pass before the request it is about has completed. Held at zero from the day the ratchet was added.",
+      "guardrail": "docs/agents/testing.md § E2E tests",
+      "fix": "Wait for the expected rendered result, the matching completed RPC response, or complete dialog teardown. Only when elapsed time itself is the assertion, keep the bounded window with a trailing // e2e-elapsed-time: comment explaining what must stay absent or unchanged and why that interval covers it. The marker is not an exception for slow readiness.",
+      "pattern": "\\.waitForTimeout\\s*\\(",
+      "exemptMarker": "e2e-elapsed-time:",
+      "include": ["src/e2e/**/*.ts", "src/e2e/**/*.tsx"],
+      "exclude": [],
+      "baseline": "scripts/ratchets/e2e-fixed-delay.baseline.txt"
+    },
+    {
+      "id": "e2e-networkidle",
+      "title": "networkidle used as an E2E readiness signal",
+      "rationale": "An idle network says nothing about hydration: a server-rendered control is visible and clickable before React owns it, so the first click or keystroke can vanish, and a page that polls never idles at all. Held at zero from the day the ratchet was added.",
+      "guardrail": "src/e2e/AGENTS.md § Readiness",
+      "fix": "Wait for what the next step needs: the page object's waitForLoad (its own rendered content), an enabled control that only React enables, clickUntilVisible for the first harmless open, or completeRpcAction for a request that must complete.",
+      "pattern": "waitForLoadState\\(\\s*[\"']networkidle|waitUntil:\\s*[\"']networkidle",
+      "include": ["src/e2e/**/*.ts", "src/e2e/**/*.tsx"],
+      "exclude": [],
+      "baseline": "scripts/ratchets/e2e-networkidle.baseline.txt"
+    },
+    {
+      "id": "zero-argument-called-with",
+      "title": "A spy assertion pinned to zero arguments: toHaveBeenCalledWith()",
+      "rationale": "The vitest/prefer-called-with fixer, run by `pnpm fix` and by lint-staged on every commit, rewrites an argument-blind `toHaveBeenCalled()` into `toHaveBeenCalledWith()`. That keeps the assertion blind when the spy takes no arguments and breaks it in an unrelated-looking way when it does. Held at zero from the day the ratchet was added.",
+      "guardrail": "docs/agents/testing.md § Falsifiability",
+      "fix": "Pin the arguments the spy must receive: toHaveBeenCalledWith(expected, …), or toHaveBeenCalledExactlyOnceWith(…) for a single call. A call that genuinely takes no arguments is toHaveBeenCalledExactlyOnceWith().",
+      "pattern": "\\.toHaveBeenCalledWith\\(\\)",
+      "include": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+      "exclude": [],
+      "baseline": "scripts/ratchets/zero-argument-called-with.baseline.txt"
+    },
+    {
+      "id": "non-lucide-icon-import",
+      "title": "An icon import from a package other than lucide-react",
+      "rationale": "Lucide is the only icon set: mixed icon styles read as unfinished, and a second icon package is a bundle nobody priced in. None of these packages is installed; the ratchet makes the first PR that adds one fail before the dependency debate is skipped. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Components: icons are lucide-react only",
+      "fix": "Use the lucide-react equivalent. A genuinely missing glyph is a design.md conversation, not a new dependency.",
+      "pattern": "from\\s+[\"'](?:react-icons|@radix-ui/react-icons|@heroicons/|@tabler/icons|@phosphor-icons/|iconoir|@iconify)",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/non-lucide-icon-import.baseline.txt"
+    },
+    {
+      "id": "bare-catch",
+      "title": "A catch block that discards the error",
+      "rationale": "A bare `} catch {` has no error binding, so it cannot report: the failure is swallowed and Sentry never learns it happened. It is the shape that turns a broken flow into a silent blank screen.",
+      "guardrail": "AGENTS.md § Error reporting: every client catch reports or is provably a heartbeat",
+      "fix": "Bind the error and call reportError(error, { action: \"Domain.snake_action\" }) from @/lib/errors/client, even when the UI also shows a message. An offline-tolerant heartbeat or poll keeps the bare catch with `// heartbeat: offline-tolerant` as a trailing comment on the catch line or as the first line inside the block; anywhere else it exempts nothing.",
+      "pattern": "\\}\\s*catch\\s*\\{",
+      "exemptMarker": "heartbeat: offline-tolerant",
+      "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/bare-catch.baseline.txt"
+    },
+    {
+      "id": "silent-catch-handler",
+      "title": "A rejection handler that discards the error",
+      "rationale": "`.catch(() => undefined)` is the other way to swallow a failure, and it looks deliberate: the error could be bound and was dropped, so Sentry never learns the promise rejected. Held at zero from the day the ratchet was added.",
+      "guardrail": "AGENTS.md § Error reporting: every client catch reports or is provably a heartbeat",
+      "fix": "Bind the error and report it: `.catch((error: unknown) => { reportError(error, { action: \"Domain.snake_action\" }); })`. An offline-tolerant heartbeat or poll keeps the discard with `// heartbeat: offline-tolerant` on the same line.",
+      "pattern": "\\.catch\\(\\(\\)\\s*=>\\s*(?:undefined|null|void 0|\\{\\s*\\})\\s*\\)",
+      "exemptMarker": "heartbeat: offline-tolerant",
+      "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/silent-catch-handler.baseline.txt"
+    },
+    {
+      "id": "report-error-action-format",
+      "title": "A reportError action outside the Domain.snake_action convention",
+      "rationale": "The action is the primary tag on every browser event and the key alert rules filter on, so one spelling has to win: `Post.createFailed` and `Post.create_failed` are two tag values nobody thinks to search together. Matches a capitalised domain with an uppercase letter in the suffix only, so unrelated dotted strings are not flagged. Held at zero from the day the ratchet was added.",
+      "guardrail": "AGENTS.md § Error reporting: actions are `Domain.snake_action`",
+      "fix": "Spell the suffix in snake_case (`Post.create_failed`, not `Post.createFailed`) and rename every occurrence, the test that asserts it included.",
+      "pattern": "action:\\s*\"[A-Z][A-Za-z0-9]*\\.[a-z0-9_]*[A-Z][A-Za-z0-9_]*\"",
+      "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/report-error-action-format.baseline.txt"
+    },
+    {
+      "id": "unscoped-sentry-capture",
+      "title": "A direct Sentry capture that bypasses the reporting helpers",
+      "rationale": "`captureExceptionWithScope` and `reportError` are what attach the action, procedure and request id, decide what is not an issue, and return an event id only when one was sent. A bare `captureException` produces an event with none of that, and from a callback outside the request scope nothing else will tag it either. Held at zero from the day the ratchet was added.",
+      "guardrail": "AGENTS.md § Error reporting: never call Sentry's capture functions directly",
+      "fix": "Server: `captureExceptionWithScope(error, { action, procedure, requestId, context })` from @/lib/sentry. Client: `reportError(error, { action, context })` from @/lib/errors/client. Both are safe without a DSN.",
+      "pattern": "\\b(?:captureException|captureMessage)\\??\\(",
+      "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**",
+        "src/lib/errors/client.ts",
+        "src/lib/sentry.ts"
+      ],
+      "baseline": "scripts/ratchets/unscoped-sentry-capture.baseline.txt"
+    },
+    {
+      "id": "raw-color-literal",
+      "title": "A raw color literal (hex, oklch(), hsl()) in a component or lib module",
+      "rationale": "The tokens in src/styles/globals.css are the one palette, with a light and a dark value each. A literal color bypasses both themes, so it can silently disagree with dark mode or with a later token change. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Foundations: never a hex/oklch()/hsl() literal in a component",
+      "fix": "Use a token through a Tailwind utility or var(--token). If the surface genuinely cannot reach the app CSS (a document-replacing crash screen, an OG image renderer), keep the literal with a trailing // color-literal: token-unreachable comment saying why.",
+      "pattern": "#[0-9a-fA-F]{6}\\b|\\b(?:oklch|hsla?)\\(",
+      "exemptMarker": "color-literal: token-unreachable",
+      "include": [
+        "src/app/**/*.ts",
+        "src/app/**/*.tsx",
+        "src/lib/**/*.ts",
+        "src/lib/**/*.tsx"
+      ],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts"
+      ],
+      "baseline": "scripts/ratchets/raw-color-literal.baseline.txt"
+    },
+    {
+      "id": "arbitrary-text-size",
+      "title": "An arbitrary pixel font size",
+      "rationale": "Type sizes come from the role table in design.md, text-xs at the smallest. A pixel literal is a new type role made up on the spot, and text shrunk to fit hides a layout that needs rewriting. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Typography and copy: no arbitrary sizes",
+      "fix": "Use a role from the type table. If the layout only works with smaller text, reflow the layout or rewrite the copy.",
+      "pattern": "text-\\[[\\d.]+px\\]",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/arbitrary-text-size.baseline.txt"
+    },
+    {
+      "id": "shadow-outside-ladder",
+      "title": "A shadow outside the xs/sm/lg role ladder",
+      "rationale": "Shadows are used by role: shadow-xs on controls, shadow-sm on cards, shadow-lg on overlays. Intermediate and arbitrary values create elevation levels the system does not define, so surfaces stop reading consistently. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Foundations: shadows by role",
+      "fix": "Pick the role's shadow: shadow-xs (control), shadow-sm (card), shadow-lg (overlay). A 1px ring drawn as a shadow is a border or ring-1.",
+      "pattern": "(?<!drop-)shadow-(?:md|xl|2xl)\\b|(?<!drop-)shadow-\\[",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**"
+      ],
+      "baseline": "scripts/ratchets/shadow-outside-ladder.baseline.txt"
+    },
+    {
+      "id": "one-off-number-format",
+      "title": "A one-off Intl formatter or toLocaleString() outside src/lib/utils/format.ts",
+      "rationale": "One module owns the locale, the time zone and the cached Intl instances, so every figure and date on screen agrees on grouping, precision and zone, and the server and the browser print the same text. A formatter built in place drifts from them, and constructing one is the slow part of formatting. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Typography and copy: numbers and dates go through src/lib/utils/format.ts",
+      "fix": "Add or reuse a formatter in src/lib/utils/format.ts and call it; components never build Intl.* or call toLocaleString().",
+      "pattern": "\\bIntl\\.(?:NumberFormat|DateTimeFormat|RelativeTimeFormat|ListFormat|PluralRules|DisplayNames)\\b|\\.toLocale(?:Date|Time)?String\\(",
+      "include": ["src/**/*.ts", "src/**/*.tsx"],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/e2e/**",
+        "src/test/**",
+        "src/lib/utils/format.ts"
+      ],
+      "baseline": "scripts/ratchets/one-off-number-format.baseline.txt"
+    }
+  ]
+}

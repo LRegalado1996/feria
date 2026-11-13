@@ -1,0 +1,108 @@
+{
+  "$schema": "node_modules/konsistent/konsistent.schema.json",
+  "version": "v1",
+  "conventions": [
+    {
+      "name": "component-levels-are-the-three-atomic-tiers",
+      "description": "AGENTS.md § Components and forms: components live under atoms/, molecules/ or organisms/. Any other directory under _components is rejected; the shape rule would simply not match it, so a stray tier would go unchecked rather than flagged. Measured at 3/3 conforming when added.",
+      "severity": "error",
+      "paths": "src/app/_components/{level:matches(^(?!atoms$|molecules$|organisms$).+$)}",
+      "mustNot": {
+        "haveType": "directory"
+      }
+    },
+    {
+      "name": "component-directories-are-kebab-case",
+      "description": "AGENTS.md § Naming: component directories are kebab-case. The shape rule skips names it does not match, so they need an explicit rejection. Measured at 14/14 conforming when added.",
+      "severity": "error",
+      "paths": "src/app/_components/{level:matches(^(atoms|molecules|organisms)$)}/{component:matches(^(?![a-z0-9-]+$).+$)}",
+      "mustNot": {
+        "haveType": "directory"
+      }
+    },
+    {
+      "name": "component-directory-shape",
+      "description": "AGENTS.md § Components and forms: each component is a directory whose files are named after it, so button/ holds button.tsx, button.test.tsx and index.ts. ${component} is the captured directory name, so the triple is enforced per component. Measured at 14/14 conforming when added.",
+      "severity": "error",
+      "paths": "src/app/_components/{level:matches(^(atoms|molecules|organisms)$)}/{component:matches(^[a-z0-9-]+$)}",
+      "must": {
+        "haveType": "directory",
+        "haveFiles": ["${component}.tsx", "${component}.test.tsx", "index.ts"]
+      }
+    },
+    {
+      "name": "component-barrel-reexports-component",
+      "description": "The per-component index.ts exists so callers can import the component's directory; it holds re-exports and nothing else. Measured at 14/14 conforming when added.",
+      "severity": "error",
+      "paths": "src/app/_components/{level:matches(^(atoms|molecules|organisms)$)}/{component:matches(^[a-z0-9-]+$)}/index.ts",
+      "must": {
+        "areBarrelFiles": true
+      }
+    },
+    {
+      "name": "schema-domain-has-barrel",
+      "description": "AGENTS.md § API (oRPC): input schemas live at src/lib/schemas/{domain}/index.ts. Measured at 2/2 conforming when added.",
+      "severity": "error",
+      "paths": "src/lib/schemas/{domain}",
+      "must": {
+        "haveType": "directory",
+        "haveFiles": ["index.ts"]
+      }
+    },
+    {
+      "name": "hook-domain-has-barrel",
+      "description": "AGENTS.md § Hooks: each hook domain has an index.ts, and callers import the domain. Measured at 1/1 conforming when added.",
+      "severity": "error",
+      "paths": "src/lib/hooks/{domain}",
+      "must": {
+        "haveType": "directory",
+        "haveFiles": ["index.ts"]
+      }
+    },
+    {
+      "name": "hooks-stay-client-side",
+      "description": "Hooks are client-side React Query wrappers over the oRPC client. A value import of the Drizzle client or a server service would pull server code into the browser bundle; a type import is erased and stays allowed. Measured at 2/2 conforming when added.",
+      "severity": "error",
+      "paths": "src/lib/hooks/{domain:matches(^[a-z0-9-]+$)}/{hook:matches(^use-[a-z0-9-]+$)}.ts",
+      "mustNot": {
+        "importValuesFrom": [
+          "@/server/db",
+          "@/server/db/*",
+          "@/server/services/*"
+        ]
+      }
+    },
+    {
+      "name": "routers-contain-no-drizzle-queries",
+      "description": "AGENTS.md § API: a router is input schema → auth check → service call, with no Drizzle even for one-step CRUD, so crons, scripts and tests reuse the same queries without a request. Every read and write goes through src/server/services/. konsistent sees imports, not member access: scripts/lint-router-db.sh catches `context.db.query…` with no import. Measured at 1/1 conforming when added.",
+      "severity": "error",
+      "paths": "src/server/api/routers/{domain:matches(^[a-z0-9-]+$)}.ts",
+      "mustNot": {
+        "importValuesFrom": ["drizzle-orm", "drizzle-orm/*"]
+      }
+    },
+    {
+      "name": "services-are-framework-agnostic",
+      "description": "docs/agents/database.md § Services own every query: a service runs from a cron, a script or a test without a request. next/headers and next/server reach into the live request, the oRPC procedures carry its context, and an error tracker is the interceptor's job; a service receives what it needs as arguments. Measured at 1/1 conforming when added.",
+      "severity": "error",
+      "paths": "src/server/services/{domain:matches(^[a-z0-9-]+$)}.ts",
+      "mustNot": {
+        "importValuesFrom": [
+          "next/headers",
+          "next/server",
+          "@/server/api/orpc",
+          "@sentry/nextjs"
+        ]
+      }
+    },
+    {
+      "name": "services-hold-no-react",
+      "description": "Services are plain async functions over the database. A React or next/navigation import means UI logic leaked into the domain layer, and the service would drag it into every cron and script. Measured at 1/1 conforming when added.",
+      "severity": "error",
+      "paths": "src/server/services/{domain:matches(^[a-z0-9-]+$)}.ts",
+      "mustNot": {
+        "importValuesFrom": ["react", "react-dom", "next/navigation"]
+      }
+    }
+  ]
+}

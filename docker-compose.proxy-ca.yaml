@@ -1,0 +1,13 @@
+# Proxy CA overlay. scripts/worktree.sh layers it only when the host trusts an
+# extra CA through NODE_EXTRA_CA_CERTS (a Claude Code cloud session, or any
+# TLS-intercepting corporate proxy). Without it the app container trusts only
+# its image's bundle, so the entrypoint's `apk add` fails on "certificate not
+# trusted". The entrypoint APPENDS this file to the bundle: on a laptop the
+# variable may name a single corporate CA rather than a full bundle.
+services:
+  app:
+    volumes:
+      - ${TEMPLATE_PROXY_CA_FILE}:/etc/wt-proxy-ca.crt:ro
+    environment:
+      WT_PROXY_CA_FILE: /etc/wt-proxy-ca.crt
+      NODE_EXTRA_CA_CERTS: /etc/wt-proxy-ca.crt

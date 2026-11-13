@@ -1,0 +1,12 @@
+# A fixed delay used to synchronize an E2E test
+#
+# A fixed delay cannot prove that hydration, a debounced query or a dialog transition finished: it passes on a fast machine and flakes on a slow one, and a negative assertion behind it can pass before the request it is about has completed. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: docs/agents/testing.md § E2E tests
+# Fix:       Wait for the expected rendered result, the matching completed RPC response, or complete dialog teardown. Only when elapsed time itself is the assertion, keep the bounded window with a trailing // e2e-elapsed-time: comment explaining what must stay absent or unchanged and why that interval covers it. The marker is not an exception for slow readiness.
+#
+# 0 file(s), 0 occurrence(s) remaining.

@@ -1,0 +1,570 @@
+name: CI
+
+on:
+    # qa, plus every hotfix branch: a `hotfix/**` push run is what
+    # promotion-verification.yml reuses for a hotfix PR, as it reuses qa's
+    # for a release. This glob defines a hotfix.
+    push:
+        branches: [qa, "hotfix/**"]
+    # Every PR except those into production: promotion-verification.yml
+    # verifies them (`Promotion Verified`) from the runs above, no rerun.
+    pull_request:
+        branches-ignore: [production]
+        # A draft runs static checks and secret scanning only; marking it
+        # ready starts the full run, and turning it back cancels that run.
+        types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    # Always the full suite, like a push.
+    workflow_dispatch:
+
+# Read-only by default; a job that needs more declares it.
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+# Shape: static-checks, unit-test, integration-test and build start together,
+# each installing on its own from setup-node's pnpm store cache: a serialized
+# setup job sat on the critical path of every one of them, and a per-SHA
+# node_modules cache filled the 10 GB cache budget. e2e waits for the build it
+# boots and for static-checks, the cheapest signal; unit and integration feed it
+# nothing, so they run beside it and only the gate waits for them. The runtime
+# jobs (unit, integration, build, e2e) run only when `changes` says the change
+# can affect them; static-checks and gitleaks run on every event.
+#
+# Cache budget: no key holds a SHA or a run id, so entries are reused instead of
+# evicting each other. Artifacts upload on failure only, except the build ->
+# e2e hand-off, kept for one day.
+
+jobs:
+    changes:
+        name: Classify Changes
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+            pull-requests: read
+        outputs:
+            full_ci: ${{ steps.classify.outputs.full_ci }}
+            deferred: ${{ steps.classify.outputs.deferred }}
+        steps:
+            # Tested by .github/scripts/ci-policy.test.mjs. Any doubt means the
+            # full suite: a run that skips what it should have run reads green.
+            - name: Classify the change
+              id: classify
+              uses: actions/github-script@v9
+              with:
+                  script: |
+                      const scope = async (fullCi, deferred, reason) => {
+                        core.setOutput("full_ci", String(fullCi));
+                        core.setOutput("deferred", String(deferred));
+                        await core.summary.addHeading("CI scope").addRaw(reason).write();
+                      };
+                      if (context.eventName !== "pull_request") {
+                        await scope(true, false, "Full validation: a push or a manual run.");
+                        return;
+                      }
+                      if (context.payload.pull_request.draft) {
+                        await scope(false, true, "Draft: static checks and secret scanning only. Mark the PR ready for review to run the merge gate.");
+                        return;
+                      }
+                      const files = await github.paginate(github.rest.pulls.listFiles, {
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        pull_number: context.payload.pull_request.number,
+                        per_page: 100,
+                      });
+                      // `[].every()` is true, and the Files API stops at 3000
+                      // files: an empty or truncated list would excuse the
+                      // runtime jobs for files nobody looked at.
+                      const FILES_API_CEILING = 3000;
+                      if (files.length === 0 || files.length >= FILES_API_CEILING) {
+                        await scope(true, false, `Full validation: the changed-file list is ${files.length === 0 ? "empty" : "truncated"}, so it cannot be classified.`);
+                        return;
+                      }
+                      const LIGHTWEIGHT_DIRECTORIES = ["docs/", ".agents/", ".claude/", ".cursor/", ".vscode/", ".superset/"];
+                      const isLightweight = (path) =>
+                        path.endsWith(".md") || LIGHTWEIGHT_DIRECTORIES.some((directory) => path.startsWith(directory));
+                      // A rename names the new path in `filename` and the old one
+                      // in `previous_filename`. Judging only the new one would read
+                      // `src/app/page.tsx` -> `docs/page.md` as documentation and
+                      // skip the jobs that would notice the module is gone.
+                      const lightweightOnly = files.every(
+                        ({ filename, previous_filename: previous }) =>
+                          isLightweight(filename) && (!previous || isLightweight(previous))
+                      );
+                      await scope(
+                        !lightweightOnly,
+                        false,
+                        lightweightOnly
+                          ? "Static checks and secret scanning only: documentation and agent or editor config changed."
+                          : "Full validation: runtime files changed."
+                      );
+
+    static-checks:
+        name: Static Checks
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        # Turborepo remote cache, only in the jobs that run a cached task. No
+        # token (forks, Dependabot, a repository without the secret) means a
+        # local cache only. docs/agents/ci.md § Turborepo cache.
+        env:
+            # Remote cache only for trusted pushes (qa, hotfix/**): a PR's code could
+            # otherwise write entries later qa runs replay, and the signature key
+            # (HMAC) that verifies a read can also sign. PR runs cache locally.
+            TURBO_TOKEN: ${{ github.event_name == 'push' && secrets.TURBO_TOKEN || '' }}
+            TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+            TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name == 'push' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+            TURBO_TELEMETRY_DISABLED: 1
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  # History, so the ratchet step below finds the PR's base
+                  # commit without a credentialed fetch: this job runs PR code.
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6.1.0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v7.1.0
+              with:
+                  node-version-file: ".nvmrc"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            # Both tasks to the end, every failure reported; an unchanged tree
+            # replays from the cache.
+            - name: Lint, format, script self-tests and type check
+              run: pnpm turbo run check typecheck --continue
+
+            # Loads the config and every spec without a browser or a server, so
+            # a broken e2e import or fixture fails here, not after a build.
+            - name: List e2e tests
+              run: pnpm exec playwright test --list --config=src/e2e/playwright.config.ts
+              env:
+                  PLAYWRIGHT_SKIP_SERVER: "true"
+
+            # Every ratchet baseline is a file in the pull request, so "it may
+            # only shrink" is a claim about the DIFF, not about the tree: append
+            # an entry, or delete it and re-seed, and the working tree agrees
+            # with itself and `check` passes. This step reads the base commit.
+            - name: Ratchet baselines may only shrink
+              if: github.event_name == 'pull_request'
+              env:
+                  # The event's base COMMIT, not the branch name: a branch tip
+                  # moves, and a baseline pruned on the base after this run
+                  # started would read as entries this PR added.
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+              run: |
+                  # Fail closed: the engine reads a base it cannot find as
+                  # "no baseline yet", which would pass anything.
+                  git cat-file -e "$BASE_SHA^{commit}"
+                  node scripts/ratchet.mjs --verify-baseline "$BASE_SHA"
+
+    unit-test:
+        name: Unit Tests
+        needs: changes
+        if: needs.changes.outputs.full_ci == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        env:
+            # Remote cache only for trusted pushes (qa, hotfix/**): a PR's code could
+            # otherwise write entries later qa runs replay, and the signature key
+            # (HMAC) that verifies a read can also sign. PR runs cache locally.
+            TURBO_TOKEN: ${{ github.event_name == 'push' && secrets.TURBO_TOKEN || '' }}
+            TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+            TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name == 'push' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+            TURBO_TELEMETRY_DISABLED: 1
+            NODE_ENV: test
+            SKIP_ENV_VALIDATION: true
+            DATABASE_URL: postgresql://localhost:5432/stub
+            BETTER_AUTH_URL: http://localhost:3000
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  persist-credentials: false
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6.1.0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v7.1.0
+              with:
+                  node-version-file: ".nvmrc"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            # No coverage artifact: the thresholds fail this step in place.
+            # No reporter flags here: turbo hashes them into the cache key.
+            - name: Run unit tests
+              run: pnpm turbo run test:unit:coverage
+
+    integration-test:
+        name: Integration Tests
+        needs: changes
+        if: needs.changes.outputs.full_ci == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        services:
+            postgres:
+                # One tag with docker-compose.base.yaml, on Debian: alpine's musl
+                # ignores the locale and sorts text differently, so an ordering
+                # test would disagree between CI and a worktree.
+                image: postgres:18.6
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: test
+                    # A throwaway database needs no crash safety. None of these
+                    # change what a query sees, only what survives a crash.
+                    POSTGRES_INITDB_ARGS: "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d test"
+                    --health-interval 2s
+                    --health-timeout 5s
+                    --health-retries 20
+        env:
+            NODE_ENV: test
+            SKIP_ENV_VALIDATION: true
+            DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test
+            BETTER_AUTH_URL: http://localhost:3000
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  persist-credentials: false
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6.1.0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v7.1.0
+              with:
+                  node-version-file: ".nvmrc"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: Apply database migrations
+              run: pnpm db:migrate
+
+            # Seeds rot silently unless something runs them: this is the run.
+            - name: Seed the database
+              run: pnpm db:seed
+              env:
+                  NODE_ENV: test
+
+            - name: Run integration tests
+              run: pnpm test:integration
+
+    build:
+        name: Build
+        needs: changes
+        if: needs.changes.outputs.full_ci == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        env:
+            # Remote cache only for trusted pushes (qa, hotfix/**): a PR's code could
+            # otherwise write entries later qa runs replay, and the signature key
+            # (HMAC) that verifies a read can also sign. PR runs cache locally.
+            TURBO_TOKEN: ${{ github.event_name == 'push' && secrets.TURBO_TOKEN || '' }}
+            TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+            TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name == 'push' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+            TURBO_TELEMETRY_DISABLED: 1
+            SKIP_ENV_VALIDATION: true
+            DATABASE_URL: postgresql://localhost:5432/stub
+            BETTER_AUTH_URL: http://localhost:3000
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  persist-credentials: false
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6.1.0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v7.1.0
+              with:
+                  node-version-file: ".nvmrc"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: Resolve compiler cache date
+              id: compiler-cache-date
+              run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+            # Same OS, arch and lockfile only, never a bare `nextjs-` fallback:
+            # pnpm embeds resolved peers in package paths, so another lockfile's
+            # cache points every entry at paths that no longer exist, and
+            # Turbopack compiling against it is far slower than a cold build.
+            # Never key it on source files: one entry per commit would evict
+            # everything else in the cache.
+            - name: Restore Next.js compiler cache
+              id: compiler-cache
+              uses: actions/cache/restore@v6
+              with:
+                  path: ${{ github.workspace }}/.next/cache
+                  key: ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-${{ steps.compiler-cache-date.outputs.date }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ runner.arch }}-nextjs-${{ hashFiles('pnpm-lock.yaml') }}-
+
+            # Through the script, never `turbo run build`: it adds the machine
+            # discriminator the standalone output's native binaries need. A
+            # cache hit restores `.next` without compiling.
+            - name: Build
+              run: bash scripts/turbo-build.sh
+              env:
+                  NEXT_TELEMETRY_DISABLED: 1
+
+            # The hand-off to e2e: the standalone server plus the static files
+            # and `public/` it does not copy itself. Never all of `.next`: its
+            # `cache/` alone is hundreds of MB. A tar keeps the symlinks and
+            # modes that pnpm's traced node_modules rely on.
+            - name: Package standalone runtime
+              run: |
+                  mkdir -p .ci/next-runtime/.next
+                  cp -R .next/standalone/. .ci/next-runtime/
+                  cp -R .next/static .ci/next-runtime/.next/static
+                  cp -R public .ci/next-runtime/public
+                  tar -cf next-runtime.tar -C .ci/next-runtime .
+                  echo "Runtime artifact: $(du -h next-runtime.tar | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Upload standalone runtime
+              uses: actions/upload-artifact@v7
+              with:
+                  name: next-runtime
+                  path: next-runtime.tar
+                  retention-days: 1
+
+            # One entry per lockfile per day, written only by qa pushes: PR runs
+            # read it and never add their own.
+            - name: Save daily compiler cache
+              if: >-
+                  github.event_name == 'push' &&
+                  github.ref == 'refs/heads/qa' &&
+                  steps.compiler-cache.outputs.cache-hit != 'true'
+              uses: actions/cache/save@v6
+              with:
+                  path: ${{ github.workspace }}/.next/cache
+                  key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
+
+    e2e:
+        name: E2E Tests
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        # `build` is a hard dependency (its artifact is what runs here);
+        # static-checks spares the browser stage on a run already red. The
+        # implicit success() also skips this job when either did not succeed.
+        needs: [changes, build, static-checks]
+        if: needs.changes.outputs.full_ci == 'true'
+        # Browsers and their system packages are baked into the image, so no
+        # browser cache and no apt step. The tag must equal the exact
+        # @playwright/test pin in package.json: Dependabot bumps the package,
+        # never this line, and `pnpm check` (scripts/check-playwright-pin.sh)
+        # fails until both agree.
+        #
+        # One job, no shards: each shard pays install, artifact download and
+        # boot again. Shard once this job's test step passes about 5 minutes.
+        container: mcr.microsoft.com/playwright:v1.64.0-noble
+        defaults:
+            run:
+                # A container's steps default to sh (dash).
+                shell: bash
+        env:
+            NODE_ENV: test
+            SKIP_ENV_VALIDATION: true
+            # Steps run in a container, so the service is reached by its name,
+            # not localhost.
+            DATABASE_URL: postgresql://postgres:postgres@postgres:5432/e2e_test
+            BETTER_AUTH_URL: http://localhost:3000
+            # Docker sets HOSTNAME to the container id, and the standalone
+            # server binds to it unless told otherwise.
+            HOSTNAME: 0.0.0.0
+            PLAYWRIGHT_SERVER_COMMAND: node .ci/next-runtime/server.js
+        services:
+            postgres:
+                image: postgres:18.6
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: e2e_test
+                    POSTGRES_INITDB_ARGS: "-c fsync=off -c synchronous_commit=off -c full_page_writes=off"
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d e2e_test"
+                    --health-interval 2s
+                    --health-timeout 5s
+                    --health-retries 20
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  persist-credentials: false
+
+            # A fresh secret per run instead of a literal in this file. The old
+            # literal stays allowlisted in .gitleaks.toml: it is in history.
+            - name: Generate ephemeral auth secret
+              run: |
+                  secret="$(openssl rand -hex 32)"
+                  echo "::add-mask::$secret"
+                  echo "BETTER_AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6.1.0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v7.1.0
+              with:
+                  node-version-file: ".nvmrc"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: Download standalone runtime
+              uses: actions/download-artifact@v8
+              with:
+                  name: next-runtime
+                  path: .
+
+            - name: Extract standalone runtime
+              run: |
+                  mkdir -p .ci/next-runtime
+                  tar -xf next-runtime.tar -C .ci/next-runtime
+
+            - name: Apply database migrations
+              run: pnpm db:migrate
+
+            - name: Run E2E tests
+              run: pnpm e2e
+
+            # The HTML report carries the traces, screenshots and videos of the
+            # failed tests; a green run has nothing worth storing.
+            - name: Upload E2E report
+              if: failure()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: e2e-report
+                  path: src/e2e/playwright-report/
+                  if-no-files-found: ignore
+                  retention-days: 7
+
+    gitleaks:
+        name: Gitleaks
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        env:
+            # Pinned instead of an unauthenticated `releases/latest` API call per
+            # run. Dependabot does not track raw binaries: bump it by hand.
+            GITLEAKS_VERSION: 8.30.1
+        steps:
+            # Scans the history of every fetched ref, with the config of the
+            # checked-out branch: a value that ever reached history needs its
+            # allowlist entry for good.
+            - name: Checkout
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Cache Gitleaks binary
+              id: gitleaks-cache
+              uses: actions/cache@v6
+              with:
+                  path: gitleaks-bin
+                  key: gitleaks-${{ env.GITLEAKS_VERSION }}-linux-x64
+
+            - name: Install Gitleaks
+              if: steps.gitleaks-cache.outputs.cache-hit != 'true'
+              run: |
+                  mkdir -p gitleaks-bin
+                  curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz -C gitleaks-bin gitleaks
+
+            - name: Run Gitleaks
+              run: ./gitleaks-bin/gitleaks git --verbose .
+
+    ci-success:
+        name: CI Success
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        needs: [changes, static-checks, unit-test, integration-test, build, e2e, gitleaks]
+        if: always()
+        steps:
+            # Results reach the shell through env, never `${{ }}` inside the
+            # script: that is substituted before bash parses the line. Tested
+            # by .github/scripts/ci-policy.test.mjs.
+            - name: Check all jobs passed
+              env:
+                  CHANGES: ${{ needs.changes.result }}
+                  FULL_CI: ${{ needs.changes.outputs.full_ci }}
+                  DEFERRED: ${{ needs.changes.outputs.deferred }}
+                  STATIC_CHECKS: ${{ needs.static-checks.result }}
+                  UNIT_TEST: ${{ needs.unit-test.result }}
+                  INTEGRATION_TEST: ${{ needs.integration-test.result }}
+                  BUILD: ${{ needs.build.result }}
+                  E2E: ${{ needs.e2e.result }}
+                  GITLEAKS: ${{ needs.gitleaks.result }}
+              run: |
+                  echo "changes=$CHANGES full_ci=$FULL_CI deferred=$DEFERRED static-checks=$STATIC_CHECKS gitleaks=$GITLEAKS"
+                  echo "unit-test=$UNIT_TEST integration-test=$INTEGRATION_TEST build=$BUILD e2e=$E2E"
+
+                  # Required on every path, a documentation-only PR included.
+                  for result in "$CHANGES" "$STATIC_CHECKS" "$GITLEAKS"; do
+                    if [[ "$result" != success ]]; then
+                      echo "::error::Classify Changes, Static Checks and Gitleaks must succeed on every run."
+                      exit 1
+                    fi
+                  done
+
+                  # A draft's skipped tests must never read as merge approval.
+                  if [[ "$DEFERRED" != false ]]; then
+                    echo "::error::Full validation deferred (draft PR) or scope unknown. Mark the PR ready for review to run the merge gate."
+                    exit 1
+                  fi
+
+                  # The light path asserts the skip rather than permitting it:
+                  # a runtime job that ran anyway, even green, means the
+                  # classifier and the job conditions disagree.
+                  case "$FULL_CI" in
+                    true) expected=success ;;
+                    false) expected=skipped ;;
+                    *)
+                      echo "::error::Unknown CI scope '$FULL_CI': refusing to excuse the runtime jobs."
+                      exit 1
+                      ;;
+                  esac
+                  failed=0
+                  for job in "Unit Tests=$UNIT_TEST" "Integration Tests=$INTEGRATION_TEST" "Build=$BUILD" "E2E Tests=$E2E"; do
+                    if [[ "${job#*=}" != "$expected" ]]; then
+                      echo "::error::${job%%=*} is '${job#*=}', expected '$expected'."
+                      failed=1
+                    fi
+                  done
+                  if ((failed)); then
+                    exit 1
+                  fi
+                  if [[ "$FULL_CI" == true ]]; then
+                    echo "All CI checks passed."
+                  else
+                    echo "Documentation-only change: runtime jobs correctly skipped."
+                  fi

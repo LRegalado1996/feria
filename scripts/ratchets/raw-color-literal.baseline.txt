@@ -1,0 +1,12 @@
+# A raw color literal (hex, oklch(), hsl()) in a component or lib module
+#
+# The tokens in src/styles/globals.css are the one palette, with a light and a dark value each. A literal color bypasses both themes, so it can silently disagree with dark mode or with a later token change. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Foundations: never a hex/oklch()/hsl() literal in a component
+# Fix:       Use a token through a Tailwind utility or var(--token). If the surface genuinely cannot reach the app CSS (a document-replacing crash screen, an OG image renderer), keep the literal with a trailing // color-literal: token-unreachable comment saying why.
+#
+# 0 file(s), 0 occurrence(s) remaining.

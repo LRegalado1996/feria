@@ -1,0 +1,133 @@
+name: Preview Deployment
+
+# Feature branches do not deploy on their own (vercel.json `"**": false`). A
+# same-repository PR into qa that is open, ready and labeled `deploy:preview`
+# gets a Vercel preview of its head on every push, within seconds. There is no
+# CI gate: a failed Vercel build is Vercel's verdict on that commit.
+#
+# Trust: these events run the reviewed workflow on the default branch, never
+# PR code. No checkout, no install, no artifacts. The Vercel token is a secret
+# of the `preview` environment, whose deployment branches admit only qa, so no
+# other workflow (and no `pull_request` run of a PR's own workflow file) can
+# read it.
+on:
+    pull_request_target:
+        branches: [qa]
+        # `ready_for_review` covers a PR labeled while still a draft.
+        types: [labeled, synchronize, ready_for_review]
+    # Retry, and the way to preview a hotfix/* PR into production (the trigger
+    # above filters on a qa base). Run it on qa with the PR number.
+    workflow_dispatch:
+        inputs:
+            pr_number:
+                description: Pull request to preview
+                required: true
+                type: string
+
+permissions:
+    contents: read
+    pull-requests: read
+
+jobs:
+    trigger:
+        name: Request Vercel preview
+        # pr-summary.yml adds a `size:*` label on pushes; any label fires
+        # `labeled`, so the name check keeps this to one run per push.
+        if: >-
+            github.ref == 'refs/heads/qa' &&
+            (github.event_name == 'workflow_dispatch' ||
+             github.event.action != 'labeled' ||
+             github.event.label.name == 'deploy:preview')
+        # On the job, after `if:`: a skipped `size:*` label event must not
+        # cancel the run deploying the push. A burst of pushes collapses onto
+        # the last one, and each run reads the PR's current head anyway.
+        concurrency:
+            group: preview-${{ github.event.pull_request.number || inputs.pr_number }}
+            cancel-in-progress: true
+        runs-on: ubuntu-latest
+        environment: preview
+        timeout-minutes: 5
+        steps:
+            - name: Deploy the head of an opted-in PR
+              uses: actions/github-script@v9
+              env:
+                  VERCEL_TOKEN: ${{ secrets.VERCEL_PREVIEW_TOKEN }}
+                  VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+                  VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+              with:
+                  script: |
+                      const { owner, repo } = context.repo;
+                      const payload = context.payload;
+                      const number = Number(payload.pull_request?.number ?? payload.inputs?.pr_number);
+                      if (!Number.isSafeInteger(number) || number <= 0) {
+                        core.notice("No pull request number. Run this workflow on qa with the PR number to retry.");
+                        return;
+                      }
+                      const getPR = async () => (await github.rest.pulls.get({ owner, repo, pull_number: number })).data;
+                      // Case-sensitive, to agree with ci.yml's `hotfix/**` push trigger.
+                      const isHotfix = (pr) => pr.base.ref === "production" && pr.head.ref.startsWith("hotfix/");
+                      const eligible = (pr) => pr.state === "open" && !pr.draft &&
+                        pr.head.repo?.id === payload.repository.id &&
+                        !["qa", "production"].includes(pr.head.ref) &&
+                        (pr.base.ref === "qa" || isHotfix(pr)) &&
+                        pr.labels.some((label) => label.name === "deploy:preview");
+                      // Read the PR rather than trust the event: a cancelled
+                      // sibling run means this one may answer for several pushes.
+                      const pr = await getPR();
+                      if (!eligible(pr)) {
+                        core.notice("Preview skipped: the PR must be open, ready, from this repository, labeled deploy:preview, and target qa (or be a hotfix/* PR into production). Releases deploy on merge.");
+                        return;
+                      }
+                      const { VERCEL_TOKEN: token, VERCEL_PROJECT_ID: projectId, VERCEL_TEAM_ID: teamId } = process.env;
+                      if (!token && context.actor === "dependabot[bot]") {
+                        core.notice("Runs triggered by Dependabot get no secrets. Run this workflow on qa with the PR number to preview it.");
+                        return;
+                      }
+                      if (!(token && projectId && teamId)) {
+                        throw new Error("Preview not configured: set the VERCEL_PREVIEW_TOKEN secret on the preview environment and the VERCEL_PROJECT_ID and VERCEL_TEAM_ID repository variables (docs/agents/ci.md § Previews).");
+                      }
+                      const vercel = async (path, params, body) => {
+                        const url = new URL(path, "https://api.vercel.com");
+                        url.search = new URLSearchParams({ teamId, ...params }).toString();
+                        const response = await fetch(url, {
+                          method: body ? "POST" : "GET",
+                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                          ...(body ? { body: JSON.stringify(body) } : {}),
+                          signal: AbortSignal.timeout(30_000),
+                        });
+                        if (!response.ok) {
+                          throw new Error(`Vercel request failed: HTTP ${response.status}. Check the token's access to the project.`);
+                        }
+                        return response.json();
+                      };
+                      // Reuse a queued, building or ready deployment of this
+                      // commit. A failed or cancelled one is not listed, so a
+                      // retry of it goes through.
+                      const existing = await vercel("/v7/deployments", {
+                        projectId, target: "preview", branch: pr.head.ref, sha: pr.head.sha,
+                        state: "BUILDING,INITIALIZING,QUEUED,READY", limit: "1",
+                      });
+                      if (existing.deployments.length > 0) {
+                        core.notice("This commit already has a pending or ready preview.");
+                        return;
+                      }
+                      // Recheck mutable state right before the side effect.
+                      const current = await getPR();
+                      if (!eligible(current) || current.head.sha !== pr.head.sha) {
+                        core.notice("Preview skipped: the PR changed while the request was in flight.");
+                        return;
+                      }
+                      const deployment = await vercel("/v13/deployments", {}, {
+                        name: repo, project: projectId,
+                        // No `target` means preview. The branch is for the Git
+                        // integration; the SHA pins the code.
+                        gitSource: { type: "github", repoId: pr.head.repo.id, ref: pr.head.ref, sha: pr.head.sha },
+                        meta: { githubPrId: String(number) },
+                      });
+                      if (!(deployment.id && deployment.url)) {
+                        throw new Error("Vercel accepted the request without a deployment ID or URL; check the project before retrying.");
+                      }
+                      await core.summary.addHeading(`Preview requested for PR #${number}`)
+                        .addLink(`Deployment for ${pr.head.sha.slice(0, 7)}`, `https://${deployment.url}`)
+                        .addRaw("\nVercel still has to build it and report Ready. Removing the label stops future requests; it does not delete existing previews.")
+                        .write();

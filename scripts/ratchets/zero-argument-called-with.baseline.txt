@@ -1,0 +1,12 @@
+# A spy assertion pinned to zero arguments: toHaveBeenCalledWith()
+#
+# The vitest/prefer-called-with fixer, run by `pnpm fix` and by lint-staged on every commit, rewrites an argument-blind `toHaveBeenCalled()` into `toHaveBeenCalledWith()`. That keeps the assertion blind when the spy takes no arguments and breaks it in an unrelated-looking way when it does. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: docs/agents/testing.md § Falsifiability
+# Fix:       Pin the arguments the spy must receive: toHaveBeenCalledWith(expected, …), or toHaveBeenCalledExactlyOnceWith(…) for a single call. A call that genuinely takes no arguments is toHaveBeenCalledExactlyOnceWith().
+#
+# 0 file(s), 0 occurrence(s) remaining.

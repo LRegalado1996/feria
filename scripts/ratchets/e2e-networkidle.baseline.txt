@@ -1,0 +1,12 @@
+# networkidle used as an E2E readiness signal
+#
+# An idle network says nothing about hydration: a server-rendered control is visible and clickable before React owns it, so the first click or keystroke can vanish, and a page that polls never idles at all. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: src/e2e/AGENTS.md § Readiness
+# Fix:       Wait for what the next step needs: the page object's waitForLoad (its own rendered content), an enabled control that only React enables, clickUntilVisible for the first harmless open, or completeRpcAction for a request that must complete.
+#
+# 0 file(s), 0 occurrence(s) remaining.

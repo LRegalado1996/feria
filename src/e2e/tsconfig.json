@@ -1,0 +1,8 @@
+{
+  // Extends the root config so strictness and module resolution can never
+  // drift from the app's: a hand-rolled config lets real type errors ship
+  // unseen. `include`/`exclude` replace the root's (which excludes src/e2e).
+  "extends": "../../tsconfig.json",
+  "include": ["./**/*.ts"],
+  "exclude": ["node_modules"]
+}

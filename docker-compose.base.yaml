@@ -1,0 +1,33 @@
+# ==============================================================================
+# Postgres for the per-worktree stack
+# ==============================================================================
+# scripts/worktree.sh layers docker-compose.worktree.yaml (host ports, the app
+# container) on top of this file. Ports are NOT exposed here.
+# ==============================================================================
+
+services:
+  db:
+    # Production's major.minor, Debian. Majors differ in ways tests cannot
+    # otherwise see (18 reports a blocked ON DELETE RESTRICT as 23001 where 17
+    # raised 23503), and Alpine's musl ignores the locale and sorts C-style.
+    # Re-pin to your provider's version, and keep CI's service image equal.
+    # A major bump means recreating the volume (pnpm wt:down --volumes): a
+    # data directory from one major does not start on the next.
+    image: postgres:18.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: template
+      POSTGRES_PASSWORD: template
+      POSTGRES_DB: template
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U template -d template"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      # 18+ keeps the cluster in a per-major subdirectory, so the volume mounts
+      # one level above .../data; a mount at .../data restart-loops.
+      - db-data:/var/lib/postgresql
+
+volumes:
+  db-data:
