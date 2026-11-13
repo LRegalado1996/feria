@@ -29,4 +29,4 @@ The fair banners ("find us at the fair, December 5 to January 5") are content cr
 
 ## Reporting
 
-Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

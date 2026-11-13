@@ -32,4 +32,4 @@ Each section hides itself when it has no content, so a new store never shows an 
 
 ## Reporting
 
-Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

@@ -23,6 +23,23 @@ Links: [general](https://app.slack.com/client/T0CHJT9S0RG/C0CH3QVTMRV) ·
 [prs](https://app.slack.com/client/T0CHJT9S0RG/C0CHDTN2JF7) ·
 [deploys](https://app.slack.com/client/T0CHJT9S0RG/C0CHM3S8QL9)
 
+## Who posts each event
+
+One event gets one message, so each event has one owner. The GitHub and Vercel
+apps for Slack are not installed yet (FER-003); until they are, the agent posts
+everything. When they are, update the "Now" column in the same PR.
+
+| Event | Channel | Now | Once the apps are installed |
+| --- | --- | --- | --- |
+| Ticket started, finished, blocked, created | `#feria-tickets` | agent | agent |
+| PR opened, PR merged | `#feria-prs` | agent | GitHub app |
+| Review round outcome, ready to merge | `#feria-prs` | agent | agent, in the thread of the app's message |
+| QA or production deployed, deployment failed | `#feria-deploys` | agent | Vercel app |
+| Health check result, production error | `#feria-deploys` | agent | agent, in the thread of the app's message |
+| Decision, question for Lucas, session summary | `#feria-general` | agent | agent |
+
+If an app misses an event it owns, the agent posts it and says so.
+
 ## Rules
 
 - **Spanish.** Slack is for Lucas, not the repo. Ticket ids, PR titles and
@@ -44,10 +61,11 @@ Links: [general](https://app.slack.com/client/T0CHJT9S0RG/C0CH3QVTMRV) ·
 ```
 #feria-tickets
 FER-017 en curso: Article upload wizard
-Rama fer-017-article-wizard · docs/tickets/FER-017-article-wizard.md
+Rama fer-017-article-wizard
+https://github.com/LRegalado1996/feria/blob/qa/docs/tickets/FER-017-article-wizard.md
 
 FER-017 terminado: Article upload wizard
-PR #23 mergeado a qa · queda pendiente: nada
+Mergeado a qa en https://github.com/LRegalado1996/feria/pull/23 · queda pendiente: nada
 ```
 
 ```
@@ -71,6 +89,7 @@ https://feria-git-qa-....vercel.app · chequeo de salud OK
 Resumen de la sesión (13 nov)
 Hecho: FER-001, FER-004. En curso: FER-005. Bloqueado: nada.
 Necesito de vos: instalar CodeRabbit en el repo.
+Estado de los tickets: https://github.com/LRegalado1996/feria/blob/qa/docs/tickets/README.md
 ```
 
 ## How to post

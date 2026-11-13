@@ -35,4 +35,4 @@ Prefer our own dictionaries over a library: the copy volume is small and the tem
 
 ## Reporting
 
-Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.
+Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.
