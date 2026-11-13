@@ -91,23 +91,31 @@ test.describe("Languages, signed out", () => {
 
       // <head> metadata has no role, label or test id to be found by. Every
       // match is read: the prerendered shell and the request each write the
-      // tags, and React merges them only when they are identical, which they
-      // are not when a build and its server disagree on the origin (as
-      // `pnpm e2e:ci` does on purpose). So the tag this server wrote must be
-      // the page's full URL on this origin, and no tag may name another page.
-      const hrefsOf = async (selector: string) =>
-        await page
+      // tags, and React merges them only when they are identical. They differ
+      // when a build and its server disagree on the port, as CI and
+      // `pnpm e2e:ci` do (built for :3000, served elsewhere). So one tag must
+      // be the page's full URL on this origin, and any other may differ from
+      // it in the port alone: never in the scheme, the host or the path.
+      const expectLinks = async (selector: string, pathname: string) => {
+        const expected = new URL(pathname, origin);
+        const hrefs = await page
           .locator(selector)
           .evaluateAll((links) =>
-            links.map((link) => new URL(link.getAttribute("href") ?? "").href)
+            links.map((link) => link.getAttribute("href") ?? "")
           );
-      const expectLinks = async (selector: string, pathname: string) => {
-        const hrefs = await hrefsOf(selector);
+        const urls = hrefs.map((href) => new URL(href));
 
-        expect(hrefs).toContain(new URL(pathname, origin).href);
-        expect([
-          ...new Set(hrefs.map((href) => new URL(href).pathname)),
-        ]).toEqual([pathname]);
+        expect(urls.map((url) => url.href)).toContain(expected.href);
+        expect(
+          urls.filter(
+            (url) =>
+              url.protocol !== expected.protocol ||
+              url.hostname !== expected.hostname ||
+              url.pathname !== expected.pathname ||
+              url.search !== "" ||
+              url.hash !== ""
+          )
+        ).toEqual([]);
       };
 
       await expectLinks('head link[rel="canonical"]', canonical);
