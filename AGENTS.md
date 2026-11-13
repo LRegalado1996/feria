@@ -182,7 +182,7 @@ A procedure is input schema → auth check → one service call. Routers hold no
 - Squash into `qa`; releases (`chore(release): promote qa to main`) and merge-backs keep merge commits. Hotfixes branch off `main` as `hotfix/<slug>` and owe a merge-back.
 - Merge only the final reviewed head (`gh pr merge --match-head-commit <sha>`), never with review fixes in flight; never push to a merged branch. A cancelled or missing CI run is not a pass; a red run is a reproduction task.
 - Merge gates: `CI Success` into `qa`, `Promotion Verified` into `main`, and `visual-proof` and `pr-description` on both, green on the exact head. Branch protection enforces them (`docs/agents/ci.md` § Releases). Previews are opt-in: label `deploy:preview`.
-- A PR that changes what people see carries one image of the result in its description (every changed screen composed into it; before and after only for a bug fix), or a recording; `visual-proof` fails without one. Tick "No visible change" only when it is true.
+- A PR that changes what people see carries one image of the result in its description (every changed screen composed into it; before and after only for a bug fix), or a recording when the change is a gesture or a timing; `visual-proof` fails without one. Tick "No visible change" only when it is true.
 - Work is tracked as tickets in `docs/tickets/`, key `FER`. The key goes in a footer (`Closes: FER-012`, `Refs: FER-012`), never in the PR title.
 
 ## Safety and permissions

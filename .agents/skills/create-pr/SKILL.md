@@ -115,11 +115,9 @@ Follow these steps to create a Pull Request:
       that affect the interface and the description has neither an image or a
       recording nor the "No visible change" box ticked. Tick that box, with
       one line on why, only when it is true.
-    - Never commit media into the repo. Attach the image with
-      `gh pr create --attach` (or `gh pr edit --attach`) and move its link
-      into the "Visual proof" section; if your `gh` has no attachment flag,
-      drag it into the PR on GitHub, or hand the file to the user and say so
-      in the section.
+    - Never commit media into the repo. The image is attached by the command
+      that creates the PR, in step 9; here you only produce the file and
+      reference it in the draft's "Visual proof" section.
 
 9.  **Create PR**: Use the `gh` CLI to create the PR against `qa`. To avoid
     shell escaping issues with multi-line Markdown, write the description to a
@@ -131,6 +129,15 @@ Follow these steps to create a Pull Request:
     # 3. Remove the temporary file
     rm <temp_file_path>
     ```
+    - **Visual proof image**: add `--attach '<image_path>#<alt text>'` to that
+      same `gh pr create`. `gh` uploads the file and appends its link at the
+      end of the body: move the link into the "Visual proof" section with
+      `gh pr edit <number> --body-file`, and use `gh pr edit --attach` to
+      replace the image later.
+    - If your `gh` has no attachment flag (`gh pr create --help`), create the
+      PR, give the file to the user and ask them to drag it into the "Visual
+      proof" section. The `visual-proof` check stays red until they do, so
+      wait for their confirmation before reporting the PR as ready.
     - **Title**: a valid first line under the `conventional-commits` skill. It
       becomes the commit on `qa` when the PR is squash-merged.
 
