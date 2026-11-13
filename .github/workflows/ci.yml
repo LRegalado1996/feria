@@ -128,7 +128,7 @@ jobs:
                   persist-credentials: false
 
             - name: Setup pnpm
-              uses: pnpm/action-setup@v6.1.0
+              uses: pnpm/action-setup@v6.1.1
 
             - name: Setup Node.js
               uses: actions/setup-node@v7.1.0
@@ -194,7 +194,7 @@ jobs:
                   persist-credentials: false
 
             - name: Setup pnpm
-              uses: pnpm/action-setup@v6.1.0
+              uses: pnpm/action-setup@v6.1.1
 
             - name: Setup Node.js
               uses: actions/setup-node@v7.1.0
@@ -249,7 +249,7 @@ jobs:
                   persist-credentials: false
 
             - name: Setup pnpm
-              uses: pnpm/action-setup@v6.1.0
+              uses: pnpm/action-setup@v6.1.1
 
             - name: Setup Node.js
               uses: actions/setup-node@v7.1.0
@@ -297,7 +297,7 @@ jobs:
                   persist-credentials: false
 
             - name: Setup pnpm
-              uses: pnpm/action-setup@v6.1.0
+              uses: pnpm/action-setup@v6.1.1
 
             - name: Setup Node.js
               uses: actions/setup-node@v7.1.0
@@ -429,7 +429,7 @@ jobs:
                   echo "BETTER_AUTH_SECRET=$secret" >> "$GITHUB_ENV"
 
             - name: Setup pnpm
-              uses: pnpm/action-setup@v6.1.0
+              uses: pnpm/action-setup@v6.1.1
 
             - name: Setup Node.js
               uses: actions/setup-node@v7.1.0
