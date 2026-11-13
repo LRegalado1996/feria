@@ -23,7 +23,7 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 ## Acceptance criteria
 
 - A PR shows green CI, a preview URL and a Neon branch that is cleaned up when the PR closes.
-- An error thrown on purpose in a preview appears in Sentry once, with the environment tagged.
+- An error thrown on purpose in QA appears in Sentry once, tagged with the environment `qa`. A pull request's preview reports nothing (§ Outcome).
 - The environment marker shows on previews and not on production.
 
 ## Notes
