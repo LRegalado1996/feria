@@ -66,7 +66,12 @@ test("only a qa release or a hotfix/* branch may target main", () => {
     hotfix: "true",
   });
   // ci.yml's push glob is case-sensitive, so these get no run to reuse.
-  for (const head of ["feature/x", "Hotfix/login", "hotfixes/login", "main"]) {
+  for (const head of [
+    "feature/x",
+    "Hotfix/login",
+    "hotfixes/login",
+    "production",
+  ]) {
     assert.equal(pair("main", head).status, 1, head);
   }
   assert.equal(pair("main", "qa", "fork/app").status, 1);

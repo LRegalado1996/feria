@@ -1,7 +1,7 @@
 <!--
 The title is a Conventional Commits message: it becomes the commit on the base
 branch. See .agents/skills/conventional-commits/SKILL.md.
-Target `qa`. Only the promotion PR from `qa` targets `main`.
+Target `qa`. Only the promotion PR from `qa` and a `hotfix/*` branch target `main`.
 
 Write for a reviewer who has not seen the work. Code, commits, branch names and
 test titles stay in English; the description may use the language the team

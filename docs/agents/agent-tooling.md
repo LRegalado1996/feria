@@ -24,9 +24,9 @@ Every skill lives once, in `.agents/skills/<name>/`, where Codex and Cursor read
 | `git-commit`                  | stage and create a commit; the message follows `conventional-commits`                | this repo                   |
 | `git-rebase`                  | rebase a branch onto the latest base                                                 | this repo                   |
 | `orpc`                        | write or review oRPC procedures, clients and tests                                   | this repo                   |
+| `review-logging-patterns`     | review logging code against evlog's wide-event patterns                              | `hugorcd/evlog`             |
 | `review-loop`                 | review a change locally before its PR, then argue it out with CodeRabbit on the PR   | this repo                   |
 | `slack-reporting`             | report tickets, PRs and deployments to Lucas's Slack channels                        | this repo                   |
-| `review-logging-patterns`     | review logging code against evlog's wide-event patterns                              | `hugorcd/evlog`             |
 | `vercel-composition-patterns` | design component APIs                                                                | `vercel-labs/agent-skills`  |
 | `vercel-react-best-practices` | review React and Next.js performance                                                 | `vercel-labs/agent-skills`  |
 | `web-design-guidelines`       | review UI against Vercel's interface guidelines                                      | `vercel-labs/agent-skills`  |

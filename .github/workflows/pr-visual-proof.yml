@@ -45,7 +45,9 @@ jobs:
             exit 0
           fi
 
-          files="$(gh pr diff "$PR_NUMBER" --repo "$REPO" --name-only)"
+          # The paginated file list, not `gh pr diff`: the diff endpoint
+          # refuses a pull request with more than 300 files.
+          files="$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')"
 
           # Paths where a change can alter what a person sees.
           visual="$(printf '%s\n' "$files" \
