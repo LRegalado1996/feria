@@ -107,7 +107,7 @@ Ultracite's presets on oxlint (lint, type-aware) and oxfmt (format), configured 
 - Work that depends on an unmerged PR goes in a stacked PR (the `gh-stack` skill), planned bottom-up (schema, then services, then UI). Every layer names the merge order.
 - Fill `.github/pull_request_template.md` (the `create-pr` skill does, following the `pr-description` skill) and end the body with `Model: … · Harness: …`.
 - **Squash-merge into `qa`**: one commit per PR. Releases (`qa → main`) and merge-backs (`main → qa`) use a **merge commit**: a squash rewrites the promoted commits, so the next release diffs them again and conflicts. GitHub has no per-base default merge method, so whoever merges applies the rule.
-- CodeRabbit (`.coderabbit.yaml`) restates `AGENTS.md`'s non-negotiable rules at the paths where they bite. A PR that changes such a rule updates its entry there.
+- CodeRabbit (`.coderabbit.yaml`) restates `AGENTS.md`'s non-negotiable rules at the paths where they bite. It does not review Dependabot's pull requests (`auto_review.ignore_usernames`). A PR that changes such a rule updates its entry there.
 
 ## Merge hygiene
 
