@@ -27,3 +27,7 @@ The production store is full and looks alive on opening day.
 ## Notes
 
 Photo tips for the stall: daylight, plain background, one photo of the article in use. Good photos do more for the AI's output than any prompt change.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

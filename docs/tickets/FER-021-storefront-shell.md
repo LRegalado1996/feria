@@ -23,3 +23,7 @@ Every public page of a store shares one header, footer and feel.
 - Social links appear only when the store has them set.
 - Lighthouse on mobile for an empty store: performance and accessibility at 95 or above.
 - E2E: navigation, mobile menu, locale toggle keeping the store.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

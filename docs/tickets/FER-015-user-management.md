@@ -26,3 +26,7 @@ Superadmins manage every login; store members manage the logins of their own sto
 ## Notes
 
 Until this ships, users are created with the seed script from FER-009. That is enough for the fair if time runs short.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

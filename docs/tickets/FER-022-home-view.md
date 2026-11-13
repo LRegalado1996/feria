@@ -29,3 +29,7 @@ Each section hides itself when it has no content, so a new store never shows an 
 - One `h1`, ordered headings, real text in the HTML for every section.
 - Smooth on a mid-range Android phone; sliders work by touch, mouse, and keyboard.
 - E2E in both languages with seeded content, and with an empty store.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

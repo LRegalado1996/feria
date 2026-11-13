@@ -31,3 +31,7 @@ The admin screens that edit a store (FER-014). Custom domains per store.
 ## Notes
 
 Every later query for catalog, orders or metrics filters by `storeId` taken from the resolved store, never from client input alone.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

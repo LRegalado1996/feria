@@ -31,3 +31,7 @@ Loading an article is the product's showpiece: photos in, a published article ou
 ## Notes
 
 Build with react-hook-form and zod as the template requires; autosave goes through a hook with optimistic updates, modelled on the template's create hook.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

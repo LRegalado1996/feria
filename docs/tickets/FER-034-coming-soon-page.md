@@ -28,3 +28,7 @@ Until launch, anyone who opens the production URL sees a good-looking "opening s
 ## Notes
 
 The logo slot uses the wordmark in display type until FER-006 delivers the real logo.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

@@ -30,3 +30,7 @@ A shopper goes from "I want this" to a confirmed order in under a minute, withou
 ## Notes
 
 The order page is reached without a login, so it is addressed by `token`, is not indexed, and shows the phone number partly masked.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

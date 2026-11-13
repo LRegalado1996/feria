@@ -27,3 +27,7 @@ The store sees every order and moves it through its states with one tap, from th
 ## Out of scope
 
 Push, email or WhatsApp notifications for new orders: worth a follow-up ticket if orders get missed at the stall. Exports and sales reports.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

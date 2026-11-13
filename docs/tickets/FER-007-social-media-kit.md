@@ -29,3 +29,7 @@ Generating a post image from an article inside the admin. Worth a ticket after l
 ## Notes
 
 The QR must point at the final custom domain, so print after FER-032, or encode a URL that redirects.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

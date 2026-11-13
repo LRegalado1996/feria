@@ -32,3 +32,7 @@ The store is live on its own domain and has been checked the way a stranger with
 - The domain serves the store over HTTPS and the old URL redirects.
 - Every checklist item is ticked or has a ticket explaining why not.
 - Lucas gives the go-ahead before the link is shared publicly.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

@@ -27,3 +27,7 @@ Only invited people can sign in, and every admin action is authorized against th
 ## Notes
 
 Buyers never have an account. Nothing in the storefront depends on a session.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

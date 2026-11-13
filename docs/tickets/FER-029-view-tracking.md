@@ -26,3 +26,7 @@ We know which articles people look at, per store and per day, without slowing th
 ## Notes
 
 Vercel Analytics stays on for traffic sources and web vitals. This table exists because the dashboard needs per-article numbers joined with our own data.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

@@ -24,3 +24,7 @@ A store member finds any article quickly and makes the common changes without op
 - Marking an article unavailable from a phone takes two taps and shows on the storefront at once.
 - Deleting removes the article's images (FER-011) and keeps past orders intact (they hold their own copy of title and price).
 - E2E: search, toggle availability, change a price, delete.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

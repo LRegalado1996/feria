@@ -23,3 +23,7 @@ A signed-in person lands in the right place and can move around the admin on a p
 - A member never sees platform navigation, and typing a platform URL answers 404.
 - Usable at 375 px: the store owner will work from a phone at the stall.
 - E2E covers sign-in, sign-out and the three landing cases.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

@@ -30,3 +30,7 @@ One button turns the uploaded photos into a complete article in both languages. 
 ## Notes
 
 Read the `claude-api` and `vercel:ai-sdk` skills and the installed AI SDK docs before writing code; pick the model there, weighing quality of Spanish copy against cost per article. Photos are sent as resized copies, not originals.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

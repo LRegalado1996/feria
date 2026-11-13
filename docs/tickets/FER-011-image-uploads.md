@@ -27,3 +27,7 @@ A store member can upload phone photos straight from the browser, and the storef
 ## Notes
 
 Function bodies are capped at 4.5 MB on Vercel, which is why the file never passes through our own route.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

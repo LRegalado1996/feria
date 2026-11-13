@@ -23,3 +23,7 @@ The template's demo is gone and the catalog is the reference implementation the 
 ## Notes
 
 Done after the catalog and admin shell exist, so the examples are never missing while work is in flight.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

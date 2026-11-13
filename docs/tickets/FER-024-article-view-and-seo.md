@@ -29,3 +29,7 @@ An article page convinces, loads instantly from a shared link, and is fully read
 ## Notes
 
 Read the `seo-ai-visibility` skill in `this-is-pepe` before starting.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

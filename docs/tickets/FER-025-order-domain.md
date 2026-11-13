@@ -31,3 +31,7 @@ The backend can take an order from an anonymous shopper safely and track it thro
 ## Notes
 
 `phoneVerifiedAt` exists from the start and stays null until FER-028.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

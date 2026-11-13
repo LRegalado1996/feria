@@ -29,3 +29,7 @@ One page tells Lucas how each store is doing and whether the AI feature earns it
 ## Notes
 
 Load the `dataviz` skill before building charts. A per-store version for store owners is a natural follow-up ticket.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

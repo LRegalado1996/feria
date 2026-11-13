@@ -36,6 +36,7 @@ A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's ow
 | Commits and PRs | Conventional Commits 1.0.0, as written in the `conventional-commits` skill. |
 | Roles | `superadmin` (Lucas: every store, user, article, plus metrics) and `store member` (owner-level access to their own store; a store can have several). Buyers have no account. |
 | Tickets | Markdown files in `docs/tickets/`, key `FER`. |
+| Reporting | Lucas's Slack workspace, four channels: `#feria-general`, `#feria-tickets`, `#feria-prs`, `#feria-deploys`. Rules and formats are in the `slack-reporting` skill. |
 
 ## Public views
 

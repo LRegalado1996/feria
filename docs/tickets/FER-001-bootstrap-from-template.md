@@ -35,3 +35,7 @@ Removing the posts demo (FER-012). Any product code.
 ## Notes
 
 The zip is a snapshot of the template's `qa` branch. Record its commit id (shown in the archive comment) in the README so later template updates can be diffed against it.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.

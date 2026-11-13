@@ -27,3 +27,7 @@ The storefront has its own visual system in the Volt language, documented and bu
 ## Notes
 
 Take the language of landonorris.com, never its material: no logos, photos, copy, fonts files or code from that site. Fonts load through `next/font`.
+
+## Reporting
+
+Post in Slack as the `slack-reporting` skill describes: start and finish in `#feria-tickets`, the PR and its review in `#feria-prs`, and any deployment it causes in `#feria-deploys`.
