@@ -101,8 +101,10 @@ Then open the PR with the `create-pr` skill.
 
 ## A PR too large to review
 
-CodeRabbit skips a pull request with more than 300 files. When nearly all of
-them are an import nobody here wrote (a template, a vendored tree), do not
+CodeRabbit skips a pull request over its file limit. The limit depends on the
+plan and counts files after the `path_filters` in `.coderabbit.yaml`; it was
+300 when FER-001 hit it, and the "Review skipped" comment states the current
+number. When nearly all of the files are an import nobody here wrote (a template, a vendored tree), do not
 split the work artificially: push the untouched import as a branch on top of
 `qa`, record it as an ancestor of the PR branch (`git merge -s ours <import>`,
 no content change), point the PR's base at that branch and ask for
