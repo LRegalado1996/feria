@@ -129,6 +129,18 @@ export function formatPrice(
   );
 }
 
+const integerFormat = cached(
+  (tag: string) => new Intl.NumberFormat(tag, { maximumFractionDigits: 0 })
+);
+
+/**
+ * A whole number with the language's grouping: `1.280` in Spanish, `1,280` in
+ * English. A fraction is rounded: a count has none.
+ */
+export function formatInteger(value: number, locale: Locale): string {
+  return integerFormat(INTL_LOCALES[locale]).format(value);
+}
+
 const dateFormat = cached(
   (tag: string) =>
     new Intl.DateTimeFormat(tag, {

@@ -30,7 +30,7 @@ Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `
 
 No arbitrary sizes or off-scale weights; text that doesn't fit is rewritten or reflowed, never shrunk. Aligned figures are `tabular-nums`, right-aligned, peers at equal precision. Numbers, prices and dates go through `src/lib/utils/format.ts`, which owns the time zone (the store's, `America/Montevideo`) and the cached `Intl` instances; every formatter takes the page's locale as an argument, and components never build `Intl.*` or call `toLocaleString()`. A price names its currency: `$ 1.290` and `US$ 12,50` in Spanish, `UYU 1,290` and `USD 12.50` in English, cents only when the amount has any.
 
-**Two product languages: Spanish by default, English behind a toggle**, in the storefront and the admin alike. The URL decides: no prefix is Spanish, `/en/...` is English, and `<html lang>` follows it. No interface text is written in a component: every string, hidden ones included (sr-only labels, `aria-label`, placeholders, toasts, validation messages), lives in `src/content/{es,en}/` and reaches the screen through `getDictionary(locale)` or `useDictionary()`, so both languages always have it (`docs/agents/i18n.md`). Spanish uses the Rioplatense voseo ("Probá de nuevo"). The locale toggle (`molecules/locale-toggle`) names the language it leads to, in that language, and keeps the path and the query string. Code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows. Headings state the task or fact; a toast says what happened. Never show raw `error.message`, enum values or schema field names.
+**Two product languages: Spanish by default, English behind a toggle**, in the storefront and the admin alike. The URL decides: no prefix is Spanish, `/en/...` is English, and `<html lang>` follows it. No interface text is written in a component: every string, hidden ones included (sr-only labels, `aria-label`, placeholders, toasts, validation messages), lives in `src/content/{es,en}/` and reaches the screen through `getDictionary(locale)` or `useDictionary()`, so both languages always have it (`docs/agents/i18n.md`). Spanish uses the Rioplatense voseo ("Probá de nuevo"). The locale toggle (`molecules/locale-toggle`) names the language it leads to, in that language, and keeps the path and the query string. Code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows (the storefront has one: § Storefront). Headings state the task or fact; a toast says what happened. Never show raw `error.message`, enum values or schema field names.
 
 ## Color and surfaces
 
@@ -92,7 +92,38 @@ The contract is `AGENTS.md` § Components and forms. Also:
 
 ## Motion
 
-Stillness by default. Approved: `animate-spin`/`animate-pulse` for waiting, Radix open/close via tw-animate-css at 150–300 ms (200 default), `transition-colors`. Reduced motion per driver: CSS with `motion-reduce:`, JS with the library's hook. Under reduced motion, drop overlay exit animations instead of slowing them: Radix unmounts an overlay when its exit animation ends, and one that never ends leaves an invisible layer eating clicks. Never scroll-reveal, parallax, marquees, bounce or sound.
+Stillness by default. Approved: `animate-spin`/`animate-pulse` for waiting, Radix open/close via tw-animate-css at 150–300 ms (200 default), `transition-colors`. Reduced motion per driver: CSS with `motion-reduce:`, JS with the library's hook. Under reduced motion, drop overlay exit animations instead of slowing them: Radix unmounts an overlay when its exit animation ends, and one that never ends leaves an invisible layer eating clicks. Never scroll-reveal, parallax, marquees, bounce or sound; the storefront reveals on scroll and has one marquee (§ Storefront).
+
+## Storefront
+
+The public store speaks another visual language than the admin: editorial, loud and fast, for a shopper deciding in seconds (the Volt language, `docs/project/overview.md`). Everything above still holds there except what this section changes. The admin changes nothing: it keeps the calm back-office rules.
+
+**Where it applies.** Storefront components are the `store-*` directories of the three component tiers; storefront routes are listed in the `storefront-style-outside-storefront` ratchet (`scripts/ratchets.json`), today `/design`. That ratchet fails any storefront utility used anywhere else, so add a route to its exclude list in the change that creates the route. `/design` shows every storefront component in both languages and answers 404 in production: check a storefront change there at 375 px and 1280 px.
+
+**Colors.** Five tokens, the LR Market palette by default; a store overrides them on its own pages (FER-008) and nothing else:
+
+| Token              | Default   | Role                                           |
+| ------------------ | --------- | ---------------------------------------------- |
+| `store-background` | `#f2f3f0` | The page                                       |
+| `store-surface`    | `#ffffff` | Cards and panels on the page                   |
+| `store-foreground` | `#111312` | Text; 16.7:1 on the background                 |
+| `store-contrast`   | `#111312` | Inverted blocks and bands, the regular price   |
+| `store-accent`     | `#c8f31d` | The one loud color; foreground on it is 14.5:1 |
+
+`store-muted` (small text on the background, 5.9:1), `store-contrast-muted` (small text on a contrast block) and `store-line` (hairlines, the surface behind a missing photo) are derived from those five with `color-mix()`, so an override never supplies them. The accent is a fill, or large text on a contrast block; never text on the background or the surface, where it cannot be read. Text on the accent is `store-foreground`; text on a contrast block is `store-background`. The storefront has no dark theme: a store's palette is its identity, so these tokens have no `.dark` value and storefront markup never uses the app tokens (`background`, `primary`, `muted-foreground`).
+
+**Type.** Two faces, both through `next/font` in the root layout. The display face (Anton, `font-display`) sets headlines, prices, article names, badges and the marquee: always `uppercase`, `leading-display` and `tracking-display`, never a sentence of body copy. Geist sets everything else, in sentence case. Display sizes are fluid utilities, not the admin's type table: `store-display-hero` (54 px on a phone to 152 px), `store-display-section` (42 to 88 px), `store-display-title` (24 to 28 px), `store-display-figure` (88 to 96 px). `store-eyebrow` is the one all-caps label in Geist. A heading breaks where its copy says (`StoreHeading` takes its lines), not where the viewport does. Corners are square: no radius on storefront surfaces or controls.
+
+**Components.** `atoms/store-eyebrow`, `atoms/store-heading` (display heading, lines rise one after another), `atoms/store-chip` (a filter; `asChild` over the link or button that applies it), `atoms/store-badge` ("New", "Price drop"), `atoms/store-arrow-link`, `atoms/store-price-tag` (regular on the contrast color; reduced on the accent with the previous price struck through, only when it was higher), `atoms/store-reveal`, `atoms/store-count-up`, `molecules/store-article-card` (one stretched link per card; one badge, a reduced price outranks new), `molecules/store-marquee`, `molecules/store-slider` (native scroll with snap, buttons, a counter, arrow keys once focused). Touch targets are 44 px (`min-h-11`, `size-11`). Focus rings are a 3 px outline in `store-foreground`, or `store-accent` on a contrast block.
+
+**Motion.** The storefront moves, within four rules:
+
+- Only `transform` and `opacity` animate (and colors on hover).
+- Every motion has a reduced-motion answer: CSS behind `motion-safe:`/`motion-reduce:`, scripted motion behind `usePrefersReducedMotion()`. Reduced motion shows the final state at once: the marquee wraps in place, reveals do not hide anything, the count-up shows its figure.
+- The text is in the server's HTML and visible without JavaScript. Motion lives in small client components (`store-reveal`, `store-count-up`, `store-marquee`, `store-slider`) that wrap server-rendered content. `useScrollEntry()` holds back only what is still off screen after hydration, so nothing the visitor has seen blinks; what was on screen at load is not animated.
+- One thing per page moves on its own: the marquee. Motion that runs longer than five seconds needs a way to stop it (WCAG 2.2.2), so the marquee carries a pause button with `aria-pressed`.
+
+**Still banned in the storefront:** decorative gradients and gradient text, glows, glass (`backdrop-blur` on translucent fills), textures, parallax, bounce, sound, and any color outside the five tokens and their three derivations.
 
 ## Accessibility
 
@@ -131,4 +162,4 @@ Then review in order, worst systemic defect first: first read → composition �
 
 Add a rule when a review theme recurs twice, at the narrowest point that holds it: a token or primitive first, then a mechanical check, prose last. Name its reference implementation once one exists. The `design-feedback` skill runs that loop over recent review comments.
 
-**Checked mechanically** by the ratchets in `scripts/ratchets.json` (`pnpm check`), each held at zero: `raw-color-literal` (Foundations), `arbitrary-text-size` (Typography), `shadow-outside-ladder` (Foundations), `one-off-number-format` (`Intl` or `toLocaleString()` outside `src/lib/utils/format.ts`) and `non-lucide-icon-import` (Components). A failure names the rule, its guardrail here and the fix.
+**Checked mechanically** by the ratchets in `scripts/ratchets.json` (`pnpm check`), each held at zero: `raw-color-literal` (Foundations), `arbitrary-text-size` (Typography), `shadow-outside-ladder` (Foundations), `one-off-number-format` (`Intl` or `toLocaleString()` outside `src/lib/utils/format.ts`), `non-lucide-icon-import` (Components) and `storefront-style-outside-storefront` (Storefront). A failure names the rule, its guardrail here and the fix.

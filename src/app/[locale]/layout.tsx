@@ -2,7 +2,7 @@ import "@/styles/globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Anton, Geist } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
@@ -59,6 +59,13 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+// The storefront's display face (design.md § Storefront). It has one weight.
+const anton = Anton({
+  subsets: ["latin"],
+  variable: "--font-anton",
+  weight: "400",
+});
+
 export default async function RootLayout({
   children,
   params,
@@ -70,7 +77,11 @@ export default async function RootLayout({
   return (
     // next-themes sets the theme class on <html> before React hydrates, so
     // the server's markup cannot know it.
-    <html className={geist.variable} lang={locale} suppressHydrationWarning>
+    <html
+      className={`${geist.variable} ${anton.variable}`}
+      lang={locale}
+      suppressHydrationWarning
+    >
       <body>
         {/* First in <body>: chrome rendered later at the same z-index paints
             over the line, never the other way round. */}

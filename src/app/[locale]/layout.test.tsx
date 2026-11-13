@@ -15,6 +15,7 @@ vi.mock("server-only", () => ({}));
 
 // `next/font` is compiled by Next's build; outside it there is nothing to load.
 vi.mock("next/font/google", () => ({
+  Anton: () => ({ variable: "font-anton-test" }),
   Geist: () => ({ variable: "font-geist-test" }),
 }));
 
@@ -63,7 +64,7 @@ const ANALYTICS =
 const SHELL_END = "</body></html>";
 
 function shellStart(locale: "en" | "es") {
-  return `<html class="font-geist-test" lang="${locale}"><head></head><body><div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
+  return `<html class="font-geist-test font-anton-test" lang="${locale}"><head></head><body><div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
 }
 
 async function makeParams(locale: string) {
