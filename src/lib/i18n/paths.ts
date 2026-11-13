@@ -1,10 +1,11 @@
 import { DEFAULT_LOCALE, isLocale, type Locale } from "./config";
 
-const LEADING_SLASHES = /^\/+/;
+// Browsers read a backslash in a URL as a slash.
+const LEADING_SLASHES = /^[/\\]+/;
 
 /**
- * One leading slash, never two: a path that starts with `//` is, as an
- * `href`, a link to another host.
+ * One leading slash, never two: a path that starts with `//` (or `/\`, which
+ * a browser reads the same way) is, as an `href`, a link to another host.
  */
 function toSameOriginPath(pathname: string): string {
   return pathname.replace(LEADING_SLASHES, "/");

@@ -55,6 +55,10 @@ describe("localizePath", () => {
     ["//evil.example", "en", "/en/evil.example"],
     ["/en//evil.example", "es", "/evil.example"],
     ["/es//evil.example", "en", "/en/evil.example"],
+    // A backslash is a slash to a browser.
+    ["/en/\\evil.example/x", "es", "/evil.example/x"],
+    ["/en/\\evil.example/x", "en", "/en/evil.example/x"],
+    ["/\\evil.example", "es", "/evil.example"],
   ] as const)("%j in %s is %j", (pathname, locale, expected) => {
     expect(localizePath(pathname, locale)).toBe(expected);
   });
