@@ -50,14 +50,15 @@ describe("useScrollEntry", () => {
     expect(renderToString(<Probe />)).toBe('<div data-state="idle"></div>');
   });
 
-  test("watches its element, ignoring the bottom tenth of the viewport", () => {
+  test("watches its element against the whole viewport, with no margin", () => {
     const { attach, element, observers, state } = setup();
 
     attach();
 
     expect(state()).toBe("idle");
     expect(observers.active()?.observed).toEqual([element]);
-    expect(observers.active()?.rootMargin).toBe("0px 0px -10% 0px");
+    // A margin would call a block visible at the edge "off screen" and hide it.
+    expect(observers.active()?.rootMargin).toBe("0px");
   });
 
   test("what is off screen waits, then enters once when it scrolls in", () => {

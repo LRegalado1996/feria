@@ -155,13 +155,18 @@ test.describe("Storefront design system", () => {
     await designPage.goto();
     const reveal = designPage.getReveal();
 
-    // Held back only once React has seen it is off screen.
+    const line = reveal.getByText("Collares", { exact: true });
+
+    // Held back only once React has seen it is off screen, and its heading
+    // waits with it instead of playing where nobody is looking.
     await expect(reveal).toHaveAttribute("data-state", "pending");
+    await expect(line).toHaveCSS("animation-name", "none");
 
     await reveal.scrollIntoViewIfNeeded();
 
     await expect(reveal).toHaveAttribute("data-state", "entered");
     await expect(reveal).toBeVisible();
+    await expect(line).toHaveCSS("animation-name", "store-line");
   });
 
   test("the count-up ends on its figure after scrolling to it", async ({

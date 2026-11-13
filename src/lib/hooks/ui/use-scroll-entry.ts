@@ -10,10 +10,6 @@ import { useEffect, useState } from "react";
  */
 export type ScrollEntryState = "entered" | "idle" | "pending";
 
-// The bottom tenth of the viewport does not count: a block is revealed once
-// a readable part of it is on screen, not at its first pixel.
-const ROOT_MARGIN = "0px 0px -10% 0px";
-
 /**
  * Returns a callback ref and the element's {@link ScrollEntryState}, for
  * motion that plays once when something scrolls into view.
@@ -21,7 +17,10 @@ const ROOT_MARGIN = "0px 0px -10% 0px";
  * It starts `idle` on the server and on the hydrating render, so the markup
  * is complete and visible without JavaScript and both renders agree. What is
  * already on screen stays `idle`: it has been seen, and hiding it to animate
- * it back would be a flash. Without IntersectionObserver it stays `idle` too.
+ * it back would be a flash. So the observer watches the whole viewport, with
+ * no margin: a margin that ignored its bottom edge would call a block that is
+ * visible there "off screen" and hide it in front of the visitor. Without
+ * IntersectionObserver it stays `idle` too.
  */
 export function useScrollEntry() {
   const [element, setElement] = useState<Element | null>(null);
@@ -32,24 +31,21 @@ export function useScrollEntry() {
       return undefined;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.some((entry) => entry.isIntersecting);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.some((entry) => entry.isIntersecting);
 
-        setState((current) => {
-          if (visible) {
-            return current === "pending" ? "entered" : current;
-          }
-
-          return current === "idle" ? "pending" : current;
-        });
-
+      setState((current) => {
         if (visible) {
-          observer.disconnect();
+          return current === "pending" ? "entered" : current;
         }
-      },
-      { rootMargin: ROOT_MARGIN }
-    );
+
+        return current === "idle" ? "pending" : current;
+      });
+
+      if (visible) {
+        observer.disconnect();
+      }
+    });
     observer.observe(element);
 
     return () => {

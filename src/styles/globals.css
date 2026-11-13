@@ -231,14 +231,15 @@
       animation: none !important;
     }
   }
+}
 
-  /*
-   * A heading inside a block that waits below the fold holds its lines still
-   * until the block is revealed: taking the animation away and giving it back
-   * is what restarts it.
-   */
-  [data-slot="store-reveal"][data-state="pending"]
-    [data-slot="store-heading-line-text"] {
-    animation: none;
-  }
+/*
+ * A heading inside a block that waits below the fold holds its lines still
+ * until the block is revealed: taking the animation away and giving it back
+ * is what restarts it. Outside every layer on purpose: the animation is a
+ * utility, and a rule in the base layer would lose to it.
+ */
+[data-slot="store-reveal"][data-state="pending"]
+  [data-slot="store-heading-line-text"] {
+  animation: none;
 }
