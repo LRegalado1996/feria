@@ -4,9 +4,9 @@
 # organization's CodeRabbit settings.
 #
 # No `base_branches`, on purpose. CodeRabbit auto-reviews only pull requests
-# into the default branch (`qa`), which keeps release and merge-back diffs away
-# from it: a bot pass over a whole release is where empty, rate-limited
-# "approvals" come from. On a hotfix PR, ask for one: `@coderabbitai review`.
+# into the default branch (`qa`); the promotion into `main` carries changes
+# already reviewed in their own pull requests. On a hotfix PR into `main`, ask
+# for one: `@coderabbitai review`.
 inheritance: true
 
 reviews:
@@ -19,6 +19,12 @@ reviews:
   # and each review is paid for. Both labels are listed because the account
   # shows up with and without the `[bot]` suffix depending on the API.
   auto_review:
+    # The release (`chore(release): promote qa to main`) and the merge-back
+    # (`chore(release): merge main back into qa`, which targets `qa` and would
+    # otherwise be reviewed): a bot pass over a whole release is where empty,
+    # rate-limited "approvals" come from.
+    ignore_title_keywords:
+      - "chore(release)"
     ignore_usernames:
       - "dependabot[bot]"
       - "dependabot"
@@ -77,3 +83,15 @@ reviews:
     - path: "**/*.{ts,tsx}"
       instructions: |
         Type safety (AGENTS.md § Type safety and code style): no `any`; no type assertion unless nothing else works; handle the `undefined` that `noUncheckedIndexedAccess` adds; prefer source types (Drizzle inferred types, `ReturnType<>`, `Pick<>`) over hand-written copies; inline type imports (`import { type X }`). No default exports outside the files a framework requires them in (Next.js pages and layouts, tool configs), and no `console.error` in production code.
+
+# The project's own rules are the review criteria. `AGENTS.md` (and the nested
+# `src/e2e/AGENTS.md`) is read by default; it is listed so the set is explicit.
+# When a suggestion contradicts one of these files, the file wins (the
+# `review-loop` skill).
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/AGENTS.md"
+      - "design.md"
+      - "docs/agents/**/*.md"

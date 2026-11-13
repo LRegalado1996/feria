@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** todo
+- **Status:** in progress
 - **Depends on:** FER-002
 
 ## Goal
@@ -29,6 +29,29 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 ## Notes
 
 Decided: two branches, `qa` then `main`, both protected. Keep the template's auto-promotion PR from `qa` to `main`, and choose the merge method for promotions so the two branches never diverge (a squash would).
+
+## Outcome
+
+Decisions, taken with Lucas on 2026-11-13:
+
+- **Every optional workflow stays.** The auto-promotion PR, Dependabot auto-merge, the opt-in preview deployment and the Neon cleanup and prune all run as the template ships them, so `docs/agents/ci.md` gained their caveats and its policy tests needed no change.
+- **No GitHub App.** The promotion PR is opened with the workflow's own token, which needed the repository setting "Allow GitHub Actions to create and approve pull requests" (now on; the workflow failed on every push to `qa` without it). The cost: close and reopen each promotion PR to start its checks, and a Dependabot auto-merge leaves `qa` without a push CI run until the next merge (`docs/agents/ci.md` § Releases).
+- **Promotions merge with a merge commit**, as the template says: a squash would make the branches diverge.
+- **Sentry reports production and QA only.** A pull request's preview stays silent, as the template designs it (`docs/agents/observability.md` § Sentry), so the "error thrown on purpose" criterion is proven on QA, which is Vercel's Preview environment on the `qa` branch and reports as `qa`.
+- **CodeRabbit** was installed on 2026-11-13 (its first review is on PR #1 that day), so the 14-day trial ends on 2026-11-27: decide before then whether to keep it. `.coderabbit.yaml` now reads `AGENTS.md`, `design.md` and `docs/agents/` as review criteria and skips releases and merge-backs by title.
+
+Set up outside the repository:
+
+- GitHub: the variables `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID`; the `preview` environment limited to `qa`; Actions allowed to create pull requests.
+- Vercel: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG` and `SENTRY_PROJECT` on Production and on the `qa` branch, pointing at the Sentry project `feria` (organization `pepe-sas-uy`).
+
+Still open, each needing Lucas at a dashboard (the command-line sessions are not allowed to create these credentials):
+
+- `VERCEL_PREVIEW_TOKEN`: a Vercel token scoped to the `feria` project, stored as a secret of the GitHub environment `preview`.
+- `NEON_API_KEY` (secret) and `NEON_PROJECT_ID` (variable) in GitHub, from the `feria-db-qa` Neon project, and "create a database branch per preview deployment" turned on for it in Vercel.
+- `SENTRY_AUTH_TOKEN` in Vercel, on Production and on the `qa` branch, so builds upload source maps.
+- The GitHub and Vercel apps for Slack. Until they post by themselves the agent keeps posting every event, and the ownership table in the `slack-reporting` skill stays as it is.
+- With those in place: the throwaway PR (green CI, a preview URL, a Neon branch deleted on close) and the error thrown on purpose in QA.
 
 ## Reporting
 
