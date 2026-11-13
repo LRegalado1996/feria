@@ -7,7 +7,7 @@
 
 ## Goal
 
-Every PR gets the template's full pipeline: checks, a preview deployment on its own database branch, and errors reported to Sentry.
+Every PR gets the template's full pipeline: checks and a preview deployment on its own database branch. Errors in QA and production are reported to Sentry.
 
 ## Scope
 
@@ -15,7 +15,7 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 - Before the first preview: in Vercel, turn on "create a database branch per preview deployment" for the `feria-db-qa` Neon resource (left by FER-002). Without it a preview build migrates the QA database. `NEON_PROJECT_ID` is that resource's project.
 - Slack: Lucas installs the GitHub app for Slack and subscribes `#feria-prs` to this repo's pull requests only (the app's default subscription also includes deployments, issues, commits and releases: turn those off, or each deployment shows up in both channels), and the Vercel app and points its deployment notifications at `#feria-deploys`, so those events post themselves. From then on the integrations own "PR opened", "PR merged" and every deployment message, and the agent posts one of those only when an app missed it: update the ownership table in the `slack-reporting` skill in the same PR. Add a Slack connector to Claude Code so the agent's own reports no longer go through the browser.
 - Create the Sentry project and set its DSN and auth token per environment.
-- CodeRabbit reviews every PR into `qa`. The promotion PR from `qa` into `main` is the one exception: it only carries changes already reviewed in their own PRs. Lucas installs the GitHub app on this repo (14-day free trial from the install date; decide before it ends whether to keep it, and write the date here). Adapt the template's `.coderabbit.yaml` to this project: point it at `AGENTS.md`, `design.md` and `docs/agents/` so its suggestions follow our rules, and have it review PRs into `qa` and skip the promotion PR into `main`.
+- CodeRabbit reviews every PR into `qa`. The promotion PR from `qa` into `main` and the merge-back from `main` into `qa` are the exceptions: they only carry changes already reviewed in their own PRs. Lucas installs the GitHub app on this repo (14-day free trial from the install date; decide before it ends whether to keep it, and write the date here). Adapt the template's `.coderabbit.yaml` to this project: point it at `AGENTS.md`, `design.md` and `docs/agents/` so its suggestions follow our rules, and have it review PRs into `qa` and skip the promotion PR into `main`.
 - The local agent answers CodeRabbit following the `review-loop` skill. Prove the loop on the first real PR.
 - Decide which other optional workflows stay for a one-person project (Dependabot auto-merge, auto-promotion PR) and remove or disable the rest, updating `docs/agents/ci.md` and its policy tests.
 - Open a throwaway PR to prove the pipeline end to end, then close it.
