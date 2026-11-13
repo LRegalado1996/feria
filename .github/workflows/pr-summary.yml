@@ -1,0 +1,86 @@
+name: PR Summary
+
+# Writes a block at the top of the pull request body: how much of the diff is
+# production code, test code and generated output, the `size:*` band of the
+# production lines, and CodeRabbit's merge-risk verdict lifted out of its
+# collapsed comment. A generated Drizzle snapshot can make a small change read
+# as a huge one, and a rate-limited CodeRabbit run posts a passing check with
+# an empty review; the block says both out loud.
+#
+# Not part of the `CI Success` gate: it reports, it never blocks a merge.
+
+on:
+    pull_request:
+        types: [opened, synchronize, reopened, ready_for_review]
+    # CodeRabbit posts and then edits one comment as it reviews, so its verdict
+    # lands after the push. This workflow writes the PR body, never a comment,
+    # so it cannot retrigger itself.
+    issue_comment:
+        types: [created, edited]
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    summary:
+        name: Summarize pull request
+        # `issue_comment` fires for every issue and commenter in the repository.
+        if: >-
+            github.event_name == 'pull_request' ||
+            (github.event.issue.pull_request &&
+             github.event.comment.user.login == 'coderabbitai[bot]')
+        # Comment runs get their own group (per comment id), so a CodeRabbit
+        # edit can never cancel the push run and leave the head with a
+        # cancelled check that nothing replaces. A newer edit of the same
+        # comment cancels the run its older content started.
+        concurrency:
+            group: >-
+                pr-summary-${{
+                github.event_name == 'pull_request'
+                && format('pr-{0}', github.event.pull_request.number)
+                || format('comment-{0}', github.event.comment.id)
+                }}
+            cancel-in-progress: true
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            # No checkout, deliberately. This job holds a write-scoped token, so
+            # it runs only reviewed code: the scripts come from the default
+            # branch, and a change to them takes effect once merged, never from
+            # inside the PR being summarized.
+            - name: Fetch summary scripts from the default branch
+              id: fetch
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  REPO: ${{ github.repository }}
+                  TRUSTED_REF: ${{ github.event.repository.default_branch }}
+              run: |
+                  set -uo pipefail
+                  for script in pr-summary-table.mjs pr-summary.mjs; do
+                    if ! gh api "repos/${REPO}/contents/.github/scripts/${script}?ref=${TRUSTED_REF}" \
+                      --jq .content 2>/dev/null | base64 --decode > "$RUNNER_TEMP/${script}"; then
+                      # Normal for the PR that introduces the scripts. Never fall
+                      # back to the PR head.
+                      echo "::notice title=PR summary skipped::.github/scripts/${script} is not on ${TRUSTED_REF} yet; the block lands once it merges."
+                      echo "available=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                    fi
+                  done
+                  echo "available=true" >> "$GITHUB_OUTPUT"
+
+            # A classifier that labelled production code as generated would
+            # shrink the number a reviewer sizes the change by, so the trusted
+            # copy proves itself first. The PR's own copy is proven by
+            # `pnpm check` in CI, without write permissions.
+            - name: Self-test the classifier
+              if: steps.fetch.outputs.available == 'true'
+              run: node "$RUNNER_TEMP/pr-summary.mjs" --self-test
+
+            - name: Write the summary block and size label
+              if: steps.fetch.outputs.available == 'true'
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  GITHUB_REPOSITORY: ${{ github.repository }}
+                  PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+              run: node "$RUNNER_TEMP/pr-summary.mjs" "$PR_NUMBER"

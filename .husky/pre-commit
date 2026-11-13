@@ -1,0 +1,8 @@
+# Fast on purpose: format and lint the staged files, then scan for secrets.
+# Typecheck and tests run on push (.husky/pre-push) and in CI.
+#
+# --hide-all so the tasks see the staged snapshot and nothing else. The default
+# hides unstaged edits to tracked files but leaves untracked ones in place, so a
+# project-wide check would see files the commit does not contain.
+pnpm exec lint-staged --hide-all
+gitleaks git --pre-commit --redact --verbose

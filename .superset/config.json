@@ -1,0 +1,5 @@
+{
+  "setup": ["pnpm wt:provision"],
+  "teardown": ["pnpm wt:down --volumes"],
+  "run": ["pnpm wt:dev"]
+}

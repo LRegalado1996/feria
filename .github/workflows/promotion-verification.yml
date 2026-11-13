@@ -1,0 +1,283 @@
+name: Promotion Verification
+
+# Release PRs into `main` and pushes to `main` do not rerun the
+# suite. They publish `Promotion Verified` by proving the tree that lands was
+# already validated. The name is deliberately not ci.yml's `CI Success`: a
+# green ci.yml push run on the same commit must never stand in for a failed
+# verification. PRs into qa require `CI Success`; PRs into main require
+# `Promotion Verified`.
+# - `qa -> main` PR: the tree `git merge-tree --write-tree` says merging
+#   would produce must be the tree of a `qa` commit whose `ci.yml` push run
+#   succeeded (polled for up to 20 minutes).
+# - `hotfix/** -> main` PR (the hotfix lane, for when qa cannot carry the
+#   fix): the branch's own `ci.yml` push run must have succeeded on the head,
+#   and main must be an ancestor of it, so the tested tree is the result.
+# - push to `main`: the landed tree must match a validated `qa` commit,
+#   or be a merged hotfix PR whose landed tree equals its validated head.
+# Anything else fails: conflicts, heads from another repository, other pairs.
+#
+# The logic is inlined, and PRs arrive through `pull_request_target`, so the
+# definition is the reviewed copy on the default branch (`qa`), never the PR's:
+# a hotfix branch cannot rewrite its own verifier. Nothing from the PR is
+# checked out or executed; its commits are only fetched as git objects. GitHub
+# attributes a `pull_request_target` run to the default-branch tip, so read
+# the verdict on the PR, not on a commit page. Pushes to main run
+# main's own copy.
+
+on:
+    pull_request_target:
+        branches: [main]
+    push:
+        branches: [main]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    actions: read
+    contents: read
+    pull-requests: read
+
+jobs:
+    ci-success:
+        name: Promotion Verified
+        runs-on: ubuntu-latest
+        timeout-minutes: 25
+        env:
+            PROMOTION_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        steps:
+            - name: Validate the branch pair
+              id: pair
+              if: github.event_name == 'pull_request_target'
+              env:
+                  BASE_REF: ${{ github.base_ref }}
+                  HEAD_REF: ${{ github.head_ref }}
+                  HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+              run: |
+                  set -euo pipefail
+                  if [[ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
+                    echo "::error::Promotions must come from this repository."
+                    exit 1
+                  fi
+                  if [[ "$BASE_REF" == main && "$HEAD_REF" == qa ]]; then
+                    echo "validated_branch=qa" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  # Case-sensitive, to agree with ci.yml's `hotfix/**` push
+                  # trigger: `Hotfix/x` gets no push run, so it falls through.
+                  if [[ "$BASE_REF" == main && "$HEAD_REF" == hotfix/* ]]; then
+                    {
+                      echo "validated_branch=$HEAD_REF"
+                      echo "hotfix=true"
+                    } >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+                  echo "::error::A pull request into main comes from qa (a release) or a hotfix/* branch; '$HEAD_REF' is neither."
+                  exit 1
+
+            # Git history only: nothing from this checkout is executed.
+            - name: Checkout qa history
+              uses: actions/checkout@v7
+              timeout-minutes: 5
+              with:
+                  ref: qa
+                  fetch-depth: 0
+                  persist-credentials: true # the fetches below
+
+            - name: Fetch the promoted head and its base
+              env:
+                  HEAD_REF: ${{ github.head_ref }}
+                  BASE_REF: ${{ github.base_ref }}
+              run: |
+                  set -euo pipefail
+                  BASE_REF="${BASE_REF:-}" # empty on a push
+                  git fetch --no-tags origin qa:refs/remotes/origin/qa
+                  if [[ -n "$BASE_REF" ]]; then
+                    git fetch --no-tags origin "$HEAD_REF:refs/remotes/origin/$HEAD_REF" "$BASE_REF:refs/remotes/origin/$BASE_REF"
+                    if [[ "$(git rev-parse "refs/remotes/origin/$HEAD_REF")" != "$PROMOTION_SHA" ]]; then
+                      echo "::error::The pull request head no longer matches origin/$HEAD_REF; the push that moved it triggers its own run."
+                      exit 1
+                    fi
+                  else
+                    git fetch --no-tags origin "$PROMOTION_SHA"
+                  fi
+
+            - name: Resolve the validated commit
+              id: provenance
+              env:
+                  BASE_REF: ${{ github.base_ref }}
+                  HOTFIX: ${{ steps.pair.outputs.hotfix }}
+              run: |
+                  set -euo pipefail
+                  BASE_REF="${BASE_REF:-}" # empty on a push
+                  if [[ ! "$PROMOTION_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+                     [[ "$(git cat-file -t "$PROMOTION_SHA" 2>/dev/null || true)" != commit ]]; then
+                    echo "::error::Unable to resolve the promoted commit '$PROMOTION_SHA'."
+                    exit 1
+                  fi
+
+                  base_sha=""
+                  if [[ -n "$BASE_REF" ]]; then
+                    base_sha="$(git rev-parse "refs/remotes/origin/$BASE_REF")"
+                  fi
+                  echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+                  # Hotfix: its own push run tested the head. While main
+                  # is an ancestor of the head, merging adds nothing from
+                  # main's side, so the tested tree IS the merge result.
+                  if [[ "${HOTFIX:-}" == true ]]; then
+                    if ! git merge-base --is-ancestor "$base_sha" "$PROMOTION_SHA"; then
+                      echo "::error::$BASE_REF moved on since this hotfix branch was cut, so its push run never tested the merge result. Merge $BASE_REF into the branch and push."
+                      exit 1
+                    fi
+                    echo "validated_sha=$PROMOTION_SHA" >> "$GITHUB_OUTPUT"
+                    echo "- Hotfix \`$PROMOTION_SHA\`, verified by its own push run; \`$BASE_REF\` is an ancestor" >> "$GITHUB_STEP_SUMMARY"
+                    exit 0
+                  fi
+
+                  # A release lands as a merge commit, so main always holds
+                  # commits qa lacks; a fast-forward rule would reject every
+                  # release. Verify the tree the merge would produce instead: it
+                  # still rejects a main carrying changes qa never validated.
+                  verified_tree="$(git rev-parse "${PROMOTION_SHA}^{tree}")"
+                  if [[ -n "$BASE_REF" ]]; then
+                    if ! merge_output="$(git merge-tree --write-tree "$base_sha" "$PROMOTION_SHA")"; then
+                      echo "::error::Merging into $BASE_REF conflicts, so no single tree would land. Merge the merge-back pull request (or $BASE_REF) into qa first."
+                      exit 1
+                    fi
+                    verified_tree="${merge_output%%$'\n'*}"
+                  fi
+
+                  # No early `exit` in awk: git log would die of SIGPIPE, and
+                  # pipefail would turn that into a failed step.
+                  validated_sha="$(git log --format='%H %T' origin/qa | awk -v tree="$verified_tree" '$2 == tree && !found { print $1; found = 1 }')"
+                  if [[ -z "$validated_sha" ]]; then
+                    # On a push, an unmatched tree may still be a hotfix merge;
+                    # the step after next decides. On a PR it is plain failure.
+                    if [[ -z "$BASE_REF" ]]; then
+                      echo "hotfix_candidate=true" >> "$GITHUB_OUTPUT"
+                      echo "Tree $verified_tree is on no qa commit; checking for a verified hotfix merge."
+                      exit 0
+                    fi
+                    echo "::error::The tree merging into $BASE_REF would produce ($verified_tree) matches no qa commit, so qa never validated it."
+                    exit 1
+                  fi
+                  echo "validated_sha=$validated_sha" >> "$GITHUB_OUTPUT"
+                  {
+                    echo "- Promoted \`$PROMOTION_SHA\`"
+                    echo "- Verified tree \`$verified_tree\` = qa commit \`$validated_sha\`"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Require a green ci.yml push run for it
+              if: steps.provenance.outputs.validated_sha != ''
+              uses: actions/github-script@v9
+              env:
+                  VALIDATED_SHA: ${{ steps.provenance.outputs.validated_sha }}
+                  VALIDATED_BRANCH: ${{ steps.pair.outputs.validated_branch || 'qa' }}
+              with:
+                  script: |
+                      const sha = process.env.VALIDATED_SHA;
+                      const branch = process.env.VALIDATED_BRANCH;
+                      const maxAttempts = 60;
+                      const wait = () => new Promise((resolve) => setTimeout(resolve, 20_000));
+                      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                        let runs;
+                        try {
+                          ({ data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                            ...context.repo,
+                            workflow_id: "ci.yml",
+                            branch,
+                            event: "push",
+                            head_sha: sha,
+                            per_page: 10,
+                          }));
+                        } catch (error) {
+                          core.warning(`GitHub API query failed (${attempt}/${maxAttempts}): ${error}`);
+                          await wait();
+                          continue;
+                        }
+                        const success = runs.find(({ conclusion }) => conclusion === "success");
+                        if (success) {
+                          await core.summary.addRaw(`- Green CI run: ${success.html_url}`, true).write();
+                          return;
+                        }
+                        const finished = runs.find(({ status }) => status === "completed");
+                        if (finished && runs.every(({ status }) => status === "completed")) {
+                          core.setFailed(`ci.yml on ${branch} at ${sha} concluded ${finished.conclusion}. Fix ${branch} and push again.`);
+                          return;
+                        }
+                        core.info(`Waiting for ci.yml on ${branch} at ${sha} (${attempt}/${maxAttempts})...`);
+                        await wait();
+                      }
+                      core.setFailed(`No successful ci.yml push run on ${branch} at ${sha} within 20 minutes.`);
+
+            # A push to main whose tree no qa commit has. The one
+            # legitimate cause is a hotfix PR: GitHub attributes the commit to
+            # it, its head has a green ci.yml push run, and the landed tree is
+            # the tree that run tested (main did not move in between).
+            - name: Verify the hotfix merge behind this push
+              if: steps.provenance.outputs.hotfix_candidate == 'true'
+              uses: actions/github-script@v9
+              with:
+                  script: |
+                      const { owner, repo } = context.repo;
+                      const sha = context.sha;
+                      let associated = [];
+                      let hotfix;
+                      // The commit-to-PR association lags the merge by seconds.
+                      for (let attempt = 1; attempt <= 6 && !hotfix; attempt += 1) {
+                        ({ data: associated } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                          owner, repo, commit_sha: sha, per_page: 100,
+                        }));
+                        hotfix = associated.find((pull) =>
+                          pull.merged_at &&
+                          pull.merge_commit_sha === sha &&
+                          pull.base.ref === "main" &&
+                          pull.head.ref.startsWith("hotfix/"));
+                        if (!hotfix && attempt < 6) {
+                          await new Promise((resolve) => setTimeout(resolve, 10_000));
+                        }
+                      }
+                      if (!hotfix) {
+                        core.setFailed(`main now holds ${sha} and nothing validated it: none of the ${associated.length} associated pull request(s) is a merged hotfix/* -> main one. Revert it, or land the change through qa.`);
+                        return;
+                      }
+                      const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                        owner, repo, workflow_id: "ci.yml", branch: hotfix.head.ref, event: "push", head_sha: hotfix.head.sha, per_page: 10,
+                      });
+                      const success = runs.find(({ conclusion }) => conclusion === "success");
+                      if (!success) {
+                        core.setFailed(`#${hotfix.number} merged ${hotfix.head.ref}, but its head ${hotfix.head.sha} has no green ci.yml push run.`);
+                        return;
+                      }
+                      const [{ data: landed }, { data: tested }] = await Promise.all([
+                        github.rest.git.getCommit({ owner, repo, commit_sha: sha }),
+                        github.rest.git.getCommit({ owner, repo, commit_sha: hotfix.head.sha }),
+                      ]);
+                      if (landed.tree.sha !== tested.tree.sha) {
+                        core.setFailed(`#${hotfix.number} was tested as tree ${tested.tree.sha} but landed as ${landed.tree.sha}: main moved in between. The merge-back pull request runs the full suite on this content; revert if it fails.`);
+                        return;
+                      }
+                      core.warning(`main carries #${hotfix.number} (${hotfix.head.ref}), which qa does not. Merge the "chore(release): merge main back into qa" pull request: until then the next release cannot verify.`, { title: "Merge-back pending" });
+                      await core.summary
+                        .addRaw(`- Hotfix #${hotfix.number} (${hotfix.head.ref}), green run ${success.html_url}`, true)
+                        .addRaw(`- Landed tree matches the tested one: \`${landed.tree.sha}\``, true)
+                        .write();
+
+            # The wait above can take 20 minutes. If main moved meanwhile,
+            # the verified merge result is stale, and GitHub will not rerun a
+            # concluded check, so fail and let the rerun see the new base.
+            - name: Confirm main did not move
+              if: github.event_name == 'pull_request_target'
+              env:
+                  BASE_REF: ${{ github.base_ref }}
+                  VERIFIED_BASE_SHA: ${{ steps.provenance.outputs.base_sha }}
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags origin "$BASE_REF"
+                  current="$(git rev-parse FETCH_HEAD)"
+                  if [[ "$current" != "$VERIFIED_BASE_SHA" ]]; then
+                    echo "::error::$BASE_REF moved from $VERIFIED_BASE_SHA to $current during verification. Re-run this check."
+                    exit 1
+                  fi

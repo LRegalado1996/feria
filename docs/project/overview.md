@@ -14,53 +14,53 @@ A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's ow
 
 ## Decisions
 
-| Topic | Decision |
-| --- | --- |
-| Tech base | `template-qa` (Streaver Template): Next.js 16, oRPC, Better Auth, Drizzle, PostgreSQL, Tailwind 4, shadcn. All its guardrails stay: 100% coverage, e2e per user-facing change, CI, ratchets. |
-| Visual base | The Volt system from `this-is-pepe` (in the spirit of landonorris.com): giant condensed display type, calm neutrals, one loud accent, engineered motion. We reuse the language, not that site's assets. |
-| Hosting | Vercel. Auto-generated URL first; `tienda.lucasregalado.com` or `shop.lucasregalado.com` the week of November 16. |
-| Environments | Two. `main` is production and shows a coming-soon page until launch. `qa` is where everything is tried until it is stable; it has its own URL and its own database. |
-| Branch flow | Work branch, then a PR into `qa`, then a promotion PR from `qa` into `main`. Both branches are protected: no direct pushes, pull requests only, for admins too. A PR with a visible change must carry an image; the `visual-proof` check enforces it. |
-| Code review | CodeRabbit reviews every PR into `qa`; the promotion PR into `main` is not reviewed again. The local agent verifies each comment, fixes or refutes it with evidence, and repeats until the PR is sound. Three rounds at most before Lucas decides. On a 14-day trial, to be re-evaluated. |
-| Database | Neon Postgres through the Vercel Marketplace (the template's CI already creates a Neon branch per preview). |
-| Images | Vercel Blob with direct client uploads (function bodies are capped at 4.5 MB). |
-| AI | Claude through Vercel AI Gateway (AI SDK, structured output from the photos). Every call is logged for the metrics tab. |
-| Repo language | English everywhere: code, comments, commits, docs, tickets. |
-| Product language | Spanish by default, English behind a toggle. Locale lives in the URL: `/{store}` is Spanish, `/en/{store}` is English. |
-| Multi-store | One deployment. A `store` table holds name, slug, contact, socials and theme colors. Stores are reached by path: `/{storeSlug}`. `/` redirects to the default store. |
-| Buying | Cart in the browser, no customer accounts. The customer enters name and phone and the order is saved. The store sees incoming orders in the admin's orders section; no WhatsApp message carries the order. |
-| Phone verification | The only use of WhatsApp messaging. Optional and feature-flagged. When enabled, the customer gets a code by WhatsApp and a form to enter it. The order exists before the code; the admin sees a "phone confirmed" flag. Never a blocker. |
-| Order states | `received`, `packed`, `delivered`, `undeliverable`. |
-| Filters | Besides its category, an article carries values from filters the store defines (Color, Material). Any combination is a shareable catalog link, such as `/{store}/products?category=collares&color=dorado`, made to be sent by WhatsApp. |
-| Stock | None. An article is available or not. No variants. |
-| Currency | Each store works in one currency, chosen in its settings: Uruguayan pesos (`UYU`) or US dollars (`USD`). Amounts are stored as integers in minor units. |
-| Commits and PRs | Conventional Commits 1.0.0, as written in the `conventional-commits` skill. |
-| Roles | `superadmin` (Lucas: every store, user, article, plus metrics) and `store member` (owner-level access to their own store; a store can have several). Buyers have no account. |
-| Tickets | Markdown files in `docs/tickets/`, key `FER`. |
-| Reporting | Lucas's Slack workspace, four channels: `#feria-general`, `#feria-tickets`, `#feria-prs`, `#feria-deploys`. Rules and formats are in the `slack-reporting` skill. |
+| Topic              | Decision                                                                                                                                                                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tech base          | `template-qa` (Streaver Template): Next.js 16, oRPC, Better Auth, Drizzle, PostgreSQL, Tailwind 4, shadcn. All its guardrails stay: 100% coverage, e2e per user-facing change, CI, ratchets.                                                                                              |
+| Visual base        | The Volt system from `this-is-pepe` (in the spirit of landonorris.com): giant condensed display type, calm neutrals, one loud accent, engineered motion. We reuse the language, not that site's assets.                                                                                   |
+| Hosting            | Vercel. Auto-generated URL first; `tienda.lucasregalado.com` or `shop.lucasregalado.com` the week of November 16.                                                                                                                                                                         |
+| Environments       | Two. `main` is production and shows a coming-soon page until launch. `qa` is where everything is tried until it is stable; it has its own URL and its own database.                                                                                                                       |
+| Branch flow        | Work branch, then a PR into `qa`, then a promotion PR from `qa` into `main`. Both branches are protected: no direct pushes, pull requests only, for admins too. A PR with a visible change must carry an image; the `visual-proof` check enforces it.                                     |
+| Code review        | CodeRabbit reviews every PR into `qa`; the promotion PR into `main` is not reviewed again. The local agent verifies each comment, fixes or refutes it with evidence, and repeats until the PR is sound. Three rounds at most before Lucas decides. On a 14-day trial, to be re-evaluated. |
+| Database           | Neon Postgres through the Vercel Marketplace (the template's CI already creates a Neon branch per preview).                                                                                                                                                                               |
+| Images             | Vercel Blob with direct client uploads (function bodies are capped at 4.5 MB).                                                                                                                                                                                                            |
+| AI                 | Claude through Vercel AI Gateway (AI SDK, structured output from the photos). Every call is logged for the metrics tab.                                                                                                                                                                   |
+| Repo language      | English everywhere: code, comments, commits, docs, tickets.                                                                                                                                                                                                                               |
+| Product language   | Spanish by default, English behind a toggle. Locale lives in the URL: `/{store}` is Spanish, `/en/{store}` is English.                                                                                                                                                                    |
+| Multi-store        | One deployment. A `store` table holds name, slug, contact, socials and theme colors. Stores are reached by path: `/{storeSlug}`. `/` redirects to the default store.                                                                                                                      |
+| Buying             | Cart in the browser, no customer accounts. The customer enters name and phone and the order is saved. The store sees incoming orders in the admin's orders section; no WhatsApp message carries the order.                                                                                |
+| Phone verification | The only use of WhatsApp messaging. Optional and feature-flagged. When enabled, the customer gets a code by WhatsApp and a form to enter it. The order exists before the code; the admin sees a "phone confirmed" flag. Never a blocker.                                                  |
+| Order states       | `received`, `packed`, `delivered`, `undeliverable`.                                                                                                                                                                                                                                       |
+| Filters            | Besides its category, an article carries values from filters the store defines (Color, Material). Any combination is a shareable catalog link, such as `/{store}/products?category=collares&color=dorado`, made to be sent by WhatsApp.                                                   |
+| Stock              | None. An article is available or not. No variants.                                                                                                                                                                                                                                        |
+| Currency           | Each store works in one currency, chosen in its settings: Uruguayan pesos (`UYU`) or US dollars (`USD`). Amounts are stored as integers in minor units.                                                                                                                                   |
+| Commits and PRs    | Conventional Commits 1.0.0, as written in the `conventional-commits` skill.                                                                                                                                                                                                               |
+| Roles              | `superadmin` (Lucas: every store, user, article, plus metrics) and `store member` (owner-level access to their own store; a store can have several). Buyers have no account.                                                                                                              |
+| Tickets            | Markdown files in `docs/tickets/`, key `FER`.                                                                                                                                                                                                                                             |
+| Reporting          | Lucas's Slack workspace, four channels: `#feria-general`, `#feria-tickets`, `#feria-prs`, `#feria-deploys`. Rules and formats are in the `slack-reporting` skill.                                                                                                                         |
 
 ## Public views
 
-| View | Route (Spanish / English) | Contents |
-| --- | --- | --- |
-| Home | `/{store}` · `/en/{store}` | Promo banners, social links, a slider per category, a curated "best sellers" ranking, a couple of featured articles. |
-| Catalog | `/{store}/products` | Grid with category, color and other filters plus search, all in the URL, and a button to share the filtered view. |
-| Article | `/{store}/products/{slug}` | Gallery, price, description, add to cart, related articles. |
+| View    | Route (Spanish / English)  | Contents                                                                                                             |
+| ------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Home    | `/{store}` · `/en/{store}` | Promo banners, social links, a slider per category, a curated "best sellers" ranking, a couple of featured articles. |
+| Catalog | `/{store}/products`        | Grid with category, color and other filters plus search, all in the URL, and a button to share the filtered view.    |
+| Article | `/{store}/products/{slug}` | Gallery, price, description, add to cart, related articles.                                                          |
 
 Supporting flow, not counted as views: cart drawer, checkout form, and the order confirmation page `/{store}/orders/{token}` (which also hosts the code form when verification is on).
 
 ## Admin
 
-| Area | Route | Who |
-| --- | --- | --- |
-| Sign in | `/admin/sign-in` | everyone with a login |
+| Area                 | Route                                    | Who                      |
+| -------------------- | ---------------------------------------- | ------------------------ |
+| Sign in              | `/admin/sign-in`                         | everyone with a login    |
 | Articles, categories | `/admin/{store}/products`, `/categories` | store member, superadmin |
-| Orders | `/admin/{store}/orders` | store member, superadmin |
-| Home curation | `/admin/{store}/home` | store member, superadmin |
-| Company and theme | `/admin/{store}/settings` | store member, superadmin |
-| Store users | `/admin/{store}/users` | store member, superadmin |
-| Stores, all users | `/admin/platform/stores`, `/users` | superadmin |
-| Metrics | `/admin/platform/metrics` | superadmin |
+| Orders               | `/admin/{store}/orders`                  | store member, superadmin |
+| Home curation        | `/admin/{store}/home`                    | store member, superadmin |
+| Company and theme    | `/admin/{store}/settings`                | store member, superadmin |
+| Store users          | `/admin/{store}/users`                   | store member, superadmin |
+| Stores, all users    | `/admin/platform/stores`, `/users`       | superadmin               |
+| Metrics              | `/admin/platform/metrics`                | superadmin               |
 
 ## Template rules this project amends
 
@@ -89,11 +89,11 @@ Each amendment is made in the ticket named, in the same PR as the code that need
 
 Target: usable at the fair on **December 5**. Order of work, with the milestone each ticket belongs to in [the ticket index](../tickets/README.md).
 
-| Week | Dates | Milestones |
-| --- | --- | --- |
-| 1 | Nov 13 to 20 | M0 Foundation, M1 Brand (identity), M2 Core domain |
-| 2 | Nov 21 to 27 | M3 Admin (articles, AI autofill, curation), M4 Storefront (three views) |
-| 3 | Nov 28 to Dec 4 | M4 Orders, M6 Launch. M5 Metrics and the WhatsApp code as time allows |
-| After launch | Dec 5 onward | Remaining M5, social kit extras, onboarding the second store |
+| Week         | Dates           | Milestones                                                              |
+| ------------ | --------------- | ----------------------------------------------------------------------- |
+| 1            | Nov 13 to 20    | M0 Foundation, M1 Brand (identity), M2 Core domain                      |
+| 2            | Nov 21 to 27    | M3 Admin (articles, AI autofill, curation), M4 Storefront (three views) |
+| 3            | Nov 28 to Dec 4 | M4 Orders, M6 Launch. M5 Metrics and the WhatsApp code as time allows   |
+| After launch | Dec 5 onward    | Remaining M5, social kit extras, onboarding the second store            |
 
 Start the WhatsApp Business paperwork on day one ([FER-028](../tickets/FER-028-whatsapp-phone-verification.md)): Meta's approval is the only item with a waiting time we do not control.
