@@ -152,14 +152,17 @@ describe("generateMetadata", () => {
     );
   });
 
-  test("resolves page URLs against the deployment when no auth URL is set", async () => {
-    vi.stubEnv("BETTER_AUTH_URL", undefined);
-    vi.stubEnv("VERCEL_URL", "feria-preview.example.com");
+  test.each([undefined, ""])(
+    "resolves page URLs against the deployment when the auth URL is %j",
+    async (authUrl) => {
+      vi.stubEnv("BETTER_AUTH_URL", authUrl);
+      vi.stubEnv("VERCEL_URL", "feria-preview.example.com");
 
-    const metadata = await generateMetadata({ params: makeParams("es") });
+      const metadata = await generateMetadata({ params: makeParams("es") });
 
-    expect(metadata.metadataBase).toEqual(
-      new URL("https://feria-preview.example.com")
-    );
-  });
+      expect(metadata.metadataBase).toEqual(
+        new URL("https://feria-preview.example.com")
+      );
+    }
+  );
 });

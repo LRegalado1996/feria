@@ -76,6 +76,19 @@ describe("AppProviders", () => {
     expect(screen.getByRole("button")).toHaveTextContent("theme:dark");
   });
 
+  test.each([
+    ["es", /^Notificaciones/u],
+    ["en", /^Notifications/u],
+  ] as const)("names the toast region in %s", (locale, name) => {
+    setup(locale);
+
+    act(() => {
+      toast.success("Post published.");
+    });
+
+    expect(screen.getByRole("region")).toHaveAccessibleName(name);
+  });
+
   test("mounts the toast region", async () => {
     setup();
 

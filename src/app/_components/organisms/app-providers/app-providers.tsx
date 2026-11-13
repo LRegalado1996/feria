@@ -20,7 +20,7 @@ export interface AppProvidersProps {
  * Every client-side provider the app needs, mounted once by the root layout:
  * the page's language and its text, the theme (a `.dark` class on <html>,
  * following the system until the user picks), the query client, and the one
- * toast region.
+ * toast region, named in the page's language.
  */
 export function AppProviders({
   children,
@@ -40,7 +40,7 @@ export function AppProviders({
             {children}
           </div>
         </ORPCReactProvider>
-        <Toaster />
+        <Toaster containerAriaLabel={dictionary.common.notifications} />
       </ThemeProvider>
     </I18nProvider>
   );

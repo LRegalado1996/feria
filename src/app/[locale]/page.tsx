@@ -1,6 +1,5 @@
 import { dehydrate, HydrationBoundary, noop } from "@tanstack/react-query";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
@@ -9,8 +8,8 @@ import { AuthForm } from "@/app/_components/organisms/auth-form";
 import { Navbar } from "@/app/_components/organisms/navbar";
 import { PostFeed } from "@/app/_components/organisms/post-feed";
 import { type Dictionary, getDictionary } from "@/content";
-import { isLocale, type Locale } from "@/lib/i18n/config";
 import { buildAlternates } from "@/lib/i18n/metadata";
+import { readLocale } from "@/lib/i18n/read-locale";
 import { getQueryClient, orpc } from "@/lib/orpc/server";
 import type { GetPostsValues } from "@/lib/schemas/post";
 import { getGravatarUrl } from "@/lib/utils/get-gravatar-url";
@@ -18,17 +17,6 @@ import { getSession } from "@/server/better-auth/server";
 
 interface HomeProps {
   params: Promise<{ locale: string }>;
-}
-
-/** The route's language, or a 404 for a segment that is not one. */
-async function readLocale(params: HomeProps["params"]): Promise<Locale> {
-  const { locale } = await params;
-
-  if (!isLocale(locale)) {
-    notFound();
-  }
-
-  return locale;
 }
 
 export async function generateMetadata({

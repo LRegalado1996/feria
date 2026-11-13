@@ -3,13 +3,13 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
-import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
 import { AppProviders } from "@/app/_components/organisms/app-providers";
 import { getDictionary } from "@/content";
 import { DEFAULT_LOCALE, isLocale, LOCALES } from "@/lib/i18n/config";
+import { readLocale } from "@/lib/i18n/read-locale";
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
 
 interface LocaleParams {
@@ -31,11 +31,16 @@ export async function generateMetadata({
   const { metadata } = getDictionary(
     isLocale(locale) ? locale : DEFAULT_LOCALE
   );
+  // An empty variable is an unset one: `new URL("")` throws.
+  const appUrl = process.env.BETTER_AUTH_URL;
 
   return {
     // What the canonical and `hreflang` URLs each page declares resolve
-    // against: the same origin the auth server answers on.
-    metadataBase: new URL(process.env.BETTER_AUTH_URL ?? getBaseUrl()),
+    // against: the same origin the auth server answers on. Read while the
+    // shell is prerendered, so it is the origin the build was made for.
+    metadataBase: new URL(
+      appUrl === undefined || appUrl === "" ? getBaseUrl() : appUrl
+    ),
     title: metadata.title,
     description: metadata.description,
     icons: [{ rel: "icon", url: "/favicon.ico" }],
@@ -58,13 +63,9 @@ export default async function RootLayout({
   children,
   params,
 }: Readonly<LocaleParams & { children: ReactNode }>) {
-  const { locale } = await params;
-
   // The proxy only ever routes a known language here; anything else is a
-  // request that went around it.
-  if (!isLocale(locale)) {
-    notFound();
-  }
+  // request that went around it, and gets a 404.
+  const locale = await readLocale(params);
 
   return (
     // next-themes sets the theme class on <html> before React hydrates, so

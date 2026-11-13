@@ -164,4 +164,28 @@ test.describe("Languages, signed in", () => {
     await expect(homePage.getButton("Cerrar sesión")).toBeVisible();
     await homePage.expectDocumentLanguage("es");
   });
+
+  for (const { path, signOut } of [
+    { path: "/", signOut: "Cerrar sesión" },
+    { path: "/en", signOut: "Sign out" },
+  ]) {
+    test(`the navbar of ${path} fits a phone: nothing is cut off and the page does not scroll sideways`, async ({
+      authenticatedPage: page,
+    }) => {
+      await page.setViewportSize({ width: 375, height: 720 });
+      const homePage = new HomePage(page);
+
+      await page.goto(path);
+
+      await expect(homePage.getButton(signOut)).toBeInViewport({ ratio: 1 });
+      await expect(homePage.getLocaleToggle()).toBeInViewport({ ratio: 1 });
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth -
+            document.documentElement.clientWidth
+        )
+      ).toBe(0);
+    });
+  }
 });

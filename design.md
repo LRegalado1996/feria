@@ -14,7 +14,7 @@ Answer first, records below; one claim, one home. Ask only when the answer chang
 
 **Tokens.** `src/styles/globals.css` is the API (Tailwind 4, CSS-first). Use utilities or `var()`; never a hex/`oklch()`/`hsl()` literal in a component, a parallel token, or an ad-hoc restyle of a shadcn primitive. Roles: `background`/`foreground` canvas; `card`/`popover` raised surfaces; `primary` the one emphasized action per view; `secondary`/`muted`/`accent` quiet fills, `muted-foreground` captions; `destructive` danger and errors; `border`/`input`/`ring` boundaries and focus; `chart-1…5` the only series colors.
 
-Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `shadow-xs` controls, `shadow-sm` cards, `shadow-lg` overlays. Fonts only through `next/font` in `src/app/layout.tsx`. Both themes are first-class: every color recipe carries its `dark:` half.
+Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `shadow-xs` controls, `shadow-sm` cards, `shadow-lg` overlays. Fonts only through `next/font` in `src/app/[locale]/layout.tsx`. Both themes are first-class: every color recipe carries its `dark:` half.
 
 **Browser floor.** Tailwind 4's: Chrome/Edge 111, Safari 16.4, Firefox 128; its colors need `oklch()` and `color-mix()`. SWC transpiles syntax but never polyfills built-ins, and browserslist doesn't police methods: check a built-in (`Object.groupBy`, `Promise.withResolvers`, iterator helpers) against the floor. Verify floor-sensitive changes on `pnpm build` output, not dev. An older floor is a project decision with its own CSS fallback pipeline and a test.
 
@@ -47,7 +47,7 @@ One canvas: a card or border must express interaction, selection, warning or a g
 
 ## Layout and responsive
 
-- One page container per shell; constrain blocks, not the page (forms `max-w-sm`, as the sign-in view in `src/app/page.tsx`).
+- One page container per shell; constrain blocks, not the page (forms `max-w-sm`, as the sign-in view in `src/app/[locale]/page.tsx`).
 - Mobile-first. Grid/flex children get `min-w-0` (`atoms/input`); so does a `<fieldset>`. The page never scrolls sideways: wide content scrolls in its own `overflow-x-auto` box, with `overflow-y-clip` to avoid a phantom vertical bar.
 - Toolbars `flex-wrap`; titles `truncate` on a block element. Unbounded user text never sits in a `whitespace-nowrap` control. `sticky` binds to the nearest ancestor with any `overflow`.
 - Overlays cap height with `dvh`, not `vh`. Inputs are `text-base md:text-sm` so iOS doesn't zoom. Never lock zoom or orientation.

@@ -10,6 +10,7 @@ export const common: Dictionary["common"] = {
   loading: "Loading",
   moreActions: "More actions",
   moreActionsForRow: "More actions: {row}",
+  notifications: "Notifications",
   showPassword: "Show password",
   tryAgain: "Try again",
   userFallbackName: "User",

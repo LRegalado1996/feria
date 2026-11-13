@@ -1,3 +1,6 @@
+import { readdirSync } from "node:fs";
+import path from "node:path";
+
 import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
@@ -51,7 +54,12 @@ describe("proxy: /api requests", () => {
     );
   });
 
-  test.each(["/api", "/api/health", "/api/orpc/post/create"])(
+  test.each([
+    "/api",
+    "/api/health",
+    "/api/orpc/post/create",
+    "/api/docs/spec.json",
+  ])(
     "never gives %s a language: it is stamped and passed through as it is",
     async (path) => {
       const outcome = await route(path);
@@ -126,24 +134,48 @@ describe("proxy: page requests", () => {
 
 describe("proxy matcher", () => {
   // Next compiles each matcher to a regular expression anchored at both ends.
-  const matches = (path: string) =>
-    config.matcher.some((source) => new RegExp(`^${source}$`).test(path));
+  const matches = (pathname: string) =>
+    config.matcher.some((source) => new RegExp(`^${source}$`).test(pathname));
 
-  test.each(["/", "/en", "/products/chain-1", "/api/health", "/es/cart"])(
-    "runs on %s",
-    (path) => {
-      expect(matches(path)).toBe(true);
-    }
-  );
+  test.each([
+    "/",
+    "/en",
+    "/products/chain-1",
+    "/api/health",
+    "/es/cart",
+    // A dot does not make a path a file.
+    "/products/pulsera-2.5mm",
+    "/api/docs/spec.json",
+    "/robots.txt",
+    // Only the tunnel itself is skipped, not a page that starts like it.
+    "/monitoring-pedidos",
+  ])("runs on %s", (path) => {
+    expect(matches(path)).toBe(true);
+  });
 
   test.each([
     "/_next/static/chunks/main.js",
     "/_next/image",
     "/_vercel/insights/script.js",
     "/monitoring",
+    "/monitoring/envelope",
     "/favicon.ico",
-    "/images/logo.png",
-  ])("stays off %s, which has no language", (path) => {
-    expect(matches(path)).toBe(false);
+  ])("stays off %s, which has no language", (pathname) => {
+    expect(matches(pathname)).toBe(false);
+  });
+
+  test("stays off every file in public/, which the proxy would otherwise rewrite into a 404", () => {
+    const publicFiles = readdirSync(path.join(process.cwd(), "public"), {
+      recursive: true,
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isFile())
+      .map(
+        (entry) =>
+          `/${path.relative("public", path.join(entry.parentPath, entry.name))}`
+      );
+
+    expect(publicFiles).toContain("/favicon.ico");
+    expect(publicFiles.filter((file) => matches(file))).toEqual([]);
   });
 });

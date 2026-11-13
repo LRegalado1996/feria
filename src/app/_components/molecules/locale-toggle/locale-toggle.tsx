@@ -65,7 +65,9 @@ function LocaleLink({
         // reader pronounces it in that language.
         lang={target}
       >
-        <Languages aria-hidden="true" />
+        {/* Decoration, so it gives way first: a phone-width navbar has room
+            for the language's name or the icon, not both. */}
+        <Languages aria-hidden="true" className="hidden size-4 sm:block" />
         {copy.switchTo}
       </Link>
     </Button>

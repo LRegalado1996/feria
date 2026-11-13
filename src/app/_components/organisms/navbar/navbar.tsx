@@ -52,14 +52,14 @@ export function Navbar({ className, user }: NavbarProps) {
   return (
     <header
       className={cn(
-        "sticky top-0 z-10 flex items-center justify-between border-b bg-background px-4 py-3",
+        "sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background px-4 py-3",
         className
       )}
       data-slot="navbar"
       data-testid="navbar"
     >
       <h1 className="text-xl font-bold">{post.feed.title}</h1>
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <Avatar size="sm">
           {user.image ? <AvatarImage alt={user.name} src={user.image} /> : null}
           <AvatarFallback>{getInitial(user.name)}</AvatarFallback>

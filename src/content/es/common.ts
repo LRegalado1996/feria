@@ -8,6 +8,7 @@ export const common = {
   loading: "Cargando",
   moreActions: "Más acciones",
   moreActionsForRow: "Más acciones: {row}",
+  notifications: "Notificaciones",
   showPassword: "Mostrar contraseña",
   tryAgain: "Reintentar",
   userFallbackName: "Usuario",

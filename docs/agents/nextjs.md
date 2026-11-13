@@ -11,7 +11,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 
 ## Layouts and pages
 
-- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/page.tsx`: `Home` → `HomeResolver`).
+- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/[locale]/page.tsx`: `Home` → `HomeResolver`).
 - A fallback mirrors what it stands for, or stays an empty `aria-busy` canvas when the outcomes differ (signed out vs signed in): a skeleton for the wrong screen is a lie and a layout shift.
 - **Layouts are UI chrome.** Auth is decided per page, inside its boundary.
 - **The root layout is `src/app/[locale]/layout.tsx`.** `locale` is the one param known at build time (`generateStaticParams` lists both languages), so awaiting it at the top of a layout or page holds nothing behind a request; every other param follows the rule below. Types for `params` are written by hand (`Promise<{ locale: string }>`): nothing here runs `next typegen`, so `PageProps`, `LayoutProps` and `next/root-params` are not available to `pnpm typecheck`.
@@ -47,6 +47,6 @@ The server renders at one instant and the browser hydrates later; React throws a
 
 ## Proxy
 
-`src/proxy.ts` (formerly `middleware.ts`) does two things and decides no access: it stamps `/api` requests with a request id for logging, and it routes page requests by language (`docs/agents/i18n.md`): unprefixed paths are rewritten to `/es/...`, `/es/...` redirects to the unprefixed URL, `/en/...` passes through. Its `matcher` is one constant pattern that leaves out Next's assets, Vercel's endpoints, the Sentry tunnel and files; a new top-level path that must not get a language is added there. If it ever redirects on a session cookie, that is optimistic only: pages and procedures still check the session themselves.
+`src/proxy.ts` (formerly `middleware.ts`) does two things and decides no access: it stamps `/api` requests with a request id for logging, and it routes page requests by language (`docs/agents/i18n.md`): unprefixed paths are rewritten to `/es/...`, `/es/...` redirects to the unprefixed URL, `/en/...` passes through. Its `matcher` is one constant pattern that leaves out Next's assets, Vercel's endpoints, the Sentry tunnel and the files in `public/`, each by name; a new top-level path that must not get a language is added there. If it ever redirects on a session cookie, that is optimistic only: pages and procedures still check the session themselves.
 
 `usePathname()` can return the rewritten path (`/es/...`) on the server and the browser's on the client. Pass it through `localizePath()` or `splitLocale()` before rendering anything from it, so both renders agree.

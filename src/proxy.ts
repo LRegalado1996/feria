@@ -52,7 +52,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except what never has a language: Next's own assets, Vercel's
-  // endpoints, the Sentry tunnel and any path with a file extension (the
-  // favicon, files in `public/`).
-  matcher: ["/((?!_next/|_vercel/|monitoring|.*\\..*).*)"],
+  // endpoints, the Sentry tunnel and the files in `public/`, each by name. A
+  // blanket "anything with a dot" would also skip pages (`/products/2.5mm`)
+  // and API routes (`/api/docs/spec.json`); a test holds this list to
+  // `public/`, so a new file there fails until it is added.
+  matcher: ["/((?!_next/|_vercel/|monitoring(?:/|$)|favicon\\.ico$).*)"],
 };
