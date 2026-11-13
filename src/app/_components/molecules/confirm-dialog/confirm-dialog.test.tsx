@@ -1,11 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import { renderWithI18n } from "@/test/i18n";
+
 import { ConfirmDialog, type ConfirmDialogProps } from "./confirm-dialog";
 
-function setup(props: Partial<ConfirmDialogProps> = {}) {
+function setup(
+  props: Partial<ConfirmDialogProps> = {},
+  locale: "en" | "es" = "en"
+) {
   const onConfirm = vi.fn(() => undefined);
   const onOpenChange = vi.fn((_open: boolean) => undefined);
   const user = userEvent.setup();
@@ -31,7 +36,7 @@ function setup(props: Partial<ConfirmDialogProps> = {}) {
     );
   }
 
-  render(<Harness />);
+  renderWithI18n(<Harness />, { locale });
 
   return { onConfirm, onOpenChange, user };
 }
@@ -119,4 +124,19 @@ describe("ConfirmDialog", () => {
     );
     expect(screen.getByRole("button", { name: "Elsewhere" })).toHaveFocus();
   });
+
+  test.each([
+    [{}, "Cancelar", "Eliminar"],
+    [{ isPending: true }, "Cancelar", "Eliminando…"],
+  ])(
+    "with %j, labels its answers in Spanish on a Spanish page",
+    (props, cancel, confirm) => {
+      setup(props, "es");
+
+      expect(screen.getByRole("button", { name: cancel })).toBeEnabled();
+      expect(screen.getByTestId("confirm-dialog-confirm")).toHaveTextContent(
+        confirm
+      );
+    }
+  );
 });

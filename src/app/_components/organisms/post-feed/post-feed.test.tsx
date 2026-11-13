@@ -1,10 +1,12 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
 import { Toaster } from "@/app/_components/molecules/sonner";
 import { reportError } from "@/lib/errors/client";
+import type { Locale } from "@/lib/i18n/config";
 import { collectHydrationErrors } from "@/test/hydration";
+import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
@@ -74,6 +76,8 @@ interface SetupOptions {
   remove?: Answer;
   /** `post.getAll`'s answer: a resolver, or `"fail"` for a 500. */
   getAll?: Answer;
+  /** The language of the page the feed is on. */
+  locale?: Locale;
   signedIn?: boolean;
 }
 
@@ -92,6 +96,7 @@ function answer(path: string, value: Answer) {
 function setup({
   create = (input) => ({ id: 99, input }),
   getAll = () => page([]),
+  locale = "en",
   remove = (input) => input,
   signedIn = true,
 }: SetupOptions = {}) {
@@ -106,19 +111,21 @@ function setup({
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
   const user = userEvent.setup();
 
-  render(
+  renderWithI18n(
     <>
       <PostFeed currentUser={signedIn ? USER : undefined} renderedAt={NOW} />
       <Toaster />
     </>,
-    { wrapper }
+    { locale, wrapper }
   );
 
-  const compose = () => screen.getByRole("textbox", { name: "New post" });
+  const compose = () => screen.getByRole("textbox");
 
   const submitPost = async (text: string) => {
     await user.type(compose(), text);
-    await user.click(screen.getByRole("button", { name: "Post" }));
+    await user.click(
+      within(screen.getByTestId("compose-area")).getByRole("button")
+    );
   };
 
   return {
@@ -423,7 +430,7 @@ describe("PostFeed delete", () => {
 });
 
 // The feed as the server rendered it: its first page already in the cache.
-function setupHydration() {
+function setupHydration(locale: Locale = "en") {
   const wrapper = createQueryWrapper();
   wrapper.queryClient.setQueryData(FEED_KEY, {
     pages: [page([makePost(1, "Fresh post", 5000)])],
@@ -435,8 +442,14 @@ function setupHydration() {
     )
   );
 
+  const I18n = createI18nWrapper(locale);
+
   return wrapper({
-    children: <PostFeed currentUser={USER} renderedAt={NOW} />,
+    children: (
+      <I18n>
+        <PostFeed currentUser={USER} renderedAt={NOW} />
+      </I18n>
+    ),
   });
 }
 
@@ -453,5 +466,117 @@ describe("PostFeed hydration", () => {
     expect(outcome.errors).toEqual([]);
     expect(outcome.serverHtml).toContain("5 seconds ago");
     expect(outcome.clientHtml).toContain("12 seconds ago");
+  });
+
+  test("does the same in Spanish: both renders agree on the language of the ages", () => {
+    const element = setupHydration("es");
+
+    const outcome = collectHydrationErrors(element, {
+      serverNowMs: NOW,
+      clientNowMs: NOW + 7000,
+    });
+
+    expect(outcome.errors).toEqual([]);
+    expect(outcome.serverHtml).toContain("hace 5 segundos");
+    expect(outcome.clientHtml).toContain("hace 12 segundos");
+  });
+});
+
+describe("PostFeed in Spanish", () => {
+  test("announces the first page loading", () => {
+    setup({ getAll: hang, locale: "es" });
+
+    expect(
+      within(screen.getByTestId("feed-skeleton")).getByRole("status")
+    ).toHaveTextContent("Cargando publicaciones");
+  });
+
+  test("says the feed is empty", async () => {
+    setup({ locale: "es" });
+
+    expect(await screen.findByTestId("empty-state")).toHaveTextContent(
+      "Todavía no hay publicaciones. ¡Publicá la primera!"
+    );
+  });
+
+  test("says a failed feed failed and offers the retry", async () => {
+    setup({ getAll: "fail", locale: "es" });
+
+    const error = await screen.findByTestId("feed-error");
+    expect(error).toHaveTextContent("No se pudo cargar el muro.");
+    expect(
+      within(error).getByRole("button", { name: "Reintentar" })
+    ).toBeInTheDocument();
+  });
+
+  test("says an older page failed and offers the retry", async () => {
+    const { observers } = setup({
+      getAll: () => page([makePost(2, "Newest")], NEXT_CURSOR),
+      locale: "es",
+    });
+    const sentinel = await screen.findByTestId("scroll-sentinel");
+    await waitFor(() => {
+      expect(observers.active()?.observed).toEqual([sentinel]);
+    });
+    server.use(createOrpcErrorHandler("post.getAll", FAILURE));
+
+    observers.active()?.emit(true);
+
+    const error = await screen.findByTestId("feed-more-error");
+    expect(error).toHaveTextContent(
+      "No se pudieron cargar las publicaciones anteriores."
+    );
+    expect(
+      within(error).getByRole("button", { name: "Reintentar" })
+    ).toBeInTheDocument();
+  });
+
+  test("writes each post's age in Spanish", async () => {
+    setup({
+      getAll: () => page([makePost(1, "First post", 120 * MINUTE)]),
+      locale: "es",
+    });
+
+    expect(
+      within(await screen.findByTestId("post-card")).getByRole("time")
+    ).toHaveTextContent("hace 2 horas");
+  });
+
+  test("asks before deleting and confirms it happened", async () => {
+    const { user } = setup({ getAll: OWN_AND_OTHERS, locale: "es" });
+    const menu = await screen.findByTestId("post-actions-2");
+    expect(menu).toHaveAccessibleName("Más acciones: My weekend plans");
+
+    await user.click(menu);
+    await user.click(screen.getByTestId("post-actions-2-delete"));
+
+    const dialog = screen.getByRole("dialog", {
+      name: "¿Eliminar esta publicación?",
+    });
+    expect(dialog).toHaveAccessibleDescription(
+      "Desaparece del muro para todos. Esta acción no se puede deshacer."
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }));
+
+    expect(
+      await screen.findByText("Publicación eliminada.")
+    ).toBeInTheDocument();
+  });
+
+  test("says a refused delete did not happen", async () => {
+    const { user } = setup({
+      getAll: OWN_AND_OTHERS,
+      locale: "es",
+      remove: "fail",
+    });
+
+    await user.click(await screen.findByTestId("post-actions-2"));
+    await user.click(screen.getByTestId("post-actions-2-delete"));
+    await user.click(screen.getByTestId("confirm-dialog-confirm"));
+
+    expect(
+      await screen.findByText("La publicación no se eliminó. Probá de nuevo.")
+    ).toBeInTheDocument();
   });
 });

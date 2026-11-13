@@ -24,7 +24,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-001](FER-001-bootstrap-from-template.md) | Bootstrap the repo from the template           | P0       | done   |
 | [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done   |
 | [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | todo   |
-| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | todo   |
+| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done   |
 | [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | todo   |
 | [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | todo   |
 
@@ -48,16 +48,17 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M3 Admin
 
-| ID                                        | Title                                        | Priority | Status |
-| ----------------------------------------- | -------------------------------------------- | -------- | ------ |
-| [FER-013](FER-013-admin-shell.md)         | Admin shell and sign-in                      | P0       | todo   |
-| [FER-014](FER-014-store-management.md)    | Store management and company settings        | P0       | todo   |
-| [FER-015](FER-015-user-management.md)     | User management                              | P1       | todo   |
-| [FER-016](FER-016-category-management.md) | Category management                          | P0       | todo   |
-| [FER-017](FER-017-article-wizard.md)      | Article upload wizard                        | P0       | todo   |
-| [FER-018](FER-018-ai-autofill.md)         | Fill the article from its photos with Claude | P0       | todo   |
-| [FER-019](FER-019-article-list.md)        | Article list and quick edits                 | P0       | todo   |
-| [FER-020](FER-020-home-curation.md)       | Home curation: banners, ranking, featured    | P0       | todo   |
+| ID                                                    | Title                                              | Priority | Status |
+| ----------------------------------------------------- | -------------------------------------------------- | -------- | ------ |
+| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | todo   |
+| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | todo   |
+| [FER-014](FER-014-store-management.md)                | Store management and company settings              | P0       | todo   |
+| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo   |
+| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | todo   |
+| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | todo   |
+| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo   |
+| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo   |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: banners, ranking, featured          | P0       | todo   |
 
 ### M4 Storefront and orders
 
@@ -96,6 +97,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 008 → 010 → 011 → 017 → 018
 010 → 016, 019, 020
 010 → 033 → 017, 023
+004 → 035 → 017
 005, 008 → 021 → 022, 023, 024
 010 → 025 → 026 → 027 → 028
 024 → 029 → 030

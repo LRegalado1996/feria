@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { authSchema, signUpSchema } from ".";
+import { en } from "@/content/en";
+import { es } from "@/content/es";
+
+import { createAuthSchema, createSignUpSchema } from ".";
+
+const authSchema = createAuthSchema(en.auth.validation);
+const signUpSchema = createSignUpSchema(en.auth.validation);
 
 const EMAIL_ISSUE = { path: ["email"], message: "Please enter a valid email" };
 const PASSWORD_ISSUE = {
@@ -81,5 +87,36 @@ describe("signUpSchema", () => {
     expect(
       parse(signUpSchema, makeCredentials({ name: "Jane Doe", ...overrides }))
     ).toEqual({ issues });
+  });
+});
+
+describe("messages", () => {
+  test("are in the language the schema was built for", () => {
+    const messages = es.auth.validation;
+
+    expect(
+      parse(
+        createAuthSchema(messages),
+        makeCredentials({ email: "not-an-email", password: "short" })
+      )
+    ).toEqual({
+      issues: [
+        { path: ["email"], message: "Ingresá un email válido" },
+        {
+          path: ["password"],
+          message: "La contraseña debe tener al menos 8 caracteres",
+        },
+      ],
+    });
+    expect(
+      parse(createSignUpSchema(messages), makeCredentials({ name: "A" }))
+    ).toEqual({
+      issues: [
+        {
+          path: ["name"],
+          message: "El nombre debe tener al menos 2 caracteres",
+        },
+      ],
+    });
   });
 });

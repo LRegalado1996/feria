@@ -7,6 +7,7 @@ import {
 } from "@/app/_components/atoms/avatar";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { TextSkeleton } from "@/app/_components/atoms/text-skeleton";
+import type { Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/utils/format";
 import { getInitial } from "@/lib/utils/get-initial";
@@ -17,6 +18,8 @@ export interface PostCardProps {
   author: { name: string; image: string | null };
   className?: string;
   content: string;
+  /** The language the age is written in. */
+  locale: Locale;
   /** The clock the age is read against (`useNow`), never `Date.now()`. */
   now: number;
   timestamp: Date;
@@ -26,6 +29,7 @@ function PostCard({
   actions,
   author,
   content,
+  locale,
   now,
   timestamp,
   className,
@@ -52,7 +56,7 @@ function PostCard({
             className="shrink-0 text-xs text-muted-foreground"
             dateTime={timestamp.toISOString()}
           >
-            {formatRelativeTime(timestamp, now)}
+            {formatRelativeTime(timestamp, now, locale)}
           </time>
         </div>
         <p className="mt-1 text-sm wrap-anywhere">{content}</p>

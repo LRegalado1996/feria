@@ -1,16 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
+import { renderWithI18n } from "@/test/i18n";
+
 import { PasswordInput } from "./password-input";
 
-function setup() {
+function setup({ locale = "en" }: { locale?: "en" | "es" } = {}) {
   const onSubmit = vi.fn((event: Event) => {
     event.preventDefault();
   });
   const user = userEvent.setup();
 
-  render(
+  renderWithI18n(
     <form
       onSubmit={(event) => {
         onSubmit(event.nativeEvent);
@@ -18,7 +20,8 @@ function setup() {
     >
       <PasswordInput aria-label="Password" className="custom" />
       <button type="submit">Sign in</button>
-    </form>
+    </form>,
+    { locale }
   );
 
   return {
@@ -67,5 +70,17 @@ describe("PasswordInput", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Sign in" })).toHaveFocus();
+  });
+
+  test("names its toggle in Spanish on a Spanish page", async () => {
+    const { user } = setup({ locale: "es" });
+
+    await user.click(
+      screen.getByRole("button", { name: "Mostrar contraseña" })
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Ocultar contraseña" })
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });

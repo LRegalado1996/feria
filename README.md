@@ -125,7 +125,7 @@ src/
     api/auth/           Better Auth
     api/health/         database probe, optionally behind HEALTH_SECRET
     api/docs/           OpenAPI reference for the API
-    page.tsx            the home page: feed, compose box, sign-in
+    [locale]/           every page, in Spanish (no prefix) and English (/en); the root layout
   server/
     api/routers/        thin routers, one per domain
     api/orpc/           procedure builders and request context
@@ -134,14 +134,16 @@ src/
     db/schema/          Drizzle tables, one file per domain; drizzle/ holds the migrations
     better-auth/        auth config
     test/               mock context and mock database for tests
+  content/              interface text in Spanish and English, one file per area
   lib/
     hooks/              React Query hooks per domain
+    i18n/               locales, localized paths, the dictionary provider
     schemas/            zod schemas per domain
     orpc/               clients for the browser and for server components
     errors/             reportError and error helpers
   e2e/                  Playwright specs, page objects, fixtures
   test/                 test setup, MSW handlers, mocks
-  proxy.ts              stamps a request id on every /api call
+  proxy.ts              routes pages by language; stamps a request id on every /api call
 scripts/                worktree stack, CI parity, ratchets and guards; each one tests itself
 docs/agents/            depth per area
 ```
@@ -208,16 +210,16 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
 
 ## Documentation
 
-| Read this                                | For                                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`docs/project/`](docs/project)          | what the product is: the overview, the decisions, the roadmap and the data model            |
-| [`docs/tickets/`](docs/tickets)          | the work, one file per ticket, with the index and how we work                               |
-| [`AGENTS.md`](AGENTS.md)                 | the rules every change follows, for people and AI agents alike. Read it first               |
-| [`design.md`](design.md)                 | UI rules: tokens, typography, layout, copy and accessibility. Read it before building UI    |
-| [`docs/agents/`](docs/agents)            | depth per area: testing, database, security, observability, Next.js, CI, agent tooling      |
-| [`src/e2e/AGENTS.md`](src/e2e/AGENTS.md) | how e2e specs, fixtures and page objects are written                                        |
-| [`konsistent.json`](konsistent.json)     | the file-structure rules a linter cannot express, such as which files must sit together     |
-| [`.agents/skills/`](.agents/skills)      | skills for agents: commits, PRs, the review loop, oRPC, the worktree stack, the running app |
+| Read this                                | For                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`docs/project/`](docs/project)          | what the product is: the overview, the decisions, the roadmap and the data model                  |
+| [`docs/tickets/`](docs/tickets)          | the work, one file per ticket, with the index and how we work                                     |
+| [`AGENTS.md`](AGENTS.md)                 | the rules every change follows, for people and AI agents alike. Read it first                     |
+| [`design.md`](design.md)                 | UI rules: tokens, typography, layout, copy and accessibility. Read it before building UI          |
+| [`docs/agents/`](docs/agents)            | depth per area: testing, database, security, observability, Next.js, languages, CI, agent tooling |
+| [`src/e2e/AGENTS.md`](src/e2e/AGENTS.md) | how e2e specs, fixtures and page objects are written                                              |
+| [`konsistent.json`](konsistent.json)     | the file-structure rules a linter cannot express, such as which files must sit together           |
+| [`.agents/skills/`](.agents/skills)      | skills for agents: commits, PRs, the review loop, oRPC, the worktree stack, the running app       |
 
 Documentation is part of the change: every pull request says `Documentation: updated` with the paths, or `no impact` and why.
 
