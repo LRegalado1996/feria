@@ -1,0 +1,71 @@
+name: PR visual proof
+
+# A pull request that changes what people see must show it: an image or a
+# recording in the description. Runs again when the description is edited, so
+# adding the image turns the check green without a new commit.
+
+on:
+  pull_request:
+    branches: [qa, main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-visual-proof-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  visual-proof:
+    name: visual-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require an image when the change is visible
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          # A promotion carries changes that were already shown in their own PRs.
+          if [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; then
+            echo "Promotion from qa to main: nothing to check."
+            exit 0
+          fi
+
+          files="$(gh pr diff "$PR_NUMBER" --repo "$REPO" --name-only)"
+
+          # Paths where a change can alter what a person sees.
+          visual="$(printf '%s\n' "$files" \
+            | grep -E '(\.css$|^public/|^src/styles/|^src/app/.*\.tsx$|^src/content/)' \
+            | grep -vE '\.test\.tsx$' || true)"
+
+          if [ -z "$visual" ]; then
+            echo "No visual files changed."
+            exit 0
+          fi
+
+          echo "Visual files changed:"
+          printf '%s\n' "$visual"
+
+          has_media='!\[[^]]*\]\([^)]+\)|<img[^>]+src=|<video|https://github\.com/user-attachments/assets/'
+          if printf '%s' "$PR_BODY" | grep -qiE "$has_media"; then
+            echo "The description includes an image or a recording."
+            exit 0
+          fi
+
+          # The author states there is nothing to see (a refactor, a renamed prop).
+          if printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*-[[:space:]]*\[x\][[:space:]]*No visible change'; then
+            echo "The author declared no visible change."
+            exit 0
+          fi
+
+          echo "::error::This PR changes files that affect the interface. Add a screenshot or a recording under 'Visual proof' in the description, or tick 'No visible change' and say why."
+          exit 1

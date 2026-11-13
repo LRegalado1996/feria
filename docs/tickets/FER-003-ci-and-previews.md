@@ -24,4 +24,4 @@ Every PR gets the template's full pipeline: checks, a preview deployment on its 
 
 ## Notes
 
-The template's flow is `qa` then `main`. Confirm with Lucas whether to keep two branches or release from `main` only; adjust the release policy tests accordingly.
+Decided: two branches, `qa` then `main`, both protected. Keep the template's auto-promotion PR from `qa` to `main`, and choose the merge method for promotions so the two branches never diverge (a squash would).

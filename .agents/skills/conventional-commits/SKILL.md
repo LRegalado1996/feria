@@ -135,7 +135,16 @@ Not valid, and why:
 
 ## Pull requests
 
-- **Title**: a valid message first line, as above. It is what lands on `main`.
+- **Base branch**: `qa`. Nobody pushes to `qa` or `main` directly; both accept
+  pull requests only. `main` receives one kind of PR: the promotion from `qa`,
+  titled `chore(release): promote qa to main`.
+- **Visual proof**: a PR with a visible change carries a screenshot or a
+  recording in its description (mobile and desktop width when layout changed).
+  Capture it from the running app, drag it into the description, never commit
+  it. The `visual-proof` check fails without it; tick "No visible change" and
+  say why only when that is true.
+- **Title**: a valid message first line, as above. It is what lands on the base
+  branch.
 - **Description**: fill `.github/pull_request_template.md` when it exists. The
   parts of a commit body still apply: why, what changed, how it was checked. End
   with the footers: `Closes: FER-0xx`, any `BREAKING CHANGE:`, and the

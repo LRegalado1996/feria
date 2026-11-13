@@ -19,6 +19,8 @@ A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's ow
 | Tech base | `template-qa` (Streaver Template): Next.js 16, oRPC, Better Auth, Drizzle, PostgreSQL, Tailwind 4, shadcn. All its guardrails stay: 100% coverage, e2e per user-facing change, CI, ratchets. |
 | Visual base | The Volt system from `this-is-pepe` (in the spirit of landonorris.com): giant condensed display type, calm neutrals, one loud accent, engineered motion. We reuse the language, not that site's assets. |
 | Hosting | Vercel. Auto-generated URL first; `tienda.lucasregalado.com` or `shop.lucasregalado.com` the week of November 16. |
+| Environments | Two. `main` is production and shows a coming-soon page until launch. `qa` is where everything is tried until it is stable; it has its own URL and its own database. |
+| Branch flow | Work branch, then a PR into `qa`, then a promotion PR from `qa` into `main`. Both branches are protected: no direct pushes, pull requests only, for admins too. A PR with a visible change must carry an image; the `visual-proof` check enforces it. |
 | Database | Neon Postgres through the Vercel Marketplace (the template's CI already creates a Neon branch per preview). |
 | Images | Vercel Blob with direct client uploads (function bodies are capped at 4.5 MB). |
 | AI | Claude through Vercel AI Gateway (AI SDK, structured output from the photos). Every call is logged for the metrics tab. |

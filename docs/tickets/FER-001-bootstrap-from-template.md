@@ -17,7 +17,9 @@ The repo holds the Streaver Template, renamed for this project, and every check 
 - Fill in `design.md` § Philosophy with who uses the product: fair shoppers on a phone, store owners loading articles.
 - Add `docs/project/` and `docs/tickets/` to the "Where things are documented" table in `AGENTS.md`.
 - Reconcile the template's `git-commit` and `create-pr` skills with this repo's `conventional-commits` skill: one source for types, scopes and the ticket footer, and the other two point to it. Add the `.claude/skills` symlinks the template uses for the rest.
-- Commit the template on a branch and merge it into `main` by PR, then create the GitHub repository (private) and push.
+- The template's base branches are `qa` and `production`; here they are `qa` and `main`. Rename every reference in workflows, scripts, policy tests, skills and docs.
+- Merge this repo's `.github/pull_request_template.md` and `pr-visual-proof.yml` with the template's: keep the template's PR sections, and make its "Visual proof" section a gate (it says "not a gate" there), with the "No visible change" checkbox the check reads.
+- Commit the template on a branch and merge it into `qa` by PR, then create the GitHub repository (private) and push.
 
 ## Out of scope
 
@@ -28,7 +30,7 @@ Removing the posts demo (FER-012). Any product code.
 - `pnpm wt:provision && pnpm db:seed && pnpm dev` serves the template's demo locally.
 - `pnpm verify && pnpm build` and `pnpm verify:ci` pass.
 - No remaining mention of "template" as the product name outside historical notes.
-- The repo is on GitHub with `main` protected the way `docs/agents/ci.md` describes.
+- `qa` and `main` stay protected (pull requests only, `visual-proof` required), and the checks the template's CI adds are added to the required list.
 
 ## Notes
 
