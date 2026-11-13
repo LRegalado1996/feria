@@ -17,15 +17,21 @@ export function stubReducedMotion(initial: boolean) {
     queries.push(query);
 
     return {
-      addEventListener: (_type: string, listener: () => void) => {
-        listeners.add(listener);
+      // Only "change" is ever fired: a hook that subscribed to anything
+      // else would never hear `set()`.
+      addEventListener: (type: string, listener: () => void) => {
+        if (type === "change") {
+          listeners.add(listener);
+        }
       },
       get matches() {
         return state.matches;
       },
       media: query,
-      removeEventListener: (_type: string, listener: () => void) => {
-        listeners.delete(listener);
+      removeEventListener: (type: string, listener: () => void) => {
+        if (type === "change") {
+          listeners.delete(listener);
+        }
       },
     } as unknown as MediaQueryList;
   });

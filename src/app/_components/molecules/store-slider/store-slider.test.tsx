@@ -131,6 +131,12 @@ describe("StoreSlider", () => {
     expect(within(track).getAllByRole("listitem")[0]).toHaveClass("snap-start");
   });
 
+  test("leaves room around the slides for a card's focus outline", () => {
+    const { track } = setup();
+
+    expect(track).toHaveClass("p-2", "-m-2", "scroll-p-2");
+  });
+
   test("scrolls smoothly, and jumps under reduced motion", () => {
     const { track } = setup();
 
@@ -273,16 +279,26 @@ describe("StoreSlider", () => {
   });
 
   test("stops listening to the scroll and the window on unmount", () => {
+    const onElement = vi.spyOn(HTMLElement.prototype, "addEventListener");
+    const onWindow = vi.spyOn(window, "addEventListener");
     const { track, view } = setup();
+    // React listens for scroll on its own root too: the slider's listener is
+    // the one registered on the track itself.
+    const onScroll = onElement.mock.calls.find(
+      ([type], call) =>
+        type === "scroll" && onElement.mock.contexts[call] === track
+    );
+    const onResize = onWindow.mock.calls.find(([type]) => type === "resize");
     const offTrack = vi.spyOn(track, "removeEventListener");
     const offWindow = vi.spyOn(window, "removeEventListener");
 
     view.unmount();
 
-    expect(offTrack).toHaveBeenCalledExactlyOnceWith(
-      "scroll",
-      expect.any(Function)
-    );
-    expect(offWindow).toHaveBeenCalledWith("resize", expect.any(Function));
+    // The very callbacks it registered: removing a fresh function would
+    // leave both listeners in place.
+    expect(onScroll?.[1]).toBeTypeOf("function");
+    expect(onResize?.[1]).toBeTypeOf("function");
+    expect(offTrack).toHaveBeenCalledExactlyOnceWith("scroll", onScroll?.[1]);
+    expect(offWindow).toHaveBeenCalledWith("resize", onResize?.[1]);
   });
 });

@@ -35,6 +35,12 @@ export type StoreHeadingProps = Omit<ComponentProps<"h2">, "children"> &
  * the copy says and not where the viewport does. Its lines rise into place
  * one after another, from CSS alone, so the text is in the server's HTML and
  * reads without JavaScript; under reduced motion they are simply there.
+ *
+ * The rise plays when the page loads, so it is seen in the first viewport.
+ * Below the fold, put the heading inside a `StoreReveal`: a waiting block
+ * holds its heading's lines still and the rise plays when the block scrolls
+ * in (the rule is in globals.css). Left bare below the fold, the heading is
+ * simply in place when the visitor reaches it.
  */
 function StoreHeading({
   accentLine,

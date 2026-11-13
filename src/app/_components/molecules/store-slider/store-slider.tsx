@@ -168,7 +168,9 @@ function StoreSlider({ className, heading, label, slides }: StoreSliderProps) {
       </div>
       <section
         aria-label={label}
-        className="snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto overflow-y-clip scroll-smooth focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-store-foreground motion-reduce:scroll-auto"
+        // The padding, taken back by the margin, is room for a card's focus
+        // outline (3px, offset 4px), which the scroll box would clip.
+        className="-m-2 snap-x snap-mandatory scroll-p-2 [scrollbar-width:none] overflow-x-auto overflow-y-clip scroll-smooth p-2 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-store-foreground motion-reduce:scroll-auto"
         data-slot="store-slider-track"
         ref={setScroller}
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrolling region must take focus to be scrolled with the arrow keys (WCAG 2.1.1), and Safari does not focus a scroller on its own

@@ -95,10 +95,18 @@ test.describe("Storefront design system", () => {
         timeout: 1000,
       });
     }).toPass();
+    await expect(designPage.getMarqueeTrack()).toHaveCSS(
+      "animation-play-state",
+      "paused"
+    );
 
     await pause.click();
 
     await expect(pause).toHaveAttribute("aria-pressed", "false");
+    await expect(designPage.getMarqueeTrack()).toHaveCSS(
+      "animation-play-state",
+      "running"
+    );
   });
 
   test("under reduced motion the marquee does not move and offers nothing to pause", async ({

@@ -80,17 +80,22 @@ function StoreMarquee({
       <div
         className={cn(
           "flex w-max font-display text-2xl leading-none font-normal tracking-display uppercase motion-safe:animate-store-marquee motion-reduce:w-full md:text-4xl",
-          paused && "[animation-play-state:paused]"
+          // Important: the `animation` shorthand of the class above resets the
+          // play state, and it comes later in the stylesheet.
+          paused && "[animation-play-state:paused]!"
         )}
         data-slot="store-marquee-track"
         data-testid="store-marquee-track"
       >
-        <div className="flex shrink-0 items-center gap-6 px-3 py-4 motion-reduce:shrink motion-reduce:flex-wrap md:py-5">
+        {/* Each copy is at least a viewport wide: the track slides by one
+            copy per lap, and a copy narrower than the band would leave it
+            empty at the end of each lap. */}
+        <div className="flex min-w-[100vw] shrink-0 items-center justify-around gap-6 px-3 py-4 motion-reduce:min-w-0 motion-reduce:shrink motion-reduce:flex-wrap motion-reduce:justify-start md:py-5">
           {phrases}
         </div>
         <div
           aria-hidden="true"
-          className="flex shrink-0 items-center gap-6 px-3 py-4 motion-reduce:hidden md:py-5"
+          className="flex min-w-[100vw] shrink-0 items-center justify-around gap-6 px-3 py-4 motion-reduce:hidden md:py-5"
         >
           {phrases}
         </div>

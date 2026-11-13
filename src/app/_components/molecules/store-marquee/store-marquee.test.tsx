@@ -46,6 +46,13 @@ describe("StoreMarquee", () => {
     expect(second).toHaveAttribute("aria-hidden", "true");
   });
 
+  test("each copy fills the band, so a short list leaves no gap at the end of a lap", () => {
+    const { first, second } = setup({ items: ["New"] });
+
+    expect(first).toHaveClass("min-w-[100vw]", "motion-reduce:min-w-0");
+    expect(second).toHaveClass("min-w-[100vw]");
+  });
+
   test("separates phrases with a decorative icon", () => {
     const { first } = setup();
 
@@ -81,18 +88,18 @@ describe("StoreMarquee", () => {
 
     expect(pause).toHaveAttribute("aria-pressed", "false");
     expect(marquee).toHaveAttribute("data-paused", "false");
-    expect(track).not.toHaveClass("[animation-play-state:paused]");
+    expect(track).not.toHaveClass("[animation-play-state:paused]!");
 
     await user.click(pause);
 
     expect(pause).toHaveAttribute("aria-pressed", "true");
     expect(marquee).toHaveAttribute("data-paused", "true");
-    expect(track).toHaveClass("[animation-play-state:paused]");
+    expect(track).toHaveClass("[animation-play-state:paused]!");
 
     await user.click(pause);
 
     expect(pause).toHaveAttribute("aria-pressed", "false");
-    expect(track).not.toHaveClass("[animation-play-state:paused]");
+    expect(track).not.toHaveClass("[animation-play-state:paused]!");
   });
 
   test("has nothing to pause under reduced motion: the button goes away", () => {

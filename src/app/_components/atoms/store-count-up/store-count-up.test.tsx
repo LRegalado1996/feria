@@ -75,8 +75,13 @@ describe("StoreCountUp", () => {
     const { advance, emit, figure } = setup();
 
     emit(true);
-    advance(2000);
+    // Straight away and mid-way through what a count would take: a figure
+    // that restarted from zero would be caught here, not after it finished.
+    expect(figure()).toBe("1,280");
+    advance(300);
+    expect(figure()).toBe("1,280");
 
+    advance(2000);
     expect(figure()).toBe("1,280");
   });
 
