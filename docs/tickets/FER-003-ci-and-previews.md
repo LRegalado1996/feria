@@ -38,7 +38,7 @@ Decisions, taken with Lucas on 2026-11-13:
 - **No GitHub App.** The promotion PR is opened with the workflow's own token, which needed the repository setting "Allow GitHub Actions to create and approve pull requests" (now on; the workflow failed on every push to `qa` without it). The cost: close and reopen each promotion PR to start its checks, and a Dependabot auto-merge leaves `qa` without a push CI run until the next merge (`docs/agents/ci.md` § Releases).
 - **Promotions merge with a merge commit**, as the template says: a squash would make the branches diverge.
 - **Sentry reports production and QA only.** A pull request's preview stays silent, as the template designs it (`docs/agents/observability.md` § Sentry), so the "error thrown on purpose" criterion is proven on QA, which is Vercel's Preview environment on the `qa` branch and reports as `qa`.
-- **CodeRabbit** was installed on 2026-11-13 (its first review is on PR #1 that day), so the 14-day trial ends on 2026-11-27: decide before then whether to keep it. `.coderabbit.yaml` now reads `AGENTS.md`, `design.md` and `docs/agents/` as review criteria and skips releases and merge-backs by title.
+- **CodeRabbit** posted its first review on PR #1 on 2026-11-13, so the 14-day trial ends on 2026-11-27 at the latest (the exact install date is on its dashboard): decide before then whether to keep it. `.coderabbit.yaml` now reads `AGENTS.md`, `design.md` and `docs/agents/` as review criteria and skips releases and merge-backs by title.
 
 Set up outside the repository:
 
