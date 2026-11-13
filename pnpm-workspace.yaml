@@ -1,0 +1,37 @@
+# pnpm 11 reads every project setting from this file, never from
+# package.json's `pnpm` key or .npmrc. No `packages:` list on purpose: this
+# repo is one package, and `packages: ["."]` turns the root into a workspace
+# package that Turborepo hashes nondeterministically.
+
+# A pnpm major can change the node_modules layout, and without a TTY pnpm
+# refuses to purge the old one, so scripted installs (worktree containers)
+# would abort after every pnpm bump. node_modules is disposable.
+confirmModulesPurge: false
+
+# pnpm 11 fails the install on a dependency build script nobody decided on.
+# Each entry is a reviewed decision; `true` runs third-party code at install
+# time. pnpm 10 skipped all of these, and the app builds and runs without them.
+allowBuilds:
+  # Only re-checks the platform binary pnpm already installs as an optional dependency.
+  esbuild: false
+  # Same: the platform binary is an optional dependency; this only downloads a fallback.
+  "@sentry/cli": false
+  # Only copies the browser service worker; no msw.workerDirectory is configured.
+  msw: false
+
+# Refuse any release younger than three days, transitive ones included. Keep
+# it written even if it equals pnpm's default: only an explicit value makes
+# resolution strict on the machine that adds a dependency, not just in a fresh
+# CI checkout. A release that cannot wait goes in minimumReleaseAgeExclude as
+# `name@x.y.z`; a bare name would exempt every later release too.
+minimumReleaseAge: 4320
+
+# Security floors for transitive advisories: the selector covers the affected
+# range, and the caret target lets the resolver float to newer fixed releases
+# inside the same major. Never an uncapped `>=` target.
+overrides:
+  # GHSA-67mh-4wv8-2f99 (via drizzle-kit)
+  "esbuild@<=0.24.2": ^0.25.0
+  # GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849 and
+  # GHSA-fxqj-rqcc-2cmp (via next)
+  "postcss@<8.5.23": ^8.5.23

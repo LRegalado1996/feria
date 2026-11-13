@@ -1,0 +1,202 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  // Cache rules (docs/agents/ci.md § Turborepo cache):
+  // 1. pnpm-workspace.yaml declares no `packages:` list: with one, turbo hashed
+  //    the same tree two ways and split the cache in half.
+  // 2. A task hashes only the env it reads (`env`), so there is no `globalEnv`;
+  //    a value that changes per run but not the result goes in `passThroughEnv`.
+  //    Strict mode hides every other variable from the task.
+  // 3. An output that embeds a native binary carries a machine discriminator:
+  //    `build` runs only through scripts/turbo-build.sh (BUILD_TARGET_ARCH).
+  // Never pass reporter or shard flags on the command line: turbo hashes them.
+  "envMode": "strict",
+  // Turbo's managed block stays out of AGENTS.md, which is held to a size
+  // budget; agents reach turbo only through `pnpm verify` and the scripts.
+  "agentGuidance": false,
+  "remoteCache": { "signature": true },
+  // The local cache is unbounded otherwise, and every build stores a `.next`.
+  "cacheMaxAge": "14d",
+  "cacheMaxSize": "10GB",
+  "tasks": {
+    "check": {
+      "description": "pnpm check: lint, format, knip, konsistent, ratchets and script self-tests.",
+      // Every tracked file: oxfmt checks Markdown, and check:scripts runs the
+      // workflow tests and reads the workflows, so nothing here is inert. No
+      // `env`: none of its pieces reads one, so a laptop and a runner share
+      // the entry.
+      "outputs": []
+    },
+    "typecheck": {
+      "description": "tsrs over the app and over src/e2e.",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "!docs/**",
+        "!.agents/**",
+        "!.claude/**",
+        "!.cursor/**",
+        "!.vscode/**",
+        "!.superset/**",
+        "!.husky/**",
+        "!.github/**",
+        "!scripts/**",
+        "!public/**",
+        "!docker-compose*.yaml",
+        "!orca.yaml",
+        "!t3.json",
+        "!vercel.json",
+        "!skills-lock.json",
+        "!knip.jsonc",
+        "!konsistent.json",
+        "!.coderabbit.yaml",
+        "!.gitleaks.toml",
+        "!.env.example"
+      ],
+      "outputs": []
+    },
+    "test:unit": {
+      "description": "Unit suite (pnpm verify, pre-push).",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "!docs/**",
+        "!.agents/**",
+        "!.claude/**",
+        "!.cursor/**",
+        "!.vscode/**",
+        "!.superset/**",
+        "!.husky/**",
+        "!.github/**",
+        "!scripts/**",
+        "!public/**",
+        "!src/e2e/**",
+        "!docker-compose*.yaml",
+        "!orca.yaml",
+        "!t3.json",
+        "!vercel.json",
+        "!skills-lock.json",
+        "!knip.jsonc",
+        "!konsistent.json",
+        "!oxlint.config.ts",
+        "!oxfmt.config.ts",
+        "!drizzle.config.ts",
+        "!.coderabbit.yaml",
+        "!.gitleaks.toml",
+        "!.env.example"
+      ],
+      "outputs": [],
+      // The test config may branch on CI (timeouts, retries, reporters), so a
+      // laptop run and a runner run are different runs.
+      "env": ["CI", "NODE_ENV", "SKIP_ENV_VALIDATION"],
+      // Read, never asserted on: the suite stubs both and connects nowhere.
+      "passThroughEnv": ["DATABASE_URL", "BETTER_AUTH_URL"]
+    },
+    "test:unit:coverage": {
+      "description": "Unit suite with the coverage thresholds (CI).",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "!docs/**",
+        "!.agents/**",
+        "!.claude/**",
+        "!.cursor/**",
+        "!.vscode/**",
+        "!.superset/**",
+        "!.husky/**",
+        "!.github/**",
+        "!scripts/**",
+        "!public/**",
+        "!src/e2e/**",
+        "!docker-compose*.yaml",
+        "!orca.yaml",
+        "!t3.json",
+        "!vercel.json",
+        "!skills-lock.json",
+        "!knip.jsonc",
+        "!konsistent.json",
+        "!oxlint.config.ts",
+        "!oxfmt.config.ts",
+        "!drizzle.config.ts",
+        "!.coderabbit.yaml",
+        "!.gitleaks.toml",
+        "!.env.example"
+      ],
+      "outputs": ["coverage/**"],
+      "env": ["CI", "NODE_ENV", "SKIP_ENV_VALIDATION"],
+      "passThroughEnv": ["DATABASE_URL", "BETTER_AUTH_URL"]
+    },
+    "build": {
+      "description": "next build (standalone). Run it through scripts/turbo-build.sh.",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        // Untracked, so $TURBO_DEFAULT$ cannot see them, and `next build`
+        // loads them. CI has none.
+        ".env",
+        ".env.local",
+        ".env.production",
+        ".env.production.local",
+        "!**/*.md",
+        "!docs/**",
+        "!.agents/**",
+        "!.claude/**",
+        "!.cursor/**",
+        "!.vscode/**",
+        "!.superset/**",
+        "!.husky/**",
+        "!.github/**",
+        "!scripts/**",
+        "!src/server/db/drizzle/**",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/e2e/**",
+        "!src/test/**",
+        "!docker-compose*.yaml",
+        "!orca.yaml",
+        "!t3.json",
+        "!vercel.json",
+        "!skills-lock.json",
+        "!knip.jsonc",
+        "!konsistent.json",
+        "!oxlint.config.ts",
+        "!oxfmt.config.ts",
+        "!drizzle.config.ts",
+        "!.coderabbit.yaml",
+        "!.gitleaks.toml",
+        "!.env.example"
+      ],
+      // `.next/cache` is the compiler cache CI keeps on its own; `.next/dev`
+      // belongs to a running `next dev`.
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "!.next/dev/**",
+        // Next copies .env files into the standalone tree; never cache them.
+        "!.next/standalone/**/.env*"
+      ],
+      "env": [
+        "NODE_ENV",
+        "SKIP_ENV_VALIDATION",
+        "DATABASE_URL",
+        // src/env-database-url.js
+        "PRODUCTION_DATABASE_URL",
+        "QA_DATABASE_URL",
+        "NEON_PREVIEW_BRANCHES",
+        "VERCEL_TARGET_ENV",
+        "VERCEL_GIT_COMMIT_REF",
+        "BETTER_AUTH_URL",
+        "VERCEL",
+        "VERCEL_ENV",
+        "VERCEL_URL",
+        "VERCEL_BRANCH_URL",
+        "VERCEL_PROJECT_PRODUCTION_URL",
+        // Inlined into the client bundle as the oRPC deployment pin.
+        "NEXT_DEPLOYMENT_ID",
+        // `.next/standalone` traces this machine's sharp binary, and turbo
+        // hashes no platform: without it an arm64 and an x64 build share a key.
+        "BUILD_TARGET_ARCH"
+      ],
+      // A fresh secret per run would make every build a miss.
+      "passThroughEnv": ["BETTER_AUTH_SECRET", "NEXT_TELEMETRY_DISABLED"]
+    }
+  }
+}

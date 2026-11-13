@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# `inheritance: true`: every setting not named here comes from the
+# organization's CodeRabbit settings.
+#
+# No `base_branches`, on purpose. CodeRabbit auto-reviews only pull requests
+# into the default branch (`qa`), which keeps release and merge-back diffs away
+# from it: a bot pass over a whole release is where empty, rate-limited
+# "approvals" come from. On a hotfix PR, ask for one: `@coderabbitai review`.
+inheritance: true
+
+reviews:
+  profile: chill
+  # Findings request changes; the review turns into an approval once every
+  # thread is resolved.
+  request_changes_workflow: true
+
+  # Generated output nobody reviews line by line.
+  path_filters:
+    - "!**/drizzle/meta/**"
+    - "!pnpm-lock.yaml"
+
+  # The rules AGENTS.md calls non-negotiable, each at the path where it bites.
+  # AGENTS.md stays authoritative: a PR that changes a rule there changes its
+  # entry here too.
+  path_instructions:
+    - path: "src/server/db/schema/**/*.ts"
+      instructions: |
+        Database rules (AGENTS.md § Database):
+        - No JSON or JSONB columns: model relations as tables, normalized to at least 3NF.
+        - snake_case singular table names, camelCase columns, one model per entity, one file per domain (plus `relations.ts` and the barrel `index.ts`).
+        - App tables use `integer().primaryKey().generatedByDefaultAsIdentity()`; Better Auth's tables keep the `text` id it sets. A row reached from an unauthenticated URL gets its own unique opaque `token` column, and the URL uses it, never the id.
+        - Timestamps are `timestamp({ mode: "date", withTimezone: true, precision: 3 })`; `createdAt` uses `.defaultNow()`, `updatedAt` `.$defaultFn(() => new Date()).$onUpdate(() => new Date())`.
+        - Every `.references()` states `onDelete`, and every foreign-key column has its own index.
+        - A schema change ships with the migration `pnpm db:generate` produced for it (under `src/server/db/drizzle/`), in the same PR.
+    - path: "src/server/api/routers/**/*.ts"
+      instructions: |
+        oRPC rules (AGENTS.md § API):
+        - Procedures are built from `publicProcedure` or `protectedProcedure` (`@/server/api/orpc`); routers are plain objects aggregated in `src/server/api/root.ts`.
+        - Input is validated by a zod schema from `src/lib/schemas/`.
+        - A procedure is input → auth → one service call: no Drizzle in a router, even for one-step CRUD. Queries live in `src/server/services/<domain>.ts`, which take a `DatabaseClient` first.
+        - Expected failures (unauthenticated, not found, invalid state) throw `ORPCError` with a code.
+        - Authorization (Definition of done: no OWASP Top 10 issues): a procedure that touches user data is a `protectedProcedure`, takes the acting user from the session, and checks every id from input against that user before a query uses it. A missing ownership check is a security defect, not a style comment.
+    - path: "src/app/**/*.tsx"
+      instructions: |
+        Architecture (AGENTS.md § Architecture):
+        - Server components by default; `"use client"` only where interactivity needs it, and no `useEffect` or `useState` for what the server or the URL can provide.
+        - Context comes from the URL and search params, not from cookies or the session.
+        - Layouts are UI chrome only: authorization is checked per page, on the server, never in a layout.
+    - path: "src/app/_components/**/*.tsx"
+      instructions: |
+        Component rules (AGENTS.md § Components and forms):
+        - Atomic design tiers; each component is a kebab-case directory holding `component.tsx`, `component.test.tsx` and `index.ts`.
+        - A function declaration with a named export, a `data-slot` attribute, classes through `cn()`, variants through CVA.
+        - Imports come from the component's own directory, never from an aggregate barrel (`src/app/_components/index.ts` or a tier's `index.ts`).
+        - Forms use shadcn `<Form>` with react-hook-form and `zodResolver`; no `useState` for form state.
+    - path: "src/lib/hooks/**/*.{ts,tsx}"
+      instructions: |
+        Hook rules (AGENTS.md § Hooks): one hook per kebab-case `use-{action}.ts` with its co-located test, grouped by domain under `src/lib/hooks/{domain}/` with a domain `index.ts`. Import from the domain, never from an aggregate `src/lib/hooks/index.ts`. React Query logic (queries, mutations, optimistic updates) lives in hooks, not in components.
+    - path: "src/**/*.test.{ts,tsx}"
+      instructions: |
+        Test rules (AGENTS.md § Testing and § Definition of done):
+        - Every new or changed source file has a co-located test, and coverage stays at 100% of statements, functions and lines.
+        - Explicit assertions only, no snapshots. Flag an assertion that would still pass with the covered behaviour reverted (docs/agents/testing.md § Falsifiability): an argument-blind spy (`toHaveBeenCalled()`, `toHaveBeenCalledTimes(n)` or `toHaveBeenCalledOnce()` without the arguments), a shape-only check (`toHaveLength`, `toBeDefined`), a label without its value, an error class without its code and message, a threshold tested on one side only, an expected value computed from the live clock.
+        - Structure (docs/agents/testing.md § Test structure): `test()`, never `it()`; a test takes its state from a `setup()` it calls first; no mutable `let` at `describe` scope; `beforeEach`/`afterEach` only clean up; `describe` only groups, one level deep; a literal repeated in more than 2 tests becomes a factory; data-only variants are one `test.each`.
+    - path: "src/e2e/**/*.ts"
+      instructions: |
+        E2E rules (docs/agents/testing.md, src/e2e/AGENTS.md): select with `getByTestId` first (add a `data-testid` to the component when it lacks one), then `getByRole`, `getByLabel` or `getByText` where they fit; never a raw CSS selector. Tests run in parallel, one user per worker: a spec asserts only on rows it created, found by their unique name, never at a position in the shared feed, and seeds through the `db` fixture, which deletes by captured id. No retries, no `waitForTimeout`, no `networkidle`; the first click after a load goes through `clickUntilVisible` (never on a submit) and a request that must happen through `completeRpcAction`.
+    - path: "**/*.{ts,tsx}"
+      instructions: |
+        Type safety (AGENTS.md § Type safety and code style): no `any`; no type assertion unless nothing else works; handle the `undefined` that `noUncheckedIndexedAccess` adds; prefer source types (Drizzle inferred types, `ReturnType<>`, `Pick<>`) over hand-written copies; inline type imports (`import { type X }`). No default exports outside the files a framework requires them in (Next.js pages and layouts, tool configs), and no `console.error` in production code.

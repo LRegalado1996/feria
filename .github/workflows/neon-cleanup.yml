@@ -1,0 +1,48 @@
+name: Neon Preview Cleanup
+
+# With the Vercel–Neon integration, each preview deployment migrates and runs
+# against its own Neon branch, `preview/<git branch>` (docs/agents/database.md
+# § Preview databases). This deletes that branch when the PR closes, merged or
+# not; neon-prune.yml sweeps whatever it misses. Without NEON_API_KEY and
+# NEON_PROJECT_ID it does nothing.
+on:
+    pull_request:
+        types: [closed]
+
+# Talks to Neon only; no GitHub token needed.
+permissions: {}
+
+jobs:
+    delete-branch:
+        name: Delete the preview database branch
+        # The long-lived branches use their own databases, never a preview one.
+        if: github.head_ref != 'qa' && github.head_ref != 'main'
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        concurrency:
+            group: neon-cleanup-${{ github.event.pull_request.number }}
+        env:
+            NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+            NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+            # Through env, never `${{ }}` in the script: a branch name is
+            # attacker-controlled text.
+            BRANCH: preview/${{ github.head_ref }}
+        steps:
+            # Tested by .github/scripts/ci-neon-policy.test.mjs.
+            - name: Delete the Neon branch
+              run: |
+                  set -euo pipefail
+                  if [[ -z "$NEON_API_KEY" || -z "$NEON_PROJECT_ID" ]]; then
+                    # Also a run Dependabot triggered: it gets no secrets.
+                    echo "::notice::NEON_API_KEY or NEON_PROJECT_ID is not set: nothing to delete here. neon-prune.yml sweeps leftover preview branches daily."
+                    exit 0
+                  fi
+                  api="https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches"
+                  id="$(curl -fsS --max-time 30 -H "Authorization: Bearer $NEON_API_KEY" "$api?limit=10000" |
+                    jq -r --arg name "$BRANCH" '.branches[] | select(.name == $name) | .id')"
+                  if [[ -z "$id" ]]; then
+                    echo "No Neon branch $BRANCH: this PR never had a preview deployment."
+                    exit 0
+                  fi
+                  curl -fsS --max-time 30 -X DELETE -H "Authorization: Bearer $NEON_API_KEY" "$api/$id" > /dev/null
+                  echo "Deleted Neon branch $BRANCH ($id)."

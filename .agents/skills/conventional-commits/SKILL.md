@@ -7,8 +7,12 @@ description: Write commit messages, PR titles and PR descriptions for this repo 
 
 Every commit on every branch, and every pull request title, follows
 [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
-PRs are squash-merged, so the PR title becomes the commit on `main`: it must be
-a valid message on its own.
+PRs into `qa` are squash-merged, so the PR title becomes the commit on `qa`: it
+must be a valid message on its own.
+
+This file is the one source for the format, the types, the scopes and the
+ticket footer. The `git-commit` skill (how to stage and commit) and the
+`create-pr` skill (how to open the PR) point here and repeat none of it.
 
 ## Format
 
@@ -62,7 +66,11 @@ several.
 
 `store` · `catalog` · `orders` · `checkout` · `admin` · `storefront` · `ai` ·
 `auth` · `i18n` · `brand` · `design` · `metrics` · `uploads` · `db` · `deps` ·
-`tickets`
+`tickets` · `release`
+
+`release` is for the two pull requests `auto-promotion-pr.yml` opens:
+`chore(release): promote qa to main` and
+`chore(release): merge main back into qa`.
 
 Add a scope to this list in the same PR that first needs it.
 
@@ -135,9 +143,13 @@ Not valid, and why:
 
 ## Pull requests
 
+- **How to open one**: the `create-pr` skill, after the local round of the
+  `review-loop` skill.
 - **Base branch**: `qa`. Nobody pushes to `qa` or `main` directly; both accept
-  pull requests only. `main` receives one kind of PR: the promotion from `qa`,
-  titled `chore(release): promote qa to main`.
+  pull requests only. `main` receives the promotion from `qa`, titled
+  `chore(release): promote qa to main`, and, rarely, a `hotfix/<slug>` branch
+  (`docs/agents/ci.md` § Releases). Promotions and merge-backs are merged
+  with a merge commit, never squashed.
 - **Visual proof**: a PR with a visible change carries a screenshot or a
   recording in its description (mobile and desktop width when layout changed).
   Capture it from the running app, drag it into the description, never commit
@@ -145,9 +157,10 @@ Not valid, and why:
   say why only when that is true.
 - **Title**: a valid message first line, as above. It is what lands on the base
   branch.
-- **Description**: fill `.github/pull_request_template.md` when it exists. The
-  parts of a commit body still apply: why, what changed, how it was checked. End
-  with the footers: `Closes: FER-0xx`, any `BREAKING CHANGE:`, and the
+- **Description**: fill `.github/pull_request_template.md`. The parts of a
+  commit body still apply: why, what changed, how it was checked. The footers
+  (`Closes: FER-0xx`, any `BREAKING CHANGE:`) go in its "Ticket and footers"
+  section, and the body ends with the `Model: · Harness:` line and the
   attribution line the harness asks for.
 - **Commits inside the PR** follow the same format even though they are
   squashed: they are what a reviewer reads.
@@ -163,4 +176,4 @@ Not valid, and why:
 5. Add the body when the reason is not obvious from the first line, then the
    footers.
 6. Never use `--no-verify`, never amend a pushed commit, never force-push
-   `main`.
+   `qa` or `main`.

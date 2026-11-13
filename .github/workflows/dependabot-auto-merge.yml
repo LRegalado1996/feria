@@ -1,0 +1,118 @@
+name: Dependabot Auto-Merge
+
+# Squash-merges green Dependabot PRs into qa. Majors and PRs a human pushed to
+# stay open for a person.
+on:
+    workflow_run:
+        workflows: ["CI"]
+        types: [completed]
+    # Safety net: a CI completion is what normally triggers a merge, so a dropped
+    # or displaced run would otherwise leave a green PR open until the next one.
+    schedule:
+        - cron: "23 * * * *"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    auto-merge:
+        name: Auto-Merge
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        # On the job, not the workflow: a workflow-level group is joined before
+        # `if:` is evaluated, so every skipped non-Dependabot CI completion would
+        # displace a pending Dependabot run. Each run re-reads every open PR, so
+        # the pending run GitHub drops loses nothing.
+        concurrency:
+            group: dependabot-auto-merge
+            cancel-in-progress: false
+        if: >-
+            github.event_name != 'workflow_run' || (
+            github.event.workflow_run.conclusion == 'success' &&
+            github.event.workflow_run.event == 'pull_request' &&
+            github.event.workflow_run.actor.login == 'dependabot[bot]')
+        permissions:
+            actions: read # each PR's CI runs; without it every read is a 403
+            contents: write # GITHUB_TOKEN fallback merge
+            pull-requests: write # GITHUB_TOKEN fallback merge
+        steps:
+            # A merge made with GITHUB_TOKEN starts no workflow, so qa would get no
+            # push CI run for it. A merge made with the org GitHub App's token does.
+            - name: Create bot token
+              id: bot
+              if: vars.BOT_APP_ID != ''
+              uses: actions/create-github-app-token@v3
+              with:
+                  client-id: ${{ vars.BOT_APP_ID }} # the App's ID or its client ID
+                  private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+                  permission-contents: write
+                  permission-pull-requests: write
+
+            # No approval step: qa requires no review, and an approval is one more
+            # setting that can silently fail in front of the merge.
+            - name: Merge green Dependabot PRs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  BOT_TOKEN: ${{ steps.bot.outputs.token }}
+                  REPO: ${{ github.repository }}
+              run: |
+                  set -euo pipefail
+                  merge_token="${BOT_TOKEN:-$GH_TOKEN}"
+
+                  # Oldest first, so a batch lands in the order Dependabot opened it.
+                  prs="$(gh pr list --repo "$REPO" --base qa --author app/dependabot --state open --limit 50 \
+                    --json number,headRefOid,createdAt --jq 'sort_by(.createdAt) | .[] | "\(.number) \(.headRefOid)"')"
+
+                  # The list arrives on fd 3, so no command in the loop can consume it from stdin.
+                  while read -r number sha <&3; do
+                    [[ -n "$number" ]] || continue
+                    commits="$(gh api "repos/$REPO/pulls/$number/commits")"
+
+                    # A commit Dependabot did not author and sign is someone else's change.
+                    foreign="$(jq '[.[] | select(.author.login != "dependabot[bot]" or .commit.verification.verified != true)] | length' <<<"$commits")"
+                    if [[ "$foreign" != 0 ]]; then
+                      echo "#$number: skipped, a human pushed to it. Merge it by hand."
+                      continue
+                    fi
+
+                    # The update type comes from Dependabot's commit metadata
+                    # (updated-dependencies -> update-type), never from the title, which
+                    # names no versions for a group. dependabot/fetch-metadata reads the
+                    # same block but only runs on pull_request events.
+                    message="$(jq -r '.[].commit.message' <<<"$commits")"
+                    if ! grep -q 'update-type: version-update:semver-' <<<"$message"; then
+                      echo "#$number: skipped, its commit carries no Dependabot metadata. Merge it by hand."
+                      continue
+                    fi
+                    if grep -q 'update-type: version-update:semver-major' <<<"$message"; then
+                      echo "#$number: skipped, it includes a major update. Review it and merge it by hand."
+                      continue
+                    fi
+
+                    ci="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$sha&event=pull_request&per_page=1" \
+                      --jq '.workflow_runs[0] | if . == null or .status != "completed" then "pending" else .conclusion end')"
+                    if [[ "$ci" != success ]]; then
+                      echo "#$number: not merged, CI is $ci."
+                      continue
+                    fi
+
+                    # GitHub recomputes mergeability lazily after the base moves, which
+                    # every merge in this loop does.
+                    for _ in 1 2 3 4 5 6; do
+                      mergeable="$(gh pr view "$number" --repo "$REPO" --json mergeable --jq .mergeable)"
+                      if [[ "$mergeable" != UNKNOWN ]]; then break; fi
+                      sleep 5
+                    done
+                    if [[ "$mergeable" != MERGEABLE ]]; then
+                      echo "#$number: not merged, it is $mergeable. Dependabot rebases a conflicted PR itself."
+                      continue
+                    fi
+
+                    # --match-head-commit: merge the commit CI passed, or nothing.
+                    GH_TOKEN="$merge_token" gh pr merge "$number" --repo "$REPO" --squash --match-head-commit "$sha"
+                    echo "#$number: merged."
+                    if [[ -z "$BOT_TOKEN" ]]; then
+                      echo "::warning title=Merged with GITHUB_TOKEN::#$number was merged with GITHUB_TOKEN because the bot GitHub App is not configured (vars.BOT_APP_ID, secrets.BOT_APP_PRIVATE_KEY). GitHub starts no workflow for that merge, so qa gets no push CI run for it."
+                    fi
+                  done 3<<<"$prs"

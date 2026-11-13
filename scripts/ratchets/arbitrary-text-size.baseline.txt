@@ -1,0 +1,12 @@
+# An arbitrary pixel font size
+#
+# Type sizes come from the role table in design.md, text-xs at the smallest. A pixel literal is a new type role made up on the spot, and text shrunk to fit hides a layout that needs rewriting. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Typography and copy: no arbitrary sizes
+# Fix:       Use a role from the type table. If the layout only works with smaller text, reflow the layout or rewrite the copy.
+#
+# 0 file(s), 0 occurrence(s) remaining.

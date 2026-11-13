@@ -1,0 +1,9 @@
+# Workspace creation provisions .env and host node_modules only; containers
+# start with the first command that needs them. Archive deletes this
+# worktree's volumes: the database is re-derivable (migrate + seed), and kept
+# volumes pile up as orphans.
+scripts:
+  setup: |
+    pnpm wt:provision
+  archive: |
+    pnpm wt:down --volumes

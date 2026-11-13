@@ -1,6 +1,6 @@
 ---
 name: review-loop
-description: Work a pull request through CodeRabbit's review until it is ready to merge. Use after opening or updating a PR in this repo, when asked to address review comments, answer CodeRabbit, check whether a PR can be merged, or "fight it out" with the reviewer.
+description: Review a change before and after its pull request until it is ready to merge. Use before opening a PR in this repo (the local round with the agent's own review and the CodeRabbit CLI), after opening or updating one, when asked to address review comments, answer CodeRabbit, check whether a PR can be merged, or "fight it out" with the reviewer.
 ---
 
 # Review loop with CodeRabbit
@@ -10,10 +10,55 @@ Neither side is right by default: the goal is a PR that is correct, not a PR
 with no comments. Agreeing to end the argument is a failure; so is refusing a
 valid point.
 
-## The loop
+The review happens twice, on purpose. A local round before the PR catches what
+can be caught cheaply, so the PR opens clean. The round on the PR is the one of
+record: a fresh review of what was pushed, argued in the PR's threads, where
+Lucas can read it.
 
-1. **Open the PR** into `qa` following the `conventional-commits` skill, then
-   wait for the review. Do not poll in a tight loop: check when CI finishes.
+## Before the PR: the local round
+
+Run it on the committed branch, after `AGENTS.md` § Definition of done is
+green and before `git push`.
+
+1. **The agent's own review.** Review the whole branch against `qa`
+   (`git diff origin/qa...HEAD`) as a reviewer who did not write it:
+   correctness and security first, then the rules in `AGENTS.md`, `design.md`
+   and `docs/agents/`. In Claude Code that is `/code-review`; in another
+   harness, its review command or a fresh agent given the diff and not the
+   conclusion.
+
+2. **CodeRabbit, locally.** The CodeRabbit CLI reviews the same diff without a
+   PR:
+
+   ```bash
+   coderabbit review --plain --base qa
+   ```
+
+   Install it once with the script on <https://www.coderabbit.ai/cli> and sign
+   in with `coderabbit auth login` (it opens a browser, so Lucas does it). The
+   CLI is rate-limited: one run per round, not one per file. If it is not
+   installed or not signed in, do not skip silently: do step 1, say in the PR
+   description's "How it was verified" that the local CodeRabbit round did not
+   run, and tell Lucas.
+
+3. **Judge every finding** from both with the verdict table below, exactly as
+   on the PR. Fix what is right in new commits, and write down what was refused
+   and why: it goes in the PR description's "Review focus", so the reviewer on
+   the PR starts from the argument instead of repeating it.
+
+4. **Repeat** while a round still finds something that is right. Two local
+   rounds at most; what is still disputed goes to the PR, where it is argued in
+   the open.
+
+Then open the PR with the `create-pr` skill.
+
+## On the PR: the loop
+
+1. **Open the PR** into `qa` following the `create-pr` skill. CodeRabbit
+   reviews it by itself. If its review does not arrive, or it reviewed an older
+   head, ask for one with a PR comment: `@coderabbitai review` (or
+   `@coderabbitai full review` to review everything again from scratch).
+   Do not poll in a tight loop: check when CI finishes.
 
    ```bash
    gh pr checks <number> --watch
@@ -43,6 +88,9 @@ valid point.
    specific. Start a reply to the bot with `@coderabbitai` so it reads it.
    Never resolve a thread without a reply that justifies it.
 
+   The argument lives in the PR, never only in the agent's session: every
+   verdict, fix and refusal is a comment there.
+
 5. **Push the fixes** as new commits (never amend or force-push a reviewed
    branch) and let CodeRabbit review the new commits. Go back to step 2.
 
@@ -58,8 +106,9 @@ stable, and ask Lucas for the go-ahead.
 
 ## Limits
 
-- **Three rounds.** If a thread is still open after three exchanges, stop and
-  bring it to Lucas with both positions in two lines each. He decides.
+- **Three rounds** on the PR. If a thread is still open after three exchanges,
+  stop and bring it to Lucas with both positions in two lines each. He decides.
+  The local rounds do not count toward the three.
 - **Never** weaken a test, disable a lint rule, lower coverage or mark a thread
   resolved to make the PR green.
 - **Never** take a suggested change without understanding it. A suggestion
@@ -71,6 +120,7 @@ stable, and ask Lucas for the go-ahead.
 
 ```
 PR #12 feat(catalog): add keyset pagination to the public article list
+Local round: own review 2 fixed · CodeRabbit CLI 1 fixed, 1 refused
 Rounds: 2
 Fixed: 3 (off-by-one on the cursor, missing index, unescaped search term)
 Refused: 1 (suggested a JSON column; AGENTS.md bans them)

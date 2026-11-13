@@ -1,0 +1,12 @@
+# A direct Sentry capture that bypasses the reporting helpers
+#
+# `captureExceptionWithScope` and `reportError` are what attach the action, procedure and request id, decide what is not an issue, and return an event id only when one was sent. A bare `captureException` produces an event with none of that, and from a callback outside the request scope nothing else will tag it either. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: AGENTS.md § Error reporting: never call Sentry's capture functions directly
+# Fix:       Server: `captureExceptionWithScope(error, { action, procedure, requestId, context })` from @/lib/sentry. Client: `reportError(error, { action, context })` from @/lib/errors/client. Both are safe without a DSN.
+#
+# 0 file(s), 0 occurrence(s) remaining.

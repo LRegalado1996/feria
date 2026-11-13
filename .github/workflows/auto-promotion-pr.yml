@@ -1,0 +1,181 @@
+name: Auto Promotion PR
+
+# Opens the next promotion pull request as soon as its source branch moves:
+# - a push to `qa` opens `chore(release): promote qa to main`;
+# - a push to `main` opens `chore(release): merge main back into qa`, but only when
+#   main holds content qa lacks (a hotfix). Every ordinary release leaves
+#   main ahead of qa by its merge commit with the same tree, so the guard
+#   is the three-dot diff, not the commit count.
+#
+# Idempotent: it opens a PR only when none is open for the pair and the head
+# holds content the base lacks. It never merges; a human does, with a merge
+# commit. `promotion-verification.yml` (release, `Promotion Verified`) and
+# `ci.yml` (merge-back, `CI Success`) are what vouch for the tree.
+#
+# Bot identity: GitHub starts no workflow for a PR opened with GITHUB_TOKEN, so
+# the PR is opened with the org GitHub App's token (vars.BOT_APP_ID,
+# secrets.BOT_APP_PRIVATE_KEY) and its checks start normally. Without the App
+# it falls back to GITHUB_TOKEN and comments that a human must close and reopen
+# the PR to start them.
+
+on:
+    push:
+        branches: [qa, main]
+    # Recovery hatch when the push that should have opened the PR did not (a
+    # failed run, or a PR closed while the branch stayed put). Run it on `qa` or
+    # `main`; it never reopens a closed PR.
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pull-requests: write # GITHUB_TOKEN fallback: open the PR and comment
+
+jobs:
+    open-promotion-pr:
+        name: Open promotion pull request
+        # The push trigger already filters; this covers workflow_dispatch, where
+        # any branch can be picked.
+        if: github.ref_name == 'qa' || github.ref_name == 'main'
+        # Serialized per branch and never cancelled: two merges seconds apart
+        # must not race into two PRs, and a cancelled run reads like a skipped one.
+        concurrency:
+            group: auto-promotion-pr-${{ github.ref }}
+            cancel-in-progress: false
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - name: Create bot token
+              id: bot
+              if: vars.BOT_APP_ID != ''
+              uses: actions/create-github-app-token@v3
+              with:
+                  client-id: ${{ vars.BOT_APP_ID }} # the App's ID or its client ID
+                  private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+                  permission-contents: read
+                  permission-pull-requests: write
+
+            - name: Resolve the promotion pair
+              id: pair
+              env:
+                  HEAD_BRANCH: ${{ github.ref_name }}
+              run: |
+                  set -euo pipefail
+                  case "$HEAD_BRANCH" in
+                    qa) base=main title='chore(release): promote qa to main' ;;
+                    main) base=qa title='chore(release): merge main back into qa' ;;
+                    # Unreachable while the job condition holds; fails loudly if
+                    # a future edit loosens it.
+                    *) echo "::error::No promotion target for '$HEAD_BRANCH'."; exit 1 ;;
+                  esac
+                  {
+                    echo "head=$HEAD_BRANCH"
+                    echo "base=$base"
+                    echo "title=$title"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Decide whether a pull request is needed
+              id: range
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  BASE_BRANCH: ${{ steps.pair.outputs.base }}
+                  HEAD_BRANCH: ${{ steps.pair.outputs.head }}
+              run: |
+                  set -euo pipefail
+                  number="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+                    --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty')"
+                  if [[ -n "$number" ]]; then
+                    echo "An open $HEAD_BRANCH -> $BASE_BRANCH pull request already exists: #$number"
+                    echo "open=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+
+                  compare="$RUNNER_TEMP/compare.json"
+                  gh api "repos/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$HEAD_BRANCH" > "$compare"
+
+                  # Judged on content: an empty three-dot diff means merging
+                  # changes nothing (main after an ordinary release, qa
+                  # right after a merge-back). A missing `files` field is not
+                  # proof of emptiness, so only an empty list skips.
+                  if [[ "$(jq '.ahead_by == 0 or (.files != null and (.files | length) == 0)' "$compare")" == true ]]; then
+                    echo "$HEAD_BRANCH holds no content $BASE_BRANCH lacks; nothing to open."
+                    echo "open=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
+
+                  # Merge commits (earlier releases and merge-backs) are the
+                  # mechanism, not the payload. The cap keeps a long-overdue
+                  # release from producing a body GitHub truncates.
+                  jq -r '
+                    [ .commits[] | select((.parents | length) < 2) | .commit.message | split("\n")[0] ] as $subjects
+                    | ($subjects[0:50][] | "- " + .),
+                      (if ($subjects | length) > 50 or .total_commits > (.commits | length)
+                       then "- ...and more: see the full comparison below"
+                       else empty end)
+                  ' "$compare" > "$RUNNER_TEMP/commits.md"
+                  if [[ ! -s "$RUNNER_TEMP/commits.md" ]]; then
+                    echo "- (merge commits only; see the full comparison below)" > "$RUNNER_TEMP/commits.md"
+                  fi
+                  echo "open=true" >> "$GITHUB_OUTPUT"
+
+            - name: Open the promotion pull request
+              id: open
+              if: steps.range.outputs.open == 'true'
+              env:
+                  GH_TOKEN: ${{ steps.bot.outputs.token || github.token }}
+                  BASE_BRANCH: ${{ steps.pair.outputs.base }}
+                  HEAD_BRANCH: ${{ steps.pair.outputs.head }}
+                  TITLE: ${{ steps.pair.outputs.title }}
+                  SERVER_URL: ${{ github.server_url }}
+              run: |
+                  set -euo pipefail
+                  body="$RUNNER_TEMP/body.md"
+                  {
+                    if [[ "$BASE_BRANCH" == qa ]]; then
+                      echo "> [!IMPORTANT]"
+                      echo "> **Hotfix merge-back, not a release.** \`main\` carries a change that never passed through \`qa\`."
+                      echo "> Until this merges, the next release cannot verify: the tree its merge would produce matches no validated \`qa\` commit."
+                      echo
+                    fi
+                    echo "## What this promotes"
+                    echo
+                    cat "$RUNNER_TEMP/commits.md"
+                    echo
+                    echo "[Full comparison: \`$BASE_BRANCH...$HEAD_BRANCH\`]($SERVER_URL/$GITHUB_REPOSITORY/compare/$BASE_BRANCH...$HEAD_BRANCH)"
+                    echo
+                    echo "---"
+                    echo
+                    echo "Opened by \`.github/workflows/auto-promotion-pr.yml\`."
+                    echo
+                    echo "**Merge this with a merge commit**, never squash or rebase: those rewrite the promoted commits, so the next promotion diffs them again and conflicts."
+                  } > "$body"
+
+                  # Losing a race to a PR opened between the check and here is
+                  # success: that PR is the one this run wanted.
+                  if ! output="$(gh pr create --repo "$GITHUB_REPOSITORY" \
+                    --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$TITLE" --body-file "$body" 2>&1)"; then
+                    echo "$output"
+                    if grep -qi 'already exists' <<<"$output"; then
+                      echo "A promotion pull request was opened concurrently; nothing to do."
+                      exit 0
+                    fi
+                    exit 1
+                  fi
+                  echo "$output"
+                  echo "url=$(grep -oE 'https://[^ ]+/pull/[0-9]+' <<<"$output" | tail -n 1)" >> "$GITHUB_OUTPUT"
+
+            # Without the App the PR was opened with GITHUB_TOKEN, so GitHub
+            # started none of its checks. Say so where the reviewer looks.
+            - name: Ask for a close and reopen
+              if: steps.open.outputs.url != '' && steps.bot.outputs.token == ''
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  PR_URL: ${{ steps.open.outputs.url }}
+              run: |
+                  set -euo pipefail
+                  echo "::warning title=Opened with GITHUB_TOKEN::The bot GitHub App is not configured (vars.BOT_APP_ID, secrets.BOT_APP_PRIVATE_KEY), so no check started for $PR_URL."
+                  gh pr comment "$PR_URL" --body-file - <<'NOTE'
+                  > [!IMPORTANT]
+                  > **No check has run on this pull request.** It was opened with the default `GITHUB_TOKEN`, and GitHub starts no workflow for events that token causes, so its checks (`CI Success` or `Promotion Verified`) will not report on their own.
+                  >
+                  > **Close and reopen this pull request** to start it. Configuring the org GitHub App (`vars.BOT_APP_ID`, `secrets.BOT_APP_PRIVATE_KEY`) removes this step.
+                  NOTE

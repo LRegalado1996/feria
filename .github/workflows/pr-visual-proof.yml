@@ -34,9 +34,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # A promotion carries changes that were already shown in their own PRs.
+          # A promotion carries changes that were already shown in their own
+          # PRs, and so does the merge-back of a hotfix shown in its PR into main.
           if [ "$HEAD_REF" = "qa" ] && [ "$BASE_REF" = "main" ]; then
             echo "Promotion from qa to main: nothing to check."
+            exit 0
+          fi
+          if [ "$HEAD_REF" = "main" ] && [ "$BASE_REF" = "qa" ]; then
+            echo "Merge-back from main to qa: nothing to check."
             exit 0
           fi
 
