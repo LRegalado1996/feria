@@ -150,10 +150,11 @@ Not valid, and why:
   `chore(release): promote qa to main`, and, rarely, a `hotfix/<slug>` branch
   (`docs/agents/ci.md` § Releases). Promotions and merge-backs are merged
   with a merge commit, never squashed.
-- **Visual proof**: a PR with a visible change carries a screenshot or a
-  recording in its description (mobile and desktop width when layout changed).
-  Capture it from the running app, drag it into the description, never commit
-  it. The `visual-proof` check fails without it; tick "No visible change" and
+- **Visual proof**: a PR with a visible change carries one image of the
+  result in its description: every changed screen composed into a single
+  labelled image (phone and desktop width when layout changed). Before and
+  after only for a bug fix; a recording for a gesture or a timing. Capture it
+  from the running app, attach it to the description, never commit it. The `visual-proof` check fails without it; tick "No visible change" and
   say why only when that is true.
 - **Title**: a valid message first line, as above. It is what lands on the base
   branch.
