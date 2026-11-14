@@ -15,10 +15,12 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 - **Re-derive a role that gates a mutation inside the write transaction,** under a row lock (resolve → lock → commit in `docs/agents/database.md`): the role in the request context is a snapshot.
 - **Public URLs carry an opaque random token** in its own unique column, never a sequential id. Rotate it when the link is re-sent.
 - `src/proxy.ts` stamps request ids on `/api`. If it ever redirects, it does so on session-cookie presence only, with a 307; pages and procedures do the real checks.
+- **Not yet enforced for stores:** `store.create` and `store.update` accept any signed-in user until FER-009 adds roles (`superadminProcedure`, `storeProcedure`). They are not to reach production before that.
 - Test authorization by calling the procedure as a less-privileged user. A missing ownership check found in review is fixed in the same PR.
 
 ## Encode for every sink
 
+- **CSS and `href` from the database:** a store's colors reach a `style` attribute and its links an `href`. Both are validated when they are stored, by the schema and (colors) by a database check: a color is `#` and six hex digits, a link is `https://` only, never `javascript:`.
 - **CSV:** quote every field, escape quotes and newlines, and prefix a cell starting with `=`, `+`, `-`, `@`, tab or carriage return with `'`: spreadsheets run it as a formula.
 - **Email HTML:** escape every interpolated value.
 - **User HTML:** a DOM-free sanitizer, never `dangerouslySetInnerHTML` on raw input.

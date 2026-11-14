@@ -82,6 +82,8 @@ describe("database client", () => {
         "post",
         "rateLimit",
         "session",
+        "store",
+        "storeTranslation",
         "user",
         "verification",
       ])

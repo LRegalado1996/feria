@@ -82,3 +82,20 @@ export function translatePostgresError(
   }
   return undefined;
 }
+
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * Whether `error` is the unique violation of `constraint`, anywhere in its
+ * cause chain. For a service that owes the user a better answer than the
+ * generic CONFLICT above: which value is taken, and what to do about it.
+ */
+export function isUniqueViolation(error: unknown, constraint: string): boolean {
+  return causeChain(error).some(
+    (link) =>
+      "code" in link &&
+      link.code === UNIQUE_VIOLATION &&
+      "constraint" in link &&
+      link.constraint === constraint
+  );
+}
