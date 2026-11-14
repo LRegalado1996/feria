@@ -1,3 +1,6 @@
+import { ORPCError } from "@orpc/server";
+
+import { detectStableEnvironment, isProductionDeploy } from "@/lib/env/deploy";
 import {
   createStoreSchema,
   getStoreBySlugSchema,
@@ -10,6 +13,27 @@ import {
   getActiveStoreBySlug,
   updateStore,
 } from "@/server/services/store";
+
+/**
+ * Writing a store, for now: any signed-in user, and never on production.
+ * There is no role to check until FER-009 brings `superadminProcedure` and
+ * `storeProcedure`, and sign-up is still public, so the live site refuses
+ * these procedures outright instead of trusting that they are not deployed
+ * there. Production is the Vercel production deployment or the `main` branch,
+ * as for the `/design` gallery. FER-009 replaces this builder and its gate.
+ */
+const storeWriteProcedure = protectedProcedure.use(({ next }) => {
+  if (
+    isProductionDeploy() ||
+    detectStableEnvironment(process.env) === "production"
+  ) {
+    throw new ORPCError("FORBIDDEN", {
+      message: "Stores cannot be changed here yet",
+    });
+  }
+
+  return next();
+});
 
 export const storeRouter = {
   getBySlug: publicProcedure
@@ -25,9 +49,7 @@ export const storeRouter = {
       tags: ["stores"],
     }),
 
-  // Any signed-in user, until FER-009 brings roles and this becomes its
-  // `superadminProcedure`.
-  create: protectedProcedure
+  create: storeWriteProcedure
     .input(createStoreSchema)
     .handler(async ({ context, input }) => {
       const created = await createStore(context.db, input);
@@ -42,9 +64,7 @@ export const storeRouter = {
       tags: ["stores"],
     }),
 
-  // Any signed-in user and any store, until FER-009 brings roles and this
-  // becomes its `storeProcedure` (a superadmin or a member of this store).
-  update: protectedProcedure
+  update: storeWriteProcedure
     .input(updateStoreSchema)
     .handler(async ({ context, input }) => {
       const updated = await updateStore(context.db, input);

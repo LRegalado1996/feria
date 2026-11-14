@@ -90,28 +90,48 @@ const storeColorSchema = z
     "Write the color as # followed by six hex digits (0 to 9, a to f)"
   );
 
-// Anything before an `@` in the authority: `https://instagram.com@evil.example`
-// reads as Instagram and goes somewhere else.
-const URL_WITH_CREDENTIALS = /^[a-z]+:[/\\]*[^/\\?#]*@/i;
+// A browser drops tabs and line breaks from a URL and reads a backslash as a
+// slash, so a link holding one is not the link a person sees.
+const URL_REWRITTEN_BY_BROWSERS = /[\s\\]/;
 
 /**
  * A link the storefront renders as an `href` or a `src`: `https` only, so a
- * stored value can never be a `javascript:` URL, and no user name in front of
- * the host. `site` holds a social link to its own site: it matches the start
- * of the link, host included.
+ * stored value can never be a `javascript:` URL, and with no user name in
+ * front of the host (`https://instagram.com@evil.example` reads as Instagram
+ * and goes somewhere else). `hosts` holds a social link to its own site.
+ *
+ * Three stages, and a later one only runs on what the earlier accepted, so a
+ * refused link gets one message and `new URL()` only ever parses a valid one.
  */
-function storeLink({ example, site }: { example: string; site?: RegExp }) {
+function storeLink({
+  example,
+  hosts,
+}: {
+  example: string;
+  hosts?: readonly string[];
+}) {
   const message = `Enter a full link, such as ${example}`;
 
   return z
     .string()
     .trim()
     .max(URL_MAX_LENGTH, `Keep the link to ${URL_MAX_LENGTH} characters`)
-    .refine(
-      (link) => !URL_WITH_CREDENTIALS.test(link) && (site?.test(link) ?? true),
-      { error: message }
-    )
+    .refine((link) => !URL_REWRITTEN_BY_BROWSERS.test(link), { error: message })
     .pipe(z.url({ error: message, protocol: /^https$/ }))
+    .pipe(
+      z.string().refine(
+        (link) => {
+          const { hostname, password, port, username } = new URL(link);
+
+          return (
+            username === "" &&
+            password === "" &&
+            (hosts === undefined || (hosts.includes(hostname) && port === ""))
+          );
+        },
+        { error: message }
+      )
+    )
     .nullable();
 }
 
@@ -250,7 +270,7 @@ const storeFieldsSchema = storePaletteSchema.extend({
   currencyCode: z.enum(STORE_CURRENCIES),
   instagramUrl: storeLink({
     example: "https://instagram.com/my-store",
-    site: /^https:\/\/(?:www\.)?instagram\.com(?:[/?#]|$)/i,
+    hosts: ["instagram.com", "www.instagram.com"],
   }),
   isActive: z.boolean(),
   logoUrl: storeLink({ example: "https://example.com/logo.png" }),
@@ -266,7 +286,7 @@ const storeFieldsSchema = storePaletteSchema.extend({
   slug: storeSlugSchema,
   tiktokUrl: storeLink({
     example: "https://tiktok.com/@my-store",
-    site: /^https:\/\/(?:www\.)?tiktok\.com(?:[/?#]|$)/i,
+    hosts: ["tiktok.com", "www.tiktok.com"],
   }),
   // At most one text per language; a store may have none yet.
   translations: z

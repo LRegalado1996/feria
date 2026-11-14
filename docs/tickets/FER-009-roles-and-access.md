@@ -16,6 +16,7 @@ Only invited people can sign in, and every admin action is authorized against th
 - Procedure builders next to `protectedProcedure`: `superadminProcedure`, and `storeProcedure`, which takes the store slug from the input, loads the store and checks the caller is a superadmin or a member of it. It hands the procedure a trusted `store`.
 - A first-run way to create the superadmin: a script that reads the email from an environment variable, refused when a superadmin already exists.
 - Rate limiting on sign-in.
+- `store.create` becomes a `superadminProcedure` and `store.update` a `storeProcedure`; the temporary `storeWriteProcedure` and its production gate (FER-008) are deleted.
 - Update `docs/agents/security.md` with the authorization model.
 
 ## Acceptance criteria

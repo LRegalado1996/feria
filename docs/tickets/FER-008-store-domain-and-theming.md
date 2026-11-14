@@ -37,7 +37,7 @@ Every later query for catalog, orders or metrics filters by `storeId` taken from
 Decisions taken on the way:
 
 - **`/` still shows the template's sign-in and feed.** Lucas chose to leave it until the admin exists, so the redirect to `DEFAULT_STORE_SLUG`, and that variable, moved to FER-013, which gives sign-in its own address.
-- **Stores can be written through the API** (`store.create`, `store.update`) by any signed-in user. Roles arrive with FER-009, which swaps in its procedure builders; nothing here goes to production before that.
+- **Stores can be written through the API** (`store.create`, `store.update`) by any signed-in user, everywhere but production: the live deployment refuses both until roles exist. Roles arrive with FER-009, which swaps in its procedure builders and removes that gate. On QA, where sign-up is still public, anyone who signs up can edit a store until then.
 - **An edit sends the whole store,** texts included. The five colors only make sense together, and a partial update would have to merge with a row read earlier.
 - **A message under a field is the form's job.** The API answers a refused store with `BAD_REQUEST`; the wording ("…has a contrast of 4.46:1. It needs at least 4.5:1") lives in the schema the settings form will validate with (FER-014), where it also gets its Spanish.
 - **AA is checked on nine pairs:** the five the storefront sets text in, plus the muted colors CSS derives from the palette on each color they sit on (`design.md` § Storefront).
