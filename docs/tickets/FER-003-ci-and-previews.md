@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-002
 
 ## Goal
@@ -45,13 +45,15 @@ Set up outside the repository:
 - GitHub: the variables `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID`; the `preview` environment limited to `qa`; Actions allowed to create pull requests.
 - Vercel: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG` and `SENTRY_PROJECT` on Production and on the `qa` branch, pointing at the Sentry project `feria` (organization `pepe-sas-uy`).
 
-Still open, each needing Lucas at a dashboard (the command-line sessions are not allowed to create these credentials):
+Lucas added the credentials the command-line sessions may not create: `VERCEL_PREVIEW_TOKEN` (environment `preview`), `NEON_API_KEY`, and `SENTRY_AUTH_TOKEN` in Vercel (one token for Production and Preview; it only uploads source maps). The Vercel dashboard cannot scope a token to one project, so `VERCEL_PREVIEW_TOKEN` reaches the whole team: replace it with a project-scoped one (`vercel tokens create --project`) once the account may create tokens from the command line. "Create a database branch per preview deployment" is on for `feria-db-qa`, and `NEON_PROJECT_ID` is that project.
 
-- `VERCEL_PREVIEW_TOKEN`: a Vercel token scoped to the `feria` project, stored as a secret of the GitHub environment `preview`.
-- `NEON_API_KEY` (secret) and `NEON_PROJECT_ID` (variable) in GitHub, from the `feria-db-qa` Neon project, and "create a database branch per preview deployment" turned on for it in Vercel.
-- `SENTRY_AUTH_TOKEN` in Vercel, on Production and on the `qa` branch, so builds upload source maps.
-- The GitHub and Vercel apps for Slack. Until they post by themselves the agent keeps posting every event, and the ownership table in the `slack-reporting` skill stays as it is.
-- With those in place: the throwaway PR (green CI, a preview URL, a Neon branch deleted on close) and the error thrown on purpose in QA.
+Proven on 2026-11-14:
+
+- **Pipeline:** the throwaway PR #24, labeled `deploy:preview`, got 15 of 15 checks green and a preview whose `/api/health` answered `{"db":"ok"}`. Closing it ran Neon Preview Cleanup, which deleted the branch `preview/fer-003-pipeline-proof`.
+- **Sentry:** an error thrown on purpose in QA is issue `FERIA-2`: one event, environment `qa`.
+- **Environment marker:** `preview` on the preview, `qa` on QA, absent on production.
+
+Not done here: the GitHub and Vercel apps for Slack posted nothing for PR #24 or its deployment, so the agent still posts every event and the ownership table in the `slack-reporting` skill is unchanged. That work is [FER-036](FER-036-slack-apps.md).
 
 ## Reporting
 
