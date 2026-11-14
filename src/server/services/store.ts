@@ -41,6 +41,19 @@ function toStoreRow(values: CreateStoreValues) {
   };
 }
 
+/** A store's texts as rows of `store_translation`, column by column too. */
+function toTranslationRows(
+  storeId: number,
+  translations: CreateStoreValues["translations"]
+) {
+  return translations.map((translation) => ({
+    description: translation.description,
+    locale: translation.locale,
+    storeId,
+    tagline: translation.tagline,
+  }));
+}
+
 /**
  * A slug another store holds is the one conflict a person can fix by typing
  * something else, so it gets its own message; anything else propagates.
@@ -144,14 +157,7 @@ export async function createStore(
           values.translations.length > 0
             ? await tx
                 .insert(storeTranslation)
-                .values(
-                  values.translations.map((translation) => ({
-                    description: translation.description,
-                    locale: translation.locale,
-                    storeId: created.id,
-                    tagline: translation.tagline,
-                  }))
-                )
+                .values(toTranslationRows(created.id, values.translations))
                 .returning(TRANSLATION_COLUMNS)
             : [];
 
@@ -199,14 +205,7 @@ export async function updateStore(
           values.translations.length > 0
             ? await tx
                 .insert(storeTranslation)
-                .values(
-                  values.translations.map((translation) => ({
-                    description: translation.description,
-                    locale: translation.locale,
-                    storeId: updated.id,
-                    tagline: translation.tagline,
-                  }))
-                )
+                .values(toTranslationRows(updated.id, values.translations))
                 .onConflictDoUpdate({
                   set: {
                     description: sql`excluded."description"`,

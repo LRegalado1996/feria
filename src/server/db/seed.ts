@@ -54,7 +54,7 @@ export const SEED_STORES = [
     colorAccent: "#ff8a3d",
     colorBackground: "#fff4e6",
     colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
+    colorForeground: "#26160f",
     colorSurface: "#ffffff",
     currencyCode: "USD",
     instagramUrl: null,

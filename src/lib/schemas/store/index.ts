@@ -47,6 +47,7 @@ export const STORE_TAGLINE_MAX_LENGTH = 120;
 export const STORE_DESCRIPTION_MAX_LENGTH = 600;
 
 const URL_MAX_LENGTH = 2048;
+const MAX_INT4 = 2_147_483_647;
 
 /** WCAG 2.x AA: 4.5:1 for text, 3:1 for large text. */
 const AA_TEXT = 4.5;
@@ -89,14 +90,30 @@ const storeColorSchema = z
     "Write the color as # followed by six hex digits (0 to 9, a to f)"
   );
 
+// Anything before an `@` in the authority: `https://instagram.com@evil.example`
+// reads as Instagram and goes somewhere else.
+const URL_WITH_CREDENTIALS = /^[a-z]+:[/\\]*[^/\\?#]*@/i;
+
 /**
- * A link the storefront renders as an `href`: `https` only, so a stored value
- * can never be a `javascript:` URL.
+ * A link the storefront renders as an `href` or a `src`: `https` only, so a
+ * stored value can never be a `javascript:` URL, and no user name in front of
+ * the host. `site` holds a social link to its own site: it matches the start
+ * of the link, host included.
  */
-const storeLinkSchema = z
-  .url({ error: "Enter a full https:// link", protocol: /^https$/ })
-  .max(URL_MAX_LENGTH, `Keep the link to ${URL_MAX_LENGTH} characters`)
-  .nullable();
+function storeLink({ example, site }: { example: string; site?: RegExp }) {
+  const message = `Enter a full link, such as ${example}`;
+
+  return z
+    .string()
+    .trim()
+    .max(URL_MAX_LENGTH, `Keep the link to ${URL_MAX_LENGTH} characters`)
+    .refine(
+      (link) => !URL_WITH_CREDENTIALS.test(link) && (site?.test(link) ?? true),
+      { error: message }
+    )
+    .pipe(z.url({ error: message, protocol: /^https$/ }))
+    .nullable();
+}
 
 const storePaletteSchema = z.object({
   colorAccent: storeColorSchema,
@@ -106,6 +123,11 @@ const storePaletteSchema = z.object({
   colorSurface: storeColorSchema,
 });
 
+// How much of the first color each derived token mixes in (globals.css).
+const MUTED_PERCENT = 68;
+const CONTRAST_MUTED_PERCENT = 74;
+const LINE_PERCENT = 11;
+
 type StorePalette = z.infer<typeof storePaletteSchema>;
 
 type PaletteColor = keyof StorePalette;
@@ -114,8 +136,9 @@ type PaletteColor = keyof StorePalette;
  * Every pair of store colors the storefront sets text in (design.md
  * § Storefront), with the ratio AA asks of it. `field` is the color the
  * message is attached to: the one a person would change to fix the pair. The
- * last two are the muted colors CSS derives from the five with `color-mix()`,
- * at the same percentages as `src/styles/globals.css`.
+ * last four are the colors CSS derives from the five with `color-mix()`, at
+ * the same percentages as `src/styles/globals.css`: muted text sits on the
+ * background, on a surface and on the hairline color behind a missing photo.
  */
 const CONTRAST_RULES: readonly {
   colors: (palette: StorePalette) => readonly [string, string];
@@ -156,7 +179,7 @@ const CONTRAST_RULES: readonly {
   },
   {
     colors: (p) => [
-      mixSrgb(p.colorForeground, p.colorBackground, 68),
+      mixSrgb(p.colorForeground, p.colorBackground, MUTED_PERCENT),
       p.colorBackground,
     ],
     field: "colorForeground",
@@ -165,7 +188,25 @@ const CONTRAST_RULES: readonly {
   },
   {
     colors: (p) => [
-      mixSrgb(p.colorBackground, p.colorContrast, 74),
+      mixSrgb(p.colorForeground, p.colorBackground, MUTED_PERCENT),
+      p.colorSurface,
+    ],
+    field: "colorSurface",
+    label: "The small muted text on the surface color",
+    minimum: AA_TEXT,
+  },
+  {
+    colors: (p) => [
+      mixSrgb(p.colorForeground, p.colorBackground, MUTED_PERCENT),
+      mixSrgb(p.colorForeground, p.colorBackground, LINE_PERCENT),
+    ],
+    field: "colorForeground",
+    label: "The small muted text on the placeholder behind a missing photo",
+    minimum: AA_TEXT,
+  },
+  {
+    colors: (p) => [
+      mixSrgb(p.colorBackground, p.colorContrast, CONTRAST_MUTED_PERCENT),
       p.colorContrast,
     ],
     field: "colorContrast",
@@ -207,9 +248,12 @@ const storeTranslationSchema = z.object({
  */
 const storeFieldsSchema = storePaletteSchema.extend({
   currencyCode: z.enum(STORE_CURRENCIES),
-  instagramUrl: storeLinkSchema,
+  instagramUrl: storeLink({
+    example: "https://instagram.com/my-store",
+    site: /^https:\/\/(?:www\.)?instagram\.com(?:[/?#]|$)/i,
+  }),
   isActive: z.boolean(),
-  logoUrl: storeLinkSchema,
+  logoUrl: storeLink({ example: "https://example.com/logo.png" }),
   // Trimmed first: `min(1)` alone accepts "   ".
   name: z
     .string()
@@ -220,7 +264,10 @@ const storeFieldsSchema = storePaletteSchema.extend({
       `Keep the name to ${STORE_NAME_MAX_LENGTH} characters`
     ),
   slug: storeSlugSchema,
-  tiktokUrl: storeLinkSchema,
+  tiktokUrl: storeLink({
+    example: "https://tiktok.com/@my-store",
+    site: /^https:\/\/(?:www\.)?tiktok\.com(?:[/?#]|$)/i,
+  }),
   // At most one text per language; a store may have none yet.
   translations: z
     .array(storeTranslationSchema)
@@ -277,8 +324,9 @@ export type CreateStoreValues = z.infer<typeof createStoreSchema>;
 
 export const updateStoreSchema = storeFieldsSchema
   .extend({
-    // Coerced: the REST surface reads it from the path.
-    id: z.coerce.number().int().positive(),
+    // Coerced: the REST surface reads it from the path. Capped at what the
+    // column holds, so an id past it is a 400 and not a database error.
+    id: z.coerce.number().int().positive().max(MAX_INT4),
   })
   .superRefine(checkPaletteContrast);
 

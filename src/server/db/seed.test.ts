@@ -223,7 +223,7 @@ describe("seed", () => {
 
     expect(palettes).toEqual([
       "#c8f31d #f2f3f0 #111312 #111312 #ffffff",
-      "#ff8a3d #fff4e6 #3d1f47 #2b1a12 #ffffff",
+      "#ff8a3d #fff4e6 #3d1f47 #26160f #ffffff",
     ]);
   });
 

@@ -22,7 +22,7 @@ const WARM = {
   colorAccent: "#ff8a3d",
   colorBackground: "#fff4e6",
   colorContrast: "#3d1f47",
-  colorForeground: "#2b1a12",
+  colorForeground: "#26160f",
   colorSurface: "#fffaf5",
 };
 
@@ -61,7 +61,7 @@ test.describe("Store pages", () => {
     await warmPage.goto();
 
     await expect(warmPage.getHeading(1)).toHaveText("Warm Store");
-    // #fff4e6, #3d1f47, #ff8a3d, #2b1a12 and #fffaf5.
+    // #fff4e6, #3d1f47, #ff8a3d, #26160f and #fffaf5.
     await expect(warmPage.getTheme()).toHaveCSS(
       "background-color",
       "rgb(255, 244, 230)"
@@ -76,7 +76,7 @@ test.describe("Store pages", () => {
     );
     await expect(warmPage.getDescription()).toHaveCSS(
       "color",
-      "rgb(43, 26, 18)"
+      "rgb(38, 22, 15)"
     );
     await expect(warmPage.getDescription()).toHaveCSS(
       "background-color",
