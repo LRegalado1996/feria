@@ -21,14 +21,27 @@ async function deleteSeedUser() {
 
 const SEED_SLUGS = SEED_STORES.map((seedStore) => seedStore.slug);
 
-async function deleteSeedStores() {
-  // By their exact addresses; cascades to their texts.
-  await db.delete(store).where(inArray(store.slug, SEED_SLUGS));
+// The seed stores a test's own `seed()` call reported creating. The clone may
+// already hold them (the template database is seeded), and those are not this
+// file's to delete: only the ones captured here are.
+const createdStoreSlugs: string[] = [];
+
+/** Runs the seed on the worker's database and keeps what it says it created. */
+async function runSeed() {
+  const result = await seed({ auth, db, nodeEnv: "test" });
+  createdStoreSlugs.push(...result.createdStores);
+
+  return result;
 }
+
+const ROLLED_BACK = "Rolled back on purpose: this test keeps nothing";
 
 afterEach(async () => {
   await deleteSeedUser();
-  await deleteSeedStores();
+  // Cascades to their texts.
+  await db
+    .delete(store)
+    .where(inArray(store.slug, createdStoreSlugs.splice(0)));
 });
 
 // Runs the seed against the migrated schema, so a constraint or column the
@@ -37,8 +50,8 @@ test("leaves one login that signs in, and a second run changes nothing", async (
   // This worker's clone may carry the template's seed user: start without it.
   await deleteSeedUser();
 
-  const first = await seed({ auth, db, nodeEnv: "test" });
-  const second = await seed({ auth, db, nodeEnv: "test" });
+  const first = await runSeed();
+  const second = await runSeed();
 
   expect(first).toMatchObject({ email: SEED_USER.email, createdUser: true });
   expect(second).toEqual({
@@ -59,45 +72,53 @@ test("leaves one login that signs in, and a second run changes nothing", async (
 });
 
 test("leaves two active stores with different palettes and texts in both languages, once", async () => {
-  // This worker's clone may carry the seed stores: start without them.
-  await deleteSeedStores();
+  // Inside a transaction that is rolled back: the test needs a database
+  // without the seed stores, and the clone's own are put back untouched.
+  const run = db.transaction(async (tx) => {
+    await tx.delete(store).where(inArray(store.slug, SEED_SLUGS));
 
-  const first = await seed({ auth, db, nodeEnv: "test" });
-  const second = await seed({ auth, db, nodeEnv: "test" });
+    const first = await seed({ auth, db: tx, nodeEnv: "test" });
+    const second = await seed({ auth, db: tx, nodeEnv: "test" });
 
-  expect(first.createdStores).toEqual(["lr-market", "tienda-demo"]);
-  expect(second.createdStores).toEqual([]);
+    expect(first.createdStores).toEqual(["lr-market", "tienda-demo"]);
+    expect(second.createdStores).toEqual([]);
 
-  const stores = await db.query.store.findMany({
-    columns: { colorAccent: true, isActive: true, name: true, slug: true },
-    orderBy: store.slug,
-    where: inArray(store.slug, SEED_SLUGS),
-    with: {
-      translations: {
-        columns: { locale: true },
-        orderBy: storeTranslation.locale,
+    const stores = await tx.query.store.findMany({
+      columns: { colorAccent: true, isActive: true, name: true, slug: true },
+      orderBy: store.slug,
+      where: inArray(store.slug, SEED_SLUGS),
+      with: {
+        translations: {
+          columns: { locale: true },
+          orderBy: storeTranslation.locale,
+        },
       },
-    },
+    });
+    expect(
+      stores.map(({ translations, ...columns }) => ({
+        ...columns,
+        locales: translations.map(({ locale }) => locale),
+      }))
+    ).toEqual([
+      {
+        colorAccent: "#c8f31d",
+        isActive: true,
+        locales: ["es", "en"],
+        name: "LR Market",
+        slug: "lr-market",
+      },
+      {
+        colorAccent: "#ff8a3d",
+        isActive: true,
+        locales: ["es", "en"],
+        name: "Tienda Demo",
+        slug: "tienda-demo",
+      },
+    ]);
+
+    throw new Error(ROLLED_BACK);
   });
-  expect(
-    stores.map(({ translations, ...columns }) => ({
-      ...columns,
-      locales: translations.map(({ locale }) => locale),
-    }))
-  ).toEqual([
-    {
-      colorAccent: "#c8f31d",
-      isActive: true,
-      locales: ["es", "en"],
-      name: "LR Market",
-      slug: "lr-market",
-    },
-    {
-      colorAccent: "#ff8a3d",
-      isActive: true,
-      locales: ["es", "en"],
-      name: "Tienda Demo",
-      slug: "tienda-demo",
-    },
-  ]);
+
+  // A failed expectation above rejects with its own message instead.
+  await expect(run).rejects.toThrow(ROLLED_BACK);
 });
