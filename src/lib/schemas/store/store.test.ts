@@ -365,6 +365,7 @@ describe("createStoreSchema", () => {
       "https://instagram.com@example.test/login",
     ],
     ["a port", "https://instagram.com:8443/sample"],
+    ["a tab a browser would drop", "https:\t//instagram.com/sample"],
     ["backslashes for slashes", "https:\\\\instagram.com\\sample"],
   ])("refuses %s as the Instagram link", (_case, link) => {
     expect(issuesOf({ instagramUrl: link })).toEqual([
@@ -402,6 +403,15 @@ describe("createStoreSchema", () => {
       "a user name and password",
       "https://user:secret@images.example.test/logo.png",
     ],
+    ["only a user name", "https://user@images.example.test/logo.png"],
+    ["only a password", "https://:secret@images.example.test/logo.png"],
+    // A browser drops the tab and then reads the user name.
+    [
+      "a user name hidden behind a tab",
+      "https:\t//user:secret@images.example.test/logo.png",
+    ],
+    ["a line break inside", "https://images.example.test/lo\ngo.png"],
+    ["a space inside", "https://images.example.test/my logo.png"],
     ["a script URL", ["javascript", "alert(1)"].join(":")],
     ["plain http", "http://images.example.test/logo.png"],
   ])("refuses a logo link with %s", (_case, link) => {

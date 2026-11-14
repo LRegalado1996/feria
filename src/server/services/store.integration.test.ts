@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -97,6 +97,28 @@ async function insertDirectly(row: typeof store.$inferInsert) {
   }
 
   return inserted;
+}
+
+/**
+ * Resolves once a statement on this database is waiting on another session's
+ * lock. Asked of Postgres itself, query after query: no sleep, and a bound so
+ * a writer that never blocks fails the test instead of hanging it.
+ */
+async function waitUntilBlocked() {
+  for (let attempt = 0; attempt < 2000; attempt += 1) {
+    const result = await db.execute<{ blocked: number }>(sql`
+      select count(*)::int as blocked
+      from pg_stat_activity
+      where datname = current_database()
+        and cardinality(pg_blocking_pids(pid)) > 0
+    `);
+
+    if ((result.rows[0]?.blocked ?? 0) > 0) {
+      return;
+    }
+  }
+
+  throw new Error("The second writer never waited on the first one's lock");
 }
 
 async function textsOf(storeId: number) {
@@ -368,6 +390,57 @@ describe("updateStore", () => {
       })
     ).resolves.toEqual({ name: "Integration Store", slug: edited.slug });
     expect(await textsOf(edited.id)).toEqual([SPANISH, ENGLISH]);
+  });
+
+  test("two edits of one store at once leave one of them whole, never a mixture", async () => {
+    const created = await create({ translations: [SPANISH, ENGLISH] });
+    const first = {
+      ...makeValues({
+        name: "First edit",
+        slug: created.slug,
+        translations: [{ ...SPANISH, tagline: "Primera" }],
+      }),
+      id: created.id,
+    };
+    const second = {
+      ...makeValues({
+        name: "Second edit",
+        slug: created.slug,
+        translations: [{ ...ENGLISH, tagline: "Second" }],
+      }),
+      id: created.id,
+    };
+
+    // The first edit holds its transaction open after writing. The second
+    // starts then, and must wait on the store's row before touching a text.
+    const { waiting } = await db.transaction(async (tx) => {
+      await updateStore(tx, first);
+      const secondEdit = updateStore(db, second);
+      await waitUntilBlocked();
+
+      // Still the first edit's texts: the second has written nothing yet.
+      expect(
+        await tx.query.storeTranslation.findMany({
+          columns: { locale: true, tagline: true },
+          where: eq(storeTranslation.storeId, created.id),
+        })
+      ).toEqual([{ locale: "es", tagline: "Primera" }]);
+
+      // In an object: returned bare, the promise would be awaited here, by
+      // the transaction it is waiting for.
+      return { waiting: secondEdit };
+    });
+    await waiting;
+
+    await expect(
+      db.query.store.findFirst({
+        columns: { name: true },
+        where: eq(store.id, created.id),
+      })
+    ).resolves.toEqual({ name: "Second edit" });
+    expect(await textsOf(created.id)).toEqual([
+      { ...ENGLISH, tagline: "Second" },
+    ]);
   });
 
   test("answers NOT_FOUND for an id no store has", async () => {
