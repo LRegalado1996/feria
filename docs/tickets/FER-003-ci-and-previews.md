@@ -7,7 +7,7 @@
 
 ## Goal
 
-Every PR gets the template's full pipeline: checks and a preview deployment on its own database branch. Errors in QA and production are reported to Sentry.
+Every PR gets the template's checks, and a PR labeled `deploy:preview` gets a preview deployment on its own database branch. Errors in QA and production are reported to Sentry.
 
 ## Scope
 
@@ -22,7 +22,7 @@ Every PR gets the template's full pipeline: checks and a preview deployment on i
 
 ## Acceptance criteria
 
-- A PR shows green CI, a preview URL and a Neon branch that is cleaned up when the PR closes.
+- A PR labeled `deploy:preview` shows green CI, a preview URL and a Neon branch that is cleaned up when the PR closes.
 - An error thrown on purpose in QA appears in Sentry once, tagged with the environment `qa`. A pull request's preview reports nothing (§ Outcome).
 - The environment marker shows on previews and not on production.
 
