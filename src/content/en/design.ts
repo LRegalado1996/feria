@@ -42,6 +42,7 @@ export const design: Dictionary["design"] = {
     cards: "Article card and slider",
     chips: "Chips and badges",
     countUp: "Count-up",
+    logo: "Logo",
     link: "Arrow link",
     marquee: "Marquee band",
     price: "Price",

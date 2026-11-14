@@ -23,6 +23,7 @@ test.describe("Storefront design system", () => {
       await expect(designPage.getHeading(1)).toHaveText("Sistema de diseño");
       await expect(page.locator("html")).toHaveAttribute("lang", "es");
       await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+        "Logo",
         "Titulares",
         "Chips y avisos",
         "Precio",

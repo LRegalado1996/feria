@@ -132,24 +132,32 @@ describe("generateStaticParams", () => {
 
 describe("generateMetadata", () => {
   test.each([
-    ["es", "La base de Feria, una tienda en línea para pequeños negocios"],
-    ["en", "The base of Feria, an online store for small businesses"],
-  ])("describes the app in %s", async (locale, description) => {
-    const metadata = await generateMetadata({ params: makeParams(locale) });
+    ["es", "Bijou y pistolas de burbujas, en la feria y en línea."],
+    ["en", "Jewelry and bubble guns, at the fair and online."],
+  ])(
+    "names the store and describes it in %s, on the page and on its share card",
+    async (locale, description) => {
+      const metadata = await generateMetadata({ params: makeParams(locale) });
 
-    expect(metadata).toEqual({
-      metadataBase: new URL("http://localhost:3000"),
-      title: "Feria",
-      description,
-      icons: [{ rel: "icon", url: "/favicon.ico" }],
-    });
-  });
+      expect(metadata).toEqual({
+        metadataBase: new URL("http://localhost:3000"),
+        title: "LR Market",
+        description,
+        openGraph: {
+          description,
+          siteName: "LR Market",
+          title: "LR Market",
+          type: "website",
+        },
+      });
+    }
+  );
 
   test("describes an unknown language's 404 in Spanish, the default", async () => {
     const metadata = await generateMetadata({ params: makeParams("fr") });
 
     expect(metadata.description).toBe(
-      "La base de Feria, una tienda en línea para pequeños negocios"
+      "Bijou y pistolas de burbujas, en la feria y en línea."
     );
   });
 

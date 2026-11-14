@@ -33,7 +33,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 | ID                                     | Title                                       | Priority | Status |
 | -------------------------------------- | ------------------------------------------- | -------- | ------ |
-| [FER-006](FER-006-brand-identity.md)   | Name, logo and brand identity               | P0       | todo   |
+| [FER-006](FER-006-brand-identity.md)   | Name, logo and brand identity               | P0       | done   |
 | [FER-007](FER-007-social-media-kit.md) | Instagram and TikTok kit, fair print pieces | P1       | todo   |
 
 ### M2 Core domain

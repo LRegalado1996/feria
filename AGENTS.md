@@ -24,6 +24,7 @@ The rules every task in this repo follows. `CLAUDE.md` is a symlink to this file
 | Next.js pages, layouts, caching, hydration             | `docs/agents/nextjs.md`                                         |
 | Releases while tabs stay open, the oRPC deployment pin | `docs/agents/skew-protection.md`                                |
 | UI: components, pages, styles, copy, accessibility     | `design.md`                                                     |
+| The name, logo files, icons, share card, voice         | `docs/brand/brand.md`                                           |
 | CI, git hooks, PRs, releases, previews, Dependabot     | `docs/agents/ci.md`                                             |
 | Interface text, languages, links, prices, dates        | `docs/agents/i18n.md`                                           |
 | What the product is, decisions, roadmap, data model    | `docs/project/overview.md`, `docs/project/data-model.md`        |

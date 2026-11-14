@@ -4,6 +4,8 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
+import { LOCALES } from "@/lib/i18n/config";
+
 import { config, proxy } from "./proxy";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -149,6 +151,16 @@ describe("proxy matcher", () => {
     "/robots.txt",
     // Only the tunnel itself is skipped, not a page that starts like it.
     "/monitoring-pedidos",
+    // Only the generated images and the brand folder, not pages named alike.
+    "/icons",
+    "/iconos/anillo",
+    "/opengraph-image",
+    "/es/opengraph-image/extra",
+    "/fr/opengraph-image",
+    "/brands",
+    "/en/brand/lr-market-logo.svg",
+    // The template's icon is gone: the tab icon is generated (`/icon`).
+    "/favicon.ico",
   ])("runs on %s", (path) => {
     expect(matches(path)).toBe(true);
   });
@@ -159,9 +171,17 @@ describe("proxy matcher", () => {
     "/_vercel/insights/script.js",
     "/monitoring",
     "/monitoring/envelope",
-    "/favicon.ico",
+    "/icon",
+    "/apple-icon",
+    "/brand/lr-market-logo.svg",
   ])("stays off %s, which has no language", (pathname) => {
     expect(matches(pathname)).toBe(false);
+  });
+
+  test("stays off the share card of every language the product speaks", () => {
+    expect(
+      LOCALES.map((locale) => matches(`/${locale}/opengraph-image`))
+    ).toEqual(LOCALES.map(() => false));
   });
 
   test("stays off every file in public/, which the proxy would otherwise rewrite into a 404", () => {
@@ -175,7 +195,7 @@ describe("proxy matcher", () => {
           `/${path.relative("public", path.join(entry.parentPath, entry.name))}`
       );
 
-    expect(publicFiles).toContain("/favicon.ico");
+    expect(publicFiles).toContain("/brand/lr-market-logo.svg");
     expect(publicFiles.filter((file) => matches(file))).toEqual([]);
   });
 });

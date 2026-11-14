@@ -52,9 +52,15 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except what never has a language: Next's own assets, Vercel's
-  // endpoints, the Sentry tunnel and the files in `public/`, each by name. A
-  // blanket "anything with a dot" would also skip pages (`/products/2.5mm`)
-  // and API routes (`/api/docs/spec.json`); a test holds this list to
-  // `public/`, so a new file there fails until it is added.
-  matcher: ["/((?!_next/|_vercel/|monitoring(?:/|$)|favicon\\.ico$).*)"],
+  // endpoints, the Sentry tunnel, the generated brand images and the files in
+  // `public/`, by name or by folder. The share card is generated per language
+  // (`app/[locale]/opengraph-image.tsx`) and is an image, not a page: its
+  // Spanish URL keeps the `/es` a page would be redirected away from, so a
+  // crawler gets it in one request. A blanket "anything with a dot" would
+  // also skip pages (`/products/2.5mm`) and API routes
+  // (`/api/docs/spec.json`); a test holds this list to `public/` and to the
+  // languages, so a new file or language fails until it is added.
+  matcher: [
+    "/((?!_next/|_vercel/|monitoring(?:/|$)|brand/|(?:icon|apple-icon)$|(?:es|en)/opengraph-image$).*)",
+  ],
 };
