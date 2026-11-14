@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
+import { StoreTheme } from "@/app/_components/organisms/store-theme";
 import { getStoreForPath } from "@/server/cache/store";
-import type { PublicStore } from "@/server/services/store";
 
 interface StoreLayoutProps {
   children: ReactNode;
@@ -26,24 +26,6 @@ export function generateStaticParams() {
   return [{ store: SAMPLE_SEGMENT }];
 }
 
-type StorePaletteStyle = CSSProperties &
-  Record<`--store-${string}`, string | undefined>;
-
-/**
- * The store's five colors over the storefront tokens. They are data, not
- * design: each was validated as a hex color when it was stored, by the schema
- * and again by a database check, so nothing else can reach this `style`.
- */
-function toPaletteStyle(store: PublicStore): StorePaletteStyle {
-  return {
-    "--store-accent": store.colorAccent,
-    "--store-background": store.colorBackground,
-    "--store-contrast": store.colorContrast,
-    "--store-foreground": store.colorForeground,
-    "--store-surface": store.colorSurface,
-  };
-}
-
 /**
  * Every public page of a store, wearing that store's colors. Chrome only: it
  * decides nothing about who may see what (the storefront has no session). An
@@ -61,16 +43,17 @@ export default async function StoreLayout({
   }
 
   return (
-    <div
-      className="min-h-screen bg-store-background text-store-foreground"
-      // The muted colors are derived from the five; this attribute makes CSS
-      // compute them again from this store's values (design.md § Storefront).
-      data-store-palette=""
-      data-slot="store-theme"
+    <StoreTheme
       data-testid="store-theme"
-      style={toPaletteStyle(store)}
+      palette={{
+        accent: store.colorAccent,
+        background: store.colorBackground,
+        contrast: store.colorContrast,
+        foreground: store.colorForeground,
+        surface: store.colorSurface,
+      }}
     >
       {children}
-    </div>
+    </StoreTheme>
   );
 }

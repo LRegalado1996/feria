@@ -51,7 +51,7 @@ async function setup({
 }
 
 describe("StoreLayout", () => {
-  test("writes the store's five colors over the storefront tokens", async () => {
+  test("hands the store's five colors to the theme, each to its own token", async () => {
     const { theme } = await setup();
 
     expect({
@@ -78,21 +78,10 @@ describe("StoreLayout", () => {
     expect(theme.style.getPropertyValue("--store-accent")).toBe("#c8f31d");
   });
 
-  test("marks the element so CSS derives the muted colors from this palette", async () => {
+  test("wraps the page in the theme", async () => {
     const { theme } = await setup();
 
-    expect(theme).toHaveAttribute("data-store-palette");
     expect(theme).toHaveAttribute("data-slot", "store-theme");
-  });
-
-  test("paints the page in the store's background and wraps the page", async () => {
-    const { theme } = await setup();
-
-    expect(theme).toHaveClass(
-      "min-h-screen",
-      "bg-store-background",
-      "text-store-foreground"
-    );
     expect(theme).toContainElement(screen.getByText("Page content"));
   });
 

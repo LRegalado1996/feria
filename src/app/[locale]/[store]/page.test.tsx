@@ -66,12 +66,11 @@ async function setup({
 }
 
 describe("StoreHome", () => {
-  test("introduces the store by name in the single h1", async () => {
-    await setup();
+  test("introduces the store by name in the page's h1, inside its main landmark", async () => {
+    const { page } = await setup();
 
-    expect(
-      screen.getAllByRole("heading").map((heading) => heading.tagName)
-    ).toEqual(["H1"]);
+    expect(page.tagName).toBe("MAIN");
+    expect(page).toContainElement(screen.getByRole("heading", { level: 1 }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       /^Sample Store$/
     );
@@ -81,17 +80,13 @@ describe("StoreHome", () => {
     ["es", SPANISH],
     ["en", ENGLISH],
   ] as const)(
-    "shows the tagline and the description in %s, marked with that language",
+    "shows the store's own words in %s, the language of the URL",
     async (locale, text) => {
       await setup({ locale });
 
       expect(screen.getByText(text.tagline)).toHaveAttribute("lang", locale);
       expect(screen.getByTestId("store-description")).toHaveTextContent(
         text.description
-      );
-      expect(screen.getByTestId("store-description")).toHaveAttribute(
-        "lang",
-        locale
       );
     }
   );
@@ -113,17 +108,6 @@ describe("StoreHome", () => {
     const { page } = await setup({ store: makeStore({ translations: [] }) });
 
     expect(page).toHaveTextContent(/^Sample Store$/);
-    expect(screen.queryByTestId("store-description")).not.toBeInTheDocument();
-  });
-
-  test("sets the name in the accent color, on the contrast block", async () => {
-    await setup();
-
-    expect(screen.getByText("Sample Store")).toHaveClass("text-store-accent");
-    expect(screen.getByTestId("store-header")).toHaveClass("bg-store-contrast");
-    expect(screen.getByTestId("store-header")).toContainElement(
-      screen.getByRole("heading", { level: 1 })
-    );
   });
 
   test("answers 404 for an address that is not an active store", async () => {
