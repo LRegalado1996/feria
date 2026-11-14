@@ -77,7 +77,7 @@ You need Docker (Docker Desktop or OrbStack), the Node version in [`.nvmrc`](.nv
 
 ```bash
 pnpm wt:provision   # installs dependencies and writes this worktree's .env; starts no containers
-pnpm db:seed        # starts this worktree's Postgres, migrates it, adds a post and a login: test@example.com / password123
+pnpm db:seed        # starts this worktree's Postgres, migrates it, adds a post, two stores (/lr-market, /tienda-demo) and a login: test@example.com / password123
 pnpm dev            # next dev on this worktree's own port
 pnpm wt:ports       # prints that port, the Postgres port and the app URL (it is not 3000)
 ```

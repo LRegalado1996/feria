@@ -40,7 +40,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 | ID                                             | Title                                              | Priority | Status |
 | ---------------------------------------------- | -------------------------------------------------- | -------- | ------ |
-| [FER-008](FER-008-store-domain-and-theming.md) | Store domain, routing by path and theming          | P0       | todo   |
+| [FER-008](FER-008-store-domain-and-theming.md) | Store domain, routing by path and theming          | P0       | done   |
 | [FER-009](FER-009-roles-and-access.md)         | Roles, memberships and closed sign-up              | P0       | todo   |
 | [FER-010](FER-010-catalog-domain.md)           | Catalog domain: categories, articles, translations | P0       | todo   |
 | [FER-011](FER-011-image-uploads.md)            | Image upload pipeline                              | P0       | todo   |

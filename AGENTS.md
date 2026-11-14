@@ -73,7 +73,7 @@ pnpm verify:ci           # all of CI on this machine; run before pushing routing
 
 pnpm db:generate         # SQL migration from a schema diff (ask first)
 pnpm db:migrate          # apply migrations (dev, CI, deploy); db:push only on a throwaway DB
-pnpm db:seed             # dev data, refused in production; login test@example.com / password123
+pnpm db:seed             # dev data (a login, two stores), refused in production; login test@example.com / password123
 
 pnpm wt:provision        # .env + node_modules, no containers (harnesses run it on create)
 pnpm dev                 # next dev on this worktree's port (pnpm wt:ports; never assume 3000)
@@ -107,6 +107,7 @@ src/lib/{hooks,orpc,schemas,utils,errors}/         client hooks per domain, oRPC
 src/lib/i18n/                                      locales, localized paths, alternates, the dictionary provider
 src/server/api/{orpc,routers}/, root.ts            procedure builders + context, domain routers
 src/server/services/                               domain services: every query
+src/server/cache/                                  cached reads (`"use cache"`) and the tag invalidation that goes with each
 src/server/{better-auth,db,test}/                  auth config, Drizzle client + schema + drizzle/ migrations + seed, test doubles
 src/e2e/ · src/test/ · src/instrumentation.ts · src/proxy.ts · src/env.js
 ```
