@@ -32,6 +32,28 @@ export abstract class BasePage {
     await clickUntilVisible(trigger, ready);
   }
 
+  /**
+   * The document's `<link>` and `<meta>` tags, in order, each under the name
+   * it declares (`rel`, `property` or `name`). Head tags have no role and no
+   * test id to find them by, so they are read off the DOM.
+   */
+  async readHeadTags(): Promise<
+    { content: string | null; href: string | null; key: string | null }[]
+  > {
+    return await this.page.evaluate(() =>
+      [...document.head.children]
+        .filter((element) => ["LINK", "META"].includes(element.tagName))
+        .map((element) => ({
+          content: element.getAttribute("content"),
+          href: element.getAttribute("href"),
+          key:
+            element.getAttribute("rel") ??
+            element.getAttribute("property") ??
+            element.getAttribute("name"),
+        }))
+    );
+  }
+
   // ── Common UI Elements ──────────────────────────────────────
 
   getHeading(level: 1 | 2 | 3 = 1): Locator {

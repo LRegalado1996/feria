@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
@@ -216,6 +216,15 @@ describe("HomeResolver", () => {
       expect(screen.getByText(subtitle)).toBeInTheDocument();
       expect(screen.getByTestId("auth-form")).toBeInTheDocument();
       expect(screen.getByTestId("locale-toggle")).toBeInTheDocument();
+      // The header carries the brand: the mark, 48 px tall, before the toggle.
+      const logo = within(screen.getByRole("banner")).getByRole("img", {
+        name: "LR Market",
+      });
+      expect(logo).toHaveAttribute("data-variant", "mark");
+      expect(logo).toHaveClass("h-12");
+      expect(
+        logo.compareDocumentPosition(screen.getByTestId("locale-toggle"))
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       expect(screen.queryByTestId("post-feed")).not.toBeInTheDocument();
       expect(infiniteOptions).not.toHaveBeenCalled();
     }

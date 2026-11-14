@@ -1,4 +1,4 @@
 export const metadata = {
-  description: "La base de Feria, una tienda en línea para pequeños negocios",
-  title: "Feria",
+  description: "Bijou y pistolas de burbujas, en la feria y en línea.",
+  title: "LR Market",
 };

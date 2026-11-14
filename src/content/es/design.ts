@@ -45,6 +45,7 @@ export const design = {
     cards: "Tarjeta de artículo y carrusel",
     chips: "Chips y avisos",
     countUp: "Número que cuenta",
+    logo: "Logo",
     link: "Enlace con flecha",
     marquee: "Banda en movimiento",
     price: "Precio",

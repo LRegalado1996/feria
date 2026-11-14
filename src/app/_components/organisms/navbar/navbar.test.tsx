@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, test, vi } from "vitest";
@@ -44,6 +44,23 @@ function setup(
 }
 
 describe("Navbar", () => {
+  test("carries the brand's mark before the page title, from the width where it fits", () => {
+    setup();
+
+    const logo = within(screen.getByRole("banner")).getByRole("img", {
+      name: "LR Market",
+    });
+
+    expect(logo).toHaveAttribute("data-variant", "mark");
+    expect(logo).toHaveClass("h-9", "hidden", "sm:block");
+    expect(logo).not.toHaveClass("block");
+    expect(
+      logo.compareDocumentPosition(
+        screen.getByRole("heading", { name: "Feed" })
+      )
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   test("renders the banner with its slot, the page title and the user", () => {
     setup({ className: "custom-class" });
 

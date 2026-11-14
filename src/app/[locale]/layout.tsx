@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
 import { AppProviders } from "@/app/_components/organisms/app-providers";
 import { getDictionary } from "@/content";
+import { BRAND_NAME } from "@/lib/brand/logo";
 import { DEFAULT_LOCALE, isLocale, LOCALES } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
@@ -43,7 +44,15 @@ export async function generateMetadata({
     ),
     title: metadata.title,
     description: metadata.description,
-    icons: [{ rel: "icon", url: "/favicon.ico" }],
+    // The share card's text. Next adds its image by itself from
+    // `opengraph-image.tsx` beside this file, as it adds the tab and
+    // home-screen icons from `app/icon.tsx` and `app/apple-icon.tsx`.
+    openGraph: {
+      description: metadata.description,
+      siteName: BRAND_NAME,
+      title: metadata.title,
+      type: "website",
+    },
   };
 }
 

@@ -7,6 +7,7 @@ import { StoreChip } from "@/app/_components/atoms/store-chip";
 import { StoreCountUp } from "@/app/_components/atoms/store-count-up";
 import { StoreEyebrow } from "@/app/_components/atoms/store-eyebrow";
 import { StoreHeading } from "@/app/_components/atoms/store-heading";
+import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { StorePriceTag } from "@/app/_components/atoms/store-price-tag";
 import { StoreReveal } from "@/app/_components/atoms/store-reveal";
 import { StoreArticleCard } from "@/app/_components/molecules/store-article-card";
@@ -122,6 +123,28 @@ export default async function DesignPage({ params }: DesignPageProps) {
           </p>
         </div>
       </header>
+
+      <section className={SECTION_CLASS} data-testid="design-logo">
+        <h2 className={SECTION_TITLE_CLASS}>{sections.logo}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex items-center justify-center bg-store-surface p-10">
+            <StoreLogo className="h-32" />
+          </div>
+          <div className="flex items-center justify-center bg-store-contrast p-10">
+            <StoreLogo className="h-32" />
+          </div>
+          <div className="flex items-center justify-center bg-store-surface p-10">
+            <StoreLogo className="h-32" tone="contrast" />
+          </div>
+          {/* Under 96 px the name cannot be read: the mark goes alone. */}
+          <div className="flex flex-wrap items-end justify-center gap-6 bg-store-surface p-6 md:p-10">
+            <StoreLogo className="h-12" variant="mark" />
+            <StoreLogo className="h-6" variant="mark" />
+            <StoreLogo className="h-12" tone="contrast" variant="mark" />
+            <StoreLogo className="h-6" tone="contrast" variant="mark" />
+          </div>
+        </div>
+      </section>
 
       <section className={SECTION_CLASS} data-testid="design-type">
         <h2 className={SECTION_TITLE_CLASS}>{sections.type}</h2>
