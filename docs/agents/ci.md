@@ -44,6 +44,8 @@ Read this before you open or merge a pull request, or change `.github/` or `.hus
 - **Hotfix lane**, only when `qa` cannot carry the fix (`git log origin/main..origin/qa` is not empty): branch `hotfix/<slug>` off `main`; its push runs the full `ci.yml`; open the PR into `main` and merge it with a merge commit. Verification accepts it while `main` is an ancestor of the branch, and on the push while the landed tree is the tested one. CodeRabbit reviews only PRs into `qa`: comment `@coderabbitai review`.
 - The push to `main` then opens `chore(release): merge main back into qa` (only when `main` holds content `qa` lacks). Merge it with a merge commit before the next release: until then the release cannot verify.
 - Bot identity: both PRs are opened with the org GitHub App token, so their checks start. Without the App the workflow falls back to `GITHUB_TOKEN` and comments on the PR: close and reopen it to start its checks.
+- **This repository has no App** (one person, FER-003): the fallback is the normal path. It needs the repository setting "Allow GitHub Actions to create and approve pull requests" (Settings → Actions → General), which is on; off, the workflow fails with "GitHub Actions is not permitted to create or approve pull requests". Every promotion PR therefore needs its close and reopen.
+- **Dependabot:** `dependabot-auto-merge.yml` squash-merges a Dependabot PR into `qa` once its CI run is green; a major update, or a PR someone else pushed to, waits for a person. Without the App that merge is made with `GITHUB_TOKEN`, so it starts no workflow: `qa` gets no push CI run and no promotion PR for it. The next ordinary merge into `qa` brings both; to release right after a Dependabot merge, run Auto Promotion PR by hand on `qa`, and expect `Promotion Verified` to fail until `qa`'s tip has a green push run.
 
 ## Checks
 
@@ -107,7 +109,7 @@ Ultracite's presets on oxlint (lint, type-aware) and oxfmt (format), configured 
 - Work that depends on an unmerged PR goes in a stacked PR (the `gh-stack` skill), planned bottom-up (schema, then services, then UI). Every layer names the merge order.
 - Fill `.github/pull_request_template.md` (the `create-pr` skill does, following the `pr-description` skill) and end the body with `Model: … · Harness: …`.
 - **Squash-merge into `qa`**: one commit per PR. Releases (`qa → main`) and merge-backs (`main → qa`) use a **merge commit**: a squash rewrites the promoted commits, so the next release diffs them again and conflicts. GitHub has no per-base default merge method, so whoever merges applies the rule.
-- CodeRabbit (`.coderabbit.yaml`) restates `AGENTS.md`'s non-negotiable rules at the paths where they bite. It does not review Dependabot's pull requests (`auto_review.ignore_usernames`). A PR that changes such a rule updates its entry there.
+- CodeRabbit (`.coderabbit.yaml`) reads `AGENTS.md`, `design.md` and `docs/agents/` as its review criteria (`knowledge_base.code_guidelines`) and restates `AGENTS.md`'s non-negotiable rules at the paths where they bite. It does not review Dependabot's pull requests (`auto_review.ignore_usernames`), releases or merge-backs (`auto_review.ignore_title_keywords`). A PR that changes such a rule updates its entry there.
 
 ## Merge hygiene
 

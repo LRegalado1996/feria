@@ -6,7 +6,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 - Take tickets in order unless a dependency says otherwise. One ticket, one branch (`fer-012-short-name`), one PR into `qa`.
 - `qa` and `main` accept pull requests only. `main` is production and receives promotion PRs from `qa` once `qa` is stable.
-- CodeRabbit reviews each PR into `qa` (not the promotion PR into `main`, whose changes were already reviewed) and the local agent answers it until every thread is settled (the `review-loop` skill). Lucas gives the word to merge.
+- CodeRabbit reviews each PR into `qa` that a person or an agent opens (not the promotion PR into `main` or the merge-back from `main`, whose changes were already reviewed, and not Dependabot's) and the local agent answers it until every thread is settled (the `review-loop` skill). Lucas gives the word to merge.
 - A PR with a visible change includes one image of the result in its description (before and after only for a bug fix), or a recording when the change is a gesture or a timing. The `visual-proof` check fails when there is no image or recording at all; whether it is the right proof is for the reviewer.
 - Commit messages and PR titles follow Conventional Commits, with the ticket in a `Refs: FER-012` footer. The rules are in the `conventional-commits` skill (`.agents/skills/conventional-commits/SKILL.md`).
 - A ticket is done when its acceptance criteria hold and the template's definition of done passes (`AGENTS.md`).
@@ -23,10 +23,11 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | --------------------------------------------- | ---------------------------------------------- | -------- | ------ |
 | [FER-001](FER-001-bootstrap-from-template.md) | Bootstrap the repo from the template           | P0       | done   |
 | [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done   |
-| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | todo   |
+| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | done   |
 | [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done   |
 | [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | done   |
 | [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | todo   |
+| [FER-036](FER-036-slack-apps.md)              | GitHub and Vercel apps post to Slack           | P2       | todo   |
 
 ### M1 Brand
 
@@ -90,7 +91,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 ## Dependency sketch
 
 ```
-001 → 002 → 003
+001 → 002 → 003 → 036
 001 → 004 → 005 → 006 → 007
 002, 005 → 034
 002 → 008 → 009 → 013 → 014, 015

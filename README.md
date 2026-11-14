@@ -172,9 +172,10 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
 
 1. **GitHub settings:**
    - `qa` (the default branch) and `main` are protected: pull requests only, for admins too. `qa` requires `CI Success`, `visual-proof` and `pr-description`; `main` requires `Promotion Verified`, `visual-proof` and `pr-description`.
-   - Default workflow permissions are read.
+   - Default workflow permissions are read, and "Allow GitHub Actions to create and approve pull requests" is on: the promotion pull request is opened with the workflow's own token.
    - The labels `deploy:preview` and `size:XS` through `size:XXL` exist.
-   - Optional: a GitHub App with the `BOT_APP_ID` variable and the `BOT_APP_PRIVATE_KEY` secret, so promotion PRs and bot merges start their checks by themselves. Without it, a promotion PR needs a close and reopen to start them.
+   - Preview deployments: the variables `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID`, and the environment `preview`, whose deployment branches admit only `qa`, holding the secret `VERCEL_PREVIEW_TOKEN` ([`docs/agents/ci.md`](docs/agents/ci.md) § Previews). Preview database cleanup: the secret `NEON_API_KEY` and the variable `NEON_PROJECT_ID`, the `feria-db-qa` project ([`docs/agents/database.md`](docs/agents/database.md) § Preview databases).
+   - Not set up, by choice: a GitHub App (`BOT_APP_ID` variable, `BOT_APP_PRIVATE_KEY` secret) that would start a promotion PR's checks by itself. Without it, close and reopen each promotion PR to start them, and a Dependabot auto-merge starts no workflow: `qa` gets no push CI run and no promotion PR is opened for it until the next merge, or until Auto Promotion PR is run by hand on `qa` ([`docs/agents/ci.md`](docs/agents/ci.md) § Releases).
 2. **Vercel project** `feria`, connected to this repository ([FER-002](docs/tickets/FER-002-vercel-neon-blob.md)). `main` is the production branch. The plan has no custom environments, so QA is the Preview environment's `qa` branch: its variables are scoped to that branch.
 
    | Environment | Branch | URL                                                       | Database (Neon) | Images (Blob)     |
@@ -198,15 +199,17 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
    | `BETTER_AUTH_URL`                           | the production URL        | the QA URL                | derived per deploy | `http://localhost:3000`         |
    | `BETTER_AUTH_SECRET`                        | its own                   | shared with previews      | shared with QA     | its own                         |
    | `BLOB_READ_WRITE_TOKEN`                     | `feria-images`            | `feria-images-qa`         | `feria-images-qa`  | `feria-images-qa`               |
-   - Why production and QA read a dedicated database variable: [`docs/agents/database.md`](docs/agents/database.md) § Preview databases. Previews must never share a real database: until the Neon integration branches per preview (FER-003), a preview would migrate the QA database, so none is deployed.
+   | `NEXT_PUBLIC_SENTRY_DSN`                    | the `feria` project's     | the same DSN              | not set            | not set                         |
+   | `SENTRY_ORG`, `SENTRY_PROJECT`              | `pepe-sas-uy`, `feria`    | the same                  | not set            | not set                         |
+   | `SENTRY_AUTH_TOKEN`                         | one token                 | the same token            | set, unused        | not set                         |
+   - Why production and QA read a dedicated database variable: [`docs/agents/database.md`](docs/agents/database.md) § Preview databases. Previews must never share a real database: the Neon integration gives each preview deployment its own branch of `feria-db-qa`, and a preview is deployed only for a PR labeled `deploy:preview`.
+   - Sentry (project `feria` in the `pepe-sas-uy` organization) reports production as `production` and QA as `qa`. A pull request's preview has no DSN and never reports, so a closed branch cannot leave an issue open ([`docs/agents/observability.md`](docs/agents/observability.md) § Sentry). `SENTRY_AUTH_TOKEN` only uploads source maps during the build.
    - Vercel AI Gateway needs no variable on a deployment: it authenticates with the OIDC token Vercel injects. The project has a budget of USD 5 per month (`vercel ai-gateway budgets list`); at the limit the calls stop until the next month.
    - **Someone new:** `vercel link --yes --project feria`, `vercel env pull .env`, then `pnpm wt:provision`, which points `DATABASE_URL` and `BETTER_AUTH_URL` at this worktree. `.env` then holds the QA image store's token and a short-lived `VERCEL_OIDC_TOKEN` for the gateway; pull again when it expires.
 
 4. **Optional services**, each inert until configured:
-   - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
    - `HEALTH_SECRET` for the health probe.
    - Turborepo remote cache: `TURBO_TOKEN`, `TURBO_TEAM`, `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
-   - Previews: the `preview` environment and its token ([`docs/agents/ci.md`](docs/agents/ci.md) § Previews).
 
 ## Documentation
 
