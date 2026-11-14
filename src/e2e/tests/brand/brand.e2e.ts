@@ -38,14 +38,16 @@ test.describe("Brand identity", () => {
 
     await expect(page).toHaveTitle("LR Market");
 
-    for (const [selector, size] of [
-      ['link[rel="icon"]', 32],
-      ['link[rel="apple-touch-icon"]', 180],
-    ] as const) {
-      const href = await page.locator(selector).getAttribute("href");
-      expect(href).not.toBeNull();
+    const head = await homePage.readHeadTags();
 
-      const response = await page.request.get(href ?? "");
+    for (const [rel, path, size] of [
+      ["icon", "/icon", 32],
+      ["apple-touch-icon", "/apple-icon", 180],
+    ] as const) {
+      const href = head.find((tag) => tag.key === rel)?.href ?? "";
+      expect(href.split("?")[0]).toBe(path);
+
+      const response = await page.request.get(href);
 
       expect(response.status()).toBe(200);
       expect(response.headers()["content-type"]).toBe("image/png");
@@ -56,31 +58,41 @@ test.describe("Brand identity", () => {
     }
   });
 
-  for (const [path, prefix, description] of [
-    ["/", "/es", "Bijou y pistolas de burbujas, en la feria y en línea."],
-    ["/en", "/en", "Jewelry and bubble guns, at the fair and online."],
+  for (const [path, prefix, heading, description] of [
+    [
+      "/",
+      "/es",
+      "Hola de nuevo",
+      "Bijou y pistolas de burbujas, en la feria y en línea.",
+    ],
+    [
+      "/en",
+      "/en",
+      "Welcome back",
+      "Jewelry and bubble guns, at the fair and online.",
+    ],
   ] as const) {
     test(`a link to ${path} shares as LR Market with its 1200 by 630 card, served without a redirect`, async ({
       page,
     }) => {
+      const homePage = new HomePage(page);
+
       await page.goto(path);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 
-      const meta = (property: string) =>
-        page.locator(`meta[property="og:${property}"]`);
-      await expect(meta("title")).toHaveAttribute("content", "LR Market");
-      await expect(meta("site_name")).toHaveAttribute("content", "LR Market");
-      await expect(meta("description")).toHaveAttribute("content", description);
-      await expect(meta("image:alt")).toHaveAttribute("content", "LR Market");
-      await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
-        "content",
-        "summary_large_image"
-      );
+      const head = await homePage.readHeadTags();
+      // The prerendered shell and the streamed page can each declare a tag,
+      // against the origin they were rendered for: the first one is read.
+      const meta = (key: string) =>
+        head.find((tag) => tag.key === key)?.content;
 
-      // The prerendered shell and the streamed page each declare the image,
-      // against the origin they were rendered for: the same path either way.
-      const image = new URL(
-        (await meta("image").first().getAttribute("content")) ?? ""
-      );
+      expect(meta("og:title")).toBe("LR Market");
+      expect(meta("og:site_name")).toBe("LR Market");
+      expect(meta("og:description")).toBe(description);
+      expect(meta("og:image:alt")).toBe("LR Market");
+      expect(meta("twitter:card")).toBe("summary_large_image");
+
+      const image = new URL(meta("og:image") ?? "");
       expect(image.pathname).toBe(`${prefix}/opengraph-image`);
 
       const response = await page.request.get(

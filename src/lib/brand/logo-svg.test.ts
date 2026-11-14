@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, test } from "vitest";
 
-import { LOGO_TAG_PATH } from "./logo";
+import { LOGO_LETTERS, LOGO_TAG_PATH } from "./logo";
 import {
   BRAND_LOGO_FILES,
   buildLogoDataUrl,
@@ -60,13 +60,35 @@ describe("buildLogoSvg", () => {
     }
   );
 
-  test.each([
-    ["full", 9],
-    ["mark", 3],
-  ] as const)("the %s variant draws %i paths", (variant, count) => {
-    const svg = buildLogoSvg({ colorway: "accent", variant });
+  test.each(["full", "mark"] as const)(
+    "the %s variant draws the tag, then every letter of its drawing, in order and in place",
+    (variant) => {
+      const svg = buildLogoSvg({ colorway: "accent", variant });
+      const letters = LOGO_LETTERS[variant]
+        .map(
+          (group) =>
+            `<g transform="${group.transform}">${group.glyphs
+              .map((glyph) =>
+                glyph.transform === undefined
+                  ? `<path d="${glyph.d}" fill-rule="evenodd"/>`
+                  : `<path d="${glyph.d}" fill-rule="evenodd" transform="${glyph.transform}"/>`
+              )
+              .join("")}</g>`
+        )
+        .join("");
 
-    expect(svg.match(/<path /g)).toHaveLength(count);
+      expect(svg).toContain(
+        `${TAG} fill="${ACCENT}" fill-rule="evenodd"/><g fill="${INK}">${letters}</g></svg>`
+      );
+    }
+  );
+
+  test("the mark leaves the name out", () => {
+    const svg = buildLogoSvg({ colorway: "accent", variant: "mark" });
+
+    expect(svg).toContain('<g transform="translate(42.6 19) scale(.62)">');
+    expect(svg).not.toContain("translate(51 66.8)");
+    expect(svg.match(/<path /g)).toHaveLength(3);
   });
 
   test("a letter placed inside its group carries its own transform, and one that is not carries none", () => {
