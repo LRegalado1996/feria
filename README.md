@@ -125,7 +125,7 @@ src/
     api/auth/           Better Auth
     api/health/         database probe, optionally behind HEALTH_SECRET
     api/docs/           OpenAPI reference for the API
-    page.tsx            the home page: feed, compose box, sign-in
+    [locale]/           every page, in Spanish (no prefix) and English (/en); the root layout
   server/
     api/routers/        thin routers, one per domain
     api/orpc/           procedure builders and request context
@@ -134,14 +134,16 @@ src/
     db/schema/          Drizzle tables, one file per domain; drizzle/ holds the migrations
     better-auth/        auth config
     test/               mock context and mock database for tests
+  content/              interface text in Spanish and English, one file per area
   lib/
     hooks/              React Query hooks per domain
+    i18n/               locales, localized paths, the dictionary provider
     schemas/            zod schemas per domain
     orpc/               clients for the browser and for server components
     errors/             reportError and error helpers
   e2e/                  Playwright specs, page objects, fixtures
   test/                 test setup, MSW handlers, mocks
-  proxy.ts              stamps a request id on every /api call
+  proxy.ts              routes pages by language; stamps a request id on every /api call
 scripts/                worktree stack, CI parity, ratchets and guards; each one tests itself
 docs/agents/            depth per area
 ```
@@ -170,32 +172,57 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
 
 1. **GitHub settings:**
    - `qa` (the default branch) and `main` are protected: pull requests only, for admins too. `qa` requires `CI Success`, `visual-proof` and `pr-description`; `main` requires `Promotion Verified`, `visual-proof` and `pr-description`.
-   - Default workflow permissions are read.
+   - Default workflow permissions are read, and "Allow GitHub Actions to create and approve pull requests" is on: the promotion pull request is opened with the workflow's own token.
    - The labels `deploy:preview` and `size:XS` through `size:XXL` exist.
-   - Optional: a GitHub App with the `BOT_APP_ID` variable and the `BOT_APP_PRIVATE_KEY` secret, so promotion PRs and bot merges start their checks by themselves. Without it, a promotion PR needs a close and reopen to start them.
-2. **Vercel project:**
-   - Import the repository; `main` is the production branch.
-   - Turn on Skew Protection (Settings → Advanced) and Analytics and Speed Insights.
-   - Keep the function region next to the database (`regions` in [`vercel.json`](vercel.json), `iad1` by default).
-3. **Environment variables:** `DATABASE_URL` and `BETTER_AUTH_SECRET` in each environment. Previews must never share a real database: see [`docs/agents/database.md`](docs/agents/database.md) § Preview databases.
+   - Preview deployments: the variables `VERCEL_PROJECT_ID` and `VERCEL_TEAM_ID`, and the environment `preview`, whose deployment branches admit only `qa`, holding the secret `VERCEL_PREVIEW_TOKEN` ([`docs/agents/ci.md`](docs/agents/ci.md) § Previews). Preview database cleanup: the secret `NEON_API_KEY` and the variable `NEON_PROJECT_ID`, the `feria-db-qa` project ([`docs/agents/database.md`](docs/agents/database.md) § Preview databases).
+   - Not set up, by choice: a GitHub App (`BOT_APP_ID` variable, `BOT_APP_PRIVATE_KEY` secret) that would start a promotion PR's checks by itself. Without it, close and reopen each promotion PR to start them, and a Dependabot auto-merge starts no workflow: `qa` gets no push CI run and no promotion PR is opened for it until the next merge, or until Auto Promotion PR is run by hand on `qa` ([`docs/agents/ci.md`](docs/agents/ci.md) § Releases).
+2. **Vercel project** `feria`, connected to this repository ([FER-002](docs/tickets/FER-002-vercel-neon-blob.md)). `main` is the production branch. The plan has no custom environments, so QA is the Preview environment's `qa` branch: its variables are scoped to that branch.
+
+   | Environment | Branch | URL                                                       | Database (Neon) | Images (Blob)     |
+   | ----------- | ------ | --------------------------------------------------------- | --------------- | ----------------- |
+   | Production  | `main` | <https://feria-blond.vercel.app>                          | `feria-db`      | `feria-images`    |
+   | QA          | `qa`   | <https://feria-git-qa-lucas-projects-628ba363.vercel.app> | `feria-db-qa`   | `feria-images-qa` |
+   - The two databases are separate Neon projects, installed from the Vercel Marketplace: nothing written in QA can reach production. The production one is connected to Production only, the QA one to Preview only.
+   - QA and every preview sit behind Vercel Authentication: open them signed in to Vercel, or with `vercel curl <url>/api/health`. Production is public.
+   - The build migrates before it compiles (`buildCommand` in [`vercel.json`](vercel.json)). Check a deployment with `/api/health`, which answers `{"db":"ok"}`.
+   - Node follows [`.nvmrc`](.nvmrc) (24.x). Keep the function region next to the databases (`regions` in `vercel.json`, `iad1`).
+   - Still to turn on: Skew Protection (Settings → Advanced), Analytics and Speed Insights.
+
+3. **Environment variables**, set in Vercel and listed with a comment each in [`.env.example`](.env.example):
+
+   | Variable                                    | Production                | QA (`qa` branch)          | Previews           | Development (`vercel env pull`) |
+   | ------------------------------------------- | ------------------------- | ------------------------- | ------------------ | ------------------------------- |
+   | `PRODUCTION_DATABASE_URL`/`QA_DATABASE_URL` | `feria-db`, pooled        | `feria-db-qa`, pooled     | not set            | not set                         |
+   | `MIGRATION_DATABASE_URL`                    | `feria-db`, direct        | `feria-db-qa`, direct     | not set            | not set                         |
+   | `DATABASE_URL`                              | written by Neon, not read | written by Neon, not read | written by Neon    | the local Postgres              |
+   | `NEON_PREVIEW_BRANCHES`                     | `1`                       | `1`                       | `1`                | not set                         |
+   | `BETTER_AUTH_URL`                           | the production URL        | the QA URL                | derived per deploy | `http://localhost:3000`         |
+   | `BETTER_AUTH_SECRET`                        | its own                   | shared with previews      | shared with QA     | its own                         |
+   | `BLOB_READ_WRITE_TOKEN`                     | `feria-images`            | `feria-images-qa`         | `feria-images-qa`  | `feria-images-qa`               |
+   | `NEXT_PUBLIC_SENTRY_DSN`                    | the `feria` project's     | the same DSN              | not set            | not set                         |
+   | `SENTRY_ORG`, `SENTRY_PROJECT`              | `pepe-sas-uy`, `feria`    | the same                  | not set            | not set                         |
+   | `SENTRY_AUTH_TOKEN`                         | one token                 | the same token            | set, unused        | not set                         |
+   - Why production and QA read a dedicated database variable: [`docs/agents/database.md`](docs/agents/database.md) § Preview databases. Previews must never share a real database: the Neon integration gives each preview deployment its own branch of `feria-db-qa`, and a preview is deployed only for a PR labeled `deploy:preview`.
+   - Sentry (project `feria` in the `pepe-sas-uy` organization) reports production as `production` and QA as `qa`. A pull request's preview has no DSN and never reports, so a closed branch cannot leave an issue open ([`docs/agents/observability.md`](docs/agents/observability.md) § Sentry). `SENTRY_AUTH_TOKEN` only uploads source maps during the build.
+   - Vercel AI Gateway needs no variable on a deployment: it authenticates with the OIDC token Vercel injects. The project has a budget of USD 5 per month (`vercel ai-gateway budgets list`); at the limit the calls stop until the next month.
+   - **Someone new:** `vercel link --yes --project feria`, `vercel env pull .env`, then `pnpm wt:provision`, which points `DATABASE_URL` and `BETTER_AUTH_URL` at this worktree. `.env` then holds the QA image store's token and a short-lived `VERCEL_OIDC_TOKEN` for the gateway; pull again when it expires.
+
 4. **Optional services**, each inert until configured:
-   - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
    - `HEALTH_SECRET` for the health probe.
    - Turborepo remote cache: `TURBO_TOKEN`, `TURBO_TEAM`, `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
-   - Previews: the `preview` environment and its token ([`docs/agents/ci.md`](docs/agents/ci.md) § Previews).
 
 ## Documentation
 
-| Read this                                | For                                                                                         |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`docs/project/`](docs/project)          | what the product is: the overview, the decisions, the roadmap and the data model            |
-| [`docs/tickets/`](docs/tickets)          | the work, one file per ticket, with the index and how we work                               |
-| [`AGENTS.md`](AGENTS.md)                 | the rules every change follows, for people and AI agents alike. Read it first               |
-| [`design.md`](design.md)                 | UI rules: tokens, typography, layout, copy and accessibility. Read it before building UI    |
-| [`docs/agents/`](docs/agents)            | depth per area: testing, database, security, observability, Next.js, CI, agent tooling      |
-| [`src/e2e/AGENTS.md`](src/e2e/AGENTS.md) | how e2e specs, fixtures and page objects are written                                        |
-| [`konsistent.json`](konsistent.json)     | the file-structure rules a linter cannot express, such as which files must sit together     |
-| [`.agents/skills/`](.agents/skills)      | skills for agents: commits, PRs, the review loop, oRPC, the worktree stack, the running app |
+| Read this                                | For                                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`docs/project/`](docs/project)          | what the product is: the overview, the decisions, the roadmap and the data model                  |
+| [`docs/tickets/`](docs/tickets)          | the work, one file per ticket, with the index and how we work                                     |
+| [`AGENTS.md`](AGENTS.md)                 | the rules every change follows, for people and AI agents alike. Read it first                     |
+| [`design.md`](design.md)                 | UI rules: tokens, typography, layout, copy and accessibility. Read it before building UI          |
+| [`docs/agents/`](docs/agents)            | depth per area: testing, database, security, observability, Next.js, languages, CI, agent tooling |
+| [`src/e2e/AGENTS.md`](src/e2e/AGENTS.md) | how e2e specs, fixtures and page objects are written                                              |
+| [`konsistent.json`](konsistent.json)     | the file-structure rules a linter cannot express, such as which files must sit together           |
+| [`.agents/skills/`](.agents/skills)      | skills for agents: commits, PRs, the review loop, oRPC, the worktree stack, the running app       |
 
 Documentation is part of the change: every pull request says `Documentation: updated` with the paths, or `no impact` and why.
 

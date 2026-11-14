@@ -1,7 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { Locale } from "@/lib/i18n/config";
+
 import { EnvironmentMarker } from "./environment-marker";
+
+// `server-only` throws on import outside a React Server Components build.
+vi.mock("server-only", () => ({}));
 
 // Every variable the marker reads, cleared, so the machine running the test
 // cannot leak its own Vercel environment in.
@@ -12,12 +17,12 @@ const UNSET = {
   VERCEL_TARGET_ENV: "",
 };
 
-function setup(env: Partial<typeof UNSET> = {}) {
+function setup(env: Partial<typeof UNSET> = {}, locale: Locale = "en") {
   for (const [name, value] of Object.entries({ ...UNSET, ...env })) {
     vi.stubEnv(name, value);
   }
 
-  return render(<EnvironmentMarker />);
+  return render(<EnvironmentMarker locale={locale} />);
 }
 
 describe("EnvironmentMarker", () => {
@@ -47,6 +52,16 @@ describe("EnvironmentMarker", () => {
       expect(marker).toHaveTextContent(`Environment: ${name}`);
     }
   );
+
+  test.each([
+    [{ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" }, "Entorno: QA"],
+    [{ VERCEL_ENV: "preview" }, "Entorno: Vista previa"],
+    [{ NODE_ENV: "development" }, "Entorno: Desarrollo"],
+  ] as const)("names %j in Spanish on a Spanish page", (env, text) => {
+    setup(env, "es");
+
+    expect(screen.getByTestId("environment-marker")).toHaveTextContent(text);
+  });
 
   test.each([
     ["a production deploy", { VERCEL_ENV: "production" }],

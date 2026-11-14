@@ -25,7 +25,7 @@ test.describe("Sign Out", () => {
     await homePage.signOut();
 
     await expect(homePage.getInput("Email")).toBeVisible();
-    await expect(homePage.getInput("Password")).toBeVisible();
-    await expect(homePage.getButton("Sign In")).toBeVisible();
+    await expect(homePage.getInput("Contraseña")).toBeVisible();
+    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
   });
 });

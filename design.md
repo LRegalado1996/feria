@@ -14,7 +14,7 @@ Answer first, records below; one claim, one home. Ask only when the answer chang
 
 **Tokens.** `src/styles/globals.css` is the API (Tailwind 4, CSS-first). Use utilities or `var()`; never a hex/`oklch()`/`hsl()` literal in a component, a parallel token, or an ad-hoc restyle of a shadcn primitive. Roles: `background`/`foreground` canvas; `card`/`popover` raised surfaces; `primary` the one emphasized action per view; `secondary`/`muted`/`accent` quiet fills, `muted-foreground` captions; `destructive` danger and errors; `border`/`input`/`ring` boundaries and focus; `chart-1…5` the only series colors.
 
-Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `shadow-xs` controls, `shadow-sm` cards, `shadow-lg` overlays. Fonts only through `next/font` in `src/app/layout.tsx`. Both themes are first-class: every color recipe carries its `dark:` half.
+Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `shadow-xs` controls, `shadow-sm` cards, `shadow-lg` overlays. Fonts only through `next/font` in `src/app/[locale]/layout.tsx`. Both themes are first-class: every color recipe carries its `dark:` half.
 
 **Browser floor.** Tailwind 4's: Chrome/Edge 111, Safari 16.4, Firefox 128; its colors need `oklch()` and `color-mix()`. SWC transpiles syntax but never polyfills built-ins, and browserslist doesn't police methods: check a built-in (`Object.groupBy`, `Promise.withResolvers`, iterator helpers) against the floor. Verify floor-sensitive changes on `pnpm build` output, not dev. An older floor is a project decision with its own CSS fallback pipeline and a test.
 
@@ -28,9 +28,9 @@ Radius `rounded-md` controls, `rounded-lg` cards and dialogs. Shadows by role: `
 | Prose; inputs on mobile | `text-base`                                               |
 | Caption, helper, badge  | `text-xs text-muted-foreground`                           |
 
-No arbitrary sizes or off-scale weights; text that doesn't fit is rewritten or reflowed, never shrunk. Aligned figures are `tabular-nums`, right-aligned, peers at equal precision. Numbers and dates go through `src/lib/utils/format.ts`, which owns the locale (`APP_LOCALE`, also `<html lang>`), the time zone and the cached `Intl` instances; components never build `Intl.*` or call `toLocaleString()`.
+No arbitrary sizes or off-scale weights; text that doesn't fit is rewritten or reflowed, never shrunk. Aligned figures are `tabular-nums`, right-aligned, peers at equal precision. Numbers, prices and dates go through `src/lib/utils/format.ts`, which owns the time zone (the store's, `America/Montevideo`) and the cached `Intl` instances; every formatter takes the page's locale as an argument, and components never build `Intl.*` or call `toLocaleString()`. A price names its currency: `$ 1.290` and `US$ 12,50` in Spanish, `UYU 1,290` and `USD 12.50` in English, cents only when the amount has any.
 
-**One product language per app** (today: English; FER-004 makes it Spanish by default with an English toggle); code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows. Headings state the task or fact; a toast says what happened. Hidden strings (sr-only labels, `aria-label`) use the product language. Never show raw `error.message`, enum values or schema field names.
+**Two product languages: Spanish by default, English behind a toggle**, in the storefront and the admin alike. The URL decides: no prefix is Spanish, `/en/...` is English, and `<html lang>` follows it. No interface text is written in a component: every string, hidden ones included (sr-only labels, `aria-label`, placeholders, toasts, validation messages), lives in `src/content/{es,en}/` and reaches the screen through `getDictionary(locale)` or `useDictionary()`, so both languages always have it (`docs/agents/i18n.md`). Spanish uses the Rioplatense voseo ("Probá de nuevo"). The locale toggle (`molecules/locale-toggle`) names the language it leads to, in that language, and keeps the path and the query string. Code, comments, commits and test titles are always English. Sentence case; no all-caps eyebrows (the storefront has one: § Storefront). Headings state the task or fact; a toast says what happened. Never show raw `error.message`, enum values or schema field names.
 
 ## Color and surfaces
 
@@ -47,7 +47,7 @@ One canvas: a card or border must express interaction, selection, warning or a g
 
 ## Layout and responsive
 
-- One page container per shell; constrain blocks, not the page (forms `max-w-sm`, as the sign-in view in `src/app/page.tsx`).
+- One page container per shell; constrain blocks, not the page (forms `max-w-sm`, as the sign-in view in `src/app/[locale]/page.tsx`).
 - Mobile-first. Grid/flex children get `min-w-0` (`atoms/input`); so does a `<fieldset>`. The page never scrolls sideways: wide content scrolls in its own `overflow-x-auto` box, with `overflow-y-clip` to avoid a phantom vertical bar.
 - Toolbars `flex-wrap`; titles `truncate` on a block element. Unbounded user text never sits in a `whitespace-nowrap` control. `sticky` binds to the nearest ancestor with any `overflow`.
 - Overlays cap height with `dvh`, not `vh`. Inputs are `text-base md:text-sm` so iOS doesn't zoom. Never lock zoom or orientation.
@@ -59,10 +59,10 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - `data-slot` on every root (a fragment gets a wrapper); `data-variant`/`data-size` where variants exist.
 - **Leaf-subpath imports** (`@/app/_components/atoms/button`), never an aggregate: one heavy re-export leaks into every page's bundle.
 - **Consumer or it doesn't ship:** a component, hook or helper lands with the code that uses it. Its own test makes an unrendered component look used.
-- After `shadcn add`: translate default strings; apply the layout rules above.
+- After `shadcn add`: move default strings into the dictionaries, in both languages; apply the layout rules above.
 - Key lists by stable id (`kind:id` when a list mixes entities), never index. One label map per enum, `satisfies Record<…>`.
 - Icons: `lucide-react` only, default stroke; `size-4` default, `size-3.5` dense, `size-6` headers, `size-12` empty states. Decorative ones get `aria-hidden`; meaningful ones a name. No icon tiles.
-- References: `atoms/button` (variants, focus ring), `atoms/input`, `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
+- References: `atoms/button` (variants, focus ring), `atoms/input`, `molecules/locale-toggle` (a link styled as a button, `lang` on its label), `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
 
 ## Data
 
@@ -80,7 +80,7 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - **Never discard typed input.** Reset only on success (`onSuccess`, or after `mutateAsync` resolves); a failure keeps the text and says why. Never silently clamp or default.
 - After a save, `form.reset(storedRow)` and key the form by entity: react-hook-form ignores new `defaultValues`.
 - An error on a hidden tab or step brings the user to it; `noValidate` so zod owns messages.
-- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing; the decimal separator follows the locale.
+- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing; the decimal separator follows the page's language (a comma in Spanish, a dot in English).
 - **Narrow Radix values:** `onValueChange` returns any string. `safeParse` it and ignore unknowns and the `""` echo.
 - Never ask users to type internal ids; don't prefill fields that decide money or dates.
 
@@ -92,7 +92,38 @@ The contract is `AGENTS.md` § Components and forms. Also:
 
 ## Motion
 
-Stillness by default. Approved: `animate-spin`/`animate-pulse` for waiting, Radix open/close via tw-animate-css at 150–300 ms (200 default), `transition-colors`. Reduced motion per driver: CSS with `motion-reduce:`, JS with the library's hook. Under reduced motion, drop overlay exit animations instead of slowing them: Radix unmounts an overlay when its exit animation ends, and one that never ends leaves an invisible layer eating clicks. Never scroll-reveal, parallax, marquees, bounce or sound.
+Stillness by default. Approved: `animate-spin`/`animate-pulse` for waiting, Radix open/close via tw-animate-css at 150–300 ms (200 default), `transition-colors`. Reduced motion per driver: CSS with `motion-reduce:`, JS with the library's hook. Under reduced motion, drop overlay exit animations instead of slowing them: Radix unmounts an overlay when its exit animation ends, and one that never ends leaves an invisible layer eating clicks. Never scroll-reveal, parallax, marquees, bounce or sound; the storefront reveals on scroll and has one marquee (§ Storefront).
+
+## Storefront
+
+The public store speaks another visual language than the admin: editorial, loud and fast, for a shopper deciding in seconds (the Volt language, `docs/project/overview.md`). Everything above still holds there except what this section changes. The admin changes nothing: it keeps the calm back-office rules.
+
+**Where it applies.** Storefront components are the `store-*` directories of the three component tiers; storefront routes are listed in the `storefront-style-outside-storefront` ratchet (`scripts/ratchets.json`), today `/design`. That ratchet fails any storefront utility used anywhere else, so add a route to its exclude list in the change that creates the route. `/design` shows every storefront component in both languages and answers 404 in production: check a storefront change there at 375 px and 1280 px.
+
+**Colors.** Five tokens, the LR Market palette by default; a store overrides them on its own pages (FER-008) and nothing else:
+
+| Token              | Default   | Role                                           |
+| ------------------ | --------- | ---------------------------------------------- |
+| `store-background` | `#f2f3f0` | The page                                       |
+| `store-surface`    | `#ffffff` | Cards and panels on the page                   |
+| `store-foreground` | `#111312` | Text; 16.7:1 on the background                 |
+| `store-contrast`   | `#111312` | Inverted blocks and bands, the regular price   |
+| `store-accent`     | `#c8f31d` | The one loud color; foreground on it is 14.5:1 |
+
+`store-muted` (small text on the background, 5.9:1), `store-contrast-muted` (small text on a contrast block) and `store-line` (hairlines, the surface behind a missing photo) are derived from those five with `color-mix()`, so an override never supplies them: the element that overrides the five carries `data-store-palette`, which computes the three again from its own values (a custom property is inherited as a finished color, so `:root` alone would keep the default ones). The accent is a fill, or large text on a contrast block; never text on the background or the surface, where it cannot be read. Text on the accent is `store-foreground`; text on a contrast block is `store-background`. The storefront has no dark theme: a store's palette is its identity, so these tokens have no `.dark` value and storefront markup never uses the app tokens (`background`, `primary`, `muted-foreground`).
+
+**Type.** Two faces, both through `next/font` in the root layout. The display face (Anton, `font-display`) sets headlines, prices, article names, badges and the marquee: always `uppercase` and `tracking-display`, never a sentence of body copy. A heading is `leading-display`; a one-line label on a solid block (badge, price, card name, marquee) is `leading-none`, so the block hugs the letters. Geist sets everything else, in sentence case. Display sizes are fluid utilities, not the admin's type table: `store-display-hero` (54 px on a phone to 152 px), `store-display-section` (42 to 88 px), `store-display-title` (24 to 28 px), `store-display-figure` (88 to 96 px). `store-eyebrow` is the one all-caps label in Geist. A heading breaks where its copy says (`StoreHeading` takes its lines), not where the viewport does. Corners are square: no radius on storefront surfaces or controls.
+
+**Components.** `atoms/store-eyebrow`, `atoms/store-heading` (display heading; its lines rise one after another when the page loads, so below the fold it goes inside a `store-reveal`, which holds the rise until the block scrolls in), `atoms/store-chip` (a filter; `asChild` over the link or button that applies it), `atoms/store-badge` ("New", "Price drop"), `atoms/store-arrow-link`, `atoms/store-price-tag` (regular on the contrast color; reduced on the accent with the previous price struck through, only when it was higher), `atoms/store-reveal`, `atoms/store-count-up`, `molecules/store-article-card` (one stretched link per card; one badge, a reduced price outranks new), `molecules/store-marquee`, `molecules/store-slider` (native scroll with snap, buttons, a counter, arrow keys once focused). Touch targets are 44 px (`min-h-11`, `size-11`). Focus rings are a 3 px outline in `store-foreground`, or `store-accent` on a contrast block.
+
+**Motion.** The storefront moves, within four rules:
+
+- Only `transform` and `opacity` animate (and colors on hover).
+- Every motion has a reduced-motion answer: CSS behind `motion-safe:`/`motion-reduce:`, scripted motion behind `usePrefersReducedMotion()`. Reduced motion shows the final state at once: the marquee wraps in place, reveals do not hide anything, the count-up shows its figure.
+- The text is in the server's HTML and visible without JavaScript. Motion lives in small client components (`store-reveal`, `store-count-up`, `store-marquee`, `store-slider`) that wrap server-rendered content. `useScrollEntry()` holds back only what is still off screen after hydration, so nothing the visitor has seen blinks; what was on screen at load is not animated.
+- One thing per store page moves on its own: the marquee (the `/design` gallery shows both of its tones, each with its own pause). Motion that runs longer than five seconds needs a way to stop it (WCAG 2.2.2), so the marquee carries a pause button with `aria-pressed`.
+
+**Still banned in the storefront:** decorative gradients and gradient text, glows, glass (`backdrop-blur` on translucent fills), textures, parallax, bounce, sound, and any color outside the five tokens and their three derivations.
 
 ## Accessibility
 
@@ -131,4 +162,4 @@ Then review in order, worst systemic defect first: first read → composition �
 
 Add a rule when a review theme recurs twice, at the narrowest point that holds it: a token or primitive first, then a mechanical check, prose last. Name its reference implementation once one exists. The `design-feedback` skill runs that loop over recent review comments.
 
-**Checked mechanically** by the ratchets in `scripts/ratchets.json` (`pnpm check`), each held at zero: `raw-color-literal` (Foundations), `arbitrary-text-size` (Typography), `shadow-outside-ladder` (Foundations), `one-off-number-format` (`Intl` or `toLocaleString()` outside `src/lib/utils/format.ts`) and `non-lucide-icon-import` (Components). A failure names the rule, its guardrail here and the fix.
+**Checked mechanically** by the ratchets in `scripts/ratchets.json` (`pnpm check`), each held at zero: `raw-color-literal` (Foundations), `arbitrary-text-size` (Typography), `shadow-outside-ladder` (Foundations), `one-off-number-format` (`Intl` or `toLocaleString()` outside `src/lib/utils/format.ts`), `non-lucide-icon-import` (Components) and `storefront-style-outside-storefront` (Storefront). A failure names the rule, its guardrail here and the fix.

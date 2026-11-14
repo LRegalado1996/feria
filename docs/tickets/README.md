@@ -6,8 +6,8 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 - Take tickets in order unless a dependency says otherwise. One ticket, one branch (`fer-012-short-name`), one PR into `qa`.
 - `qa` and `main` accept pull requests only. `main` is production and receives promotion PRs from `qa` once `qa` is stable.
-- CodeRabbit reviews each PR into `qa` (not the promotion PR into `main`, whose changes were already reviewed) and the local agent answers it until every thread is settled (the `review-loop` skill). Lucas gives the word to merge.
-- A PR with a visible change includes a screenshot or recording in its description. The `visual-proof` check fails without one.
+- CodeRabbit reviews each PR into `qa` that a person or an agent opens (not the promotion PR into `main` or the merge-back from `main`, whose changes were already reviewed, and not Dependabot's) and the local agent answers it until every thread is settled (the `review-loop` skill). Lucas gives the word to merge.
+- A PR with a visible change includes one image of the result in its description (before and after only for a bug fix), or a recording when the change is a gesture or a timing. The `visual-proof` check fails when there is no image or recording at all; whether it is the right proof is for the reviewer.
 - Commit messages and PR titles follow Conventional Commits, with the ticket in a `Refs: FER-012` footer. The rules are in the `conventional-commits` skill (`.agents/skills/conventional-commits/SKILL.md`).
 - A ticket is done when its acceptance criteria hold and the template's definition of done passes (`AGENTS.md`).
 - Update the `Status` line in the ticket and the table below in the same PR: `todo`, `in progress`, `done`.
@@ -22,11 +22,12 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | ID                                            | Title                                          | Priority | Status |
 | --------------------------------------------- | ---------------------------------------------- | -------- | ------ |
 | [FER-001](FER-001-bootstrap-from-template.md) | Bootstrap the repo from the template           | P0       | done   |
-| [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | todo   |
-| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | todo   |
-| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | todo   |
-| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | todo   |
+| [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done   |
+| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | done   |
+| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done   |
+| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | done   |
 | [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | todo   |
+| [FER-036](FER-036-slack-apps.md)              | GitHub and Vercel apps post to Slack           | P2       | todo   |
 
 ### M1 Brand
 
@@ -48,16 +49,17 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M3 Admin
 
-| ID                                        | Title                                        | Priority | Status |
-| ----------------------------------------- | -------------------------------------------- | -------- | ------ |
-| [FER-013](FER-013-admin-shell.md)         | Admin shell and sign-in                      | P0       | todo   |
-| [FER-014](FER-014-store-management.md)    | Store management and company settings        | P0       | todo   |
-| [FER-015](FER-015-user-management.md)     | User management                              | P1       | todo   |
-| [FER-016](FER-016-category-management.md) | Category management                          | P0       | todo   |
-| [FER-017](FER-017-article-wizard.md)      | Article upload wizard                        | P0       | todo   |
-| [FER-018](FER-018-ai-autofill.md)         | Fill the article from its photos with Claude | P0       | todo   |
-| [FER-019](FER-019-article-list.md)        | Article list and quick edits                 | P0       | todo   |
-| [FER-020](FER-020-home-curation.md)       | Home curation: banners, ranking, featured    | P0       | todo   |
+| ID                                                    | Title                                              | Priority | Status |
+| ----------------------------------------------------- | -------------------------------------------------- | -------- | ------ |
+| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | todo   |
+| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | todo   |
+| [FER-014](FER-014-store-management.md)                | Store management and company settings              | P0       | todo   |
+| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo   |
+| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | todo   |
+| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | todo   |
+| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo   |
+| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo   |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: banners, ranking, featured          | P0       | todo   |
 
 ### M4 Storefront and orders
 
@@ -89,13 +91,14 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 ## Dependency sketch
 
 ```
-001 → 002 → 003
+001 → 002 → 003 → 036
 001 → 004 → 005 → 006 → 007
 002, 005 → 034
 002 → 008 → 009 → 013 → 014, 015
 008 → 010 → 011 → 017 → 018
 010 → 016, 019, 020
 010 → 033 → 017, 023
+004 → 035 → 017
 005, 008 → 021 → 022, 023, 024
 010 → 025 → 026 → 027 → 028
 024 → 029 → 030

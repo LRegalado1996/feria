@@ -67,10 +67,11 @@ considered". How to fill each one: .agents/skills/pr-description/SKILL.md.
 
 ## Visual proof
 
-<!-- Required when the change is visible: a screenshot of the result, at mobile
-     and desktop width when layout changed, before and after of the same
-     screen at the same size, and a recording for a gesture or a timing. Drag
-     the files into this description; never commit media.
+<!-- Required when the change is visible: ONE image of the result, with every
+     changed screen composed into it and labelled, at phone and desktop width
+     when layout changed. Show how it is now; before and after of the same
+     screen only for a bug fix, in that same image. A recording for a gesture
+     or a timing. Attach the file to this description; never commit media.
      It is a gate: the `visual-proof` check fails when the PR touches files
      that affect the interface and this description has neither an image or a
      recording nor the box below ticked. -->

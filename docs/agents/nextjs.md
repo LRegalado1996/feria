@@ -11,9 +11,10 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 
 ## Layouts and pages
 
-- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/page.tsx`: `Home` → `HomeResolver`).
+- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/[locale]/page.tsx`: `Home` → `HomeResolver`).
 - A fallback mirrors what it stands for, or stays an empty `aria-busy` canvas when the outcomes differ (signed out vs signed in): a skeleton for the wrong screen is a lie and a layout shift.
 - **Layouts are UI chrome.** Auth is decided per page, inside its boundary.
+- **The root layout is `src/app/[locale]/layout.tsx`.** `locale` is the one param known at build time (`generateStaticParams` lists both languages), so awaiting it at the top of a layout or page holds nothing behind a request; every other param follows the rule below. Types for `params` are written by hand (`Promise<{ locale: string }>`): nothing here runs `next typegen`, so `PageProps`, `LayoutProps` and `next/root-params` are not available to `pnpm typecheck`.
 - **No `export const dynamic`, `revalidate` or `fetchCache`.** Cache with `"use cache"` and an explicit `cacheLife`. `force-static` is inert on a GET route handler under Cache Components: wrap its work in `"use cache"` and check the build's route table (`○`/`◐`/`ƒ`) after the change.
 - **`params` and `searchParams` are promises.** Pass the promise into the boundary and await it there. `useParams()`/`useSearchParams()` in a client component need a `<Suspense>` above them.
 - **Request-time values:** `Date.now()`, `new Date()`, `Math.random()` and `crypto.randomUUID()` in a server component run after `await connection()` (or another request read) inside a boundary, or move to a client component's effect.
@@ -23,6 +24,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 ## Navigation
 
 - **After signing in, signing up or signing out, navigate with a full page load** (`window.location.assign(target)`), never `router.refresh()`/`router.push()`. A soft navigation can keep a shell rendered for the old session, or settle on the URL of a server-redirect chain without its content.
+- **Changing language is a soft navigation** (`molecules/locale-toggle` is a `<Link>`): the `[locale]` layout re-renders under the new param, `<html lang>` updates and the theme class stays.
 - **Routes stay mounted.** Cache Components keeps a route you navigate away from inside React's `<Activity mode="hidden">`: its state survives, its effects are cleaned up and re-run on return, and its DOM stays in the document, so a global `:has()` selector or a `document.querySelector` can match a hidden tree.
 
 ## React Compiler
@@ -45,4 +47,6 @@ The server renders at one instant and the browser hydrates later; React throws a
 
 ## Proxy
 
-`src/proxy.ts` (formerly `middleware.ts`), when present, is optimistic only: it may redirect on the presence of a session cookie, and pages and procedures still check the session themselves.
+`src/proxy.ts` (formerly `middleware.ts`) does two things and decides no access: it stamps `/api` requests with a request id for logging, and it routes page requests by language (`docs/agents/i18n.md`): unprefixed paths are rewritten to `/es/...`, `/es/...` redirects to the unprefixed URL, `/en/...` passes through. Its `matcher` is one constant pattern that leaves out Next's assets, Vercel's endpoints, the Sentry tunnel and the files in `public/`, each by name; a new top-level path that must not get a language is added there. If it ever redirects on a session cookie, that is optimistic only: pages and procedures still check the session themselves.
+
+`usePathname()` can return the rewritten path (`/es/...`) on the server and the browser's on the client. Render only what does not depend on that prefix: the result of `localizePath()`, or the `pathname` `splitLocale()` returns. Never the `locale` it returns (`"es"` for the rewritten path, `null` for the browser's): the page's language comes from `useLocale()`.

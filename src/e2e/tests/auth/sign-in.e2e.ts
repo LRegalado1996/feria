@@ -1,7 +1,7 @@
 import { expect, test } from "../../fixtures";
 import { HomePage } from "../../page-objects/home.page";
 
-const INVALID_CREDENTIALS_PATTERN = /invalid/i;
+const INVALID_CREDENTIALS_PATTERN = /no son correctos/i;
 const MIN_PASSWORD_LENGTH_PATTERN = /8/;
 
 // These start signed out; the worker's user is who signs in.
@@ -13,9 +13,9 @@ test.describe("Sign In", () => {
     await homePage.goto();
 
     await homePage.expectUnauthenticated();
-    await expect(homePage.getButton("Sign In")).toBeVisible();
+    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
     await expect(homePage.getInput("Email")).toBeVisible();
-    await expect(homePage.getInput("Password")).toBeVisible();
+    await expect(homePage.getInput("Contraseña")).toBeVisible();
   });
 
   test("should sign in with valid credentials", async ({ identity, page }) => {

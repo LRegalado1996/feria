@@ -200,6 +200,30 @@
         "src/lib/utils/format.ts"
       ],
       "baseline": "scripts/ratchets/one-off-number-format.baseline.txt"
+    },
+    {
+      "id": "storefront-style-outside-storefront",
+      "title": "A storefront style used outside the storefront",
+      "rationale": "The storefront has its own visual language (design.md § Storefront): a display face set uppercase, fluid sizes, a marquee, and the five store colors a store overrides on its own pages. The admin keeps the calm back-office rules, which ban all-caps labels and moving bands. These utilities are allowed only in storefront components (a `store-` directory in a component tier) and storefront routes, so the two languages cannot leak into each other one class at a time. Held at zero from the day the ratchet was added.",
+      "guardrail": "design.md § Storefront: where it differs from the admin, and where its styles may be used",
+      "fix": "In the admin, use the roles in design.md § Typography and copy and the app tokens. If the screen is part of the storefront, build it from the `store-*` components, or add its route to this rule's exclude list in the same change as design.md.",
+      "pattern": "-store-(?:background|surface|foreground|contrast|accent|muted|line)\\b|\\bstore-display-|\\bstore-eyebrow\\b|animate-store-|\\bfont-display\\b|\\buppercase\\b|\\b(?:tracking|leading)-(?:display|eyebrow)\\b",
+      "include": [
+        "src/app/**/*.ts",
+        "src/app/**/*.tsx",
+        "src/lib/**/*.ts",
+        "src/lib/**/*.tsx"
+      ],
+      "exclude": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/**/*.integration.test.ts",
+        "src/app/_components/atoms/store-*/**",
+        "src/app/_components/molecules/store-*/**",
+        "src/app/_components/organisms/store-*/**",
+        "src/app/*/design/**"
+      ],
+      "baseline": "scripts/ratchets/storefront-style-outside-storefront.baseline.txt"
     }
   ]
 }

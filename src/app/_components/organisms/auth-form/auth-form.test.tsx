@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import { describe, expect, test, vi } from "vitest";
 
 import { reportError } from "@/lib/errors/client";
+import type { Locale } from "@/lib/i18n/config";
 import { collectHydrationErrors } from "@/test/hydration";
+import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 import { server } from "@/test/msw";
 
 import { AuthForm, type AuthFormProps } from "./auth-form";
@@ -16,14 +18,36 @@ const SIGN_UP = "*/api/auth/sign-up/email";
 
 const VALID = { email: "test@example.com", password: "password123" };
 
-function setup(props: AuthFormProps = {}, ...handlers: RequestHandler[]) {
+// What the helpers below look the form's controls up by, in each language.
+const CONTROLS = {
+  en: {
+    name: "Name",
+    email: "Email",
+    password: "Password",
+    submit: /^Sign (In|Up)$/,
+    switchMode: /account\?/,
+  },
+  es: {
+    name: "Nombre",
+    email: "Email",
+    password: "Contraseña",
+    submit: /^(Iniciar sesión|Crear cuenta)$/,
+    switchMode: /cuenta\?/,
+  },
+} as const;
+
+function setup(
+  { locale = "en", ...props }: AuthFormProps & { locale?: Locale } = {},
+  ...handlers: RequestHandler[]
+) {
+  const controls = CONTROLS[locale];
   server.use(...handlers);
   const assign = vi
     .spyOn(window.location, "assign")
     .mockImplementation(() => undefined);
   const user = userEvent.setup();
 
-  render(<AuthForm {...props} />);
+  renderWithI18n(<AuthForm {...props} />, { locale });
 
   async function fill(values: {
     email?: string;
@@ -31,9 +55,9 @@ function setup(props: AuthFormProps = {}, ...handlers: RequestHandler[]) {
     password?: string;
   }) {
     for (const [label, value] of [
-      ["Name", values.name],
-      ["Email", values.email],
-      ["Password", values.password],
+      [controls.name, values.name],
+      [controls.email, values.email],
+      [controls.password, values.password],
     ] as const) {
       if (value) {
         await user.type(screen.getByLabelText(new RegExp(`^${label}`)), value);
@@ -42,11 +66,11 @@ function setup(props: AuthFormProps = {}, ...handlers: RequestHandler[]) {
   }
 
   async function submit() {
-    await user.click(screen.getByRole("button", { name: /^Sign (In|Up)$/ }));
+    await user.click(screen.getByRole("button", { name: controls.submit }));
   }
 
   async function switchMode() {
-    await user.click(screen.getByRole("button", { name: /account\?/ }));
+    await user.click(screen.getByRole("button", { name: controls.switchMode }));
   }
 
   return { assign, fill, submit, switchMode };
@@ -171,7 +195,7 @@ describe("AuthForm validation", () => {
 });
 
 describe("AuthForm submission", () => {
-  test("signs in, tells the caller, then reloads the page", async () => {
+  test("signs in, tells the caller, then reloads into the home of the page's language", async () => {
     const onSuccess = vi.fn(() => undefined);
     const signIn = vi.fn((_body: unknown) => undefined);
     const { assign, fill, submit } = setup(
@@ -186,7 +210,7 @@ describe("AuthForm submission", () => {
     await submit();
 
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledExactlyOnceWith("/");
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/en");
     });
     expect(onSuccess).toHaveBeenCalledExactlyOnceWith();
     expect(onSuccess.mock.invocationCallOrder[0]).toBeLessThan(
@@ -195,7 +219,7 @@ describe("AuthForm submission", () => {
     expect(signIn).toHaveBeenCalledExactlyOnceWith(VALID);
   });
 
-  test("signs up with the name, then reloads the page", async () => {
+  test("signs up with the name, then reloads into the home of the page's language", async () => {
     const signUp = vi.fn((_body: unknown) => undefined);
     const { assign, fill, submit } = setup(
       { initialMode: "signup" },
@@ -209,7 +233,7 @@ describe("AuthForm submission", () => {
     await submit();
 
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledExactlyOnceWith("/");
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/en");
     });
     expect(signUp).toHaveBeenCalledExactlyOnceWith({
       name: "Test User",
@@ -218,8 +242,11 @@ describe("AuthForm submission", () => {
   });
 
   test("cannot submit before it hydrates: the browser would put the password in the URL", () => {
+    const I18n = createI18nWrapper();
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
-      <AuthForm />,
+      <I18n>
+        <AuthForm />
+      </I18n>,
       { serverNowMs: 0, clientNowMs: 1000 }
     );
 
@@ -335,5 +362,165 @@ describe("AuthForm submission", () => {
     await switchMode();
 
     expect(screen.queryByTestId("auth-error")).not.toBeInTheDocument();
+  });
+});
+
+describe("AuthForm in Spanish", () => {
+  test("labels both modes in Spanish", async () => {
+    const { switchMode } = setup({ locale: "es" });
+
+    expect(screen.getByLabelText(/^Email/)).toHaveAttribute(
+      "placeholder",
+      "vos@ejemplo.com"
+    );
+    expect(screen.getByLabelText(/^Contraseña/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Iniciar sesión" })
+    ).toBeInTheDocument();
+
+    await switchMode();
+
+    expect(screen.getByLabelText(/^Nombre/)).toHaveAttribute(
+      "placeholder",
+      "Tu nombre"
+    );
+    expect(
+      screen.getByRole("button", { name: "Crear cuenta" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "¿Ya tenés una cuenta? Iniciá sesión",
+      })
+    ).toBeInTheDocument();
+
+    await switchMode();
+
+    expect(
+      screen.getByRole("button", { name: "¿No tenés una cuenta? Registrate" })
+    ).toBeInTheDocument();
+  });
+
+  test("explains each invalid field in Spanish", async () => {
+    const { fill, submit } = setup({ initialMode: "signup", locale: "es" });
+    await fill({
+      name: "A",
+      email: "test@example.com",
+      password: "password123",
+    });
+
+    await submit();
+
+    expect(
+      await screen.findByText("El nombre debe tener al menos 2 caracteres")
+    ).toBeInTheDocument();
+  });
+
+  test.each([
+    [
+      { password: "123", email: VALID.email },
+      "La contraseña debe tener al menos 8 caracteres",
+    ],
+    [{ password: VALID.password }, "Ingresá un email válido"],
+  ])("refuses %j saying %j", async (values, message) => {
+    const { assign, fill, submit } = setup({ locale: "es" });
+    await fill(values);
+
+    await submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  test("signs in and reloads into the Spanish home, which has no prefix", async () => {
+    const { assign, fill, submit } = setup(
+      { locale: "es" },
+      http.post(SIGN_IN, () =>
+        HttpResponse.json({ token: "t", user: { id: "1" } })
+      )
+    );
+    await fill(VALID);
+
+    await submit();
+
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/");
+    });
+  });
+
+  test("shows the save in progress in Spanish", async () => {
+    const { fill, submit } = setup(
+      { locale: "es" },
+      http.post(SIGN_IN, async () => await new Promise(() => {}))
+    );
+    await fill(VALID);
+
+    await submit();
+
+    expect(
+      await screen.findByRole("button", { name: "Iniciando sesión…" })
+    ).toBeDisabled();
+  });
+
+  test.each([
+    [
+      SIGN_IN,
+      "signin",
+      401,
+      "INVALID_EMAIL_OR_PASSWORD",
+      "El email o la contraseña no son correctos.",
+    ],
+    [
+      SIGN_UP,
+      "signup",
+      422,
+      "USER_ALREADY_EXISTS",
+      "Ya existe una cuenta con este email.",
+    ],
+    [
+      SIGN_IN,
+      "signin",
+      500,
+      "INTERNAL_SERVER_ERROR",
+      "No pudimos iniciar la sesión. Probá de nuevo.",
+    ],
+    [
+      SIGN_UP,
+      "signup",
+      400,
+      "PASSWORD_TOO_SHORT",
+      "No pudimos crear la cuenta. Probá de nuevo.",
+    ],
+  ] as const)(
+    "%s refused with %s → %i %s says it in Spanish",
+    async (url, initialMode, status, code, message) => {
+      const { fill, submit } = setup(
+        { initialMode, locale: "es" },
+        refuse(url, status, code)
+      );
+      await fill({
+        name: initialMode === "signup" ? "Test User" : undefined,
+        ...VALID,
+      });
+
+      await submit();
+
+      expect(await screen.findByTestId("auth-error")).toHaveTextContent(
+        message
+      );
+    }
+  );
+
+  test("says in Spanish that the server could not be reached", async () => {
+    const { fill, submit } = setup(
+      { locale: "es" },
+      http.post(SIGN_IN, () => HttpResponse.error())
+    );
+    await fill(VALID);
+
+    await submit();
+
+    expect(await screen.findByTestId("auth-error")).toHaveTextContent(
+      "No pudimos conectar con el servidor. Revisá tu conexión y probá de nuevo."
+    );
   });
 });

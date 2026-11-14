@@ -18,7 +18,7 @@ test.describe("Post failures", () => {
     await homePage.submitPost();
 
     await expect(
-      page.getByText("Your post was not published. Try again.")
+      page.getByText("Tu publicación no se publicó. Probá de nuevo.")
     ).toBeVisible();
     await expect(homePage.getComposeBox()).toHaveValue(text);
     // The optimistic card is taken back off the feed.

@@ -4,8 +4,10 @@ import { completeRpcAction } from "../fixtures/complete-rpc-action";
 import { expectDialogRemoved } from "../fixtures/expect-dialog-removed";
 import { BasePage } from "./base.page";
 
-const SWITCH_TO_SIGN_UP_PATTERN = /Don't have an account\? Sign Up/i;
-const SWITCH_TO_SIGN_IN_PATTERN = /Already have an account\? Sign In/i;
+// The specs read the interface in Spanish, the language of an unprefixed URL
+// and what most visitors get. English has its own spec (`tests/i18n.e2e.ts`).
+const SWITCH_TO_SIGN_UP_PATTERN = /¿No tenés una cuenta\? Registrate/i;
+const SWITCH_TO_SIGN_IN_PATTERN = /¿Ya tenés una cuenta\? Iniciá sesión/i;
 
 export class HomePage extends BasePage {
   async goto(): Promise<void> {
@@ -17,7 +19,7 @@ export class HomePage extends BasePage {
   protected loaded(): Locator {
     // A streamed reload can briefly hold a second, hidden navbar.
     return this.getByTestId("navbar")
-      .or(this.page.getByRole("heading", { name: "Welcome back" }))
+      .or(this.page.getByRole("heading", { name: "Hola de nuevo" }))
       .filter({ visible: true })
       .first();
   }
@@ -29,11 +31,11 @@ export class HomePage extends BasePage {
   }
 
   async fillPassword(password: string): Promise<void> {
-    await this.fillField("Password", password);
+    await this.fillField("Contraseña", password);
   }
 
   async fillName(name: string): Promise<void> {
-    await this.fillField("Name", name);
+    await this.fillField("Nombre", name);
   }
 
   /**
@@ -41,31 +43,31 @@ export class HomePage extends BasePage {
    * enabled is the proof that typing and submitting now reach React.
    */
   async waitForAuthForm(
-    mode: "Sign In" | "Sign Up" = "Sign In"
+    mode: "Crear cuenta" | "Iniciar sesión" = "Iniciar sesión"
   ): Promise<void> {
     await expect(this.getButton(mode)).toBeEnabled();
   }
 
   /** A click that the form refuses before sending anything (validation). */
   async submitSignIn(): Promise<void> {
-    await this.getButton("Sign In").click();
+    await this.getButton("Iniciar sesión").click();
   }
 
   async submitSignUp(): Promise<void> {
-    await this.getButton("Sign Up").click();
+    await this.getButton("Crear cuenta").click();
   }
 
   async switchToSignUp(): Promise<void> {
     await this.clickUntilVisible(
       this.getButton(SWITCH_TO_SIGN_UP_PATTERN),
-      this.getInput("Name")
+      this.getInput("Nombre")
     );
   }
 
   async switchToSignIn(): Promise<void> {
     await this.clickUntilVisible(
       this.getButton(SWITCH_TO_SIGN_IN_PATTERN),
-      this.getButton("Sign In")
+      this.getButton("Iniciar sesión")
     );
   }
 
@@ -110,8 +112,8 @@ export class HomePage extends BasePage {
     // Signing out twice changes nothing, so a click lost before hydration is
     // safe to repeat until the sign-in page shows.
     await this.clickUntilVisible(
-      this.getButton("Sign out").filter({ visible: true }),
-      this.page.getByRole("heading", { name: "Welcome back" })
+      this.getButton("Cerrar sesión").filter({ visible: true }),
+      this.page.getByRole("heading", { name: "Hola de nuevo" })
     );
   }
 
@@ -140,11 +142,11 @@ export class HomePage extends BasePage {
   }
 
   async cancelDeleteDialog(): Promise<void> {
-    await this.page.getByRole("button", { name: "Cancel" }).click();
+    await this.page.getByRole("button", { name: "Cancelar" }).click();
     await expectDialogRemoved(this.page, this.getByTestId("confirm-dialog"));
   }
 
-  async chooseTheme(theme: "Dark" | "Light" | "System"): Promise<void> {
+  async chooseTheme(theme: "Claro" | "Oscuro" | "Sistema"): Promise<void> {
     // Right after a reload the streamed page can briefly hold a second,
     // hidden copy of the navbar; the visible one is the one a user presses.
     const option = this.page.getByRole("menuitemradio", { name: theme });
@@ -155,26 +157,42 @@ export class HomePage extends BasePage {
     await option.click();
   }
 
+  // ── Language ────────────────────────────────────────────────
+
+  /**
+   * The link to this page in the other language. After a switch the page
+   * left behind stays mounted, hidden, with a toggle of its own: the visible
+   * one is the one a user presses.
+   */
+  getLocaleToggle(): Locator {
+    return this.getByTestId("locale-toggle").filter({ visible: true });
+  }
+
+  /** The document's language, which screen readers and search engines read. */
+  async expectDocumentLanguage(lang: "en" | "es"): Promise<void> {
+    await expect(this.page.locator("html")).toHaveAttribute("lang", lang);
+  }
+
   // ── Post Form ───────────────────────────────────────────────
 
   getComposeBox(): Locator {
-    return this.page.getByRole("textbox", { name: "New post" });
+    return this.page.getByRole("textbox", { name: "Nueva publicación" });
   }
 
   /**
-   * Types into the compose box until React has it: the Post button enables
+   * Types into the compose box until React has it: the Publicar button enables
    * only once React holds the text, and text typed before hydration is lost
    * to it. Filling again is harmless; submitting twice would not be.
    */
   async fillPostContent(content: string): Promise<void> {
     await expect(async () => {
       await this.getComposeBox().fill(content);
-      await expect(this.getButton("Post")).toBeEnabled({ timeout: 1000 });
+      await expect(this.getButton("Publicar")).toBeEnabled({ timeout: 1000 });
     }).toPass();
   }
 
   async submitPost(): Promise<void> {
-    await this.getButton("Post").click();
+    await this.getButton("Publicar").click();
   }
 
   /** Posts `content` and waits until the saved post is in the feed. */
@@ -197,16 +215,16 @@ export class HomePage extends BasePage {
   // ── Assertions ──────────────────────────────────────────────
 
   async expectUnauthenticated(): Promise<void> {
-    await this.expectHeading("Welcome back");
+    await this.expectHeading("Hola de nuevo");
     await expect(
-      this.page.getByText("Sign in to your account to continue")
+      this.page.getByText("Iniciá sesión en tu cuenta para continuar")
     ).toBeVisible();
   }
 
   async expectAuthenticated(userName: string): Promise<void> {
     await expect(this.getByTestId("navbar")).toBeVisible();
     await expect(this.getByTestId("navbar").getByText(userName)).toBeVisible();
-    await expect(this.getButton("Sign out")).toBeVisible();
+    await expect(this.getButton("Cerrar sesión")).toBeVisible();
   }
 
   /** Cards whose text contains `text`: a spec's own posts, by their unique names. */
@@ -238,7 +256,7 @@ export class HomePage extends BasePage {
 
   async expectPostFormVisible(): Promise<void> {
     await expect(this.getByTestId("compose-area")).toBeVisible();
-    await expect(this.getButton("Post")).toBeVisible();
+    await expect(this.getButton("Publicar")).toBeVisible();
   }
 
   // ── Feed / Pagination ──────────────────────────────────────

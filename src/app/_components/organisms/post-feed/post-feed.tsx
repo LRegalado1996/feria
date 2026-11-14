@@ -13,7 +13,9 @@ import {
   PostCardSkeleton,
 } from "@/app/_components/molecules/post-card";
 import { RowActions } from "@/app/_components/molecules/row-actions";
+import type { Dictionary } from "@/content";
 import { reportError } from "@/lib/errors/client";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useCreatePost, useDeletePost, useGetPosts } from "@/lib/hooks/post";
 import { useNow } from "@/lib/hooks/ui";
 
@@ -44,6 +46,8 @@ function excerpt(text: string) {
  * behind a confirmation.
  */
 export function PostFeed({ currentUser, renderedAt }: PostFeedProps) {
+  const { common, post: copy } = useDictionary();
+  const locale = useLocale();
   const now = useNow(renderedAt);
   const { attachSentinel, ...feed } = useGetPosts();
   const createPost = useCreatePost({ queryKey: feed.queryKey, currentUser });
@@ -58,12 +62,12 @@ export function PostFeed({ currentUser, renderedAt }: PostFeedProps) {
   const handleConfirmDelete = async (id: number) => {
     try {
       await deletePost.mutateAsync({ id });
-      toast.success("Post deleted.");
+      toast.success(copy.delete.success);
     } catch (error) {
       // The delete mutation leaves reporting to this catch (its meta), so a
       // failure is reported once.
       reportError(error, { action: "Post.delete" });
-      toast.error("The post was not deleted. Try again.");
+      toast.error(copy.delete.failed);
     }
 
     setPendingDelete(null);
@@ -81,18 +85,21 @@ export function PostFeed({ currentUser, renderedAt }: PostFeedProps) {
       <div data-testid="post-list">
         <FeedBody
           attachSentinel={attachSentinel}
+          copy={copy.feed}
           feed={feed}
+          locale={locale}
           now={now}
           onDelete={(pending) => {
             returnFocusTo.current = pending.trigger;
             setPendingDelete(pending);
           }}
+          retryLabel={common.tryAgain}
           viewerId={currentUser?.id}
         />
       </div>
 
       <ConfirmDialog
-        description="It disappears from the feed for everyone. This cannot be undone."
+        description={copy.delete.description}
         isPending={deletePost.isPending}
         onCloseAutoFocus={(event) => {
           // Back to the menu the delete came from, while its post is there;
@@ -113,7 +120,7 @@ export function PostFeed({ currentUser, renderedAt }: PostFeedProps) {
           }
         }}
         open={pendingDelete !== null}
-        title="Delete this post?"
+        title={copy.delete.title}
       />
     </div>
   );
@@ -121,21 +128,27 @@ export function PostFeed({ currentUser, renderedAt }: PostFeedProps) {
 
 function FeedBody({
   attachSentinel,
+  copy,
   feed,
+  locale,
   now,
   onDelete,
+  retryLabel,
   viewerId,
 }: {
   attachSentinel: ReturnType<typeof useGetPosts>["attachSentinel"];
+  copy: Dictionary["post"]["feed"];
   feed: Omit<ReturnType<typeof useGetPosts>, "attachSentinel">;
+  locale: ReturnType<typeof useLocale>;
   now: number;
   onDelete: (pending: PendingDelete) => void;
+  retryLabel: string;
   viewerId: string | undefined;
 }) {
   if (feed.isPending) {
     return (
       <div aria-busy="true" data-testid="feed-skeleton">
-        <output className="sr-only">Loading posts</output>
+        <output className="sr-only">{copy.loading}</output>
         <PostCardSkeleton />
         <PostCardSkeleton />
         <PostCardSkeleton />
@@ -146,22 +159,18 @@ function FeedBody({
   if (feed.isError || !feed.posts) {
     return (
       <FeedError
-        message="The feed did not load."
+        message={copy.loadFailed}
         onRetry={() => {
           feed.refetch();
         }}
+        retryLabel={retryLabel}
         testId="feed-error"
       />
     );
   }
 
   if (feed.posts.length === 0) {
-    return (
-      <EmptyState
-        icon={MessageSquare}
-        message="No posts yet. Be the first to post!"
-      />
-    );
+    return <EmptyState icon={MessageSquare} message={copy.empty} />;
   }
 
   return (
@@ -186,6 +195,7 @@ function FeedBody({
           author={{ name: post.createdBy.name, image: post.createdBy.image }}
           content={post.name}
           key={post.id}
+          locale={locale}
           now={now}
           timestamp={new Date(post.createdAt)}
         />
@@ -198,10 +208,11 @@ function FeedBody({
       )}
       {feed.isFetchNextPageError && (
         <FeedError
-          message="Older posts did not load."
+          message={copy.loadMoreFailed}
           onRetry={() => {
             feed.fetchNextPage();
           }}
+          retryLabel={retryLabel}
           testId="feed-more-error"
         />
       )}
@@ -217,10 +228,12 @@ function FeedBody({
 function FeedError({
   message,
   onRetry,
+  retryLabel,
   testId,
 }: {
   message: string;
   onRetry: () => void;
+  retryLabel: string;
   testId: string;
 }) {
   return (
@@ -231,7 +244,7 @@ function FeedError({
     >
       <p className="text-sm text-muted-foreground">{message}</p>
       <Button onClick={onRetry} size="sm" variant="outline">
-        Try again
+        {retryLabel}
       </Button>
     </div>
   );
