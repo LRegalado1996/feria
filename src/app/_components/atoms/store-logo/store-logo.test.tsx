@@ -1,9 +1,28 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
-import { LOGO_TAG_PATH } from "@/lib/brand/logo";
+import {
+  LOGO_LETTERS,
+  LOGO_TAG_PATH,
+  type LogoVariant,
+} from "@/lib/brand/logo";
 
 import { StoreLogo, type StoreLogoProps } from "./store-logo";
+
+/**
+ * What each variant must draw after the tag: every letter of the drawing with
+ * its group's placement and its own. The drawing itself is pinned to the
+ * approved artwork in `src/lib/brand/logo.test.ts`.
+ */
+function expectedLetters(variant: LogoVariant) {
+  return LOGO_LETTERS[variant].flatMap((group) =>
+    group.glyphs.map((glyph) => ({
+      d: glyph.d,
+      group: group.transform,
+      transform: glyph.transform ?? null,
+    }))
+  );
+}
 
 function setup(props: StoreLogoProps = {}) {
   render(<StoreLogo {...props} />);
@@ -14,6 +33,11 @@ function setup(props: StoreLogoProps = {}) {
   return {
     letters: slot("store-logo-letters"),
     logo,
+    drawnLetters: [...logo.querySelectorAll("g > g > path")].map((path) => ({
+      d: path.getAttribute("d"),
+      group: path.parentElement?.getAttribute("transform"),
+      transform: path.getAttribute("transform"),
+    })),
     paths: [...logo.querySelectorAll("path")],
     tag: slot("store-logo-tag"),
   };
@@ -21,7 +45,7 @@ function setup(props: StoreLogoProps = {}) {
 
 describe("StoreLogo", () => {
   test("is an image named after the brand: the tag on the accent, the monogram and the name in the foreground", () => {
-    const { letters, logo, paths, tag } = setup();
+    const { drawnLetters, letters, logo, paths, tag } = setup();
 
     expect(logo.tagName).toBe("svg");
     expect(logo).toHaveAttribute("data-slot", "store-logo");
@@ -31,15 +55,19 @@ describe("StoreLogo", () => {
     expect(tag).toHaveAttribute("d", LOGO_TAG_PATH);
     expect(tag).toHaveClass("fill-store-accent");
     expect(letters).toHaveClass("fill-store-foreground");
-    // The tag, L, R and the six letters of MARKET.
+    // The tag, then L, R and the six letters of MARKET, each in its place.
     expect(paths).toHaveLength(9);
+    expect(drawnLetters).toEqual(expectedLetters("full"));
+    expect(drawnLetters).toHaveLength(8);
   });
 
   test("the mark keeps the tag and the monogram, larger, and drops the name", () => {
-    const { letters, logo, paths } = setup({ variant: "mark" });
+    const { drawnLetters, letters, logo, paths } = setup({ variant: "mark" });
 
     expect(logo).toHaveAttribute("data-variant", "mark");
     expect(paths).toHaveLength(3);
+    expect(drawnLetters).toEqual(expectedLetters("mark"));
+    expect(drawnLetters).toHaveLength(2);
     expect(letters?.firstElementChild).toHaveAttribute(
       "transform",
       "translate(42.6 19) scale(.62)"
