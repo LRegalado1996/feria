@@ -25,7 +25,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done        |
 | [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | in progress |
 | [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done        |
-| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | todo        |
+| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | done        |
 | [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | todo        |
 
 ### M1 Brand
