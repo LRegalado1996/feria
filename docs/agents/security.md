@@ -20,7 +20,7 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 
 ## Encode for every sink
 
-- **CSS and `href` from the database:** a store's colors reach a `style` attribute and its links an `href`. Both are validated when they are stored, by the schema and (colors) by a database check: a color is `#` and six hex digits, a link is `https://` only, never `javascript:`.
+- **CSS and `href` from the database:** a store's colors reach a `style` attribute and its links an `href`. Both are validated when they are stored, by the schema and (colors) by a database check: a color is `#` and six hex digits; a link is `https://` only, never `javascript:`, carries no user name, and a social link stays on its own site.
 - **CSV:** quote every field, escape quotes and newlines, and prefix a cell starting with `=`, `+`, `-`, `@`, tab or carriage return with `'`: spreadsheets run it as a formula.
 - **Email HTML:** escape every interpolated value.
 - **User HTML:** a DOM-free sanitizer, never `dangerouslySetInnerHTML` on raw input.

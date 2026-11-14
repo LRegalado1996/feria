@@ -17,6 +17,7 @@ Lucas can create a new store in a few minutes, and each store can keep its own d
 - Theme editor: the five store colors with pickers, a live preview of a storefront header and article card, a contrast warning that blocks an unreadable pair, and "reset to default".
 - WhatsApp number validated and stored in international format.
 - Saving invalidates the cached store so the storefront updates at once.
+- `store.update` (FER-008) replaces the whole store, texts included, and the last save wins. The settings form sends every field it loaded, and two people editing the same store must not silently undo each other: refuse a save made from a stale copy (compare `updatedAt`) and say so.
 
 ## Acceptance criteria
 

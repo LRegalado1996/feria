@@ -1,3 +1,6 @@
+import { readdirSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, test } from "vitest";
 
 import {
@@ -97,6 +100,36 @@ describe("storeSlugSchema", () => {
   });
 });
 
+describe("RESERVED_STORE_SLUGS", () => {
+  const appDirectory = path.join(import.meta.dirname, "../../../app");
+
+  /** The folders of `directory` that are a literal URL segment. */
+  function literalSegments(directory: string) {
+    return readdirSync(directory, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          !entry.name.startsWith("[") &&
+          !entry.name.startsWith("_") &&
+          !entry.name.startsWith("(")
+      )
+      .map((entry) => entry.name);
+  }
+
+  // A page added at the top level without its name here would shadow, or be
+  // shadowed by, a store of that name. This fails until the list (and the
+  // database check built from it) has it.
+  test("holds every top-level route of the app", () => {
+    const routes = [
+      ...literalSegments(appDirectory),
+      ...literalSegments(path.join(appDirectory, "[locale]")),
+    ];
+
+    expect(routes).toEqual(["api", "design"]);
+    expect(RESERVED_STORE_SLUGS).toEqual(expect.arrayContaining(routes));
+  });
+});
+
 describe("getStoreBySlugSchema", () => {
   test("accepts a store address", () => {
     expect(getStoreBySlugSchema.parse({ slug: "lr-market" })).toEqual({
@@ -188,17 +221,51 @@ describe("createStoreSchema", () => {
     expect(createStoreSchema.safeParse(rest).success).toBe(false);
   });
 
-  test("accepts text on a surface that just reaches 4.5:1", () => {
-    // #111312 on #7d7d7d is 4.53:1.
-    expect(issuesOf({ colorSurface: "#7d7d7d" })).toEqual([]);
+  test("accepts a surface the muted text just reaches 4.5:1 on", () => {
+    // The default muted text, #595b59, on #d2d2d2 is 4.53:1.
+    expect(issuesOf({ colorSurface: "#d2d2d2" })).toEqual([]);
   });
 
-  test("refuses text on a surface one step short of 4.5:1, with the ratio it has", () => {
-    // #111312 on #7c7c7c is 4.469:1: truncated, so it never reads as 4.5.
-    expect(issuesOf({ colorSurface: "#7c7c7c" })).toEqual([
+  test("refuses a surface one step darker, with the ratio it has", () => {
+    // On #d1d1d1 it is 4.486:1: truncated, so it never reads as the 4.5 it
+    // failed to reach. The regular text still passes there, at 12.2:1.
+    expect(issuesOf({ colorSurface: "#d1d1d1" })).toEqual([
       [
         "colorSurface",
-        "The text color on the surface color has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
+        "The small muted text on the surface color has a contrast of 4.48:1. It needs at least 4.5:1 to be readable",
+      ],
+    ]);
+  });
+
+  test("names the regular text too once the surface is dark enough to fail it", () => {
+    // #111312 on #7d7d7d is 4.53:1 and on #7c7c7c is 4.469:1.
+    const textMessage = [
+      "colorSurface",
+      "The text color on the surface color has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
+    ];
+
+    expect(issuesOf({ colorSurface: "#7c7c7c" })).toContainEqual(textMessage);
+    expect(issuesOf({ colorSurface: "#7d7d7d" })).toEqual([
+      [
+        "colorSurface",
+        "The small muted text on the surface color has a contrast of 1.66:1. It needs at least 4.5:1 to be readable",
+      ],
+    ]);
+  });
+
+  test("refuses a text color whose muted shade cannot be read on the placeholder behind a missing photo", () => {
+    // The warm palette with #2b1a12 passes every other pair; #26160f passes this one too.
+    const warm = {
+      colorAccent: "#ff8a3d",
+      colorBackground: "#fff4e6",
+      colorContrast: "#3d1f47",
+    };
+
+    expect(issuesOf({ ...warm, colorForeground: "#26160f" })).toEqual([]);
+    expect(issuesOf({ ...warm, colorForeground: "#2b1a12" })).toEqual([
+      [
+        "colorForeground",
+        "The small muted text on the placeholder behind a missing photo has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
       ],
     ]);
   });
@@ -243,6 +310,14 @@ describe("createStoreSchema", () => {
         "colorForeground",
         "The small muted text on the background color has a contrast of 2.52:1. It needs at least 4.5:1 to be readable",
       ],
+      [
+        "colorSurface",
+        "The small muted text on the surface color has a contrast of 2.52:1. It needs at least 4.5:1 to be readable",
+      ],
+      [
+        "colorForeground",
+        "The small muted text on the placeholder behind a missing photo has a contrast of 2.21:1. It needs at least 4.5:1 to be readable",
+      ],
     ]);
   });
 
@@ -280,9 +355,58 @@ describe("createStoreSchema", () => {
     ["plain http", "http://instagram.com/sample"],
     ["a bare handle", "@sample"],
     ["empty", ""],
-  ])("refuses %s as a link", (_case, link) => {
+    ["another site", "https://example.test/instagram.com"],
+    [
+      "a host that only starts like Instagram's",
+      "https://instagram.com.example.test/sample",
+    ],
+    [
+      "Instagram as a user name in front of another host",
+      "https://instagram.com@example.test/login",
+    ],
+    ["a port", "https://instagram.com:8443/sample"],
+    ["backslashes for slashes", "https:\\\\instagram.com\\sample"],
+  ])("refuses %s as the Instagram link", (_case, link) => {
     expect(issuesOf({ instagramUrl: link })).toEqual([
-      ["instagramUrl", "Enter a full https:// link"],
+      [
+        "instagramUrl",
+        "Enter a full link, such as https://instagram.com/my-store",
+      ],
+    ]);
+  });
+
+  test.each([
+    ["instagramUrl", "https://instagram.com/sample"],
+    ["instagramUrl", "https://www.instagram.com/sample/?hl=es"],
+    ["tiktokUrl", "https://tiktok.com/@sample"],
+    ["tiktokUrl", "https://www.tiktok.com/@sample"],
+    // Any https host: the image pipeline (FER-011) decides where logos live.
+    ["logoUrl", "https://images.example.test/logo@2x.png"],
+  ])("accepts %s %s, trimmed", (field, link) => {
+    const parsed = createStoreSchema.parse(makeStore({ [field]: ` ${link} ` }));
+
+    expect(parsed[field as "logoUrl"]).toBe(link);
+  });
+
+  test.each([
+    ["an Instagram link", "https://instagram.com/sample"],
+    ["plain http", "http://tiktok.com/@sample"],
+  ])("refuses %s as the TikTok link", (_case, link) => {
+    expect(issuesOf({ tiktokUrl: link })).toEqual([
+      ["tiktokUrl", "Enter a full link, such as https://tiktok.com/@my-store"],
+    ]);
+  });
+
+  test.each([
+    [
+      "a user name and password",
+      "https://user:secret@images.example.test/logo.png",
+    ],
+    ["a script URL", ["javascript", "alert(1)"].join(":")],
+    ["plain http", "http://images.example.test/logo.png"],
+  ])("refuses a logo link with %s", (_case, link) => {
+    expect(issuesOf({ logoUrl: link })).toEqual([
+      ["logoUrl", "Enter a full link, such as https://example.com/logo.png"],
     ]);
   });
 
@@ -371,7 +495,13 @@ describe("updateStoreSchema", () => {
     });
   });
 
-  test.each([["0"], ["-1"], ["1.5"], [""], ["abc"]])(
+  test("accepts the largest id the column holds", () => {
+    expect(
+      updateStoreSchema.parse({ ...makeStore(), id: "2147483647" }).id
+    ).toBe(2_147_483_647);
+  });
+
+  test.each([["0"], ["-1"], ["1.5"], [""], ["abc"], ["2147483648"]])(
     "refuses %j as an id",
     (id) => {
       expect(updateStoreSchema.safeParse({ ...makeStore(), id }).success).toBe(
@@ -382,12 +512,12 @@ describe("updateStoreSchema", () => {
 
   test("checks the contrast of an edited palette too", () => {
     const result = updateStoreSchema.safeParse({
-      ...makeStore({ colorSurface: "#7c7c7c" }),
+      ...makeStore({ colorSurface: "#d1d1d1" }),
       id: 7,
     });
 
     expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      "The text color on the surface color has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
+      "The small muted text on the surface color has a contrast of 4.48:1. It needs at least 4.5:1 to be readable",
     ]);
   });
 
