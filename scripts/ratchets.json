@@ -221,7 +221,8 @@
         "src/app/_components/atoms/store-*/**",
         "src/app/_components/molecules/store-*/**",
         "src/app/_components/organisms/store-*/**",
-        "src/app/*/design/**"
+        "src/app/*/design/**",
+        "src/app/*/?store?/**"
       ],
       "baseline": "scripts/ratchets/storefront-style-outside-storefront.baseline.txt"
     }
