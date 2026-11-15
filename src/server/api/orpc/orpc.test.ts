@@ -309,18 +309,12 @@ describe("storeProcedure", () => {
 
     await callStore({ storeSlug: "lr-market" });
 
-    const { params, sql } = renderQuery(
-      db.$["select.where"].mock.calls[0]?.[0]
-    );
-    expect(params).toEqual([
-      "lr-market",
-      "test-user-id",
-      "superadmin",
-      "test-user-id",
-    ]);
-    expect(sql).toContain('"store"."slug" = $1');
-    expect(sql).toContain('"user"."role" = $3');
-    expect(sql).toContain('"store_member"."userId" = $4');
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: ["lr-market", "test-user-id", "superadmin", "test-user-id"],
+      sql:
+        '("store"."slug" = $1 and (exists (select 1 from "user" where ("user"."id" = $2 and "user"."role" = $3)) or ' +
+        'exists (select 1 from "store_member" where ("store_member"."storeId" = "store"."id" and "store_member"."userId" = $4))))',
+    });
   });
 
   test("answers NOT_FOUND for a store the caller may not work on, as for one that does not exist", async () => {

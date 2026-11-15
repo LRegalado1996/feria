@@ -93,7 +93,7 @@ describe("createSuperadmin", () => {
     async (_case, env, message) => {
       const { run } = setup();
 
-      await expect(run(env)).rejects.toThrow(message);
+      await expect(run(env)).rejects.toMatchObject({ message });
       expect(createAccount).not.toHaveBeenCalled();
     }
   );

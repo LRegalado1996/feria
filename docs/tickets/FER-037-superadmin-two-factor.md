@@ -12,7 +12,7 @@ The one login that reaches every store cannot be taken over with a guessed or le
 ## Scope
 
 - Better Auth's `twoFactor` plugin (TOTP), required of superadmins on the live production deployment only (`VERCEL_ENV === "production"`), so qa, previews and local work stay usable.
-- Enforced in pages and in `superadminProcedure`, not only at sign-in; a superadmin cannot turn it off on production.
+- Enforced in pages and in every procedure a superadmin can call (`protectedProcedure` and everything built on it, `storeProcedure` included, since a superadmin reaches every store through it), not only at sign-in; a superadmin cannot turn it off on production.
 - The sign-in form handles `twoFactorRedirect` (`docs/agents/security.md` § Better Auth).
 - The plugin's own routes that duplicate an operation the app authorizes answer 404.
 
