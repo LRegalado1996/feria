@@ -92,6 +92,7 @@ describe("AdminShell", () => {
       [
         ["Articles", "/en/admin/lr-market/products", null],
         ["Categories", "/en/admin/lr-market/categories", null],
+        ["Filters", "/en/admin/lr-market/filters", null],
         ["Orders", "/en/admin/lr-market/orders", "page"],
         ["Home", "/en/admin/lr-market/home", null],
         ["Settings", "/en/admin/lr-market/settings", null],
@@ -104,6 +105,7 @@ describe("AdminShell", () => {
       [
         ["Artículos", "/admin/lr-market/products", null],
         ["Categorías", "/admin/lr-market/categories", null],
+        ["Filtros", "/admin/lr-market/filters", null],
         ["Pedidos", "/admin/lr-market/orders", "page"],
         ["Inicio", "/admin/lr-market/home", null],
         ["Ajustes", "/admin/lr-market/settings", null],
@@ -111,7 +113,7 @@ describe("AdminShell", () => {
       ],
     ],
   ] as const)(
-    "in %s, lists the store's six sections, the one on screen current",
+    "in %s, lists the store's seven sections, the one on screen current",
     (locale, name, expected) => {
       const { links } = setup({ locale, location: inStore("orders") });
 

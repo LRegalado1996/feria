@@ -66,6 +66,80 @@ export const admin = {
     body: "Esta sección todavía se está construyendo. Va a aparecer acá en una próxima versión.",
     title: "Próximamente",
   },
+  filters: {
+    add: {
+      pending: "Agregando…",
+      submit: "Agregar filtro",
+      title: "Nuevo filtro",
+    },
+    addValue: {
+      pending: "Agregando…",
+      submit: "Agregar valor",
+      title: "Nuevo valor de «{name}»",
+    },
+    count: "{count} artículos",
+    countOne: "1 artículo",
+    delete: {
+      action: "Eliminar filtro: {name}",
+      confirm: "Eliminar filtro",
+      description:
+        "Se va a eliminar «{name}» con sus {count} valores, y se les quita a los artículos que los tienen. No se puede deshacer.",
+      title: "¿Eliminar el filtro?",
+    },
+    deleteValue: {
+      action: "Eliminar valor: {name}",
+      confirm: "Eliminar valor",
+      inUse:
+        "«{name}» está en {count}. Se les va a quitar a esos artículos. No se puede deshacer.",
+      unused: "Se va a eliminar «{name}». No se puede deshacer.",
+      title: "¿Eliminar el valor?",
+    },
+    description:
+      "Con los filtros tus clientes encuentran lo que buscan, por ejemplo por color. Cada filtro tiene su propio enlace: /tu-tienda/products?color=dorado.",
+    edit: {
+      action: "Renombrar filtro: {name}",
+      cancel: "Cancelar",
+      pending: "Guardando…",
+      submit: "Guardar",
+      valueAction: "Editar valor: {name}",
+    },
+    empty:
+      "Todavía no hay filtros. Agregá el primero arriba, por ejemplo Color.",
+    emptyValues: "Este filtro todavía no tiene valores.",
+    errors: {
+      duplicate: "Ya hay uno con ese nombre acá.",
+      generic: "No pudimos guardar el cambio. Probá de nuevo.",
+      load: "No pudimos cargar los filtros.",
+      nameRequired: "Escribí el nombre en español.",
+      nameTooLong: "Usá hasta 60 caracteres.",
+    },
+    fields: {
+      nameEn: "Nombre en inglés (opcional)",
+      nameEnHint:
+        "Si lo dejás vacío, en inglés se muestra el nombre en español.",
+      nameEs: "Nombre en español",
+      swatch: "Color de muestra",
+      swatchAdd: "Agregar color de muestra",
+      swatchHint: "Un punto de este color aparece al lado del nombre.",
+      swatchRemove: "Quitar color",
+    },
+    list: "Filtros de la tienda",
+    move: {
+      down: "Bajar: {name}",
+      moved: "«{name}» quedó en el lugar {position} de {total}.",
+      up: "Subir: {name}",
+    },
+    title: "Filtros",
+    toasts: {
+      created: "Filtro agregado.",
+      deleted: "Filtro eliminado.",
+      renamed: "Filtro renombrado.",
+      valueCreated: "Valor agregado.",
+      valueDeleted: "Valor eliminado.",
+      valueUpdated: "Valor guardado.",
+    },
+    values: "Valores de «{name}»",
+  },
   landing: {
     inactive: "Inactiva",
     noStoresBody:
@@ -96,6 +170,7 @@ export const admin = {
   },
   storeSections: {
     categories: "Categorías",
+    filters: "Filtros",
     home: "Inicio",
     orders: "Pedidos",
     products: "Artículos",

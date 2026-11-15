@@ -32,6 +32,7 @@ describe("admin paths", () => {
 
   test.each([
     ["products", true],
+    ["filters", true],
     ["users", true],
     ["metrics", false],
     ["", false],

@@ -6,10 +6,15 @@ import { Pool } from "pg";
 import * as schema from "../../server/db/schema";
 import {
   account,
+  attribute,
+  attributeTranslation,
+  attributeValue,
+  attributeValueTranslation,
   category,
   categoryTranslation,
   post,
   product,
+  productAttributeValue,
   productTranslation,
   store,
   storeMember,
@@ -85,6 +90,24 @@ export interface DbFixture {
         categoryId: number,
         title: string
       ) => Promise<{ id: number }>;
+      /**
+       * A filter of the store (FER-033) named in Spanish, with these values
+       * in order, each carried by the articles listed. Deleted with its
+       * store.
+       */
+      createFilter: (
+        storeId: number,
+        filter: {
+          nameEs: string;
+          slug: string;
+          values: {
+            articleIds?: number[];
+            nameEs: string;
+            slug: string;
+            swatchColor?: string;
+          }[];
+        }
+      ) => Promise<{ id: number; valueIds: number[] }>;
       /**
        * A login that can sign in through the form (FER-009): its role, a
        * password, and a membership in each store given. Unique per call.
@@ -239,6 +262,73 @@ export const test = userTest.extend<DbFixture>({
           });
 
           return created;
+        },
+
+        createFilter: async (
+          storeId: number,
+          {
+            nameEs,
+            slug,
+            values,
+          }: {
+            nameEs: string;
+            slug: string;
+            values: {
+              articleIds?: number[];
+              nameEs: string;
+              slug: string;
+              swatchColor?: string;
+            }[];
+          }
+        ): Promise<{ id: number; valueIds: number[] }> => {
+          const [created] = await db
+            .insert(attribute)
+            .values({ position: 0, slug, storeId })
+            .returning({ id: attribute.id });
+
+          if (!created) {
+            throw new Error("Inserting a filter returned no row");
+          }
+
+          await db
+            .insert(attributeTranslation)
+            .values({ attributeId: created.id, locale: "es", name: nameEs });
+          const valueIds: number[] = [];
+
+          for (const [position, value] of values.entries()) {
+            const [row] = await db
+              .insert(attributeValue)
+              .values({
+                attributeId: created.id,
+                position,
+                slug: value.slug,
+                swatchColor: value.swatchColor ?? null,
+              })
+              .returning({ id: attributeValue.id });
+
+            if (!row) {
+              throw new Error("Inserting a filter value returned no row");
+            }
+
+            await db.insert(attributeValueTranslation).values({
+              attributeValueId: row.id,
+              locale: "es",
+              name: value.nameEs,
+            });
+
+            if (value.articleIds && value.articleIds.length > 0) {
+              await db.insert(productAttributeValue).values(
+                value.articleIds.map((productId) => ({
+                  attributeValueId: row.id,
+                  productId,
+                }))
+              );
+            }
+
+            valueIds.push(row.id);
+          }
+
+          return { id: created.id, valueIds };
         },
 
         createLogin: async ({
