@@ -54,10 +54,12 @@ export function generateOrderCode() {
 
 /**
  * A phone shown on the order's public page, which anyone with the link can
- * open: the country code and the last three digits, the rest hidden.
+ * open: the last three digits, after `+598` for a Uruguayan number or the
+ * bare `+` for any other (whose country code length varies), the rest
+ * hidden.
  */
 export function maskPhone(phone: string) {
-  const country = phone.startsWith("+598") ? 4 : 3;
+  const country = phone.startsWith("+598") ? 4 : 1;
 
   return `${phone.slice(0, country)}${"•".repeat(Math.max(phone.length - country - 3, 0))}${phone.slice(-3)}`;
 }
@@ -127,6 +129,9 @@ async function lockOrderableArticles(
         eq(product.status, "published")
       )
     )
+    // In id order, like every other writer locking several articles, so
+    // two of them never each hold what the other waits for.
+    .orderBy(asc(product.id))
     .for("share");
   const titles = await tx
     .select({
@@ -161,29 +166,45 @@ export async function createOrder(
   {
     clientKey,
     currencyCode,
-    now = new Date(),
+    now: givenNow,
     storeId,
     values,
   }: StoreScope & {
     /** A keyed hash of the client's IP, `null` when the platform gives none. */
     clientKey: string | null;
     currencyCode: (typeof customerOrder.$inferInsert)["currencyCode"];
+    /** The moment the order is taken at; the database's clock unless given. */
     now?: Date;
     values: Omit<CreateOrderValues, "storeSlug">;
   }
 ) {
   return await db.transaction(async (tx) => {
-    // One order at a time per phone (its hourly count) and per store (its
-    // codes and request keys); always in this order, so two never deadlock.
+    // One order at a time per phone and per client (their hourly counts)
+    // and per store (its codes and request keys); always in this order, so
+    // two never deadlock.
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`order.phone:${values.customerPhone}`}))`
     );
+
+    if (clientKey !== null) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`order.client:${clientKey}`}))`
+      );
+    }
+
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`order.store:${storeId}`}))`
     );
+    // Read after the locks (docs/agents/database.md § Time): an order that
+    // waited on one is stamped after the orders it waited for.
+    const now = givenNow ?? (await databaseNow(tx));
 
     const [already] = await tx
-      .select({ code: customerOrder.code, token: customerOrder.token })
+      .select({
+        code: customerOrder.code,
+        customerPhone: customerOrder.customerPhone,
+        token: customerOrder.token,
+      })
       .from(customerOrder)
       .where(
         and(
@@ -193,7 +214,15 @@ export async function createOrder(
       );
 
     if (already) {
-      return already;
+      // The same submit again is the same phone: anything else reusing the
+      // key never receives another shopper's order link.
+      if (already.customerPhone !== values.customerPhone) {
+        throw new ORPCError("CONFLICT", {
+          message: "That request was already used for another order",
+        });
+      }
+
+      return { code: already.code, token: already.token };
     }
 
     assertUnderLimit(
@@ -255,6 +284,7 @@ export async function createOrder(
       .values({
         clientKey,
         code,
+        createdAt: now,
         currencyCode,
         customerName: values.customerName,
         customerPhone: values.customerPhone,
@@ -278,12 +308,29 @@ export async function createOrder(
     await tx
       .insert(orderItem)
       .values(lines.map((line) => ({ ...line, orderId: created.id })));
-    await tx
-      .insert(orderStatusEvent)
-      .values({ changedById: null, orderId: created.id, status: "received" });
+    await tx.insert(orderStatusEvent).values({
+      changedById: null,
+      createdAt: now,
+      orderId: created.id,
+      status: "received",
+    });
 
     return { code: created.code, token: created.token };
   });
+}
+
+/** The database's clock at this moment, not the transaction's start. */
+async function databaseNow(tx: DatabaseClient) {
+  const result = await tx.execute<{ now: Date | string }>(
+    sql`select clock_timestamp() as now`
+  );
+  const value = result.rows[0]?.now;
+
+  if (value === undefined) {
+    throw new Error("The database gave no time");
+  }
+
+  return new Date(value);
 }
 
 /** A code the store has not used, under the store's order lock. */

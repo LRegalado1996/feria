@@ -81,7 +81,9 @@ export const orderItem = pgTable(
     quantity: integer().notNull(),
   },
   (table) => [
-    index().on(table.orderId),
+    // Each article once per order, with its quantity; a deleted article's
+    // null never clashes.
+    unique().on(table.orderId, table.productId),
     index().on(table.productId),
     check("order_item_price", sql`${table.unitPriceAmount} >= 0`),
     check(

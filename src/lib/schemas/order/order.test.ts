@@ -143,6 +143,27 @@ describe("createOrderSchema", () => {
       true,
     ],
     ["a request key that is not a uuid", { requestKey: "abc" }, false],
+    // The checkout draws a v4 (`crypto.randomUUID()`); any other is not its.
+    [
+      "a v4 request key",
+      { requestKey: "22222222-2222-4222-8222-222222222222" },
+      true,
+    ],
+    [
+      "the nil uuid",
+      { requestKey: "00000000-0000-0000-0000-000000000000" },
+      false,
+    ],
+    [
+      "a v1 request key",
+      { requestKey: "33333333-3333-1333-8333-333333333333" },
+      false,
+    ],
+    [
+      "a v7 request key",
+      { requestKey: "44444444-4444-7444-8444-444444444444" },
+      false,
+    ],
     ["no request key", { requestKey: undefined }, false],
     ["another language", { locale: "fr" }, false],
   ])("%s is accepted: %s", (_case, overrides, accepted) => {

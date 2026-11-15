@@ -13,6 +13,7 @@ import {
 } from "@/lib/schemas/order";
 import { publicProcedure, storeProcedure } from "@/server/api/orpc";
 import { orderClientKey } from "@/server/api/utils/client-key";
+import { safeRequestLogger } from "@/server/api/utils/logger";
 import { writeToStore } from "@/server/api/utils/write-to-store";
 import {
   changeOrderStatus,
@@ -41,9 +42,17 @@ export const orderRouter = {
 
       const { storeSlug, ...values } = input;
       const store = await getActiveStoreBySlug(context.db, { slug: storeSlug });
+      const clientKey = orderClientKey(context.headers);
+
+      // The per-client limit fails open (only the phone limit applies); on
+      // a deployment, where the platform always gives the IP, that is
+      // worth seeing in the request's log line.
+      if (clientKey === null) {
+        safeRequestLogger()?.set({ order: { clientLimit: "skipped" } });
+      }
 
       return await createOrder(context.db, {
-        clientKey: orderClientKey(context.headers),
+        clientKey,
         currencyCode: store.currencyCode,
         storeId: store.id,
         values,

@@ -68,6 +68,7 @@ const TITLES_SQL = '"product_translation"."productId" in ($1, $2)';
 const CODE_SQL =
   '("customer_order"."storeId" = $1 and "customer_order"."code" = $2)';
 const LOCK_SQL = "select pg_advisory_xact_lock(hashtext($1))";
+const CLOCK_SQL = "select clock_timestamp() as now";
 
 /** `minutes` after an hour ago: an order still inside the window. */
 function minutesIntoWindow(minutes: number) {
@@ -100,20 +101,23 @@ function makeValues(overrides: Record<string, unknown> = {}) {
  *   the client, oldest first;
  * - `articles` / `titles`: what the store's orderable articles hold;
  * - `takenCodes`: the codes the store already used;
- * - `created`: what the order insert returns (`null`: no row).
+ * - `created`: what the order insert returns (`null`: no row);
+ * - `clock`: what `clock_timestamp()` answers (`null`: no row).
  */
 function setup({
   already = null,
   articles = [makeArticle(), makeArticle({ id: 12, priceAmount: 129_000 })],
   clientTimes = [],
+  clock = NOW,
   created = { code: "33333", id: 70, token: "the-token" },
   phoneTimes = [],
   takenCodes = [],
   titles = [],
 }: {
-  already?: { code: string; token: string } | null;
+  already?: { code: string; customerPhone: string; token: string } | null;
   articles?: ReturnType<typeof makeArticle>[];
   clientTimes?: { createdAt: Date }[];
+  clock?: Date | string | null;
   created?: { code: string; id: number; token: string } | null;
   phoneTimes?: { createdAt: Date }[];
   takenCodes?: string[];
@@ -163,25 +167,36 @@ function setup({
       : await Promise.resolve([])
   );
   db.$["insert.returning"].mockResolvedValue(created ? [created] : []);
+  // The locks answer nothing; the clock answers its row, or none.
+  db.$.execute.mockImplementation(async (query: unknown) =>
+    renderQuery(query).sql === CLOCK_SQL
+      ? await Promise.resolve({ rows: clock === null ? [] : [{ now: clock }] })
+      : await Promise.resolve(null)
+  );
 
+  /** Places the order; `now: null` leaves the time to the database. */
   const create = async ({
     clientKey = CLIENT_KEY,
+    now = NOW,
     values = makeValues(),
   }: {
     clientKey?: string | null;
+    now?: Date | null;
     values?: ReturnType<typeof makeValues>;
   } = {}) =>
     await createOrder(db as never, {
       clientKey,
       currencyCode: "UYU",
-      now: NOW,
+      ...(now === null ? {} : { now }),
       storeId: STORE_ID,
       values,
     });
   const selectWheres = () =>
     db.$["select.where"].mock.calls.map(([where]) => renderQuery(where));
+  const statements = () =>
+    db.$.execute.mock.calls.map(([query]) => renderQuery(query));
 
-  return { create, db, selectWheres };
+  return { create, db, selectWheres, statements };
 }
 
 describe("generateOrderToken", () => {
@@ -219,29 +234,28 @@ describe("generateOrderCode", () => {
 describe("maskPhone", () => {
   test.each([
     ["a Uruguayan number keeps +598", "+59899123456", "+598•••••456"],
-    ["another country keeps 3 characters", "+5491123456789", "+54••••••••789"],
-    ["the shortest phone we accept", "+12345678", "+12•••678"],
-    ["a number with nothing to hide", "+12345", "+12345"],
-    // Shorter than any phone `normalizePhone` accepts: it must still not throw.
-    ["a number shorter than what it keeps", "+1234", "+12234"],
+    // Country codes run 1 to 3 digits: only the `+` is sure to be one.
+    ["another country keeps only +", "+5491123456789", "+••••••••••789"],
+    ["a one-digit country keeps only +", "+12025550123", "+••••••••123"],
+    ["the shortest phone we accept", "+12345678", "+•••••678"],
+    ["a number with nothing to hide", "+123", "+123"],
   ])("%s: %s is %s", (_case, phone, masked) => {
     expect(maskPhone(phone)).toBe(masked);
   });
 });
 
 describe("createOrder", () => {
-  test("takes the phone's lock, then the store's, before reading anything", async () => {
-    const { create, db } = setup();
+  test("locks the phone, the client, then the store, before reading anything", async () => {
+    const { create, db, statements } = setup();
 
     await create();
 
-    expect(
-      db.$.execute.mock.calls.map(([query]) => renderQuery(query))
-    ).toEqual([
+    expect(statements()).toEqual([
       { params: [`order.phone:${PHONE}`], sql: LOCK_SQL },
+      { params: [`order.client:${CLIENT_KEY}`], sql: LOCK_SQL },
       { params: [`order.store:${String(STORE_ID)}`], sql: LOCK_SQL },
     ]);
-    expect(db.$.execute.mock.invocationCallOrder[1] ?? Infinity).toBeLessThan(
+    expect(db.$.execute.mock.invocationCallOrder[2] ?? Infinity).toBeLessThan(
       db.$["select.where"].mock.invocationCallOrder[0] ?? 0
     );
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
@@ -249,9 +263,86 @@ describe("createOrder", () => {
     );
   });
 
+  test("takes no client lock when the platform gave no IP", async () => {
+    const { create, statements } = setup();
+
+    await create({ clientKey: null });
+
+    expect(statements()).toEqual([
+      { params: [`order.phone:${PHONE}`], sql: LOCK_SQL },
+      { params: [`order.store:${String(STORE_ID)}`], sql: LOCK_SQL },
+    ]);
+  });
+
+  test.each([
+    ["a timestamp text", "2026-11-15T13:30:00.000Z"],
+    ["a Date", new Date("2026-11-15T13:30:00.000Z")],
+  ])(
+    "reads the database's clock after the locks, as %s, for the windows and the stamps",
+    async (_case, clock) => {
+      const { create, db, selectWheres, statements } = setup({ clock });
+
+      await create({ now: null });
+
+      expect(statements().slice(3)).toEqual([{ params: [], sql: CLOCK_SQL }]);
+      // An hour before the database's now, not the app server's.
+      expect(selectWheres().slice(1, 3)).toEqual([
+        { params: [PHONE, "2026-11-15T12:30:00.000Z"], sql: PHONE_HOUR_SQL },
+        {
+          params: [CLIENT_KEY, "2026-11-15T12:30:00.000Z"],
+          sql: CLIENT_HOUR_SQL,
+        },
+      ]);
+      const stamped = new Date("2026-11-15T13:30:00.000Z");
+      expect(db.$["insert.values"].mock.calls[0]?.[0]).toMatchObject({
+        createdAt: stamped,
+      });
+      expect(db.$["insert.values"].mock.calls[2]?.[0]).toEqual({
+        changedById: null,
+        createdAt: stamped,
+        orderId: 70,
+        status: "received",
+      });
+    }
+  );
+
+  test("reads no clock when the moment is given", async () => {
+    const { create, statements } = setup({ clock: null });
+
+    await create();
+
+    expect(statements().filter(({ sql }) => sql === CLOCK_SQL)).toEqual([]);
+  });
+
+  test("fails loudly when the database gives no time, reading nothing", async () => {
+    const { create, db } = setup({ clock: null });
+
+    await expect(create({ now: null })).rejects.toThrow(
+      "The database gave no time"
+    );
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("refuses a request key another phone already used, never answering its order", async () => {
+    const { create, db } = setup({
+      already: {
+        code: "ABCDE",
+        customerPhone: "+59898765432",
+        token: "earlier-token",
+      },
+    });
+
+    await expect(create()).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "That request was already used for another order",
+    });
+    expect(db.$["select.orderBy"]).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
+  });
+
   test("answers the order a request key already created, before any limit", async () => {
     const { create, db, selectWheres } = setup({
-      already: { code: "ABCDE", token: "earlier-token" },
+      already: { code: "ABCDE", customerPhone: PHONE, token: "earlier-token" },
       phoneTimes: Array.from({ length: 5 }, () => minutesIntoWindow(1)),
     });
 
@@ -275,11 +366,13 @@ describe("createOrder", () => {
       { params: [PHONE, HOUR_AGO.toISOString()], sql: PHONE_HOUR_SQL },
       { params: [CLIENT_KEY, HOUR_AGO.toISOString()], sql: CLIENT_HOUR_SQL },
     ]);
+    // The articles are locked in id order, so two orders never deadlock.
     expect(
       db.$["select.orderBy"].mock.calls.map((terms) => renderOrderBy(terms))
     ).toEqual([
       '"customer_order"."createdAt" asc',
       '"customer_order"."createdAt" asc',
+      '"product"."id" asc',
     ]);
   });
 
@@ -470,6 +563,7 @@ describe("createOrder", () => {
     expect(order).toEqual({
       clientKey: CLIENT_KEY,
       code: expect.stringMatching(/^[2-9A-HJKMNP-Z]{5}$/u),
+      createdAt: NOW,
       currencyCode: "UYU",
       customerName: "Ana Pérez",
       customerPhone: PHONE,
@@ -501,7 +595,7 @@ describe("createOrder", () => {
           },
         ],
       ],
-      [{ changedById: null, orderId: 70, status: "received" }],
+      [{ changedById: null, createdAt: NOW, orderId: 70, status: "received" }],
     ]);
     expect(db.$["insert.returning"]).toHaveBeenCalledExactlyOnceWith({
       code: customerOrder.code,

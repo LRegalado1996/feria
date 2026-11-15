@@ -27,6 +27,8 @@ const services = vi.hoisted(() => ({
   getOrderByToken: vi.fn(async () => ({ code: "ABCDE" })),
   isStorefrontLaunchedFor: vi.fn(),
   listOrders: vi.fn(async () => ({ items: [{ id: 70 }], nextCursor: null })),
+  // The request's wide-event logger: `set` is what lands on its log line.
+  logSet: vi.fn<(fields: unknown) => void>(),
   // A keyed hash stands in for the real one: derived from the headers the
   // router hands it, so a key from anywhere else would show.
   orderClientKey: vi.fn((headers: Headers) => {
@@ -56,6 +58,10 @@ vi.mock("@/server/services/store", () => ({
 
 vi.mock("@/server/api/utils/client-key", () => ({
   orderClientKey: services.orderClientKey,
+}));
+
+vi.mock("@/server/api/utils/logger", () => ({
+  safeRequestLogger: () => ({ set: services.logSet }),
 }));
 
 vi.mock("@/lib/env/launch", () => ({
@@ -146,6 +152,18 @@ function setup({
   return { ctx: mockCtx, db: mockCtx.db, run };
 }
 
+/**
+ * What the router set on the request's log line under `order`; the shared
+ * interceptor's own `orpc` timing goes through the same logger.
+ */
+function orderLogFields() {
+  return services.logSet.mock.calls.flatMap(([fields]) =>
+    typeof fields === "object" && fields !== null && "order" in fields
+      ? [fields]
+      : []
+  );
+}
+
 const STORE_NOT_FOUND = { code: "NOT_FOUND", message: "Store not found" };
 
 describe("order router: the shopper's side", () => {
@@ -179,6 +197,8 @@ describe("order router: the shopper's side", () => {
     expect(services.orderClientKey).toHaveBeenCalledExactlyOnceWith(
       ctx.headers
     );
+    // With a client key, both limits apply: nothing to flag.
+    expect(orderLogFields()).toEqual([]);
     expect(services.createOrder).toHaveBeenCalledExactlyOnceWith(db, {
       clientKey: "key-of:203.0.113.7",
       currencyCode: "USD",
@@ -206,6 +226,8 @@ describe("order router: the shopper's side", () => {
       db,
       expect.objectContaining({ clientKey: null })
     );
+    // The per-client limit failed open: the request's log line says so.
+    expect(orderLogFields()).toEqual([{ order: { clientLimit: "skipped" } }]);
   });
 
   test("a closed storefront takes no order, before resolving the store", async () => {

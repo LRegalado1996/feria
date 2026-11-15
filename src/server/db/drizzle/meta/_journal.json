@@ -71,6 +71,13 @@
       "when": 1794727331534,
       "tag": "0009_brainy_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794728609932,
+      "tag": "0010_vengeful_bromley",
+      "breakpoints": true
     }
   ]
 }

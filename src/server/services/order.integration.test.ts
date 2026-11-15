@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, inArray } from "drizzle-orm";
-import { afterEach, describe, expect, onTestFinished, test, vi } from "vitest";
+import { eq, inArray, sql } from "drizzle-orm";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   ORDER_STATUSES,
@@ -26,6 +26,8 @@ import { createStore } from "@/server/services/store";
 import {
   backendPid,
   deferred,
+  releaseHeldWriters,
+  releaseOnTeardown,
   waitUntilAdvisoryBlocked,
 } from "@/server/test/two-writers";
 
@@ -49,6 +51,7 @@ const createdStoreIds: number[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
+  releaseHeldWriters();
   await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
 });
@@ -431,6 +434,40 @@ describe("creating an order", () => {
   });
 });
 
+test("a request key reused with another phone is refused, never answered with that order", async () => {
+  const shop = await makeStore();
+  const ring = await makeArticle(shop.id, { title: "Anillo" });
+  const values = orderValues({ productId: ring.id });
+  await place(shop, values);
+
+  await expect(
+    place(shop, { ...values, customerPhone: "+59899000222" })
+  ).rejects.toMatchObject({
+    code: "CONFLICT",
+    message: "That request was already used for another order",
+  });
+});
+
+test("an order is stamped by the database's clock, and its first event with it", async () => {
+  const shop = await makeStore();
+  const ring = await makeArticle(shop.id, { title: "Anillo" });
+  const before = await db.execute<{ now: string }>(
+    sql`select clock_timestamp() as now`
+  );
+
+  const { token } = await place(shop, orderValues({ productId: ring.id }));
+
+  const row = await orderRow(token);
+  expect(row.createdAt.getTime()).toBeGreaterThanOrEqual(
+    new Date(before.rows[0]?.now ?? 0).getTime()
+  );
+  const [event] = await db
+    .select({ createdAt: orderStatusEvent.createdAt })
+    .from(orderStatusEvent)
+    .where(eq(orderStatusEvent.orderId, row.id));
+  expect(event?.createdAt).toEqual(row.createdAt);
+});
+
 describe("abuse limits", () => {
   test("a phone places five orders an hour; the sixth waits for the oldest to leave the window", async () => {
     const shop = await makeStore();
@@ -725,6 +762,66 @@ describe("status moves", () => {
   );
 });
 
+describe("one client ordering in two stores at once", () => {
+  test("the second waits for the first's client lock, so the hourly count is never read stale", async () => {
+    const [storeA, storeB] = [await makeStore(), await makeStore()];
+    const ringA = await makeArticle(storeA.id, { title: "Anillo" });
+    const ringB = await makeArticle(storeB.id, { title: "Anillo" });
+    const clientKey = `client-${randomUUID()}`;
+    const held = deferred();
+    const written = deferred();
+    const firstPid = deferred<number>();
+    const secondPid = deferred<number>();
+    releaseOnTeardown(() => {
+      held.resolve(undefined);
+    });
+
+    const first = db.transaction(async (tx) => {
+      firstPid.resolve(await backendPid(tx));
+      const created = await createOrder(tx, {
+        clientKey,
+        currencyCode: "UYU",
+        storeId: storeA.id,
+        values: orderValues({ productId: ringA.id }),
+      });
+      written.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+    await written.promise;
+    // Another phone and another store: only the client's lock is shared.
+    const second = db.transaction(async (tx) => {
+      secondPid.resolve(await backendPid(tx));
+
+      return await createOrder(tx, {
+        clientKey,
+        currencyCode: "UYU",
+        storeId: storeB.id,
+        values: orderValues({
+          customerPhone: "+59899000333",
+          productId: ringB.id,
+        }),
+      });
+    });
+
+    try {
+      await waitUntilAdvisoryBlocked(
+        db,
+        await secondPid.promise,
+        await firstPid.promise
+      );
+    } finally {
+      held.resolve(undefined);
+      await Promise.allSettled([first, second]);
+    }
+
+    await expect(second).resolves.toMatchObject({
+      token: expect.stringMatching(ORDER_TOKEN_PATTERN),
+    });
+  });
+});
+
 describe("one submit sent twice at once", () => {
   test("the second waits for the first's lock and answers the same order", async () => {
     const shop = await makeStore();
@@ -734,7 +831,7 @@ describe("one submit sent twice at once", () => {
     const written = deferred();
     const firstPid = deferred<number>();
     const secondPid = deferred<number>();
-    onTestFinished(() => {
+    releaseOnTeardown(() => {
       held.resolve(undefined);
     });
     const submit = async (tx: DatabaseClient) =>
