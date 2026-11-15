@@ -134,16 +134,23 @@ interface SetupOptions {
   /** `attribute.list`'s answer: rows, a failure, or nothing yet. */
   list?: Filter[] | "fail" | "hang";
   locale?: Locale;
+  /** How many articles the server says a deleted value was taken off. */
+  removedFromArticles?: number;
   /** How each write ends. */
   writes?: Partial<Record<Write, Outcome>>;
 }
 
-function setup({ list = ROWS, locale = "en", writes = {} }: SetupOptions = {}) {
+function setup({
+  list = ROWS,
+  locale = "en",
+  removedFromArticles = 0,
+  writes = {},
+}: SetupOptions = {}) {
   const spies: Record<Write | "list", Mock<(input: unknown) => unknown>> = {
     create: vi.fn((_input: unknown) => ({ id: 10, position: 3, slug: "x" })),
     createValue: vi.fn((_input: unknown) => ({ id: 40, position: 3 })),
     delete: vi.fn((_input: unknown) => ({ id: 7 })),
-    deleteValue: vi.fn((_input: unknown) => ({ id: 22 })),
+    deleteValue: vi.fn((_input: unknown) => ({ id: 22, removedFromArticles })),
     list: vi.fn((_input: unknown) => (Array.isArray(list) ? list : ROWS)),
     rename: vi.fn((_input: unknown) => ({ id: 7, slug: "color" })),
     reorder: vi.fn((input: unknown) => input),
@@ -195,7 +202,29 @@ function setup({ list = ROWS, locale = "en", writes = {} }: SetupOptions = {}) {
     await user.click(within(scope).getByRole("button", { name }));
   };
 
-  return { card, formWith, press, queryClient, spies, user, value };
+  /** The filters' Spanish names, top to bottom. */
+  const filterOrder = () =>
+    screen.getAllByTestId("filter-name").map((name) => name.textContent);
+  /** A filter's values' Spanish names, top to bottom. */
+  const valueOrder = (slug: string) =>
+    within(card(slug))
+      .getAllByTestId("filter-value-name")
+      .map((name) => name.textContent);
+  const button = (scope: HTMLElement, name: string) =>
+    within(scope).getByRole("button", { name });
+
+  return {
+    button,
+    card,
+    filterOrder,
+    formWith,
+    press,
+    queryClient,
+    spies,
+    user,
+    value,
+    valueOrder,
+  };
 }
 
 /** The manager's own live region. */
@@ -410,9 +439,13 @@ describe("FilterManager", () => {
     expect(screen.queryByText("Filter added.")).toBeNull();
   });
 
-  test("renames a filter in place, then closes its form", async () => {
-    const { card, formWith, press, spies, user } = setup();
+  test("renames a filter in place, shows the name read again, and gives focus back to its rename button", async () => {
+    const { button, card, formWith, press, spies, user } = setup();
     await shown();
+    spies.list.mockImplementation(() => [
+      { ...ROWS[0], nameEs: "Colores" },
+      ...ROWS.slice(1),
+    ]);
 
     await press(card("color"), "Rename filter: Color");
     const form = formWith("Save", card("color"));
@@ -437,13 +470,16 @@ describe("FilterManager", () => {
         within(card("color")).queryByRole("button", { name: "Save" })
       ).toBeNull();
     });
-    expect(within(card("color")).getByTestId("filter-name")).toHaveTextContent(
-      /^Color$/u
-    );
+    await waitFor(() => {
+      expect(
+        within(card("color")).getByTestId("filter-name")
+      ).toHaveTextContent(/^Colores$/u);
+    });
+    expect(button(card("color"), "Rename filter: Colores")).toHaveFocus();
   });
 
-  test("cancelling a rename puts the filter back as it was", async () => {
-    const { card, press, spies } = setup();
+  test("cancelling a rename puts the filter back as it was, focus on its rename button", async () => {
+    const { button, card, press, spies } = setup();
     await shown();
 
     await press(card("talle"), "Rename filter: Talle");
@@ -452,6 +488,7 @@ describe("FilterManager", () => {
     expect(within(card("talle")).getByTestId("filter-name")).toHaveTextContent(
       /^Talle$/u
     );
+    expect(button(card("talle"), "Rename filter: Talle")).toHaveFocus();
     expect(spies.rename).not.toHaveBeenCalled();
   });
 
@@ -474,9 +511,13 @@ describe("FilterManager", () => {
   });
 
   test("adds a value with its swatch to its own filter", async () => {
-    const { card, formWith, spies, user } = setup();
+    const { card, spies, user } = setup();
     await shown();
-    const form = formWith("Add value", card("color"));
+    const form = within(
+      within(card("color")).getByRole("form", {
+        name: "New value of “Color”",
+      })
+    );
 
     await user.type(form.getByLabelText(/^Name in Spanish/u), "Rosa");
     await user.type(form.getByLabelText("Name in English (optional)"), "Pink");
@@ -554,8 +595,8 @@ describe("FilterManager", () => {
     );
   });
 
-  test("edits a value in place, swatch included, then closes its form", async () => {
-    const { formWith, press, spies, user, value } = setup();
+  test("edits a value in place, swatch included, then gives focus back to its edit button", async () => {
+    const { button, formWith, press, spies, user, value } = setup();
     await shown();
 
     await press(value("dorado"), "Edit value: Dorado");
@@ -582,16 +623,18 @@ describe("FilterManager", () => {
       ).toBeNull();
     });
     expect(value("dorado")).toHaveTextContent(/^Dorado · Gold1 article$/u);
+    expect(button(value("dorado"), "Edit value: Dorado")).toHaveFocus();
   });
 
-  test("cancelling a value's edit puts it back as it was", async () => {
-    const { press, spies, value } = setup();
+  test("cancelling a value's edit puts it back as it was, focus on its edit button", async () => {
+    const { button, press, spies, value } = setup();
     await shown();
 
     await press(value("negro"), "Edit value: Negro");
     await press(value("negro"), "Cancel");
 
     expect(value("negro")).toHaveTextContent(/^Negro0 articles$/u);
+    expect(button(value("negro"), "Edit value: Negro")).toHaveFocus();
     expect(spies.updateValue).not.toHaveBeenCalled();
   });
 
@@ -641,11 +684,19 @@ describe("FilterManager", () => {
   ] as const)(
     "moving a filter %s saves the new order and announces it",
     async (direction, name, ids, announcement) => {
-      const { card, press, spies } = setup();
+      const { card, filterOrder, press, spies } = setup({
+        writes: { reorder: "hang" },
+      });
       await shown();
 
       await press(card(name.toLowerCase()), `Move ${direction}: ${name}`);
 
+      // On screen at once, before the server answers.
+      await waitFor(() => {
+        expect(filterOrder()).toEqual(
+          ids.map((id) => ROWS.find((row) => row.id === id)?.nameEs)
+        );
+      });
       expect(announcer()).toHaveTextContent(announcement);
       expect(announcer()).toHaveAttribute("aria-live", "polite");
       await waitFor(() => {
@@ -653,12 +704,6 @@ describe("FilterManager", () => {
           ids,
           storeSlug: STORE_SLUG,
         });
-      });
-      await waitFor(() => {
-        expect(spies.list.mock.calls).toEqual([
-          [{ storeSlug: STORE_SLUG }],
-          [{ storeSlug: STORE_SLUG }],
-        ]);
       });
       expect(spies.reorderValues).not.toHaveBeenCalled();
     }
@@ -671,11 +716,20 @@ describe("FilterManager", () => {
   ] as const)(
     "moving a value %s saves its filter's new order and announces it",
     async (direction, name, ids, announcement) => {
-      const { press, spies, value } = setup();
+      const { press, spies, value, valueOrder } = setup({
+        writes: { reorderValues: "hang" },
+      });
       await shown();
 
       await press(value(name.toLowerCase()), `Move ${direction}: ${name}`);
 
+      await waitFor(() => {
+        expect(valueOrder("color")).toEqual(
+          ids.map(
+            (id) => ROWS[0]?.values.find((other) => other.id === id)?.nameEs
+          )
+        );
+      });
       expect(announcer()).toHaveTextContent(announcement);
       await waitFor(() => {
         expect(spies.reorderValues).toHaveBeenCalledExactlyOnceWith({
@@ -688,13 +742,59 @@ describe("FilterManager", () => {
     }
   );
 
+  test("a second quick move of a filter starts from the first move's order", async () => {
+    const { card, filterOrder, press, spies } = setup();
+    await shown();
+
+    await press(card("color"), "Move down: Color");
+    await waitFor(() => {
+      expect(filterOrder()).toEqual(["Material", "Color", "Talle"]);
+    });
+    await press(card("color"), "Move down: Color");
+
+    await waitFor(() => {
+      expect(spies.reorder.mock.calls).toEqual([
+        [{ ids: [8, 7, 9], storeSlug: STORE_SLUG }],
+        [{ ids: [8, 9, 7], storeSlug: STORE_SLUG }],
+      ]);
+    });
+    expect(filterOrder()).toEqual(["Material", "Talle", "Color"]);
+    expect(announcer()).toHaveTextContent("“Color” is now in place 3 of 3.");
+    // Saved moves read nothing again.
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
+      storeSlug: STORE_SLUG,
+    });
+  });
+
+  test("a second quick move of a value starts from the first move's order", async () => {
+    const { press, spies, value, valueOrder } = setup();
+    await shown();
+
+    await press(value("dorado"), "Move down: Dorado");
+    await waitFor(() => {
+      expect(valueOrder("color")).toEqual(["Plateado", "Dorado", "Negro"]);
+    });
+    await press(value("dorado"), "Move down: Dorado");
+
+    await waitFor(() => {
+      expect(spies.reorderValues.mock.calls).toEqual([
+        [{ attributeId: 7, ids: [22, 21, 23], storeSlug: STORE_SLUG }],
+        [{ attributeId: 7, ids: [22, 23, 21], storeSlug: STORE_SLUG }],
+      ]);
+    });
+    expect(valueOrder("color")).toEqual(["Plateado", "Negro", "Dorado"]);
+    expect(valueOrder("talle")).toEqual(["Único"]);
+  });
+
   test.each([
     ["filter", "reorder", "Color", "color"],
     ["value", "reorderValues", "Dorado", "dorado"],
   ] as const)(
     "reports a failed %s move, says so in a toast and the live region",
     async (kind, write, name, slug) => {
-      const { card, press, value } = setup({ writes: { [write]: "fail" } });
+      const { card, filterOrder, press, value, valueOrder } = setup({
+        writes: { [write]: "fail" },
+      });
       await shown();
 
       await press(
@@ -716,6 +816,10 @@ describe("FilterManager", () => {
         expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
         { action: "Attribute.reorder" }
       );
+      await waitFor(() => {
+        expect(filterOrder()).toEqual(["Color", "Material", "Talle"]);
+      });
+      expect(valueOrder("color")).toEqual(["Dorado", "Plateado", "Negro"]);
     }
   );
 
@@ -727,7 +831,7 @@ describe("FilterManager", () => {
     const dialog = await screen.findByTestId("confirm-dialog");
     expect(dialog).toHaveAccessibleName("Delete the filter?");
     expect(dialog).toHaveAccessibleDescription(
-      "“Color” will be deleted with its 3 values, and taken off the articles that carry them. This cannot be undone."
+      "“Color” will be deleted with all its values, and they will be taken off the articles that carry them. This cannot be undone."
     );
     expect(spies.delete).not.toHaveBeenCalled();
     await press(dialog, "Delete filter");
@@ -740,7 +844,9 @@ describe("FilterManager", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    });
   });
 
   test("keeps the filter's dialog open, saying so, while the deletion runs", async () => {
@@ -749,9 +855,6 @@ describe("FilterManager", () => {
 
     await press(card("material"), "Delete filter: Material");
     const dialog = await screen.findByTestId("confirm-dialog");
-    expect(dialog).toHaveAccessibleDescription(
-      "“Material” will be deleted with its 0 values, and taken off the articles that carry them. This cannot be undone."
-    );
     await press(dialog, "Delete filter");
 
     expect(
@@ -763,6 +866,29 @@ describe("FilterManager", () => {
     });
     expect(screen.queryByText("Filter deleted.")).toBeNull();
   });
+
+  test.each([
+    ["Cancel", "the cancel button"],
+    ["{Escape}", "Escape"],
+  ])(
+    "closing the filter's dialog with %s deletes nothing and gives focus back to its delete button (%s)",
+    async (key, _how) => {
+      const { button, card, press, spies, user } = setup();
+      await shown();
+
+      await press(card("talle"), "Delete filter: Talle");
+      const dialog = await screen.findByTestId("confirm-dialog");
+      await (key === "Cancel" ? press(dialog, "Cancel") : user.keyboard(key));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      });
+      await waitFor(() => {
+        expect(button(card("talle"), "Delete filter: Talle")).toHaveFocus();
+      });
+      expect(spies.delete).not.toHaveBeenCalled();
+    }
+  );
 
   test("reports a failed filter deletion, says so and keeps the dialog open", async () => {
     const { card, press } = setup({ writes: { delete: "fail" } });
@@ -807,6 +933,43 @@ describe("FilterManager", () => {
     }
   );
 
+  test.each([
+    [4, "Value deleted: taken off 4 articles."],
+    [1, "Value deleted: taken off 1 article."],
+    [0, "Value deleted."],
+  ])(
+    "after deleting a value taken off %i articles, says %j",
+    async (removedFromArticles, message) => {
+      const { press, value } = setup({ removedFromArticles });
+      await shown();
+
+      await press(value("plateado"), "Delete value: Plateado");
+      await press(await screen.findByTestId("confirm-dialog"), "Delete value");
+
+      expect(await screen.findByText(message)).toBeVisible();
+    }
+  );
+
+  test("deleting a value while its filter is being renamed puts focus on the page title", async () => {
+    const { card, press, spies, value } = setup();
+    await shown();
+
+    await press(card("color"), "Rename filter: Color");
+    await press(value("negro"), "Delete value: Negro");
+    await press(await screen.findByTestId("confirm-dialog"), "Delete value");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+    });
+    expect(spies.deleteValue).toHaveBeenCalledExactlyOnceWith({
+      id: 23,
+      storeSlug: STORE_SLUG,
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    });
+  });
+
   test("deletes a value once confirmed, then puts focus on its filter's name", async () => {
     const { card, press, spies, value } = setup();
     await shown();
@@ -823,22 +986,33 @@ describe("FilterManager", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     });
-    expect(within(card("color")).getByTestId("filter-name")).toHaveFocus();
-  });
-
-  test("cancelling a value's deletion deletes nothing", async () => {
-    const { card, press, spies, value } = setup();
-    await shown();
-
-    await press(value("negro"), "Delete value: Negro");
-    await press(await screen.findByTestId("confirm-dialog"), "Cancel");
-
     await waitFor(() => {
-      expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      expect(within(card("color")).getByTestId("filter-name")).toHaveFocus();
     });
-    expect(spies.deleteValue).not.toHaveBeenCalled();
-    expect(within(card("color")).getByTestId("filter-name")).toHaveFocus();
   });
+
+  test.each([
+    ["Cancel", "the cancel button"],
+    ["{Escape}", "Escape"],
+  ])(
+    "closing a value's dialog with %s deletes nothing and gives focus back to its delete button (%s)",
+    async (key, _how) => {
+      const { button, press, spies, user, value } = setup();
+      await shown();
+
+      await press(value("negro"), "Delete value: Negro");
+      const dialog = await screen.findByTestId("confirm-dialog");
+      await (key === "Cancel" ? press(dialog, "Cancel") : user.keyboard(key));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      });
+      await waitFor(() => {
+        expect(button(value("negro"), "Delete value: Negro")).toHaveFocus();
+      });
+      expect(spies.deleteValue).not.toHaveBeenCalled();
+    }
+  );
 
   test("reports a failed value deletion, says so and keeps the dialog open", async () => {
     const { press, value } = setup({ writes: { deleteValue: "fail" } });

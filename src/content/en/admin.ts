@@ -84,7 +84,7 @@ export const admin: Dictionary["admin"] = {
       action: "Delete filter: {name}",
       confirm: "Delete filter",
       description:
-        "“{name}” will be deleted with its {count} values, and taken off the articles that carry them. This cannot be undone.",
+        "“{name}” will be deleted with all its values, and they will be taken off the articles that carry them. This cannot be undone.",
       title: "Delete the filter?",
     },
     deleteValue: {
@@ -135,6 +135,7 @@ export const admin: Dictionary["admin"] = {
       renamed: "Filter renamed.",
       valueCreated: "Value added.",
       valueDeleted: "Value deleted.",
+      valueDeletedFrom: "Value deleted: taken off {count}.",
       valueUpdated: "Value saved.",
     },
     values: "Values of “{name}”",

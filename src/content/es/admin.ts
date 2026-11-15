@@ -83,7 +83,7 @@ export const admin = {
       action: "Eliminar filtro: {name}",
       confirm: "Eliminar filtro",
       description:
-        "Se va a eliminar «{name}» con sus {count} valores, y se les quita a los artículos que los tienen. No se puede deshacer.",
+        "Se va a eliminar «{name}» con todos sus valores, y se les quitan a los artículos que los tienen. No se puede deshacer.",
       title: "¿Eliminar el filtro?",
     },
     deleteValue: {
@@ -136,6 +136,7 @@ export const admin = {
       renamed: "Filtro renombrado.",
       valueCreated: "Valor agregado.",
       valueDeleted: "Valor eliminado.",
+      valueDeletedFrom: "Valor eliminado: se quitó de {count}.",
       valueUpdated: "Valor guardado.",
     },
     values: "Valores de «{name}»",

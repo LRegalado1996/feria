@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { type RefCallback, useId, useRef, useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button, buttonVariants } from "@/app/_components/atoms/button";
@@ -34,6 +34,8 @@ export interface AttributeFormSaved {
 
 export interface AttributeFormProps {
   className?: string;
+  /** The id of the heading that names the form, among several alike. */
+  labelledBy?: string;
   /** Present when the form edits a filter or a value: shows "Cancel". */
   onCancel?: () => void;
   /** Saves; the form keeps what was typed unless it was saved. */
@@ -54,6 +56,7 @@ export interface AttributeFormProps {
  */
 function AttributeForm({
   className,
+  labelledBy,
   onCancel,
   onSave,
   pendingLabel,
@@ -99,6 +102,7 @@ function AttributeForm({
   return (
     <Form {...form}>
       <form
+        aria-labelledby={labelledBy}
         className={cn(
           "grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-start",
           className
@@ -143,57 +147,17 @@ function AttributeForm({
             <FormField
               control={form.control}
               name="swatchColor"
-              render={({ field }) =>
-                field.value === "" ? (
-                  <div className="sm:col-span-3">
-                    {/* The button opens the browser's picker, and the swatch
-                        exists once a color is chosen there: a form left with
-                        no choice saves none, whatever the picker showed. */}
-                    <label
-                      className={cn(
-                        buttonVariants({ size: "sm", variant: "outline" }),
-                        "cursor-pointer has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50"
-                      )}
-                    >
-                      {copy.fields.swatchAdd}
-                      <input
-                        className="sr-only"
-                        onChange={(event) => {
-                          field.onChange(event.target.value.toLowerCase());
-                        }}
-                        type="color"
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <FormItem className="sm:col-span-3">
-                    <FormLabel>{copy.fields.swatch}</FormLabel>
-                    <div className="flex items-center gap-2">
-                      <FormControl>
-                        <input
-                          className="h-11 w-16 cursor-pointer rounded-md border bg-background p-1 md:h-9"
-                          type="color"
-                          {...field}
-                          onChange={(event) => {
-                            field.onChange(event.target.value.toLowerCase());
-                          }}
-                        />
-                      </FormControl>
-                      <Button
-                        onClick={() => {
-                          field.onChange("");
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        {copy.fields.swatchRemove}
-                      </Button>
-                    </div>
-                    <FormDescription>{copy.fields.swatchHint}</FormDescription>
-                  </FormItem>
-                )
-              }
+              render={({ field }) => (
+                <SwatchField
+                  hint={copy.fields.swatchHint}
+                  labels={{
+                    add: copy.fields.swatchAdd,
+                    remove: copy.fields.swatchRemove,
+                    swatch: copy.fields.swatch,
+                  }}
+                  {...field}
+                />
+              )}
             />
           ) : null}
         </fieldset>
@@ -209,7 +173,14 @@ function AttributeForm({
             {isSubmitting ? pendingLabel : submitLabel}
           </Button>
           {onCancel ? (
-            <Button onClick={onCancel} type="button" variant="ghost">
+            // Locked while saving: a save that lands after a cancel and a
+            // reopen would close the newer editor.
+            <Button
+              disabled={isSubmitting}
+              onClick={onCancel}
+              type="button"
+              variant="ghost"
+            >
               {copy.edit.cancel}
             </Button>
           ) : null}
@@ -221,6 +192,95 @@ function AttributeForm({
         ) : null}
       </form>
     </Form>
+  );
+}
+
+interface SwatchFieldProps {
+  hint: string;
+  labels: { add: string; remove: string; swatch: string };
+  name: string;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  ref: RefCallback<HTMLInputElement>;
+  value: string;
+}
+
+/**
+ * The swatch: with none, a button that opens the browser's picker, and the
+ * swatch exists once a color is chosen there (a form left alone saves none,
+ * whatever the picker showed). With one, the picker and "Remove". It is one
+ * input in both states, so focus stays on it while a color is picked and
+ * comes back to it after "Remove".
+ */
+function SwatchField({
+  hint,
+  labels,
+  name,
+  onBlur,
+  onChange,
+  ref,
+  value,
+}: SwatchFieldProps) {
+  const hintId = useId();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const hasColor = value !== "";
+
+  return (
+    <div className="space-y-2 sm:col-span-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className={
+            hasColor
+              ? "flex items-center gap-2 text-sm font-medium"
+              : cn(
+                  buttonVariants({ variant: "outline" }),
+                  "h-11 cursor-pointer has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 md:h-9"
+                )
+          }
+        >
+          {hasColor ? labels.swatch : labels.add}
+          <input
+            aria-describedby={hasColor ? hintId : undefined}
+            className={
+              hasColor
+                ? "h-11 w-16 cursor-pointer rounded-md border bg-background p-1 md:h-9"
+                : "sr-only"
+            }
+            name={name}
+            onBlur={() => {
+              onBlur();
+            }}
+            onChange={(event) => {
+              onChange(event.target.value.toLowerCase());
+            }}
+            ref={(node) => {
+              inputRef.current = node;
+              ref(node);
+            }}
+            type="color"
+            value={value}
+          />
+        </label>
+        {hasColor ? (
+          <Button
+            className="h-11 md:h-9"
+            onClick={() => {
+              onChange("");
+              inputRef.current?.focus();
+            }}
+            type="button"
+            variant="ghost"
+          >
+            {labels.remove}
+          </Button>
+        ) : null}
+      </div>
+      {hasColor ? (
+        <p className="text-sm text-muted-foreground" id={hintId}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

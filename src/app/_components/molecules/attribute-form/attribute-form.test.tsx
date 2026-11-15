@@ -12,6 +12,8 @@ import {
 } from "./attribute-form";
 
 interface SetupOptions {
+  /** Names the form by a heading beside it, as a filter's value form is. */
+  labelledBy?: boolean;
   locale?: Locale;
   /** What the save answers; `"hang"` never settles. */
   result?: AttributeFormResult | "hang";
@@ -25,6 +27,7 @@ function makeSaved(overrides: Partial<AttributeFormSaved> = {}) {
 }
 
 function setup({
+  labelledBy = false,
   locale = "en",
   result = "saved",
   values,
@@ -40,14 +43,18 @@ function setup({
   const user = userEvent.setup();
 
   renderWithI18n(
-    <AttributeForm
-      onCancel={values ? onCancel : undefined}
-      onSave={onSave}
-      pendingLabel="Saving now"
-      submitLabel="Save it"
-      values={values}
-      withSwatch={withSwatch}
-    />,
+    <>
+      {labelledBy ? <h3 id="value-form-title">New value of “Color”</h3> : null}
+      <AttributeForm
+        labelledBy={labelledBy ? "value-form-title" : undefined}
+        onCancel={values ? onCancel : undefined}
+        onSave={onSave}
+        pendingLabel="Saving now"
+        submitLabel="Save it"
+        values={values}
+        withSwatch={withSwatch}
+      />
+    </>,
     { locale }
   );
 
@@ -382,5 +389,65 @@ describe("AttributeForm", () => {
     await waitFor(() => {
       expect(messageOf(spanish())).toBe("Escribí el nombre en español.");
     });
+  });
+
+  test("picking a color keeps the same input in place, focused, and Remove puts focus back on it", async () => {
+    const { addSwatch, pick, swatch, user } = setup({ withSwatch: true });
+    const input = addSwatch();
+    input.focus();
+
+    pick(input, "#d4af37");
+
+    expect(swatch()).toBe(input);
+    expect(input).toHaveFocus();
+
+    await user.click(screen.getByRole("button", { name: "Remove color" }));
+
+    expect(addSwatch()).toBe(input);
+    expect(input).toHaveFocus();
+  });
+
+  test("links the swatch hint only while a color is set", async () => {
+    const { addSwatch, swatch, user } = setup({
+      values: makeSaved({ swatchColor: "#d4af37" }),
+      withSwatch: true,
+    });
+
+    expect(swatch()).toHaveAccessibleDescription(
+      "A dot of this color shows beside the name."
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove color" }));
+
+    expect(addSwatch()).not.toHaveAttribute("aria-describedby");
+    expect(addSwatch()).toHaveAccessibleDescription("");
+    expect(
+      screen.queryByText("A dot of this color shows beside the name.")
+    ).toBeNull();
+  });
+
+  test.each([
+    [true, "New value of “Color”"],
+    [false, ""],
+  ])("named by its heading: %s", (labelledBy, name) => {
+    setup({ labelledBy, withSwatch: true });
+
+    expect(document.querySelector("form")).toHaveAccessibleName(name);
+  });
+
+  test("locks Cancel while saving, so a late save cannot close a reopened editor", async () => {
+    const { onCancel, submit, user } = setup({
+      result: "hang",
+      values: makeSaved(),
+    });
+
+    await submit();
+
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    await waitFor(() => {
+      expect(cancel).toBeDisabled();
+    });
+    await user.click(cancel);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 });

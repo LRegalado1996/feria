@@ -2,7 +2,8 @@
 
 import { ORPCError } from "@orpc/client";
 import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
-import { type RefObject, useRef, useState } from "react";
+import { type RefObject, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -58,14 +59,44 @@ function moved(ids: number[], from: number, to: number) {
     : [...rest.slice(0, to), id, ...rest.slice(to)];
 }
 
-/** Puts focus on an element after a dialog closed (design.md § Focus). */
-function focusOn(ref: RefObject<HTMLElement | null>) {
-  return (event: Event) => {
-    event.preventDefault();
-    ref.current?.focus();
-  };
+/**
+ * Where focus goes when a delete dialog closes (design.md § Focus after
+ * close). Cancelled, it goes back to the delete button that opened it: the
+ * dialog is controlled and has no trigger of its own, so Radix would leave
+ * it on the page. After a deletion that button is gone, so it goes to the
+ * first of `targets` on the page.
+ */
+function focusAfterDelete(
+  event: Event,
+  deleted: RefObject<boolean>,
+  opener: RefObject<HTMLButtonElement | null>,
+  targets: RefObject<HTMLElement | null>[]
+) {
+  event.preventDefault();
+
+  if (!deleted.current) {
+    opener.current?.focus();
+    return;
+  }
+
+  deleted.current = false;
+  targets.find((target) => target.current)?.current?.focus();
 }
 
+/**
+ * Closes an inline editor and gives focus back to the button that opened
+ * it, so a keyboard user is not left on the page itself. The editor closes
+ * synchronously so the button is back before it is focused.
+ */
+function closeEditor(
+  setEditing: (editing: boolean) => void,
+  button: RefObject<HTMLButtonElement | null>
+) {
+  flushSync(() => {
+    setEditing(false);
+  });
+  button.current?.focus();
+}
 /**
  * A store's filters on one screen (FER-033): add a filter, then its values
  * inline, each with an optional swatch and the number of articles that carry
@@ -268,6 +299,10 @@ function FilterCard({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const deleted = useRef(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const addValueTitleId = useId();
 
   return (
     <li
@@ -277,7 +312,7 @@ function FilterCard({
       {editing ? (
         <AttributeForm
           onCancel={() => {
-            setEditing(false);
+            closeEditor(setEditing, editButton);
           }}
           onSave={async ({ nameEn, nameEs }) => {
             try {
@@ -287,7 +322,7 @@ function FilterCard({
                 nameEs,
                 storeSlug,
               });
-              setEditing(false);
+              closeEditor(setEditing, editButton);
               toast.success(copy.toasts.renamed);
               return "saved";
             } catch (error) {
@@ -342,6 +377,7 @@ function FilterCard({
               onClick={() => {
                 setEditing(true);
               }}
+              ref={editButton}
               size="icon"
               variant="ghost"
             >
@@ -352,6 +388,7 @@ function FilterCard({
               onClick={() => {
                 setDeleting(true);
               }}
+              ref={deleteButton}
               size="icon"
               variant="ghost"
             >
@@ -369,9 +406,9 @@ function FilterCard({
         >
           {row.values.map((value, index) => (
             <ValueRow
-              countLabel={countLabel(value.productCount)}
+              countLabel={countLabel}
               first={index === 0}
-              headingRef={headingRef}
+              focusTargets={[headingRef, titleRef]}
               key={value.id}
               last={index === row.values.length - 1}
               onMove={(offset) => {
@@ -384,10 +421,11 @@ function FilterCard({
         </ul>
       )}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold">
+        <h3 className="text-sm font-semibold" id={addValueTitleId}>
           {interpolate(copy.addValue.title, { name: row.nameEs })}
         </h3>
         <AttributeForm
+          labelledBy={addValueTitleId}
           onSave={async (values) => {
             try {
               await createValue.mutateAsync({
@@ -409,17 +447,19 @@ function FilterCard({
       <ConfirmDialog
         confirmLabel={copy.delete.confirm}
         description={interpolate(copy.delete.description, {
-          count: String(row.values.length),
           name: row.nameEs,
         })}
         isPending={remove.isPending}
-        onCloseAutoFocus={focusOn(titleRef)}
+        onCloseAutoFocus={(event) => {
+          focusAfterDelete(event, deleted, deleteButton, [titleRef]);
+        }}
         onConfirm={() => {
           void (async () => {
             try {
               // Awaited here: the list read after the deletion unmounts this
               // card, and TanStack runs no per-call callback once unmounted.
               await remove.mutateAsync({ id: row.id, storeSlug });
+              deleted.current = true;
               setDeleting(false);
               toast.success(copy.toasts.deleted);
             } catch (error) {
@@ -437,10 +477,13 @@ function FilterCard({
 }
 
 interface ValueRowProps {
-  countLabel: string;
+  countLabel: (count: number) => string;
   first: boolean;
-  /** The filter's heading, where focus goes once the value is deleted. */
-  headingRef: RefObject<HTMLHeadingElement | null>;
+  /**
+   * Where focus goes once the value is deleted: the filter's heading, or
+   * the page's while the filter is being renamed.
+   */
+  focusTargets: RefObject<HTMLHeadingElement | null>[];
   last: boolean;
   onMove: (offset: number) => void;
   storeSlug: string;
@@ -450,7 +493,7 @@ interface ValueRowProps {
 function ValueRow({
   countLabel,
   first,
-  headingRef,
+  focusTargets,
   last,
   onMove,
   storeSlug,
@@ -462,6 +505,9 @@ function ValueRow({
   const remove = useDeleteAttributeValue(storeSlug);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const deleted = useRef(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const deleteButton = useRef<HTMLButtonElement>(null);
 
   return (
     <li
@@ -472,12 +518,12 @@ function ValueRow({
         <AttributeForm
           className="min-w-0 flex-1 basis-full"
           onCancel={() => {
-            setEditing(false);
+            closeEditor(setEditing, editButton);
           }}
           onSave={async (values) => {
             try {
               await update.mutateAsync({ ...values, id: value.id, storeSlug });
-              setEditing(false);
+              closeEditor(setEditing, editButton);
               toast.success(copy.toasts.valueUpdated);
               return "saved";
             } catch (error) {
@@ -523,7 +569,7 @@ function ValueRow({
               className="text-xs text-muted-foreground"
               data-testid="filter-value-count"
             >
-              {countLabel}
+              {countLabel(value.productCount)}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -556,6 +602,7 @@ function ValueRow({
               onClick={() => {
                 setEditing(true);
               }}
+              ref={editButton}
               size="icon"
               variant="ghost"
             >
@@ -568,6 +615,7 @@ function ValueRow({
               onClick={() => {
                 setDeleting(true);
               }}
+              ref={deleteButton}
               size="icon"
               variant="ghost"
             >
@@ -581,19 +629,33 @@ function ValueRow({
         description={
           value.productCount > 0
             ? interpolate(copy.deleteValue.inUse, {
-                count: countLabel,
+                count: countLabel(value.productCount),
                 name: value.nameEs,
               })
             : interpolate(copy.deleteValue.unused, { name: value.nameEs })
         }
         isPending={remove.isPending}
-        onCloseAutoFocus={focusOn(headingRef)}
+        onCloseAutoFocus={(event) => {
+          focusAfterDelete(event, deleted, deleteButton, focusTargets);
+        }}
         onConfirm={() => {
           void (async () => {
             try {
-              await remove.mutateAsync({ id: value.id, storeSlug });
+              const { removedFromArticles } = await remove.mutateAsync({
+                id: value.id,
+                storeSlug,
+              });
+              deleted.current = true;
               setDeleting(false);
-              toast.success(copy.toasts.valueDeleted);
+              // What the server took it off, which can be more than the
+              // count loaded with the page.
+              toast.success(
+                removedFromArticles > 0
+                  ? interpolate(copy.toasts.valueDeletedFrom, {
+                      count: countLabel(removedFromArticles),
+                    })
+                  : copy.toasts.valueDeleted
+              );
             } catch (error) {
               reportError(error, { action: "Attribute.delete_value" });
               toast.error(copy.errors.generic);

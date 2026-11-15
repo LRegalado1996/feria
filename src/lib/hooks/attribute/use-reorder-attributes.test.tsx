@@ -1,4 +1,5 @@
 import { renderHook, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { describe, expect, test, vi } from "vitest";
 
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
@@ -13,137 +14,323 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const FIRST = { ids: [8, 7], storeSlug: "lr-market" };
+const KEY = storeAttributesKey("lr-market");
 
-const SECOND = { ids: [7, 8], storeSlug: "lr-market" };
+const REFUSAL = "Give every filter of the store, once each";
 
-const OTHER = { attributeId: 7, ids: [22, 21], storeSlug: "lr-market" };
+function makeValue(id: number, position: number) {
+  return {
+    id,
+    nameEn: null,
+    nameEs: `Valor ${id}`,
+    position,
+    productCount: 0,
+    slug: `valor-${id}`,
+    swatchColor: null,
+  };
+}
 
-function setup({ fails = false }: { fails?: boolean } = {}) {
-  const reorder = vi.fn((input: unknown) => input);
+function makeFilter(id: number, position: number) {
+  return {
+    id,
+    nameEn: null,
+    nameEs: `Filtro ${id}`,
+    position,
+    slug: `filtro-${id}`,
+    values: [makeValue(id * 10, 0), makeValue(id * 10 + 1, 1)],
+  };
+}
+
+type Filter = ReturnType<typeof makeFilter>;
+
+const LIST = [makeFilter(7, 0), makeFilter(8, 1), makeFilter(9, 2)];
+
+/** The list with the filters of `ids`, in that order. */
+function listOf(ids: number[]) {
+  return ids.map((id, position) => makeFilter(id, position));
+}
+
+function move(ids: number[]) {
+  return { ids, storeSlug: "lr-market" };
+}
+
+interface SetupOptions {
+  /** `attribute.reorder`'s answer: saved, refused, or never. */
+  answer?: "fail" | "hang" | "save";
+  /** The cached list; `null` for none yet. */
+  list?: Filter[] | null;
+}
+
+function setup({ answer = "save", list = LIST }: SetupOptions = {}) {
+  const reorder = vi.fn(async (input: unknown) =>
+    answer === "hang" ? await new Promise<never>(() => {}) : input
+  );
   server.use(
-    fails
+    answer === "fail"
       ? createOrpcErrorHandler("attribute.reorder", {
           code: "BAD_REQUEST",
-          message: "Give every filter of the store, once each",
+          message: REFUSAL,
           status: 400,
         })
       : createOrpcHandler("attribute.reorder", reorder)
   );
   const wrapper = createQueryWrapper();
-  const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
+  const { queryClient } = wrapper;
+
+  if (list) {
+    queryClient.setQueryData(KEY, list);
+  }
+
+  const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
   const { result } = renderHook(
     () => ({
-      other: useReorderAttributeValues("lr-market"),
       reorder: useReorderAttributes("lr-market"),
+      values: useReorderAttributeValues("lr-market"),
     }),
     { wrapper }
   );
-  const metas = () =>
-    wrapper.queryClient
-      .getMutationCache()
-      .getAll()
-      .map((mutation) => mutation.meta);
 
-  /** Every request either reorder sends is held until released, in order. */
-  const holdRequests = () => {
-    const received: unknown[] = [];
-    const releases: (() => void)[] = [];
-    const held = async (input: unknown) => {
-      received.push(input);
-      await new Promise<void>((resolve) => {
-        releases.push(resolve);
-      });
-      return input;
-    };
-    server.use(
-      createOrpcHandler("attribute.reorder", held),
-      createOrpcHandler("attribute.reorderValues", held)
-    );
-    return { received, releases };
+  return {
+    invalidateQueries,
+    listNow: () => queryClient.getQueryData(KEY),
+    /** Each mutation's place in the store's queue, oldest first. */
+    queue: () =>
+      queryClient
+        .getMutationCache()
+        .getAll()
+        .map(({ state }) => ({
+          isPaused: state.isPaused,
+          status: state.status,
+        })),
+    metas: () =>
+      queryClient
+        .getMutationCache()
+        .getAll()
+        .map((mutation) => mutation.meta),
+    reorder,
+    result,
+    setList: (rows: Filter[]) => {
+      queryClient.setQueryData(KEY, rows);
+    },
   };
-
-  return { holdRequests, invalidateQueries, metas, reorder, result };
 }
 
-/** Time for a second request to arrive, were it sent in parallel. */
-async function settle() {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+/**
+ * Holds every reorder request, of filters or of values, until the test
+ * answers it, in the order received.
+ */
+function holdReorders() {
+  const received: unknown[] = [];
+  const answers: ((outcome: "fail" | "save") => void)[] = [];
+  const hold = (path: string) =>
+    http.post<never, { json?: unknown }>(path, async ({ request }) => {
+      const { json } = await request.json();
+      received.push(json);
+      const outcome = await new Promise<"fail" | "save">((resolve) => {
+        answers.push(resolve);
+      });
+
+      return outcome === "save"
+        ? HttpResponse.json({ json, meta: [] })
+        : HttpResponse.json(
+            {
+              code: "BAD_REQUEST",
+              defined: true,
+              message: REFUSAL,
+              status: 400,
+            },
+            { status: 400 }
+          );
+    });
+  server.use(
+    hold("*/api/orpc/attribute/reorder"),
+    hold("*/api/orpc/attribute/reorderValues")
+  );
+
+  return {
+    answer: (index: number, outcome: "fail" | "save") => {
+      answers[index]?.(outcome);
+    },
+    received,
+  };
 }
+
+const RUNNING = { isPaused: false, status: "pending" };
+const QUEUED = { isPaused: true, status: "pending" };
 
 describe("useReorderAttributes", () => {
-  test("sends the new order of the filters, then reads the store's filters again", async () => {
-    const { invalidateQueries, reorder, result } = setup();
+  test("puts the new order on screen before the server answers, positions rewritten and values kept", async () => {
+    const { listNow, reorder, result } = setup({ answer: "hang" });
 
-    await expect(result.current.reorder.mutateAsync(FIRST)).resolves.toEqual(
-      FIRST
-    );
+    void result.current.reorder.mutateAsync(move([9, 7, 8]));
 
-    expect(reorder).toHaveBeenCalledExactlyOnceWith(FIRST);
-    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+    await waitFor(() => {
+      expect(listNow()).toEqual(listOf([9, 7, 8]));
+    });
+    await waitFor(() => {
+      expect(reorder).toHaveBeenCalledExactlyOnceWith(move([9, 7, 8]));
     });
   });
 
-  test("rejects a refused order with its code, still reads the list again, and leaves the report to the screen", async () => {
-    const { invalidateQueries, metas, result } = setup({ fails: true });
+  test("keeps the new order once saved, without reading the list again", async () => {
+    const { invalidateQueries, listNow, result } = setup();
 
     await expect(
-      result.current.reorder.mutateAsync(FIRST)
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "Give every filter of the store, once each",
+      result.current.reorder.mutateAsync(move([8, 7, 9]))
+    ).resolves.toEqual(move([8, 7, 9]));
+
+    expect(listNow()).toEqual(listOf([8, 7, 9]));
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  test("puts the previous order back when the server refuses, then reads the list again", async () => {
+    const { invalidateQueries, listNow, metas, result } = setup({
+      answer: "fail",
     });
 
+    await expect(
+      result.current.reorder.mutateAsync(move([9, 8, 7]))
+    ).rejects.toMatchObject({ code: "BAD_REQUEST", message: REFUSAL });
+
+    expect(listNow()).toEqual(LIST);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: KEY,
     });
+    // The screen reports the failure itself, once.
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });
 
-  test("sends a second quick move only once the first was answered", async () => {
-    const { holdRequests, result } = setup();
-    const { received, releases } = holdRequests();
+  test("puts the saved order back over a list read that landed while the move was in flight, reading nothing", async () => {
+    const { invalidateQueries, listNow, result, setList } = setup();
+    const { answer, received } = holdReorders();
 
-    const first = result.current.reorder.mutateAsync(FIRST);
-    const second = result.current.reorder.mutateAsync(SECOND);
+    const saved = result.current.reorder.mutateAsync(move([9, 7, 8]));
+    await waitFor(() => {
+      expect(received).toEqual([move([9, 7, 8])]);
+    });
+    // A list read from before the save answers with the old order.
+    setList(LIST);
+
+    answer(0, "save");
+    await expect(saved).resolves.toEqual(move([9, 7, 8]));
+
+    expect(listNow()).toEqual(listOf([9, 7, 8]));
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  test("queues a second quick move until the first is answered, then sends it", async () => {
+    const { queue, result } = setup();
+    const { answer, received } = holdReorders();
+
+    const first = result.current.reorder.mutateAsync(move([8, 7, 9]));
+    const second = result.current.reorder.mutateAsync(move([8, 9, 7]));
 
     await waitFor(() => {
-      expect(received).toEqual([FIRST]);
+      expect(received).toEqual([move([8, 7, 9])]);
     });
-    await settle();
-    expect(received).toEqual([FIRST]);
-
-    releases[0]?.();
-    await expect(first).resolves.toEqual(FIRST);
     await waitFor(() => {
-      expect(received).toEqual([FIRST, SECOND]);
+      expect(queue()).toEqual([RUNNING, QUEUED]);
     });
-    releases[1]?.();
-    await expect(second).resolves.toEqual(SECOND);
+    expect(received).toEqual([move([8, 7, 9])]);
+
+    answer(0, "save");
+    await expect(first).resolves.toEqual(move([8, 7, 9]));
+    await waitFor(() => {
+      expect(received).toEqual([move([8, 7, 9]), move([8, 9, 7])]);
+    });
+    answer(1, "save");
+    await expect(second).resolves.toEqual(move([8, 9, 7]));
   });
 
   test("waits for a move of a filter's values in flight too: both share the store's queue", async () => {
-    const { holdRequests, result } = setup();
-    const { received, releases } = holdRequests();
+    const { queue, result } = setup();
+    const { answer, received } = holdReorders();
+    const valuesMove = {
+      attributeId: 7,
+      ids: [71, 70],
+      storeSlug: "lr-market",
+    };
 
-    const other = result.current.other.mutateAsync(OTHER);
-    const mine = result.current.reorder.mutateAsync(FIRST);
+    const values = result.current.values.mutateAsync(valuesMove);
+    const filters = result.current.reorder.mutateAsync(move([8, 7, 9]));
 
     await waitFor(() => {
-      expect(received).toEqual([OTHER]);
+      expect(received).toEqual([valuesMove]);
     });
-    await settle();
-    expect(received).toEqual([OTHER]);
-
-    releases[0]?.();
-    await expect(other).resolves.toEqual(OTHER);
     await waitFor(() => {
-      expect(received).toEqual([OTHER, FIRST]);
+      expect(queue()).toEqual([RUNNING, QUEUED]);
     });
-    releases[1]?.();
-    await expect(mine).resolves.toEqual(FIRST);
+
+    answer(0, "save");
+    await expect(values).resolves.toEqual(valuesMove);
+    await waitFor(() => {
+      expect(received).toEqual([valuesMove, move([8, 7, 9])]);
+    });
+    answer(1, "save");
+    await expect(filters).resolves.toEqual(move([8, 7, 9]));
+  });
+
+  test("ends on the second move's order when the first queued move fails and the second saves", async () => {
+    const { listNow, result } = setup();
+    const { answer, received } = holdReorders();
+
+    const first = result.current.reorder.mutateAsync(move([8, 7, 9]));
+    // Caught where it starts: the refusal lands before it is asserted.
+    const refused = first.then(
+      () => null,
+      (error: unknown) => error
+    );
+    const second = result.current.reorder.mutateAsync(move([8, 9, 7]));
+    await waitFor(() => {
+      expect(received).toEqual([move([8, 7, 9])]);
+    });
+
+    answer(0, "fail");
+    expect(await refused).toMatchObject({
+      code: "BAD_REQUEST",
+      message: REFUSAL,
+    });
+    await waitFor(() => {
+      expect(received).toEqual([move([8, 7, 9]), move([8, 9, 7])]);
+    });
+    answer(1, "save");
+    await expect(second).resolves.toEqual(move([8, 9, 7]));
+
+    expect(listNow()).toEqual(listOf([8, 9, 7]));
+  });
+
+  test("keeps the second queued move on screen when the first one saves, before the second is answered", async () => {
+    const { listNow, result } = setup();
+    const { answer, received } = holdReorders();
+
+    const first = result.current.reorder.mutateAsync(move([8, 7, 9]));
+    const second = result.current.reorder.mutateAsync(move([8, 9, 7]));
+    await waitFor(() => {
+      expect(listNow()).toEqual(listOf([8, 9, 7]));
+    });
+    await waitFor(() => {
+      expect(received).toEqual([move([8, 7, 9])]);
+    });
+
+    answer(0, "save");
+    await expect(first).resolves.toEqual(move([8, 7, 9]));
+
+    // The first save must not flash its own, older order back.
+    expect(listNow()).toEqual(listOf([8, 9, 7]));
+    await waitFor(() => {
+      expect(received).toEqual([move([8, 7, 9]), move([8, 9, 7])]);
+    });
+    answer(1, "save");
+    await expect(second).resolves.toEqual(move([8, 9, 7]));
+    expect(listNow()).toEqual(listOf([8, 9, 7]));
+  });
+
+  test("creates no list when none is cached yet", async () => {
+    const { listNow, reorder, result } = setup({ list: null });
+
+    await result.current.reorder.mutateAsync(move([7, 8]));
+
+    expect(reorder).toHaveBeenCalledExactlyOnceWith(move([7, 8]));
+    expect(listNow()).toBeUndefined();
   });
 });
