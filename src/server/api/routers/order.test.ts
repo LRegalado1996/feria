@@ -20,6 +20,12 @@ const { TX } = vi.hoisted(() => ({
 
 const services = vi.hoisted(() => ({
   changeOrderStatus: vi.fn(async () => ({ id: 70, status: "packed" })),
+  countOrders: vi.fn(async () => ({
+    delivered: 2,
+    packed: 0,
+    received: 5,
+    undeliverable: 1,
+  })),
   createOrder: vi.fn(async () => ({ code: "ABCDE", token: "the-token" })),
   findAccessibleStore: vi.fn(),
   getActiveStoreBySlug: vi.fn(),
@@ -48,6 +54,7 @@ const services = vi.hoisted(() => ({
 
 vi.mock("@/server/services/order", () => ({
   changeOrderStatus: services.changeOrderStatus,
+  countOrders: services.countOrders,
   createOrder: services.createOrder,
   getOrder: services.getOrder,
   getOrderByToken: services.getOrderByToken,
@@ -146,6 +153,8 @@ function setup({
   const procedures = {
     changeStatus: async (input: unknown) =>
       await call(orderRouter.changeStatus, input as never, options),
+    counts: async (input: unknown) =>
+      await call(orderRouter.counts, input as never, options),
     create: async (input: unknown) =>
       await call(orderRouter.create, input as never, options),
     get: async (input: unknown) =>
@@ -372,6 +381,42 @@ describe("order router: the store's side", () => {
     expect(services.withStoreAccess).not.toHaveBeenCalled();
   });
 
+  test.each([
+    ["  José  ", "José"],
+    ["   ", undefined],
+  ])("lists with the search %j sent as %j", async (q, expected) => {
+    const { db, run } = setup({ signedIn: true });
+
+    await run("list", { q, storeSlug: "lr-market" });
+
+    expect(services.listOrders).toHaveBeenCalledExactlyOnceWith(db, {
+      cursor: undefined,
+      q: expected,
+      status: undefined,
+      storeId: 7,
+    });
+  });
+
+  test("counts the resolved store's orders per status, outside any write", async () => {
+    const { db, run } = setup({ signedIn: true });
+
+    await expect(run("counts", { storeSlug: "lr-market" })).resolves.toEqual({
+      delivered: 2,
+      packed: 0,
+      received: 5,
+      undeliverable: 1,
+    });
+
+    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
+      slug: "lr-market",
+      userId: "test-user-id",
+    });
+    expect(services.countOrders).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+    });
+    expect(services.withStoreAccess).not.toHaveBeenCalled();
+  });
+
   test("gets one order by id within the resolved store", async () => {
     const { db, run } = setup({ signedIn: true });
 
@@ -411,6 +456,7 @@ describe("order router: the store's side", () => {
 
   test.each([
     ["list", { storeSlug: "tienda-demo" }, services.listOrders],
+    ["counts", { storeSlug: "tienda-demo" }, services.countOrders],
     ["get", { id: 70, storeSlug: "tienda-demo" }, services.getOrder],
     [
       "changeStatus",
@@ -430,6 +476,7 @@ describe("order router: the store's side", () => {
 
   test.each([
     ["list", { storeSlug: "lr-market" }],
+    ["counts", { storeSlug: "lr-market" }],
     ["get", { id: 70, storeSlug: "lr-market" }],
     ["changeStatus", { id: 70, status: "packed", storeSlug: "lr-market" }],
   ] as const)(

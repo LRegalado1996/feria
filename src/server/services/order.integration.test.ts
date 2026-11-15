@@ -35,6 +35,7 @@ import {
 
 import {
   changeOrderStatus,
+  countOrders,
   createOrder,
   getOrder,
   getOrderByToken,
@@ -716,6 +717,158 @@ describe("reading an order", () => {
         (row) => row.code
       )
     ).toEqual([codes[2]]);
+  });
+});
+
+describe("searching and counting the orders", () => {
+  /** An order of `shop` with this name and phone, its code and status set. */
+  async function makeOrder(
+    shop: { id: number },
+    {
+      code,
+      customerName = "Ana",
+      customerPhone = "+59894000000",
+      status = "received",
+    }: {
+      code?: string;
+      customerName?: string;
+      customerPhone?: string;
+      status?: OrderStatus;
+    } = {}
+  ) {
+    const ring = await makeArticle(shop.id, { title: "Anillo" });
+    const created = await place(
+      shop,
+      orderValues({
+        customerName,
+        customerPhone,
+        productId: ring.id,
+      })
+    );
+    await db
+      .update(customerOrder)
+      .set({ code: code ?? created.code, status })
+      .where(eq(customerOrder.token, created.token));
+  }
+
+  async function searched(
+    shop: { id: number },
+    q: string,
+    status?: OrderStatus
+  ) {
+    const page = await listOrders(db, { q, status, storeId: shop.id });
+
+    return page.items.map((row) => row.code);
+  }
+
+  test("a code prefix typed in lower case finds the order, a code holding it elsewhere does not", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, { code: "K7P2M" });
+    await makeOrder(shop, { code: "XK7PA" });
+
+    expect(await searched(shop, "k7p")).toEqual(["K7P2M"]);
+  });
+
+  test("a name typed without its accents finds it, in any case", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, { code: "HXR4Q", customerName: "José Martínez" });
+    await makeOrder(shop, { code: "B9TNW", customerName: "Ana" });
+
+    expect(await searched(shop, "jose")).toEqual(["HXR4Q"]);
+    expect(await searched(shop, "MARTINEZ")).toEqual(["HXR4Q"]);
+  });
+
+  test("a phone typed locally finds the stored international number", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, { code: "M3N5P", customerPhone: "+59899123987" });
+    await makeOrder(shop, { code: "R6S8T", customerPhone: "+59891234567" });
+
+    expect(await searched(shop, "099 123")).toEqual(["M3N5P"]);
+  });
+
+  test("a search that matches nothing lists nothing, and % is taken literally", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, { customerName: "Ana" });
+
+    await expect(
+      listOrders(db, { q: "zzz", storeId: shop.id })
+    ).resolves.toEqual({ items: [], nextCursor: null });
+    expect(await searched(shop, "%")).toEqual([]);
+  });
+
+  test("a search narrows within a status", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, { code: "C2D3E", customerName: "Lucía" });
+    await makeOrder(shop, {
+      code: "F4G5H",
+      customerName: "Lucía",
+      status: "packed",
+    });
+    await makeOrder(shop, {
+      code: "J6K7M",
+      customerName: "Ana",
+      status: "packed",
+    });
+
+    expect(await searched(shop, "lucia")).toEqual(["F4G5H", "C2D3E"]);
+    expect(await searched(shop, "lucia", "packed")).toEqual(["F4G5H"]);
+  });
+
+  test("another store's orders never match", async () => {
+    const shopA = await makeStore();
+    const shopB = await makeStore();
+    await makeOrder(shopA, {
+      code: "N8P9Q",
+      customerName: "José",
+      customerPhone: "+59899123987",
+    });
+    await makeOrder(shopB, {
+      code: "N8P9R",
+      customerName: "José",
+      customerPhone: "+59899123987",
+    });
+
+    expect(await searched(shopA, "jose")).toEqual(["N8P9Q"]);
+    expect(await searched(shopA, "099 123")).toEqual(["N8P9Q"]);
+    expect(await searched(shopA, "n8p9")).toEqual(["N8P9Q"]);
+  });
+
+  test("counts the store's orders in each status, 0 where none, another store's left out", async () => {
+    const shop = await makeStore();
+    const other = await makeStore();
+    const empty = await makeStore();
+    const statuses: OrderStatus[] = [
+      "received",
+      "received",
+      "received",
+      "packed",
+      "delivered",
+      "delivered",
+    ];
+
+    // A phone each: one phone's hourly limit would stop the sixth.
+    for (const [index, status] of statuses.entries()) {
+      await makeOrder(shop, {
+        customerPhone: `+5989400010${String(index)}`,
+        status,
+      });
+    }
+
+    await makeOrder(other, { status: "undeliverable" });
+    await makeOrder(other, { status: "packed" });
+
+    await expect(countOrders(db, { storeId: shop.id })).resolves.toEqual({
+      delivered: 2,
+      packed: 1,
+      received: 3,
+      undeliverable: 0,
+    });
+    await expect(countOrders(db, { storeId: empty.id })).resolves.toEqual({
+      delivered: 0,
+      packed: 0,
+      received: 0,
+      undeliverable: 0,
+    });
   });
 });
 

@@ -21,6 +21,7 @@ import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 
 import {
   changeOrderStatus,
+  countOrders,
   createOrder,
   generateOrderCode,
   generateOrderToken,
@@ -892,6 +893,142 @@ describe("listOrders", () => {
 
     expect(page.items.map((row) => row.id)).toEqual([9, 8]);
     expect(page.nextCursor).toBeNull();
+  });
+
+  const CODE_OR_NAME_SQL =
+    '("customer_order"."code" like $2 or unaccent("customer_order"."customerName") ilike unaccent($3)';
+
+  test.each([
+    {
+      params: [STORE_ID, "JOSÉ%", "%josé%"],
+      phone: "",
+      q: "josé",
+    },
+    {
+      params: [STORE_ID, "099 123%", "%099 123%", "%99123%"],
+      phone: ' or "customer_order"."customerPhone" like $4',
+      q: "099 123",
+    },
+    {
+      params: [STORE_ID, "K7P123%", "%k7p123%", "%7123%"],
+      phone: ' or "customer_order"."customerPhone" like $4',
+      q: "k7p123",
+    },
+    {
+      params: [STORE_ID, "0991%", "%0991%", "%991%"],
+      phone: ' or "customer_order"."customerPhone" like $4',
+      q: "0991",
+    },
+    {
+      params: [STORE_ID, "012%", "%012%"],
+      phone: "",
+      q: "012",
+    },
+    {
+      params: [STORE_ID, "\\%\\_\\\\A%", "%\\%\\_\\\\a%"],
+      phone: "",
+      q: "%_\\a",
+    },
+  ])(
+    "searches $q by code prefix, accent-blind name and phone digits",
+    async ({ params, phone, q }) => {
+      const { db } = setupList([]);
+
+      await listOrders(db as never, { q, storeId: STORE_ID });
+
+      expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+        params,
+        sql: `("customer_order"."storeId" = $1 and ${CODE_OR_NAME_SQL}${phone}))`,
+      });
+    }
+  );
+
+  test("searches within a status, before the cursor", async () => {
+    const { db } = setupList([]);
+
+    await listOrders(db as never, {
+      cursor: { createdAt: NOW, id: 40 },
+      q: "ana",
+      status: "packed",
+      storeId: STORE_ID,
+    });
+
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [
+        STORE_ID,
+        "packed",
+        "ANA%",
+        "%ana%",
+        NOW.toISOString(),
+        NOW.toISOString(),
+        40,
+      ],
+      sql:
+        '("customer_order"."storeId" = $1 and "customer_order"."status" = $2 and ' +
+        '("customer_order"."code" like $3 or unaccent("customer_order"."customerName") ilike unaccent($4)) and ' +
+        '("customer_order"."createdAt" < $5 or ("customer_order"."createdAt" = $6 and "customer_order"."id" < $7)))',
+    });
+  });
+});
+
+describe("countOrders", () => {
+  test("counts the store's orders per status in one grouped query", async () => {
+    const db = createMockDatabase();
+    db.$["select.groupBy"].mockResolvedValue([]);
+
+    await countOrders(db as never, { storeId: STORE_ID });
+
+    const [columns] = db.$.select.mock.calls[0] ?? [];
+    const { count, ...plain } = columns as Record<string, unknown>;
+    expect(plain).toEqual({ status: customerOrder.status });
+    expect(renderQuery(count)).toEqual({ params: [], sql: "count(*)::int" });
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(customerOrder);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID],
+      sql: '"customer_order"."storeId" = $1',
+    });
+    expect(db.$["select.groupBy"]).toHaveBeenCalledExactlyOnceWith(
+      customerOrder.status
+    );
+  });
+
+  test.each<
+    [
+      string,
+      { count: number; status: OrderStatus }[],
+      Record<OrderStatus, number>,
+    ]
+  >([
+    [
+      "no orders",
+      [],
+      { delivered: 0, packed: 0, received: 0, undeliverable: 0 },
+    ],
+    [
+      "some statuses",
+      [
+        { count: 4, status: "received" },
+        { count: 1, status: "undeliverable" },
+      ],
+      { delivered: 0, packed: 0, received: 4, undeliverable: 1 },
+    ],
+    [
+      "every status",
+      [
+        { count: 2, status: "delivered" },
+        { count: 3, status: "packed" },
+        { count: 5, status: "received" },
+        { count: 7, status: "undeliverable" },
+      ],
+      { delivered: 2, packed: 3, received: 5, undeliverable: 7 },
+    ],
+  ])("names every status, 0 where none: %s", async (_case, rows, expected) => {
+    const db = createMockDatabase();
+    db.$["select.groupBy"].mockResolvedValue(rows);
+
+    await expect(
+      countOrders(db as never, { storeId: STORE_ID })
+    ).resolves.toEqual(expected);
   });
 });
 
