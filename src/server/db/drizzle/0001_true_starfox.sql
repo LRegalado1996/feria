@@ -10,6 +10,7 @@ CREATE TABLE "store" (
 	"currencyCode" "currency_code" NOT NULL,
 	"logoUrl" text,
 	"isActive" boolean NOT NULL,
+	"isDefault" boolean DEFAULT false NOT NULL,
 	"colorBackground" text NOT NULL,
 	"colorSurface" text NOT NULL,
 	"colorForeground" text NOT NULL,
@@ -18,6 +19,7 @@ CREATE TABLE "store" (
 	"createdAt" timestamp (3) with time zone DEFAULT now() NOT NULL,
 	"updatedAt" timestamp (3) with time zone NOT NULL,
 	CONSTRAINT "store_slug_unique" UNIQUE("slug"),
+	CONSTRAINT "store_default_is_active" CHECK (NOT "store"."isDefault" OR "store"."isActive"),
 	CONSTRAINT "store_slug_format" CHECK ("store"."slug" ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' AND char_length("store"."slug") BETWEEN 2 AND 40),
 	CONSTRAINT "store_slug_not_reserved" CHECK ("store"."slug" NOT IN ('admin', 'api', 'design', 'en', 'es', 'monitoring')),
 	CONSTRAINT "store_color_background_hex" CHECK ("store"."colorBackground" ~ '^#[0-9a-f]{6}$'),
@@ -38,4 +40,5 @@ CREATE TABLE "store_translation" (
 	CONSTRAINT "store_translation_storeId_locale_unique" UNIQUE("storeId","locale")
 );
 --> statement-breakpoint
-ALTER TABLE "store_translation" ADD CONSTRAINT "store_translation_storeId_store_id_fk" FOREIGN KEY ("storeId") REFERENCES "public"."store"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "store_translation" ADD CONSTRAINT "store_translation_storeId_store_id_fk" FOREIGN KEY ("storeId") REFERENCES "public"."store"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "store_single_default" ON "store" USING btree ("isDefault") WHERE "store"."isDefault";

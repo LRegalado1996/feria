@@ -54,6 +54,7 @@ function makeInput(overrides: Record<string, unknown> = {}) {
     currencyCode: "UYU",
     instagramUrl: null,
     isActive: true,
+    isDefault: false,
     logoUrl: null,
     name: "Sample Store",
     slug: "sample-store",

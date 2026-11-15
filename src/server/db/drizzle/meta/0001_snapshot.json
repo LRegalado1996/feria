@@ -1,5 +1,5 @@
 {
-  "id": "6829cc19-6fe8-4335-ba5a-edaac5015497",
+  "id": "0b381c82-dba4-4755-b208-68bb1f798675",
   "prevId": "2d031959-5a82-4ceb-89e8-2519d2468731",
   "version": "7",
   "dialect": "postgresql",
@@ -447,6 +447,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "isDefault": {
+          "name": "isDefault",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "colorBackground": {
           "name": "colorBackground",
           "type": "text",
@@ -491,7 +498,24 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "store_single_default": {
+          "name": "store_single_default",
+          "columns": [
+            {
+              "expression": "isDefault",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"store\".\"isDefault\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
@@ -505,6 +529,10 @@
       },
       "policies": {},
       "checkConstraints": {
+        "store_default_is_active": {
+          "name": "store_default_is_active",
+          "value": "NOT \"store\".\"isDefault\" OR \"store\".\"isActive\""
+        },
         "store_slug_format": {
           "name": "store_slug_format",
           "value": "\"store\".\"slug\" ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' AND char_length(\"store\".\"slug\") BETWEEN 2 AND 40"

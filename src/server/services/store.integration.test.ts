@@ -29,7 +29,14 @@ vi.mock("@/env", () => ({
 // is the whole cleanup, and it never reaches a row another file owns.
 const createdStoreIds: number[] = [];
 
+// What a test that moved the default mark registered to put it back.
+const restoreDefault: (() => Promise<void>)[] = [];
+
 afterEach(async () => {
+  for (const restore of restoreDefault.splice(0)) {
+    await restore();
+  }
+
   await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
 });
 
@@ -61,6 +68,7 @@ function makeValues(
     currencyCode: "UYU",
     instagramUrl: "https://instagram.com/sample",
     isActive: true,
+    isDefault: false,
     logoUrl: null,
     name: "Integration Store",
     slug: uniqueSlug(),
@@ -299,6 +307,172 @@ describe("what the database itself refuses", () => {
     await db.delete(store).where(eq(store.id, created.id));
 
     expect(await textsOf(created.id)).toEqual([]);
+  });
+});
+
+describe("the default store", () => {
+  // The worker's clone may hold a default store of its own (the seed's). A
+  // test here moves the mark, so it first registers putting it back where it
+  // was: `afterEach` runs that before deleting the stores the test created.
+  async function rememberDefault() {
+    const found = await db.query.store.findFirst({
+      columns: { id: true },
+      where: eq(store.isDefault, true),
+    });
+
+    restoreDefault.push(async () => {
+      await db
+        .update(store)
+        .set({ isDefault: false })
+        .where(eq(store.isDefault, true));
+
+      if (found) {
+        await db
+          .update(store)
+          .set({ isDefault: true })
+          .where(eq(store.id, found.id));
+      }
+    });
+  }
+
+  async function defaultIds() {
+    const rows = await db.query.store.findMany({
+      columns: { id: true },
+      where: eq(store.isDefault, true),
+    });
+
+    return rows.map((row) => row.id);
+  }
+
+  test("creating a default store takes the mark from the one that had it", async () => {
+    await rememberDefault();
+    const first = await create({ isDefault: true });
+
+    const second = await create({ isDefault: true });
+
+    expect(await defaultIds()).toEqual([second.id]);
+    await expect(
+      db.query.store.findFirst({
+        columns: { isActive: true, isDefault: true },
+        where: eq(store.id, first.id),
+      })
+    ).resolves.toEqual({ isActive: true, isDefault: false });
+  });
+
+  test("an edit moves the mark, and an edit that unmarks leaves no default", async () => {
+    await rememberDefault();
+    const first = await create({ isDefault: true });
+    const second = await create();
+
+    await updateStore(db, {
+      ...makeValues({ isDefault: true, slug: second.slug }),
+      id: second.id,
+    });
+
+    expect(await defaultIds()).toEqual([second.id]);
+
+    await updateStore(db, {
+      ...makeValues({ isDefault: false, slug: second.slug }),
+      id: second.id,
+    });
+
+    expect(await defaultIds()).toEqual([]);
+    await expect(
+      db.query.store.findFirst({
+        columns: { isDefault: true },
+        where: eq(store.id, first.id),
+      })
+    ).resolves.toEqual({ isDefault: false });
+  });
+
+  test("saving the default store again keeps it the default", async () => {
+    await rememberDefault();
+    const created = await create({ isDefault: true });
+
+    await updateStore(db, {
+      ...makeValues({ isDefault: true, name: "Renamed", slug: created.slug }),
+      id: created.id,
+    });
+
+    expect(await defaultIds()).toEqual([created.id]);
+  });
+
+  test("two stores made the default at once end with exactly one, and neither edit deadlocks", async () => {
+    await rememberDefault();
+    const older = await create();
+    const newer = await create();
+
+    // Each edit locks both rows; in id order, so they queue instead of
+    // holding one row each. Repeated, because one lucky interleaving proves
+    // nothing.
+    for (let round = 0; round < 10; round += 1) {
+      const results = await Promise.allSettled([
+        updateStore(db, {
+          ...makeValues({ isDefault: true, slug: newer.slug }),
+          id: newer.id,
+        }),
+        updateStore(db, {
+          ...makeValues({ isDefault: true, slug: older.slug }),
+          id: older.id,
+        }),
+      ]);
+
+      expect(results.map((result) => result.status)).toEqual([
+        "fulfilled",
+        "fulfilled",
+      ]);
+      const marked = await defaultIds();
+      expect(marked).toHaveLength(1);
+      expect([older.id, newer.id]).toContain(marked[0]);
+    }
+  });
+
+  test("the database refuses a second default store written straight into the table", async () => {
+    await rememberDefault();
+    await db
+      .update(store)
+      .set({ isDefault: false })
+      .where(eq(store.isDefault, true));
+    const first = await create({ isDefault: true });
+
+    await expect(
+      insertDirectly(makeRow({ isDefault: true, slug: uniqueSlug() }))
+    ).rejects.toMatchObject({
+      cause: { code: "23505", constraint: "store_single_default" },
+    });
+
+    expect(await defaultIds()).toEqual([first.id]);
+  });
+
+  test("the database refuses an inactive default store, on insert and on deactivation", async () => {
+    await rememberDefault();
+    const refused = {
+      cause: { code: "23514", constraint: "store_default_is_active" },
+    };
+
+    await expect(
+      insertDirectly(
+        makeRow({ isActive: false, isDefault: true, slug: uniqueSlug() })
+      )
+    ).rejects.toMatchObject(refused);
+
+    const created = await create({ isDefault: true });
+
+    await expect(
+      db.update(store).set({ isActive: false }).where(eq(store.id, created.id))
+    ).rejects.toMatchObject(refused);
+  });
+
+  test("any number of stores can be ordinary ones", async () => {
+    const first = await create({ isDefault: false });
+    const second = await create({ isDefault: false });
+
+    await expect(
+      db.query.store.findMany({
+        columns: { isDefault: true },
+        where: inArray(store.id, [first.id, second.id]),
+      })
+    ).resolves.toEqual([{ isDefault: false }, { isDefault: false }]);
   });
 });
 

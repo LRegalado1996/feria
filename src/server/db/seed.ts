@@ -15,7 +15,7 @@ export const SEED_USER = {
 
 /**
  * Two stores with different palettes, so one deployment shows a store's own
- * colors at each path. The first is Lucas's, in the default palette under the
+ * colors at each path. The first is Lucas's and the site's default, in the default palette under the
  * project's working name (the brand is FER-006's to decide); the second is a
  * stand-in for the next business. Contact details stay empty: a seed holds
  * nobody's phone number.
@@ -30,6 +30,7 @@ export const SEED_STORES = [
     currencyCode: "UYU",
     instagramUrl: null,
     isActive: true,
+    isDefault: true,
     logoUrl: null,
     name: "LR Market",
     slug: "lr-market",
@@ -59,6 +60,7 @@ export const SEED_STORES = [
     currencyCode: "USD",
     instagramUrl: null,
     isActive: true,
+    isDefault: false,
     logoUrl: null,
     name: "Tienda Demo",
     slug: "tienda-demo",

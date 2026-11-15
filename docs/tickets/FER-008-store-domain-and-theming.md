@@ -36,7 +36,8 @@ Every later query for catalog, orders or metrics filters by `storeId` taken from
 
 Decisions taken on the way:
 
-- **`/` still shows the template's sign-in and feed.** Lucas chose to leave it until the admin exists, so the redirect to `DEFAULT_STORE_SLUG`, and that variable, moved to FER-013, which gives sign-in its own address.
+- **`/` still shows the template's sign-in and feed.** Lucas chose to leave it for now, so the redirect to the default store moved to FER-013, which gives sign-in its own address.
+- **The default store is a column, not an environment variable.** The site will have one store open at a time, and which one is the store owner's setting, so `store.isDefault` replaces the `DEFAULT_STORE_SLUG` the scope names. At most one store holds it (the database refuses a second), it must be active, and marking a store takes the mark from the one that had it. The seed marks `lr-market`. Nothing reads it yet: FER-013 does, and FER-014 draws its checkbox.
 - **Stores can be written through the API** (`store.create`, `store.update`) by any signed-in user, everywhere but production: the live deployment refuses both until roles exist. Roles arrive with FER-009, which swaps in its procedure builders and removes that gate. On QA, where sign-up is still public, anyone who signs up can edit a store until then.
 - **An edit sends the whole store,** texts included. The five colors only make sense together, and a partial update would have to merge with a row read earlier.
 - **A message under a field is the form's job.** The API answers a refused store with `BAD_REQUEST`; the wording ("…has a contrast of 4.46:1. It needs at least 4.5:1") lives in the schema the settings form will validate with (FER-014), where it also gets its Spanish.

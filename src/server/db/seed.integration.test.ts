@@ -84,7 +84,13 @@ test("leaves two active stores with different palettes and texts in both languag
     expect(second.createdStores).toEqual([]);
 
     const stores = await tx.query.store.findMany({
-      columns: { colorAccent: true, isActive: true, name: true, slug: true },
+      columns: {
+        colorAccent: true,
+        isActive: true,
+        isDefault: true,
+        name: true,
+        slug: true,
+      },
       orderBy: store.slug,
       where: inArray(store.slug, SEED_SLUGS),
       with: {
@@ -103,6 +109,7 @@ test("leaves two active stores with different palettes and texts in both languag
       {
         colorAccent: "#c8f31d",
         isActive: true,
+        isDefault: true,
         locales: ["es", "en"],
         name: "LR Market",
         slug: "lr-market",
@@ -110,6 +117,7 @@ test("leaves two active stores with different palettes and texts in both languag
       {
         colorAccent: "#ff8a3d",
         isActive: true,
+        isDefault: false,
         locales: ["es", "en"],
         name: "Tienda Demo",
         slug: "tienda-demo",

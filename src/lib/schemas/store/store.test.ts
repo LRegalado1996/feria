@@ -29,6 +29,7 @@ function makeStore(
     currencyCode: "UYU",
     instagramUrl: null,
     isActive: true,
+    isDefault: false,
     logoUrl: null,
     name: "Sample Store",
     slug: "sample-store",
@@ -495,6 +496,45 @@ describe("createStoreSchema", () => {
       })
     ).toEqual([[`translations.0.${field}`, message]]);
   });
+});
+
+describe("the default store", () => {
+  test("an active store can be the default", () => {
+    expect(issuesOf({ isActive: true, isDefault: true })).toEqual([]);
+  });
+
+  test("an inactive store cannot: the site would open on a 404", () => {
+    expect(issuesOf({ isActive: false, isDefault: true })).toEqual([
+      [
+        "isDefault",
+        "The default store has to be active. Activate it, or make another store the default first",
+      ],
+    ]);
+  });
+
+  test("an inactive store that is not the default is fine", () => {
+    expect(issuesOf({ isActive: false, isDefault: false })).toEqual([]);
+  });
+
+  test("an edit is held to the same rule", () => {
+    const result = updateStoreSchema.safeParse({
+      ...makeStore({ isActive: false, isDefault: true }),
+      id: 7,
+    });
+
+    expect(result.error?.issues.map((issue) => issue.path.join("."))).toEqual([
+      "isDefault",
+    ]);
+  });
+
+  test.each([["yes"], [1], [null], [undefined]])(
+    "refuses %j where a yes or no is expected",
+    (isDefault) => {
+      expect(
+        createStoreSchema.safeParse(makeStore({ isDefault })).success
+      ).toBe(false);
+    }
+  );
 });
 
 describe("updateStoreSchema", () => {

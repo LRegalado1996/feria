@@ -273,6 +273,8 @@ const storeFieldsSchema = storePaletteSchema.extend({
     hosts: ["instagram.com", "www.instagram.com"],
   }),
   isActive: z.boolean(),
+  // The store the site opens on. Marking one unmarks the one that was.
+  isDefault: z.boolean(),
   logoUrl: storeLink({ example: "https://example.com/logo.png" }),
   // Trimmed first: `min(1)` alone accepts "   ".
   name: z
@@ -337,8 +339,24 @@ function checkPaletteContrast(
   }
 }
 
-export const createStoreSchema =
-  storeFieldsSchema.superRefine(checkPaletteContrast);
+/** The site cannot open on a store visitors get a 404 for. */
+function checkDefaultIsActive(
+  input: { isActive: boolean; isDefault: boolean },
+  context: z.RefinementCtx
+): void {
+  if (input.isDefault && !input.isActive) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "The default store has to be active. Activate it, or make another store the default first",
+      path: ["isDefault"],
+    });
+  }
+}
+
+export const createStoreSchema = storeFieldsSchema
+  .superRefine(checkPaletteContrast)
+  .superRefine(checkDefaultIsActive);
 
 export type CreateStoreValues = z.infer<typeof createStoreSchema>;
 
@@ -348,7 +366,8 @@ export const updateStoreSchema = storeFieldsSchema
     // column holds, so an id past it is a 400 and not a database error.
     id: z.coerce.number().int().positive().max(MAX_INT4),
   })
-  .superRefine(checkPaletteContrast);
+  .superRefine(checkPaletteContrast)
+  .superRefine(checkDefaultIsActive);
 
 export type UpdateStoreValues = z.infer<typeof updateStoreSchema>;
 

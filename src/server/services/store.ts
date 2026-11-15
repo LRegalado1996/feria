@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 
 import { isUniqueViolation } from "@/lib/errors/postgres";
 import type {
@@ -12,6 +12,8 @@ import { store, storeTranslation } from "@/server/db/schema";
 
 // The name Postgres gives `store.slug`'s unique constraint (see the migration).
 const SLUG_UNIQUE_CONSTRAINT = "store_slug_unique";
+// The partial unique index that allows one default store.
+const SINGLE_DEFAULT_INDEX = "store_single_default";
 
 const TRANSLATION_COLUMNS = {
   description: storeTranslation.description,
@@ -33,6 +35,7 @@ function toStoreRow(values: CreateStoreValues) {
     currencyCode: values.currencyCode,
     instagramUrl: values.instagramUrl,
     isActive: values.isActive,
+    isDefault: values.isDefault,
     logoUrl: values.logoUrl,
     name: values.name,
     slug: values.slug,
@@ -55,10 +58,11 @@ function toTranslationRows(
 }
 
 /**
- * A slug another store holds is the one conflict a person can fix by typing
- * something else, so it gets its own message; anything else propagates.
+ * The two conflicts a person can do something about get their own message:
+ * a slug another store holds, and a default store that someone else set in
+ * the same instant. Anything else propagates.
  */
-async function refusingATakenSlug<T>(write: () => Promise<T>): Promise<T> {
+async function refusingKnownConflicts<T>(write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (error) {
@@ -68,8 +72,31 @@ async function refusingATakenSlug<T>(write: () => Promise<T>): Promise<T> {
       });
     }
 
+    if (isUniqueViolation(error, SINGLE_DEFAULT_INDEX)) {
+      throw new ORPCError("CONFLICT", {
+        message: "Another store was made the default just now. Try again",
+      });
+    }
+
     throw error;
   }
+}
+
+/**
+ * Makes room for a new default store: the one that holds the mark, if it is
+ * another store, loses it. Called in the transaction that then marks
+ * `keepId`, so there is never a moment with two.
+ */
+async function unmarkOtherDefault(tx: DatabaseClient, keepId: number | null) {
+  await tx
+    .update(store)
+    .set({ isDefault: false })
+    .where(
+      and(
+        eq(store.isDefault, true),
+        keepId === null ? undefined : ne(store.id, keepId)
+      )
+    );
 }
 
 /**
@@ -136,14 +163,21 @@ export async function listTakenStoreSlugs(
   return rows.map((row) => row.slug);
 }
 
-/** Stores the store and its texts together, or neither. */
+/**
+ * Stores the store and its texts together, or neither. A store created as
+ * the default takes the mark from the one that had it.
+ */
 export async function createStore(
   db: DatabaseClient,
   values: CreateStoreValues
 ) {
-  return await refusingATakenSlug(
+  return await refusingKnownConflicts(
     async () =>
       await db.transaction(async (tx) => {
+        if (values.isDefault) {
+          await unmarkOtherDefault(tx, null);
+        }
+
         const [created] = await tx
           .insert(store)
           .values(toStoreRow(values))
@@ -169,15 +203,30 @@ export async function createStore(
 /**
  * Replaces everything a person can set on store `id`, texts included: a
  * language left out of `translations` loses its text. One transaction, so a
- * reader never sees the new colors with the old texts.
+ * reader never sees the new colors with the old texts. Marking the store as
+ * the default takes the mark from the one that had it; unmarking it leaves
+ * the site with no default store.
  */
 export async function updateStore(
   db: DatabaseClient,
   values: UpdateStoreValues
 ) {
-  return await refusingATakenSlug(
+  return await refusingKnownConflicts(
     async () =>
       await db.transaction(async (tx) => {
+        if (values.isDefault) {
+          // Both rows this edit writes, locked in id order before either is
+          // written: two edits that each make their own store the default
+          // would otherwise lock one row each and wait on the other's.
+          await tx
+            .select({ id: store.id })
+            .from(store)
+            .where(or(eq(store.id, values.id), eq(store.isDefault, true)))
+            .orderBy(store.id)
+            .for("update");
+          await unmarkOtherDefault(tx, values.id);
+        }
+
         const [updated] = await tx
           .update(store)
           .set(toStoreRow(values))

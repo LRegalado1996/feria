@@ -165,6 +165,7 @@ describe("seed", () => {
         colorAccent: "#c8f31d",
         currencyCode: "UYU",
         isActive: true,
+        isDefault: true,
         name: "LR Market",
         slug: "lr-market",
       })
@@ -174,6 +175,7 @@ describe("seed", () => {
         colorAccent: "#ff8a3d",
         currencyCode: "USD",
         isActive: true,
+        isDefault: false,
         name: "Tienda Demo",
         slug: "tienda-demo",
       })

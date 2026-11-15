@@ -39,6 +39,7 @@ function makeValues(
     currencyCode: "UYU",
     instagramUrl: "https://instagram.com/sample",
     isActive: true,
+    isDefault: false,
     logoUrl: null,
     name: "Sample Store",
     slug: "sample-store",
@@ -63,6 +64,19 @@ function violation(code: string, constraint: string) {
     [],
     Object.assign(new Error("violates constraint"), { code, constraint })
   );
+}
+
+/** When a spy was first called, among every spy's calls; fails if it never was. */
+function firstCallOrder(
+  spy: { mock: { invocationCallOrder: number[] } } | undefined
+) {
+  const order = spy?.mock.invocationCallOrder[0];
+
+  if (order === undefined) {
+    throw new Error("The spy was never called");
+  }
+
+  return order;
 }
 
 function setup() {
@@ -291,6 +305,89 @@ describe("createStore", () => {
       await expect(create(makeValues())).rejects.toBe(error);
     }
   );
+});
+
+describe("the default store", () => {
+  test("a store created as the default first takes the mark from the store that has it", async () => {
+    const { answerWrites, create, db } = setup();
+    answerWrites("insert", makeRow({ isDefault: true }));
+
+    await create(makeValues({ isDefault: true }));
+
+    expect(db.$.update).toHaveBeenCalledExactlyOnceWith(store);
+    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
+      isDefault: false,
+    });
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      sql: '"store"."isDefault" = $1',
+      params: [true],
+    });
+    // Unmarked before the new default is written, or the index refuses it.
+    expect(firstCallOrder(db.$["update.where"])).toBeLessThan(
+      firstCallOrder(db.$["insert.values"])
+    );
+  });
+
+  test("a store created as an ordinary one leaves the default alone", async () => {
+    const { answerWrites, create, db } = setup();
+    answerWrites("insert", makeRow());
+
+    await create(makeValues({ isDefault: false }));
+
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test("an edit that makes a store the default locks both rows in id order, then unmarks the other one", async () => {
+    const { answerWrites, db, update } = setup();
+    answerWrites("update", makeRow({ isDefault: true }));
+
+    await update({ ...makeValues({ isDefault: true }), id: 7 });
+
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      sql: '("store"."id" = $1 or "store"."isDefault" = $2)',
+      params: [7, true],
+    });
+    expect(db.$["select.orderBy"]).toHaveBeenCalledExactlyOnceWith(store.id);
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
+    expect(db.$["update.set"].mock.calls[0]).toEqual([{ isDefault: false }]);
+    // Never the store being edited: it is about to be marked.
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      sql: '("store"."isDefault" = $1 and "store"."id" <> $2)',
+      params: [true, 7],
+    });
+    expect(db.$["update.set"].mock.calls[1]).toEqual([
+      expect.objectContaining({ isDefault: true }),
+    ]);
+    expect(firstCallOrder(db.$["select.for"])).toBeLessThan(
+      firstCallOrder(db.$["update.set"])
+    );
+  });
+
+  test("an edit that does not make the store the default locks and unmarks nothing", async () => {
+    const { answerWrites, db, update } = setup();
+    answerWrites("update", makeRow());
+
+    await update({ ...makeValues({ isDefault: false }), id: 7 });
+
+    expect(db.$.select).not.toHaveBeenCalled();
+    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ isDefault: false, name: "Sample Store" })
+    );
+  });
+
+  test("answers CONFLICT when someone else set the default in the same instant", async () => {
+    const { db, update } = setup();
+    db.$["update.returning"].mockRejectedValue(
+      violation("23505", "store_single_default")
+    );
+
+    await expect(
+      update({ ...makeValues({ isDefault: true }), id: 7 })
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Another store was made the default just now. Try again",
+    });
+  });
 });
 
 describe("updateStore", () => {

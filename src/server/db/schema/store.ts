@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 import {
@@ -48,6 +49,9 @@ export const store = pgTable(
     currencyCode: currencyCodeEnum().notNull(),
     logoUrl: text(),
     isActive: boolean().notNull(),
+    // The store the site opens on. At most one, by the partial unique index
+    // below, and never an inactive one.
+    isDefault: boolean().notNull().default(false),
     // The store's palette, the five storefront tokens (design.md § Storefront).
     colorBackground: text().notNull(),
     colorSurface: text().notNull(),
@@ -63,6 +67,15 @@ export const store = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // Only rows with `isDefault` are indexed, and all of them hold the same
+    // value, so a second default store is a unique violation.
+    uniqueIndex("store_single_default")
+      .on(table.isDefault)
+      .where(sql`${table.isDefault}`),
+    check(
+      "store_default_is_active",
+      sql`NOT ${table.isDefault} OR ${table.isActive}`
+    ),
     check(
       "store_slug_format",
       sql`${table.slug} ~ ${slugPattern} AND char_length(${table.slug}) BETWEEN ${slugMinLength} AND ${slugMaxLength}`
