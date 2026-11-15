@@ -2,7 +2,7 @@
 
 - **Milestone:** M2 Core domain
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-009
 
 ## Goal
@@ -29,6 +29,14 @@ Uploads (FER-011) and all UI.
 - Public procedures never return drafts or another store's rows, with tests on both sides of each rule.
 - Search matches title and description in the requested locale.
 - The paginated list is stable while rows are inserted, per the template's keyset rule.
+
+## Outcome
+
+- Schema in `src/server/db/schema/catalog.ts`, migration `0003`; `seed` joins the reserved store slugs (migration `0004`) because the sample photos live in `public/seed/`.
+- Public reads, `catalog.categories`, `catalog.products` (keyset on `publishedAt`, `id`; category and search), `catalog.product` and `catalog.related`, resolve the active store from `storeSlug` and answer only its published articles, with the store's currency beside every price. Search matches the title and description the visitor is shown: their language, or Spanish where the article has no text in it.
+- Store-scoped writes in the `product` router (`create`, `update`, `publish`, `unpublish`, `setAvailability`, `delete`, `reorderImages`) run through `storeProcedure` and `withStoreAccess`. Publishing re-derives `resolvePublishGaps` (image, category, price, Spanish title) under the row's lock and names what is missing.
+- Seed: the five launch categories and eleven sample articles in Lucas's store, one unavailable, with photos credited in `docs/brand/seed-photos.md`.
+- Adding images is FER-011's (uploads); `reorderImages` orders the ones the seed or the uploader created. Category management is FER-016's.
 
 ## Notes
 

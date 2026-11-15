@@ -12,6 +12,11 @@ import {
 } from "@/server/services/access";
 import { createStore, listTakenStoreSlugs } from "@/server/services/store";
 
+import { seedCatalog } from "./seed-catalog";
+
+/** The store that gets the sample catalog: Lucas's. */
+const CATALOG_STORE_SLUG = "lr-market";
+
 interface SeedAccount {
   email: string;
   name: string;
@@ -258,5 +263,20 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
     }
   }
 
-  return { createdAccounts, createdPost: createPost, createdStores };
+  const catalogStoreId = storeIds.get(CATALOG_STORE_SLUG);
+  // In one transaction: a seed that fails half-way leaves no half catalog,
+  // and the next run (which skips a store that has categories) starts over.
+  const createdArticles =
+    catalogStoreId === undefined
+      ? 0
+      : await db.transaction(
+          async (tx) => await seedCatalog(tx, catalogStoreId)
+        );
+
+  return {
+    createdAccounts,
+    createdArticles,
+    createdPost: createPost,
+    createdStores,
+  };
 }

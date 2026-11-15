@@ -22,6 +22,20 @@
       "when": 1794712130258,
       "tag": "0002_common_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794714357614,
+      "tag": "0003_soft_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794714639164,
+      "tag": "0004_brief_vermin",
+      "breakpoints": true
     }
   ]
 }

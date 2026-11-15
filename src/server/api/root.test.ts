@@ -14,7 +14,12 @@ vi.mock("@/env", () => ({
 // Every key here is a public URL prefix (`/api/orpc/post/...`): a router
 // mounted by accident is reachable, and one dropped is a 404 for every client.
 test("mounts each domain router at its own key, and nothing else", () => {
-  expect(Object.keys(appRouter)).toEqual(["post", "store"]);
+  expect(Object.keys(appRouter)).toEqual([
+    "catalog",
+    "post",
+    "product",
+    "store",
+  ]);
   expect(appRouter.post).toBe(postRouter);
   expect(appRouter.store).toBe(storeRouter);
 });

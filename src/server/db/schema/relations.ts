@@ -1,6 +1,14 @@
 import { relations } from "drizzle-orm";
 
 import { account, session, user } from "./auth";
+import {
+  category,
+  categoryTranslation,
+  product,
+  productImage,
+  productImageTranslation,
+  productTranslation,
+} from "./catalog";
 import { post } from "./post";
 import { store, storeTranslation } from "./store";
 import { storeMember } from "./store-member";
@@ -34,7 +42,9 @@ export const postRelations = relations(post, ({ one }) => ({
 }));
 
 export const storeRelations = relations(store, ({ many }) => ({
+  categories: many(category),
   members: many(storeMember),
+  products: many(product),
   translations: many(storeTranslation),
 }));
 
@@ -55,6 +65,63 @@ export const storeTranslationRelations = relations(
     store: one(store, {
       fields: [storeTranslation.storeId],
       references: [store.id],
+    }),
+  })
+);
+
+export const categoryRelations = relations(category, ({ many, one }) => ({
+  products: many(product),
+  store: one(store, { fields: [category.storeId], references: [store.id] }),
+  translations: many(categoryTranslation),
+}));
+
+export const categoryTranslationRelations = relations(
+  categoryTranslation,
+  ({ one }) => ({
+    category: one(category, {
+      fields: [categoryTranslation.categoryId],
+      references: [category.id],
+    }),
+  })
+);
+
+export const productRelations = relations(product, ({ many, one }) => ({
+  category: one(category, {
+    fields: [product.categoryId],
+    references: [category.id],
+  }),
+  images: many(productImage),
+  store: one(store, { fields: [product.storeId], references: [store.id] }),
+  translations: many(productTranslation),
+}));
+
+export const productTranslationRelations = relations(
+  productTranslation,
+  ({ one }) => ({
+    product: one(product, {
+      fields: [productTranslation.productId],
+      references: [product.id],
+    }),
+  })
+);
+
+export const productImageRelations = relations(
+  productImage,
+  ({ many, one }) => ({
+    product: one(product, {
+      fields: [productImage.productId],
+      references: [product.id],
+    }),
+    translations: many(productImageTranslation),
+  })
+);
+
+export const productImageTranslationRelations = relations(
+  productImageTranslation,
+  ({ one }) => ({
+    image: one(productImage, {
+      fields: [productImageTranslation.productImageId],
+      references: [productImage.id],
     }),
   })
 );

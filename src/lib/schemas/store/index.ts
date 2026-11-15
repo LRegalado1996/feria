@@ -32,6 +32,8 @@ export const RESERVED_STORE_SLUGS = [
   "es",
   // The Sentry tunnel (`src/proxy.ts`).
   "monitoring",
+  // The sample articles' photos (`public/seed/`, FER-010).
+  "seed",
 ] as const;
 
 /** The currencies a store can sell in, pesos first. */

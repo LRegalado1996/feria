@@ -271,6 +271,8 @@ describe("proxy matcher", () => {
     "/fr/opengraph-image",
     "/brands",
     "/en/brand/lr-market-logo.svg",
+    "/seeds",
+    "/en/seed/ring-1.jpg",
     // The template's icon is gone: the tab icon is generated (`/icon`).
     "/favicon.ico",
   ])("runs on %s", (path) => {
@@ -286,6 +288,7 @@ describe("proxy matcher", () => {
     "/icon",
     "/apple-icon",
     "/brand/lr-market-logo.svg",
+    "/seed/ring-1.jpg",
   ])("stays off %s, which has no language", (pathname) => {
     expect(matches(pathname)).toBe(false);
   });

@@ -3,7 +3,13 @@ import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
-import { store, storeMember, storeTranslation, user } from "@/server/db/schema";
+import {
+  category,
+  store,
+  storeMember,
+  storeTranslation,
+  user,
+} from "@/server/db/schema";
 
 import { SEED_MEMBERS, SEED_STORES, SEED_USER, seed } from "./seed";
 
@@ -40,6 +46,7 @@ test("leaves three logins with their roles, credentials and memberships, and a s
     expect(first.createdAccounts).toEqual(SEED_EMAILS);
     expect(second).toEqual({
       createdAccounts: [],
+      createdArticles: 0,
       createdPost: false,
       createdStores: [],
     });
@@ -110,6 +117,24 @@ test("leaves two active stores with different palettes and texts in both languag
 
     expect(first.createdStores).toEqual(["lr-market", "tienda-demo"]);
     expect(second.createdStores).toEqual([]);
+    expect([first.createdArticles, second.createdArticles]).toEqual([11, 0]);
+    const lrMarket = await tx.query.store.findFirst({
+      where: eq(store.slug, "lr-market"),
+      with: {
+        categories: { columns: { slug: true }, orderBy: category.position },
+        products: { columns: { status: true } },
+      },
+    });
+    expect(lrMarket?.categories.map(({ slug }) => slug)).toEqual([
+      "burbujeros",
+      "cadenas",
+      "anillos",
+      "aros",
+      "pulseras",
+    ]);
+    expect(lrMarket?.products.map(({ status }) => status)).toEqual(
+      Array.from({ length: 11 }, () => "published")
+    );
 
     const stores = await tx.query.store.findMany({
       columns: {
