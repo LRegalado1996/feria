@@ -103,17 +103,12 @@ export const superadminProcedure = protectedProcedure.use(
  * Resolves the store a store-scoped procedure works on, from the slug in its
  * input, against the caller's access. Attached with `storeProcedure(schema)`.
  */
-const storeAccess = o.middleware(
-  async ({ context, next }, storeSlug: string) => {
-    const userId = context.session?.user.id;
-
-    if (!userId) {
-      throw new ORPCError("UNAUTHORIZED");
-    }
-
+const storeAccess = os
+  .$context<SignedInContext>()
+  .middleware(async ({ context, next }, storeSlug: string) => {
     const store = await findAccessibleStore(context.db, {
       slug: storeSlug,
-      userId,
+      userId: context.session.user.id,
     });
 
     if (!store) {
@@ -121,8 +116,17 @@ const storeAccess = o.middleware(
     }
 
     return await next({ context: { store } });
-  }
-);
+  });
+
+/** The context after `protectedProcedure`: a session with its user. */
+type SignedInContext = Omit<
+  Awaited<ReturnType<typeof createORPCContext>>,
+  "session"
+> & {
+  session: NonNullable<
+    Awaited<ReturnType<typeof createORPCContext>>["session"]
+  >;
+};
 
 /**
  * A procedure on one store (FER-009). Its input names the store by
