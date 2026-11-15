@@ -29,9 +29,10 @@ Until launch, anyone who opens the production URL sees a good-looking "opening s
 
 The page uses the FER-006 logo. Lucas asked for it to be fun: the headline rises in, the days to the fair count up, and the logo blows a burst of bubbles on load and on every press.
 
-`/admin` is left out of the switch, but no admin page exists until FER-013: until then nobody signs in on production, because today's sign-in form lives at `/`.
+Still open, and the ticket is not done until both hold:
 
-Still open: the Lighthouse criterion. Everything else is built and merged, but the two scores have not been measured (the tool is not a dependency of the repo). Measure the deployed coming-soon page on mobile, fix what falls under 95, and only then mark this ticket done.
+- **Lighthouse.** The two scores have not been measured (the tool is not a dependency of the repo). Measure the deployed coming-soon page on mobile and fix what falls under 95.
+- **"`/admin` still signs in".** The switch leaves `/admin` alone (unit and e2e tests hold that), but no admin page exists until FER-013: today's sign-in form lives at `/`, which the switch redirects, so nobody signs in on production while it is off. When FER-013 lands, check that `/admin` signs in with the switch off and add that case to `src/e2e/tests/coming-soon/`.
 
 ## Reporting
 
