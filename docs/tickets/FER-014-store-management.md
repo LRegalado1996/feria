@@ -12,11 +12,13 @@ Lucas can create a new store in a few minutes, and each store can keep its own d
 ## Scope
 
 - Platform: list stores, create one (name, slug, first member), activate or deactivate.
+- A "default store" checkbox in the store's settings, for superadmins: the store the site opens on at `/`. The data and its rules exist since FER-008 (`store.isDefault`: one at a time, never an inactive store). Ticking it on one store unticks the other, so the screen says which store loses it before saving, and the default store cannot be deactivated until another one takes over.
 - Store settings: name, tagline and description in both languages, WhatsApp number, Instagram and TikTok links, logo upload.
 - Currency: the store picks Uruguayan pesos or US dollars. Changing it later does not convert existing prices, so the screen warns, asks for confirmation, and lists how many articles will need a new price. Past orders keep the currency they were placed in.
 - Theme editor: the five store colors with pickers, a live preview of a storefront header and article card, a contrast warning that blocks an unreadable pair, and "reset to default".
 - WhatsApp number validated and stored in international format.
 - Saving invalidates the cached store so the storefront updates at once.
+- `store.update` (FER-008) replaces the whole store, texts included, and the last save wins. The settings form sends every field it loaded, and two people editing the same store must not silently undo each other: refuse a save made from a stale copy (compare `updatedAt`) and say so.
 
 ## Acceptance criteria
 

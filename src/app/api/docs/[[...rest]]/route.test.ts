@@ -68,6 +68,9 @@ describe("API docs route", () => {
     ).toEqual([
       ["/posts", ["post", "get"]],
       ["/posts/{id}", ["delete"]],
+      ["/stores/{slug}", ["get"]],
+      ["/stores", ["post"]],
+      ["/stores/{id}", ["put"]],
     ]);
   });
 

@@ -8,6 +8,13 @@
       "when": 1792708878213,
       "tag": "0000_violet_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794707686324,
+      "tag": "0001_lonely_namor",
+      "breakpoints": true
     }
   ]
 }

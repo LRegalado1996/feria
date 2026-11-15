@@ -1,7 +1,7 @@
 import { DrizzleQueryError } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 
-import { translatePostgresError } from "./postgres";
+import { isUniqueViolation, translatePostgresError } from "./postgres";
 
 /** What node-postgres throws, as Drizzle wraps it. */
 function violation(code: string, constraint?: string): DrizzleQueryError {
@@ -89,5 +89,29 @@ describe("translatePostgresError", () => {
     ["an error with no code", new Error("x")],
   ])("leaves %s to the caller", (_case, error) => {
     expect(translatePostgresError(error, scope)).toBeUndefined();
+  });
+});
+
+describe("isUniqueViolation", () => {
+  test("recognizes the named constraint through Drizzle's wrapper", () => {
+    expect(
+      isUniqueViolation(
+        violation("23505", "store_slug_unique"),
+        "store_slug_unique"
+      )
+    ).toBe(true);
+  });
+
+  test.each([
+    ["another unique constraint", violation("23505", "user_email_unique")],
+    ["a unique violation that names no constraint", violation("23505")],
+    [
+      "a check violation on a constraint of that name",
+      violation("23514", "store_slug_unique"),
+    ],
+    ["an error with no code", new Error("store_slug_unique")],
+    ["something that is not an error", "store_slug_unique"],
+  ])("leaves %s alone", (_case, error) => {
+    expect(isUniqueViolation(error, "store_slug_unique")).toBe(false);
   });
 });
