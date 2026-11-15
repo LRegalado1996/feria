@@ -120,8 +120,10 @@ export const product = pgTable(
     index("product_public_list_index").on(
       table.storeId,
       table.status,
-      table.publishedAt.desc(),
-      table.id.desc()
+      // NULLS FIRST, Postgres's default for DESC and what the query's
+      // `desc()` asks for, so the index serves the order and the LIMIT.
+      table.publishedAt.desc().nullsFirst(),
+      table.id.desc().nullsFirst()
     ),
     check("product_slug_format", sql`${table.slug} ~ ${slugPattern}`),
     check(

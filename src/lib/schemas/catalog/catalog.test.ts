@@ -134,6 +134,23 @@ describe("listProductsSchema", () => {
     [{ category: "cadenas-doradas" }, true],
     [{ cursor: { id: 3, publishedAt: "2026-11-15T10:00:00.000Z" } }, true],
     [{ cursor: { id: 3, publishedAt: "yesterday" } }, false],
+    [{ cursor: { id: 3, publishedAt: "0000-01-01T00:00:00.000Z" } }, false],
+    [{ cursor: { id: 3, publishedAt: "0001-01-01T00:00:00.000Z" } }, true],
+    [
+      {
+        cursor: { id: 2_147_483_647, publishedAt: "2026-11-15T10:00:00.000Z" },
+      },
+      true,
+    ],
+    [
+      {
+        cursor: { id: 2_147_483_648, publishedAt: "2026-11-15T10:00:00.000Z" },
+      },
+      false,
+    ],
+    // The REST surface sends numbers as text.
+    [{ limit: "12" }, true],
+    [{ limit: "" }, false],
     [{ locale: "fr" }, false],
   ])("%j is accepted: %s", (overrides, accepted) => {
     expect(

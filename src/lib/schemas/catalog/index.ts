@@ -22,7 +22,12 @@ export const PRODUCTS_PAGE_SIZE_MAX = 48;
 export const RELATED_PRODUCTS_DEFAULT = 4;
 export const RELATED_PRODUCTS_MAX = 12;
 
-const idSchema = z.number().int().positive();
+/** The largest value of a Postgres `integer`, every id column's type. */
+export const INT4_MAX = 2_147_483_647;
+
+// Coerced: the REST surface reads ids and page sizes from the path and the
+// query string. `Number("")` is 0, which `positive()` and `min(1)` refuse.
+const idSchema = z.coerce.number().int().positive().max(INT4_MAX);
 const localeSchema = z.enum(LOCALES);
 
 export const catalogSlugSchema = z
@@ -47,13 +52,18 @@ export const listCategoriesSchema = publicCatalogSchema;
  */
 export const productCursorSchema = z.object({
   id: idSchema,
-  publishedAt: z.iso.datetime({ offset: true }),
+  // Postgres has no year 0, so a cursor from it would fail in the database.
+  publishedAt: z.iso
+    .datetime({ offset: true })
+    .refine((value) => !value.startsWith("0000"), {
+      message: "Not a date a row can have",
+    }),
 });
 
 export const listProductsSchema = publicCatalogSchema.extend({
   category: catalogSlugSchema.optional(),
   cursor: productCursorSchema.optional(),
-  limit: z
+  limit: z.coerce
     .number()
     .int()
     .min(1)
@@ -73,7 +83,7 @@ export const getProductSchema = publicCatalogSchema.extend({
 });
 
 export const listRelatedProductsSchema = getProductSchema.extend({
-  limit: z
+  limit: z.coerce
     .number()
     .int()
     .min(1)

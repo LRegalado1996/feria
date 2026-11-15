@@ -258,13 +258,16 @@ describe("seed", () => {
 
   test("loads the sample catalog into Lucas's store, inside a transaction", async () => {
     const { db, run } = setup();
+    // The transaction's own handle: the catalog must be written through it.
+    const tx = createMockDatabase();
+    db.$.transaction.mockImplementation(
+      async (callback: unknown) =>
+        await (callback as (handle: unknown) => Promise<unknown>)(tx)
+    );
 
     await run("development");
 
-    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
-      expect.any(Function)
-    );
-    expect(seedCatalog).toHaveBeenCalledExactlyOnceWith(db, 11);
+    expect(seedCatalog).toHaveBeenCalledExactlyOnceWith(tx, 11);
   });
 
   test("skips the catalog when Lucas's store is not there", async () => {

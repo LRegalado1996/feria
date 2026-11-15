@@ -1,0 +1,2 @@
+DROP INDEX "product_public_list_index";--> statement-breakpoint
+CREATE INDEX "product_public_list_index" ON "product" USING btree ("storeId","status","publishedAt" DESC NULLS FIRST,"id" DESC NULLS FIRST);
