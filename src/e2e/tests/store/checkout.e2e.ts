@@ -12,6 +12,7 @@ import { StorePage } from "../../page-objects/store.page";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const ORDER_CREATE = "/api/orpc/order/create";
+const CART_PRODUCTS = "**/api/orpc/catalog/cartProducts";
 
 /** A store with a necklace and a bracelet, the bracelet sold out if asked. */
 async function setup(
@@ -297,6 +298,64 @@ test.describe("Cart and checkout", () => {
       )
     ).toHaveCount(0);
     await expect(submit).toBeEnabled();
+  });
+
+  test("prices that fail to load after a line is taken out keep what the shopper typed, and the order goes through after a retry", async ({
+    db,
+    page,
+  }) => {
+    const { bracelet, necklace, store } = await setup({ db });
+    await openCartWith(page, `/${store.slug}/cart`, store.slug, [
+      { productId: necklace.id, quantity: 1 },
+      { productId: bracelet.id, quantity: 1 },
+    ]);
+    await fillCheckout(page);
+    const submit = page.getByTestId("store-checkout-submit");
+    await page.route(CART_PRODUCTS, async (route) => {
+      await route.abort("failed");
+    });
+
+    await cartLine(page, "Pulsera violeta")
+      .getByRole("button", { name: "Quitar Pulsera violeta" })
+      .click();
+
+    await expect(
+      page.getByTestId("store-cart").getByRole("alert")
+    ).toContainText("No pudimos traer los precios de ahora.");
+    await expect(page.getByLabel("Tu nombre")).toHaveValue("Ana Prueba");
+    await expect(page.getByLabel("Tu celular")).toHaveValue("099 123 456");
+    await expect(page.getByLabel("Nota para la tienda (opcional)")).toHaveValue(
+      "Paso a la tarde."
+    );
+    await expect(submit).toBeDisabled();
+
+    await page.unroute(CART_PRODUCTS);
+    await page.getByRole("button", { name: "Probar de nuevo" }).click();
+    await expect(cartLine(page, "Collar dorado")).toBeVisible();
+    await expect(page.getByTestId("store-cart-total")).toHaveText(
+      "Total$ 1.200"
+    );
+
+    await completeRpcAction(
+      page,
+      ORDER_CREATE,
+      async () => {
+        await submit.click();
+      },
+      {
+        input: {
+          customerName: "Ana Prueba",
+          customerPhone: "099 123 456",
+          note: "Paso a la tarde.",
+          storeSlug: store.slug,
+        },
+      }
+    );
+    const order = page.getByTestId("store-order-page");
+    await expect(order.getByRole("listitem")).toHaveText([
+      "1 × Collar dorado$ 1.200",
+    ]);
+    await expect(order).toContainText("Paso a la tarde.");
   });
 
   test("in English, the cart speaks English", async ({ db, page }) => {
