@@ -167,11 +167,6 @@ function captureCreatedRows(page: Page, rows: CreatedRows): void {
 
     if (pathname === "/api/orpc/post/create") {
       rows.pending.push(recordPost(response, rows));
-    } else if (pathname === "/api/auth/sign-up/email") {
-      // The page reloads as soon as sign-up answers, which discards the
-      // response body; the email it signed up, unique, names the user.
-      const { email } = request.postDataJSON() as { email: string };
-      rows.userEmails.push(email);
     }
   });
 }

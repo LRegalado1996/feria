@@ -5,7 +5,7 @@ import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
 import { store, storeTranslation, user } from "@/server/db/schema";
 
-import { SEED_STORES, SEED_USER, seed } from "./seed";
+import { SEED_MEMBERS, SEED_STORES, SEED_USER, seed } from "./seed";
 
 vi.mock("@/env", () => ({
   env: {
@@ -14,9 +14,11 @@ vi.mock("@/env", () => ({
   },
 }));
 
-async function deleteSeedUser() {
-  // Cascades to its sessions, accounts and posts.
-  await db.delete(user).where(eq(user.email, SEED_USER.email));
+const SEED_EMAILS = [SEED_USER, ...SEED_MEMBERS].map(({ email }) => email);
+
+async function deleteSeedUsers() {
+  // Cascades to their sessions, accounts, posts and memberships.
+  await db.delete(user).where(inArray(user.email, SEED_EMAILS));
 }
 
 const SEED_SLUGS = SEED_STORES.map((seedStore) => seedStore.slug);
@@ -37,7 +39,7 @@ async function runSeed() {
 const ROLLED_BACK = "Rolled back on purpose: this test keeps nothing";
 
 afterEach(async () => {
-  await deleteSeedUser();
+  await deleteSeedUsers();
   // Cascades to their texts.
   await db
     .delete(store)
@@ -46,20 +48,47 @@ afterEach(async () => {
 
 // Runs the seed against the migrated schema, so a constraint or column the
 // seed no longer satisfies fails here instead of in the next fresh worktree.
-test("leaves one login that signs in, and a second run changes nothing", async () => {
-  // This worker's clone may carry the template's seed user: start without it.
-  await deleteSeedUser();
+test("leaves three logins that sign in with their roles, and a second run changes nothing", async () => {
+  // This worker's clone may carry the template's seed users: start without them.
+  await deleteSeedUsers();
 
   const first = await runSeed();
   const second = await runSeed();
 
-  expect(first).toMatchObject({ email: SEED_USER.email, createdUser: true });
+  expect(first.createdAccounts).toEqual(SEED_EMAILS);
   expect(second).toEqual({
-    email: SEED_USER.email,
-    createdUser: false,
+    createdAccounts: [],
     createdPost: false,
     createdStores: [],
   });
+  expect(
+    await db.query.user.findMany({
+      columns: { email: true, role: true },
+      orderBy: user.email,
+      where: inArray(user.email, SEED_EMAILS),
+      with: {
+        storeMemberships: {
+          columns: {},
+          with: { store: { columns: { slug: true } } },
+        },
+      },
+    })
+  ).toEqual([
+    {
+      email: "member@example.com",
+      role: "member",
+      storeMemberships: [{ store: { slug: "lr-market" } }],
+    },
+    {
+      email: "multi@example.com",
+      role: "member",
+      storeMemberships: expect.arrayContaining([
+        { store: { slug: "lr-market" } },
+        { store: { slug: "tienda-demo" } },
+      ]),
+    },
+    { email: "test@example.com", role: "superadmin", storeMemberships: [] },
+  ]);
 
   const users = await db
     .select({ id: user.id })

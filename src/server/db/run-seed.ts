@@ -9,7 +9,7 @@ import { seed } from "./seed";
 try {
   const result = await seed({ auth, db, nodeEnv: process.env.NODE_ENV });
   console.log(
-    `db:seed: ${result.email} ${result.createdUser ? "created" : "already there"}; welcome post ${result.createdPost ? "created" : "skipped, posts exist"}; stores ${result.createdStores.length > 0 ? `created: ${result.createdStores.join(", ")}` : "already there"}`
+    `db:seed: logins ${result.createdAccounts.length > 0 ? `created: ${result.createdAccounts.join(", ")}` : "already there"}; welcome post ${result.createdPost ? "created" : "skipped, posts exist"}; stores ${result.createdStores.length > 0 ? `created: ${result.createdStores.join(", ")}` : "already there"}`
   );
 } catch (error) {
   process.exitCode = 1;

@@ -6,6 +6,15 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 
 `protectedProcedure` proves the caller is signed in, nothing more. Every procedure that touches a resource authorizes it on the server.
 
+### Roles and stores (FER-009)
+
+- **Two roles,** on `user.role`: `superadmin` (every store, every user, the platform area) and `member` (the stores they belong to, through `store_member`; every member of a store has the same permissions). Shoppers have no account. A new login is a `member` with no store: it reaches nothing until it is added to one.
+- **Nobody signs themselves up.** Better Auth runs with `disableSignUp`, `/api/auth/sign-up/*` answers 404 (`src/app/api/auth/[...all]/route.ts`), and the form has no sign-up mode. Logins are created on the server with `createAccount` (`src/server/better-auth/accounts.ts`): by `pnpm db:create-superadmin` for the first one, the seed, and the user screens (FER-015). The role is a Better Auth field with `input: false`, so no request can set it.
+- **`superadminProcedure`** re-reads the role from the database on every call (the session's copy sits in a cookie for up to 5 minutes) and answers FORBIDDEN to anyone else.
+- **`storeProcedure(schema)`** is every procedure on one store. Its input extends `storeScopeSchema` (`storeSlug`); the slug is resolved in one query against the caller's access (superadmin, or a `store_member` row) and the handler gets the trusted row as `context.store`. A store the caller may not work on answers NOT_FOUND, the same as one that does not exist. Every query in the handler filters by `context.store.id`, never by a store id from the input, and every other id in the input (an article, a category, an order) is checked to belong to `context.store` in the same query that uses it.
+- **Pages check too, and separately.** A page reads the session with `getSession()` (which bypasses the cookie cache) and the same services; hiding a link is not authorization (FER-013).
+- **Tests:** each builder has a unit test and an integration test (`src/server/api/orpc/access.integration.test.ts`) with a member of store A asking for store B.
+
 - **Scope ids are attacker-controlled.** An owner, tenant or parent id from input, a header or a cookie is authorized in the procedure before any query uses it.
 - **Filter by owner (or tenant) and id together** (`id = $id AND ownerId = $actor`). A row the caller may not see answers NOT_FOUND; FORBIDDEN confirms it exists.
 - **The actor comes from the session.** Never accept `userId`, `createdById` or a scope field from the client, and never spread input into an insert.
@@ -15,7 +24,6 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 - **Re-derive a role that gates a mutation inside the write transaction,** under a row lock (resolve → lock → commit in `docs/agents/database.md`): the role in the request context is a snapshot.
 - **Public URLs carry an opaque random token** in its own unique column, never a sequential id. Rotate it when the link is re-sent.
 - `src/proxy.ts` stamps request ids on `/api`. If it ever redirects, it does so on session-cookie presence only, with a 307; pages and procedures do the real checks.
-- **Not yet enforced for stores:** `store.create` and `store.update` accept any signed-in user until FER-009 adds roles (`superadminProcedure`, `storeProcedure`). Until then the production deployment answers both with FORBIDDEN (`storeWriteProcedure` in the `store` router); qa, previews and local runs accept them, with public sign-up still open there.
 - Test authorization by calling the procedure as a less-privileged user. A missing ownership check found in review is fixed in the same PR.
 
 ## Encode for every sink
@@ -46,6 +54,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 
 - **One shared, atomic store.** In-memory counters are per instance, so Better Auth's limiter needs `rateLimit.storage: "database"` (or secondary storage), never the default `"memory"`.
 - **Sliding window for guessable secrets** (codes, PINs, passwords): a fixed window lets an attacker spend twice the budget across its edge.
+- **Sign-in** is limited by Better Auth to 5 attempts a minute per IP (`customRules` in `src/server/better-auth/config.ts`). Its limiter is a fixed window, so the worst case is 10 tries across a window's edge; FER-037 adds 2FA for the superadmin, the login worth guessing.
 - **Never one bucket for unknown clients:** one client could lock everyone out. Key by the holder of the secret, and take the IP from the platform (`ipAddress()` from `@vercel/functions`), never a raw `x-forwarded-for`.
 - Security limiters fail closed; failing open on a store outage is for low-risk paths only, and logged.
 - **The one switch that turns Better Auth's limiter off** is `E2E_DISABLE_AUTH_RATE_LIMIT=true`, set only in Playwright's `webServer.env` and ignored when `VERCEL_ENV` is `production` (`isAuthRateLimitDisabled` in `src/server/better-auth/config.ts`). Never set it on a deploy.
@@ -58,7 +67,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 
 ## 2FA recipe
 
-For apps with privileged users (none yet; the superadmin arrives with FER-009):
+For apps with privileged users (the superadmin, since FER-009; [FER-037](../tickets/FER-037-superadmin-two-factor.md) enables it):
 
 - Add Better Auth's `twoFactor` plugin and require it of privileged users on the live production deploy only (`VERCEL_ENV === "production"`), so previews, qa and local stay usable.
 - Enforce it in pages and in every protected procedure, not only at sign-in, and block disabling it for privileged users on production.

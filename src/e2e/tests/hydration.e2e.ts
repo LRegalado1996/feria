@@ -66,8 +66,8 @@ test.describe("Home hydration", () => {
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
-    // The mode switch is a React handler: it answers only after hydration.
-    await new HomePage(page).switchToSignUp();
+    // The submit button is enabled only once React owns the form.
+    await new HomePage(page).waitForAuthForm();
 
     expect(errors).toEqual([]);
     await context.close();

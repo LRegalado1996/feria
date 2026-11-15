@@ -6,8 +6,6 @@ import { BasePage } from "./base.page";
 
 // The specs read the interface in Spanish, the language of an unprefixed URL
 // and what most visitors get. English has its own spec (`tests/i18n.e2e.ts`).
-const SWITCH_TO_SIGN_UP_PATTERN = /¿No tenés una cuenta\? Registrate/i;
-const SWITCH_TO_SIGN_IN_PATTERN = /¿Ya tenés una cuenta\? Iniciá sesión/i;
 
 export class HomePage extends BasePage {
   async goto(): Promise<void> {
@@ -34,41 +32,17 @@ export class HomePage extends BasePage {
     await this.fillField("Contraseña", password);
   }
 
-  async fillName(name: string): Promise<void> {
-    await this.fillField("Nombre", name);
-  }
-
   /**
    * The submit button stays disabled until React owns the form, so it being
    * enabled is the proof that typing and submitting now reach React.
    */
-  async waitForAuthForm(
-    mode: "Crear cuenta" | "Iniciar sesión" = "Iniciar sesión"
-  ): Promise<void> {
-    await expect(this.getButton(mode)).toBeEnabled();
+  async waitForAuthForm(): Promise<void> {
+    await expect(this.getButton("Iniciar sesión")).toBeEnabled();
   }
 
   /** A click that the form refuses before sending anything (validation). */
   async submitSignIn(): Promise<void> {
     await this.getButton("Iniciar sesión").click();
-  }
-
-  async submitSignUp(): Promise<void> {
-    await this.getButton("Crear cuenta").click();
-  }
-
-  async switchToSignUp(): Promise<void> {
-    await this.clickUntilVisible(
-      this.getButton(SWITCH_TO_SIGN_UP_PATTERN),
-      this.getInput("Nombre")
-    );
-  }
-
-  async switchToSignIn(): Promise<void> {
-    await this.clickUntilVisible(
-      this.getButton(SWITCH_TO_SIGN_IN_PATTERN),
-      this.getButton("Iniciar sesión")
-    );
   }
 
   /** Signs in and waits for Better Auth's answer, `status` (200 by default). */
@@ -82,27 +56,6 @@ export class HomePage extends BasePage {
       "/api/auth/sign-in/email",
       async () => {
         await this.submitSignIn();
-      },
-      { input: { email }, status }
-    );
-  }
-
-  /** Signs up and waits for Better Auth's answer, `status` (200 by default). */
-  async signUp(
-    name: string,
-    email: string,
-    password: string,
-    status = 200
-  ): Promise<void> {
-    await this.switchToSignUp();
-    await this.fillName(name);
-    await this.fillEmail(email);
-    await this.fillPassword(password);
-    await completeRpcAction(
-      this.page,
-      "/api/auth/sign-up/email",
-      async () => {
-        await this.submitSignUp();
       },
       { input: { email }, status }
     );

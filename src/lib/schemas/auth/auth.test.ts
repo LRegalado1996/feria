@@ -3,19 +3,14 @@ import { describe, expect, test } from "vitest";
 import { en } from "@/content/en";
 import { es } from "@/content/es";
 
-import { createAuthSchema, createSignUpSchema } from ".";
+import { createAuthSchema } from ".";
 
 const authSchema = createAuthSchema(en.auth.validation);
-const signUpSchema = createSignUpSchema(en.auth.validation);
 
 const EMAIL_ISSUE = { path: ["email"], message: "Please enter a valid email" };
 const PASSWORD_ISSUE = {
   path: ["password"],
   message: "Password must be at least 8 characters",
-};
-const NAME_ISSUE = {
-  path: ["name"],
-  message: "Name must be at least 2 characters",
 };
 
 function makeCredentials(overrides: Record<string, unknown> = {}) {
@@ -23,7 +18,6 @@ function makeCredentials(overrides: Record<string, unknown> = {}) {
 }
 
 /** What the schema made of `input`: the parsed data, or each issue's path and message. */
-// `signUpSchema` is `authSchema` refined, so one type covers both.
 function parse(schema: typeof authSchema, input: unknown) {
   const result = schema.safeParse(input);
 
@@ -40,7 +34,6 @@ function parse(schema: typeof authSchema, input: unknown) {
 describe("authSchema", () => {
   test.each([
     ["sign-in credentials", makeCredentials()],
-    ["a name beside them", makeCredentials({ name: "Jane Doe" })],
     [
       "a password of exactly 8 characters",
       makeCredentials({ password: "12345678" }),
@@ -60,33 +53,11 @@ describe("authSchema", () => {
   });
 });
 
-describe("signUpSchema", () => {
-  test.each([
-    ["a full name", "Jane Doe"],
-    ["a name of exactly 2 characters", "AB"],
-  ])("accepts %s", (_case, name) => {
-    const input = makeCredentials({ name });
-
-    expect(parse(signUpSchema, input)).toEqual({ data: input });
-  });
-
-  test.each([
-    ["no name", {}],
-    ["an empty name", { name: "" }],
-    ["a name of 1 character", { name: "A" }],
-  ])("rejects %s", (_case, overrides) => {
-    expect(parse(signUpSchema, makeCredentials(overrides))).toEqual({
-      issues: [NAME_ISSUE],
+describe("authSchema without sign-up", () => {
+  test("drops a name sent beside the credentials: there is no account to name", () => {
+    expect(parse(authSchema, makeCredentials({ name: "Jane Doe" }))).toEqual({
+      data: makeCredentials(),
     });
-  });
-
-  test.each([
-    ["the address", { email: "invalid-email" }, [EMAIL_ISSUE]],
-    ["the password", { password: "short" }, [PASSWORD_ISSUE]],
-  ])("still checks %s", (_case, overrides, issues) => {
-    expect(
-      parse(signUpSchema, makeCredentials({ name: "Jane Doe", ...overrides }))
-    ).toEqual({ issues });
   });
 });
 
@@ -105,16 +76,6 @@ describe("messages", () => {
         {
           path: ["password"],
           message: "La contraseña debe tener al menos 8 caracteres",
-        },
-      ],
-    });
-    expect(
-      parse(createSignUpSchema(messages), makeCredentials({ name: "A" }))
-    ).toEqual({
-      issues: [
-        {
-          path: ["name"],
-          message: "El nombre debe tener al menos 2 caracteres",
         },
       ],
     });

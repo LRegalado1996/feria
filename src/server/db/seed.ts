@@ -1,17 +1,58 @@
 import { count, eq } from "drizzle-orm";
 
+import type { UserRole } from "@/lib/schemas/access";
 import { createStoreSchema } from "@/lib/schemas/store";
-import type { auth as appAuth } from "@/server/better-auth";
+import { type AccountAuth, createAccount } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
 import { post, user } from "@/server/db/schema";
+import {
+  addStoreMember,
+  listStoreIdsBySlug,
+  setUserRole,
+} from "@/server/services/access";
 import { createStore, listTakenStoreSlugs } from "@/server/services/store";
 
-/** The login a seeded development database accepts. */
-export const SEED_USER = {
-  name: "Test User",
+interface SeedAccount {
+  email: string;
+  name: string;
+  password: string;
+  role: UserRole;
+  /** The seed stores the login is a member of. */
+  stores: string[];
+}
+
+/** The documented login of a seeded database: a superadmin. */
+export const SEED_USER: SeedAccount = {
   email: "test@example.com",
+  name: "Test User",
   password: "password123",
+  role: "superadmin",
+  stores: [],
 };
+
+/**
+ * One login per way into the admin (FER-009, FER-013): a member of one store,
+ * who lands in it, and a member of two, who picks one. Same password as the
+ * superadmin, for local work and e2e only.
+ */
+export const SEED_MEMBERS: SeedAccount[] = [
+  {
+    email: "member@example.com",
+    name: "Store Member",
+    password: "password123",
+    role: "member",
+    stores: ["lr-market"],
+  },
+  {
+    email: "multi@example.com",
+    name: "Two Stores Member",
+    password: "password123",
+    role: "member",
+    stores: ["lr-market", "tienda-demo"],
+  },
+];
+
+const SEED_ACCOUNTS = [SEED_USER, ...SEED_MEMBERS];
 
 /**
  * Two stores with different palettes, so one deployment shows a store's own
@@ -84,38 +125,68 @@ export const SEED_STORES = [
 ];
 
 interface SeedOptions {
-  auth: { api: Pick<typeof appAuth.api, "signUpEmail"> };
+  auth: AccountAuth;
   db: DatabaseClient;
   nodeEnv: string | undefined;
 }
 
 /**
- * Development data: a user who can sign in, a first post and two stores. Safe
- * to run again: whatever already exists is left alone.
+ * The account with this email, created when it is missing and given its seed
+ * role when it is not: a database seeded before roles existed converges.
+ */
+async function ensureAccount(
+  { auth, db }: Pick<SeedOptions, "auth" | "db">,
+  account: SeedAccount
+): Promise<{ created: boolean; id: string }> {
+  const existing = await db.query.user.findFirst({
+    columns: { id: true },
+    where: eq(user.email, account.email),
+  });
+
+  if (existing) {
+    await setUserRole(db, { role: account.role, userId: existing.id });
+    return { created: false, id: existing.id };
+  }
+
+  // Through Better Auth's adapter and hasher, so the credential account
+  // exists: a user inserted by hand cannot sign in.
+  const { email, name, password, role } = account;
+  const created = await createAccount(auth, { email, name, password, role });
+
+  return { created: true, id: created.id };
+}
+
+/**
+ * Development data: a superadmin and two members who can sign in, a first
+ * post and two stores the members belong to. Safe to run again: whatever
+ * already exists is left alone.
  */
 export async function seed({ auth, db, nodeEnv }: SeedOptions) {
-  // No override: a known password and demo rows must never reach production.
+  // No override: known passwords and demo rows must never reach production.
   if (nodeEnv === "production") {
     throw new Error("db:seed refuses to run with NODE_ENV=production");
   }
 
-  const existing = await db.query.user.findFirst({
-    columns: { id: true },
-    where: eq(user.email, SEED_USER.email),
-  });
-  // Through Better Auth, so the password is hashed its way and the
-  // credential account exists: a user inserted by hand cannot sign in.
-  const userId =
-    existing?.id ??
-    (await auth.api.signUpEmail({ body: { ...SEED_USER } })).user.id;
+  const accounts = new Map<string, string>();
+  const createdAccounts: string[] = [];
+
+  for (const account of SEED_ACCOUNTS) {
+    const { created, id } = await ensureAccount({ auth, db }, account);
+    accounts.set(account.email, id);
+
+    if (created) {
+      createdAccounts.push(account.email);
+    }
+  }
 
   const [posts] = await db.select({ total: count() }).from(post);
   const createPost = (posts?.total ?? 0) === 0;
+  const authorId = accounts.get(SEED_USER.email);
 
-  if (createPost) {
+  if (createPost && authorId) {
     await db
       .insert(post)
-      .values({ name: "Welcome to the feed!", createdById: userId });
+      .values({ name: "Welcome to the feed!", createdById: authorId });
   }
 
   const takenSlugs = await listTakenStoreSlugs(
@@ -133,10 +204,22 @@ export async function seed({ auth, db, nodeEnv }: SeedOptions) {
     }
   }
 
-  return {
-    email: SEED_USER.email,
-    createdUser: !existing,
-    createdPost: createPost,
-    createdStores,
-  };
+  const storeIds = await listStoreIdsBySlug(
+    db,
+    SEED_STORES.map((store) => store.slug)
+  );
+
+  for (const account of SEED_MEMBERS) {
+    const userId = accounts.get(account.email);
+
+    for (const slug of account.stores) {
+      const storeId = storeIds.get(slug);
+
+      if (userId && storeId !== undefined) {
+        await addStoreMember(db, { storeId, userId });
+      }
+    }
+  }
+
+  return { createdAccounts, createdPost: createPost, createdStores };
 }

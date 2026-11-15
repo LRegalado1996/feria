@@ -15,6 +15,13 @@
       "when": 1794707686324,
       "tag": "0001_lonely_namor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794712130258,
+      "tag": "0002_common_stellaris",
+      "breakpoints": true
     }
   ]
 }

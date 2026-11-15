@@ -24,10 +24,4 @@ export const authHandlers = [
       url: null,
     })
   ),
-  http.post("*/api/auth/sign-up/email", () =>
-    HttpResponse.json({
-      token: "mock-session-token",
-      user: authUser,
-    })
-  ),
 ];

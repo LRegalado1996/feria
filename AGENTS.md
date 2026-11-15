@@ -74,7 +74,8 @@ pnpm verify:ci           # all of CI on this machine; run before pushing routing
 
 pnpm db:generate         # SQL migration from a schema diff (ask first)
 pnpm db:migrate          # apply migrations (dev, CI, deploy); db:push only on a throwaway DB
-pnpm db:seed             # dev data (a login, two stores), refused in production; login test@example.com / password123
+pnpm db:seed             # dev data (three logins, two stores), refused in production; superadmin test@example.com / password123
+pnpm db:create-superadmin  # first login of a fresh database, from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD
 
 pnpm wt:provision        # .env + node_modules, no containers (harnesses run it on create)
 pnpm dev                 # next dev on this worktree's port (pnpm wt:ports; never assume 3000)

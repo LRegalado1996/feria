@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
 import { session, user } from "@/server/db/schema";
@@ -24,16 +25,23 @@ afterEach(async () => {
 });
 
 /**
- * Signs a fresh user up and returns the cookies the browser would now hold,
- * with a `Cookie` header builder for any subset of them.
+ * Creates a fresh login, signs it in and returns the cookies the browser
+ * would now hold, with a `Cookie` header builder for any subset of them.
  */
 async function setup() {
   const email = `session-cache-${randomUUID()}@example.test`;
-  const { headers, response } = await auth.api.signUpEmail({
-    body: { email, name: "Cache Test", password: "synthetic-pass-123" },
+  const password = "synthetic-pass-123";
+  const created = await createAccount(auth, {
+    email,
+    name: "Cache Test",
+    password,
+    role: "member",
+  });
+  createdUserIds.push(created.id);
+  const { headers, response } = await auth.api.signInEmail({
+    body: { email, password },
     returnHeaders: true,
   });
-  createdUserIds.push(response.user.id);
 
   const cookies = new Map<string, string>();
 
@@ -47,7 +55,7 @@ async function setup() {
     const name = [...cookies.keys()].find((key) => key.includes(part));
 
     if (!name) {
-      throw new Error(`sign-up set no ${part} cookie`);
+      throw new Error(`sign-in set no ${part} cookie`);
     }
 
     return name;

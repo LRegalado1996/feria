@@ -24,4 +24,31 @@ describe("auth route", () => {
     expect(handler).toHaveBeenCalledExactlyOnceWith(request);
     expect(await response.text()).toBe("auth");
   });
+
+  test.each([
+    ["POST", POST, "/api/auth/sign-up/email"],
+    ["GET", GET, "/api/auth/sign-up/email"],
+    ["POST", POST, "/api/auth/sign-up"],
+    ["POST", POST, "/api/auth/sign-up/social"],
+  ])(
+    "%s %s answers 404 without reaching Better Auth: sign-up is closed",
+    async (method, route, path) => {
+      const response = await route(
+        new Request(`http://localhost:3000${path}`, { method })
+      );
+
+      expect(response.status).toBe(404);
+      expect(handler).not.toHaveBeenCalled();
+    }
+  );
+
+  test("a path that only starts with the same letters still reaches Better Auth", async () => {
+    const request = new Request("http://localhost:3000/api/auth/sign-up-x", {
+      method: "POST",
+    });
+
+    await POST(request);
+
+    expect(handler).toHaveBeenCalledExactlyOnceWith(request);
+  });
 });

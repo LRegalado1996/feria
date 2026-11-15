@@ -1,36 +1,66 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
-import { post, store, storeTranslation } from "@/server/db/schema";
+import {
+  post,
+  store,
+  storeMember,
+  storeTranslation,
+  user,
+} from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { SEED_STORES, seed } from "./seed";
+import { SEED_MEMBERS, SEED_STORES, SEED_USER, seed } from "./seed";
+
+const { createAccount } = vi.hoisted(() => ({
+  createAccount: vi.fn(async (_auth: unknown, values: { email: string }) => ({
+    email: values.email,
+    id: `id:${values.email}`,
+    name: "Seeded",
+    role: "member" as const,
+  })),
+}));
+
+vi.mock("@/server/better-auth/accounts", () => ({ createAccount }));
 
 const BOTH_STORES = ["lr-market", "tienda-demo"];
+const ALL_EMAILS = [
+  "test@example.com",
+  "member@example.com",
+  "multi@example.com",
+];
+const STORE_IDS = { "lr-market": 11, "tienda-demo": 12 };
+
+/** The email a `user.findFirst` call looked up, from its bound parameter. */
+function emailOf(config: unknown): string {
+  return renderQuery((config as { where: unknown }).where).params[0] as string;
+}
 
 function setup({
-  existingUserId,
+  existingEmails = [],
   postCount = 0,
   takenSlugs = BOTH_STORES,
 }: {
-  existingUserId?: string;
+  /** The seed logins already in the database, by email. */
+  existingEmails?: string[];
   postCount?: number;
   /** The seed stores already in the database: both, unless a test is about them. */
   takenSlugs?: string[];
 } = {}) {
   const db = createMockDatabase();
-  const auth = {
-    api: {
-      signUpEmail: vi.fn(async () => ({ user: { id: "seed-user-id" } })),
-    },
-  };
-  db.query.user.findFirst.mockResolvedValue(
-    existingUserId ? { id: existingUserId } : undefined
-  );
+  const auth = { $context: Promise.resolve({}) };
+  db.query.user.findFirst.mockImplementation(async (config: unknown) => {
+    const email = emailOf(config);
+    return existingEmails.includes(email) ? { id: `old:${email}` } : undefined;
+  });
+  db.$["update.returning"].mockResolvedValue([{ id: "updated" }]);
   db.$["select.from"].mockResolvedValue([{ total: postCount }]);
-  db.query.store.findMany.mockResolvedValue(
-    takenSlugs.map((slug) => ({ slug }))
+  // Two reads of the seed stores: which exist (slugs), then their ids.
+  db.query.store.findMany.mockImplementation(async (config: unknown) =>
+    (config as { columns: Record<string, boolean> }).columns.id
+      ? Object.entries(STORE_IDS).map(([slug, id]) => ({ id, slug }))
+      : takenSlugs.map((slug) => ({ slug }))
   );
   // A store's insert answers with the row it was given; nothing else is read back.
   const inserted: unknown[] = [];
@@ -50,18 +80,25 @@ function setup({
     db,
     run: async (nodeEnv: string | undefined) =>
       await seed({ auth: auth as never, db: db as never, nodeEnv }),
+    /** The memberships the seed inserted, as (store id, user id) pairs. */
+    memberships: () =>
+      db.$.insert.mock.calls.flatMap(([table], index) =>
+        table === storeMember
+          ? [db.$["insert.values"].mock.calls[index]?.[0]]
+          : []
+      ),
   };
 }
 
 describe("seed", () => {
   test("refuses production before touching the database or Better Auth", async () => {
-    const { auth, db, run } = setup();
+    const { db, run } = setup();
 
     await expect(run("production")).rejects.toThrow(
       "db:seed refuses to run with NODE_ENV=production"
     );
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
-    expect(auth.api.signUpEmail).not.toHaveBeenCalled();
+    expect(createAccount).not.toHaveBeenCalled();
   });
 
   test.each(["development", "test", undefined])(
@@ -70,82 +107,111 @@ describe("seed", () => {
       const { run } = setup();
 
       await expect(run(nodeEnv)).resolves.toEqual({
-        email: "test@example.com",
-        createdUser: true,
+        createdAccounts: ALL_EMAILS,
         createdPost: true,
         createdStores: [],
       });
     }
   );
 
-  test("signs the documented login up through Better Auth and posts as them on an empty database", async () => {
-    const { auth, db, run } = setup();
+  test("creates a superadmin and two members through Better Auth, with the documented password", async () => {
+    const { auth, run } = setup();
 
     await run("development");
 
-    expect(auth.api.signUpEmail).toHaveBeenCalledExactlyOnceWith({
-      body: {
-        name: "Test User",
-        email: "test@example.com",
-        password: "password123",
-      },
-    });
-    expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(post);
-    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
-      name: "Welcome to the feed!",
-      createdById: "seed-user-id",
-    });
+    expect(createAccount.mock.calls).toEqual([
+      [
+        auth,
+        {
+          email: "test@example.com",
+          name: "Test User",
+          password: "password123",
+          role: "superadmin",
+        },
+      ],
+      [
+        auth,
+        {
+          email: "member@example.com",
+          name: "Store Member",
+          password: "password123",
+          role: "member",
+        },
+      ],
+      [
+        auth,
+        {
+          email: "multi@example.com",
+          name: "Two Stores Member",
+          password: "password123",
+          role: "member",
+        },
+      ],
+    ]);
   });
 
-  test("looks the user up by the seed email", async () => {
+  test("makes the first member a member of one store and the second of both", async () => {
+    const { memberships, run } = setup();
+
+    await run("development");
+
+    expect(memberships()).toEqual([
+      { storeId: 11, userId: "id:member@example.com" },
+      { storeId: 11, userId: "id:multi@example.com" },
+      { storeId: 12, userId: "id:multi@example.com" },
+    ]);
+  });
+
+  test("posts as the superadmin on an empty feed", async () => {
     const { db, run } = setup();
 
-    await run("test");
+    await run("development");
 
-    const lookup = db.query.user.findFirst.mock.calls[0]?.[0] as {
-      where: unknown;
-    };
-    expect(renderQuery(lookup.where)).toEqual({
-      sql: '"user"."email" = $1',
-      params: ["test@example.com"],
+    expect(db.$.insert).toHaveBeenCalledWith(post);
+    expect(db.$["insert.values"]).toHaveBeenCalledWith({
+      name: "Welcome to the feed!",
+      createdById: "id:test@example.com",
     });
   });
 
-  test("leaves an existing user and a feed of one post alone on a second run", async () => {
-    const { auth, db, run } = setup({
-      existingUserId: "existing-id",
-      postCount: 1,
-    });
+  test("gives existing logins their seed role instead of creating them again", async () => {
+    const { db, run } = setup({ existingEmails: ALL_EMAILS, postCount: 1 });
 
     await expect(run("test")).resolves.toEqual({
-      email: "test@example.com",
-      createdUser: false,
+      createdAccounts: [],
       createdPost: false,
       createdStores: [],
     });
-    expect(auth.api.signUpEmail).not.toHaveBeenCalled();
-    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(createAccount).not.toHaveBeenCalled();
+    expect(db.$.update).toHaveBeenCalledWith(user);
+    expect(db.$["update.set"].mock.calls).toEqual([
+      [{ role: "superadmin" }],
+      [{ role: "member" }],
+      [{ role: "member" }],
+    ]);
   });
 
-  test("posts as an existing user when the feed is empty", async () => {
-    const { auth, db, run } = setup({ existingUserId: "existing-id" });
+  test("leaves the feed alone when it has a post", async () => {
+    const { db, run } = setup({ existingEmails: ALL_EMAILS, postCount: 1 });
 
-    await expect(run("test")).resolves.toEqual({
-      email: "test@example.com",
-      createdUser: false,
-      createdPost: true,
-      createdStores: [],
-    });
-    expect(auth.api.signUpEmail).not.toHaveBeenCalled();
-    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
-      name: "Welcome to the feed!",
-      createdById: "existing-id",
-    });
+    await run("test");
+
+    expect(db.$.insert).not.toHaveBeenCalledWith(post);
+  });
+
+  test("every seed login has a store to land in, except the superadmin who needs none", () => {
+    expect(
+      [SEED_USER, ...SEED_MEMBERS].map(({ role, stores }) => [role, stores])
+    ).toEqual([
+      ["superadmin", []],
+      ["member", ["lr-market"]],
+      ["member", ["lr-market", "tienda-demo"]],
+    ]);
   });
 
   test("creates both stores, with their texts, on a database that has neither", async () => {
     const { db, run } = setup({
-      existingUserId: "existing-id",
+      existingEmails: ALL_EMAILS,
       postCount: 1,
       takenSlugs: [],
     });
@@ -159,6 +225,9 @@ describe("seed", () => {
       [storeTranslation],
       [store],
       [storeTranslation],
+      [storeMember],
+      [storeMember],
+      [storeMember],
     ]);
     expect(db.$["insert.values"]).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -198,7 +267,7 @@ describe("seed", () => {
 
   test("creates only the store that is missing", async () => {
     const { db, run } = setup({
-      existingUserId: "existing-id",
+      existingEmails: ALL_EMAILS,
       postCount: 1,
       takenSlugs: ["lr-market"],
     });
@@ -206,7 +275,13 @@ describe("seed", () => {
     await expect(run("test")).resolves.toMatchObject({
       createdStores: ["tienda-demo"],
     });
-    expect(db.$.insert.mock.calls).toEqual([[store], [storeTranslation]]);
+    expect(db.$.insert.mock.calls).toEqual([
+      [store],
+      [storeTranslation],
+      [storeMember],
+      [storeMember],
+      [storeMember],
+    ]);
   });
 
   test("every seed store passes the rules the API holds a store to, in two different palettes", () => {

@@ -71,25 +71,18 @@ function makeRow(overrides: Record<string, unknown> = {}) {
   return { ...columns, createdAt: STORED_AT, id: 7, updatedAt: STORED_AT };
 }
 
-// Every variable the production gate reads, cleared, so the machine running
-// the test cannot leak its own Vercel environment in.
-const UNSET = {
-  VERCEL_ENV: "",
-  VERCEL_GIT_COMMIT_REF: "",
-  VERCEL_TARGET_ENV: "",
-};
-
+/**
+ * A caller: signed out, or signed in with the role the database holds for
+ * them now (`superadminProcedure` reads it there, not off the session).
+ */
 function setup({
-  env = {},
-  signedIn = false,
-}: { env?: Partial<typeof UNSET>; signedIn?: boolean } = {}) {
-  for (const [name, value] of Object.entries({ ...UNSET, ...env })) {
-    vi.stubEnv(name, value);
-  }
-
-  const { mockCtx } = signedIn
-    ? createMockContext()
-    : createUnauthenticatedMockContext();
+  role = null,
+}: { role?: "member" | "superadmin" | null } = {}) {
+  const { mockCtx } =
+    role === null ? createUnauthenticatedMockContext() : createMockContext();
+  mockCtx.db.query.user.findFirst.mockImplementation(async () =>
+    role === null ? undefined : { role }
+  );
   const options = { context: mockCtx as never };
 
   return {
@@ -146,7 +139,7 @@ describe("store.getBySlug", () => {
 
 describe("store.create", () => {
   test("stores the validated store, then drops what was cached at its address", async () => {
-    const { create, db } = setup({ signedIn: true });
+    const { create, db } = setup({ role: "superadmin" });
     db.$["insert.returning"].mockResolvedValue([makeRow()]);
 
     await expect(
@@ -167,7 +160,7 @@ describe("store.create", () => {
   ])(
     "refuses %s before touching the database or the cache",
     async (_case, overrides) => {
-      const { create, db } = setup({ signedIn: true });
+      const { create, db } = setup({ role: "superadmin" });
 
       await expect(create(makeInput(overrides))).rejects.toMatchObject(
         INVALID_INPUT
@@ -186,7 +179,7 @@ describe("store.create", () => {
   });
 
   test("leaves the cache alone when the store was not stored", async () => {
-    const { create, db } = setup({ signedIn: true });
+    const { create, db } = setup({ role: "superadmin" });
     db.$["insert.returning"].mockResolvedValue([]);
 
     await expect(create(makeInput())).rejects.toThrow(
@@ -198,7 +191,7 @@ describe("store.create", () => {
 
 describe("store.update", () => {
   test("replaces the store by the id in the path, then drops what was cached about it", async () => {
-    const { db, update } = setup({ signedIn: true });
+    const { db, update } = setup({ role: "superadmin" });
     db.$["update.returning"].mockResolvedValue([
       makeRow({ slug: "renamed-store" }),
     ]);
@@ -220,7 +213,7 @@ describe("store.update", () => {
   });
 
   test("answers NOT_FOUND for an id that matches nothing, leaving the cache alone", async () => {
-    const { update } = setup({ signedIn: true });
+    const { update } = setup({ role: "superadmin" });
 
     await expect(update({ ...makeInput(), id: 404 })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -234,7 +227,7 @@ describe("store.update", () => {
     ["a palette that fails AA contrast", { colorSurface: "#7c7c7c" }],
     ["no id", { id: undefined }],
   ])("refuses %s before touching the database", async (_case, overrides) => {
-    const { db, update } = setup({ signedIn: true });
+    const { db, update } = setup({ role: "superadmin" });
 
     await expect(
       update({ ...makeInput(), id: 7, ...overrides })
@@ -253,54 +246,30 @@ describe("store.update", () => {
   });
 });
 
-describe("store writes on production, until roles exist", () => {
-  test.each([
-    ["the Vercel production deployment", { VERCEL_ENV: "production" }],
-    ["the production branch", { VERCEL_GIT_COMMIT_REF: "main" }],
-    ["a production target", { VERCEL_TARGET_ENV: "production" }],
-  ] as const)(
-    "%s refuses a signed-in caller's create and update before touching the database",
-    async (_case, env) => {
-      const { create, db, update } = setup({ env, signedIn: true });
-      const refused = {
-        code: "FORBIDDEN",
-        message: "Stores cannot be changed here yet",
-      };
+describe("store writes", () => {
+  test("refuse a member before touching the database: opening and editing stores is a superadmin's", async () => {
+    const { create, db, update } = setup({ role: "member" });
+    const refused = { code: "FORBIDDEN", message: "Forbidden" };
 
-      await expect(create(makeInput())).rejects.toMatchObject(refused);
-      await expect(update({ ...makeInput(), id: 7 })).rejects.toMatchObject(
-        refused
-      );
-      expect(db.$.insert).not.toHaveBeenCalled();
-      expect(db.$.update).not.toHaveBeenCalled();
-      expect(invalidateStoreCache).not.toHaveBeenCalled();
-    }
-  );
+    await expect(create(makeInput())).rejects.toMatchObject(refused);
+    await expect(update({ ...makeInput(), id: 7 })).rejects.toMatchObject(
+      refused
+    );
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(db.$.update).not.toHaveBeenCalled();
+    expect(invalidateStoreCache).not.toHaveBeenCalled();
+  });
 
-  test("a preview or qa deployment still accepts the write", async () => {
-    const { create, db } = setup({
-      env: { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "qa" },
-      signedIn: true,
-    });
+  test("check the role the database holds for the caller, not the session's copy", async () => {
+    const { create, db } = setup({ role: "superadmin" });
     db.$["insert.returning"].mockResolvedValue([makeRow()]);
 
-    await expect(create(makeInput())).resolves.toEqual({
-      ...makeRow(),
-      translations: [],
+    await create(makeInput());
+
+    const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+    expect(renderQuery((config as { where: unknown }).where)).toEqual({
+      params: ["test-user-id"],
+      sql: '"user"."id" = $1',
     });
-  });
-
-  test("production still serves the public read", async () => {
-    const { db, getBySlug } = setup({ env: { VERCEL_ENV: "production" } });
-    const found = { id: 7, name: "Sample Store", slug: "sample-store" };
-    db.query.store.findFirst.mockResolvedValue(found);
-
-    await expect(getBySlug({ slug: "sample-store" })).resolves.toEqual(found);
-  });
-
-  test("a signed-out caller on production is told to sign in, not that writes are closed", async () => {
-    const { create } = setup({ env: { VERCEL_ENV: "production" } });
-
-    await expect(create(makeInput())).rejects.toMatchObject(SIGNED_OUT);
   });
 });
