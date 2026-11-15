@@ -365,7 +365,11 @@ export const updateStoreSchema = storeFieldsSchema
   .extend({
     // Coerced: the REST surface reads it from the path. Capped at what the
     // column holds, so an id past it is a 400 and not a database error.
-    id: z.coerce.number().int().positive().max(MAX_INT4),
+    // Only a number or a string is read as one: `Number(true)` is 1 and
+    // `Number([7])` is 7, and neither names a store.
+    id: z
+      .union([z.number(), z.string()])
+      .pipe(z.coerce.number().int().positive().max(MAX_INT4)),
   })
   .superRefine(checkPaletteContrast)
   .superRefine(checkDefaultIsActive);

@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { PublicStore } from "@/server/services/store";
 
-import StoreHome, { ensureStatic, generateMetadata } from "./page";
+import StoreHome, { ensureStatic, generateMetadata, instant } from "./page";
 
 const { getStoreForPath } = vi.hoisted(() => ({
   getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
@@ -130,6 +130,10 @@ describe("StoreHome", () => {
 
   test("is complete static output, so the lookup runs before the status is sent", () => {
     expect(ensureStatic).toBe("navigation");
+  });
+
+  test("says it blocks on purpose, so the development check does not flag every visit", () => {
+    expect(instant).toBe(false);
   });
 });
 

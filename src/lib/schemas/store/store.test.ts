@@ -552,6 +552,21 @@ describe("updateStoreSchema", () => {
     ).toBe(2_147_483_647);
   });
 
+  test("accepts the id as a number too", () => {
+    expect(updateStoreSchema.parse({ ...makeStore(), id: 7 }).id).toBe(7);
+  });
+
+  test.each([
+    ["true, which Number() reads as 1", true],
+    ["an array, which Number() reads as its only item", [7]],
+    ["null, which Number() reads as 0", null],
+    ["an object", { id: 7 }],
+  ])("refuses %s as an id", (_case, id) => {
+    expect(updateStoreSchema.safeParse({ ...makeStore(), id }).success).toBe(
+      false
+    );
+  });
+
   test.each([["0"], ["-1"], ["1.5"], [""], ["abc"], ["2147483648"]])(
     "refuses %j as an id",
     (id) => {

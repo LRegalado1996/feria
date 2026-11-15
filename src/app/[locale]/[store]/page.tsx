@@ -17,6 +17,11 @@ interface StoreHomeProps {
 // a real 404 (docs/agents/nextjs.md § Store pages).
 export const ensureStatic = "navigation";
 
+// The page waits on its address before anything is sent, which is the point
+// of the line above. This tells Next's instant-navigation check, which runs
+// in development, that the wait is the design and not an oversight to flag.
+export const instant = false;
+
 export async function generateMetadata({
   params,
 }: StoreHomeProps): Promise<Metadata> {
