@@ -10,12 +10,12 @@ export const common: Dictionary["common"] = {
   loading: "Loading",
   moreActions: "More actions",
   moreActionsForRow: "More actions: {row}",
+  notifications: "Notifications",
   numberInput: {
     decimal: "This field takes whole numbers only.",
     unreadable:
       "We couldn't read this number. Type it without a thousands separator, for example 1500 or 12.50.",
   },
-  notifications: "Notifications",
   showPassword: "Show password",
   tryAgain: "Try again",
   userFallbackName: "User",

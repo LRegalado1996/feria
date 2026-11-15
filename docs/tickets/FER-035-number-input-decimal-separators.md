@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P0
-- **Status:** done
+- **Status:** in progress
 - **Depends on:** FER-004
 
 ## Goal
@@ -28,7 +28,7 @@ Formatting prices for display (`formatPrice`, done in FER-004).
 
 - The rule (confirmed with Lucas on 2026-11-14): one separator before one or two digits is the decimal point, before exactly three digits it groups thousands (`1.500` is fifteen hundred, the Uruguayan reading), both separators make the last one the decimal point, and anything that could be read two ways is refused. It is `readTypedNumber` in `src/lib/utils/format.ts`, which replaces `toPlainNumberText` and no longer takes the locale.
 - `atoms/input` keeps the text as typed, reports `null` while it is refused and shows the reason under the field once focus leaves; on blur a readable figure is rewritten in the page's notation, so the person sees how it was read.
-- **Pending: the e2e on the first form that takes a price.** No such form exists until the article wizard; the e2e moves to [FER-017](FER-017-article-wizard.md), whose scope now lists it.
+- **Pending: the e2e on the first form that takes a price.** No such form exists until the article wizard ([FER-017](FER-017-article-wizard.md)), whose acceptance criteria now list it. The ticket stays `in progress` until that e2e lands. When the field sits in a form, the form shows one message for a refused figure: today the field shows its reason and reports `null`, so a `required` rule would add a second, contradicting one.
 
 ## Notes
 

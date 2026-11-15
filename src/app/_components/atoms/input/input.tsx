@@ -70,10 +70,12 @@ function Input(props: InputProps) {
   );
 }
 
-// What a number field lets through: a leading minus, digits, either
-// separator and spaces. Anything else (a letter, a currency sign) is dropped
-// as it is typed; what is let through is read by `readTypedNumber`.
-const NUMBER_TEXT_PATTERN = /^-?[\d.,\s\u00A0\u202F]*$/u;
+// What a number field lets through: a minus (or the minus sign U+2212) after
+// any spaces, then digits, either separator and spaces. Anything else (a
+// letter, a currency sign) is dropped as it is typed; what is let through is
+// read, and refused with its reason, by `readTypedNumber`.
+const NUMBER_TEXT_PATTERN =
+  /^[\s\u00A0\u202F]*[-\u2212]?[\d.,\s\u00A0\u202F]*$/u;
 
 /** The field's text for a value, in the page language's notation. */
 function formatNumberValue(value: number | null, locale: Locale): string {
@@ -108,8 +110,8 @@ function NumberInput({
     formatNumberValue(normalized, locale)
   );
   const [lastValue, setLastValue] = useState(normalized);
-  // A refusal shows once focus leaves: "1.234.5" on its way to "1.234.567"
-  // is not a mistake yet.
+  // A refusal shows once focus leaves and until the next keystroke:
+  // "1.234.5" on its way to "1.234.567" is not a mistake yet.
   const [left, setLeft] = useState(false);
   const reading = readTypedNumber(buffer, { allowDecimal });
 
@@ -142,10 +144,11 @@ function NumberInput({
         aria-invalid={refusal === null ? ariaInvalid : true}
         inputMode={allowDecimal ? "decimal" : "numeric"}
         onBlur={(event) => {
-          // A figure that reads settles to the page language's notation, so
-          // the person sees how it was read: "1.500" becomes "1500".
+          // A figure that reads settles to the value the field holds, in the
+          // page language's notation, so the person sees how it was read
+          // ("1.500" becomes "1500") or that the form kept another value.
           if (reading.kind !== "refused") {
-            setBuffer(formatNumberValue(valueOf(reading), locale));
+            setBuffer(formatNumberValue(normalized, locale));
           }
           setLeft(true);
           onBlur?.(event);
@@ -155,6 +158,7 @@ function NumberInput({
 
           if (NUMBER_TEXT_PATTERN.test(text)) {
             setBuffer(text);
+            setLeft(false);
             onValueChange(valueOf(readTypedNumber(text, { allowDecimal })));
           }
         }}

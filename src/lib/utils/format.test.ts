@@ -161,6 +161,12 @@ describe("readTypedNumber", () => {
     [" 1 500 ", 1500],
     ["1\u00A0500,50", 1500.5],
     ["1\u202F500", 1500],
+    ["1 234 567,5", 1_234_567.5],
+    // The minus sign some sources paste instead of a hyphen.
+    ["\u221212,5", -12.5],
+    [" -5", -5],
+    ["9007199254740991", 9_007_199_254_740_991],
+    ["0,000001", 0.000001],
     // A separator still waiting for its digits reads as the number so far.
     ["12,", 12],
     ["12.", 12],
@@ -197,6 +203,16 @@ describe("readTypedNumber", () => {
     "1,500.25.5",
     "1,5.000",
     "1.234.",
+    // A space anywhere but between thousands groups is a typo.
+    "12 50",
+    "1 23",
+    "1 5,5",
+    "1 500,5 0",
+    "1.500 000",
+    // Beyond what a number holds exactly, or written back as an exponent.
+    "9".repeat(400),
+    "9007199254740993",
+    "0,0000001",
     // Not a figure at all.
     "1a",
     "1-2",

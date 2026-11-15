@@ -19,10 +19,13 @@ function setupText(props: TextInputProps = {}) {
 
 /** A numeric field whose value lives in its parent, as in a form. */
 function setupNumber({
+  accepts = () => true,
   allowDecimal,
   initial = null,
   locale = "en",
 }: {
+  /** Whether the parent keeps a value the field reports, as a form may not. */
+  accepts?: (value: number | null) => boolean;
   allowDecimal?: boolean;
   initial?: number | null;
   locale?: "en" | "es";
@@ -42,7 +45,9 @@ function setupNumber({
           aria-label="Amount"
           onBlur={onBlur}
           onValueChange={(next) => {
-            setValue(next);
+            if (accepts(next)) {
+              setValue(next);
+            }
             onValueChange(next);
           }}
           type="number"
@@ -253,6 +258,49 @@ describe("Input (number)", () => {
     await user.click(screen.getByRole("button", { name: "Set 42" }));
 
     expect(input).toHaveValue("42");
+  });
+
+  test("once focus leaves, shows the value the parent kept, not the one it refused", async () => {
+    const { input, onValueChange, user } = setupNumber({
+      accepts: (value) => value === null || value >= 0,
+      initial: 3,
+    });
+
+    await user.clear(input);
+    await user.type(input, "-5");
+    await user.tab();
+
+    expect(onValueChange).toHaveBeenLastCalledWith(-5);
+    expect(input).toHaveValue("");
+  });
+
+  test("hides a shown refusal as soon as the figure is being typed again", async () => {
+    const { input, user } = setupNumber();
+
+    await user.type(input, "1.23.4");
+    await user.tab();
+
+    expect(screen.getByText(UNREADABLE_EN)).toBeVisible();
+
+    await user.click(input);
+    await user.type(input, "5");
+
+    expect(input).toHaveValue("1.23.45");
+    expect(screen.queryByText(UNREADABLE_EN)).not.toBeInTheDocument();
+    expect(input).not.toHaveAttribute("aria-invalid");
+  });
+
+  test.each([
+    [" -5", -5],
+    ["\u22125", -5],
+  ])("lets a pasted %j through and reads it as %d", async (pasted, value) => {
+    const { input, onValueChange, user } = setupNumber();
+
+    await user.click(input);
+    await user.paste(pasted);
+
+    expect(input).toHaveValue(pasted);
+    expect(onValueChange).toHaveBeenLastCalledWith(value);
   });
 
   test("a value set from outside replaces a refused figure and its reason", async () => {

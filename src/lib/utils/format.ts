@@ -171,8 +171,18 @@ export type TypedNumber =
   | { kind: "refused"; reason: "decimal" | "unreadable" };
 
 // Spaces, no-break spaces and narrow no-break spaces: what a pasted figure
-// groups its thousands with in several languages.
+// groups its thousands with in several languages. Inside a figure they are
+// read only as that grouping, in the integer part.
+const SPACE = /[\s\u00A0\u202F]/u;
 const SPACES = /[\s\u00A0\u202F]/gu;
+const GROUPED_BY_SPACE = /^[1-9]\d{0,2}(?:[\s\u00A0\u202F]\d{3})+$/u;
+// The minus sign some sources paste instead of a hyphen.
+const MINUS_SIGN = "\u2212";
+// Beyond this a figure loses digits as a JavaScript number, and `String()`
+// writes it back in exponent form: no price or count gets near it.
+const LARGEST_READABLE = Number.MAX_SAFE_INTEGER;
+// Below this `String()` also switches to exponent form ("1e-7").
+const SMALLEST_READABLE = 1e-6;
 const DIGITS_AND_SEPARATORS = /^[\d.,]+$/u;
 const GROUPED_BY_DOT = /^[1-9]\d{0,2}(?:\.\d{3})+$/u;
 const GROUPED_BY_COMMA = /^[1-9]\d{0,2}(?:,\d{3})+$/u;
@@ -205,9 +215,14 @@ export function readTypedNumber(
   typed: string,
   { allowDecimal = true }: { allowDecimal?: boolean } = {}
 ): TypedNumber {
-  const compact = typed.replaceAll(SPACES, "");
-  const negative = compact.startsWith("-");
-  const body = negative ? compact.slice(1) : compact;
+  const trimmed = typed.trim().replace(MINUS_SIGN, "-");
+  const negative = trimmed.startsWith("-");
+  const signless = negative ? trimmed.slice(1) : trimmed;
+  const body = readSpaceGrouping(signless);
+
+  if (body === null) {
+    return { kind: "refused", reason: "unreadable" };
+  }
 
   if (body === "" || body === "." || body === ",") {
     return { kind: "empty" };
@@ -234,8 +249,37 @@ export function readTypedNumber(
     `${negative ? "-" : ""}0${reading.integer}.${reading.fraction ?? ""}0`
   );
 
+  const magnitude = Math.abs(value);
+
+  if (
+    magnitude > LARGEST_READABLE ||
+    (magnitude !== 0 && magnitude < SMALLEST_READABLE)
+  ) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
   // `-0` reads back as "0" anyway; a field never holds a negative zero.
   return { kind: "number", value: value === 0 ? 0 : value };
+}
+
+/**
+ * The figure with its space grouping removed, or null when a space sits
+ * anywhere but between groups of three in the integer part: `12 50` is not
+ * twelve hundred and fifty, it is a typo.
+ */
+function readSpaceGrouping(signless: string): string | null {
+  if (!SPACE.test(signless)) {
+    return signless;
+  }
+
+  const firstSeparatorAt = signless.search(/[.,]/u);
+  const integer =
+    firstSeparatorAt === -1 ? signless : signless.slice(0, firstSeparatorAt);
+  const rest = firstSeparatorAt === -1 ? "" : signless.slice(firstSeparatorAt);
+
+  return GROUPED_BY_SPACE.test(integer) && !SPACE.test(rest)
+    ? `${integer.replaceAll(SPACES, "")}${rest}`
+    : null;
 }
 
 /** The integer and fraction digits of an unsigned figure, or null. */
