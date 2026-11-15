@@ -162,3 +162,78 @@ export const reorderProductImagesSchema = productIdSchema.extend({
 
 export type ListProductsValues = z.infer<typeof listProductsSchema>;
 export type ProductCursor = z.infer<typeof productCursorSchema>;
+
+export const CATEGORY_NAME_MAX_LENGTH = 60;
+
+const categoryNamesSchema = z.object({
+  // English is optional: the storefront shows the Spanish name where it has
+  // none (Lucas, 2026-11-14).
+  nameEn: z
+    .string()
+    .trim()
+    .max(CATEGORY_NAME_MAX_LENGTH)
+    .transform((value) => (value === "" ? null : value))
+    .nullable(),
+  nameEs: z.string().trim().min(1).max(CATEGORY_NAME_MAX_LENGTH),
+});
+
+export const listStoreCategoriesSchema = storeScopeSchema.extend({});
+
+export const createCategorySchema = storeScopeSchema.extend(
+  categoryNamesSchema.shape
+);
+
+export type CreateCategoryValues = z.infer<typeof createCategorySchema>;
+
+export const renameCategorySchema = storeScopeSchema
+  .extend({ id: idSchema })
+  .extend(categoryNamesSchema.shape);
+
+export type RenameCategoryValues = z.infer<typeof renameCategorySchema>;
+
+/** Every category of the store, once each, in the new order. */
+export const reorderCategoriesSchema = storeScopeSchema.extend({
+  ids: z
+    .array(bodyIdSchema)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each category at most once",
+    }),
+});
+
+/**
+ * A category to delete and, when it still has articles, the category of the
+ * same store they move to: none is ever left without one.
+ */
+export const deleteCategorySchema = storeScopeSchema.extend({
+  id: idSchema,
+  moveToId: bodyIdSchema.nullable(),
+});
+
+/** The messages the category form shows under its fields. */
+interface CategoryFormMessages {
+  nameRequired: string;
+  nameTooLong: string;
+}
+
+/**
+ * The category form's own schema, its messages in the page's language. What
+ * the form sends is then held to `createCategorySchema` by the procedure.
+ */
+export function createCategoryFormSchema(messages: CategoryFormMessages) {
+  return z.object({
+    nameEn: z
+      .string()
+      .trim()
+      .max(CATEGORY_NAME_MAX_LENGTH, messages.nameTooLong),
+    nameEs: z
+      .string()
+      .trim()
+      .min(1, messages.nameRequired)
+      .max(CATEGORY_NAME_MAX_LENGTH, messages.nameTooLong),
+  });
+}
+
+export type CategoryFormValues = z.infer<
+  ReturnType<typeof createCategoryFormSchema>
+>;

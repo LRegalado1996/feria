@@ -6,8 +6,7 @@ import {
   updateProductSchema,
 } from "@/lib/schemas/catalog";
 import { storeProcedure } from "@/server/api/orpc";
-import type { DatabaseClient } from "@/server/db";
-import { withStoreAccess } from "@/server/services/access";
+import { writeToStore } from "@/server/api/utils/write-to-store";
 import {
   createProduct,
   deleteProduct,
@@ -17,29 +16,6 @@ import {
   unpublishProduct,
   updateProduct,
 } from "@/server/services/catalog";
-
-/** What a store-scoped handler knows: the resolved store and the caller. */
-interface StoreWriteContext {
-  db: DatabaseClient;
-  session: { user: { id: string } };
-  store: { id: number };
-}
-
-/**
- * Runs a write on the resolved store with the caller's access re-checked
- * inside its transaction: the one place every procedure below goes through,
- * so none can forget the re-check or pass another store's id.
- */
-async function writeToStore<T>(
-  context: StoreWriteContext,
-  write: (tx: DatabaseClient, storeId: number) => Promise<T>
-): Promise<T> {
-  return await withStoreAccess(
-    context.db,
-    { storeId: context.store.id, userId: context.session.user.id },
-    async (tx) => await write(tx, context.store.id)
-  );
-}
 
 /**
  * A store's own articles (FER-010): every procedure resolves the store from

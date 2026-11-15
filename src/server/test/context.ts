@@ -52,6 +52,7 @@ interface MockChain {
   select: MockFn;
   "select.for": MockFn;
   "select.from": MockFn;
+  "select.groupBy": MockFn;
   "select.innerJoin": MockFn;
   "select.leftJoin": MockFn;
   "select.limit": MockFn;

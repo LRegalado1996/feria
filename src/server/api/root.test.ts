@@ -17,6 +17,7 @@ test("mounts each domain router at its own key, and nothing else", () => {
   expect(Object.keys(appRouter)).toEqual([
     "admin",
     "catalog",
+    "category",
     "post",
     "product",
     "store",

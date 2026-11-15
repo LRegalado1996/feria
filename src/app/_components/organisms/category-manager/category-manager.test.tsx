@@ -1,0 +1,602 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { RequestHandler } from "msw";
+import type { ReactNode } from "react";
+import { describe, expect, test, vi } from "vitest";
+
+import { Toaster } from "@/app/_components/molecules/sonner";
+import { reportError } from "@/lib/errors/client";
+import type { Locale } from "@/lib/i18n/config";
+import { renderWithI18n } from "@/test/i18n";
+import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
+
+import { CategoryManager } from "./category-manager";
+
+vi.mock("@/lib/orpc/client", async () => {
+  const { orpcClientMock } = await import("@/test/mocks/orpc-client");
+  return orpcClientMock;
+});
+
+vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
+
+const STORE_SLUG = "lr-market";
+
+function makeRow(
+  id: number,
+  nameEs: string,
+  overrides: Partial<{
+    nameEn: string | null;
+    position: number;
+    productCount: number;
+  }> = {}
+) {
+  return {
+    id,
+    nameEn: null,
+    nameEs,
+    position: id - 1,
+    productCount: 0,
+    slug: nameEs.toLowerCase(),
+    ...overrides,
+  };
+}
+
+type Row = ReturnType<typeof makeRow>;
+
+const ROWS: Row[] = [
+  makeRow(1, "Collares", { nameEn: "Necklaces", productCount: 1 }),
+  makeRow(2, "Aros", { productCount: 3 }),
+  makeRow(3, "Pulseras"),
+];
+
+const FAILURE = {
+  code: "INTERNAL_SERVER_ERROR",
+  message: "Internal server error",
+  status: 500,
+};
+
+/** A procedure that records its input, then answers, fails or never answers. */
+function answer(
+  path: string,
+  spy: (input: unknown) => unknown,
+  outcome: "fail" | "hang" | "ok"
+): RequestHandler {
+  if (outcome === "fail") {
+    return createOrpcErrorHandler(path, FAILURE);
+  }
+
+  return createOrpcHandler(path, async (input) => {
+    const output = spy(input);
+    return outcome === "hang" ? await new Promise<never>(() => {}) : output;
+  });
+}
+
+interface SetupOptions {
+  /** `category.list`'s first answer: rows, a failure, or nothing yet. */
+  list?: Row[] | "fail" | "hang";
+  locale?: Locale;
+  /** How each write ends. */
+  writes?: Partial<
+    Record<"create" | "delete" | "rename" | "reorder", "fail" | "hang" | "ok">
+  >;
+}
+
+function setup({ list = ROWS, locale = "en", writes = {} }: SetupOptions = {}) {
+  const spies = {
+    create: vi.fn((_input: unknown) => ({
+      id: 9,
+      position: 3,
+      slug: "anillos",
+    })),
+    delete: vi.fn((_input: unknown) => ({ id: 2, movedArticles: 3 })),
+    list: vi.fn((_input: unknown) => (Array.isArray(list) ? list : ROWS)),
+    rename: vi.fn((_input: unknown) => ({ id: 1, slug: "collares" })),
+    reorder: vi.fn((input: unknown) => input),
+  };
+  server.use(
+    Array.isArray(list)
+      ? createOrpcHandler("category.list", spies.list)
+      : answer("category.list", spies.list, list === "fail" ? "fail" : "hang"),
+    ...(["create", "delete", "rename", "reorder"] as const).map((name) =>
+      answer(`category.${name}`, spies[name], writes[name] ?? "ok")
+    )
+  );
+  const queryClient = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  });
+
+  function Providers({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster />
+      </QueryClientProvider>
+    );
+  }
+
+  const user = userEvent.setup();
+  renderWithI18n(<CategoryManager storeSlug={STORE_SLUG} />, {
+    locale,
+    wrapper: Providers,
+  });
+
+  const row = (slug: string) => screen.getByTestId(`category-row-${slug}`);
+  /** The Spanish names in the list, top to bottom. */
+  const order = () =>
+    within(screen.getByTestId("category-list"))
+      .getAllByRole("listitem")
+      .map((item) => item.querySelector("p")?.textContent);
+
+  /** Gives each row its own place, 60px apart: happy-dom lays nothing out. */
+  const layOut = (slugs: string[]) => {
+    for (const [index, slug] of slugs.entries()) {
+      vi.spyOn(row(slug), "getBoundingClientRect").mockReturnValue(
+        DOMRect.fromRect({ height: 56, width: 400, x: 0, y: index * 60 })
+      );
+    }
+  };
+
+  return { layOut, order, queryClient, row, spies, user };
+}
+
+/** The manager's own live region; dnd-kit adds another `status` of its own. */
+function announcer() {
+  return screen
+    .getAllByRole("status")
+    .find((region) => region.tagName === "OUTPUT");
+}
+
+async function shown() {
+  await screen.findByTestId("category-list");
+}
+
+describe("CategoryManager", () => {
+  test("shows a busy skeleton while the list loads", async () => {
+    const { spies } = setup({ list: "hang" });
+
+    const skeleton = screen.getByTestId("category-list-skeleton");
+    expect(skeleton).toHaveAttribute("aria-busy", "true");
+    expect(skeleton).toHaveTextContent(/^Loading$/u);
+    expect(screen.queryByTestId("category-list")).toBeNull();
+    await waitFor(() => {
+      expect(spies.list).toHaveBeenCalledExactlyOnceWith({
+        storeSlug: STORE_SLUG,
+      });
+    });
+  });
+
+  test("says the list failed to load and loads it again on retry", async () => {
+    const { spies, user } = setup({ list: "fail" });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      /^We could not load the categories\.Try again$/u
+    );
+    expect(screen.queryByTestId("empty-state")).toBeNull();
+
+    server.use(createOrpcHandler("category.list", spies.list));
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    await shown();
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
+      storeSlug: STORE_SLUG,
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("invites adding the first category when the store has none", async () => {
+    setup({ list: [] });
+
+    expect(await screen.findByTestId("empty-state")).toHaveTextContent(
+      "No categories yet. Add the first one above."
+    );
+    expect(screen.queryByTestId("category-list")).toBeNull();
+  });
+
+  test("lists each category with its English name and article count", async () => {
+    const { order, row, spies } = setup();
+    await shown();
+
+    expect(order()).toEqual(["Collares", "Aros", "Pulseras"]);
+    expect(row("collares")).toHaveTextContent("CollaresNecklaces · 1 article");
+    expect(within(row("collares")).getByText("Necklaces ·")).toHaveAttribute(
+      "lang",
+      "en"
+    );
+    expect(row("aros")).toHaveTextContent(/^Aros3 articles$/u);
+    expect(row("pulseras")).toHaveTextContent(/^Pulseras0 articles$/u);
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
+      storeSlug: STORE_SLUG,
+    });
+  });
+
+  test("names every row's controls after its category", async () => {
+    const { row } = setup();
+    await shown();
+
+    expect(
+      within(row("aros"))
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual([
+      "Drag to reorder: Aros",
+      "Move up: Aros",
+      "Move down: Aros",
+      "Rename: Aros",
+      "Delete: Aros",
+    ]);
+  });
+
+  test("adds a category and reads the list again", async () => {
+    const { spies, user } = setup();
+    await shown();
+
+    await user.type(screen.getByLabelText(/^Name in Spanish/u), "Anillos");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByText("Category added.")).toBeVisible();
+    expect(spies.create).toHaveBeenCalledExactlyOnceWith({
+      nameEn: null,
+      nameEs: "Anillos",
+      storeSlug: STORE_SLUG,
+    });
+    await waitFor(() => {
+      expect(spies.list.mock.calls).toEqual([
+        [{ storeSlug: STORE_SLUG }],
+        [{ storeSlug: STORE_SLUG }],
+      ]);
+    });
+    expect(screen.getByLabelText(/^Name in Spanish/u)).toHaveValue("");
+  });
+
+  test("puts a name the store already has on the Spanish field, without reporting it", async () => {
+    const { user } = setup();
+    server.use(
+      createOrpcErrorHandler("category.create", {
+        code: "CONFLICT",
+        message: "Another category of this store already has that name",
+        status: 409,
+      })
+    );
+    await shown();
+    const spanish = screen.getByLabelText(/^Name in Spanish/u);
+
+    await user.type(spanish, "Collares");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(spanish).toHaveAttribute("aria-invalid", "true");
+    });
+    expect(spanish).toHaveAccessibleDescription(
+      "This store already has a category with that name."
+    );
+    expect(spanish).toHaveValue("Collares");
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("reports a failed addition and says it failed", async () => {
+    const { user } = setup({ writes: { create: "fail" } });
+    await shown();
+
+    await user.type(screen.getByLabelText(/^Name in Spanish/u), "Anillos");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /^We could not save the change\. Try again\.$/u
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.create" }
+    );
+  });
+
+  test("renames a category in place, then closes its form", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+
+    await user.click(
+      within(row("collares")).getByRole("button", { name: "Rename: Collares" })
+    );
+    const form = within(row("collares"));
+    expect(form.getByLabelText(/^Name in Spanish/u)).toHaveValue("Collares");
+    expect(form.getByLabelText("Name in English (optional)")).toHaveValue(
+      "Necklaces"
+    );
+    await user.clear(form.getByLabelText("Name in English (optional)"));
+    await user.click(form.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Category renamed.")).toBeVisible();
+    expect(spies.rename).toHaveBeenCalledExactlyOnceWith({
+      id: 1,
+      nameEn: null,
+      nameEs: "Collares",
+      storeSlug: STORE_SLUG,
+    });
+    await waitFor(() => {
+      expect(within(row("collares")).queryByRole("textbox")).toBeNull();
+    });
+  });
+
+  test("cancelling a rename puts the row back as it was", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    );
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Cancel" })
+    );
+
+    expect(row("aros")).toHaveTextContent(/^Aros3 articles$/u);
+    expect(spies.rename).not.toHaveBeenCalled();
+  });
+
+  test("reports a failed rename and keeps its form open", async () => {
+    const { row, user } = setup({ writes: { rename: "fail" } });
+    await shown();
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    );
+    await user.click(within(row("aros")).getByRole("button", { name: "Save" }));
+
+    expect(await within(row("aros")).findByRole("alert")).toHaveTextContent(
+      /^We could not save the change\. Try again\.$/u
+    );
+    expect(within(row("aros")).getByLabelText(/^Name in Spanish/u)).toHaveValue(
+      "Aros"
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.rename" }
+    );
+  });
+
+  test("the first row cannot move up and the last cannot move down", async () => {
+    const { row } = setup();
+    await shown();
+
+    expect(
+      within(row("collares")).getByRole("button", { name: "Move up: Collares" })
+    ).toBeDisabled();
+    expect(
+      within(row("collares")).getByRole("button", {
+        name: "Move down: Collares",
+      })
+    ).toBeEnabled();
+    expect(
+      within(row("pulseras")).getByRole("button", { name: "Move up: Pulseras" })
+    ).toBeEnabled();
+    expect(
+      within(row("pulseras")).getByRole("button", {
+        name: "Move down: Pulseras",
+      })
+    ).toBeDisabled();
+  });
+
+  test.each([
+    [
+      "down",
+      "collares",
+      "Collares",
+      [2, 1, 3],
+      "“Collares” is now in place 2 of 3.",
+    ],
+    [
+      "up",
+      "pulseras",
+      "Pulseras",
+      [1, 3, 2],
+      "“Pulseras” is now in place 2 of 3.",
+    ],
+  ])(
+    "moving a row %s saves the new order at once and announces it",
+    async (direction, slug, name, ids, announcement) => {
+      const { order, row, spies, user } = setup({
+        writes: { reorder: "hang" },
+      });
+      await shown();
+
+      await user.click(
+        within(row(slug)).getByRole("button", {
+          name: `Move ${direction}: ${name}`,
+        })
+      );
+
+      await waitFor(() => {
+        expect(order()).toEqual(
+          ids.map((id) => ROWS.find((candidate) => candidate.id === id)?.nameEs)
+        );
+      });
+      expect(announcer()).toHaveTextContent(announcement);
+      expect(announcer()).toHaveAttribute("aria-live", "polite");
+      await waitFor(() => {
+        expect(spies.reorder).toHaveBeenCalledExactlyOnceWith({
+          ids,
+          storeSlug: STORE_SLUG,
+        });
+      });
+    }
+  );
+
+  test("reports a failed reorder, says so and puts the order back", async () => {
+    const { order, row, user } = setup({ writes: { reorder: "fail" } });
+    await shown();
+
+    await user.click(
+      within(row("collares")).getByRole("button", {
+        name: "Move down: Collares",
+      })
+    );
+
+    expect(
+      await screen.findByText("We could not save the change. Try again.")
+    ).toBeVisible();
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.reorder" }
+    );
+    await waitFor(() => {
+      expect(order()).toEqual(["Collares", "Aros", "Pulseras"]);
+    });
+  });
+
+  test("dragging a row with the keyboard puts it in its new place", async () => {
+    const { layOut, order, row, spies, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+
+    within(row("collares"))
+      .getByRole("button", { name: "Drag to reorder: Collares" })
+      .focus();
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+
+    await waitFor(() => {
+      expect(spies.reorder).toHaveBeenCalledExactlyOnceWith({
+        ids: [2, 1, 3],
+        storeSlug: STORE_SLUG,
+      });
+    });
+    expect(order()).toEqual(["Aros", "Collares", "Pulseras"]);
+    expect(announcer()).toHaveTextContent("“Collares” is now in place 2 of 3.");
+  });
+
+  test("dropping a row back where it was saves nothing", async () => {
+    const { layOut, order, row, spies, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+
+    within(row("aros"))
+      .getByRole("button", { name: "Drag to reorder: Aros" })
+      .focus();
+    await user.keyboard(" ");
+    await user.keyboard(" ");
+
+    expect(order()).toEqual(["Collares", "Aros", "Pulseras"]);
+    expect(announcer()).toHaveTextContent(/^$/u);
+    expect(spies.reorder).not.toHaveBeenCalled();
+  });
+
+  test("dropping a row that left the list mid-drag saves nothing", async () => {
+    const { layOut, order, queryClient, row, spies, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+
+    within(row("collares"))
+      .getByRole("button", { name: "Drag to reorder: Collares" })
+      .focus();
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    act(() => {
+      queryClient.setQueryData(
+        ["category", "list", { input: { storeSlug: STORE_SLUG } }],
+        [ROWS[1], ROWS[2]]
+      );
+    });
+    await user.keyboard(" ");
+
+    expect(order()).toEqual(["Aros", "Pulseras"]);
+    expect(spies.reorder).not.toHaveBeenCalled();
+  });
+
+  test("deletes a category with articles once told where they move", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Delete: Aros" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    expect(dialog).toHaveAccessibleDescription(
+      "“Aros” has 3 articles. Choose where they move before deleting it."
+    );
+    expect(
+      within(dialog)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Choose a category", "Collares", "Pulseras"]);
+    await user.selectOptions(within(dialog).getByRole("combobox"), "3");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    expect(await screen.findByText("Category deleted.")).toBeVisible();
+    expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
+      id: 2,
+      moveToId: 3,
+      storeSlug: STORE_SLUG,
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("delete-category-dialog")).toBeNull();
+    });
+  });
+
+  test("deletes a category with no articles without asking where they move", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    await user.click(
+      within(await screen.findByTestId("delete-category-dialog")).getByRole(
+        "button",
+        { name: "Delete category" }
+      )
+    );
+
+    await waitFor(() => {
+      expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
+        id: 3,
+        moveToId: null,
+        storeSlug: STORE_SLUG,
+      });
+    });
+  });
+
+  test("reports a failed deletion and keeps the dialog open with the error", async () => {
+    const { row, user } = setup({ writes: { delete: "fail" } });
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /^We could not save the change\. Try again\.$/u
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.delete" }
+    );
+  });
+
+  test("in Spanish, counts and names everything in Spanish", async () => {
+    const { row } = setup({ locale: "es" });
+    await shown();
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Categorías$/u
+    );
+    expect(row("collares")).toHaveTextContent("CollaresNecklaces · 1 artículo");
+    expect(row("aros")).toHaveTextContent(/^Aros3 artículos$/u);
+    expect(
+      within(screen.getByRole("list", { name: "Categorías de la tienda" }))
+        .getAllByRole("button", { name: /^Arrastrar para ordenar: / })
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual([
+      "Arrastrar para ordenar: Collares",
+      "Arrastrar para ordenar: Aros",
+      "Arrastrar para ordenar: Pulseras",
+    ]);
+    expect(screen.getByRole("button", { name: "Agregar" })).toBeVisible();
+  });
+});

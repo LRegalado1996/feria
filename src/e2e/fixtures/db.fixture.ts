@@ -6,7 +6,11 @@ import { Pool } from "pg";
 import * as schema from "../../server/db/schema";
 import {
   account,
+  category,
+  categoryTranslation,
   post,
+  product,
+  productTranslation,
   store,
   storeMember,
   storeTranslation,
@@ -62,6 +66,25 @@ export interface DbFixture {
       ) => Promise<CreatedStore>;
       /** Another user, for "someone else's" cases. */
       createUser: (name: string) => Promise<CreatedUser>;
+      /**
+       * A category of the store at `position`, named in Spanish (and English
+       * when given). Deleted with its store.
+       */
+      createCategory: (
+        storeId: number,
+        names: {
+          nameEn?: string;
+          nameEs: string;
+          position: number;
+          slug: string;
+        }
+      ) => Promise<{ id: number; slug: string }>;
+      /** A draft article of the store in a category. Deleted with its store. */
+      createArticle: (
+        storeId: number,
+        categoryId: number,
+        title: string
+      ) => Promise<{ id: number }>;
       /**
        * A login that can sign in through the form (FER-009): its role, a
        * password, and a membership in each store given. Unique per call.
@@ -152,6 +175,68 @@ export const test = userTest.extend<DbFixture>({
               .insert(storeTranslation)
               .values(texts.map((text) => ({ ...text, storeId: created.id })));
           }
+
+          return created;
+        },
+
+        createCategory: async (
+          storeId: number,
+          {
+            nameEn,
+            nameEs,
+            position,
+            slug,
+          }: { nameEn?: string; nameEs: string; position: number; slug: string }
+        ): Promise<{ id: number; slug: string }> => {
+          const [created] = await db
+            .insert(category)
+            .values({ position, slug, storeId })
+            .returning({ id: category.id, slug: category.slug });
+
+          if (!created) {
+            throw new Error("Inserting a category returned no row");
+          }
+
+          await db.insert(categoryTranslation).values([
+            { categoryId: created.id, locale: "es", name: nameEs },
+            ...(nameEn
+              ? [
+                  {
+                    categoryId: created.id,
+                    locale: "en" as const,
+                    name: nameEn,
+                  },
+                ]
+              : []),
+          ]);
+
+          return created;
+        },
+
+        createArticle: async (
+          storeId: number,
+          categoryId: number,
+          title: string
+        ): Promise<{ id: number }> => {
+          const [created] = await db
+            .insert(product)
+            .values({
+              categoryId,
+              slug: `e2e-${crypto.randomUUID()}`,
+              storeId,
+            })
+            .returning({ id: product.id });
+
+          if (!created) {
+            throw new Error("Inserting an article returned no row");
+          }
+
+          await db.insert(productTranslation).values({
+            description: "",
+            locale: "es",
+            productId: created.id,
+            title,
+          });
 
           return created;
         },
