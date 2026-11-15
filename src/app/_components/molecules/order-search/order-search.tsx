@@ -70,12 +70,21 @@ function OrderSearch({ className, query, storeSlug }: OrderSearchProps) {
     }
   }, [replaced]);
 
+  // A search waiting out the pause keeps the closure of the render that
+  // typed it: it reads the status the address holds when it fires, so a tab
+  // changed meanwhile is kept, not undone.
+  const status = useRef(query.status);
+  useEffect(() => {
+    status.current = query.status;
+  }, [query.status]);
+
   const go = (typed: string) => {
     const q = typed.trim() === "" ? undefined : typed.trim();
     setSent((previous) => [...previous, q]);
-    router.replace(ordersPath(storeSlug, locale, { q, status: query.status }), {
-      scroll: false,
-    });
+    router.replace(
+      ordersPath(storeSlug, locale, { q, status: status.current }),
+      { scroll: false }
+    );
   };
 
   return (

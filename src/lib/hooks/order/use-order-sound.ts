@@ -94,11 +94,14 @@ function isRunning(output: AudioContext) {
 
 /**
  * The page's audio context, made on first use and woken up; `null` without
- * Web Audio. `onAwake` hears whether it runs, once it is known.
+ * Web Audio, or when the browser refuses to make one (it caps how many a
+ * page may open: NotSupportedError), which `onUnavailable` hears once
+ * reported. `onAwake` hears whether it runs, once it is known.
  */
 function wakeAudio(
   context: RefObject<AudioContext | null>,
-  onAwake: (awake: boolean) => void
+  onAwake: (awake: boolean) => void,
+  onUnavailable: (unavailable: true) => void
 ): AudioContext | null {
   const AudioContextClass = audioContextClass();
 
@@ -106,20 +109,38 @@ function wakeAudio(
     return null;
   }
 
-  const output = context.current ?? new AudioContextClass();
-  context.current = output;
+  let output = context.current;
+
+  if (!output) {
+    try {
+      output = new AudioContextClass();
+    } catch (error) {
+      reportError(error, { action: "Orders.create_audio" });
+      onUnavailable(true);
+      return null;
+    }
+
+    context.current = output;
+  }
 
   if (isRunning(output)) {
     onAwake(true);
   } else {
+    const waking = output;
     // A context made without a tap starts suspended (autoplay rules); a tap
-    // wakes it, and a refusal only means no sound.
+    // wakes it, and a refusal only means no sound. A context the screen
+    // closed meanwhile (it went away) has nothing left to wake or report.
     void (async () => {
       try {
-        await output.resume();
-        onAwake(isRunning(output));
+        await waking.resume();
+
+        if (context.current === waking) {
+          onAwake(isRunning(waking));
+        }
       } catch (error) {
-        reportError(error, { action: "Orders.resume_sound" });
+        if (context.current === waking) {
+          reportError(error, { action: "Orders.resume_sound" });
+        }
       }
     })();
   }
@@ -151,8 +172,34 @@ export function useOrderSound() {
   // One context for the page: browsers cap how many a page may open.
   const context = useRef<AudioContext | null>(null);
   const [awake, setAwake] = useState(false);
+  // The browser refused to make a context: the screen stays silent, and
+  // asks for no tap that could not help.
+  const [unavailable, setUnavailable] = useState(false);
   const needsGesture =
-    enabled === true && !awake && audioContextClass() !== undefined;
+    enabled === true &&
+    !awake &&
+    !unavailable &&
+    audioContextClass() !== undefined;
+
+  // The context is the screen's: closed when it goes, so coming back to the
+  // orders again and again never piles up contexts against the browser's cap.
+  useEffect(
+    () => () => {
+      const output = context.current;
+      context.current = null;
+
+      if (output) {
+        void (async () => {
+          try {
+            await output.close();
+          } catch (error) {
+            reportError(error, { action: "Orders.close_audio" });
+          }
+        })();
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     if (!needsGesture) {
@@ -160,7 +207,7 @@ export function useOrderSound() {
     }
 
     const wake = () => {
-      wakeAudio(context, setAwake);
+      wakeAudio(context, setAwake, setUnavailable);
     };
 
     // The page was already touched (the staff came back from an order): the
@@ -187,7 +234,9 @@ export function useOrderSound() {
 
   const beep = () => {
     try {
-      const output = wakeAudio(context, setAwake);
+      const output = unavailable
+        ? null
+        : wakeAudio(context, setAwake, setUnavailable);
 
       if (!output) {
         return;

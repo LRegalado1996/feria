@@ -73,12 +73,20 @@ function OrderStatusActions({
   ];
   const pending = pendingMove !== null;
 
+  // The marker belongs to one attempt: a move that settles where it started
+  // (it failed) is over, so a later status change from elsewhere keeps focus.
   useEffect(() => {
-    if (movedFrom.current !== null && movedFrom.current !== status) {
+    if (movedFrom.current === null) {
+      return;
+    }
+
+    if (movedFrom.current !== status) {
       movedFrom.current = null;
       group.current?.querySelector("button")?.focus();
+    } else if (pendingMove === null) {
+      movedFrom.current = null;
     }
-  }, [status]);
+  }, [pendingMove, status]);
 
   const move = (to: OrderStatus) => {
     movedFrom.current = status;

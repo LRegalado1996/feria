@@ -165,7 +165,12 @@ function setup({
     class {
       currentTime = 0;
       destination = {};
-      state = audio;
+      state: AudioContextState = audio;
+
+      async close() {
+        this.state = "closed";
+        await Promise.resolve();
+      }
 
       async resume() {
         resumed.push(Date.now());
@@ -264,6 +269,16 @@ function setup({
     liveRegion: () => screen.getByRole("status"),
     queryClient,
     resumed,
+    /** The address changes its status or search, as a tab or a search does. */
+    rerender: (next: OrdersQuery) => {
+      rendered.rerender(
+        <OrderManager
+          query={next}
+          renderedAt={RENDERED_AT}
+          storeSlug="lr-market"
+        />
+      );
+    },
     refresh: async () => {
       await act(async () => {
         await queryClient.refetchQueries();
@@ -447,9 +462,45 @@ describe("OrderManager", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  test("a refresh that fails after an empty list says so with a retry, instead of passing for no orders", async () => {
+    const { list, refresh, user } = setup({
+      lists: [onePage([]), "fail", onePage([makeOrder(1, "AB3CD")])],
+    });
+    await screen.findByTestId("empty-state");
+
+    await refresh();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      /^We couldn't refresh the orders: this is the last list we read\.Try again$/u
+    );
+
+    await user.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByTestId("order-row-AB3CD")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(list).toHaveBeenCalledTimes(3);
+  });
+
+  test("a refresh that fails keeps the orders it read on screen, and says so in Spanish", async () => {
+    const { codes, refresh } = setup({
+      lists: [onePage([makeOrder(1, "AB3CD")]), "fail"],
+      locale: "es",
+    });
+    await screen.findByTestId("order-row-AB3CD");
+
+    await refresh();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /^No pudimos actualizar los pedidos: esta es la última lista que leímos\.Reintentar$/u
+    );
+    expect(codes()).toEqual(["AB3CD"]);
+  });
+
   test("an order only a later read brings is new and announced; one the first read held is neither", async () => {
-    // The first read's order placed "later" by the server's clock: the
-    // clocks no longer decide, the ids the tab has seen do.
+    // The first read's order placed "later" than the server rendered: the
+    // render's clock decides nothing; the orders the tab has seen, and the
+    // newest stamp its list showed, do.
     const { codes, liveRegion, refresh, row } = setup({
       lists: [
         onePage([
@@ -457,7 +508,14 @@ describe("OrderManager", () => {
             createdAt: new Date(RENDERED_AT + MINUTE).toISOString(),
           }),
         ]),
-        onePage([makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")]),
+        onePage([
+          makeOrder(9, "K7P2Q", {
+            createdAt: new Date(RENDERED_AT + 2 * MINUTE).toISOString(),
+          }),
+          makeOrder(1, "AB3CD", {
+            createdAt: new Date(RENDERED_AT + MINUTE).toISOString(),
+          }),
+        ]),
       ],
     });
     await screen.findByTestId("order-row-AB3CD");
@@ -475,6 +533,26 @@ describe("OrderManager", () => {
     expect(within(row("AB3CD")).queryByTestId("order-new")).toBeNull();
     expect(liveRegion()).toHaveTextContent(/^Order K7P2Q arrived$/u);
     expect(liveRegion()).toHaveAttribute("aria-live", "polite");
+  });
+
+  test("an older order that moves up into the page when one above it is packed is neither new nor announced", async () => {
+    // The page ends at AB3CD; packing K7P2Q brings ZZ9XY, older, onto it.
+    const { codes, liveRegion, refresh, row } = setup({
+      lists: [
+        onePage([makeOrder(1, "K7P2Q"), makeOrder(2, "AB3CD")]),
+        onePage([makeOrder(2, "AB3CD"), makeOrder(3, "ZZ9XY")]),
+      ],
+      query: { status: "received" },
+    });
+    await screen.findByTestId("order-row-K7P2Q");
+
+    await refresh();
+
+    await waitFor(() => {
+      expect(codes()).toEqual(["AB3CD", "ZZ9XY"]);
+    });
+    expect(within(row("ZZ9XY")).queryByTestId("order-new")).toBeNull();
+    expect(liveRegion()).toHaveTextContent(/^$/u);
   });
 
   test("speaks a Spanish arrival", async () => {
@@ -499,7 +577,12 @@ describe("OrderManager", () => {
       lists: [
         onePage([makeOrder(1, "AB3CD")]),
         // Placed while the staff was on an order's page.
-        onePage([makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")]),
+        onePage([
+          makeOrder(9, "K7P2Q", {
+            createdAt: new Date(RENDERED_AT).toISOString(),
+          }),
+          makeOrder(1, "AB3CD"),
+        ]),
       ],
     });
     await screen.findByTestId("order-row-AB3CD");
@@ -552,7 +635,14 @@ describe("OrderManager", () => {
     const { refresh, row } = setup({
       lists: [
         onePage([makeOrder(1, "AB3CD")]),
-        onePage([makeOrder(9, "K7P2Q"), makeOrder(8, "ZZ9XY")]),
+        onePage([
+          makeOrder(9, "K7P2Q", {
+            createdAt: new Date(RENDERED_AT).toISOString(),
+          }),
+          makeOrder(8, "ZZ9XY", {
+            createdAt: new Date(RENDERED_AT - MINUTE / 2).toISOString(),
+          }),
+        ]),
       ],
     });
     await screen.findByTestId("order-row-AB3CD");
@@ -852,6 +942,105 @@ describe("OrderManager", () => {
   });
 });
 
+describe("OrderManager's focus after Load more", () => {
+  test("a next page that failed focuses no row when a later read grows the list", async () => {
+    const { codes, refresh, user } = setup({
+      lists: [
+        {
+          items: [makeOrder(1, "AB3CD")],
+          nextCursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
+        },
+        {
+          items: [makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")],
+          nextCursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
+        },
+      ],
+      nextPage: "fail",
+    });
+    await screen.findByTestId("order-row-AB3CD");
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByRole("alert");
+
+    await refresh();
+
+    await waitFor(() => {
+      expect(codes()).toEqual(["K7P2Q", "AB3CD"]);
+    });
+    expect(screen.getByRole("button", { name: "Load more" })).toHaveFocus();
+  });
+
+  test("a next page still on its way when the status changes focuses no row of the new list", async () => {
+    const { codes, rerender, user } = setup({
+      lists: [
+        {
+          items: [makeOrder(1, "AB3CD")],
+          nextCursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
+        },
+        {
+          items: [
+            makeOrder(2, "K7P2Q"),
+            makeOrder(3, "MN4PQ"),
+            makeOrder(4, "RS5TV"),
+          ],
+          nextCursor: { createdAt: "2026-11-14T21:56:00.000Z", id: 4 },
+        },
+      ],
+      nextPage: "hang",
+    });
+    await screen.findByTestId("order-row-AB3CD");
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByRole("button", { name: "Loading…" });
+    // The staff goes to the tab, which takes them to its list.
+    const tab = within(
+      screen.getByRole("navigation", { name: "Filter by status" })
+    ).getAllByRole("link")[1];
+    tab?.focus();
+
+    rerender({ status: "received" });
+
+    await waitFor(() => {
+      expect(codes()).toEqual(["K7P2Q", "MN4PQ", "RS5TV"]);
+    });
+    expect(tab).toHaveAttribute("aria-current", "page");
+    expect(tab).toHaveFocus();
+  });
+
+  test("a status whose longer list is already read, chosen while a next page is on its way, focuses none of its rows", async () => {
+    const all = {
+      items: [makeOrder(1, "AB3CD")],
+      nextCursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
+    };
+    const received = onePage([
+      makeOrder(2, "K7P2Q"),
+      makeOrder(3, "MN4PQ"),
+      makeOrder(4, "RS5TV"),
+    ]);
+    const { codes, rerender, user } = setup({
+      lists: [all, received, all, received],
+      nextPage: "hang",
+    });
+    await screen.findByTestId("order-row-AB3CD");
+    rerender({ status: "received" });
+    await screen.findByTestId("order-row-RS5TV");
+    rerender({});
+    await waitFor(() => {
+      expect(codes()).toEqual(["AB3CD"]);
+    });
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByRole("button", { name: "Loading…" });
+    const tab = within(
+      screen.getByRole("navigation", { name: "Filter by status" })
+    ).getAllByRole("link")[1];
+    tab?.focus();
+
+    // The list it read is on screen in the same render as the change.
+    rerender({ status: "received" });
+
+    expect(codes()).toEqual(["K7P2Q", "MN4PQ", "RS5TV"]);
+    expect(tab).toHaveFocus();
+  });
+});
+
 describe("OrderManager before hydration", () => {
   /**
    * The screen as the server renders it with its first page fetched, in a
@@ -860,8 +1049,13 @@ describe("OrderManager before hydration", () => {
    */
   function setupHydration() {
     const page = onePage([makeOrder(9, "K7P2Q")]);
+    // The cache holds what the client decoded: dates, not strings.
+    const decoded = page.items.map((order) => ({
+      ...order,
+      createdAt: new Date(order.createdAt),
+    }));
     recordOrderList("lr-market", {}, [[]], RENDERED_AT);
-    recordOrderList("lr-market", {}, [page.items], RENDERED_AT);
+    recordOrderList("lr-market", {}, [decoded], RENDERED_AT);
     server.use(
       listHandler(() => page),
       createOrpcHandler("order.counts", () => COUNTS)
@@ -878,16 +1072,7 @@ describe("OrderManager before hydration", () => {
       }).queryKey,
       {
         pageParams: [firstCursor],
-        // The cache holds what the client decoded: dates, not strings.
-        pages: [
-          {
-            items: page.items.map((order) => ({
-              ...order,
-              createdAt: new Date(order.createdAt),
-            })),
-            nextCursor: null,
-          },
-        ],
+        pages: [{ items: decoded, nextCursor: null }],
       }
     );
     const I18n = createI18nWrapper("en");

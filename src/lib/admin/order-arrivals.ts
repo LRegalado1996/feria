@@ -7,8 +7,16 @@ export const ARRIVAL_FRESH_MS = 10 * 60_000;
 /** What the store needs of an order in a list. */
 interface ListedOrder {
   code: string;
+  /** The database's stamp, which the list is sorted by, newest first. */
+  createdAt: Date;
   id: number;
   status: OrderStatus;
+}
+
+/** A place in a list's order: when the order was placed, then its id. */
+interface ListPlace {
+  createdAt: number;
+  id: number;
 }
 
 /** The last list that brought arrivals: their codes, in the list's order. */
@@ -19,8 +27,11 @@ export interface Arrival {
 }
 
 interface StoreArrivals {
-  /** The lists (status and search) this tab has read at least once. */
-  baselines: Set<string>;
+  /**
+   * The lists (status and search) this tab has read at least once, each
+   * with the newest place it has shown (`null` while it has shown none).
+   */
+  baselines: Map<string, ListPlace | null>;
   /** Each order still marked "New", with the instant this tab saw it come. */
   fresh: ReadonlyMap<number, number>;
   /** Every order this tab has seen in the store's lists or opened. */
@@ -52,7 +63,7 @@ function storeArrivals(storeSlug: string): StoreArrivals {
   }
 
   const created: StoreArrivals = {
-    baselines: new Set(),
+    baselines: new Map(),
     fresh: NO_ARRIVALS,
     known: new Set(),
     last: null,
@@ -75,13 +86,30 @@ function listKey({ q, status }: OrdersQuery) {
   return JSON.stringify([status ?? null, q ?? null]);
 }
 
+function placeOf(order: ListedOrder): ListPlace {
+  return { createdAt: new Date(order.createdAt).getTime(), id: order.id };
+}
+
+/** Whether `place` sorts ahead of `than`: placed later, or the higher id. */
+function isNewer(place: ListPlace, than: ListPlace | null) {
+  return (
+    than === null ||
+    place.createdAt > than.createdAt ||
+    (place.createdAt === than.createdAt && place.id > than.id)
+  );
+}
+
 /**
  * Records what a list of the store brought and returns its arrivals: the
- * orders on its first page this tab had never seen. The first read of each
- * list (a status, a search) only learns what is there: a tab or search the
- * staff had not opened holds older orders, not arrivals. Later pages
- * ("Load more") are older orders too, learned silently. An order no longer
- * received stops being new.
+ * orders on its first page this tab had never seen, placed after the newest
+ * the list had shown. The first read of each list (a status, a search) only
+ * learns what is there: a tab or search the staff had not opened holds older
+ * orders, not arrivals. Later pages ("Load more") are older orders too,
+ * learned silently, and so is an older order the first page brings up when
+ * one above it leaves the list (packed, say): it was only below the page's
+ * end. The stamps compared are all the database's, and a store's orders are
+ * stamped one at a time after its lock (`createOrder`), so a later stamp is
+ * a later commit: no order that arrives can carry an older one.
  */
 export function recordOrderList<T extends ListedOrder>(
   storeSlug: string,
@@ -92,22 +120,32 @@ export function recordOrderList<T extends ListedOrder>(
   const arrivals = storeArrivals(storeSlug);
   const key = listKey(query);
   const firstRead = !arrivals.baselines.has(key);
+  const boundary = arrivals.baselines.get(key) ?? null;
   const [newest = [], ...older] = pages;
   const arrived = firstRead
     ? []
-    : newest.filter((order) => !arrivals.known.has(order.id));
+    : newest.filter(
+        (order) =>
+          !arrivals.known.has(order.id) && isNewer(placeOf(order), boundary)
+      );
   const fresh = new Map(arrivals.fresh);
   let changed = false;
-
-  arrivals.baselines.add(key);
+  let shown = boundary;
 
   for (const order of [...newest, ...older.flat()]) {
     arrivals.known.add(order.id);
+    const place = placeOf(order);
+
+    if (isNewer(place, shown)) {
+      shown = place;
+    }
 
     if (order.status !== "received" && fresh.delete(order.id)) {
       changed = true;
     }
   }
+
+  arrivals.baselines.set(key, shown);
 
   for (const order of arrived) {
     fresh.set(order.id, now);

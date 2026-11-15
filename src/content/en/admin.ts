@@ -201,6 +201,7 @@ export const admin: Dictionary["admin"] = {
       load: "We couldn't load the orders.",
       loadMore: "We couldn't load more orders.",
       order: "We couldn't load the order.",
+      refresh: "We couldn't refresh the orders: this is the last list we read.",
     },
     list: "The store's orders",
     loadMore: "Load more",

@@ -20,8 +20,16 @@ afterEach(() => {
 const AT = Date.parse("2026-11-14T22:00:00.000Z");
 const STORE = "lr-market";
 
-function makeOrder(id: number, status: OrderStatus = "received") {
-  return { code: `C${String(id)}`, id, status };
+/**
+ * An order as a list holds it: ids and stamps rise together, as the store's
+ * one-at-a-time ordering makes them, unless the stamp is given.
+ */
+function makeOrder(
+  id: number,
+  status: OrderStatus = "received",
+  createdAt = new Date(AT - 3_600_000 + id * 1000)
+) {
+  return { code: `C${String(id)}`, createdAt, id, status };
 }
 
 /** A store whose received list was read once, holding orders 1 and 2. */
@@ -96,16 +104,16 @@ describe("recordOrderList", () => {
       []
     );
     expect(
-      recordOrderList(STORE, { q: "ana" }, [[makeOrder(7), makeOrder(8)]], AT)
-    ).toEqual([makeOrder(7)]);
+      recordOrderList(STORE, { q: "ana" }, [[makeOrder(10), makeOrder(8)]], AT)
+    ).toEqual([makeOrder(10)]);
   });
 
   test("an order known from one list is no arrival in another", () => {
     setup();
-    recordOrderList(STORE, {}, [[makeOrder(2)]], AT);
+    recordOrderList(STORE, {}, [[makeOrder(1)]], AT);
 
     expect(
-      recordOrderList(STORE, {}, [[makeOrder(1), makeOrder(2)]], AT)
+      recordOrderList(STORE, {}, [[makeOrder(2), makeOrder(1)]], AT)
     ).toEqual([]);
   });
 
@@ -113,11 +121,11 @@ describe("recordOrderList", () => {
     const { poll } = setup();
     recordOrderList("tienda-demo", {}, [[makeOrder(40)]], AT);
 
-    expect(recordOrderList("tienda-demo", {}, [[makeOrder(3)]], AT)).toEqual([
-      makeOrder(3),
+    expect(recordOrderList("tienda-demo", {}, [[makeOrder(41)]], AT)).toEqual([
+      makeOrder(41),
     ]);
     expect(poll([[makeOrder(40), makeOrder(2)]])).toEqual([makeOrder(40)]);
-    expect([...freshArrivals("tienda-demo")]).toEqual([[3, AT]]);
+    expect([...freshArrivals("tienda-demo")]).toEqual([[41, AT]]);
   });
 
   test("an arrival no longer received stops being new", () => {
@@ -146,6 +154,72 @@ describe("recordOrderList", () => {
     poll([[makeOrder(3)]]);
 
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  test("an older order the first page brings up when one above it leaves is no arrival", () => {
+    const { listener, poll } = setup();
+
+    // Order 2 was packed: order 0, only past the page's end until now,
+    // comes up into it.
+    expect(poll([[makeOrder(1), makeOrder(0)]])).toEqual([]);
+    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  test("the list remembers the newest it showed, not the newest still on it", () => {
+    const { poll } = setup();
+    // Order 2, the newest it showed, leaves the list; then an order placed
+    // between 1 and 2 that this tab never saw (moved back from packed by
+    // someone else) comes in: older than what the list showed, no arrival.
+    poll([[makeOrder(1)]]);
+    const movedBack = makeOrder(7, "received", new Date(AT - 3_598_500));
+
+    expect(poll([[movedBack, makeOrder(1)]])).toEqual([]);
+    expect(poll([[makeOrder(3), movedBack, makeOrder(1)]])).toEqual([
+      makeOrder(3),
+    ]);
+  });
+
+  test.each([
+    ["a later stamp", makeOrder(9, "received", new Date(AT + 1)), [9]],
+    [
+      "the same stamp and a higher id",
+      makeOrder(6, "received", new Date(AT)),
+      [6],
+    ],
+    [
+      "the same stamp and a lower id",
+      makeOrder(4, "received", new Date(AT)),
+      [],
+    ],
+    ["an earlier stamp", makeOrder(9, "received", new Date(AT - 1)), []],
+  ] as const)(
+    "against the newest order shown, one with %s is an arrival: %j",
+    (_case, order, expected) => {
+      recordOrderList(
+        STORE,
+        {},
+        [[makeOrder(5, "received", new Date(AT))]],
+        AT
+      );
+
+      expect(
+        recordOrderList(
+          STORE,
+          {},
+          [[order, makeOrder(5, "received", new Date(AT))]],
+          AT
+        ).map(({ id }) => id)
+      ).toEqual(expected);
+    }
+  );
+
+  test("after an empty first read, any order the list brings is an arrival", () => {
+    recordOrderList(STORE, {}, [[]], AT);
+
+    expect(recordOrderList(STORE, {}, [[makeOrder(1)]], AT)).toEqual([
+      makeOrder(1),
+    ]);
   });
 
   test("an empty read records nothing and announces nothing", () => {

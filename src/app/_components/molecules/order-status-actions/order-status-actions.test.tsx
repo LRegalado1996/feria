@@ -204,6 +204,22 @@ describe("OrderStatusActions", () => {
     ).toHaveFocus();
   });
 
+  test("after a move that failed, a status changed elsewhere does not take focus", async () => {
+    const { rerender, user } = setup({ status: "received" });
+    const tapped = screen.getByRole("button", { name: "Mark packed" });
+
+    await user.click(tapped);
+    rerender({ pendingMove: "packed", status: "received" });
+    rerender({ status: "received" });
+
+    expect(tapped).toHaveFocus();
+
+    tapped.blur();
+    rerender({ status: "packed" });
+
+    expect(document.body).toHaveFocus();
+  });
+
   test("a status changed elsewhere (another staff member) does not take focus", () => {
     const { rerender } = setup({ status: "received" });
 

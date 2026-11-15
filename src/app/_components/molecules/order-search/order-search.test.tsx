@@ -195,6 +195,22 @@ describe("OrderSearch", () => {
     expect(field()).toHaveValue("carla");
   });
 
+  test("a status changed while the search waits is the one it navigates to", () => {
+    const { advance, rerender, type } = setup({
+      query: { status: "received" },
+    });
+
+    type("ana");
+    advance(ORDER_SEARCH_DEBOUNCE_MS - 1);
+    rerender({ status: "packed" });
+    advance(1);
+
+    expect(replace).toHaveBeenCalledExactlyOnceWith(
+      "/admin/lr-market/orders?status=packed&q=ana",
+      { scroll: false }
+    );
+  });
+
   test("before the script runs, the form itself carries the status", () => {
     const { field, form } = setup();
 

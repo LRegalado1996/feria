@@ -388,8 +388,18 @@ describe("OrderDetail", () => {
       {},
       [
         [
-          { code: "K7P2Q", id: 42, status: "received" },
-          { code: "AB3CD", id: 7, status: "received" },
+          {
+            code: "K7P2Q",
+            createdAt: new Date(RENDERED_AT),
+            id: 42,
+            status: "received",
+          },
+          {
+            code: "AB3CD",
+            createdAt: new Date(RENDERED_AT - 60_000),
+            id: 7,
+            status: "received",
+          },
         ],
       ],
       RENDERED_AT

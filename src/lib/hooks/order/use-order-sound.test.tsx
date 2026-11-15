@@ -30,25 +30,44 @@ function stubUserActivation(hasBeenActive: boolean) {
  * `[frequency, start, stop]`.
  */
 function stubAudio({
+  closeFails = false,
+  constructFails = false,
   createFails = false,
   resumeFails = false,
   state = "running",
 }: {
+  closeFails?: boolean;
+  constructFails?: boolean;
   createFails?: boolean;
   resumeFails?: boolean;
   state?: AudioContextState;
 } = {}) {
   const tones: [number, number, number][] = [];
-  const contexts: { resumed: number }[] = [];
+  const contexts: { closed: number; resumed: number }[] = [];
 
   class FakeAudioContext {
     currentTime = 2;
     destination = {};
-    readonly record = { resumed: 0 };
+    readonly record = { closed: 0, resumed: 0 };
     state = state;
 
     constructor() {
+      if (constructFails) {
+        throw new DOMException("too many contexts", "NotSupportedError");
+      }
+
       contexts.push(this.record);
+    }
+
+    async close() {
+      this.record.closed += 1;
+
+      if (closeFails) {
+        throw new Error("could not close");
+      }
+
+      this.state = "closed";
+      await Promise.resolve();
     }
 
     createGain() {
@@ -102,7 +121,14 @@ function setup({
   stored,
   storage = "works",
 }: {
-  audio?: "missing" | "present" | "suspended" | "suspended-refused" | "broken";
+  audio?:
+    | "missing"
+    | "present"
+    | "suspended"
+    | "suspended-refused"
+    | "broken"
+    | "refused"
+    | "unclosable";
   stored?: string;
   storage?: "read-fails" | "works" | "write-fails";
 } = {}) {
@@ -141,6 +167,8 @@ function setup({
     audio === "missing"
       ? (vi.stubGlobal("AudioContext", undefined), { contexts: [], tones: [] })
       : stubAudio({
+          closeFails: audio === "unclosable",
+          constructFails: audio === "refused",
           createFails: audio === "broken",
           resumeFails: audio === "suspended-refused",
           state: audio.startsWith("suspended") ? "suspended" : "running",
@@ -232,7 +260,7 @@ describe("useOrderSound", () => {
     });
 
     expect(tones).toEqual([BEEP, BEEP]);
-    expect(contexts).toEqual([{ resumed: 0 }]);
+    expect(contexts).toEqual([{ closed: 0, resumed: 0 }]);
   });
 
   test("wakes a context the browser started suspended", () => {
@@ -242,7 +270,7 @@ describe("useOrderSound", () => {
       result.current.play();
     });
 
-    expect(contexts).toEqual([{ resumed: 1 }]);
+    expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
     expect(reportError).not.toHaveBeenCalled();
   });
 
@@ -339,13 +367,13 @@ describe("useOrderSound", () => {
 
       await gesture(type);
 
-      expect(contexts).toEqual([{ resumed: 1 }]);
+      expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
       expect(result.current.needsGesture).toBe(false);
       expect(tones).toEqual([]);
 
       await gesture(type);
 
-      expect(contexts).toEqual([{ resumed: 1 }]);
+      expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
     }
   );
 
@@ -358,7 +386,7 @@ describe("useOrderSound", () => {
     await gesture();
     await gesture();
 
-    expect(contexts).toEqual([{ resumed: 2 }]);
+    expect(contexts).toEqual([{ closed: 0, resumed: 2 }]);
     expect(result.current.needsGesture).toBe(true);
     expect(reportError).toHaveBeenCalledWith(
       expect.objectContaining({ message: "not allowed to start" }),
@@ -403,7 +431,7 @@ describe("useOrderSound", () => {
       await Promise.resolve();
     });
 
-    expect(contexts).toEqual([{ resumed: 1 }]);
+    expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
     expect(result.current.needsGesture).toBe(false);
   });
 
@@ -415,7 +443,7 @@ describe("useOrderSound", () => {
       await Promise.resolve();
     });
 
-    expect(contexts).toEqual([{ resumed: 1 }]);
+    expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
     expect(result.current.needsGesture).toBe(false);
   });
 
@@ -425,6 +453,94 @@ describe("useOrderSound", () => {
 
     expect(contexts).toEqual([]);
     expect(result.current.needsGesture).toBe(true);
+  });
+
+  test("closes its context once the screen is gone", async () => {
+    const { contexts, result, unmount } = setup({ stored: "on" });
+    act(() => {
+      result.current.play();
+    });
+
+    await act(async () => {
+      unmount();
+      await Promise.resolve();
+    });
+
+    expect(contexts).toEqual([{ closed: 1, resumed: 0 }]);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("reports a context that will not close, without failing", async () => {
+    const { contexts, result, unmount } = setup({
+      audio: "unclosable",
+      stored: "on",
+    });
+    act(() => {
+      result.current.play();
+    });
+
+    await act(async () => {
+      unmount();
+      await Promise.resolve();
+    });
+
+    expect(contexts).toEqual([{ closed: 1, resumed: 0 }]);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: "could not close" }),
+      { action: "Orders.close_audio" }
+    );
+  });
+
+  test("a wake still on its way when the screen goes ends quietly", async () => {
+    const { contexts, result, unmount } = setup({
+      audio: "suspended-refused",
+      stored: "on",
+    });
+
+    // The refusal lands after the screen closed the context.
+    await act(async () => {
+      result.current.play();
+      unmount();
+      await Promise.resolve();
+    });
+
+    expect(contexts).toEqual([{ closed: 1, resumed: 1 }]);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("with no context to open, reports it once and stays silent, asking for no tap", async () => {
+    const { gesture, result } = setup({ audio: "refused" });
+
+    act(() => {
+      result.current.setEnabled(true);
+    });
+    act(() => {
+      result.current.play();
+    });
+    await gesture();
+
+    expect(result.current.enabled).toBe(true);
+    expect(result.current.needsGesture).toBe(false);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ name: "NotSupportedError" }),
+      { action: "Orders.create_audio" }
+    );
+  });
+
+  test("with no context to open on a page already touched, mounts without failing", async () => {
+    stubUserActivation(true);
+    const { result } = setup({ audio: "refused", stored: "on" });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.enabled).toBe(true);
+    expect(result.current.needsGesture).toBe(false);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ name: "NotSupportedError" }),
+      { action: "Orders.create_audio" }
+    );
   });
 
   test("follows a choice made in another tab", () => {

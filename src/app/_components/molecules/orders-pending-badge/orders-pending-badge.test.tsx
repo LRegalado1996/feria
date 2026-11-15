@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import { AdminNav } from "@/app/_components/molecules/admin-nav";
+import { useOrderCounts } from "@/lib/hooks/order";
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
@@ -14,6 +15,19 @@ vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
   return orpcClientMock;
 });
+
+/**
+ * The same count beside the badge, shown once it has loaded: it renders in
+ * the same commit as the badge, so seeing it proves the badge has rendered
+ * the loaded count too, not the state before it.
+ */
+function LoadedCount() {
+  const counts = useOrderCounts("lr-market");
+
+  return counts.isSuccess ? (
+    <p data-testid="loaded-count">{counts.data.received}</p>
+  ) : null;
+}
 
 function setup({
   fails = false,
@@ -41,7 +55,10 @@ function setup({
 
   function Providers({ children }: { children: ReactNode }) {
     return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <LoadedCount />
+      </QueryClientProvider>
     );
   }
 
@@ -116,10 +133,9 @@ describe("OrdersPendingBadge", () => {
   test("names the link with its label alone and shows no figure when no order waits to be packed", async () => {
     const { counts } = setup({ locale: "es", received: 0 });
 
-    await waitFor(() => {
-      expect(counts).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: "lr-market",
-      });
+    expect(await screen.findByTestId("loaded-count")).toHaveTextContent(/^0$/u);
+    expect(counts).toHaveBeenCalledExactlyOnceWith({
+      storeSlug: "lr-market",
     });
     expect(screen.getByRole("link")).toHaveAccessibleName("Pedidos");
     expect(

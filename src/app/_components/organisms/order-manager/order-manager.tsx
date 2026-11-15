@@ -135,19 +135,32 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
   const sound = useOrderSound();
   const soundHint = useId();
   const list = useRef<HTMLUListElement>(null);
-  // Where focus goes once "Load more" brings its page: the first new row.
-  const focusRow = useRef<number | null>(null);
+  // Where focus goes once "Load more" brings its page: the first new row of
+  // the list (status and search) it was asked for.
+  const focusRow = useRef<{ list: string; row: number } | null>(null);
+  const listName = JSON.stringify([query.status ?? null, query.q ?? null]);
   const items = orders.data?.pages.flatMap((page) => page.items);
   const arrivals = useArrivals(storeSlug, query, orders, sound.play);
 
   const rowCount = items?.length ?? 0;
 
   useEffect(() => {
-    if (focusRow.current !== null && rowCount > focusRow.current) {
-      list.current?.querySelectorAll("a")[focusRow.current]?.focus();
+    const pending = focusRow.current;
+
+    if (pending === null) {
+      return;
+    }
+
+    // Another status or search is another list: the row a "Load more" on
+    // the last one waited to focus is not in it, even when the new list,
+    // already read, arrives longer in the same render.
+    if (pending.list !== listName) {
+      focusRow.current = null;
+    } else if (rowCount > pending.row) {
+      list.current?.querySelectorAll("a")[pending.row]?.focus();
       focusRow.current = null;
     }
-  }, [rowCount]);
+  }, [listName, rowCount]);
 
   let emptyMessage = copy.empty[query.status ?? "all"];
 
@@ -214,21 +227,7 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
           ))}
         </div>
       ) : null}
-      {orders.isError && !items ? (
-        <div className="space-y-2" role="alert">
-          <p className="text-sm">{copy.errors.load}</p>
-          <Button
-            onClick={() => {
-              void orders.refetch();
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {common.tryAgain}
-          </Button>
-        </div>
-      ) : null}
+      <OrderListError orders={orders} />
       {items?.length === 0 ? <EmptyState message={emptyMessage} /> : null}
       {items && items.length > 0 ? (
         <ul
@@ -263,9 +262,18 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
               return;
             }
 
-            focusRow.current = rowCount;
-            // A failure lands in the query's state, which the list renders.
-            void orders.fetchNextPage();
+            const asked = { list: listName, row: rowCount };
+            focusRow.current = asked;
+            // A failure lands in the query's state, which the list renders;
+            // the row it would have focused is forgotten, so a later read
+            // that grows the list (an arrival) leaves focus where it is.
+            void (async () => {
+              const result = await orders.fetchNextPage();
+
+              if (result.isError && focusRow.current === asked) {
+                focusRow.current = null;
+              }
+            })();
           }}
           type="button"
           variant="outline"
@@ -274,6 +282,47 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
         </Button>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * A read of the list that failed, with a retry: in place of the list when
+ * none was read, and above the last one read when a refresh failed, so an
+ * old list (an empty one too) never passes for the current one. A next page
+ * that failed says so below the list instead.
+ */
+function OrderListError({
+  orders,
+}: {
+  orders: Pick<
+    ReturnType<typeof useOrders>,
+    "isLoadingError" | "isRefetchError" | "refetch"
+  >;
+}) {
+  const { admin, common } = useDictionary();
+
+  if (!(orders.isLoadingError || orders.isRefetchError)) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2" role="alert">
+      <p className="text-sm">
+        {orders.isRefetchError
+          ? admin.orders.errors.refresh
+          : admin.orders.errors.load}
+      </p>
+      <Button
+        onClick={() => {
+          void orders.refetch();
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {common.tryAgain}
+      </Button>
+    </div>
   );
 }
 

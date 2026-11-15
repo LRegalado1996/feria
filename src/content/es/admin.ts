@@ -202,6 +202,8 @@ export const admin = {
       load: "No pudimos cargar los pedidos.",
       loadMore: "No pudimos cargar más pedidos.",
       order: "No pudimos cargar el pedido.",
+      refresh:
+        "No pudimos actualizar los pedidos: esta es la última lista que leímos.",
     },
     list: "Pedidos de la tienda",
     loadMore: "Cargar más",
