@@ -1,4 +1,4 @@
-import { expect, type Locator } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 
 import { BasePage } from "./base.page";
 
@@ -64,19 +64,5 @@ export class DesignPage extends BasePage {
 
   getCountUpFigure(): Locator {
     return this.getSection("count-up").getByTestId("design-count-up-figure");
-  }
-
-  /** The page is never wider than the window it is shown in. */
-  async expectNoHorizontalScroll(): Promise<void> {
-    await expect
-      .poll(
-        async () =>
-          await this.page.evaluate(
-            () =>
-              document.documentElement.scrollWidth -
-              document.documentElement.clientWidth
-          )
-      )
-      .toBe(0);
   }
 }

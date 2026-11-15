@@ -140,6 +140,12 @@ export default defineConfig({
             // and never honoured on a production deploy
             // (src/server/better-auth/config.ts).
             E2E_DISABLE_AUTH_RATE_LIMIT: "true",
+            // One server shows both positions of the launch switch: a spec
+            // sends `x-e2e-storefront-launched` to close or open the store
+            // for its own requests. Read only by the server Playwright
+            // starts, and never honoured on a production deploy
+            // (src/lib/env/launch.ts).
+            E2E_STOREFRONT_LAUNCH_OVERRIDE: "true",
           },
         },
 });

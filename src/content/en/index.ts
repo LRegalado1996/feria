@@ -1,6 +1,7 @@
 import type { Dictionary } from "@/content/es";
 
 import { auth } from "./auth";
+import { comingSoon } from "./coming-soon";
 import { common } from "./common";
 import { design } from "./design";
 import { environment } from "./environment";
@@ -14,6 +15,7 @@ import { theme } from "./theme";
 /** The English interface text, held to the Spanish dictionary's shape. */
 export const en: Dictionary = {
   auth,
+  comingSoon,
   common,
   design,
   environment,

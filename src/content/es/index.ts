@@ -1,4 +1,5 @@
 import { auth } from "./auth";
+import { comingSoon } from "./coming-soon";
 import { common } from "./common";
 import { design } from "./design";
 import { environment } from "./environment";
@@ -17,6 +18,7 @@ import { theme } from "./theme";
  */
 export const es = {
   auth,
+  comingSoon,
   common,
   design,
   environment,

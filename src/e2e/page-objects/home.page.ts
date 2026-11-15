@@ -168,11 +168,6 @@ export class HomePage extends BasePage {
     return this.getByTestId("locale-toggle").filter({ visible: true });
   }
 
-  /** The document's language, which screen readers and search engines read. */
-  async expectDocumentLanguage(lang: "en" | "es"): Promise<void> {
-    await expect(this.page.locator("html")).toHaveAttribute("lang", lang);
-  }
-
   // ── Post Form ───────────────────────────────────────────────
 
   getComposeBox(): Locator {

@@ -47,6 +47,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 - **Never one bucket for unknown clients:** one client could lock everyone out. Key by the holder of the secret, and take the IP from the platform (`ipAddress()` from `@vercel/functions`), never a raw `x-forwarded-for`.
 - Security limiters fail closed; failing open on a store outage is for low-risk paths only, and logged.
 - **The one switch that turns Better Auth's limiter off** is `E2E_DISABLE_AUTH_RATE_LIMIT=true`, set only in Playwright's `webServer.env` and ignored when `VERCEL_ENV` is `production` (`isAuthRateLimitDisabled` in `src/server/better-auth/config.ts`). Never set it on a deploy.
+- **The launch switch has one test-only override**, guarded the same way: `E2E_STOREFRONT_LAUNCH_OVERRIDE=true` lets the `x-e2e-storefront-launched` request header open or close the store for that request (`isStorefrontLaunchedFor` in `src/lib/env/launch.ts`). It is set only in Playwright's `webServer.env` and ignored when `VERCEL_ENV` is `production`: there a visitor's header can never open the store. The switch hides pages, it authorizes nothing: the API and the admin are reachable while the store is closed and check the session themselves.
 
 ## Secrets
 
