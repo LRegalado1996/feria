@@ -24,6 +24,7 @@ export class DesignPage extends BasePage {
       | "chips"
       | "count-up"
       | "link"
+      | "logo"
       | "marquee"
       | "price"
       | "reveal"

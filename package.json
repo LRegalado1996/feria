@@ -30,6 +30,7 @@
     "db:push": "bash scripts/worktree.sh ensure --quiet && drizzle-kit push",
     "db:seed": "bash scripts/worktree.sh ensure --quiet --no-seed && tsx --env-file-if-exists=.env src/server/db/run-seed.ts",
     "db:studio": "bash scripts/worktree.sh ensure --quiet && drizzle-kit studio",
+    "brand:assets": "tsx scripts/write-brand-assets.ts",
     "prepare": "husky",
     "e2e": "bash scripts/worktree.sh ensure --quiet && playwright test --config=src/e2e/playwright.config.ts",
     "e2e:ui": "bash scripts/worktree.sh ensure --quiet && playwright test --config=src/e2e/playwright.config.ts --ui",

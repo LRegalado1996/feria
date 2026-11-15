@@ -1,6 +1,6 @@
 # Project overview
 
-Working name: **LR Market** (final name is decided in [FER-006](../tickets/FER-006-brand-identity.md)).
+Name: **LR Market** ([brand guide](../brand/brand.md)). "Feria" is the repository's name.
 
 A multi-store, bilingual mini e-commerce. The first store is Lucas Regalado's own: bubble guns and jewelry (chains, rings, earrings, bracelets) sold at a street Christmas fair from **December 5, 2026 to January 5, 2027**, and online afterwards. The same product is later sold to other small businesses, so the article-upload flow and the admin panel double as the sales demo.
 

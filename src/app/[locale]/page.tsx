@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { AuthForm } from "@/app/_components/organisms/auth-form";
 import { Navbar } from "@/app/_components/organisms/navbar";
@@ -71,7 +72,8 @@ export async function HomeResolver({ dictionary }: { dictionary: Dictionary }) {
   if (!session) {
     return (
       <div className="flex min-h-screen flex-col">
-        <header className="flex justify-end p-4">
+        <header className="flex items-center justify-between p-4">
+          <StoreLogo className="h-12" variant="mark" />
           <LocaleToggle />
         </header>
         <main className="flex flex-1 items-center justify-center pb-16">

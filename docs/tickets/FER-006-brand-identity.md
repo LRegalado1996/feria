@@ -2,7 +2,7 @@
 
 - **Milestone:** M1 Brand
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-005
 
 ## Goal
@@ -11,9 +11,9 @@ The store has a name, a logo and a small identity that works on a phone screen, 
 
 ## Scope
 
-- Name: present three options with rationale (for example LR Market, LR Shop, Feria LR) and let Lucas pick. Check the Instagram and TikTok handles are free.
+- Name: **LR Market**, picked by Lucas. The Instagram and TikTok handles are assumed free; Lucas confirms them before the profiles are created (FER-007).
 - Logo: generic on purpose, because the product mix changes. A monogram or wordmark, not a drawing of a bubble gun. Deliver as SVG: full logo, compact mark, one-color versions on light and dark.
-- Palette and type, aligned with FER-005, with a festive variant for the fair period that is a swap of accent, not a second identity.
+- Palette and type, aligned with FER-005. One accent all year: no festive variant (decided by Lucas on 2026-11-13).
 - Favicon, app icons and the default Open Graph image, generated in code so they follow the tokens.
 - `docs/brand/brand.md`: logo usage and clear space, colors with hex values, type, tone of voice in Spanish and English, do and don't examples.
 
@@ -25,11 +25,11 @@ Post templates and print pieces (FER-007).
 
 - Logo files live in `public/brand/` and render crisply at 24 px and at 1080 px.
 - The header, favicon and share card of the deployed site use the new identity.
-- Lucas has approved the name and the logo.
+- Lucas has approved the name and the logo (2026-11-13: the price tag with LR and MARKET).
 
 ## Notes
 
-Show two or three logo directions as an Artifact before committing to one.
+The logo directions were shown as an Artifact and Lucas delivered the final drawing as an SVG; `src/lib/brand/logo.ts` is that drawing.
 
 ## Reporting
 

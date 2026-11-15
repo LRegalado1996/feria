@@ -10,7 +10,7 @@
 
 </div>
 
-**Feria** (working name: LR Market) is a multi-store, bilingual mini e-commerce. Each store gets a public storefront made for a phone, and an admin panel where loading an article takes under a minute because Claude fills it in from the photos. The first store sells bubble guns and jewelry at a street Christmas fair from December 5, 2026, and online afterwards. What the product is, the decisions behind it and the roadmap are in [the project overview](docs/project/overview.md); the work is split into [tickets](docs/tickets/README.md).
+**LR Market** (this repository is named Feria) is a multi-store, bilingual mini e-commerce. Each store gets a public storefront made for a phone, and an admin panel where loading an article takes under a minute because Claude fills it in from the photos. The first store sells bubble guns and jewelry at a street Christmas fair from December 5, 2026, and online afterwards. What the product is, the decisions behind it and the roadmap are in [the project overview](docs/project/overview.md); the work is split into [tickets](docs/tickets/README.md).
 
 Today the repository holds the base it is built on: one Next.js deployment on Vercel with the pages, a typed oRPC API, Better Auth email and password sign-in, and PostgreSQL through Drizzle ORM. A small posts demo still runs through every layer once (sign in, write a post, scroll the feed, delete your own post) and stays as the worked example until the catalog replaces it ([FER-012](docs/tickets/FER-012-remove-post-demo.md)).
 

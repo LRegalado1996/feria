@@ -9,6 +9,7 @@ import {
   AvatarImage,
 } from "@/app/_components/atoms/avatar";
 import { Button } from "@/app/_components/atoms/button";
+import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { ThemeToggle } from "@/app/_components/molecules/theme-toggle";
 import { reportError } from "@/lib/errors/client";
@@ -58,7 +59,11 @@ export function Navbar({ className, user }: NavbarProps) {
       data-slot="navbar"
       data-testid="navbar"
     >
-      <h1 className="text-xl font-bold">{post.feed.title}</h1>
+      <div className="flex items-center gap-3">
+        {/* A phone's navbar has no room left: the sign-out button would be cut off. */}
+        <StoreLogo className="hidden h-9 sm:block" variant="mark" />
+        <h1 className="text-xl font-bold">{post.feed.title}</h1>
+      </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <Avatar size="sm">
           {user.image ? <AvatarImage alt={user.name} src={user.image} /> : null}

@@ -93,6 +93,7 @@ describe("DesignPage", () => {
       "en",
       "Design system",
       [
+        "Logo",
         "Headings",
         "Chips and badges",
         "Price",
@@ -107,6 +108,7 @@ describe("DesignPage", () => {
       "es",
       "Sistema de diseño",
       [
+        "Logo",
         "Titulares",
         "Chips y avisos",
         "Precio",
@@ -132,6 +134,32 @@ describe("DesignPage", () => {
       ).toEqual(sections);
     }
   );
+
+  test("shows the logo on the surface and on the contrast color, in both tones, and the mark at 48 and 24 px", async () => {
+    await setup();
+
+    const logos = within(screen.getByTestId("design-logo")).getAllByRole(
+      "img",
+      { name: "LR Market" }
+    );
+
+    expect(
+      logos.map((logo) => [
+        logo.dataset.variant,
+        logo.dataset.tone,
+        logo.parentElement?.className.match(/bg-store-\w+/)?.[0],
+        logo.getAttribute("class")?.match(/\bh-\d+/)?.[0],
+      ])
+    ).toEqual([
+      ["full", "accent", "bg-store-surface", "h-32"],
+      ["full", "accent", "bg-store-contrast", "h-32"],
+      ["full", "contrast", "bg-store-surface", "h-32"],
+      ["mark", "accent", "bg-store-surface", "h-12"],
+      ["mark", "accent", "bg-store-surface", "h-6"],
+      ["mark", "contrast", "bg-store-surface", "h-12"],
+      ["mark", "contrast", "bg-store-surface", "h-6"],
+    ]);
+  });
 
   test("paints the storefront canvas, not the admin's", async () => {
     const { page } = await setup();
