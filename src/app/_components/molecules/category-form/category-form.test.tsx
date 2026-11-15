@@ -234,6 +234,22 @@ describe("CategoryForm", () => {
     });
   });
 
+  test("locks Cancel while saving, so a late save cannot close a reopened editor", async () => {
+    const { onCancel, submit, user } = setup({
+      result: "hang",
+      values: { nameEn: null, nameEs: "Collares" },
+    });
+
+    await submit();
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    await waitFor(() => {
+      expect(cancel).toBeDisabled();
+    });
+    await user.click(cancel);
+
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
   test("an edit form starts from the category's names, keeps them once saved, and can be cancelled", async () => {
     const { english, onCancel, onSave, spanish, submit, user } = setup({
       values: { nameEn: "Necklaces", nameEs: "Collares" },

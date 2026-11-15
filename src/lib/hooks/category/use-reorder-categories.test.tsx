@@ -262,6 +262,31 @@ describe("useReorderCategories", () => {
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
+  test("keeps a category added while the move was in flight, after the moved ones", async () => {
+    const { listNow, result, setList } = setup();
+    const { answer, received } = holdReorders();
+
+    const move = result.current.mutateAsync({
+      ids: [3, 1, 2],
+      storeSlug: "lr-market",
+    });
+    await waitFor(() => {
+      expect(received).toHaveLength(1);
+    });
+    // A list read after another member added category 4.
+    setList([...LIST, makeRow(4, 3)]);
+
+    answer(0, "save");
+    await move;
+
+    expect(listNow()).toEqual([
+      makeRow(3, 0),
+      makeRow(1, 1),
+      makeRow(2, 2),
+      makeRow(4, 3),
+    ]);
+  });
+
   test("ends on the second move's order when the first queued move fails and the second saves", async () => {
     const { listNow, result } = setup();
     const { answer, received } = holdReorders();

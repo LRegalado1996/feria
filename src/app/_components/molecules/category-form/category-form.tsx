@@ -132,7 +132,14 @@ function CategoryForm({
             {isSubmitting ? pendingLabel : submitLabel}
           </Button>
           {onCancel ? (
-            <Button onClick={onCancel} type="button" variant="ghost">
+            // Locked while saving: a save that lands after a cancel and a
+            // reopen would close the newer editor.
+            <Button
+              disabled={isSubmitting}
+              onClick={onCancel}
+              type="button"
+              variant="ghost"
+            >
               {copy.edit.cancel}
             </Button>
           ) : null}

@@ -8,8 +8,9 @@ import { storeCategoriesKey } from "./use-store-categories";
 type StoreCategories = Awaited<ReturnType<typeof client.category.list>>;
 
 /**
- * The list in the order of `ids`. Positions follow the rows that remain, so
- * an id the list does not hold leaves no gap.
+ * The list with the rows `ids` lists first, in that order, then any row it
+ * does not list (one added after the move was made) in its own order;
+ * positions renumbered, so an id the list does not hold leaves no gap.
  */
 function inOrder(current: StoreCategories | undefined, ids: number[]) {
   if (!current) {
@@ -17,13 +18,15 @@ function inOrder(current: StoreCategories | undefined, ids: number[]) {
   }
 
   const byId = new Map(current.map((row) => [row.id, row]));
+  const listed = new Set(ids);
 
-  return ids
-    .flatMap((id) => {
+  return [
+    ...ids.flatMap((id) => {
       const row = byId.get(id);
       return row ? [row] : [];
-    })
-    .map((row, position) => ({ ...row, position }));
+    }),
+    ...current.filter((row) => !listed.has(row.id)),
+  ].map((row, position) => ({ ...row, position }));
 }
 
 /**
