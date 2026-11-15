@@ -744,10 +744,11 @@ describe("getPublishedProduct", () => {
 describe("listCartProducts", () => {
   async function cartProducts(
     db: ReturnType<typeof setup>["db"],
-    ids: number[]
+    ids: number[],
+    currencyCode: Parameters<typeof listCartProducts>[1]["currencyCode"] = "UYU"
   ) {
     return await listCartProducts(db as never, {
-      currencyCode: "UYU",
+      currencyCode,
       ids,
       locale: "es",
       storeId: STORE_ID,
@@ -774,19 +775,22 @@ describe("listCartProducts", () => {
     });
   });
 
-  test("answers the cards in the order the cart asked, in the store's currency, leaving out an id it does not own", async () => {
-    const { db } = setup();
-    db.$["select.where"].mockResolvedValue([{ id: 5 }, { id: 8 }]);
-    db.query.product.findMany.mockResolvedValue([
-      cardRow(5),
-      cardRow(8, { isAvailable: false, priceAmount: 2100 }),
-    ]);
+  test.each(["UYU", "USD"] as const)(
+    "answers the cards in the order the cart asked, in the store's currency (%s), leaving out an id it does not own",
+    async (currencyCode) => {
+      const { db } = setup();
+      db.$["select.where"].mockResolvedValue([{ id: 5 }, { id: 8 }]);
+      db.query.product.findMany.mockResolvedValue([
+        cardRow(5),
+        cardRow(8, { isAvailable: false, priceAmount: 2100 }),
+      ]);
 
-    await expect(cartProducts(db, [8, 6, 5])).resolves.toEqual([
-      card(8, { isAvailable: false, priceAmount: 2100 }),
-      card(5),
-    ]);
-  });
+      await expect(cartProducts(db, [8, 6, 5], currencyCode)).resolves.toEqual([
+        card(8, { currencyCode, isAvailable: false, priceAmount: 2100 }),
+        card(5, { currencyCode }),
+      ]);
+    }
+  );
 
   test("answers none, with no card query, when the store owns none of the ids", async () => {
     const { db } = setup();
