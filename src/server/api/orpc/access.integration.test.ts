@@ -245,6 +245,9 @@ describe("withStoreAccess against the database", () => {
       held.resolve(undefined);
       await Promise.allSettled([write, demotion]);
     }
+    // Both writers settled above; this surfaces either one's failure, which
+    // `allSettled` kept for the cleanup's sake.
+    await Promise.all([write, demotion]);
 
     expect(order).toEqual(["write", "demotion"]);
   });
