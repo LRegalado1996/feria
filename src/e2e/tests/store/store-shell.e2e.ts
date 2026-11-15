@@ -40,7 +40,7 @@ test.describe("Storefront shell", () => {
       "href",
       `/${store.slug}/products`
     );
-    await expect(header.getByRole("search").locator("form")).toHaveAttribute(
+    await expect(header.getByTestId("store-search-form")).toHaveAttribute(
       "action",
       `/${store.slug}/products`
     );
@@ -51,7 +51,7 @@ test.describe("Storefront shell", () => {
     const skip = page.getByRole("link", { name: "Saltar al contenido" });
     await expect(skip).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#store-main")).toBeFocused();
+    await expect(page.getByTestId("store-main")).toBeFocused();
   });
 
   test("an address under a store that nothing answers is a 404 inside the store's shell", async ({

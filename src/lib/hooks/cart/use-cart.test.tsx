@@ -337,6 +337,46 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(9, 5)]);
   });
 
+  test("another tab's write drops the page's copy, so a cart it cleared stays cleared", async () => {
+    const { result, storage, storedCart } = await setup();
+    storage.setItem.mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    act(() => {
+      result.current.add(4);
+    });
+    expect(result.current.items).toEqual([makeItem(4, 1)]);
+
+    // Another tab empties the cart in storage.
+    act(() => {
+      storage.setItem(KEY, JSON.stringify([]));
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    });
+    expect(result.current.items).toEqual([]);
+
+    // A later add starts from the cleared cart, not the page's old copy.
+    act(() => {
+      result.current.add(7);
+    });
+    expect(storedCart()).toEqual([makeItem(7, 1)]);
+  });
+
+  test("a storage event with no key (storage cleared) keeps the page's copy", async () => {
+    const { result, storage } = await setup();
+    storage.setItem.mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+    act(() => {
+      result.current.add(4);
+    });
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    });
+
+    expect(result.current.items).toEqual([makeItem(4, 1)]);
+  });
+
   test.each([
     ["add 0 units", (cart: CartApi) => cart.add(4, 0)],
     ["add -1 units", (cart: CartApi) => cart.add(4, -1)],

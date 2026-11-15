@@ -17,26 +17,36 @@ export function cartStorageKey(storeSlug: string) {
   return `feria:cart:${storeSlug}`;
 }
 
-// Tabs of the same store share the cart: a write here is announced to this
-// tab's subscribers, and the browser's `storage` event tells the others.
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  window.addEventListener("storage", listener);
-
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", listener);
-  };
-}
-
 // `undefined` until first asked; `null` once the browser refused it.
 let storage: Storage | null | undefined;
 
 // Where a cart lives when storage refused it or could not hold it: in this
 // page only, gone when the page is left, but a cart all the same.
 const memory = new Map<string, string>();
+
+// Tabs of the same store share the cart: a write here is announced to this
+// tab's subscribers, and the browser's `storage` event tells the others.
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void) {
+  // Another tab wrote this cart to storage: a copy this page kept after a
+  // failed write is older than it, and would bring cleared articles back.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null) {
+      memory.delete(event.key);
+    }
+
+    listener();
+  };
+
+  listeners.add(listener);
+  window.addEventListener("storage", onStorage);
+
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
 
 /**
  * The browser's storage, opened once. A browser that blocks site data

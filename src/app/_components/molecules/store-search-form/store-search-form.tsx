@@ -31,6 +31,7 @@ function StoreSearchForm({
       <form
         action={localizePath(`/${storeSlug}/products`, locale)}
         className="flex items-stretch"
+        data-testid="store-search-form"
         method="get"
       >
         <label className="sr-only" htmlFor={id}>

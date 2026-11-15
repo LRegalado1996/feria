@@ -105,7 +105,12 @@ export default async function StoreLayout({
     >
       <StoreHeader copy={copy} locale={locale} store={store} />
       {/* Its top clears the sticky header when the skip link scrolls to it. */}
-      <div className="flex-1 scroll-mt-16" id={STORE_MAIN_ID} tabIndex={-1}>
+      <div
+        className="flex-1 scroll-mt-16"
+        data-testid="store-main"
+        id={STORE_MAIN_ID}
+        tabIndex={-1}
+      >
         {children}
       </div>
       <StoreFooter
