@@ -16,6 +16,7 @@ import { createStore } from "@/server/services/store";
 import {
   backendPid,
   deferred,
+  readyOrFailed,
   releaseHeldWriters,
   releaseOnTeardown,
   waitUntilAdvisoryBlocked,
@@ -42,7 +43,7 @@ vi.mock("@/env", () => ({
 const createdStoreIds: number[] = [];
 
 afterEach(async () => {
-  releaseHeldWriters();
+  await releaseHeldWriters();
   await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
 });
 
@@ -431,9 +432,13 @@ describe("filter names under two writers", () => {
 
     // Released however the test ends, a timeout included: an open first
     // transaction would hold its lock and the store row past the test.
-    releaseOnTeardown(() => {
-      held.resolve(undefined);
-    });
+    const writers: Promise<unknown>[] = [];
+    releaseOnTeardown(
+      () => {
+        held.resolve(undefined);
+      },
+      async () => await Promise.allSettled(writers)
+    );
 
     const first = db.transaction(async (tx) => {
       firstPid.resolve(await backendPid(tx));
@@ -443,22 +448,24 @@ describe("filter names under two writers", () => {
 
       return created;
     });
-    await written.promise;
+    writers.push(first);
+    await readyOrFailed(written.promise, first);
     const second = db.transaction(async (tx) => {
       secondPid.resolve(await backendPid(tx));
 
       return await add(tx, stores.second, names.second);
     });
+    writers.push(second);
 
     return {
       first,
-      firstPid: firstPid.promise,
+      firstPid: readyOrFailed(firstPid.promise, first),
       release: async () => {
         held.resolve(undefined);
         await Promise.allSettled([first, second]);
       },
       second,
-      secondPid: secondPid.promise,
+      secondPid: readyOrFailed(secondPid.promise, second),
     };
   }
 

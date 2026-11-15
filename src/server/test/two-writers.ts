@@ -2,23 +2,53 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseClient } from "@/server/db";
 
-const heldWriters: (() => void)[] = [];
-
-/**
- * Registers a held writer's release. A test that times out never reaches
- * its own `finally`, and Vitest runs `onTestFinished` after `afterEach`, so
- * a cleanup deleting the writer's rows would wait on its open transaction:
- * `releaseHeldWriters()` first thing in `afterEach` lets it commit.
- */
-export function releaseOnTeardown(release: () => void) {
-  heldWriters.push(release);
+interface HeldWriters {
+  release: () => void;
+  /** Settles once every writer of the test has finished, either way. */
+  settled: () => Promise<unknown>;
 }
 
-/** Releases every writer still held; call it first in `afterEach`. */
-export function releaseHeldWriters() {
-  for (const release of heldWriters.splice(0)) {
-    release();
+const heldWriters: HeldWriters[] = [];
+
+/**
+ * Registers a held writer's release, and how to wait for its writers. A
+ * test that times out never reaches its own `finally`, and Vitest runs
+ * `onTestFinished` after `afterEach`, so a cleanup deleting the writers'
+ * rows would race them: `await releaseHeldWriters()` first thing in
+ * `afterEach` lets them commit and waits for them.
+ */
+export function releaseOnTeardown(
+  release: () => void,
+  settled: () => Promise<unknown>
+) {
+  heldWriters.push({ release, settled });
+}
+
+/**
+ * Releases every writer still held and waits for all of them to finish;
+ * call it first in `afterEach`.
+ */
+export async function releaseHeldWriters() {
+  const held = heldWriters.splice(0);
+
+  for (const writer of held) {
+    writer.release();
   }
+
+  await Promise.allSettled(held.map(async (writer) => await writer.settled()));
+}
+
+/**
+ * `ready`, unless `work` fails first: a writer that throws before it
+ * signals fails the test with its own error instead of leaving it waiting
+ * on a signal that never comes. `work` finishing without a failure keeps
+ * waiting on `ready`.
+ */
+export async function readyOrFailed<T>(
+  ready: Promise<T>,
+  work: Promise<unknown>
+): Promise<T> {
+  return await Promise.race([ready, work.then(async () => await ready)]);
 }
 
 /** A promise and the function that settles it, for ordering two writers. */
