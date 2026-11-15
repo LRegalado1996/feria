@@ -189,7 +189,9 @@ test.describe("Store pages", () => {
     ).toBeVisible();
   });
 
-  for (const reserved of ["admin", "es/admin", "en/admin", "en/en"]) {
+  // Reserved slugs with no page of their own (`/admin` is the admin since
+  // FER-013): none may ever be read as a store.
+  for (const reserved of ["platform", "en/platform", "sign-in", "en/en"]) {
     test(`the reserved address /${reserved} is never a store`, async ({
       page,
     }) => {

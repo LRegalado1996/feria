@@ -78,7 +78,9 @@ export function safeReturnPath(next: unknown, locale: Locale): string {
   const isSignIn =
     pathname === ADMIN_SIGN_IN || pathname.startsWith(`${ADMIN_SIGN_IN}/`);
 
+  // In the sign-in page's language, like the fallback: a link cannot switch
+  // the admin's language by what it puts in `next`.
   return url.origin === PROBE_ORIGIN && inAdmin && !isSignIn
-    ? `${url.pathname}${url.search}`
+    ? `${localizePath(pathname, locale)}${url.search}`
     : fallback;
 }

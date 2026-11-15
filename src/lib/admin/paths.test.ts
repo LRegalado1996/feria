@@ -50,7 +50,6 @@ describe("admin paths", () => {
 describe("safeReturnPath", () => {
   test.each([
     ["/admin/lr-market/products", "/admin/lr-market/products"],
-    ["/en/admin/platform/stores", "/en/admin/platform/stores"],
     ["/admin", "/admin"],
     [
       "/admin/lr-market/orders?status=received",
@@ -59,6 +58,22 @@ describe("safeReturnPath", () => {
   ])("goes back to the admin page %j", (next, expected) => {
     expect(safeReturnPath(next, "es")).toBe(expected);
   });
+
+  test.each([
+    ["es", "/en/admin/platform/stores", "/admin/platform/stores"],
+    ["en", "/admin/platform/stores", "/en/admin/platform/stores"],
+    [
+      "en",
+      "/en/admin/lr-market/orders?page=2",
+      "/en/admin/lr-market/orders?page=2",
+    ],
+    ["es", "/en/admin", "/admin"],
+  ] as const)(
+    "on a page in %s, brings %j to that language: %j",
+    (locale, next, expected) => {
+      expect(safeReturnPath(next, locale)).toBe(expected);
+    }
+  );
 
   test.each([
     ["https://evil.example/admin"],

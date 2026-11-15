@@ -64,7 +64,7 @@ function AdminShell({
   const storeName = currentStore?.name ?? stores[0]?.name;
   let storeHeading: ReactNode = null;
 
-  if (stores.length > 1 || role === "superadmin") {
+  if (stores.length > 1 || (role === "superadmin" && stores.length > 0)) {
     storeHeading = (
       <StoreSwitcher
         current={currentStore}

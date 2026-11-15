@@ -24,8 +24,14 @@ type SignInTree = ReactElement<{
   ];
 }>;
 
+const { getSession } = vi.hoisted(() => ({
+  getSession: vi.fn<() => Promise<{ user: { id: string } } | null>>(),
+}));
+
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
+
+vi.mock("@/server/better-auth/server", () => ({ getSession }));
 
 // The form has its own tests; here it only shows where it will land.
 vi.mock("@/app/_components/organisms/auth-form", () => ({
@@ -43,13 +49,16 @@ async function makeSearchParams(next?: string | string[]) {
 }
 
 /**
- * The page with its heading rendered, and the form its boundary streams once
- * the query string is read.
+ * The page with its heading and fallback rendered, and what its boundary
+ * streams once the query string and the session are read. Signed out unless
+ * `signedIn`.
  */
 async function setup({
   locale = "en",
   next,
-}: { locale?: string; next?: string | string[] } = {}) {
+  signedIn = false,
+}: { locale?: string; next?: string | string[]; signedIn?: boolean } = {}) {
+  getSession.mockResolvedValue(signedIn ? { user: { id: "user-1" } } : null);
   const page: SignInTree = await SignInPage({
     params: makeParams(locale),
     searchParams: makeSearchParams(next),
@@ -61,11 +70,17 @@ async function setup({
     <>
       {heading}
       {boundary.props.fallback}
-      {await form.type(form.props)}
     </>
   );
 
-  return { form: screen.getByTestId("auth-form"), page };
+  return {
+    page,
+    resolve: async () => await form.type(form.props),
+    showForm: async () => {
+      render(await form.type(form.props));
+      return screen.getByTestId("auth-form");
+    },
+  };
 }
 
 describe("SignInPage", () => {
@@ -100,6 +115,8 @@ describe("SignInPage", () => {
   test.each([
     ["en", "/en/admin/lr-market/orders", "/en/admin/lr-market/orders"],
     ["es", "/admin/platform/users?tab=all", "/admin/platform/users?tab=all"],
+    // A link in the other language lands in the page's.
+    ["es", "/en/admin/lr-market/orders", "/admin/lr-market/orders"],
     ["en", "//evil.example", "/en/admin"],
     ["es", "https://evil.example/admin", "/admin"],
     ["en", "/en/admin/sign-in", "/en/admin"],
@@ -108,11 +125,28 @@ describe("SignInPage", () => {
     // Two `next` in the query string: neither is trusted.
     ["en", ["/en/admin/lr-market/orders"], "/en/admin"],
   ] satisfies [Locale, string | string[] | undefined, string][])(
-    "in %s, with ?next=%j, lands the form at %s",
+    "in %s, signed out, with ?next=%j, lands the form at %s",
     async (locale, next, redirectTo) => {
-      const { form } = await setup({ locale, next });
+      const { showForm } = await setup({ locale, next });
 
-      expect(form).toHaveAttribute("data-redirect-to", redirectTo);
+      expect(await showForm()).toHaveAttribute("data-redirect-to", redirectTo);
+      expect(getSession).toHaveBeenCalledExactlyOnceWith();
+    }
+  );
+
+  test.each([
+    ["en", "/en/admin/lr-market/orders", "/en/admin/lr-market/orders"],
+    ["es", "/admin/platform/users", "/admin/platform/users"],
+    ["en", "//evil.example", "/en/admin"],
+  ] satisfies [Locale, string, string][])(
+    "in %s, sends a login already signed in straight on: ?next=%j goes to %s, with no form",
+    async (locale, next, to) => {
+      const { resolve } = await setup({ locale, next, signedIn: true });
+
+      await expect(resolve()).rejects.toMatchObject({
+        digest: `NEXT_REDIRECT;replace;${to};307;`,
+      });
+      expect(screen.queryByTestId("auth-form")).not.toBeInTheDocument();
     }
   );
 

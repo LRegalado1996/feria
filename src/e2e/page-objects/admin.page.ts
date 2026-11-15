@@ -1,5 +1,6 @@
-import type { Locator } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 
+import { completeRpcAction } from "../fixtures/complete-rpc-action";
 import { BasePage } from "./base.page";
 
 // The admin reads in Spanish, the language of an unprefixed URL.
@@ -31,11 +32,14 @@ export class AdminPage extends BasePage {
     });
   }
 
-  /** Signs out; repeating the click is harmless until the sign-in shows. */
+  /** Signs out once, waiting for Better Auth's answer, then the sign-in. */
   async signOut(): Promise<void> {
-    await this.clickUntilVisible(
-      this.getButton("Cerrar sesión").filter({ visible: true }),
-      this.getByTestId("admin-sign-in")
-    );
+    const button = this.getButton("Cerrar sesión").filter({ visible: true });
+    // Enabled only once React owns it: a click before that would be lost.
+    await expect(button).toBeEnabled();
+    await completeRpcAction(this.page, "/api/auth/sign-out", async () => {
+      await button.click();
+    });
+    await expect(this.getByTestId("admin-sign-in")).toBeVisible();
   }
 }

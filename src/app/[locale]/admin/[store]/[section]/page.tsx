@@ -5,7 +5,11 @@ import { AdminPlaceholder } from "@/app/_components/molecules/admin-placeholder"
 import { AdminShellSkeleton } from "@/app/_components/molecules/admin-shell-skeleton";
 import { AdminShell } from "@/app/_components/organisms/admin-shell";
 import { getDictionary } from "@/content";
-import { requireAdmin, requireAdminStore } from "@/lib/admin/access";
+import {
+  requireAdmin,
+  requireAdminStore,
+  requireStoreSegment,
+} from "@/lib/admin/access";
 import { isStoreSection, storeSectionPath } from "@/lib/admin/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 
@@ -37,12 +41,13 @@ async function StoreSectionResolver({ params }: StoreSectionProps) {
     notFound();
   }
 
+  const slug = requireStoreSegment(segment);
   const { admin } = getDictionary(locale);
   const me = await requireAdmin(
-    storeSectionPath(segment, section, locale),
+    storeSectionPath(slug, section, locale),
     locale
   );
-  const store = await requireAdminStore(segment);
+  const store = requireAdminStore(me, slug);
 
   return (
     <AdminShell

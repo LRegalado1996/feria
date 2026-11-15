@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AuthForm } from "@/app/_components/organisms/auth-form";
@@ -5,6 +6,7 @@ import { getDictionary } from "@/content";
 import { safeReturnPath } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
+import { getSession } from "@/server/better-auth/server";
 
 interface SignInPageProps {
   params: Promise<{ locale: string }>;
@@ -14,7 +16,8 @@ interface SignInPageProps {
 /**
  * The admin's sign-in (FER-013). The form is the template's, without its
  * sign-up mode; it lands where `?next=` points, when that is an admin page
- * of this site, or the admin's landing. The query string is a request-time
+ * of this site, or the admin's landing; a login that is already signed in
+ * goes there at once. The query string is a request-time
  * read, so the form waits inside its boundary; the heading does not.
  */
 export default async function SignInPage({
@@ -52,6 +55,12 @@ async function SignInForm({
   searchParams: SignInPageProps["searchParams"];
 }) {
   const { next } = await searchParams;
+  const redirectTo = safeReturnPath(next, locale);
 
-  return <AuthForm redirectTo={safeReturnPath(next, locale)} />;
+  // Already signed in: straight on, instead of a second session.
+  if (await getSession()) {
+    redirect(redirectTo);
+  }
+
+  return <AuthForm redirectTo={redirectTo} />;
 }

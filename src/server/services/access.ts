@@ -175,3 +175,17 @@ export async function listAccessibleStores(db: DatabaseClient, userId: string) {
     .where(mayWorkOnStore(userId))
     .orderBy(asc(store.name), asc(store.id));
 }
+
+/**
+ * What the admin's pages decide with: the role the database holds for the
+ * login and the stores it may work on, read together; `null` when the user
+ * no longer exists (a session that outlived it).
+ */
+export async function getAdminProfile(db: DatabaseClient, userId: string) {
+  const [role, stores] = await Promise.all([
+    getUserRole(db, userId),
+    listAccessibleStores(db, userId),
+  ]);
+
+  return role === null ? null : { role, stores };
+}

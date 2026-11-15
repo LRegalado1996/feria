@@ -5,33 +5,40 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { AdminShellProps } from "@/app/_components/organisms/admin-shell";
 import type {
+  AdminProfile,
   requireAdmin as RequireAdmin,
   requireAdminStore as RequireAdminStore,
+  requireStoreSegment as RequireStoreSegment,
 } from "@/lib/admin/access";
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import StoreSection from "./page";
 
-type Me = Awaited<ReturnType<typeof RequireAdmin>>;
-type AdminStore = Awaited<ReturnType<typeof RequireAdminStore>>;
+type AdminStore = ReturnType<typeof RequireAdminStore>;
 
 interface StoreSectionParams {
   params: Promise<{ locale: string; section: string; store: string }>;
 }
 
-const { requireAdmin, requireAdminStore, shellProps } = vi.hoisted(() => ({
-  requireAdmin: vi.fn<typeof RequireAdmin>(),
-  requireAdminStore: vi.fn<typeof RequireAdminStore>(),
-  shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
-}));
+const { requireAdmin, requireAdminStore, requireStoreSegment, shellProps } =
+  vi.hoisted(() => ({
+    requireAdmin: vi.fn<typeof RequireAdmin>(),
+    requireAdminStore: vi.fn<typeof RequireAdminStore>(),
+    requireStoreSegment: vi.fn<typeof RequireStoreSegment>(),
+    shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
+  }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
 // The checks have their own tests; here they answer with the login and the
 // store, and are spied on for what the page asked.
-vi.mock("@/lib/admin/access", () => ({ requireAdmin, requireAdminStore }));
+vi.mock("@/lib/admin/access", () => ({
+  requireAdmin,
+  requireAdminStore,
+  requireStoreSegment,
+}));
 
 // The shell has its own tests; here it records what the page handed it.
 vi.mock("@/app/_components/organisms/admin-shell", () => ({
@@ -50,7 +57,7 @@ function makeStore(): AdminStore {
   return { id: 1, isActive: true, name: "LR Market", slug: "lr-market" };
 }
 
-function makeMe(): Me {
+function makeMe(): AdminProfile {
   return {
     name: "Ada Admin",
     role: "member",
@@ -64,8 +71,9 @@ async function makeParams(locale: string, section: string, store: string) {
 
 /**
  * The page's boundary for `/admin/<store>/<section>`: its fallback, and what
- * it streams once resolved. The store check answers 404 for any store but
- * the login's own.
+ * it streams once resolved. The segment check passes any segment but
+ * "Bad Segment"; the store check answers 404 for any store but the login's
+ * own.
  */
 function setup({
   locale = "en",
@@ -75,12 +83,19 @@ function setup({
   const me = makeMe();
   const found = makeStore();
   requireAdmin.mockResolvedValue(me);
-  requireAdminStore.mockImplementation(async (segment) => {
-    if (segment !== found.slug) {
+  requireStoreSegment.mockImplementation((segment) => {
+    if (segment === "Bad Segment") {
       notFound();
     }
 
-    return await Promise.resolve(found);
+    return segment;
+  });
+  requireAdminStore.mockImplementation((_profile, slug) => {
+    if (slug !== found.slug) {
+      notFound();
+    }
+
+    return found;
   });
   const page: Boundary<StoreSectionParams> = StoreSection({
     params: makeParams(locale, section, store),
@@ -119,10 +134,21 @@ describe("StoreSection", () => {
       await expect(resolve()).rejects.toMatchObject({
         digest: "NEXT_HTTP_ERROR_FALLBACK;404",
       });
+      expect(requireStoreSegment).not.toHaveBeenCalled();
       expect(requireAdmin).not.toHaveBeenCalled();
       expect(requireAdminStore).not.toHaveBeenCalled();
     }
   );
+
+  test("answers 404 for a segment that is not a store address, before any session check", async () => {
+    const { resolve } = setup({ store: "Bad Segment" });
+
+    await expect(resolve()).rejects.toMatchObject({
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
+    expect(requireStoreSegment).toHaveBeenCalledExactlyOnceWith("Bad Segment");
+    expect(requireAdmin).not.toHaveBeenCalled();
+  });
 
   test("answers 404 for a language the product does not speak, before any check", async () => {
     const { resolve } = setup({ locale: "fr" });
@@ -137,27 +163,38 @@ describe("StoreSection", () => {
     ["en", "/en/admin/lr-market/orders"],
     ["es", "/admin/lr-market/orders"],
   ] as const)(
-    "in %s, checks the session coming back to this page, then the store",
+    "in %s, checks the segment, the session coming back to this page, then the store among the login's",
     async (locale, returnTo) => {
-      const { show } = setup({ locale });
+      const { me, show } = setup({ locale });
 
       await show();
 
+      expect(requireStoreSegment).toHaveBeenCalledExactlyOnceWith("lr-market");
       expect(requireAdmin).toHaveBeenCalledExactlyOnceWith(returnTo, locale);
-      expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith("lr-market");
-      expect(requireAdmin.mock.invocationCallOrder[0]).toBeLessThan(
-        requireAdminStore.mock.invocationCallOrder[0] ?? 0
+      expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith(
+        me,
+        "lr-market"
       );
+      const [segmentAt = 0, sessionAt = 0, storeAt = 0] = [
+        requireStoreSegment,
+        requireAdmin,
+        requireAdminStore,
+      ].map((check) => check.mock.invocationCallOrder[0]);
+      expect(segmentAt).toBeLessThan(sessionAt);
+      expect(sessionAt).toBeLessThan(storeAt);
     }
   );
 
   test("answers 404 for a store the login may not work on, with no shell", async () => {
-    const { resolve } = setup({ store: "sample-store" });
+    const { me, resolve } = setup({ store: "sample-store" });
 
     await expect(resolve()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith("sample-store");
+    expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith(
+      me,
+      "sample-store"
+    );
     expect(shellProps).not.toHaveBeenCalled();
   });
 

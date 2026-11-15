@@ -37,7 +37,7 @@ export interface SeededLogin {
   password: string;
 }
 
-const LOGIN_PASSWORD = "e2e-login-password-123";
+const LOGIN_PASSWORD = "synthetic-e2e-login-password-123";
 
 export interface DbFixture {
   db: {

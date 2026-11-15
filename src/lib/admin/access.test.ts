@@ -3,28 +3,42 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 
-import { requireAdmin, requireAdminStore } from "./access";
+import {
+  type AdminProfile,
+  requireAdmin,
+  requireAdminStore,
+  requireStoreSegment,
+} from "./access";
 
-const { me, store } = vi.hoisted(() => ({
-  me: vi.fn<() => Promise<unknown>>(),
-  store: vi.fn<(input: { storeSlug: string }) => Promise<unknown>>(),
+const { me } = vi.hoisted(() => ({
+  me: vi.fn<() => Promise<AdminProfile>>(),
 }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-vi.mock("@/lib/orpc/server", () => ({ caller: { admin: { me, store } } }));
+vi.mock("@/lib/orpc/server", () => ({ caller: { admin: { me } } }));
 
-function makeMe() {
+function makeStore(overrides: Partial<AdminProfile["stores"][number]> = {}) {
   return {
-    name: "Ada Admin",
-    role: "member",
-    stores: [{ isActive: true, name: "LR Market", slug: "lr-market" }],
+    id: 7,
+    isActive: true,
+    name: "LR Market",
+    slug: "lr-market",
+    ...overrides,
   };
 }
 
-function makeStore() {
-  return { id: 7, isActive: true, name: "LR Market", slug: "lr-market" };
+function makeMe(overrides: Partial<AdminProfile> = {}): AdminProfile {
+  return {
+    name: "Ada Admin",
+    role: "member",
+    stores: [
+      makeStore(),
+      makeStore({ id: 8, name: "Sample Store", slug: "sample-store" }),
+    ],
+    ...overrides,
+  };
 }
 
 /** `admin.me` answers with the login, or fails with `failure`. */
@@ -40,28 +54,6 @@ function setupMe({ failure }: { failure?: Error } = {}) {
 
   return { login };
 }
-
-/**
- * `admin.store` answers by the slug it was asked for: the login's one store,
- * NOT_FOUND for any other, or `failure` for every slug.
- */
-function setupStore({ failure }: { failure?: Error } = {}) {
-  const found = makeStore();
-  store.mockImplementation(async ({ storeSlug }) => {
-    if (failure !== undefined) {
-      throw failure;
-    }
-
-    if (storeSlug !== found.slug) {
-      throw new ORPCError("NOT_FOUND");
-    }
-
-    return await Promise.resolve(found);
-  });
-
-  return { found };
-}
-
 describe("requireAdmin", () => {
   test("returns the signed-in login as admin.me answers it", async () => {
     const { login } = setupMe();
@@ -103,40 +95,36 @@ describe("requireAdmin", () => {
 });
 
 describe("requireAdminStore", () => {
-  test("returns the store the login may work on, asked by its slug", async () => {
-    const { found } = setupStore();
+  test("returns the store at the slug, among the login's own", () => {
+    const profile = makeMe();
 
-    await expect(requireAdminStore("lr-market")).resolves.toBe(found);
-    expect(store).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
+    expect(requireAdminStore(profile, "sample-store")).toBe(profile.stores[1]);
   });
 
-  test.each(["LR-Market", "a", "lr market"])(
-    "answers 404 for %j, not a store address, without asking",
-    async (segment) => {
-      setupStore();
+  test.each([
+    ["a store the login may not work on", makeMe(), "other-store"],
+    ["a login with no stores", makeMe({ stores: [] }), "lr-market"],
+  ])("answers 404 for %s", (_name, profile, slug) => {
+    expect(() => requireAdminStore(profile, slug)).toThrow(
+      expect.objectContaining({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" })
+    );
+  });
+});
 
-      await expect(requireAdminStore(segment)).rejects.toMatchObject({
-        digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-      });
-      expect(store).not.toHaveBeenCalled();
+describe("requireStoreSegment", () => {
+  test.each(["lr-market", "ab"])(
+    "passes the store address %j through",
+    (segment) => {
+      expect(requireStoreSegment(segment)).toBe(segment);
     }
   );
 
-  test("answers 404 for a store the login may not work on", async () => {
-    setupStore();
-
-    await expect(requireAdminStore("sample-store")).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
-    expect(store).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: "sample-store",
-    });
-  });
-
-  test("lets any other failure propagate, so an outage is never a 404", async () => {
-    const outage = new Error("database unavailable");
-    setupStore({ failure: outage });
-
-    await expect(requireAdminStore("lr-market")).rejects.toBe(outage);
-  });
+  test.each(["LR-Market", "a", "lr market", ""])(
+    "answers 404 for %j, not a store address",
+    (segment) => {
+      expect(() => requireStoreSegment(segment)).toThrow(
+        expect.objectContaining({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" })
+      );
+    }
+  );
 });

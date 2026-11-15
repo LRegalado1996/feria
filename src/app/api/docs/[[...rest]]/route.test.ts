@@ -67,7 +67,6 @@ describe("API docs route", () => {
       ])
     ).toEqual([
       ["/admin/me", ["get"]],
-      ["/admin/stores/{storeSlug}", ["get"]],
       ["/stores/{storeSlug}/categories", ["get"]],
       ["/stores/{storeSlug}/products", ["get"]],
       ["/stores/{storeSlug}/products/{slug}", ["get"]],

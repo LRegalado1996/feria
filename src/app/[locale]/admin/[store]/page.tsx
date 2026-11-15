@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { requireStoreSegment } from "@/lib/admin/access";
 import { storeSectionPath } from "@/lib/admin/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 
@@ -24,5 +25,5 @@ async function ToArticles({ params }: AdminStoreProps): Promise<never> {
   const locale = await readLocale(params);
   const { store } = await params;
 
-  redirect(storeSectionPath(store, "products", locale));
+  redirect(storeSectionPath(requireStoreSegment(store), "products", locale));
 }

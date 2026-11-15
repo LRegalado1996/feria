@@ -1,7 +1,12 @@
 import type { ReactElement, ReactNode } from "react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import AdminStore from "./page";
+
+// `server-only` throws on import outside a React Server Components build; the
+// store check this page uses reads no session, so the caller is never asked.
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/orpc/server", () => ({ caller: {} }));
 
 interface AdminStoreParams {
   params: Promise<{ locale: string; store: string }>;
@@ -17,9 +22,9 @@ async function makeParams(locale: string, store = "lr-market") {
 }
 
 /** What the page's boundary streams: the redirect, thrown. */
-function setup(locale: string) {
+function setup(locale: string, store = "lr-market") {
   const page: Boundary<AdminStoreParams> = AdminStore({
-    params: makeParams(locale),
+    params: makeParams(locale, store),
   });
   const inner = page.props.children;
 
@@ -39,6 +44,17 @@ describe("AdminStore", () => {
         digest: `NEXT_REDIRECT;replace;${to};307;`,
       });
       expect(fallback).toBeUndefined();
+    }
+  );
+
+  test.each(["LR-Market", "a", "lr market"])(
+    "answers 404 for %j, not a store address, instead of redirecting",
+    async (store) => {
+      const { resolve } = setup("en", store);
+
+      await expect(resolve).rejects.toMatchObject({
+        digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+      });
     }
   );
 

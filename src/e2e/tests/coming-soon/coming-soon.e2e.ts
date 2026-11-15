@@ -42,10 +42,11 @@ test.describe("Launch switch off: the store is closed", () => {
   test("the admin, the API and the brand files are not behind the switch", async ({
     request,
   }) => {
-    // No admin page exists yet (FER-013): what matters is that the address is
-    // answered by the app, not sent to the coming-soon page.
-    const admin = await request.get("/admin", { maxRedirects: 0 });
-    expect(admin.status()).toBe(404);
+    // The admin's sign-in is served as itself, never sent to the
+    // coming-soon page (FER-013).
+    const admin = await request.get("/admin/sign-in", { maxRedirects: 0 });
+    expect(admin.status()).toBe(200);
+    expect(admin.headers().location).toBeUndefined();
 
     const health = await request.get("/api/health", { maxRedirects: 0 });
     expect(health.headers().location).toBeUndefined();

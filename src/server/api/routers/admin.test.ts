@@ -11,11 +11,7 @@ import { adminRouter } from "./admin";
 // The router is session → service; the queries are
 // `src/server/services/access.test.ts`'s.
 
-const services = vi.hoisted(() => ({
-  findAccessibleStore: vi.fn(),
-  getUserRole: vi.fn(),
-  listAccessibleStores: vi.fn(),
-}));
+const services = vi.hoisted(() => ({ getAdminProfile: vi.fn() }));
 
 vi.mock("@/server/services/access", () => services);
 
@@ -38,15 +34,14 @@ function setup({
   const { mockCtx } = signedIn
     ? createMockContext()
     : createUnauthenticatedMockContext();
-  services.getUserRole.mockResolvedValue(role);
-  services.listAccessibleStores.mockResolvedValue(STORES);
+  services.getAdminProfile.mockResolvedValue(
+    role === null ? null : { role, stores: STORES }
+  );
   const options = { context: mockCtx as never };
 
   return {
     db: mockCtx.db,
     me: async () => await call(adminRouter.me, undefined, options),
-    store: async (input: unknown) =>
-      await call(adminRouter.store, input as never, options),
   };
 }
 
@@ -61,11 +56,7 @@ describe("admin.me", () => {
         role,
         stores: STORES,
       });
-      expect(services.getUserRole).toHaveBeenCalledExactlyOnceWith(
-        db,
-        "test-user-id"
-      );
-      expect(services.listAccessibleStores).toHaveBeenCalledExactlyOnceWith(
+      expect(services.getAdminProfile).toHaveBeenCalledExactlyOnceWith(
         db,
         "test-user-id"
       );
@@ -79,48 +70,15 @@ describe("admin.me", () => {
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });
-    expect(services.listAccessibleStores).not.toHaveBeenCalled();
   });
 
   test("refuses a signed-out visitor before reading anything", async () => {
     const { me } = setup({ signedIn: false });
 
-    await expect(me()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
-    expect(services.getUserRole).not.toHaveBeenCalled();
-  });
-});
-
-describe("admin.store", () => {
-  test("answers the store the login may work on, without its colors or contacts", async () => {
-    const { db, store } = setup();
-    services.findAccessibleStore.mockResolvedValue({
-      colorAccent: "#c8f31d",
-      id: 3,
-      isActive: false,
-      name: "LR Market",
-      slug: "lr-market",
-      whatsappNumber: "+59899000000",
+    await expect(me()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
     });
-
-    await expect(store({ storeSlug: "lr-market" })).resolves.toEqual({
-      id: 3,
-      isActive: false,
-      name: "LR Market",
-      slug: "lr-market",
-    });
-    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-      userId: "test-user-id",
-    });
-  });
-
-  test("answers NOT_FOUND for a store the login may not work on", async () => {
-    const { store } = setup();
-    services.findAccessibleStore.mockResolvedValue(null);
-
-    await expect(store({ storeSlug: "tienda-demo" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      message: "Store not found",
-    });
+    expect(services.getAdminProfile).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 
 import { signInPath } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
-import { catchNotFound } from "@/lib/orpc/catch-not-found";
 import { caller } from "@/lib/orpc/server";
 import { storeSlugSchema } from "@/lib/schemas/store";
 
@@ -26,25 +25,34 @@ export async function requireAdmin(returnTo: string, locale: Locale) {
   }
 }
 
+/** The admin profile `requireAdmin` answers. */
+export type AdminProfile = Awaited<ReturnType<typeof requireAdmin>>;
+
 /**
- * The store at `segment`, if the signed-in login may work on it, else a 404:
- * another store's admin is as absent as a store that does not exist. Call it
- * after `requireAdmin`, which handles a missing session.
+ * The store at `slug` among the ones the login may work on (`admin.me`
+ * already lists them under the same rule as `storeProcedure`), else a 404:
+ * another store's admin is as absent as a store that does not exist.
  */
-export async function requireAdminStore(segment: string) {
-  const slug = storeSlugSchema.safeParse(segment);
-
-  if (!slug.success) {
-    notFound();
-  }
-
-  const store = await catchNotFound(
-    caller.admin.store({ storeSlug: slug.data })
-  );
+export function requireAdminStore(me: AdminProfile, slug: string) {
+  const store = me.stores.find((candidate) => candidate.slug === slug);
 
   if (!store) {
     notFound();
   }
 
   return store;
+}
+
+/**
+ * The URL's store segment as a slug, or a 404 before anything else reads it:
+ * it goes into redirects and return paths.
+ */
+export function requireStoreSegment(segment: string): string {
+  const slug = storeSlugSchema.safeParse(segment);
+
+  if (!slug.success) {
+    notFound();
+  }
+
+  return slug.data;
 }

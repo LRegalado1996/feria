@@ -253,6 +253,30 @@ describe("AdminShell", () => {
     ).toEqual([["Sample Store", "/admin/sample-store/products"]]);
   });
 
+  test("shows a superadmin with no stores neither a switcher nor a store name", () => {
+    setup({
+      location: { kind: "platform", section: "stores" },
+      role: "superadmin",
+      stores: [],
+    });
+
+    const banner = screen.getByRole("banner");
+    expect(screen.queryByTestId("store-switcher")).not.toBeInTheDocument();
+    expect(
+      [...banner.querySelectorAll("p")].map((line) => line.textContent)
+    ).toEqual([]);
+  });
+
+  test("names the only store of a member on the landing in a line of the banner", () => {
+    setup({ location: { kind: "landing" }, stores: [SAMPLE] });
+
+    expect(
+      [...screen.getByRole("banner").querySelectorAll("p")].map(
+        (line) => line.textContent
+      )
+    ).toEqual(["Sample Store"]);
+  });
+
   test("speaks Spanish in its own chrome", () => {
     setup({ locale: "es" });
 

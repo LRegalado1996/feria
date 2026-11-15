@@ -7,6 +7,7 @@ import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 import {
   addStoreMember,
   findAccessibleStore,
+  getAdminProfile,
   getUserRole,
   hasSuperadmin,
   listAccessibleStores,
@@ -257,5 +258,28 @@ describe("listAccessibleStores", () => {
     expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
       '"store"."name" asc, "store"."id" asc'
     );
+  });
+});
+
+describe("getAdminProfile", () => {
+  test("answers the role and the stores together", async () => {
+    const { db } = setup();
+    const stores = [
+      { id: 3, isActive: true, name: "LR Market", slug: "lr-market" },
+    ];
+    db.query.user.findFirst.mockResolvedValue({ role: "member" });
+    db.$["select.orderBy"].mockResolvedValue(stores);
+
+    await expect(getAdminProfile(db as never, "user-1")).resolves.toEqual({
+      role: "member",
+      stores,
+    });
+  });
+
+  test("answers null for a user that no longer exists", async () => {
+    const { db } = setup();
+    db.$["select.orderBy"].mockResolvedValue([]);
+
+    await expect(getAdminProfile(db as never, "gone")).resolves.toBeNull();
   });
 });
