@@ -1,4 +1,4 @@
-import type { Page, Response } from "@playwright/test";
+import type { Page, Request } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { customerOrder } from "../../../server/db/schema";
@@ -212,11 +212,15 @@ test.describe("Cart and checkout", () => {
       { productId: necklace.id, quantity: 1 },
     ]);
     await fillCheckout(page);
-    // Every order request this page sends, answered in full before counting.
-    const answers: Promise<unknown>[] = [];
-    page.on("response", (response: Response) => {
-      if (new URL(response.url()).pathname === ORDER_CREATE) {
-        answers.push(response.finished());
+    // Every order request this page sends, caught as it starts so one still
+    // waiting for its answer is counted too.
+    const sent: Request[] = [];
+    page.on("request", (request: Request) => {
+      if (
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === ORDER_CREATE
+      ) {
+        sent.push(request);
       }
     });
 
@@ -229,7 +233,13 @@ test.describe("Cart and checkout", () => {
       { input: { customerName: "Ana Prueba", storeSlug: store.slug } }
     );
     await expect(page.getByTestId("store-order-code")).toBeVisible();
-    await Promise.all(answers);
+    // Each one answered in full, so a second order would be in the table.
+    await Promise.all(
+      sent.map(async (request) => {
+        const response = await request.response();
+        await response?.finished();
+      })
+    );
 
     const placed = await orders();
     expect(placed).toHaveLength(1);
