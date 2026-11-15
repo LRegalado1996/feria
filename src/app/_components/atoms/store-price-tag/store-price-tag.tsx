@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
-import { getDictionary } from "@/content";
+import type { Dictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,8 @@ export type StorePriceTagProps = VariantProps<typeof amountVariants> & {
   amount: number;
   className?: string;
   currency: Currency;
+  /** Its words, from `getDictionary` on the server or `useDictionary` in the browser. */
+  labels: Dictionary["storefront"]["price"];
   locale: Locale;
   /** What it cost before, in minor units. Shown struck through, and only
    *  when it was higher: a price that went up is not announced as a deal. */
@@ -36,17 +38,18 @@ export type StorePriceTagProps = VariantProps<typeof amountVariants> & {
 
 /**
  * An article's price, in the display face on a solid block so it is the first
- * thing read on a card. Server-only: it reads the dictionary itself.
+ * thing read on a card. It takes its words as a prop, so it renders on the
+ * server and in the browser alike.
  */
 function StorePriceTag({
   amount,
   className,
   currency,
+  labels,
   locale,
   previousAmount = null,
   size = "sm",
 }: StorePriceTagProps) {
-  const { price } = getDictionary(locale).storefront;
   const sale = previousAmount !== null && previousAmount > amount;
 
   return (
@@ -67,7 +70,7 @@ function StorePriceTag({
           className="text-sm text-store-muted"
           data-slot="store-price-tag-previous"
         >
-          {interpolate(price.previous, {
+          {interpolate(labels.previous, {
             price: formatPrice(previousAmount, currency, locale),
           })}
         </s>

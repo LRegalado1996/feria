@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import { DICTIONARIES } from "@/test/i18n";
+
 import {
   StoreArticleCard,
   type StoreArticleCardProps,
@@ -12,9 +14,15 @@ vi.mock("server-only", () => ({}));
 // Intl separates a currency from its amount with a no-break space.
 const NBSP = "\u00A0";
 
+/** The card, its words those of the page's language unless given. */
 function setup(props: Partial<StoreArticleCardProps> = {}) {
+  const locale = props.locale ?? "en";
   render(
     <StoreArticleCard
+      labels={{
+        card: DICTIONARIES[locale].storefront.articleCard,
+        price: DICTIONARIES[locale].storefront.price,
+      }}
       amount={89_000}
       currency="UYU"
       href="/en/lr/articles/pearl-necklace"
@@ -151,6 +159,69 @@ describe("StoreArticleCard", () => {
     const { badge } = setup({ isNew: true, previousAmount: 89_000 });
 
     expect(badge).toHaveTextContent("New");
+  });
+
+  test.each([
+    ["en", "Sold out"],
+    ["es", "Agotado"],
+  ] as const)("in %s, an unavailable article is marked %j", (locale, text) => {
+    const { badge } = setup({ locale, unavailable: true });
+
+    expect(badge).toHaveTextContent(new RegExp(`^${text}$`, "u"));
+    expect(badge).toHaveAttribute("data-tone", "contrast");
+  });
+
+  test("sold out outranks a reduced price and new: one badge a card", () => {
+    const { card } = setup({
+      isNew: true,
+      previousAmount: 129_000,
+      unavailable: true,
+    });
+
+    const badges = [...card.querySelectorAll('[data-slot="store-badge"]')];
+    expect(badges.map((badge) => badge.textContent)).toEqual(["Sold out"]);
+  });
+
+  test("uses the words it is given for its badges and prices", () => {
+    const { badge, card } = setup({
+      labels: {
+        card: {
+          badgeNew: "Fresh",
+          badgeSale: "Deal",
+          noImage: "Nothing to see",
+          unavailable: "Gone",
+        },
+        price: { previous: "Before: {price}" },
+      },
+      previousAmount: 129_000,
+    });
+
+    expect(badge).toHaveTextContent(/^Deal$/u);
+    expect(
+      card.querySelector('[data-slot="store-price-tag-previous"]')?.textContent
+    ).toBe(`Before: UYU${NBSP}1,290`);
+    expect(
+      card.querySelector('[data-slot="store-article-card-no-image"]')
+    ).toHaveTextContent("Nothing to see");
+  });
+
+  test("draws its action above the stretched link, as a control of its own", () => {
+    const { card, link } = setup({
+      action: <button type="button">Add to cart: Pearl necklace</button>,
+    });
+
+    const button = within(card).getByRole("button", {
+      name: "Add to cart: Pearl necklace",
+    });
+    expect(button.parentElement).toHaveClass("relative", "z-10");
+    expect(link).not.toContainElement(button);
+  });
+
+  test("has no action slot without an action", () => {
+    const { card } = setup();
+
+    expect(within(card).queryByRole("button")).toBeNull();
+    expect(card.querySelector(".z-10")).toBeNull();
   });
 
   test("keeps a caller's class", () => {

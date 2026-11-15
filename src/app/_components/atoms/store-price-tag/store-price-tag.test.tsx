@@ -1,6 +1,8 @@
 import { render } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import { DICTIONARIES } from "@/test/i18n";
+
 import { StorePriceTag, type StorePriceTagProps } from "./store-price-tag";
 
 // `server-only` throws on import outside a React Server Components build.
@@ -9,9 +11,17 @@ vi.mock("server-only", () => ({}));
 // Intl separates a currency from its amount with a no-break space.
 const NBSP = " ";
 
+/** The tag, its words those of the page's language unless given. */
 function setup(props: Partial<StorePriceTagProps> = {}) {
+  const locale = props.locale ?? "en";
   const { container } = render(
-    <StorePriceTag amount={89_000} currency="UYU" locale="en" {...props} />
+    <StorePriceTag
+      amount={89_000}
+      currency="UYU"
+      labels={DICTIONARIES[locale].storefront.price}
+      locale={locale}
+      {...props}
+    />
   );
   const tag = container.querySelector('[data-slot="store-price-tag"]');
 
@@ -84,6 +94,15 @@ describe("StorePriceTag", () => {
 
     expect(tag).toHaveAttribute("data-sale", "true");
     expect(previous?.textContent).toBe(`Was UYU${NBSP}890.01`);
+  });
+
+  test("says the previous price with the words it is given", () => {
+    const { previous } = setup({
+      labels: { previous: "Before: {price}" },
+      previousAmount: 129_000,
+    });
+
+    expect(previous?.textContent).toBe(`Before: UYU${NBSP}1,290`);
   });
 
   test("a null previous price is a regular price", () => {

@@ -67,7 +67,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | ------------------------------------------------- | ----------------------------------- | -------- | ----------- |
 | [FER-021](FER-021-storefront-shell.md)            | Storefront shell                    | P0       | in progress |
 | [FER-022](FER-022-home-view.md)                   | Home view                           | P0       | todo        |
-| [FER-023](FER-023-catalog-view.md)                | Catalog view                        | P0       | todo        |
+| [FER-023](FER-023-catalog-view.md)                | Catalog view                        | P0       | done        |
 | [FER-024](FER-024-article-view-and-seo.md)        | Article view and SEO                | P0       | todo        |
 | [FER-025](FER-025-order-domain.md)                | Order domain                        | P0       | done        |
 | [FER-026](FER-026-cart-and-checkout.md)           | Cart and checkout                   | P0       | todo        |
