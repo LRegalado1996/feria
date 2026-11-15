@@ -1,4 +1,11 @@
-import { useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { reportError } from "@/lib/errors/client";
 
@@ -76,10 +83,61 @@ function serverSnapshot(): boolean | null {
   return null;
 }
 
+/** Web Audio's constructor; typed as always there, an old or locked-down browser has none. */
+function audioContextClass(): typeof AudioContext | undefined {
+  return window.AudioContext;
+}
+
+function isRunning(output: AudioContext) {
+  return output.state === "running";
+}
+
+/**
+ * The page's audio context, made on first use and woken up; `null` without
+ * Web Audio. `onAwake` hears whether it runs, once it is known.
+ */
+function wakeAudio(
+  context: RefObject<AudioContext | null>,
+  onAwake: (awake: boolean) => void
+): AudioContext | null {
+  const AudioContextClass = audioContextClass();
+
+  if (!AudioContextClass) {
+    return null;
+  }
+
+  const output = context.current ?? new AudioContextClass();
+  context.current = output;
+
+  if (isRunning(output)) {
+    onAwake(true);
+  } else {
+    // A context made without a tap starts suspended (autoplay rules); a tap
+    // wakes it, and a refusal only means no sound.
+    void (async () => {
+      try {
+        await output.resume();
+        onAwake(isRunning(output));
+      } catch (error) {
+        reportError(error, { action: "Orders.resume_sound" });
+      }
+    })();
+  }
+
+  return output;
+}
+
+/** The gestures a browser takes as leave to start a page's sound. */
+const WAKING_GESTURES = ["pointerdown", "keydown"] as const;
+
 /**
  * Whether a new order beeps (FER-027): off unless the staff turned it on,
  * remembered by this browser. `enabled` is `null` until the browser's choice
  * is read. A browser without Web Audio stays silent; nothing fails.
+ *
+ * A choice remembered as on meets a page the browser keeps silent until the
+ * staff touches it (a reload, a fresh tab): `needsGesture` says so, and the
+ * first tap or key anywhere wakes the sound, without doing anything else.
  */
 export function useOrderSound() {
   // One store per screen, kept for its identity: React subscribes again
@@ -92,38 +150,44 @@ export function useOrderSound() {
   );
   // One context for the page: browsers cap how many a page may open.
   const context = useRef<AudioContext | null>(null);
+  const [awake, setAwake] = useState(false);
+  const needsGesture =
+    enabled === true && !awake && audioContextClass() !== undefined;
 
-  /** The page's audio context, woken up; `null` without Web Audio. */
-  const audio = (): AudioContext | null => {
-    // Typed as always there; an old or locked-down browser has none.
-    const AudioContextClass: typeof AudioContext | undefined =
-      window.AudioContext;
-
-    if (!AudioContextClass) {
-      return null;
+  useEffect(() => {
+    if (!needsGesture) {
+      return undefined;
     }
 
-    const output = context.current ?? new AudioContextClass();
-    context.current = output;
+    const wake = () => {
+      wakeAudio(context, setAwake);
+    };
 
-    // A context made without a tap starts suspended (autoplay rules); the
-    // toggle's tap wakes it, and a refusal only means no sound.
-    if (output.state === "suspended") {
-      void (async () => {
-        try {
-          await output.resume();
-        } catch (error) {
-          reportError(error, { action: "Orders.resume_sound" });
-        }
-      })();
+    // The page was already touched (the staff came back from an order): the
+    // browser lets it sound, no new gesture needed. Typed as always there;
+    // older browsers have no `userActivation`.
+    const activation: UserActivation | undefined = navigator.userActivation;
+
+    if (activation?.hasBeenActive) {
+      wake();
     }
 
-    return output;
-  };
+    // Listening until the sound runs: a refused wake tries again on the
+    // next gesture. Capture, so a control that stops the event still counts.
+    for (const gesture of WAKING_GESTURES) {
+      document.addEventListener(gesture, wake, { capture: true });
+    }
+
+    return () => {
+      for (const gesture of WAKING_GESTURES) {
+        document.removeEventListener(gesture, wake, { capture: true });
+      }
+    };
+  }, [needsGesture]);
 
   const beep = () => {
     try {
-      const output = audio();
+      const output = wakeAudio(context, setAwake);
 
       if (!output) {
         return;
@@ -147,6 +211,8 @@ export function useOrderSound() {
 
   return {
     enabled,
+    /** On, but silent until the staff taps or types anywhere on the page. */
+    needsGesture,
     /** Beeps if the staff turned the sound on. */
     play: () => {
       if (enabled === true) {

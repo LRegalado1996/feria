@@ -165,10 +165,16 @@ function orderRow(page: Page, code: string) {
   return page.getByTestId(`order-row-${code}`);
 }
 
-/** Taps a row of the list and waits for the order's page. */
+/**
+ * Taps a row of the list and waits for the order's page. An order opened
+ * before stays mounted and hidden (the router keeps pages left behind), so
+ * the page is the visible one.
+ */
 async function openOrder(page: Page, code: string) {
   await orderRow(page, code).getByRole("link").click();
-  await expect(page.getByTestId("order-detail")).toBeVisible();
+  await expect(
+    page.getByTestId("order-detail").filter({ visible: true })
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { level: 1, name: `Pedido ${code}` })
   ).toBeVisible();
@@ -402,9 +408,13 @@ test.describe("Order management", () => {
     await expect(
       page.getByRole("button", { exact: true, name: "Marcar entregado" })
     ).toBeVisible();
+    // The way back returns to the tab the order was opened from.
     await page.getByRole("link", { name: "Volver a pedidos" }).click();
-    await expect(page).toHaveURL(`/admin/${store.slug}/orders`);
-    await expect(tab(page, "Recibido (1)")).toBeVisible();
+    await expect(page).toHaveURL(`/admin/${store.slug}/orders?status=received`);
+    await expect(tab(page, "Recibido (1)")).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
     await expect(tab(page, "Preparado (1)")).toBeVisible();
     await expect(tab(page, "Todos (2)")).toBeVisible();
     await tab(page, "Preparado (1)").click();
@@ -480,10 +490,7 @@ test.describe("Order management", () => {
 
     // The figure for the eye; the link's name for a screen reader.
     await expect(badge.getByText("1", { exact: true })).toBeVisible();
-    // The badge is a flex box, so the name gets a space at its edge.
-    await expect(ordersLink).toHaveAccessibleName(
-      /^Pedidos ?, 1 sin preparar$/u
-    );
+    await expect(ordersLink).toHaveAccessibleName("Pedidos, 1 sin preparar");
 
     await openOrder(page, code);
     await move(page, "Marcar preparado", "packed");
@@ -493,6 +500,57 @@ test.describe("Order management", () => {
     await page.getByRole("link", { name: "Volver a pedidos" }).click();
     await expect(tab(page, "Recibido (0)")).toBeVisible();
     await expect(badge).toHaveCount(0);
+  });
+
+  test("an order placed while the staff is on another order is new on return, until opened", async ({
+    db,
+    page,
+  }) => {
+    const { login, necklace, store } = await setup({ db });
+    const first = await placeOrder(page, {
+      customerName: "Ana Prueba",
+      customerPhone: uniquePhone().international,
+      productId: necklace.id,
+      storeSlug: store.slug,
+    });
+    const admin = await signIn(page, login);
+    await openOrders(admin, store.slug, "?status=received");
+    // What the screen opened with is not news.
+    await expect(orderRow(page, first.code)).toBeVisible();
+    await expect(
+      orderRow(page, first.code).getByTestId("order-new")
+    ).toHaveCount(0);
+
+    await openOrder(page, first.code);
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/${store.slug}/orders/\\d+\\?status=received$`, "u")
+    );
+    const second = await placeOrder(page, {
+      customerName: "Josefina Núñez",
+      customerPhone: uniquePhone(first.code).international,
+      productId: necklace.id,
+      storeSlug: store.slug,
+    });
+    await page.getByRole("link", { name: "Volver a pedidos" }).click();
+    await expect(page).toHaveURL(`/admin/${store.slug}/orders?status=received`);
+
+    await expect(
+      orderRow(page, second.code).getByTestId("order-new")
+    ).toHaveText("Nuevo");
+    await expect(
+      page.getByText(`Llegó el pedido ${second.code}`, { exact: true })
+    ).toBeAttached();
+    await expect(
+      orderRow(page, first.code).getByTestId("order-new")
+    ).toHaveCount(0);
+
+    // Opening it is seeing it.
+    await openOrder(page, second.code);
+    await page.getByRole("link", { name: "Volver a pedidos" }).click();
+    await expect(orderRow(page, second.code)).toBeVisible();
+    await expect(
+      orderRow(page, second.code).getByTestId("order-new")
+    ).toHaveCount(0);
   });
 
   test("another store's member cannot open the order and never sees it", async ({

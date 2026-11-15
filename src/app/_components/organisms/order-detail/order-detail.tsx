@@ -2,14 +2,15 @@
 
 import { ArrowLeft, MessageCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { OrderPhoneVerified } from "@/app/_components/molecules/order-phone-verified";
 import { OrderStatusActions } from "@/app/_components/molecules/order-status-actions";
 import { OrderStatusBadge } from "@/app/_components/molecules/order-status-badge";
-import { ordersPath } from "@/lib/admin/orders";
+import { markOrderSeen } from "@/lib/admin/order-arrivals";
+import { type OrdersQuery, ordersPath } from "@/lib/admin/orders";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import {
   isStatusConflict,
@@ -27,6 +28,8 @@ import {
 } from "@/lib/utils/format";
 
 export interface OrderDetailProps {
+  /** The list's tab and search it was opened from: where "Back" returns. */
+  from: OrdersQuery;
   id: number;
   /** When the server rendered the page, the clock its times start from. */
   renderedAt: number;
@@ -41,7 +44,7 @@ type MoveOutcome = "conflict" | "failed" | null;
  * allows, what was ordered, the customer's note, how to reach them, and who
  * moved it when.
  */
-function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
+function OrderDetail({ from, id, renderedAt, storeSlug }: OrderDetailProps) {
   const { admin, common, storefront } = useDictionary();
   const copy = admin.orders;
   const locale = useLocale();
@@ -49,6 +52,11 @@ function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
   const change = useChangeOrderStatus(storeSlug);
   const now = useNow(renderedAt);
   const [outcome, setOutcome] = useState<MoveOutcome>(null);
+
+  // Opened: the list no longer marks it "New".
+  useEffect(() => {
+    markOrderSeen(storeSlug, id);
+  }, [id, storeSlug]);
 
   const when = (date: Date | string) => {
     const instant = new Date(date);
@@ -65,7 +73,7 @@ function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
   const back = (
     <Link
       className="inline-flex h-11 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:h-9"
-      href={ordersPath(storeSlug, locale)}
+      href={ordersPath(storeSlug, locale, from)}
     >
       <ArrowLeft aria-hidden="true" className="size-4" />
       {copy.detail.back}
@@ -215,7 +223,7 @@ function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
           <p className="font-semibold break-words">{found.customerName}</p>
           <p>
             <a
-              className="tabular-nums underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center tabular-nums underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
               href={`tel:${found.customerPhone}`}
             >
               <span className="sr-only">{copy.detail.phone} </span>
@@ -237,8 +245,14 @@ function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
       <div className="space-y-3">
         <h2 className="text-sm font-semibold">{copy.detail.history}</h2>
         <ol className="space-y-3" data-testid="order-history">
-          {found.history.map((event) => {
+          {found.history.map((event, index) => {
             const at = new Date(event.createdAt);
+            // No login behind a move: the shopper placing the order, or a
+            // login since removed from the team.
+            const placing = index === 0 && event.status === "received";
+            const withoutLogin = placing
+              ? copy.detail.historyPlaced
+              : copy.detail.historyFormer;
 
             return (
               <li
@@ -246,7 +260,7 @@ function OrderDetail({ id, renderedAt, storeSlug }: OrderDetailProps) {
                 key={`${at.toISOString()}:${event.status}`}
               >
                 <OrderStatusBadge status={event.status} />
-                <span>{event.changedByName ?? copy.detail.historyPlaced}</span>
+                <span>{event.changedByName ?? withoutLogin}</span>
                 <time
                   className="text-xs text-muted-foreground"
                   dateTime={at.toISOString()}

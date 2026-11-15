@@ -53,8 +53,12 @@ function AdminNav({ className, items, label, title }: AdminNavProps) {
               )}
               href={item.href}
             >
-              {item.label}
-              {item.badge}
+              {/* One inline box for the label and the badge: a browser
+                  puts a space between boxes when it names the link. */}
+              <span>
+                {item.label}
+                {item.badge}
+              </span>
             </Link>
           </li>
         ))}

@@ -42,12 +42,8 @@ export function readOrdersQuery(
   };
 }
 
-/** The orders screen of a store, with its selection in the query string. */
-export function ordersPath(
-  storeSlug: string,
-  locale: Locale,
-  { q, status }: OrdersQuery = {}
-): string {
+/** A screen's selection as a query string, `?` included, or "" for none. */
+function selectionQuery({ q, status }: OrdersQuery): string {
   const params = new URLSearchParams();
 
   if (status) {
@@ -59,14 +55,30 @@ export function ordersPath(
   }
 
   const query = params.toString();
-  const path = localizePath(`/admin/${storeSlug}/orders`, locale);
 
-  return query ? `${path}?${query}` : path;
+  return query ? `?${query}` : "";
 }
 
-/** One order's page in the admin. */
-export function orderPath(storeSlug: string, id: number, locale: Locale) {
-  return localizePath(`/admin/${storeSlug}/orders/${id}`, locale);
+/** The orders screen of a store, with its selection in the query string. */
+export function ordersPath(
+  storeSlug: string,
+  locale: Locale,
+  query: OrdersQuery = {}
+): string {
+  return `${localizePath(`/admin/${storeSlug}/orders`, locale)}${selectionQuery(query)}`;
+}
+
+/**
+ * One order's page in the admin, carrying the list's selection it was opened
+ * from, so its way back returns to the same tab and search.
+ */
+export function orderPath(
+  storeSlug: string,
+  id: number,
+  locale: Locale,
+  from: OrdersQuery = {}
+) {
+  return `${localizePath(`/admin/${storeSlug}/orders/${id}`, locale)}${selectionQuery(from)}`;
 }
 
 /**

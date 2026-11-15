@@ -12,7 +12,7 @@ import {
   requireAdminStore,
   requireStoreSegment,
 } from "@/lib/admin/access";
-import { orderPath, readOrderId } from "@/lib/admin/orders";
+import { orderPath, readOrderId, readOrdersQuery } from "@/lib/admin/orders";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { catchNotFound } from "@/lib/orpc/catch-not-found";
 import { getQueryClient, orpc } from "@/lib/orpc/server";
@@ -25,6 +25,8 @@ async function readRenderInstant() {
 
 interface OrderPageProps {
   params: Promise<{ id: string; locale: string; store: string }>;
+  /** The list's tab and search it was opened from, for the way back. */
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
@@ -32,17 +34,17 @@ interface OrderPageProps {
  * address no order can have, or an order this store does not have, is the
  * not-found page.
  */
-export default function OrderPage({ params }: OrderPageProps) {
-  // The store and the order are only known per request: the params are read
-  // inside the boundary, never above it.
+export default function OrderPage({ params, searchParams }: OrderPageProps) {
+  // The store, the order and the list it came from are only known per
+  // request: read inside the boundary, never above it.
   return (
     <Suspense fallback={<AdminShellSkeleton />}>
-      <OrderResolver params={params} />
+      <OrderResolver params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function OrderResolver({ params }: OrderPageProps) {
+async function OrderResolver({ params, searchParams }: OrderPageProps) {
   const locale = await readLocale(params);
   const { id: idSegment, store: segment } = await params;
   const slug = requireStoreSegment(segment);
@@ -53,8 +55,10 @@ async function OrderResolver({ params }: OrderPageProps) {
     notFound();
   }
 
+  // Checked as the list checks it: anyone can edit an address.
+  const from = readOrdersQuery(await searchParams);
   const { admin } = getDictionary(locale);
-  const me = await requireAdmin(orderPath(slug, id, locale), locale);
+  const me = await requireAdmin(orderPath(slug, id, locale, from), locale);
   const store = requireAdminStore(me, slug);
   const queryClient = getQueryClient();
   // Another store's order is NOT_FOUND too. Any other failure is not a 404:
@@ -81,7 +85,12 @@ async function OrderResolver({ params }: OrderPageProps) {
         role={me.role}
         stores={me.stores}
       >
-        <OrderDetail id={id} renderedAt={renderedAt} storeSlug={slug} />
+        <OrderDetail
+          from={from}
+          id={id}
+          renderedAt={renderedAt}
+          storeSlug={slug}
+        />
       </AdminShell>
     </HydrationBoundary>
   );

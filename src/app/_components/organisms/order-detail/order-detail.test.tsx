@@ -3,8 +3,14 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
+import {
+  forgetOrderArrivals,
+  freshArrivals,
+  recordOrderList,
+} from "@/lib/admin/order-arrivals";
+import type { OrdersQuery } from "@/lib/admin/orders";
 import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
 import type { OrderStatus } from "@/lib/schemas/order";
@@ -20,35 +26,48 @@ vi.mock("@/lib/orpc/client", async () => {
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
+afterEach(() => {
+  forgetOrderArrivals();
+});
+
 const RENDERED_AT = Date.parse("2026-11-14T22:00:00.000Z");
 const HOUR = 3_600_000;
 
+interface HistoryEvent {
+  changedByName: string | null;
+  createdAt: string;
+  status: OrderStatus;
+}
+
 function makeOrder(
   overrides: Partial<{
+    history: HistoryEvent[];
     locale: Locale;
     note: string | null;
     phoneVerified: boolean;
     status: OrderStatus;
   }> = {}
 ) {
+  const history: HistoryEvent[] = [
+    {
+      changedByName: null,
+      createdAt: new Date(RENDERED_AT - 2 * HOUR).toISOString(),
+      status: "received",
+    },
+    {
+      changedByName: "Ada Admin",
+      createdAt: new Date(RENDERED_AT - HOUR).toISOString(),
+      status: "packed",
+    },
+  ];
+
   return {
     code: "K7P2Q",
     createdAt: new Date(RENDERED_AT - 2 * HOUR).toISOString(),
     currencyCode: "UYU",
     customerName: "Ana Pérez",
     customerPhone: "+59899123456",
-    history: [
-      {
-        changedByName: null,
-        createdAt: new Date(RENDERED_AT - 2 * HOUR).toISOString(),
-        status: "received",
-      },
-      {
-        changedByName: "Ada Admin",
-        createdAt: new Date(RENDERED_AT - HOUR).toISOString(),
-        status: "packed",
-      },
-    ],
+    history,
     id: 42,
     items: [
       { productId: 7, quantity: 2, title: "Collar", unitPriceAmount: 64_500 },
@@ -119,10 +138,13 @@ function answering<T>(
 
 function setup({
   change = { id: 42, status: "delivered" },
+  from = {},
   gets = [makeOrder()],
   locale = "en",
 }: {
   change?: Answer<{ id: number; status: OrderStatus }>;
+  /** The list's selection the order was opened from. */
+  from?: OrdersQuery;
   /** `order.get`'s answers, in turn; the last one repeats. */
   gets?: Answer<Order>[];
   locale?: Locale;
@@ -153,7 +175,12 @@ function setup({
 
   const user = userEvent.setup();
   renderWithI18n(
-    <OrderDetail id={42} renderedAt={RENDERED_AT} storeSlug="lr-market" />,
+    <OrderDetail
+      from={from}
+      id={42}
+      renderedAt={RENDERED_AT}
+      storeSlug="lr-market"
+    />,
     { locale, wrapper: Providers }
   );
 
@@ -256,9 +283,12 @@ describe("OrderDetail", () => {
       const contact = section("Contact");
       expect(contact).toHaveTextContent(confirmed);
       expect(within(contact).getByText("Ana Pérez")).toBeInTheDocument();
-      expect(
-        within(contact).getByRole("link", { name: "Phone +59899123456" })
-      ).toHaveAttribute("href", "tel:+59899123456");
+      const phone = within(contact).getByRole("link", {
+        name: "Phone +59899123456",
+      });
+      expect(phone).toHaveAttribute("href", "tel:+59899123456");
+      // A 44 px target for a thumb.
+      expect(phone).toHaveClass("inline-flex", "min-h-11", "items-center");
       const whatsapp = within(contact).getByRole("link", {
         name: "Open WhatsApp chat (opens in a new tab)",
       });
@@ -277,6 +307,99 @@ describe("OrderDetail", () => {
         .getAllByRole("listitem")
         .map((item) => item.textContent)
     ).toEqual(["ReceivedOrder placed2 hours ago", "PackedAda Admin1 hour ago"]);
+  });
+
+  test("names a move with no login behind it, after the placing, as someone no longer on the team", async () => {
+    setup({
+      gets: [
+        makeOrder({
+          history: [
+            {
+              changedByName: null,
+              createdAt: new Date(RENDERED_AT - 3 * HOUR).toISOString(),
+              status: "received",
+            },
+            {
+              changedByName: null,
+              createdAt: new Date(RENDERED_AT - 2 * HOUR).toISOString(),
+              status: "packed",
+            },
+            {
+              changedByName: null,
+              createdAt: new Date(RENDERED_AT - HOUR).toISOString(),
+              status: "received",
+            },
+          ],
+        }),
+      ],
+      locale: "es",
+    });
+    await screen.findByTestId("order-detail");
+
+    expect(
+      within(screen.getByTestId("order-history"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+    ).toEqual([
+      "RecibidoPedido hechohace 3 horas",
+      "PreparadoAlguien que ya no está en el equipohace 2 horas",
+      "RecibidoAlguien que ya no está en el equipohace 1 hora",
+    ]);
+  });
+
+  test("a first event that is not the placing is no placing", async () => {
+    setup({
+      gets: [
+        makeOrder({
+          history: [
+            {
+              changedByName: null,
+              createdAt: new Date(RENDERED_AT - HOUR).toISOString(),
+              status: "packed",
+            },
+          ],
+        }),
+      ],
+    });
+    await screen.findByTestId("order-detail");
+
+    expect(
+      within(screen.getByTestId("order-history"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent)
+    ).toEqual(["PackedSomeone no longer on the team1 hour ago"]);
+  });
+
+  test("goes back to the tab and search the order was opened from", async () => {
+    setup({ from: { q: "ana", status: "received" } });
+
+    expect(
+      await screen.findByRole("link", { name: "Back to orders" })
+    ).toHaveAttribute(
+      "href",
+      "/en/admin/lr-market/orders?status=received&q=ana"
+    );
+  });
+
+  test("opening an order that arrived takes its New mark off the list", async () => {
+    recordOrderList("lr-market", {}, [[]], RENDERED_AT);
+    recordOrderList(
+      "lr-market",
+      {},
+      [
+        [
+          { code: "K7P2Q", id: 42, status: "received" },
+          { code: "AB3CD", id: 7, status: "received" },
+        ],
+      ],
+      RENDERED_AT
+    );
+    expect([...freshArrivals("lr-market").keys()]).toEqual([42, 7]);
+
+    setup();
+    await screen.findByTestId("order-detail");
+
+    expect([...freshArrivals("lr-market").keys()]).toEqual([7]);
   });
 
   test("speaks Spanish", async () => {

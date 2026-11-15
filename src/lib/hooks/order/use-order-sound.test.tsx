@@ -9,9 +9,21 @@ import { ORDER_SOUND_STORAGE_KEY, useOrderSound } from "./use-order-sound";
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
 afterEach(() => {
+  Reflect.deleteProperty(navigator, "userActivation");
   window.localStorage.clear();
   vi.restoreAllMocks();
 });
+
+/**
+ * `navigator.userActivation`, which happy-dom lacks: whether the page has
+ * had a tap or a key since it loaded. Removed after each test.
+ */
+function stubUserActivation(hasBeenActive: boolean) {
+  Object.defineProperty(navigator, "userActivation", {
+    configurable: true,
+    value: { hasBeenActive },
+  });
+}
 
 /**
  * A Web Audio double that records the tones it was asked to play, as
@@ -75,6 +87,7 @@ function stubAudio({
         throw new Error("not allowed to start");
       }
 
+      this.state = "running";
       await Promise.resolve();
     }
   }
@@ -132,11 +145,19 @@ function setup({
           resumeFails: audio === "suspended-refused",
           state: audio.startsWith("suspended") ? "suspended" : "running",
         });
-  const { result } = renderHook(() => useOrderSound());
+  const { result, unmount } = renderHook(() => useOrderSound());
 
   return {
     ...recorded,
+    /** A tap or a key anywhere on the page. */
+    gesture: async (type: "keydown" | "pointerdown" = "pointerdown") => {
+      await act(async () => {
+        document.body.dispatchEvent(new Event(type, { bubbles: true }));
+        await Promise.resolve();
+      });
+    },
     result,
+    unmount,
     stored: () => window.localStorage.getItem(ORDER_SOUND_STORAGE_KEY),
   };
 }
@@ -301,6 +322,106 @@ describe("useOrderSound", () => {
       expect.objectContaining({ name: "QuotaExceededError" }),
       { action: "Orders.save_sound_preference" }
     );
+  });
+
+  test.each(["pointerdown", "keydown"] as const)(
+    "a choice remembered as on waits for a gesture, and %s wakes the sound without a beep",
+    async (type) => {
+      const { contexts, gesture, result, tones } = setup({
+        audio: "suspended",
+        stored: "on",
+      });
+      expect(result.current.needsGesture).toBe(true);
+      expect(contexts).toEqual([]);
+
+      await gesture(type);
+
+      expect(contexts).toEqual([{ resumed: 1 }]);
+      expect(result.current.needsGesture).toBe(false);
+      expect(tones).toEqual([]);
+
+      await gesture(type);
+
+      expect(contexts).toEqual([{ resumed: 1 }]);
+    }
+  );
+
+  test("a wake the browser refuses is reported, and the next gesture tries again", async () => {
+    const { contexts, gesture, result } = setup({
+      audio: "suspended-refused",
+      stored: "on",
+    });
+
+    await gesture();
+    await gesture();
+
+    expect(contexts).toEqual([{ resumed: 2 }]);
+    expect(result.current.needsGesture).toBe(true);
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "not allowed to start" }),
+      { action: "Orders.resume_sound" }
+    );
+  });
+
+  test("stops listening once the screen is gone", async () => {
+    const { contexts, gesture, unmount } = setup({
+      audio: "suspended",
+      stored: "on",
+    });
+
+    unmount();
+    await gesture();
+
+    expect(contexts).toEqual([]);
+  });
+
+  test.each([
+    ["off", "suspended"],
+    [undefined, "suspended"],
+    ["on", "missing"],
+  ] as const)(
+    "with %j remembered and audio %s, waits for no gesture",
+    async (stored, audio) => {
+      const { contexts, gesture, result } = setup({ audio, stored });
+
+      expect(result.current.needsGesture).toBe(false);
+
+      await gesture();
+
+      expect(contexts).toEqual([]);
+    }
+  );
+
+  test("turning it on in a tap wakes the sound: no gesture asked after", async () => {
+    const { contexts, result } = setup({ audio: "suspended" });
+
+    await act(async () => {
+      result.current.setEnabled(true);
+      await Promise.resolve();
+    });
+
+    expect(contexts).toEqual([{ resumed: 1 }]);
+    expect(result.current.needsGesture).toBe(false);
+  });
+
+  test("on a page already touched, wakes the sound at once", async () => {
+    stubUserActivation(true);
+    const { contexts, result } = setup({ audio: "suspended", stored: "on" });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(contexts).toEqual([{ resumed: 1 }]);
+    expect(result.current.needsGesture).toBe(false);
+  });
+
+  test("on a page not touched yet, waits for the gesture", () => {
+    stubUserActivation(false);
+    const { contexts, result } = setup({ audio: "suspended", stored: "on" });
+
+    expect(contexts).toEqual([]);
+    expect(result.current.needsGesture).toBe(true);
   });
 
   test("follows a choice made in another tab", () => {

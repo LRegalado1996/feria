@@ -5,10 +5,18 @@ import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import {
+  forgetOrderArrivals,
+  markOrderSeen,
+  recordOrderList,
+} from "@/lib/admin/order-arrivals";
 import type { OrdersQuery } from "@/lib/admin/orders";
 import { ORDER_SOUND_STORAGE_KEY } from "@/lib/hooks/order/use-order-sound";
 import type { Locale } from "@/lib/i18n/config";
-import { renderWithI18n } from "@/test/i18n";
+import { orpc } from "@/lib/orpc/client";
+import type { ListOrdersValues } from "@/lib/schemas/order";
+import { collectHydrationErrors } from "@/test/hydration";
+import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 
 import { OrderManager } from "./order-manager";
@@ -23,8 +31,22 @@ vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 afterEach(() => {
+  Reflect.deleteProperty(navigator, "userActivation");
   window.localStorage.clear();
+  // As a reload does: each test's tab starts knowing no order.
+  forgetOrderArrivals();
 });
+
+/**
+ * `navigator.userActivation`, which happy-dom lacks: whether the page has
+ * had a tap or a key since it loaded. Removed after each test.
+ */
+function stubUserActivation(hasBeenActive: boolean) {
+  Object.defineProperty(navigator, "userActivation", {
+    configurable: true,
+    value: { hasBeenActive },
+  });
+}
 
 /** The instant the server rendered the screen, and the frozen clock. */
 const RENDERED_AT = Date.parse("2026-11-14T22:00:00.000Z");
@@ -109,6 +131,8 @@ function hasCursor(input: unknown) {
 }
 
 interface SetupOptions {
+  /** How the browser starts the page's sound: a reload starts it suspended. */
+  audio?: "running" | "suspended";
   counts?: "fail" | "ok";
   /** `order.list`'s answers, in turn; the last one repeats. */
   lists?: Answer[];
@@ -120,6 +144,7 @@ interface SetupOptions {
 }
 
 function setup({
+  audio = "running",
   counts = "ok",
   lists = [onePage([makeOrder(1, "AB3CD")])],
   locale = "en",
@@ -134,12 +159,19 @@ function setup({
   }
 
   const beeps: number[] = [];
+  const resumed: number[] = [];
   vi.stubGlobal(
     "AudioContext",
     class {
       currentTime = 0;
       destination = {};
-      state = "running";
+      state = audio;
+
+      async resume() {
+        resumed.push(Date.now());
+        this.state = "running";
+        await Promise.resolve();
+      }
 
       createGain() {
         return {
@@ -193,14 +225,14 @@ function setup({
   }
 
   const user = userEvent.setup();
-  renderWithI18n(
+  const screenUi = (
     <OrderManager
       query={query}
       renderedAt={RENDERED_AT}
       storeSlug="lr-market"
-    />,
-    { locale, wrapper: Providers }
+    />
   );
+  const rendered = renderWithI18n(screenUi, { locale, wrapper: Providers });
 
   const row = (code: string) => screen.getByTestId(`order-row-${code}`);
   const codes = () =>
@@ -218,11 +250,20 @@ function setup({
 
   return {
     beeps,
+    /** Leaves the screen and comes back to it, as a client navigation does. */
+    comeBack: () => {
+      rendered.unmount();
+      // The page comes back with its list read anew (the server fetches it
+      // on every visit), not with the list it left.
+      queryClient.clear();
+      renderWithI18n(screenUi, { locale, wrapper: Providers });
+    },
     codes,
     countsSpy,
     list,
     liveRegion: () => screen.getByRole("status"),
     queryClient,
+    resumed,
     refresh: async () => {
       await act(async () => {
         await queryClient.refetchQueries();
@@ -347,9 +388,15 @@ describe("OrderManager", () => {
   });
 
   test("reads the list for the status and the search in the address", async () => {
-    const { list } = setup({ query: { q: "ana", status: "received" } });
+    const { list, row } = setup({ query: { q: "ana", status: "received" } });
 
     await screen.findByTestId("order-row-AB3CD");
+
+    // The row carries them to the order, whose way back returns here.
+    expect(within(row("AB3CD")).getByRole("link")).toHaveAttribute(
+      "href",
+      "/en/admin/lr-market/orders/1?status=received&q=ana"
+    );
 
     expect(list).toHaveBeenCalledExactlyOnceWith({
       q: "ana",
@@ -400,17 +447,21 @@ describe("OrderManager", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  test("marks an order placed after the screen opened as new and announces it, once", async () => {
-    const arrived = makeOrder(9, "K7P2Q", {
-      createdAt: new Date(RENDERED_AT + MINUTE).toISOString(),
-    });
+  test("an order only a later read brings is new and announced; one the first read held is neither", async () => {
+    // The first read's order placed "later" by the server's clock: the
+    // clocks no longer decide, the ids the tab has seen do.
     const { codes, liveRegion, refresh, row } = setup({
       lists: [
-        onePage([makeOrder(1, "AB3CD")]),
-        onePage([arrived, makeOrder(1, "AB3CD")]),
+        onePage([
+          makeOrder(1, "AB3CD", {
+            createdAt: new Date(RENDERED_AT + MINUTE).toISOString(),
+          }),
+        ]),
+        onePage([makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")]),
       ],
     });
     await screen.findByTestId("order-row-AB3CD");
+    expect(within(row("AB3CD")).queryByTestId("order-new")).toBeNull();
     expect(liveRegion()).toHaveTextContent(/^$/u);
 
     await refresh();
@@ -426,22 +477,153 @@ describe("OrderManager", () => {
     expect(liveRegion()).toHaveAttribute("aria-live", "polite");
   });
 
-  test("an order placed exactly as the screen opened is not new", async () => {
-    setup({
+  test("speaks a Spanish arrival", async () => {
+    const { liveRegion, refresh, row } = setup({
+      lists: [onePage([]), onePage([makeOrder(9, "K7P2Q")])],
+      locale: "es",
+    });
+    await screen.findByTestId("empty-state");
+
+    await refresh();
+
+    await waitFor(() => {
+      expect(liveRegion()).toHaveTextContent(/^Llegó el pedido K7P2Q$/u);
+    });
+    expect(within(row("K7P2Q")).getByTestId("order-new")).toHaveTextContent(
+      /^Nuevo$/u
+    );
+  });
+
+  test("remembers the orders it has seen when the staff leaves and comes back", async () => {
+    const { comeBack, liveRegion, row } = setup({
       lists: [
-        onePage([
-          makeOrder(1, "AB3CD", {
-            createdAt: new Date(RENDERED_AT).toISOString(),
-          }),
-        ]),
+        onePage([makeOrder(1, "AB3CD")]),
+        // Placed while the staff was on an order's page.
+        onePage([makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")]),
       ],
     });
+    await screen.findByTestId("order-row-AB3CD");
 
-    const only = await screen.findByTestId("order-row-AB3CD");
+    comeBack();
 
-    expect(within(only).queryByTestId("order-new")).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent(/^$/u);
+    await waitFor(() => {
+      expect(liveRegion()).toHaveTextContent(/^Order K7P2Q arrived$/u);
+    });
+    expect(within(row("K7P2Q")).getByTestId("order-new")).toHaveTextContent(
+      /^New$/u
+    );
+    expect(within(row("AB3CD")).queryByTestId("order-new")).toBeNull();
   });
+
+  test("coming back with nothing new says nothing again and stays silent", async () => {
+    const { beeps, comeBack, liveRegion, refresh, row } = setup({
+      lists: [onePage([]), onePage([makeOrder(9, "K7P2Q")])],
+      sound: "on",
+    });
+    await screen.findByTestId("empty-state");
+    await refresh();
+    await waitFor(() => {
+      expect(liveRegion()).toHaveTextContent(/^Order K7P2Q arrived$/u);
+    });
+    expect(beeps).toEqual([RENDERED_AT]);
+
+    comeBack();
+
+    // Still new, but already said: the region starts empty, no second beep.
+    expect(
+      within(await screen.findByTestId("order-row-K7P2Q")).getByTestId(
+        "order-new"
+      )
+    ).toHaveTextContent(/^New$/u);
+    expect(liveRegion()).toHaveTextContent(/^$/u);
+    expect(beeps).toEqual([RENDERED_AT]);
+
+    // A change that is no arrival (the order opened elsewhere) says nothing.
+    act(() => {
+      markOrderSeen("lr-market", 9);
+    });
+
+    expect(within(row("K7P2Q")).queryByTestId("order-new")).toBeNull();
+    expect(liveRegion()).toHaveTextContent(/^$/u);
+    expect(beeps).toEqual([RENDERED_AT]);
+  });
+
+  test("an arrival opened on its page is no longer new", async () => {
+    const { refresh, row } = setup({
+      lists: [
+        onePage([makeOrder(1, "AB3CD")]),
+        onePage([makeOrder(9, "K7P2Q"), makeOrder(8, "ZZ9XY")]),
+      ],
+    });
+    await screen.findByTestId("order-row-AB3CD");
+    await refresh();
+    await screen.findByTestId("order-row-K7P2Q");
+
+    act(() => {
+      markOrderSeen("lr-market", 9);
+    });
+
+    expect(within(row("K7P2Q")).queryByTestId("order-new")).toBeNull();
+    expect(within(row("ZZ9XY")).getByTestId("order-new")).toHaveTextContent(
+      /^New$/u
+    );
+  });
+
+  test("an arrival moved out of received is no longer new", async () => {
+    const { refresh, row } = setup({
+      lists: [
+        onePage([]),
+        onePage([makeOrder(9, "K7P2Q")]),
+        onePage([makeOrder(9, "K7P2Q", { status: "packed" })]),
+      ],
+    });
+    await screen.findByTestId("empty-state");
+    await refresh();
+    expect(
+      within(await screen.findByTestId("order-row-K7P2Q")).getByTestId(
+        "order-new"
+      )
+    ).toHaveTextContent(/^New$/u);
+
+    await refresh();
+
+    await waitFor(() => {
+      expect(within(row("K7P2Q")).getByRole("link")).toHaveTextContent(
+        /Packed/u
+      );
+    });
+    expect(within(row("K7P2Q")).queryByTestId("order-new")).toBeNull();
+  });
+
+  test.each([
+    [10 * MINUTE - 1000, true],
+    [10 * MINUTE, false],
+  ])(
+    "%i ms after it arrived, an arrival is still new: %s",
+    async (later, isNew) => {
+      const { comeBack, refresh, row } = setup({
+        lists: [onePage([]), onePage([makeOrder(9, "K7P2Q")])],
+      });
+      await screen.findByTestId("empty-state");
+      await refresh();
+      await screen.findByTestId("order-row-K7P2Q");
+
+      vi.setSystemTime(RENDERED_AT + later);
+      comeBack();
+
+      await screen.findByTestId("order-row-K7P2Q");
+      // The screen's clock is the browser's once mounted: the order, placed
+      // 9 minutes before the screen first opened, is 19 minutes old.
+      await waitFor(() => {
+        expect(within(row("K7P2Q")).getByRole("time")).toHaveTextContent(
+          /^19 minutes ago$/u
+        );
+      });
+      expect(within(row("K7P2Q")).queryByTestId("order-new") !== null).toBe(
+        isNew
+      );
+    }
+  );
 
   test("announces several arrivals together, and beeps once when the sound is on", async () => {
     const first = makeOrder(8, "K7P2Q", {
@@ -512,6 +694,82 @@ describe("OrderManager", () => {
 
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(window.localStorage.getItem(ORDER_SOUND_STORAGE_KEY)).toBe("off");
+  });
+
+  test("a sound remembered as on, held silent by the browser, asks for a tap and wakes on the first one", async () => {
+    const { beeps, resumed, user } = setup({ audio: "suspended", sound: "on" });
+    const toggle = screen.getByRole("button", {
+      name: "Sound when an order arrives",
+    });
+    const hint = await screen.findByTestId("order-sound-hint");
+    expect(hint).toHaveTextContent(/^Tap the screen to turn the sound on$/u);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).toHaveAttribute("aria-describedby", hint.id);
+    expect(resumed).toEqual([]);
+
+    await user.click(screen.getByRole("heading", { level: 1 }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("order-sound-hint")).toBeNull();
+    });
+    expect(resumed).toEqual([RENDERED_AT]);
+    expect(beeps).toEqual([]);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(toggle).not.toHaveAttribute("aria-describedby");
+  });
+
+  test("a key wakes the sound too, and says so in Spanish until then", async () => {
+    const { resumed, user } = setup({
+      audio: "suspended",
+      locale: "es",
+      sound: "on",
+    });
+    expect(await screen.findByTestId("order-sound-hint")).toHaveTextContent(
+      /^Tocá la pantalla para activar el sonido$/u
+    );
+
+    await user.keyboard("{Shift}");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("order-sound-hint")).toBeNull();
+    });
+    expect(resumed).toEqual([RENDERED_AT]);
+  });
+
+  test("tapping the toggle while the sound waits for a tap only turns it off", async () => {
+    const { beeps, user } = setup({ audio: "suspended", sound: "on" });
+    await screen.findByTestId("order-sound-hint");
+    const toggle = screen.getByRole("button", {
+      name: "Sound when an order arrives",
+    });
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(window.localStorage.getItem(ORDER_SOUND_STORAGE_KEY)).toBe("off");
+    expect(beeps).toEqual([]);
+    expect(screen.queryByTestId("order-sound-hint")).toBeNull();
+  });
+
+  test("with the sound off, asks for no tap", async () => {
+    setup({ audio: "suspended", sound: "off" });
+
+    await screen.findByTestId("order-row-AB3CD");
+
+    expect(screen.queryByTestId("order-sound-hint")).toBeNull();
+  });
+
+  test("back on a page the staff already touched, the sound wakes without asking", async () => {
+    stubUserActivation(true);
+    const { beeps, resumed } = setup({ audio: "suspended", sound: "on" });
+
+    await screen.findByTestId("order-row-AB3CD");
+
+    await waitFor(() => {
+      expect(resumed).toEqual([RENDERED_AT]);
+    });
+    expect(screen.queryByTestId("order-sound-hint")).toBeNull();
+    expect(beeps).toEqual([]);
   });
 
   test("loads the next page on demand, focusing its first order", async () => {
@@ -591,5 +849,69 @@ describe("OrderManager", () => {
     );
     expect(codes()).toEqual(["AB3CD"]);
     expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled();
+  });
+});
+
+describe("OrderManager before hydration", () => {
+  /**
+   * The screen as the server renders it with its first page fetched, in a
+   * module that already holds an arrival for the store (on the server, one
+   * module serves every request).
+   */
+  function setupHydration() {
+    const page = onePage([makeOrder(9, "K7P2Q")]);
+    recordOrderList("lr-market", {}, [[]], RENDERED_AT);
+    recordOrderList("lr-market", {}, [page.items], RENDERED_AT);
+    server.use(
+      listHandler(() => page),
+      createOrpcHandler("order.counts", () => COUNTS)
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    const firstCursor: ListOrdersValues["cursor"] = undefined;
+    queryClient.setQueryData(
+      orpc.order.list.infiniteOptions({
+        getNextPageParam: () => undefined,
+        initialPageParam: firstCursor,
+        input: (cursor) => ({ cursor, storeSlug: "lr-market" }),
+      }).queryKey,
+      {
+        pageParams: [firstCursor],
+        // The cache holds what the client decoded: dates, not strings.
+        pages: [
+          {
+            items: page.items.map((order) => ({
+              ...order,
+              createdAt: new Date(order.createdAt),
+            })),
+            nextCursor: null,
+          },
+        ],
+      }
+    );
+    const I18n = createI18nWrapper("en");
+
+    return collectHydrationErrors(
+      <QueryClientProvider client={queryClient}>
+        <I18n>
+          <OrderManager
+            query={{}}
+            renderedAt={RENDERED_AT}
+            storeSlug="lr-market"
+          />
+        </I18n>
+      </QueryClientProvider>,
+      { clientNowMs: RENDERED_AT + 5000, serverNowMs: RENDERED_AT }
+    );
+  }
+
+  test("the server marks nothing new and says nothing: arrivals are the tab's own", () => {
+    const { errors, serverHtml } = setupHydration();
+
+    expect(serverHtml).toContain('data-testid="order-row-K7P2Q"');
+    expect(serverHtml).not.toContain("order-new");
+    expect(serverHtml).not.toContain("Order K7P2Q arrived");
+    expect(errors).toEqual([]);
   });
 });

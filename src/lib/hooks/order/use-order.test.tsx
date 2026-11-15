@@ -1,14 +1,21 @@
-import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { focusManager } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { orderKey, storeOrderKeys, useOrder } from "./use-order";
+import { ORDERS_REFRESH_MS } from "./use-orders";
 
 vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
   return orpcClientMock;
+});
+
+afterEach(() => {
+  // Back to reading the document's own visibility.
+  focusManager.setFocused(undefined);
 });
 
 const ORDER = {
@@ -35,7 +42,14 @@ const ORDER = {
   totalAmount: 129_000,
 };
 
-function setup({ fails = false }: { fails?: boolean } = {}) {
+function setup({
+  fails = false,
+  fakeTimers = false,
+}: { fails?: boolean; fakeTimers?: boolean } = {}) {
+  if (fakeTimers) {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  }
+
   const get = vi.fn((_input: unknown) => ORDER);
   server.use(
     fails
@@ -84,6 +98,56 @@ describe("useOrder", () => {
         .getQueryCache()
         .findAll({ queryKey: storeOrderKeys("tienda-demo") })
     ).toEqual([]);
+  });
+
+  test("reads the order again every 15 seconds while the tab is in sight, so another staff's move shows", async () => {
+    const { get, queryClient, result } = setup({ fakeTimers: true });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(ORDER);
+    });
+    const [observer] =
+      queryClient.getQueryCache().find({ queryKey: orderKey("lr-market", 42) })
+        ?.observers ?? [];
+    expect(observer?.options).toMatchObject({
+      refetchInterval: 15_000,
+      refetchIntervalInBackground: false,
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDERS_REFRESH_MS - 1000);
+    });
+    expect(get).toHaveBeenCalledExactlyOnceWith({
+      id: 42,
+      storeSlug: "lr-market",
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    await waitFor(() => {
+      expect(get.mock.calls).toEqual([
+        [{ id: 42, storeSlug: "lr-market" }],
+        [{ id: 42, storeSlug: "lr-market" }],
+      ]);
+    });
+  });
+
+  test("waits while the tab is out of sight", async () => {
+    const { get, result } = setup({ fakeTimers: true });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(ORDER);
+    });
+    focusManager.setFocused(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ORDERS_REFRESH_MS * 2);
+    });
+
+    expect(get).toHaveBeenCalledExactlyOnceWith({
+      id: 42,
+      storeSlug: "lr-market",
+    });
   });
 
   test("answers a missing order as an error, never as data", async () => {

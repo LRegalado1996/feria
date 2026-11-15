@@ -48,8 +48,10 @@ function setup({
   renderWithI18n(
     // As the navigation renders it: inside the section's link.
     <Link href="/admin/lr-market/orders">
-      {locale === "en" ? "Orders" : "Pedidos"}
-      <OrdersPendingBadge className="custom" storeSlug="lr-market" />
+      <span>
+        {locale === "en" ? "Orders" : "Pedidos"}
+        <OrdersPendingBadge className="custom" storeSlug="lr-market" />
+      </span>
     </Link>,
     { locale, wrapper: Providers }
   );
@@ -58,27 +60,35 @@ function setup({
 }
 
 describe("OrdersPendingBadge", () => {
+  // happy-dom computes no display for a span, so the name it gives has a
+  // space between every box: the exact name, "Pedidos, 1 sin preparar", is
+  // asserted in Chromium (`e2e/tests/admin/orders.e2e.ts`). Here: the text
+  // that joins the label, and the plain inline boxes that let it join.
   test.each([
-    // The badge is a box of its own, so the name has a space before its
-    // comma, as a browser computes it; read aloud, it is the pause.
-    ["en", 3, "Orders , 3 to pack", "3"],
-    ["en", 1, "Orders , 1 to pack", "1"],
-    ["en", 1280, "Orders , 1,280 to pack", "1,280"],
-    ["es", 3, "Pedidos , 3 sin preparar", "3"],
-    ["es", 1, "Pedidos , 1 sin preparar", "1"],
+    ["en", 3, ", 3 to pack", "3"],
+    ["en", 1, ", 1 to pack", "1"],
+    ["en", 1280, ", 1,280 to pack", "1,280"],
+    ["es", 3, ", 3 sin preparar", "3"],
+    ["es", 1, ", 1 sin preparar", "1"],
   ] as const)(
-    "in %s, with %i to pack, names the link %j and shows %j",
-    async (locale, received, name, figure) => {
+    "in %s, with %i to pack, adds %j to the link's name and shows %j",
+    async (locale, received, spoken, figure) => {
       const { counts } = setup({ locale, received });
 
-      const link = await screen.findByRole("link", { name });
-      const badge = screen.getByTestId("orders-pending-badge");
+      const badge = await screen.findByTestId("orders-pending-badge");
+      const label = locale === "en" ? "Orders" : "Pedidos";
+      const link = screen.getByRole("link");
       expect(link).toContainElement(badge);
+      expect(link.textContent).toBe(`${label}${spoken}${figure}`);
       expect(badge).toHaveAttribute("data-slot", "orders-pending-badge");
-      expect(badge).toHaveClass("custom");
-      expect(badge.querySelector("[aria-hidden='true']")).toHaveTextContent(
-        new RegExp(`^${figure}$`, "u")
-      );
+      // No layout of its own: a flex or positioned box would part the name.
+      expect(badge.className).toBe("custom");
+      const [text, shown] = [...badge.children];
+      expect(text).toHaveTextContent(new RegExp(`^${spoken}$`, "u"));
+      expect(text?.className).toBe("sr-only-inline");
+      expect(text).not.toHaveAttribute("aria-hidden");
+      expect(shown).toHaveAttribute("aria-hidden", "true");
+      expect(shown).toHaveTextContent(new RegExp(`^${figure}$`, "u"));
       expect(counts).toHaveBeenCalledExactlyOnceWith({
         storeSlug: "lr-market",
       });

@@ -168,6 +168,7 @@ export const admin = {
       back: "Volver a pedidos",
       contact: "Contacto",
       history: "Historial",
+      historyFormer: "Alguien que ya no está en el equipo",
       historyPlaced: "Pedido hecho",
       items: "Artículos",
       itemLine: "{quantity} × {title}",
@@ -214,6 +215,7 @@ export const admin = {
     search: "Buscar pedidos",
     searchPlaceholder: "Código, nombre o teléfono",
     sound: "Sonido cuando llega un pedido",
+    soundHint: "Tocá la pantalla para activar el sonido",
     statuses: {
       delivered: "Entregado",
       packed: "Preparado",

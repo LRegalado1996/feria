@@ -99,7 +99,15 @@ describe("AdminNav", () => {
       "Articles",
       "Orders3",
     ]);
-    expect(links[1]?.lastElementChild).toBe(screen.getByTestId("badge"));
-    expect(links[0]?.children).toHaveLength(0);
+    // The label and the badge share one inline box, so the link's name
+    // joins them with no space between.
+    expect(links[1]?.firstElementChild?.tagName).toBe("SPAN");
+    expect(links[1]?.firstElementChild?.lastElementChild).toBe(
+      screen.getByTestId("badge")
+    );
+    expect(links[1]?.firstElementChild?.firstChild?.textContent).toBe("Orders");
+    expect(links[1]?.children).toHaveLength(1);
+    expect(links[0]?.firstElementChild?.textContent).toBe("Articles");
+    expect(links[0]?.firstElementChild?.children).toHaveLength(0);
   });
 });

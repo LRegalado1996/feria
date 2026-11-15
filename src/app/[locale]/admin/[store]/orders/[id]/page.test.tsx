@@ -25,6 +25,7 @@ type AdminStore = ReturnType<typeof RequireAdminStore>;
 
 interface OrderParams {
   params: Promise<{ id: string; locale: string; store: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 const RENDERED_AT = Date.parse("2026-11-14T22:00:00.000Z");
@@ -127,11 +128,13 @@ function setup({
   id = "42",
   locale = "en",
   order = "found",
+  searchParams = {},
   store = "lr-market",
 }: {
   id?: string;
   locale?: string;
   order?: "fails" | "found" | "missing";
+  searchParams?: Record<string, string | string[] | undefined>;
   store?: string;
 } = {}) {
   vi.setSystemTime(RENDERED_AT);
@@ -165,6 +168,7 @@ function setup({
   });
   const page: Boundary<OrderParams> = OrderPage({
     params: Promise.resolve({ id, locale, store }),
+    searchParams: Promise.resolve(searchParams),
   });
   const inner = page.props.children;
 
@@ -295,6 +299,7 @@ describe("OrderPage", () => {
       });
       expect(connection).toHaveBeenCalledExactlyOnceWith();
       expect(detailProps).toHaveBeenCalledExactlyOnceWith({
+        from: {},
         id: 42,
         renderedAt: RENDERED_AT,
         storeSlug: "lr-market",
@@ -305,12 +310,45 @@ describe("OrderPage", () => {
     }
   );
 
+  test("carries the list's tab and search, checked as the list checks them, to the way back and the sign-in", async () => {
+    const { show } = setup({
+      searchParams: { q: ["  ana  ", "beto"], status: "received" },
+    });
+
+    await show();
+
+    expect(requireAdmin).toHaveBeenCalledExactlyOnceWith(
+      "/en/admin/lr-market/orders/42?status=received&q=ana",
+      "en"
+    );
+    expect(detailProps).toHaveBeenCalledExactlyOnceWith({
+      from: { q: "ana", status: "received" },
+      id: 42,
+      renderedAt: RENDERED_AT,
+      storeSlug: "lr-market",
+    });
+  });
+
+  test("drops a status no order has from the way back", async () => {
+    const { show } = setup({ searchParams: { status: "shipped" } });
+
+    await show();
+
+    expect(detailProps).toHaveBeenCalledExactlyOnceWith({
+      from: {},
+      id: 42,
+      renderedAt: RENDERED_AT,
+      storeSlug: "lr-market",
+    });
+  });
+
   test("a read that fails for another reason is no 404: the screen fetches it again", async () => {
     const { show } = setup({ order: "fails" });
 
     await show();
 
     expect(detailProps).toHaveBeenCalledExactlyOnceWith({
+      from: {},
       id: 42,
       renderedAt: RENDERED_AT,
       storeSlug: "lr-market",

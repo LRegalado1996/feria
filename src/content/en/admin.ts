@@ -168,6 +168,7 @@ export const admin: Dictionary["admin"] = {
       back: "Back to orders",
       contact: "Contact",
       history: "History",
+      historyFormer: "Someone no longer on the team",
       historyPlaced: "Order placed",
       items: "Articles",
       itemLine: "{quantity} × {title}",
@@ -213,6 +214,7 @@ export const admin: Dictionary["admin"] = {
     search: "Search orders",
     searchPlaceholder: "Code, name or phone",
     sound: "Sound when an order arrives",
+    soundHint: "Tap the screen to turn the sound on",
     statuses: {
       delivered: "Delivered",
       packed: "Packed",

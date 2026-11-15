@@ -2,7 +2,14 @@
 
 import { Sparkles, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
@@ -10,6 +17,14 @@ import { EmptyState } from "@/app/_components/molecules/empty-state";
 import { OrderPhoneVerified } from "@/app/_components/molecules/order-phone-verified";
 import { OrderSearch } from "@/app/_components/molecules/order-search";
 import { OrderStatusBadge } from "@/app/_components/molecules/order-status-badge";
+import {
+  freshArrivals,
+  isFreshArrival,
+  lastArrival,
+  NO_ARRIVALS,
+  recordOrderList,
+  subscribeArrivals,
+} from "@/lib/admin/order-arrivals";
 import { type OrdersQuery, orderPath, ordersPath } from "@/lib/admin/orders";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import {
@@ -33,91 +48,84 @@ type OrderRow = OrdersPage["items"][number];
 export interface OrderManagerProps {
   /** The status and search in the address, already read and checked. */
   query: OrdersQuery;
-  /** When the server rendered the screen: its clock, and when it opened. */
+  /** When the server rendered the screen: the clock the ages start from. */
   renderedAt: number;
   storeSlug: string;
 }
 
-/** What the screen announced of the orders placed since it opened. */
-interface Arrivals {
-  /** The orders already said, never said again. */
-  announced: ReadonlySet<number>;
-  /** How many announcements, one per list that brought arrivals. */
-  count: number;
-  message: string;
-  /** The first render's instant, kept as the screen moves between tabs. */
-  openedAt: number;
-}
-
-/** An order placed after the screen opened. */
-function arrivedSince(order: OrderRow, openedAt: number) {
-  return new Date(order.createdAt).getTime() > openedAt;
-}
-
 /**
- * The orders in `items` placed after the screen opened (`renderedAt`, kept
- * from the first render as the screen moves between tabs): each is said
- * once in `message`, and `play` runs once per list that brought any.
+ * The orders that arrived while this tab watched the store's lists: each is
+ * said once in `message`, and `play` runs once per list that brought any. The
+ * tab's record of what it has seen (`order-arrivals`) outlives the screen,
+ * so leaving for an order and coming back neither repeats nor misses one.
  */
 function useArrivals(
-  items: OrderRow[] | undefined,
-  renderedAt: number,
+  storeSlug: string,
+  { q, status }: OrdersQuery,
+  orders: Pick<ReturnType<typeof useOrders>, "data" | "isPlaceholderData">,
   play: () => void
 ) {
   const { admin } = useDictionary();
   const copy = admin.orders;
   const locale = useLocale();
-  const [arrivals, setArrivals] = useState<Arrivals>(() => ({
-    announced: new Set(),
-    count: 0,
-    message: "",
-    openedAt: renderedAt,
-  }));
-  // How many arrivals have beeped, so a render never beeps twice for one.
-  const beeped = useRef(0);
-  const fresh = (items ?? []).filter(
-    (order) =>
-      arrivedSince(order, arrivals.openedAt) &&
-      !arrivals.announced.has(order.id)
+  const fresh = useSyncExternalStore(
+    subscribeArrivals,
+    () => freshArrivals(storeSlug),
+    () => NO_ARRIVALS
   );
+  const [message, setMessage] = useState("");
+  const announce = useEffectEvent((codes: readonly string[]) => {
+    setMessage(
+      codes.length === 1
+        ? interpolate(copy.arrived, { code: codes[0] ?? "" })
+        : interpolate(copy.arrivedMany, {
+            codes: codes.join(", "),
+            count: formatInteger(codes.length, locale),
+          })
+    );
+    play();
+  });
+  const { data, isPlaceholderData } = orders;
 
-  // Orders the list just brought that were placed since the screen opened:
-  // said once, as the list renders them.
-  if (fresh.length > 0) {
-    setArrivals({
-      announced: new Set([
-        ...arrivals.announced,
-        ...fresh.map((order) => order.id),
-      ]),
-      count: arrivals.count + 1,
-      message:
-        fresh.length === 1
-          ? interpolate(copy.arrived, { code: fresh[0]?.code ?? "" })
-          : interpolate(copy.arrivedMany, {
-              codes: fresh.map((order) => order.code).join(", "),
-              count: formatInteger(fresh.length, locale),
-            }),
-      openedAt: arrivals.openedAt,
-    });
-  }
-
-  // The beep is the one side effect of an arrival: it waits for the commit.
+  // Arrivals recorded from here on are this screen's to say: declared before
+  // the effect that records, so a list read as the screen mounts is heard.
   useEffect(() => {
-    if (arrivals.count > beeped.current) {
-      beeped.current = arrivals.count;
-      play();
-    }
-  }, [arrivals.count, play]);
+    let said = lastArrival(storeSlug)?.seq ?? 0;
 
-  return arrivals;
+    return subscribeArrivals(() => {
+      const last = lastArrival(storeSlug);
+
+      if (last && last.seq > said) {
+        said = last.seq;
+        announce(last.codes);
+      }
+    });
+  }, [storeSlug]);
+
+  // A list shown while another status or search loads is not that list.
+  useEffect(() => {
+    if (!data || isPlaceholderData) {
+      return;
+    }
+
+    recordOrderList(
+      storeSlug,
+      { q, status },
+      data.pages.map((page) => page.items),
+      Date.now()
+    );
+  }, [data, isPlaceholderData, q, status, storeSlug]);
+
+  return { fresh, message };
 }
 
 /**
  * A store's orders (FER-027), newest first, refreshed every 15 seconds while
  * open: this screen is the only place a new order is announced. An order
- * placed after it opened is marked "New" and said in a polite live region,
- * with a beep if the staff turned the sound on. The status tab and the search
- * live in the address. Each row is a link: a tap opens the order.
+ * that arrives while it is open is marked "New" (until it is opened, leaves
+ * received or ten minutes pass) and said in a polite live region, with a beep
+ * if the staff turned the sound on. The status tab and the search live in
+ * the address, and each row's link carries them to the order and back.
  */
 function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
   const { admin, common } = useDictionary();
@@ -125,11 +133,12 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
   const orders = useOrders(storeSlug, query);
   const now = useNow(renderedAt);
   const sound = useOrderSound();
+  const soundHint = useId();
   const list = useRef<HTMLUListElement>(null);
   // Where focus goes once "Load more" brings its page: the first new row.
   const focusRow = useRef<number | null>(null);
   const items = orders.data?.pages.flatMap((page) => page.items);
-  const arrivals = useArrivals(items, renderedAt, sound.play);
+  const arrivals = useArrivals(storeSlug, query, orders, sound.play);
 
   const rowCount = items?.length ?? 0;
 
@@ -157,24 +166,36 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
           <h1 className="text-2xl font-bold">{copy.title}</h1>
           <p className="text-sm text-muted-foreground">{copy.description}</p>
         </div>
-        <Button
-          aria-pressed={sound.enabled === true}
-          className="h-11 md:h-8"
-          disabled={sound.enabled === null}
-          onClick={() => {
-            sound.setEnabled(sound.enabled !== true);
-          }}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          {sound.enabled === true ? (
-            <Volume2 aria-hidden="true" />
-          ) : (
-            <VolumeX aria-hidden="true" />
-          )}
-          {copy.sound}
-        </Button>
+        <div className="flex min-w-0 flex-col items-end gap-1">
+          <Button
+            aria-describedby={sound.needsGesture ? soundHint : undefined}
+            aria-pressed={sound.enabled === true}
+            className="h-11 md:h-8"
+            disabled={sound.enabled === null}
+            onClick={() => {
+              sound.setEnabled(sound.enabled !== true);
+            }}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {sound.enabled === true ? (
+              <Volume2 aria-hidden="true" />
+            ) : (
+              <VolumeX aria-hidden="true" />
+            )}
+            {copy.sound}
+          </Button>
+          {sound.needsGesture ? (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="order-sound-hint"
+              id={soundHint}
+            >
+              {copy.soundHint}
+            </p>
+          ) : null}
+        </div>
       </div>
       <OrderTabs query={query} storeSlug={storeSlug} />
       <OrderSearch query={query} storeSlug={storeSlug} />
@@ -218,7 +239,8 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
         >
           {items.map((order) => (
             <OrderListRow
-              isNew={arrivedSince(order, arrivals.openedAt)}
+              from={query}
+              isNew={isFreshArrival(arrivals.fresh, order, now)}
               key={order.id}
               now={now}
               order={order}
@@ -316,11 +338,14 @@ function OrderTabs({
 }
 
 function OrderListRow({
+  from,
   isNew,
   now,
   order,
   storeSlug,
 }: {
+  /** The list's selection, carried to the order and back. */
+  from: OrdersQuery;
   isNew: boolean;
   now: number;
   order: OrderRow;
@@ -334,7 +359,7 @@ function OrderListRow({
     <li data-testid={`order-row-${order.code}`}>
       <Link
         className="flex flex-col gap-1 p-3 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        href={orderPath(storeSlug, order.id, locale)}
+        href={orderPath(storeSlug, order.id, locale, from)}
       >
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold">{order.code}</span>

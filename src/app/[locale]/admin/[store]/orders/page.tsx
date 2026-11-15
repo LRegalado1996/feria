@@ -76,8 +76,8 @@ async function OrdersResolver({ params, searchParams }: OrdersPageProps) {
       .catch(noop),
   ]);
 
-  // After the request reads above, and after the list: an order is "new"
-  // when it was placed after this instant, so one the list already has is not.
+  // After the request reads above: the clock the rows' ages start from, the
+  // same on the server and in the hydrating render.
   const renderedAt = await readRenderInstant();
 
   // Above the shell: the navigation's count of orders to pack reads the

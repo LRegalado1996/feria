@@ -796,6 +796,84 @@ describe("searching and counting the orders", () => {
     expect(await searched(shop, "%")).toEqual([]);
   });
 
+  test("_ is taken literally: it never stands for any one character", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, {
+      code: "P2Q3R",
+      customerName: "Ana Luz",
+      customerPhone: uniquePhone(),
+    });
+    await makeOrder(shop, {
+      code: "S4T5U",
+      customerName: "Ana_Luz",
+      customerPhone: uniquePhone(),
+    });
+
+    // Unescaped, "a_l" would match the "a L" in "Ana Luz" too.
+    expect(await searched(shop, "a_l")).toEqual(["S4T5U"]);
+  });
+
+  test("\\ is taken literally: a name holding one is found by it, and only it", async () => {
+    const shop = await makeStore();
+    await makeOrder(shop, {
+      code: "V6W7X",
+      customerName: "Ana\\Luz",
+      customerPhone: uniquePhone(),
+    });
+    await makeOrder(shop, {
+      code: "Y8Z9A",
+      customerName: "Ana Luz",
+      customerPhone: uniquePhone(),
+    });
+
+    expect(await searched(shop, "\\")).toEqual(["V6W7X"]);
+    expect(await searched(shop, "a\\l")).toEqual(["V6W7X"]);
+  });
+
+  test("a whole code typed is a code: a phone holding its digits does not match", async () => {
+    const shop = await makeStore();
+    let anaPhone = uniquePhone();
+
+    // Ana's own phone must not hold them, or it would match for itself.
+    while (anaPhone.includes("2345")) {
+      anaPhone = uniquePhone();
+    }
+
+    await makeOrder(shop, {
+      code: "A2345",
+      customerName: "Ana",
+      customerPhone: anaPhone,
+    });
+    // Its phone holds the code's digits, 2345.
+    await makeOrder(shop, {
+      code: "B6789",
+      customerName: "Beto",
+      customerPhone: `+5989${String(randomInt(1000)).padStart(3, "0")}2345`,
+    });
+
+    expect(await searched(shop, "a2345")).toEqual(["A2345"]);
+  });
+
+  test("a phone typed in its 00 international form finds the stored +598 number", async () => {
+    const shop = await makeStore();
+    const digits = String(randomInt(1_000_000)).padStart(6, "0");
+    await makeOrder(shop, {
+      code: "C2D4F",
+      customerName: "Ana",
+      customerPhone: `+59899${digits}`,
+    });
+    // Another 598 phone, never 59899…: the typed digits are not in it.
+    await makeOrder(shop, {
+      code: "G3H5J",
+      customerName: "Beto",
+      customerPhone: `+59891${digits}`,
+    });
+
+    expect(await searched(shop, `00598 99 ${digits.slice(0, 3)}`)).toEqual([
+      "C2D4F",
+    ]);
+  });
+
   test("a search narrows within a status", async () => {
     const shop = await makeStore();
     await makeOrder(shop, { code: "C2D3E", customerName: "Lucía" });
