@@ -42,6 +42,8 @@ describe("createProductSchema", () => {
     ["no price yet", { priceAmount: null }, true],
     ["no category yet", { categoryId: null }, true],
     ["a category id of 0", { categoryId: 0 }, false],
+    ["a category id sent as true", { categoryId: true }, false],
+    ["a category id sent as text", { categoryId: "1" }, false],
   ])("%s is accepted: %s", (_case, overrides, accepted) => {
     expect(accepts(makeProduct(overrides))).toBe(accepted);
   });
@@ -195,6 +197,7 @@ describe("reorderProductImagesSchema", () => {
     [[3, 1, 2], true],
     [[1, 1], false],
     [[], false],
+    [[true], false],
   ])("image ids %j are accepted: %s", (imageIds, accepted) => {
     expect(
       reorderProductImagesSchema.safeParse({

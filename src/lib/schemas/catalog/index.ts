@@ -28,6 +28,10 @@ export const INT4_MAX = 2_147_483_647;
 // Coerced: the REST surface reads ids and page sizes from the path and the
 // query string. `Number("")` is 0, which `positive()` and `min(1)` refuse.
 const idSchema = z.coerce.number().int().positive().max(INT4_MAX);
+
+// Not coerced: a JSON body sends numbers as numbers, and `Number(true)` is 1,
+// which would attach category 1 instead of refusing a malformed body.
+const bodyIdSchema = z.number().int().positive().max(INT4_MAX);
 const localeSchema = z.enum(LOCALES);
 
 export const catalogSlugSchema = z
@@ -112,7 +116,7 @@ export const productTranslationSchema = z.object({
  * is the fallback for every other language); each language at most once.
  */
 const productFieldsSchema = z.object({
-  categoryId: idSchema.nullable(),
+  categoryId: bodyIdSchema.nullable(),
   isAvailable: z.boolean(),
   priceAmount: z.number().int().min(0).max(PRODUCT_PRICE_MAX).nullable(),
   translations: z
@@ -149,7 +153,7 @@ export const setProductAvailabilitySchema = productIdSchema.extend({
 /** Every image of the article, once each, in the new order. */
 export const reorderProductImagesSchema = productIdSchema.extend({
   imageIds: z
-    .array(idSchema)
+    .array(bodyIdSchema)
     .min(1)
     .refine((ids) => new Set(ids).size === ids.length, {
       message: "Each image at most once",

@@ -298,8 +298,8 @@ describe("listPublishedProducts", () => {
       nextCursor: null,
     });
     expect(renderQuery(configOf(db.query.product.findMany).where)).toEqual({
-      params: [5, 4],
-      sql: '"product"."id" in ($1, $2)',
+      params: [5, 4, "published"],
+      sql: '("product"."id" in ($1, $2) and "product"."status" = $3)',
     });
   });
 
@@ -318,7 +318,7 @@ describe("listPublishedProducts", () => {
     });
     expect(
       renderQuery(configOf(db.query.product.findMany).where).params
-    ).toEqual([5, 4]);
+    ).toEqual([5, 4, "published"]);
   });
 
   test("builds cards with their fallbacks and skips an id the card query lost", async () => {

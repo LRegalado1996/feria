@@ -12,6 +12,12 @@ import { productRouter } from "./product";
 // check. The queries are `src/server/services/catalog.test.ts`'s and the
 // access rules `src/server/services/access.test.ts`'s.
 
+// The handle `withStoreAccess` hands its write: distinct from the client, so
+// a mutation that wrote through the outer client instead would be caught.
+const { TX } = vi.hoisted(() => ({
+  TX: { handle: "the write's transaction" },
+}));
+
 const services = vi.hoisted(() => ({
   createProduct: vi.fn(async () => ({ id: 1 })),
   deleteProduct: vi.fn(async () => ({ id: 1 })),
@@ -23,10 +29,10 @@ const services = vi.hoisted(() => ({
   updateProduct: vi.fn(async () => ({ id: 1 })),
   withStoreAccess: vi.fn(
     async (
-      tx: unknown,
+      _db: unknown,
       _scope: unknown,
       write: (handle: unknown) => Promise<unknown>
-    ) => await write(tx)
+    ) => await write(TX)
   ),
 }));
 
@@ -119,18 +125,18 @@ describe("product router", () => {
       ACCESS,
       expect.any(Function)
     );
-    expect(services.createProduct).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(services.createProduct).toHaveBeenCalledExactlyOnceWith(TX, {
       storeId: 7,
       values: makeFields(),
     });
   });
 
   test("updates by id within the resolved store", async () => {
-    const { db, run } = setup();
+    const { run } = setup();
 
     await run("update", { ...makeFields(), id: 5, storeSlug: "lr-market" });
 
-    expect(services.updateProduct).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(services.updateProduct).toHaveBeenCalledExactlyOnceWith(TX, {
       storeId: 7,
       values: { ...makeFields(), id: 5 },
     });
@@ -152,7 +158,7 @@ describe("product router", () => {
         ACCESS,
         expect.any(Function)
       );
-      expect(service).toHaveBeenCalledExactlyOnceWith(db, {
+      expect(service).toHaveBeenCalledExactlyOnceWith(TX, {
         id: 5,
         storeId: 7,
       });
@@ -160,7 +166,7 @@ describe("product router", () => {
   );
 
   test("sets availability within the resolved store", async () => {
-    const { db, run } = setup();
+    const { run } = setup();
 
     await run("setAvailability", {
       id: 5,
@@ -169,7 +175,7 @@ describe("product router", () => {
     });
 
     expect(services.setProductAvailability).toHaveBeenCalledExactlyOnceWith(
-      db,
+      TX,
       {
         id: 5,
         isAvailable: false,
@@ -179,7 +185,7 @@ describe("product router", () => {
   });
 
   test("reorders images within the resolved store", async () => {
-    const { db, run } = setup();
+    const { run } = setup();
 
     await run("reorderImages", {
       id: 5,
@@ -187,7 +193,7 @@ describe("product router", () => {
       storeSlug: "lr-market",
     });
 
-    expect(services.reorderProductImages).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(services.reorderProductImages).toHaveBeenCalledExactlyOnceWith(TX, {
       id: 5,
       imageIds: [3, 1, 2],
       storeId: 7,
@@ -214,6 +220,7 @@ describe("product router", () => {
       run("delete", { id: 5, storeSlug: "lr-market" })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED",
+      message: "Unauthorized",
     });
     expect(services.findAccessibleStore).not.toHaveBeenCalled();
   });
@@ -236,7 +243,10 @@ describe("product router", () => {
         }),
         storeSlug: "lr-market",
       })
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
     expect(services.findAccessibleStore).not.toHaveBeenCalled();
   });
 });

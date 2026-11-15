@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
@@ -611,5 +611,110 @@ describe("store-scoped writes", () => {
       code: "BAD_REQUEST",
       message: "The article cannot be published yet. Missing: price",
     });
+  });
+});
+
+/** A promise and the function that settles it, for ordering two writers. */
+function deferred() {
+  let settle: (value: undefined) => void = () => undefined;
+  const promise = new Promise<undefined>((resolve) => {
+    settle = resolve;
+  });
+
+  return { promise, resolve: settle };
+}
+
+/** Waits until some query on this database waits on another's lock. */
+async function waitUntilBlocked() {
+  for (let attempt = 0; attempt < 2000; attempt += 1) {
+    const result = await db.execute<{ blocked: number }>(sql`
+      select count(*)::int as blocked
+      from pg_stat_activity
+      where datname = current_database()
+        and cardinality(pg_blocking_pids(pid)) > 0
+    `);
+
+    if ((result.rows[0]?.blocked ?? 0) > 0) {
+      return;
+    }
+  }
+
+  throw new Error("The second writer never waited on the slug lock");
+}
+
+function draftValues(title: string) {
+  return {
+    categoryId: null,
+    isAvailable: true,
+    priceAmount: null,
+    translations: [
+      {
+        description: "",
+        locale: "es" as const,
+        seoDescription: null,
+        seoTitle: null,
+        title,
+      },
+    ],
+  };
+}
+
+describe("slug allocation under two writers", () => {
+  test("a second article with the same title waits for the first one's slug and takes the next", async () => {
+    const shop = await makeStore();
+    const held = deferred();
+    const allocated = deferred();
+
+    const first = db.transaction(async (tx) => {
+      const created = await createProduct(tx, {
+        storeId: shop.id,
+        values: draftValues("Collar Gemelo"),
+      });
+      allocated.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+    await allocated.promise;
+    const second = db.transaction(
+      async (tx) =>
+        await createProduct(tx, {
+          storeId: shop.id,
+          values: draftValues("Collar Gemelo"),
+        })
+    );
+
+    try {
+      await waitUntilBlocked();
+    } finally {
+      held.resolve(undefined);
+      await Promise.allSettled([first, second]);
+    }
+
+    const [a, b] = await Promise.all([first, second]);
+    expect([a.slug, b.slug]).toEqual(["collar-gemelo", "collar-gemelo-2"]);
+  });
+
+  test("control: articles with different titles in two stores do not wait on each other", async () => {
+    const [storeA, storeB] = [await makeStore(), await makeStore()];
+
+    const [a, b] = await Promise.all([
+      db.transaction(
+        async (tx) =>
+          await createProduct(tx, {
+            storeId: storeA.id,
+            values: draftValues("Collar"),
+          })
+      ),
+      db.transaction(
+        async (tx) =>
+          await createProduct(tx, {
+            storeId: storeB.id,
+            values: draftValues("Collar"),
+          })
+      ),
+    ]);
+
+    expect([a.slug, b.slug]).toEqual(["collar", "collar"]);
   });
 });

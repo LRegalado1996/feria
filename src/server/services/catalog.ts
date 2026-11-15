@@ -134,7 +134,10 @@ async function loadCards(
       publishedAt: true,
       slug: true,
     },
-    where: inArray(product.id, ids),
+    // Published again here, not only in the list's query: under READ
+    // COMMITTED an article unpublished between the two statements would
+    // otherwise come back with whatever it was edited into.
+    where: and(inArray(product.id, ids), eq(product.status, "published")),
     with: {
       category: { columns: { slug: true } },
       images: {
