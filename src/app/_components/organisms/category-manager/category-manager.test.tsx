@@ -147,6 +147,13 @@ function announcer() {
     .find((region) => region.tagName === "OUTPUT");
 }
 
+/** dnd-kit's live region, which says what a drag is doing. */
+function dragAnnouncer() {
+  return screen
+    .getAllByRole("status")
+    .find((region) => region.tagName !== "OUTPUT");
+}
+
 async function shown() {
   await screen.findByTestId("category-list");
 }
@@ -501,10 +508,14 @@ describe("CategoryManager", () => {
     });
   });
 
-  test("reports a failed first move even when a second one was made meanwhile", async () => {
-    const { row, user } = setup();
+  test("reports a failed first move once, after a second move made while it was in flight", async () => {
+    const { order, row, user } = setup();
     const received: unknown[] = [];
-    // The first save fails, the next goes through.
+    let failFirst: () => void = () => undefined;
+    const firstHeld = new Promise<void>((resolve) => {
+      failFirst = resolve;
+    });
+    // The first save is held, then fails; the next goes through.
     server.use(
       http.post<never, { json?: unknown }>(
         "*/api/orpc/category/reorder",
@@ -512,17 +523,20 @@ describe("CategoryManager", () => {
           const { json } = await request.json();
           received.push(json);
 
-          return received.length === 1
-            ? HttpResponse.json(
-                {
-                  code: FAILURE.code,
-                  defined: true,
-                  message: FAILURE.message,
-                  status: 500,
-                },
-                { status: 500 }
-              )
-            : HttpResponse.json({ json, meta: [] });
+          if (received.length > 1) {
+            return HttpResponse.json({ json, meta: [] });
+          }
+
+          await firstHeld;
+          return HttpResponse.json(
+            {
+              code: FAILURE.code,
+              defined: true,
+              message: FAILURE.message,
+              status: 500,
+            },
+            { status: 500 }
+          );
         }
       )
     );
@@ -533,19 +547,31 @@ describe("CategoryManager", () => {
         name: "Move down: Collares",
       })
     );
+    await waitFor(() => {
+      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: STORE_SLUG }]);
+    });
     await user.click(
       within(row("pulseras")).getByRole("button", { name: "Move up: Pulseras" })
     );
 
+    // Both moves are on screen while the first is still unanswered.
+    expect(order()).toEqual(["Aros", "Pulseras", "Collares"]);
+    expect(reportError).not.toHaveBeenCalled();
+    failFirst();
+
     await waitFor(() => {
-      expect(received).toHaveLength(2);
+      expect(received).toEqual([
+        { ids: [2, 1, 3], storeSlug: STORE_SLUG },
+        { ids: [2, 3, 1], storeSlug: STORE_SLUG },
+      ]);
     });
     await waitFor(() => {
-      expect(reportError).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
-        { action: "Category.reorder" }
-      );
+      expect(order()).toEqual(["Aros", "Pulseras", "Collares"]);
     });
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.reorder" }
+    );
   });
 
   test("dragging a row with the keyboard puts it in its new place", async () => {
@@ -718,6 +744,210 @@ describe("CategoryManager", () => {
       expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
       { action: "Category.delete" }
     );
+  });
+
+  test("a refusal asking where the articles go clears once a destination is chosen, and a failed retry says only that it failed", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+    server.use(
+      createOrpcErrorHandler("category.delete", {
+        code: "BAD_REQUEST",
+        message: "Choose where its articles move before deleting it",
+        status: 400,
+      }),
+      createOrpcHandler("category.list", () => [
+        ROWS[0],
+        ROWS[1],
+        makeRow(3, "Pulseras", { productCount: 2 }),
+      ])
+    );
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /^Choose which category its articles move to\.$/u
+    );
+
+    await user.selectOptions(
+      await within(dialog).findByRole("combobox", {
+        name: "Move its articles to",
+      }),
+      "1"
+    );
+
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+
+    server.use(createOrpcErrorHandler("category.delete", FAILURE));
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    await waitFor(() => {
+      expect(
+        within(dialog)
+          .queryAllByRole("alert")
+          .map((alert) => alert.textContent)
+      ).toEqual(["We could not save the change. Try again."]);
+    });
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+      { action: "Category.delete" }
+    );
+    expect(spies.delete).not.toHaveBeenCalled();
+  });
+
+  test("a retry starts without the previous try's error", async () => {
+    const { row, spies, user } = setup({ writes: { delete: "fail" } });
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /^We could not save the change\. Try again\.$/u
+    );
+
+    server.use(
+      createOrpcHandler("category.delete", async (input) => {
+        spies.delete(input);
+        return await new Promise<never>(() => {});
+      })
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    expect(
+      await within(dialog).findByRole("button", { name: "Deleting…" })
+    ).toBeDisabled();
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
+      id: 3,
+      moveToId: null,
+      storeSlug: STORE_SLUG,
+    });
+  });
+
+  test("tells a screen reader how to drag with the keyboard, in the page's language", async () => {
+    const { row } = setup();
+    await shown();
+
+    const handle = within(row("collares")).getByRole("button", {
+      name: "Drag to reorder: Collares",
+    });
+    expect(handle).toHaveAccessibleDescription(
+      "To reorder with the keyboard, press space on the handle, move it with the arrow keys and press space again to drop it, or Escape to cancel."
+    );
+  });
+
+  test("announces a keyboard drag by the category's name: picked up, over another, dropped in place", async () => {
+    const { layOut, row, spies, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+    within(row("collares"))
+      .getByRole("button", { name: "Drag to reorder: Collares" })
+      .focus();
+
+    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(/^Picked up “Collares”\.$/u);
+    });
+
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(
+        /^“Collares” is over “Aros”\.$/u
+      );
+    });
+
+    await user.keyboard("{ArrowUp}");
+    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(
+        /^“Collares” stayed where it was\.$/u
+      );
+    });
+    expect(spies.reorder).not.toHaveBeenCalled();
+  });
+
+  test("a drop that moved the row leaves dnd-kit's region on the move and announces the place", async () => {
+    const { layOut, row, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+    within(row("collares"))
+      .getByRole("button", { name: "Drag to reorder: Collares" })
+      .focus();
+
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+
+    await waitFor(() => {
+      expect(announcer()).toHaveTextContent(
+        /^“Collares” is now in place 2 of 3\.$/u
+      );
+    });
+    expect(dragAnnouncer()).toHaveTextContent(/^“Collares” is over “Aros”\.$/u);
+  });
+
+  test("announces a cancelled keyboard drag by the category's name", async () => {
+    const { layOut, order, row, spies, user } = setup();
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+    within(row("collares"))
+      .getByRole("button", { name: "Drag to reorder: Collares" })
+      .focus();
+
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(
+        /^Move cancelled: “Collares” stayed where it was\.$/u
+      );
+    });
+    expect(order()).toEqual(["Collares", "Aros", "Pulseras"]);
+    expect(spies.reorder).not.toHaveBeenCalled();
+  });
+
+  test("in Spanish, tells and announces a keyboard drag in Spanish", async () => {
+    const { layOut, row, user } = setup({ locale: "es" });
+    await shown();
+    layOut(["collares", "aros", "pulseras"]);
+    const handle = within(row("collares")).getByRole("button", {
+      name: "Arrastrar para ordenar: Collares",
+    });
+    expect(handle).toHaveAccessibleDescription(
+      "Para ordenar con el teclado, apretá espacio en la manija, movela con las flechas y apretá espacio de nuevo para dejarla, o Escape para cancelar."
+    );
+    handle.focus();
+
+    await user.keyboard(" ");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(/^Tomaste «Collares»\.$/u);
+    });
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(
+        /^«Collares» está sobre «Aros»\.$/u
+      );
+    });
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(dragAnnouncer()).toHaveTextContent(
+        /^Movimiento cancelado: «Collares» quedó donde estaba\.$/u
+      );
+    });
   });
 
   test("in Spanish, counts and names everything in Spanish", async () => {

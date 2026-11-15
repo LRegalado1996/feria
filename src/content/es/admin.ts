@@ -44,9 +44,15 @@ export const admin = {
     },
     list: "Categorías de la tienda",
     move: {
+      cancelled: "Movimiento cancelado: «{name}» quedó donde estaba.",
       down: "Bajar: {name}",
       drag: "Arrastrar para ordenar: {name}",
+      instructions:
+        "Para ordenar con el teclado, apretá espacio en la manija, movela con las flechas y apretá espacio de nuevo para dejarla, o Escape para cancelar.",
       moved: "«{name}» quedó en el lugar {position} de {total}.",
+      over: "«{name}» está sobre «{over}».",
+      picked: "Tomaste «{name}».",
+      stayed: "«{name}» quedó donde estaba.",
       up: "Subir: {name}",
     },
     title: "Categorías",

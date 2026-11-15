@@ -45,9 +45,15 @@ export const admin: Dictionary["admin"] = {
     },
     list: "The store's categories",
     move: {
+      cancelled: "Move cancelled: “{name}” stayed where it was.",
       down: "Move down: {name}",
       drag: "Drag to reorder: {name}",
+      instructions:
+        "To reorder with the keyboard, press space on the handle, move it with the arrow keys and press space again to drop it, or Escape to cancel.",
       moved: "“{name}” is now in place {position} of {total}.",
+      over: "“{name}” is over “{over}”.",
+      picked: "Picked up “{name}”.",
+      stayed: "“{name}” stayed where it was.",
       up: "Move up: {name}",
     },
     title: "Categories",

@@ -3,10 +3,14 @@
 import {
   closestCenter,
   DndContext,
+  type DragCancelEvent,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
   TouchSensor,
+  type UniqueIdentifier,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -204,6 +208,35 @@ function CategoryList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const copy = admin.categories.move;
+  const nameOf = (id: UniqueIdentifier) =>
+    rows.find((row) => row.id === id)?.nameEs ?? "";
+  // dnd-kit's own words are English and read the row's id: these are the
+  // page's language and say the category's name.
+  const accessibility = {
+    announcements: {
+      onDragCancel: ({ active }: DragCancelEvent) =>
+        interpolate(copy.cancelled, { name: nameOf(active.id) }),
+      // A drop that moved the row is announced by `move`, with its place.
+      onDragEnd: ({ active, over }: DragEndEvent) =>
+        over && over.id !== active.id
+          ? undefined
+          : interpolate(copy.stayed, { name: nameOf(active.id) }),
+      // Over its own place says nothing: dnd-kit reports that right after
+      // the pick-up, and it would replace "Picked up" with a row over itself.
+      onDragOver: ({ active, over }: DragOverEvent) =>
+        over && over.id !== active.id
+          ? interpolate(copy.over, {
+              name: nameOf(active.id),
+              over: nameOf(over.id),
+            })
+          : undefined,
+      onDragStart: ({ active }: DragStartEvent) =>
+        interpolate(copy.picked, { name: nameOf(active.id) }),
+    },
+    screenReaderInstructions: { draggable: copy.instructions },
+  };
+
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) {
       return;
@@ -218,6 +251,7 @@ function CategoryList({
 
   return (
     <DndContext
+      accessibility={accessibility}
       collisionDetection={closestCenter}
       id={dndId}
       onDragEnd={onDragEnd}
@@ -397,7 +431,12 @@ function CategoryRow({
           }}
           error={deleteError}
           isPending={remove.isPending}
+          onChoose={() => {
+            setDeleteError(null);
+          }}
           onConfirm={(moveToId) => {
+            // A retry starts without the previous try's error.
+            setDeleteError(null);
             void (async () => {
               try {
                 // Awaited here, not in a per-call callback: the list read

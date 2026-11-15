@@ -33,6 +33,7 @@ function setup({
 }: Partial<DeleteCategoryDialogProps> & { locale?: Locale } = {}) {
   const onConfirm = vi.fn<(moveToId: number | null) => void>();
   const onOpenChange = vi.fn<(open: boolean) => void>();
+  const onChoose = vi.fn<() => void>();
   const user = userEvent.setup();
 
   renderWithI18n(
@@ -40,6 +41,7 @@ function setup({
       category={makeCategory()}
       error={null}
       isPending={false}
+      onChoose={onChoose}
       onConfirm={onConfirm}
       onOpenChange={onOpenChange}
       open
@@ -59,6 +61,7 @@ function setup({
     },
     confirmButton,
     dialog,
+    onChoose,
     onConfirm,
     onOpenChange,
     user,
@@ -124,6 +127,29 @@ describe("DeleteCategoryDialog", () => {
 
     expect(within(dialog()).queryByRole("alert")).toBeNull();
     expect(select).not.toHaveAttribute("aria-invalid");
+  });
+
+  test("says a destination was chosen, once per change, and not on confirming or cancelling", async () => {
+    const { confirm, dialog, onChoose, user } = setup({
+      error: "We could not delete the category. Try again.",
+    });
+
+    await confirm();
+    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
+    expect(onChoose).not.toHaveBeenCalled();
+
+    await user.selectOptions(within(dialog()).getByRole("combobox"), "7");
+
+    expect(onChoose.mock.calls).toEqual([[]]);
+  });
+
+  test("chooses a destination without an onChoose to tell", async () => {
+    const { confirm, dialog, onConfirm, user } = setup({ onChoose: undefined });
+
+    await user.selectOptions(within(dialog()).getByRole("combobox"), "6");
+    await confirm();
+
+    expect(onConfirm).toHaveBeenCalledExactlyOnceWith(6);
   });
 
   test("confirms with the chosen destination's id", async () => {

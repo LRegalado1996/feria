@@ -25,6 +25,8 @@ export interface DeleteCategoryDialogProps {
   /** Shown when the deletion failed; the dialog stays open. */
   error: string | null;
   isPending: boolean;
+  /** A destination was chosen: an error about the previous try is stale. */
+  onChoose?: () => void;
   /** Runs the deletion; `moveToId` is `null` when there are no articles. */
   onConfirm: (moveToId: number | null) => void;
   onOpenChange: (open: boolean) => void;
@@ -42,6 +44,7 @@ function DeleteCategoryDialog({
   category,
   error,
   isPending,
+  onChoose,
   onConfirm,
   onOpenChange,
   open,
@@ -104,6 +107,7 @@ function DeleteCategoryDialog({
               onChange={(event) => {
                 setMoveToId(event.currentTarget.value);
                 setMissing(false);
+                onChoose?.();
               }}
               value={moveToId}
             >
