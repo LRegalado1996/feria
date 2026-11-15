@@ -428,6 +428,12 @@ function likeEscaped(text: string): string {
   return text.replaceAll(/[\\%_]/gu, (char) => `\\${char}`);
 }
 
+/** A whole order code, as staff type it from what the shopper reads out. */
+const ORDER_CODE_SEARCH = new RegExp(
+  `^[${ORDER_CODE_ALPHABET}]{${ORDER_CODE_LENGTH}}$`,
+  "iu"
+);
+
 /** The fewest digits that make a phone search: fewer match everyone. */
 const PHONE_SEARCH_MIN_DIGITS = 3;
 
@@ -438,12 +444,16 @@ const PHONE_SEARCH_MIN_DIGITS = 3;
  * the leading 0 of a local number is dropped like the stored number drops it).
  */
 function matchesOrderSearch(q: string) {
-  const digits = q.replaceAll(/\D/gu, "").replace(/^0/u, "");
+  // A number typed locally (099…) or in its 00 international form drops
+  // those zeros, as the stored +598… number has none.
+  const digits = q.replaceAll(/\D/gu, "").replace(/^00?/u, "");
+  // A code read aloud (K7P2M) has digits too: it is not a phone.
+  const isCode = ORDER_CODE_SEARCH.test(q);
 
   return or(
     sql`${customerOrder.code} like ${`${likeEscaped(q.toUpperCase())}%`}`,
     sql`unaccent(${customerOrder.customerName}) ilike unaccent(${`%${likeEscaped(q)}%`})`,
-    digits.length >= PHONE_SEARCH_MIN_DIGITS
+    !isCode && digits.length >= PHONE_SEARCH_MIN_DIGITS
       ? sql`${customerOrder.customerPhone} like ${`%${digits}%`}`
       : undefined
   );

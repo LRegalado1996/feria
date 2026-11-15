@@ -924,6 +924,24 @@ describe("listOrders", () => {
       phone: "",
       q: "012",
     },
+    // A whole code read aloud has digits, but it is not a phone.
+    {
+      params: [STORE_ID, "7K3M9%", "%7k3m9%"],
+      phone: "",
+      q: "7k3m9",
+    },
+    // One letter short of a code: its digits are a phone search again.
+    {
+      params: [STORE_ID, "7K39%", "%7k39%", "%739%"],
+      phone: ' or "customer_order"."customerPhone" like $4',
+      q: "7k39",
+    },
+    // The 00 international form drops both zeros, like the stored number.
+    {
+      params: [STORE_ID, "00598 99 123%", "%00598 99 123%", "%59899123%"],
+      phone: ' or "customer_order"."customerPhone" like $4',
+      q: "00598 99 123",
+    },
     {
       params: [STORE_ID, "\\%\\_\\\\A%", "%\\%\\_\\\\a%"],
       phone: "",
