@@ -178,9 +178,9 @@ const SPACES = /[\s\u00A0\u202F]/gu;
 const GROUPED_BY_SPACE = /^[1-9]\d{0,2}(?:[\s\u00A0\u202F]\d{3})+$/u;
 // The minus sign some sources paste instead of a hyphen.
 const MINUS_SIGN = "\u2212";
-// Beyond this a figure loses digits as a JavaScript number, and `String()`
-// writes it back in exponent form: no price or count gets near it.
-const LARGEST_READABLE = Number.MAX_SAFE_INTEGER;
+// A JavaScript number holds 15 significant digits exactly; beyond that
+// `Number()` rounds the figure silently. No price or count gets near it.
+const MOST_SIGNIFICANT_DIGITS = 15;
 // Below this `String()` also switches to exponent form ("1e-7").
 const SMALLEST_READABLE = 1e-6;
 const DIGITS_AND_SEPARATORS = /^[\d.,]+$/u;
@@ -242,6 +242,15 @@ export function readTypedNumber(
     return { kind: "refused", reason: "decimal" };
   }
 
+  const significant = `${reading.integer}${reading.fraction ?? ""}`.replace(
+    /^0+/u,
+    ""
+  );
+
+  if (significant.length > MOST_SIGNIFICANT_DIGITS) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
   // A trailing 0 completes a fraction still being typed ("12," is "12.0")
   // without changing one that is there ("12,5" is "12.50"), and a leading one
   // an integer part left out (",5" is "0.5").
@@ -249,12 +258,7 @@ export function readTypedNumber(
     `${negative ? "-" : ""}0${reading.integer}.${reading.fraction ?? ""}0`
   );
 
-  const magnitude = Math.abs(value);
-
-  if (
-    magnitude > LARGEST_READABLE ||
-    (magnitude !== 0 && magnitude < SMALLEST_READABLE)
-  ) {
+  if (value !== 0 && Math.abs(value) < SMALLEST_READABLE) {
     return { kind: "refused", reason: "unreadable" };
   }
 

@@ -165,7 +165,7 @@ describe("readTypedNumber", () => {
     // The minus sign some sources paste instead of a hyphen.
     ["\u221212,5", -12.5],
     [" -5", -5],
-    ["9007199254740991", 9_007_199_254_740_991],
+    ["999999999999999", 999_999_999_999_999],
     ["0,000001", 0.000001],
     // A separator still waiting for its digits reads as the number so far.
     ["12,", 12],
@@ -212,6 +212,9 @@ describe("readTypedNumber", () => {
     // Beyond what a number holds exactly, or written back as an exponent.
     "9".repeat(400),
     "9007199254740993",
+    "9007199254740991,01",
+    "1234567890123,456",
+    "0,00000000000001",
     "0,0000001",
     // Not a figure at all.
     "1a",

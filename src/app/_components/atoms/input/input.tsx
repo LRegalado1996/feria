@@ -45,7 +45,12 @@ export interface NumberInputProps extends Omit<
 > {
   /** Permit a decimal part. Off for counts and years. */
   allowDecimal?: boolean;
-  /** The parsed number, or `null` once the field is empty. */
+  /**
+   * The parsed number, or `null` once the field is empty or holds a figure it
+   * refuses. The parent keeps `null` when it is reported: clearing the field
+   * is how a value is removed, and a refused figure stays on screen only
+   * while the value it stands for is `null`.
+   */
   onValueChange: (value: number | null) => void;
   type: "number";
   value: number | null | undefined;
