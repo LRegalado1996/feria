@@ -1,0 +1,30 @@
+/**
+ * A phone number as typed, in international format (`+59899123456`), or
+ * `null` when it is not one we can reach (FER-025). International numbers
+ * start with `+` or `00`; a Uruguayan mobile is also accepted in its local
+ * form (`099 123 456`, `99 123 456`). Spaces, dots, dashes and parentheses
+ * are ignored. A Uruguayan landline in local form is refused: the store
+ * writes to the shopper on WhatsApp.
+ */
+export function normalizePhone(typed: string): string | null {
+  const compact = typed.replaceAll(/[\s.\-()]/gu, "");
+
+  if (/^(?:\+|00)\d{8,15}$/u.test(compact)) {
+    return `+${compact.replace(/^(?:\+|00)/u, "")}`;
+  }
+
+  // 09X XXX XXX: the national prefix 0 drops for the country code.
+  if (/^09\d{7}$/u.test(compact)) {
+    return `+598${compact.slice(1)}`;
+  }
+
+  if (/^9\d{7}$/u.test(compact)) {
+    return `+598${compact}`;
+  }
+
+  if (/^5989\d{7}$/u.test(compact)) {
+    return `+${compact}`;
+  }
+
+  return null;
+}

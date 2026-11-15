@@ -53,6 +53,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 
 ## Rate limits
 
+- **Orders** (`order.create`, FER-025): 5 an hour per phone and 20 an hour per client, counted from the orders themselves under a per-phone advisory lock, answered with `TOO_MANY_REQUESTS` and its `retryAfter`. The client is a keyed hash of the platform's IP (`orderClientKey`, `src/server/api/utils/client-key.ts`); with no IP (a local server) only the phone limit applies, never one shared bucket. At most 20 distinct articles of at most 10 units each. Bot checks on the checkout are FER-026's.
 - **One shared, atomic store.** In-memory counters are per instance, so Better Auth's limiter needs `rateLimit.storage: "database"` (or secondary storage), never the default `"memory"`.
 - **Sliding window for guessable secrets** (codes, PINs, passwords): a fixed window lets an attacker spend twice the budget across its edge.
 - **Sign-in** is limited by Better Auth to 10 attempts a minute per IP (the fair's staff may share one Wi-Fi) (`customRules` in `src/server/better-auth/config.ts`). Its limiter is a fixed window, so the worst case is 20 tries across a window's edge; FER-037 adds 2FA for the superadmin, the login worth guessing.

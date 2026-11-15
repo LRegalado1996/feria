@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-010
 
 ## Goal
@@ -31,6 +31,17 @@ The backend can take an order from an anonymous shopper safely and track it thro
 ## Notes
 
 `phoneVerifiedAt` exists from the start and stays null until FER-028.
+
+## Outcome
+
+- Tables `customer_order`, `order_item`, `order_status_event` (migration `0009`). An order's items keep a copy of each article's title and price; deleting the article only clears `productId`.
+- Public `order.create` (`POST /stores/{storeSlug}/orders`): the store's active address, the items as article ids and quantities, name, phone, an optional note, the language and a `requestKey` (a uuid the checkout makes per submit). The server loads every article (published, of that store, locked against an edit until the order is written) and computes every price and the total; a missing, draft or other store's article is NOT_FOUND "Article not found", an unavailable one BAD_REQUEST "Article not available"; a quantity of 0 or over 10, more than 20 articles or one listed twice fail the input schema. The currency is the store's. The order starts `received`, with a 43-character random `token` and a 5-character `code` from an alphabet without look-alikes, unique per store. The same `requestKey` again answers the order it created, so a double tap writes one. A closed storefront (`STOREFRONT_LAUNCHED`) takes no orders.
+- Public `order.getByToken`: code, status, items, total, currency, name, the phone masked (`+598•••••456`), whether it is verified; never the internal id.
+- Store-scoped `order.list` (newest first, by status, keyset cursor), `order.get` (full phone, items, history with who changed each status) and `order.changeStatus`: `received → packed`, `packed → delivered | undeliverable`, and one step back (`packed → received`, `delivered → packed`, `undeliverable → packed`). A refused move is CONFLICT; each move appends an `order_status_event` with the member who made it. The order is locked, so two members tapping at once move it one after the other.
+- Phones are normalized to international format (`normalizePhone`, `src/lib/utils/phone.ts`): `+` or `00` with 8 to 15 digits, or a Uruguayan mobile in local form (`099 123 456`). Landlines in local form are refused.
+- Abuse: 5 orders an hour per phone, 20 per client (a keyed hash of the IP Vercel reports), with `retryAfter`; caps of 20 articles and 10 units each (`docs/agents/security.md` § Rate limits). BotID on the checkout is FER-026's, as Lucas decided.
+- `phoneVerifiedAt` exists and stays null until FER-028.
+- Tests: integration over a real database (`src/server/services/order.integration.test.ts`) for creation, every tampering case, the copies surviving an edit and a deletion, the resubmit, both limits, store isolation, every status move allowed and refused, and one submit sent twice at once.
 
 ## Reporting
 

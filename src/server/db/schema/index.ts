@@ -7,6 +7,12 @@ export {
   verification,
 } from "./auth";
 export { localeEnum } from "./locale";
+export {
+  customerOrder,
+  orderItem,
+  orderStatusEnum,
+  orderStatusEvent,
+} from "./order";
 export { post } from "./post";
 export {
   accountRelations,
@@ -16,6 +22,9 @@ export {
   attributeValueTranslationRelations,
   categoryRelations,
   categoryTranslationRelations,
+  customerOrderRelations,
+  orderItemRelations,
+  orderStatusEventRelations,
   productImageRelations,
   productImageTranslationRelations,
   productRelations,
