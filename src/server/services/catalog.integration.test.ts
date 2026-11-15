@@ -4,7 +4,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
-import { db } from "@/server/db";
+import { type DatabaseClient, db } from "@/server/db";
 import {
   category,
   categoryTranslation,
@@ -615,16 +615,19 @@ describe("store-scoped writes", () => {
 });
 
 /** A promise and the function that settles it, for ordering two writers. */
-function deferred() {
-  let settle: (value: undefined) => void = () => undefined;
-  const promise = new Promise<undefined>((resolve) => {
+function deferred<T = undefined>() {
+  let settle: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => {
     settle = resolve;
   });
 
   return { promise, resolve: settle };
 }
 
-/** Waits until some query on this database waits on another's lock. */
+/**
+ * Waits until some query on this database waits on another's lock. Enough
+ * where the outcome itself shows which lock was waited on.
+ */
 async function waitUntilBlocked() {
   for (let attempt = 0; attempt < 2000; attempt += 1) {
     const result = await db.execute<{ blocked: number }>(sql`
@@ -639,7 +642,44 @@ async function waitUntilBlocked() {
     }
   }
 
-  throw new Error("The second writer never waited on the slug lock");
+  throw new Error("The second writer never waited");
+}
+
+/** The server process running this transaction's statements. */
+async function backendPid(tx: DatabaseClient) {
+  const result = await tx.execute<{ pid: number }>(
+    sql`select pg_backend_pid() as pid`
+  );
+  const pid = result.rows[0]?.pid;
+
+  if (pid === undefined) {
+    throw new Error("The backend has no process id");
+  }
+
+  return pid;
+}
+
+/**
+ * Waits until the `waiter` process waits on an advisory lock that the
+ * `holder` process holds. Only the slug lock is advisory here: a wait on the
+ * `(storeId, slug)` unique index, which a writer without the lock would hit,
+ * is a different wait and never satisfies this.
+ */
+async function waitUntilAdvisoryBlocked(waiter: number, holder: number) {
+  for (let attempt = 0; attempt < 2000; attempt += 1) {
+    const result = await db.execute<{ waiting: boolean }>(sql`
+      select exists (
+        select 1 from pg_locks
+        where pid = ${waiter} and locktype = 'advisory' and not granted
+      ) and ${holder} = any(pg_blocking_pids(${waiter})) as waiting
+    `);
+
+    if (result.rows[0]?.waiting) {
+      return;
+    }
+  }
+
+  throw new Error("The second writer never waited on the first's slug lock");
 }
 
 function draftValues(title: string) {
@@ -664,8 +704,11 @@ describe("slug allocation under two writers", () => {
     const shop = await makeStore();
     const held = deferred();
     const allocated = deferred();
+    const firstPid = deferred<number>();
+    const secondPid = deferred<number>();
 
     const first = db.transaction(async (tx) => {
+      firstPid.resolve(await backendPid(tx));
       const created = await createProduct(tx, {
         storeId: shop.id,
         values: draftValues("Collar Gemelo"),
@@ -676,16 +719,20 @@ describe("slug allocation under two writers", () => {
       return created;
     });
     await allocated.promise;
-    const second = db.transaction(
-      async (tx) =>
-        await createProduct(tx, {
-          storeId: shop.id,
-          values: draftValues("Collar Gemelo"),
-        })
-    );
+    const second = db.transaction(async (tx) => {
+      secondPid.resolve(await backendPid(tx));
+
+      return await createProduct(tx, {
+        storeId: shop.id,
+        values: draftValues("Collar Gemelo"),
+      });
+    });
 
     try {
-      await waitUntilBlocked();
+      await waitUntilAdvisoryBlocked(
+        await secondPid.promise,
+        await firstPid.promise
+      );
     } finally {
       held.resolve(undefined);
       await Promise.allSettled([first, second]);
