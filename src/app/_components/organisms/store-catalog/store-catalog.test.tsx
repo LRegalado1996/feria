@@ -109,8 +109,11 @@ const CHOSEN = makeQuery({
 interface SetupOptions {
   firstPage?: CatalogPage;
   locale?: Locale;
-  /** How `catalog.products` answers the next page. */
-  next?: "fail" | "hang" | "ok";
+  /**
+   * How `catalog.products` answers the next page; `held` waits for the
+   * test's `release()`.
+   */
+  next?: "fail" | "hang" | "held" | "ok";
   query?: CatalogQuery;
 }
 
@@ -120,11 +123,21 @@ function setup({
   next = "ok",
   query = makeQuery(),
 }: SetupOptions = {}) {
-  const products = vi.fn(async (_input: unknown) =>
-    next === "hang"
-      ? await new Promise<never>(() => {})
-      : makePage([makeItem(3)])
-  );
+  const releases: (() => void)[] = [];
+  const held = new Promise<void>((resolve) => {
+    releases.push(resolve);
+  });
+  const products = vi.fn(async (_input: unknown) => {
+    if (next === "hang") {
+      await new Promise<never>(() => {});
+    }
+
+    if (next === "held") {
+      await held;
+    }
+
+    return makePage([makeItem(3)]);
+  });
   server.use(
     next === "fail"
       ? createOrpcErrorHandler("catalog.products", {
@@ -173,6 +186,12 @@ function setup({
     },
     observers,
     products,
+    /** Lets a `held` next page answer. */
+    release: () => {
+      for (const resolve of releases) {
+        resolve();
+      }
+    },
     /** The grid's article names, in order. */
     titles: () =>
       within(screen.getByTestId("store-catalog-grid"))
@@ -537,6 +556,54 @@ describe("StoreCatalog", () => {
     expect(screen.getByRole("button", { name: "Cargar más" })).toHaveFocus();
   });
 
+  test("leaves focus on the search when it was taken there while a page asked for with the button loaded", async () => {
+    const { release, titles, user } = setup({
+      firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
+      next: "held",
+    });
+    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await screen.findByRole("button", { name: "Cargando…" });
+    const search = screen.getByRole("searchbox", { name: "Buscar artículos" });
+
+    await user.click(search);
+    release();
+
+    await waitFor(() => {
+      expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
+    });
+    expect(search).toHaveFocus();
+  });
+
+  test("moves focus to the retry when a page asked for with the button fails", async () => {
+    const { user } = setup({
+      firstPage: makePage([makeItem(1)], CURSOR),
+      next: "fail",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(
+      within(alert).getByRole("button", { name: "Probar de nuevo" })
+    ).toHaveFocus();
+  });
+
+  test("leaves focus alone when a page asked for by scrolling fails, even from a focused button", async () => {
+    const { observers } = setup({
+      firstPage: makePage([makeItem(1)], CURSOR),
+      next: "fail",
+    });
+    screen.getByRole("button", { name: "Cargar más" }).focus();
+
+    observers.active()?.emit(true);
+
+    const alert = await screen.findByRole("alert");
+    expect(
+      within(alert).getByRole("button", { name: "Probar de nuevo" })
+    ).not.toHaveFocus();
+    expect(document.body).toHaveFocus();
+  });
+
   test("leaves focus alone when a page arrives by scrolling", async () => {
     const { observers, titles } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
@@ -591,5 +658,7 @@ describe("StoreCatalog", () => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 3"]);
     });
     expect(screen.queryByRole("alert")).toBeNull();
+    // The retry went with the alert: the page it asked for takes focus.
+    expect(screen.getByRole("link", { name: "Artículo 3" })).toHaveFocus();
   });
 });

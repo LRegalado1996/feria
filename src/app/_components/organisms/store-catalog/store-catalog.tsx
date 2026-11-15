@@ -64,11 +64,17 @@ function StoreCatalog({
   const locale = useLocale();
   const [sheetOpen, setSheetOpen] = useState(false);
   const grid = useRef<HTMLUListElement>(null);
-  // Set when "Cargar más" is pressed: the first card of the page it asked
-  // for takes focus once it lands, since the button may then be gone. It
-  // names the selection it was pressed in: another selection's first page
-  // is no page it asked for.
-  const focusFrom = useRef<{ from: number; selection: string } | null>(null);
+  // Set when "Cargar más" (or its retry) is pressed: the first card of the
+  // page it asked for takes focus once it lands, since the button may then
+  // be gone. It names the selection it was pressed in (another selection's
+  // first page is no page it asked for) and the control pressed: focus the
+  // visitor took elsewhere meanwhile, the search say, stays there.
+  const focusFrom = useRef<{
+    from: number;
+    selection: string;
+    trigger: HTMLElement;
+  } | null>(null);
+  const retry = useRef<HTMLButtonElement>(null);
   const { attachSentinel, fetchNextPage, ...products } = useCatalogProducts({
     firstPage,
     locale,
@@ -78,8 +84,8 @@ function StoreCatalog({
   const href = (next: CatalogQuery) => catalogHref(storeSlug, locale, next);
   const selection = href(query);
 
-  // Moving focus to a page that just arrived is the DOM work this effect
-  // synchronises with the list's length.
+  // Moving focus to a page that just arrived, or to the retry when it
+  // failed, is the DOM work this effect synchronises with the list.
   useEffect(() => {
     const pending = focusFrom.current;
 
@@ -87,13 +93,17 @@ function StoreCatalog({
       return;
     }
 
-    if (pending.selection !== selection) {
+    if (pending.selection !== selection || !ownsFocus(pending.trigger)) {
       focusFrom.current = null;
     } else if (products.items.length > pending.from) {
       focusFrom.current = null;
       grid.current?.children[pending.from]?.querySelector("a")?.focus();
+    } else if (products.isFetchNextPageError) {
+      // The pressed button went with the failed page: its retry takes over.
+      focusFrom.current = null;
+      retry.current?.focus();
     }
-  }, [products.items.length, selection]);
+  }, [products.isFetchNextPageError, products.items.length, selection]);
   const chosen = chosenChips(query, categories, filters);
   const filterProps = { categories, copy, filters, locale, query, storeSlug };
 
@@ -277,9 +287,15 @@ function StoreCatalog({
               <p className="text-sm">{copy.loadFailed}</p>
               <button
                 className={CONTROL_CLASS}
-                onClick={() => {
+                onClick={(event) => {
+                  focusFrom.current = {
+                    from: products.items.length,
+                    selection,
+                    trigger: event.currentTarget,
+                  };
                   fetchNextPage();
                 }}
+                ref={retry}
                 type="button"
               >
                 {copy.retry}
@@ -294,11 +310,12 @@ function StoreCatalog({
                 aria-busy={products.isFetchingNextPage}
                 aria-disabled={products.isFetchingNextPage}
                 className={CONTROL_CLASS}
-                onClick={() => {
+                onClick={(event) => {
                   if (!products.isFetchingNextPage) {
                     focusFrom.current = {
                       from: products.items.length,
                       selection,
+                      trigger: event.currentTarget,
                     };
                     fetchNextPage();
                   }
@@ -312,6 +329,19 @@ function StoreCatalog({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Whether the control that asked for a page still speaks for the focus: it
+ * holds it, or it was removed and the focus fell to the page with it.
+ */
+function ownsFocus(trigger: HTMLElement) {
+  const active = document.activeElement;
+
+  return (
+    active === trigger ||
+    (!trigger.isConnected && (active === null || active === document.body))
   );
 }
 
