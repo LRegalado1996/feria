@@ -139,13 +139,23 @@ describe("listIndexableArticles", () => {
       [product],
       [productTranslation],
     ]);
-    const [joined, on] = db.$["select.innerJoin"].mock.calls[0] ?? [];
-    expect(joined).toBe(store);
-    expect(renderQuery(on)).toEqual({
-      params: [],
-      sql: '"store"."id" = "product"."storeId"',
-    });
-    // A draft never, and nothing of an inactive store even by its id.
+    expect(
+      db.$["select.innerJoin"].mock.calls.map(([joined, on]) => [
+        joined,
+        renderQuery(on),
+      ])
+    ).toEqual([
+      [store, { params: [], sql: '"store"."id" = "product"."storeId"' }],
+      [
+        product,
+        {
+          params: [],
+          sql: '"product"."id" = "product_translation"."productId"',
+        },
+      ],
+    ]);
+    // A draft never, and nothing of an inactive store even by its id; the
+    // titles of an article unpublished since the first read neither.
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
@@ -153,7 +163,10 @@ describe("listIndexableArticles", () => {
         params: [STORE_ID, "published", true],
         sql: '("product"."storeId" = $1 and "product"."status" = $2 and "store"."isActive" = $3)',
       },
-      { params: [9, 8], sql: '"product_translation"."productId" in ($1, $2)' },
+      {
+        params: [9, 8, "published"],
+        sql: '("product_translation"."productId" in ($1, $2) and "product"."status" = $3)',
+      },
     ]);
     expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
       '"product"."publishedAt" desc, "product"."id" desc'

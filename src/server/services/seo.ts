@@ -78,6 +78,9 @@ export async function listIndexableArticles(
     return [];
   }
 
+  // Published again here, not only in the list's query: under READ
+  // COMMITTED an article unpublished between the two statements would
+  // otherwise come back with whatever it was edited into.
   const titles = await db
     .select({
       locale: productTranslation.locale,
@@ -85,10 +88,14 @@ export async function listIndexableArticles(
       title: productTranslation.title,
     })
     .from(productTranslation)
+    .innerJoin(product, eq(product.id, productTranslation.productId))
     .where(
-      inArray(
-        productTranslation.productId,
-        rows.map((row) => row.id)
+      and(
+        inArray(
+          productTranslation.productId,
+          rows.map((row) => row.id)
+        ),
+        eq(product.status, "published")
       )
     );
 
