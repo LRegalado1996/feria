@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+
+import { renderWithI18n } from "@/test/i18n";
 
 import { ThemeToggle } from "./theme-toggle";
 
@@ -13,15 +15,18 @@ const { useTheme } = vi.hoisted(() => ({
 
 vi.mock("next-themes", () => ({ useTheme }));
 
-function setup({ theme = "light" }: { theme?: string | null } = {}) {
+function setup({
+  locale = "en",
+  theme = "light",
+}: { locale?: "en" | "es"; theme?: string | null } = {}) {
   const setTheme = vi.fn((_theme: string) => undefined);
   useTheme.mockReturnValue({ setTheme, theme: theme ?? undefined });
   const user = userEvent.setup();
 
-  render(<ThemeToggle />);
+  renderWithI18n(<ThemeToggle />, { locale });
 
   const open = async () => {
-    await user.click(screen.getByRole("button", { name: "Change theme" }));
+    await user.click(screen.getByTestId("theme-toggle"));
   };
 
   return { open, setTheme, user };
@@ -78,5 +83,23 @@ describe("ThemeToggle", () => {
         .getAllByRole("menuitemradio")
         .map((option) => option.getAttribute("aria-checked"))
     ).toEqual(["false", "false", "false"]);
+  });
+
+  test("names itself and its options in Spanish on a Spanish page, applying the same themes", async () => {
+    const { open, setTheme, user } = setup({ locale: "es" });
+
+    expect(
+      screen.getByRole("button", { name: "Cambiar tema" })
+    ).toBeInTheDocument();
+
+    await open();
+
+    expect(
+      screen.getAllByRole("menuitemradio").map((option) => option.textContent)
+    ).toEqual(["Claro", "Oscuro", "Sistema"]);
+
+    await user.click(screen.getByRole("menuitemradio", { name: "Oscuro" }));
+
+    expect(setTheme).toHaveBeenCalledExactlyOnceWith("dark");
   });
 });

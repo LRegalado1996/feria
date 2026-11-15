@@ -11,12 +11,10 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/app/_components/molecules/dropdown-menu";
+import { useDictionary } from "@/lib/hooks/i18n";
 
-const THEMES = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-] as const;
+// Each value is also its label's key in the `theme` dictionary.
+const THEMES = ["light", "dark", "system"] as const;
 
 /**
  * Light, dark or the system's choice. The icon follows the applied theme
@@ -25,12 +23,13 @@ const THEMES = [
  */
 function ThemeToggle() {
   const { setTheme, theme } = useTheme();
+  const labels = useDictionary().theme;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          aria-label="Change theme"
+          aria-label={labels.change}
           data-slot="theme-toggle"
           data-testid="theme-toggle"
           size="icon-sm"
@@ -50,15 +49,15 @@ function ThemeToggle() {
         <DropdownMenuRadioGroup
           onValueChange={(value) => {
             // Radix hands back any string; only a known theme is applied.
-            if (THEMES.some((known) => known.value === value)) {
+            if (THEMES.some((known) => known === value)) {
               setTheme(value);
             }
           }}
           value={theme}
         >
-          {THEMES.map(({ value, label }) => (
+          {THEMES.map((value) => (
             <DropdownMenuRadioItem key={value} value={value}>
-              {label}
+              {labels[value]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

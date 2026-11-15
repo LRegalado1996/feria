@@ -38,7 +38,7 @@ considered", and a deleted one fails the check.
 | **Blast radius** | What this can break, including surfaces not touched. What is out of scope. Order of operations and rollback when merging is not enough by itself. | a short list |
 | **How it was verified** | The checklist, ticked only for what was done, then the commands that ran and their result. A bug fix states the reproduction before and after. | checklist + list |
 | **Falsifiability** | The production change to revert and the test that goes red, by name. | 1 to 4 lines |
-| **Visual proof** | Screenshots or a recording for a visible change (mobile and desktop width when layout changed), or the "No visible change" box ticked with one line on why. A gate: the `visual-proof` check reads it. | images + 1 line |
+| **Visual proof** | One image of the result for a visible change: every changed screen composed into a single labelled image (phone and desktop width when layout changed), showing how it is now. Before and after only for a bug fix, in that same image. A recording for a gesture or a timing. Or the "No visible change" box ticked with one line on why. A gate: the `visual-proof` check reads it. | 1 image + 1 line |
 | **Risk sweep** | One line per class, or `N/A`. | 6 lines |
 | **Review focus** | The judgement call a reasonable reviewer could disagree with, and what the local review round refused and why. | 1 short paragraph |
 
@@ -71,4 +71,7 @@ line the harness asks for.
 
 The two pull requests `auto-promotion-pr.yml` opens (`qa` into `main`, `main`
 into `qa`) and the ones bots open (Dependabot) carry their own generated body.
-The check lets them through; their titles still follow Conventional Commits.
+The check lets their bodies through. A promotion's title still follows
+Conventional Commits in full. A bot's title is held to the type prefix only
+(`chore(deps): ...`): Dependabot capitalises "Bump" and writes long titles, and
+neither can be configured.

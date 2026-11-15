@@ -1,0 +1,12 @@
+# A storefront style used outside the storefront
+#
+# The storefront has its own visual language (design.md § Storefront): a display face set uppercase, fluid sizes, a marquee, and the five store colors a store overrides on its own pages. The admin keeps the calm back-office rules, which ban all-caps labels and moving bands. These utilities are allowed only in storefront components (a `store-` directory in a component tier) and storefront routes, so the two languages cannot leak into each other one class at a time. Held at zero from the day the ratchet was added.
+#
+# This is a RATCHET: the list may only SHRINK. Do NOT add an entry to get
+# CI green — fix the site instead. After removing violations, run:
+#   pnpm ratchet:prune
+#
+# Guardrail: design.md § Storefront: where it differs from the admin, and where its styles may be used
+# Fix:       In the admin, use the roles in design.md § Typography and copy and the app tokens. If the screen is part of the storefront, build it from the `store-*` components, or add its route to this rule's exclude list in the same change as design.md.
+#
+# 0 file(s), 0 occurrence(s) remaining.

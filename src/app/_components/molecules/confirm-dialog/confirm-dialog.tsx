@@ -11,9 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/app/_components/molecules/dialog";
+import { useDictionary } from "@/lib/hooks/i18n";
 
 export interface ConfirmDialogProps {
+  /** Defaults to the dictionary's "Cancel". */
   cancelLabel?: string;
+  /** Defaults to the dictionary's "Delete". */
   confirmLabel?: string;
   description: string;
   /** The action is running: the confirm button says so and stays disabled. */
@@ -26,23 +29,26 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  /** Defaults to the dictionary's "Deleting…". */
   pendingLabel?: string;
   title: string;
 }
 
 /** Asks before a destructive action; the action runs only on confirm. */
 function ConfirmDialog({
-  cancelLabel = "Cancel",
-  confirmLabel = "Delete",
+  cancelLabel,
+  confirmLabel,
   description,
   isPending = false,
   onCloseAutoFocus,
   onConfirm,
   onOpenChange,
   open,
-  pendingLabel = "Deleting…",
+  pendingLabel,
   title,
 }: ConfirmDialogProps) {
+  const { common } = useDictionary();
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
@@ -61,7 +67,7 @@ function ConfirmDialog({
             type="button"
             variant="outline"
           >
-            {cancelLabel}
+            {cancelLabel ?? common.cancel}
           </Button>
           <Button
             data-testid="confirm-dialog-confirm"
@@ -70,7 +76,9 @@ function ConfirmDialog({
             type="button"
             variant="destructive"
           >
-            {isPending ? pendingLabel : confirmLabel}
+            {isPending
+              ? (pendingLabel ?? common.deleting)
+              : (confirmLabel ?? common.delete)}
           </Button>
         </DialogFooter>
       </DialogContent>

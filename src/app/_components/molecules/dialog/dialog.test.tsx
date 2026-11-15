@@ -1,6 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
+
+import { renderWithI18n } from "@/test/i18n";
 
 import {
   Dialog,
@@ -11,11 +13,11 @@ import {
   DialogTitle,
 } from "./dialog";
 
-function setup() {
+function setup({ locale = "en" }: { locale?: "en" | "es" } = {}) {
   const onOpenChange = vi.fn((_open: boolean) => undefined);
   const user = userEvent.setup();
 
-  render(
+  renderWithI18n(
     <Dialog onOpenChange={onOpenChange} open>
       <DialogContent className="custom">
         <DialogHeader>
@@ -26,7 +28,8 @@ function setup() {
           <button type="button">Delete</button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog>,
+    { locale }
   );
 
   return { dialog: screen.getByRole("dialog"), onOpenChange, user };
@@ -86,5 +89,13 @@ describe("Dialog", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  test("names its close button in Spanish on a Spanish page", async () => {
+    const { onOpenChange, user } = setup({ locale: "es" });
+
+    await user.click(screen.getByRole("button", { name: "Cerrar diálogo" }));
+
+    expect(onOpenChange).toHaveBeenCalledExactlyOnceWith(false);
   });
 });

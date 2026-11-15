@@ -15,42 +15,34 @@ import {
   FormMessage,
 } from "@/app/_components/molecules/form";
 import { PasswordInput } from "@/app/_components/molecules/password-input";
+import type { Dictionary } from "@/content";
 import { reportError } from "@/lib/errors/client";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import { localizePath } from "@/lib/i18n/paths";
 import {
   type AuthFormValues,
-  authSchema,
-  signUpSchema,
+  createAuthSchema,
+  createSignUpSchema,
 } from "@/lib/schemas/auth";
 import { authClient } from "@/server/better-auth/client";
 
 type AuthMode = "signin" | "signup";
 
-const COPY = {
-  signin: {
-    submit: "Sign In",
-    pending: "Signing in…",
-    switchTo: "Don't have an account? Sign Up",
-    failed: "Sign in failed. Try again.",
-  },
-  signup: {
-    submit: "Sign Up",
-    pending: "Signing up…",
-    switchTo: "Already have an account? Sign In",
-    failed: "Sign up failed. Try again.",
-  },
-} satisfies Record<AuthMode, Record<string, string>>;
+// Each mode's copy in the `auth` dictionary.
+const COPY_KEY = {
+  signin: "signIn",
+  signup: "signUp",
+} as const satisfies Record<AuthMode, keyof Dictionary["auth"]>;
 
-// Better Auth error codes the user can act on. Anything else gets the generic
-// line for the mode: the library's own message is never shown.
-const ERROR_MESSAGES: Partial<Record<string, string>> = {
-  INVALID_EMAIL_OR_PASSWORD: "Invalid email or password.",
-  USER_ALREADY_EXISTS: "An account with this email already exists.",
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-    "An account with this email already exists.",
-};
-
-const UNREACHABLE =
-  "We could not reach the server. Check your connection and try again.";
+// Better Auth error codes the user can act on, by their message in the `auth`
+// dictionary. Anything else gets the generic line for the mode: the library's
+// own message is never shown.
+const ERROR_KEYS: Partial<Record<string, keyof Dictionary["auth"]["errors"]>> =
+  {
+    INVALID_EMAIL_OR_PASSWORD: "invalidCredentials",
+    USER_ALREADY_EXISTS: "userExists",
+    USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "userExists",
+  };
 
 export interface AuthFormProps {
   initialMode?: AuthMode;
@@ -60,10 +52,11 @@ export interface AuthFormProps {
 /**
  * A full page load, not `router.refresh()`: the session changed, and a soft
  * refresh can keep a shell rendered for the old session, or drop the page
- * behind a server redirect (docs/agents/nextjs.md § Navigation).
+ * behind a server redirect (docs/agents/nextjs.md § Navigation). To the home
+ * page of the language the visitor signed in from.
  */
-function reloadSignedIn() {
-  window.location.assign("/");
+function reloadSignedIn(home: string) {
+  window.location.assign(home);
 }
 
 function subscribeToNothing() {
@@ -109,10 +102,16 @@ function AuthModeForm({
   onSuccess?: () => void;
   onSwitchMode: () => void;
 }) {
-  const copy = COPY[mode];
+  const { auth } = useDictionary();
+  const locale = useLocale();
+  const copy = auth[COPY_KEY[mode]];
   const [error, setError] = useState("");
   const form = useForm<AuthFormValues>({
-    resolver: zodResolver(mode === "signup" ? signUpSchema : authSchema),
+    resolver: zodResolver(
+      mode === "signup"
+        ? createSignUpSchema(auth.validation)
+        : createAuthSchema(auth.validation)
+    ),
     defaultValues: { name: "", email: "", password: "" },
   });
   // A hook, not `form.formState`: the React Compiler memoizes a read off the
@@ -137,17 +136,18 @@ function AuthModeForm({
             });
 
       if (result.error) {
-        setError(ERROR_MESSAGES[result.error.code ?? ""] ?? copy.failed);
+        const errorKey = ERROR_KEYS[result.error.code ?? ""];
+        setError(errorKey ? auth.errors[errorKey] : copy.failed);
         return;
       }
 
       onSuccess?.();
-      reloadSignedIn();
+      reloadSignedIn(localizePath("/", locale));
     } catch (error) {
       reportError(error, {
         action: mode === "signup" ? "Auth.sign_up" : "Auth.sign_in",
       });
-      setError(UNREACHABLE);
+      setError(auth.errors.unreachable);
     }
   };
 
@@ -167,11 +167,11 @@ function AuthModeForm({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel required>Name</FormLabel>
+                  <FormLabel required>{auth.fields.name.label}</FormLabel>
                   <FormControl>
                     <Input
                       autoComplete="name"
-                      placeholder="Your name"
+                      placeholder={auth.fields.name.placeholder}
                       {...field}
                     />
                   </FormControl>
@@ -185,11 +185,11 @@ function AuthModeForm({
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>Email</FormLabel>
+                <FormLabel required>{auth.fields.email.label}</FormLabel>
                 <FormControl>
                   <Input
                     autoComplete="email"
-                    placeholder="you@example.com"
+                    placeholder={auth.fields.email.placeholder}
                     type="email"
                     {...field}
                   />
@@ -203,7 +203,7 @@ function AuthModeForm({
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel required>Password</FormLabel>
+                <FormLabel required>{auth.fields.password.label}</FormLabel>
                 <FormControl>
                   <PasswordInput
                     autoComplete={

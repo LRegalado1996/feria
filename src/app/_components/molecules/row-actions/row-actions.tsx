@@ -15,6 +15,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/app/_components/molecules/dropdown-menu";
+import { useDictionary } from "@/lib/hooks/i18n";
+import { interpolate } from "@/lib/i18n/interpolate";
 
 export interface RowActionsProps {
   /**
@@ -34,6 +36,7 @@ export interface RowActionsProps {
 
 /** An icon-only menu of the actions on one row of a list. */
 function RowActions({ onDelete, rowLabel, testId }: RowActionsProps) {
+  const { common } = useDictionary();
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
@@ -44,7 +47,9 @@ function RowActions({ onDelete, rowLabel, testId }: RowActionsProps) {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
-              aria-label={`More actions: ${rowLabel}`}
+              aria-label={interpolate(common.moreActionsForRow, {
+                row: rowLabel,
+              })}
               data-slot="row-actions"
               data-testid={testId}
               ref={triggerRef}
@@ -55,11 +60,11 @@ function RowActions({ onDelete, rowLabel, testId }: RowActionsProps) {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent>More actions</TooltipContent>
+        <TooltipContent>{common.moreActions}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem
-          aria-label={`Delete: ${rowLabel}`}
+          aria-label={interpolate(common.deleteRow, { row: rowLabel })}
           data-testid={`${testId}-delete`}
           onSelect={() => {
             onDelete(triggerRef.current);
@@ -67,7 +72,7 @@ function RowActions({ onDelete, rowLabel, testId }: RowActionsProps) {
           variant="destructive"
         >
           <Trash2 aria-hidden="true" />
-          Delete
+          {common.delete}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

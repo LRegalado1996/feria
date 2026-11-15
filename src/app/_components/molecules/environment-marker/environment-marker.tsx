@@ -1,15 +1,11 @@
 import { cva } from "class-variance-authority";
 
+import { getDictionary } from "@/content";
 import { detectStableEnvironment } from "@/env-database-url";
+import type { Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 
 type MarkedEnvironment = "qa" | "preview" | "development";
-
-const LABELS: Record<MarkedEnvironment, string> = {
-  qa: "QA",
-  preview: "Preview",
-  development: "Development",
-};
 
 const lineVariants = cva(
   // Pure paint at the top edge: it never takes a row or a click.
@@ -71,12 +67,20 @@ function resolveEnvironment(): MarkedEnvironment | null {
  * chip naming the environment, so the marker is never color alone. Production
  * renders nothing; a bare edge means the real thing. Mounted first in <body>.
  */
-function EnvironmentMarker({ className }: { className?: string }) {
+function EnvironmentMarker({
+  className,
+  locale,
+}: {
+  className?: string;
+  locale: Locale;
+}) {
   const environment = resolveEnvironment();
 
   if (!environment) {
     return null;
   }
+
+  const labels = getDictionary(locale).environment;
 
   return (
     <div
@@ -87,8 +91,8 @@ function EnvironmentMarker({ className }: { className?: string }) {
     >
       <div aria-hidden="true" className={lineVariants({ environment })} />
       <p className={chipVariants({ environment })}>
-        <span className="sr-only">Environment: </span>
-        {LABELS[environment]}
+        <span className="sr-only">{labels.prefix} </span>
+        {labels[environment]}
       </p>
     </div>
   );

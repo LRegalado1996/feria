@@ -2,8 +2,10 @@
 
 import { type ComponentProps, useState } from "react";
 
+import { useLocale } from "@/lib/hooks/i18n";
+import type { Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
-import { toPlainNumberText } from "@/lib/utils/format";
+import { fromPlainNumberText, toPlainNumberText } from "@/lib/utils/format";
 
 const INPUT_CLASS = [
   "h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30",
@@ -65,14 +67,17 @@ function Input(props: InputProps) {
 }
 
 // An empty field, a leading minus, digits and (for decimals) one dot,
-// including the "1." and "-" a user types on the way to a number.
+// including the "1." and "-" a user types on the way to a number. Checked on
+// the plain text, whatever separators the page's language uses.
 const INTEGER_PATTERN = /^-?\d*$/;
 const DECIMAL_PATTERN = /^-?\d*\.?\d*$/;
 
-function formatNumberValue(value: number | null): string {
-  return value === null ? "" : String(value);
+/** The field's text for a value, in the page language's notation. */
+function formatNumberValue(value: number | null, locale: Locale): string {
+  return value === null ? "" : fromPlainNumberText(String(value), locale);
 }
 
+/** The number a plain (`-1234.5`) text stands for, or `null` for none yet. */
 function parseNumberValue(text: string): number | null {
   const parsed = Number(text);
   return text.trim() === "" || !Number.isFinite(parsed) ? null : parsed;
@@ -86,12 +91,16 @@ function NumberInput({
   value,
   ...props
 }: NumberInputProps) {
+  const locale = useLocale();
   // Every "no number" (null, undefined, NaN) is null, so the resync below
   // compares stably: NaN !== NaN would loop.
   const normalized =
     value === null || value === undefined || Number.isNaN(value) ? null : value;
-  // The text being typed, so "1." and "-" survive until they are a number.
-  const [buffer, setBuffer] = useState(() => formatNumberValue(normalized));
+  // The text being typed, in the page language's notation ("1500,5" in
+  // Spanish), so "1," and "-" survive until they are a number.
+  const [buffer, setBuffer] = useState(() =>
+    formatNumberValue(normalized, locale)
+  );
   const [lastValue, setLastValue] = useState(normalized);
 
   // A new value from outside (a reset, another record) replaces the text,
@@ -100,8 +109,8 @@ function NumberInput({
   if (normalized !== lastValue) {
     setLastValue(normalized);
 
-    if (parseNumberValue(buffer) !== normalized) {
-      setBuffer(formatNumberValue(normalized));
+    if (parseNumberValue(toPlainNumberText(buffer, locale)) !== normalized) {
+      setBuffer(formatNumberValue(normalized, locale));
     }
   }
 
@@ -115,15 +124,16 @@ function NumberInput({
       inputMode={allowDecimal ? "decimal" : "numeric"}
       onBlur={(event) => {
         // Dangling text ("1.", "-") settles to the value once focus leaves.
-        setBuffer(formatNumberValue(normalized));
+        setBuffer(formatNumberValue(normalized, locale));
         onBlur?.(event);
       }}
       onChange={(event) => {
-        // The user types in the app locale's notation ("1,500.5" in en-US).
-        const text = toPlainNumberText(event.currentTarget.value);
+        // The user types in the page language's notation: "1.500,5" in
+        // Spanish, "1,500.5" in English.
+        const text = toPlainNumberText(event.currentTarget.value, locale);
 
         if (pattern.test(text)) {
-          setBuffer(text);
+          setBuffer(fromPlainNumberText(text, locale));
           onValueChange(parseNumberValue(text));
         }
       }}

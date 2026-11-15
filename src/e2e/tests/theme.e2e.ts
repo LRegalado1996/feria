@@ -11,14 +11,14 @@ test.describe("Theme", () => {
     await homePage.goto();
     const html = page.locator("html");
 
-    await homePage.chooseTheme("Dark");
+    await homePage.chooseTheme("Oscuro");
 
     await expect(html).toHaveClass(DARK_CLASS);
 
     await page.reload();
     await expect(html).toHaveClass(DARK_CLASS);
 
-    await homePage.chooseTheme("Light");
+    await homePage.chooseTheme("Claro");
 
     await expect(html).not.toHaveClass(DARK_CLASS);
   });

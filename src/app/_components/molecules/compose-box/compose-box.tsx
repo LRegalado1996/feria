@@ -19,6 +19,7 @@ import {
   FormLabel,
 } from "@/app/_components/molecules/form";
 import { reportError } from "@/lib/errors/client";
+import { useDictionary } from "@/lib/hooks/i18n";
 import {
   type CreatePostValues,
   createPostSchema,
@@ -33,6 +34,7 @@ export interface ComposeBoxProps {
 }
 
 function ComposeBox({ currentUser, onSubmit }: ComposeBoxProps) {
+  const copy = useDictionary().post.compose;
   const form = useForm<CreatePostValues>({
     resolver: zodResolver(createPostSchema),
     defaultValues: { name: "" },
@@ -51,7 +53,7 @@ function ComposeBox({ currentUser, onSubmit }: ComposeBoxProps) {
       // The create mutation leaves reporting to this catch (its meta), so a
       // failure is reported once.
       reportError(error, { action: "Post.create" });
-      toast.error("Your post was not published. Try again.");
+      toast.error(copy.failed);
     }
   };
 
@@ -77,12 +79,12 @@ function ComposeBox({ currentUser, onSubmit }: ComposeBoxProps) {
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="sr-only">New post</FormLabel>
+                <FormLabel className="sr-only">{copy.label}</FormLabel>
                 <FormControl>
                   <Textarea
                     className="resize-none border-0 shadow-none"
                     maxLength={POST_NAME_MAX_LENGTH}
-                    placeholder="What's happening?"
+                    placeholder={copy.placeholder}
                     {...field}
                   />
                 </FormControl>
@@ -96,7 +98,7 @@ function ComposeBox({ currentUser, onSubmit }: ComposeBoxProps) {
               size="sm"
               type="submit"
             >
-              {isSubmitting ? "Posting…" : "Post"}
+              {isSubmitting ? copy.pending : copy.submit}
             </Button>
           </div>
         </div>

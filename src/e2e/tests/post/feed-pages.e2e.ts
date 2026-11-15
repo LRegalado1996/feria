@@ -50,12 +50,14 @@ test.describe("Feed pages", () => {
     await homePage.scrollToBottom();
 
     const error = page.getByTestId("feed-more-error");
-    await expect(error).toContainText("Older posts did not load.");
+    await expect(error).toContainText(
+      "No se pudieron cargar las publicaciones anteriores."
+    );
     await expect(page.getByTestId("post-card")).toHaveCount(10);
     await expect(page.getByTestId("empty-state")).toHaveCount(0);
 
     await page.unroute(GET_POSTS);
-    await error.getByRole("button", { name: "Try again" }).click();
+    await error.getByRole("button", { name: "Reintentar" }).click();
 
     await homePage.waitForMinimumPosts(11);
     await expect(error).toHaveCount(0);

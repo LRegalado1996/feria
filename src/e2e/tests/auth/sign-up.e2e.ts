@@ -1,7 +1,7 @@
 import { expect, test } from "../../fixtures";
 import { HomePage } from "../../page-objects/home.page";
 
-const EMAIL_EXISTS_PATTERN = /already|exists|user/i;
+const EMAIL_EXISTS_PATTERN = /Ya existe una cuenta/i;
 const MIN_NAME_LENGTH_PATTERN = /2/;
 
 // These start signed out. A user signed up here is deleted at teardown (the
@@ -15,10 +15,10 @@ test.describe("Sign Up", () => {
 
     await homePage.switchToSignUp();
 
-    await expect(homePage.getButton("Sign Up")).toBeVisible();
-    await expect(homePage.getInput("Name")).toBeVisible();
+    await expect(homePage.getButton("Crear cuenta")).toBeVisible();
+    await expect(homePage.getInput("Nombre")).toBeVisible();
     await expect(homePage.getInput("Email")).toBeVisible();
-    await expect(homePage.getInput("Password")).toBeVisible();
+    await expect(homePage.getInput("Contraseña")).toBeVisible();
   });
 
   test("should sign up with valid credentials", async ({ page }) => {
@@ -66,10 +66,10 @@ test.describe("Sign Up", () => {
     await homePage.goto();
 
     await homePage.switchToSignUp();
-    await expect(homePage.getInput("Name")).toBeVisible();
+    await expect(homePage.getInput("Nombre")).toBeVisible();
 
     await homePage.switchToSignIn();
-    await expect(homePage.getInput("Name")).not.toBeVisible();
-    await expect(homePage.getButton("Sign In")).toBeVisible();
+    await expect(homePage.getInput("Nombre")).not.toBeVisible();
+    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
   });
 });

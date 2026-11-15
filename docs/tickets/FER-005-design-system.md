@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-004
 
 ## Goal

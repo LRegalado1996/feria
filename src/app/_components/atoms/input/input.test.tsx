@@ -1,13 +1,15 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
+
+import { renderWithI18n } from "@/test/i18n";
 
 import { Input, type TextInputProps } from "./input";
 
 function setupText(props: TextInputProps = {}) {
   const user = userEvent.setup();
-  render(<Input aria-label="Field" {...props} />);
+  renderWithI18n(<Input aria-label="Field" {...props} />);
 
   return { input: screen.getByLabelText("Field"), user };
 }
@@ -16,9 +18,11 @@ function setupText(props: TextInputProps = {}) {
 function setupNumber({
   allowDecimal,
   initial = null,
+  locale = "en",
 }: {
   allowDecimal?: boolean;
   initial?: number | null;
+  locale?: "en" | "es";
 } = {}) {
   const onValueChange = vi.fn((_value: number | null) => undefined);
   const onBlur = vi.fn(() => undefined);
@@ -52,7 +56,7 @@ function setupNumber({
     );
   }
 
-  render(<Field />);
+  renderWithI18n(<Field />, { locale });
 
   return {
     input: screen.getByLabelText<HTMLInputElement>("Amount"),
@@ -115,7 +119,35 @@ describe("Input (number)", () => {
     ]);
   });
 
-  test("reads the locale's grouping, so en-US 1,500 is fifteen hundred", async () => {
+  test("reads and shows Spanish notation on a Spanish page: 1.500,5 is fifteen hundred and a half", async () => {
+    const { input, onValueChange, user } = setupNumber({ locale: "es" });
+
+    await user.type(input, "1.500,5");
+
+    expect(input).toHaveValue("1500,5");
+    expect(onValueChange).toHaveBeenLastCalledWith(1500.5);
+  });
+
+  test("on a Spanish page, shows an outside value with a decimal comma and settles dangling text to it", async () => {
+    const { input, onValueChange, user } = setupNumber({
+      initial: 2.5,
+      locale: "es",
+    });
+
+    expect(input).toHaveValue("2,5");
+
+    await user.clear(input);
+    await user.type(input, "-3,");
+
+    expect(input).toHaveValue("-3,");
+    expect(onValueChange).toHaveBeenLastCalledWith(-3);
+
+    await user.tab();
+
+    expect(input).toHaveValue("-3");
+  });
+
+  test("reads the locale's grouping, so the English 1,500 is fifteen hundred", async () => {
     const { input, onValueChange, user } = setupNumber();
 
     await user.type(input, "1,500");

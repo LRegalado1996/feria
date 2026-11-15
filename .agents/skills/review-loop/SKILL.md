@@ -5,7 +5,9 @@ description: Review a change before and after its pull request until it is ready
 
 # Review loop with CodeRabbit
 
-CodeRabbit reviews every pull request into `qa`. The local agent answers it.
+CodeRabbit reviews every pull request into `qa` that a person or an agent
+opens. Dependabot's are skipped (`.coderabbit.yaml`): CI vouches for a version
+bump, and each review is paid for. The local agent answers it.
 Neither side is right by default: the goal is a PR that is correct, not a PR
 with no comments. Agreeing to end the argument is a failure; so is refusing a
 valid point.
@@ -97,10 +99,23 @@ Then open the PR with the `create-pr` skill.
 6. **Stop when** every thread is resolved with a fix or an accepted reason, all
    required checks are green, and a visible change has its visual proof.
 
+## A PR too large to review
+
+CodeRabbit skips a pull request over its file limit. The limit depends on the
+plan and counts files after the `path_filters` in `.coderabbit.yaml`; it was
+300 when FER-001 hit it, and the "Review skipped" comment states the current
+number. When nearly all of the files are an import nobody here wrote (a template, a vendored tree), do not
+split the work artificially: push the untouched import as a branch on top of
+`qa`, record it as an ancestor of the PR branch (`git merge -s ours <import>`,
+no content change), point the PR's base at that branch and ask for
+`@coderabbitai full review`. The diff is then only what this project changed.
+Point the base back to `qa` before merging and delete the import branch after.
+
 ## Promotion PRs
 
-The PR from `qa` into `main` is not part of this loop. CodeRabbit is configured
-to skip it, because every change in it was reviewed in its own PR. Do not wait
+The PR from `qa` into `main` is not part of this loop, and neither is the
+merge-back from `main` into `qa`. CodeRabbit skips both by their
+exact titles, because every change in them was reviewed in its own PR. Do not wait
 for a review there: check that the required checks are green, that `qa` is
 stable, and ask Lucas for the go-ahead.
 

@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-001
 
 ## Goal
@@ -33,6 +33,17 @@ The custom domain (FER-032). Sentry and CI secrets (FER-003).
 ## Notes
 
 Needs Lucas for the interactive steps: Vercel login, Marketplace terms, billing confirmation.
+
+## Outcome
+
+What exists, and where each environment points, is in `README.md` § Project setup. Decisions taken on the way:
+
+- **QA is the Preview environment's `qa` branch.** The Hobby plan has no custom environments, so QA's variables are scoped to that git branch and its stable URL is the branch alias.
+- **Two Neon projects, not two branches of one:** `feria-db` is connected to Production only and `feria-db-qa` to Preview only, so no QA or preview build ever holds production's credentials.
+- **Two Blob stores** (`feria-images`, `feria-images-qa`), public access: the storefront serves the images to anyone.
+- **AI Gateway:** no key. Deployments authenticate with Vercel's OIDC token; the project's budget is USD 5 per month, chosen by Lucas for the start.
+- **Left for FER-003,** which owns preview deployments and CI secrets: turn on "create a database branch per preview deployment" on `feria-db-qa` in the Neon integration, and add `NEON_API_KEY` and `NEON_PROJECT_ID` to GitHub. Until then no preview is deployed (`vercel.json` deploys `qa` and `main` only).
+- **Not done:** a DML-only database role for the running app (`docs/agents/database.md` § Migration credentials). The app and the migrations use Neon's owner role, on the pooled and the direct endpoint.
 
 ## Reporting
 

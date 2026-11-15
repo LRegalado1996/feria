@@ -16,7 +16,7 @@ test.describe("Delete a post", () => {
 
     await homePage.deletePost(own.id);
 
-    await expect(page.getByText("Post deleted.")).toBeVisible();
+    await expect(page.getByText("Publicación eliminada.")).toBeVisible();
     await expect(
       page.getByTestId("post-card").filter({ hasText: own.name })
     ).toHaveCount(0);
