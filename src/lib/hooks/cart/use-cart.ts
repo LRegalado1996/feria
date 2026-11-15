@@ -103,8 +103,12 @@ function readRaw(key: string): string | null {
     reportError(error, { action: "Cart.read_storage" });
     storage = null;
 
+    // A copy the page already keeps (a write storage refused) is newer than
+    // what was last read for that key.
     for (const [storedKey, raw] of lastRead) {
-      memory.set(storedKey, raw);
+      if (!memory.has(storedKey)) {
+        memory.set(storedKey, raw);
+      }
     }
 
     return memory.get(key) ?? null;

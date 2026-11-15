@@ -359,6 +359,47 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(4, 1)]);
   });
 
+  test("a read that throws for one store keeps another store's newer cart from a refused write", async () => {
+    const { cart, result, storage } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+    const other = renderHook(() => cart.useCart("tienda-demo"));
+    storage.setItem.mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+
+    // Storage refuses the write: this store's newer cart lives in the page.
+    act(() => {
+      result.current.add(9);
+    });
+    expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
+
+    // The other store's next read throws.
+    storage.getItem.mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    });
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "feria:cart:tienda-demo" })
+      );
+    });
+    expect(other.result.current.items).toEqual([]);
+
+    act(() => {
+      result.current.add(5);
+    });
+
+    expect(result.current.items).toEqual([
+      makeItem(4, 2),
+      makeItem(9, 1),
+      makeItem(5, 1),
+    ]);
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "SecurityError" }),
+      { action: "Cart.read_storage" }
+    );
+  });
+
   test("a cart another tab removed is not brought back when a later read throws", async () => {
     const { result, storage } = await setup({
       stored: JSON.stringify([makeItem(4, 2)]),
