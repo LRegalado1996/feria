@@ -1,6 +1,12 @@
 import type { Page } from "@playwright/test";
 
-import { type DbFixture, expect, test } from "../../fixtures";
+import {
+  type DbFixture,
+  expect,
+  IGNORE_HTTPS_ERRORS,
+  requireBaseURL,
+  test,
+} from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { StorePage } from "../../page-objects/store.page";
 
@@ -84,6 +90,7 @@ function titles(page: Page) {
 
 test.describe("Catalog", () => {
   test("filters by category and color in the address, and a fresh visit to the link shows the same selection", async ({
+    baseURL,
     browser,
     db,
     page,
@@ -112,20 +119,22 @@ test.describe("Catalog", () => {
     await expect(page).toHaveTitle("Collares · Dorado · Catalog Store");
 
     // Opened fresh, as a link pasted into a chat, in English too.
-    const fresh = await browser.newPage();
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      timezoneId: "UTC",
+    });
     try {
+      const fresh = await context.newPage();
       await fresh.goto(
-        new URL(
-          `/en/${store.slug}/products?category=collares&color=dorado`,
-          page.url()
-        ).href
+        `/en/${store.slug}/products?category=collares&color=dorado`
       );
       await expect(titles(fresh)).toHaveText(["Collar dorado"]);
       await expect(fresh.getByRole("heading", { level: 1 })).toHaveText(
         "Collares · Dorado"
       );
     } finally {
-      await fresh.close();
+      await context.close();
     }
   });
 
@@ -154,7 +163,12 @@ test.describe("Catalog", () => {
     await expect(titles(page)).toHaveCount(2);
     const search = page.getByRole("searchbox", { name: "Buscar artículos" });
 
-    await search.fill("pulsera");
+    // Filled until React owns the field: a fill before hydration is lost.
+    await expect(async () => {
+      await search.fill("");
+      await search.fill("pulsera");
+      await expect(page).toHaveURL(/q=/u, { timeout: 2000 });
+    }).toPass();
     await expect(page).toHaveURL(/color=violeta&q=pulsera$/u);
     await expect(titles(page)).toHaveText(["Pulsera violeta"]);
     await expect(search).toBeFocused();

@@ -32,7 +32,9 @@ function makeItem(id: number): CatalogPage["items"][number] {
   };
 }
 
-const CURSOR = {
+// The default selection is by price, so its cursor carries the price.
+const CURSOR = { id: 2, priceAmount: 2000, sort: "price_asc" as const };
+const NEWEST_CURSOR = {
   id: 2,
   publishedAt: "2026-11-01T12:00:00.000Z",
   sort: "newest" as const,
@@ -145,7 +147,10 @@ describe("useCatalogProducts", () => {
   });
 
   test("sends no category and no search when none is chosen", async () => {
-    const { products, result } = setup({ query: EMPTY_CATALOG_QUERY });
+    const { products, result } = setup({
+      firstPage: makePage([1, 2], NEWEST_CURSOR),
+      query: EMPTY_CATALOG_QUERY,
+    });
 
     act(() => {
       result.current.fetchNextPage();
@@ -153,7 +158,7 @@ describe("useCatalogProducts", () => {
 
     await waitFor(() => {
       expect(products).toHaveBeenCalledExactlyOnceWith({
-        cursor: CURSOR,
+        cursor: NEWEST_CURSOR,
         filters: [],
         locale: "es",
         sort: "newest",
