@@ -537,8 +537,15 @@ describe("deleteCategory", () => {
       movedArticles: 3,
     });
 
-    // The deleted category is locked to write, its destination to keep.
-    expect(locks()).toEqual(["update", "share"]);
+    // The deleted category is locked to write, its destination to keep,
+    // then its articles to move, in id order (the order an order takes).
+    expect(locks()).toEqual(["update", "share", "update"]);
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls.at(-1))).toBe(
+      '"product"."id" asc'
+    );
+    expect(db.$["select.for"].mock.invocationCallOrder[2] ?? 0).toBeLessThan(
+      db.$["update.where"].mock.invocationCallOrder[0] ?? 0
+    );
     expect(db.$["update.returning"]).toHaveBeenCalledExactlyOnceWith({
       id: product.id,
     });

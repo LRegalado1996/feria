@@ -291,6 +291,15 @@ export async function deleteCategory(
     }
 
     await findStoreCategory(tx, { id: moveToId, lock: "share", storeId });
+    // Its articles locked in id order before the bulk update, which locks
+    // them in scan order: an order (FER-025) share-locks articles in id
+    // order too, so neither can hold one the other waits for.
+    await tx
+      .select({ id: product.id })
+      .from(product)
+      .where(and(eq(product.storeId, storeId), eq(product.categoryId, id)))
+      .orderBy(asc(product.id))
+      .for("update");
     const moved = await tx
       .update(product)
       .set({ categoryId: moveToId })
