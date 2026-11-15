@@ -32,7 +32,8 @@ function subscribe(listener: () => void) {
   // Another tab wrote this cart to storage: a copy this page kept after a
   // failed write is older than it, and would bring cleared articles back.
   const onStorage = (event: StorageEvent) => {
-    if (event.key !== null) {
+    // Without a readable storage the page's copy is the only one there is.
+    if (event.key !== null && storage) {
       memory.delete(event.key);
     }
 
@@ -67,9 +68,47 @@ function cartStorage(): Storage | null {
   return storage;
 }
 
+// The last text each key read from storage, kept for the moment a later
+// read throws: the page carries on with it instead of an empty cart.
+const lastRead = new Map<string, string>();
+
 /** The raw stored text, the snapshot React compares between renders. */
 function readRaw(key: string): string | null {
-  return memory.get(key) ?? cartStorage()?.getItem(key) ?? null;
+  const kept = memory.get(key);
+
+  if (kept !== undefined) {
+    return kept;
+  }
+
+  const browserStorage = cartStorage();
+
+  if (!browserStorage) {
+    return null;
+  }
+
+  try {
+    const raw = browserStorage.getItem(key);
+
+    if (raw === null) {
+      lastRead.delete(key);
+    } else {
+      lastRead.set(key, raw);
+    }
+
+    return raw;
+  } catch (error) {
+    // Storage opened, but a later read threw (Firefox does once site data
+    // goes away mid-visit): reported once, and from then on every cart
+    // lives in the page, starting from what it last read.
+    reportError(error, { action: "Cart.read_storage" });
+    storage = null;
+
+    for (const [storedKey, raw] of lastRead) {
+      memory.set(storedKey, raw);
+    }
+
+    return memory.get(key) ?? null;
+  }
 }
 
 /** The stored cart, or an empty one when it is missing or does not parse. */
@@ -105,6 +144,7 @@ function write(key: string, cart: Cart): boolean {
     try {
       browserStorage.setItem(key, text);
       memory.delete(key);
+      lastRead.set(key, text);
     } catch (error) {
       // Full or refused: the cart lives in the page until it is left.
       reportError(error, { action: "Cart.write_storage" });
