@@ -191,7 +191,8 @@ describe("Input (number)", () => {
 
     await user.tab();
 
-    const message = screen.getByText(UNREADABLE_EN);
+    const message = screen.getByRole("alert");
+    expect(message).toHaveTextContent(UNREADABLE_EN);
     expect(input).toHaveValue("0,500");
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(input).toHaveAttribute(

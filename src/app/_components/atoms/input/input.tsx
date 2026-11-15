@@ -170,6 +170,7 @@ function NumberInput({
           className="text-sm text-destructive"
           data-slot="input-refusal"
           id={messageId}
+          role="alert"
         >
           {dictionary.common.numberInput[refusal]}
         </p>

@@ -244,6 +244,9 @@ describe("fromPlainNumberText", () => {
     // Text still being typed keeps its dangling separator or sign.
     ["1.", "1,", "1."],
     ["-", "-", "-"],
+    // Three decimals get a trailing zero, or they would read as thousands.
+    ["1.234", "1,2340", "1.2340"],
+    ["0.125", "0,1250", "0.1250"],
     ["12", "12", "12"],
     ["", "", ""],
   ])(
@@ -257,9 +260,11 @@ describe("fromPlainNumberText", () => {
   test.each(["es", "en"] as const)(
     "what it writes in %s, readTypedNumber reads back",
     (locale) => {
-      expect(
-        readTypedNumber(fromPlainNumberText("-1234.5", locale))
-      ).toStrictEqual({ kind: "number", value: -1234.5 });
+      for (const value of [-1234.5, 1.234, 0.125, 12.5, 1500]) {
+        expect(
+          readTypedNumber(fromPlainNumberText(String(value), locale))
+        ).toStrictEqual({ kind: "number", value });
+      }
     }
   );
 });

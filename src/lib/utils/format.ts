@@ -327,8 +327,14 @@ function readDigits(
  * The other direction: plain `-1234.5` text written with the language's
  * decimal separator and no grouping ("-1234,5" in Spanish), which is what a
  * number field shows once focus leaves it. `readTypedNumber` reads it back to
- * the same number.
+ * the same number, three decimals included.
  */
 export function fromPlainNumberText(plain: string, locale: Locale): string {
-  return plain.replace(".", decimalSeparator(INTL_LOCALES[locale]));
+  // Three decimals would read back as a thousands group ("1,234" is 1234), so
+  // they get a trailing zero that keeps them a fraction ("1,2340").
+  const [integer = "", fraction] = plain.split(".");
+  const written =
+    fraction?.length === THOUSANDS_DIGITS ? `${integer}.${fraction}0` : plain;
+
+  return written.replace(".", decimalSeparator(INTL_LOCALES[locale]));
 }
