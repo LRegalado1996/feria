@@ -9,7 +9,8 @@
 export function normalizePhone(typed: string): string | null {
   const compact = typed.replaceAll(/[\s.\-()]/gu, "");
 
-  if (/^(?:\+|00)\d{8,15}$/u.test(compact)) {
+  // Country codes never start with 0.
+  if (/^(?:\+|00)[1-9]\d{7,14}$/u.test(compact)) {
     return `+${compact.replace(/^(?:\+|00)/u, "")}`;
   }
 

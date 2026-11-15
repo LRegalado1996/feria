@@ -10,7 +10,7 @@ const { env } = vi.hoisted(() => ({
 
 vi.mock("@/env", () => ({ env }));
 
-const SECRET = "a-secret-only-tests-know";
+const SECRET = "synthetic-order-client-secret";
 
 function setup({ secret = SECRET }: { secret?: string } = {}) {
   env.BETTER_AUTH_SECRET = secret === "" ? undefined : secret;
@@ -77,17 +77,18 @@ describe("orderClientKey", () => {
 
     expect(key).toBe(keyOf("203.0.113.7"));
     expect(keyFor({ "x-real-ip": "203.0.113.7" })).toBe(key);
-    expect(keyFor({ "x-real-ip": "203.0.113.8" })).not.toBe(key);
+    expect(keyFor({ "x-real-ip": "203.0.113.8" })).toBe(keyOf("203.0.113.8"));
+    expect(keyOf("203.0.113.8")).not.toBe(key);
     expect(key).not.toContain("203.0.113.7");
   });
 
   test("depends on the secret, so the database alone cannot reverse it", () => {
     const first = setup().keyFor({ "x-real-ip": "203.0.113.7" });
-    const second = setup({ secret: "another-secret" }).keyFor({
+    const second = setup({ secret: "synthetic-other-secret" }).keyFor({
       "x-real-ip": "203.0.113.7",
     });
 
-    expect(second).toBe(keyOf("203.0.113.7", "another-secret"));
+    expect(second).toBe(keyOf("203.0.113.7", "synthetic-other-secret"));
     expect(second).not.toBe(first);
   });
 
@@ -98,6 +99,9 @@ describe("orderClientKey", () => {
 
     expect(key).toBe(keyOf("2001:db8:1:2::/64"));
     expect(keyFor({ "x-real-ip": "2001:db8:1:2:ffff::9" })).toBe(key);
-    expect(keyFor({ "x-real-ip": "2001:db8:1:3::8" })).not.toBe(key);
+    expect(keyFor({ "x-real-ip": "2001:db8:1:3::8" })).toBe(
+      keyOf("2001:db8:1:3::/64")
+    );
+    expect(keyOf("2001:db8:1:3::/64")).not.toBe(key);
   });
 });

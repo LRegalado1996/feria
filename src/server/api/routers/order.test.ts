@@ -176,16 +176,7 @@ describe("order router: the shopper's side", () => {
     });
 
     await expect(
-      run(
-        "create",
-        makeOrderInput({
-          clientKey: "forged",
-          currencyCode: "UYU",
-          items: [{ productId: 11, quantity: 2, unitPriceAmount: 1 }],
-          storeId: 99,
-          totalAmount: 1,
-        })
-      )
+      run("create", makeOrderInput({ items: [{ productId: 11, quantity: 2 }] }))
     ).resolves.toEqual({ code: "ABCDE", token: "the-token" });
 
     expect(services.isStorefrontLaunchedFor).toHaveBeenCalledExactlyOnceWith(
@@ -213,6 +204,30 @@ describe("order router: the shopper's side", () => {
       },
     });
   });
+
+  test.each([
+    [
+      "a price",
+      { items: [{ productId: 11, quantity: 2, unitPriceAmount: 1 }] },
+    ],
+    ["a total", { totalAmount: 1 }],
+    ["a currency", { currencyCode: "UYU" }],
+    ["a store id", { storeId: 99 }],
+    ["a client key", { clientKey: "forged" }],
+  ])(
+    "refuses a request carrying %s as tampered, before reading anything",
+    async (_what, forged) => {
+      const { run } = setup({
+        headers: { "x-e2e-storefront-launched": "true" },
+      });
+
+      await expect(run("create", makeOrderInput(forged))).rejects.toMatchObject(
+        { code: "BAD_REQUEST" }
+      );
+      expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+      expect(services.createOrder).not.toHaveBeenCalled();
+    }
+  );
 
   test("creates with no client key when the platform gave no IP", async () => {
     const { db, run } = setup();

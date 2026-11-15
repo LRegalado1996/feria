@@ -754,6 +754,9 @@ describe("status moves", () => {
     "%s → %s is refused, changing nothing",
     async (from, to) => {
       const order = await setup(from);
+      const before = (
+        await getOrder(db, { id: order.id, storeId: order.shop.id })
+      ).history;
 
       await expect(move(order, to)).rejects.toMatchObject({
         code: "CONFLICT",
@@ -762,7 +765,7 @@ describe("status moves", () => {
       expect((await orderRow(order.token)).status).toBe(from);
       expect(
         (await getOrder(db, { id: order.id, storeId: order.shop.id })).history
-      ).toHaveLength(1);
+      ).toEqual(before);
     }
   );
 });

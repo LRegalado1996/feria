@@ -50,17 +50,19 @@ export const ORDER_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const bodyIdSchema = z.number().int().positive().max(INT4_MAX);
 const idSchema = z.coerce.number().int().positive().max(INT4_MAX);
 
-export const orderItemInputSchema = z.object({
+export const orderItemInputSchema = z.strictObject({
   productId: bodyIdSchema,
   quantity: z.number().int().min(1).max(ORDER_QUANTITY_MAX),
 });
 
 /**
  * An anonymous shopper's order: the articles and how many of each, never a
- * price, which the server computes. `requestKey` is the checkout's own id
+ * price, which the server computes. Strict: a request carrying a price, or
+ * any field this does not name, is refused as tampered, not quietly
+ * trimmed. `requestKey` is the checkout's own id
  * for this submit, so a double tap or a resubmit creates one order.
  */
-export const createOrderSchema = z.object({
+export const createOrderSchema = z.strictObject({
   customerName: z.string().trim().min(1).max(ORDER_CUSTOMER_NAME_MAX_LENGTH),
   customerPhone: z
     .string()

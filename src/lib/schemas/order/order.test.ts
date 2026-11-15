@@ -59,14 +59,26 @@ describe("ORDER_MOVES", () => {
 });
 
 describe("createOrderSchema", () => {
-  test("trims the name, normalizes the phone, reads a blank note as none and drops a price", () => {
+  test.each([
+    ["an item's price", { items: [makeItem({ unitPriceAmount: 1 })] }],
+    ["the order's total", { totalAmount: 1 }],
+    ["a field it does not name", { storeId: 7 }],
+  ])("refuses %s as tampering, never trims it", (_what, overrides) => {
+    const result = createOrderSchema.safeParse(makeOrder(overrides));
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.code)).toEqual([
+      "unrecognized_keys",
+    ]);
+  });
+
+  test("trims the name, normalizes the phone and reads a blank note as none", () => {
     expect(
       createOrderSchema.parse(
         makeOrder({
           customerName: "  Ana Pérez  ",
-          items: [makeItem({ productId: 3, quantity: 2, unitPriceAmount: 1 })],
+          items: [makeItem({ productId: 3, quantity: 2 })],
           note: "   ",
-          totalAmount: 1,
         })
       )
     ).toEqual({

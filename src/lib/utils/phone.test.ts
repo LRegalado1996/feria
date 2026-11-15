@@ -29,6 +29,8 @@ describe("normalizePhone", () => {
     ["+ with 16 digits", "+1234567890123456"],
     ["00 with 7 digits", "001234567"],
     ["00 with 16 digits", "001234567890123456"],
+    ["+ with country code 0", "+099123456"],
+    ["00 with country code 0", "00099123456"],
     ["a local mobile one digit short", "09912345"],
     ["a local mobile one digit long", "0991234567"],
     ["a bare mobile one digit short", "9912345"],
