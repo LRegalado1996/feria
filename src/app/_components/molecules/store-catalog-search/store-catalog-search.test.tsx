@@ -215,6 +215,20 @@ describe("StoreCatalogSearch", () => {
     expect(field()).toHaveValue("");
   });
 
+  test("a search from elsewhere drops the one still waiting to be sent", () => {
+    const { advance, field, rerender, type } = setup({
+      query: makeQuery({ q: "perla" }),
+    });
+
+    type("aro");
+    advance(SEARCH_DEBOUNCE_MS - 1);
+    rerender(makeQuery({ q: "collar" }));
+    advance(SEARCH_DEBOUNCE_MS);
+
+    expect(replace).not.toHaveBeenCalled();
+    expect(field()).toHaveValue("collar");
+  });
+
   test("shows a search the address brought from elsewhere", () => {
     const { field, rerender } = setup({ query: makeQuery({ q: "perla" }) });
 

@@ -29,6 +29,9 @@ function StoreShareButton({ className, path, title }: StoreShareButtonProps) {
   // The count changes the text even when the message repeats, so a second
   // "Link copied" is announced like the first.
   const [status, setStatus] = useState({ count: 0, text: "" });
+  // One share at a time: a second tap while the sheet or the copy is still
+  // working does nothing.
+  const [pending, setPending] = useState(false);
 
   const say = (text: string) => {
     setStatus((previous) => ({ count: previous.count + 1, text }));
@@ -64,13 +67,25 @@ function StoreShareButton({ className, path, title }: StoreShareButtonProps) {
     }
   };
 
+  const shareOnce = async () => {
+    if (pending) {
+      return;
+    }
+
+    setPending(true);
+    // `share` reports its own failures and never throws.
+    await share();
+    setPending(false);
+  };
+
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <button
         className="inline-flex min-h-11 items-center gap-2 border-2 border-store-contrast px-4 text-sm font-semibold text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+        aria-disabled={pending}
         data-slot="store-share-button"
         onClick={() => {
-          void share();
+          void shareOnce();
         }}
         type="button"
       >

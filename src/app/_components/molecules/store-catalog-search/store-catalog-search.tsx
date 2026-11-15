@@ -53,6 +53,9 @@ function StoreCatalogSearch({
   // from elsewhere (the back button) and replaces what the field shows.
   const [seen, setSeen] = useState(query.q);
   const [sent, setSent] = useState<(string | null)[]>([]);
+  // Counts the searches that came from elsewhere, so the effect below can
+  // drop a search of this field's own that was still waiting.
+  const [replaced, setReplaced] = useState(0);
 
   if (query.q !== seen) {
     const own = sent.indexOf(query.q);
@@ -62,8 +65,18 @@ function StoreCatalogSearch({
 
     if (own === -1) {
       setValue(query.q ?? "");
+      setReplaced((count) => count + 1);
     }
   }
+
+  // A search from elsewhere (the back button) replaced the field: a search
+  // it was still waiting to send would navigate away from it, so it goes.
+  useEffect(() => {
+    if (replaced > 0 && timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, [replaced]);
 
   const go = (typed: string) => {
     const q = typed.trim() === "" ? null : typed.trim();

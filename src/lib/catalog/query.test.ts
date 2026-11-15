@@ -89,7 +89,7 @@ describe("readCatalogQuery", () => {
     expect(readCatalogQuery({ q }).q).toBe(expected);
   });
 
-  test("drops tracking and malformed parameters, keeping the rest of the selection", () => {
+  test("drops parameters whose names or values are not slugs, keeping the rest", () => {
     expect(
       readCatalogQuery({
         FBCLID: "abc",
@@ -99,6 +99,20 @@ describe("readCatalogQuery", () => {
         utm_source: "instagram",
         UTM_SOURCE: "instagram",
       }).filters
+    ).toEqual([{ attribute: "color", values: ["dorado"] }]);
+  });
+
+  test("reads a tracking parameter that looks like a filter as one, which the store's filters then drop", () => {
+    const query = readCatalogQuery({ color: "dorado", fbclid: "abc" });
+
+    // `fbclid` is not one of the catalog's own names, and `abc` is a slug.
+    expect(query.filters).toEqual([
+      { attribute: "color", values: ["dorado"] },
+      { attribute: "fbclid", values: ["abc"] },
+    ]);
+    expect(
+      knownOnly(query, [], [{ slug: "color", values: [{ slug: "dorado" }] }])
+        .filters
     ).toEqual([{ attribute: "color", values: ["dorado"] }]);
   });
 

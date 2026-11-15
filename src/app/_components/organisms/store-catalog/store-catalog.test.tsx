@@ -80,6 +80,8 @@ function makeItem(
 }
 
 const CURSOR = { id: 2, publishedAt: "2026-11-01T12:00:00.000Z" };
+// A price order's cursor carries the price, not the date.
+const PRICE_CURSOR = { id: 2, priceAmount: 2000 };
 
 function makePage(
   items: CatalogItem[],
@@ -449,7 +451,7 @@ describe("StoreCatalog", () => {
 
   test("loads the next page with its button, with the whole selection", async () => {
     const { products, titles, user } = setup({
-      firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
+      firstPage: makePage([makeItem(1), makeItem(2)], PRICE_CURSOR),
       query: CHOSEN,
     });
 
@@ -460,7 +462,7 @@ describe("StoreCatalog", () => {
     });
     expect(products).toHaveBeenCalledExactlyOnceWith({
       category: "collares",
-      cursor: CURSOR,
+      cursor: PRICE_CURSOR,
       filters: [{ attribute: "color", values: ["dorado"] }],
       locale: "es",
       q: "perla",

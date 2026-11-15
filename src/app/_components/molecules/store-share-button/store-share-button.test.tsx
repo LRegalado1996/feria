@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -21,7 +21,7 @@ interface SetupOptions {
   copy?: "fail" | "ok";
   locale?: Locale;
   /** The browser's share sheet: absent, or how it ends. */
-  share?: "abort" | "fail" | "none" | "ok";
+  share?: "abort" | "fail" | "hold" | "none" | "ok";
 }
 
 function setup({
@@ -33,7 +33,15 @@ function setup({
   // Set before the browser's own objects are swapped: user-event installs
   // a clipboard of its own.
   const user = userEvent.setup();
+  // The held sheets, each closed by the test in turn.
+  const closes: (() => void)[] = [];
   const shareSheet = vi.fn(async (_data: ShareData) => {
+    if (share === "hold") {
+      await new Promise<void>((resolve) => {
+        closes.push(resolve);
+      });
+    }
+
     if (share === "abort") {
       throw new DOMException("Share canceled", "AbortError");
     }
@@ -73,6 +81,10 @@ function setup({
     },
     /** What the live region says, without its invisible mark. */
     said: () => screen.getByRole("status").textContent?.replaceAll(MARK, ""),
+    /** Closes the oldest share sheet still open. */
+    closeSheet: () => {
+      closes.shift()?.();
+    },
     shareSheet,
     status: () => screen.getByRole("status"),
     writeText,
@@ -181,4 +193,34 @@ describe("StoreShareButton", () => {
       );
     }
   );
+
+  test("shares one at a time: a second press while the sheet is open does nothing", async () => {
+    const { click, closeSheet, shareSheet } = setup({ share: "hold" });
+    const button = screen.getByRole("button", { name: "Compartir" });
+    expect(button).toHaveAttribute("aria-disabled", "false");
+
+    await click();
+    await waitFor(() => {
+      expect(button).toHaveAttribute("aria-disabled", "true");
+    });
+    await click();
+
+    expect(shareSheet).toHaveBeenCalledExactlyOnceWith({
+      title: "Collares",
+      url: URL_SHARED,
+    });
+
+    act(() => {
+      closeSheet();
+    });
+    await waitFor(() => {
+      expect(button).toHaveAttribute("aria-disabled", "false");
+    });
+    await click();
+
+    expect(shareSheet.mock.calls).toEqual([
+      [{ title: "Collares", url: URL_SHARED }],
+      [{ title: "Collares", url: URL_SHARED }],
+    ]);
+  });
 });
