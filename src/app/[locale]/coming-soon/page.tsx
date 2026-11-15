@@ -1,17 +1,15 @@
 import type { Metadata, ResolvedMetadata } from "next";
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { StoreArrowLink } from "@/app/_components/atoms/store-arrow-link";
-import { StoreCountUp } from "@/app/_components/atoms/store-count-up";
 import { StoreEyebrow } from "@/app/_components/atoms/store-eyebrow";
 import { StoreHeading } from "@/app/_components/atoms/store-heading";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
+import { StoreFairCountdown } from "@/app/_components/molecules/store-fair-countdown";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
-import { type Dictionary, getDictionary } from "@/content";
-import { daysUntilFair } from "@/lib/brand/fair";
+import { getDictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
 import { SOCIAL_LINKS } from "@/lib/brand/social";
 import { COMING_SOON_PATH } from "@/lib/env/launch";
@@ -87,13 +85,18 @@ export default async function ComingSoonPage({ params }: ComingSoonPageProps) {
           />
         </div>
         <p className="max-w-prose text-lg">{comingSoon.lead}</p>
-        {/* The height is held while the count streams in, so nothing below
-            it jumps. */}
-        <div className="min-h-24" data-testid="fair-countdown-slot">
-          <Suspense fallback={null}>
-            <FairCountdown copy={comingSoon.countdown} />
-          </Suspense>
-        </div>
+        {/* The fallback holds the count's height while it streams in, so
+            nothing below it jumps. */}
+        <Suspense
+          fallback={
+            <div className="min-h-24" data-testid="fair-countdown-fallback" />
+          }
+        >
+          <StoreFairCountdown
+            className="min-h-24"
+            copy={comingSoon.countdown}
+          />
+        </Suspense>
         <ul className="flex flex-col gap-2 sm:flex-row sm:gap-8">
           <li>
             <StoreArrowLink
@@ -129,43 +132,5 @@ export default async function ComingSoonPage({ params }: ComingSoonPageProps) {
         tone="accent"
       />
     </div>
-  );
-}
-
-/** Reading the clock is request-time IO, hence `connection()`. */
-async function readRequestInstant() {
-  await connection();
-  return Date.now();
-}
-
-/**
- * The days left until the fair. The clock is a request-time read, so it sits
- * behind `connection()` inside a boundary and the rest of the page stays
- * prerendered. From the opening day on there is nothing to count.
- */
-export async function FairCountdown({
-  copy,
-}: {
-  copy: Dictionary["comingSoon"]["countdown"];
-}) {
-  const days = daysUntilFair(await readRequestInstant());
-
-  if (days === 0) {
-    return null;
-  }
-
-  return (
-    <p
-      className="flex flex-wrap items-end gap-x-4 gap-y-1"
-      data-testid="fair-countdown"
-    >
-      <StoreCountUp
-        className="font-display store-display-figure leading-display font-normal tracking-display text-store-accent"
-        value={days}
-      />
-      <span className="pb-2 text-base font-medium">
-        {days === 1 ? copy.one : copy.many}
-      </span>
-    </p>
   );
 }

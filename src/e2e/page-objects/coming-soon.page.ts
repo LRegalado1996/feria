@@ -16,7 +16,7 @@ export class ComingSoonPage extends BasePage {
   }
 
   getBubblesButton(): Locator {
-    return this.getButton("Hacer burbujas");
+    return this.getButton("LR Market: hacer burbujas");
   }
 
   /** The layer of the burst in flight; it is replaced on every burst. */

@@ -1,6 +1,7 @@
 /** The page production shows on every storefront address until launch (FER-034). */
 export const comingSoon = {
-  bubbles: "Hacer burbujas",
+  // Names the logo it sits on, then what pressing it does.
+  bubbles: "LR Market: hacer burbujas",
   countdown: {
     many: "días para la feria",
     one: "día para la feria",

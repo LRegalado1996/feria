@@ -7,7 +7,7 @@ import { renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
 import { stubReducedMotion } from "@/test/reduced-motion";
 
-import ComingSoonPage, { FairCountdown, generateMetadata } from "./page";
+import ComingSoonPage, { generateMetadata } from "./page";
 
 const { connection, notFound } = vi.hoisted(() => ({
   connection: vi.fn(async () => {
@@ -29,8 +29,6 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/coming-soon",
   useSearchParams: () => new URLSearchParams(),
 }));
-
-const THREE_WEEKS_BEFORE = new Date("2026-11-14T15:00:00.000Z");
 
 const SHARE_CARD = {
   alt: "LR Market",
@@ -69,21 +67,6 @@ async function setup({ locale = "en" }: { locale?: Locale } = {}) {
   });
 
   return { page: screen.getByTestId("coming-soon-page") };
-}
-
-async function setupCountdown(now: Date, locale: Locale = "en") {
-  vi.setSystemTime(now);
-  stubIntersectionObserver();
-  stubReducedMotion(false);
-
-  const copy =
-    locale === "en"
-      ? { many: "days until the fair", one: "day until the fair" }
-      : { many: "días para la feria", one: "día para la feria" };
-
-  renderWithI18n(<div>{await FairCountdown({ copy })}</div>, { locale });
-
-  return { countdown: screen.queryByTestId("fair-countdown") };
 }
 
 describe("ComingSoonPage", () => {
@@ -134,7 +117,9 @@ describe("ComingSoonPage", () => {
 
   test("the logo's mark blows bubbles: it is a button, with a first burst already in the page", async () => {
     const { page } = await setup();
-    const button = within(page).getByRole("button", { name: "Make bubbles" });
+    const button = within(page).getByRole("button", {
+      name: "LR Market: make bubbles",
+    });
     const logo = button.querySelector('[data-slot="store-logo"]');
 
     expect(logo).toHaveAttribute("data-variant", "mark");
@@ -206,58 +191,17 @@ describe("ComingSoonPage", () => {
   test("holds the countdown's height while it streams in, so nothing below it jumps", async () => {
     await setup();
 
-    const slot = screen.getByTestId("fair-countdown-slot");
-
-    expect(slot).toHaveClass("min-h-24");
-    // Until the request's clock is read there is no figure, only the room.
-    expect(slot).toBeEmptyDOMElement();
+    // Until the request's clock is read there is no figure, only its room.
+    expect(screen.getByTestId("fair-countdown-fallback")).toHaveClass(
+      "min-h-24"
+    );
+    expect(screen.queryByTestId("fair-countdown")).not.toBeInTheDocument();
   });
 
   test("answers 404 for a language the product does not have", async () => {
     await expect(ComingSoonPage({ params: makeParams("fr") })).rejects.toThrow(
       "NEXT_NOT_FOUND"
     );
-  });
-});
-
-describe("FairCountdown", () => {
-  test.each([
-    ["en", "21", "days until the fair"],
-    ["es", "21", "días para la feria"],
-  ] as const)(
-    "in %s, three weeks before, counts 21 days after reading the request's clock",
-    async (locale, figure, label) => {
-      const { countdown } = await setupCountdown(THREE_WEEKS_BEFORE, locale);
-
-      expect(connection).toHaveBeenCalledExactlyOnceWith();
-      const count = countdown?.querySelector('[data-slot="store-count-up"]');
-
-      // The figure a screen reader gets, then its label.
-      expect(count?.firstElementChild).toHaveTextContent(figure);
-      expect(count).toHaveClass("font-display", "text-store-accent");
-      expect(count?.nextElementSibling).toHaveTextContent(label);
-    }
-  );
-
-  test("the evening before, it is one day, in the singular", async () => {
-    const { countdown } = await setupCountdown(
-      new Date("2026-12-04T23:00:00.000Z")
-    );
-
-    expect(
-      countdown?.querySelector('[data-slot="store-count-up"]')
-        ?.firstElementChild
-    ).toHaveTextContent("1");
-    expect(countdown?.lastElementChild?.textContent).toBe("day until the fair");
-  });
-
-  test.each([
-    ["at the opening", "2026-12-05T03:00:00.000Z"],
-    ["during the fair", "2026-12-20T12:00:00.000Z"],
-  ])("%s, there is nothing to count", async (_name, now) => {
-    const { countdown } = await setupCountdown(new Date(now));
-
-    expect(countdown).not.toBeInTheDocument();
   });
 });
 

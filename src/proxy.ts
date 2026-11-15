@@ -32,8 +32,10 @@ function isAdminPath(pathname: string) {
  * to that page, in the language of the address. Open, the coming-soon page
  * leads home: it must not outlive the launch in someone's bookmarks.
  */
-function resolveLaunchRedirect(request: NextRequest): string | null {
-  const { locale, pathname } = splitLocale(request.nextUrl.pathname);
+function resolveLaunchRedirect(
+  request: NextRequest,
+  { locale, pathname }: ReturnType<typeof splitLocale>
+): string | null {
   const language = locale ?? DEFAULT_LOCALE;
   const launched = isStorefrontLaunchedFor(
     request.headers.get(LAUNCH_OVERRIDE_HEADER)
@@ -70,7 +72,8 @@ export async function proxy(request: NextRequest) {
     return await stampApiRequest(request);
   }
 
-  const launchRedirect = resolveLaunchRedirect(request);
+  const split = splitLocale(pathname);
+  const launchRedirect = resolveLaunchRedirect(request, split);
 
   if (launchRedirect !== null) {
     const url = request.nextUrl.clone();
@@ -81,7 +84,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url, TEMPORARY_REDIRECT);
   }
 
-  const { locale, pathname: bare } = splitLocale(pathname);
+  const { locale, pathname: bare } = split;
 
   if (locale === null) {
     const url = request.nextUrl.clone();

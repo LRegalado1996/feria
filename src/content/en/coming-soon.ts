@@ -1,7 +1,7 @@
 import type { Dictionary } from "@/content/es";
 
 export const comingSoon: Dictionary["comingSoon"] = {
-  bubbles: "Make bubbles",
+  bubbles: "LR Market: make bubbles",
   countdown: {
     many: "days until the fair",
     one: "day until the fair",

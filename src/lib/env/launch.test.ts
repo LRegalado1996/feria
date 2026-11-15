@@ -79,11 +79,16 @@ describe("isStorefrontLaunchedFor", () => {
     ).toBe(true);
   });
 
-  test("never lets a header open production, even if the opt-in is set there", () => {
-    expect(isStorefrontLaunchedFor("true", { ...PRODUCTION, ...E2E })).toBe(
-      false
-    );
-  });
+  test.each([
+    ["the production deployment", PRODUCTION],
+    ["a build of main", { VERCEL_GIT_COMMIT_REF: "main" }],
+    ["the production target", { VERCEL_TARGET_ENV: "production" }],
+  ])(
+    "never lets a header open %s, even if the opt-in is set there",
+    (_name, env) => {
+      expect(isStorefrontLaunchedFor("true", { ...env, ...E2E })).toBe(false);
+    }
+  );
 });
 
 describe("launch constants", () => {

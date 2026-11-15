@@ -1,3 +1,4 @@
+import { daysUntilFair } from "../../../lib/brand/fair";
 import { expect, test } from "../../fixtures";
 import { ComingSoonPage } from "../../page-objects/coming-soon.page";
 import { HomePage } from "../../page-objects/home.page";
@@ -9,10 +10,6 @@ const OPEN = { "x-e2e-storefront-launched": "true" };
 
 const PHONE = { height: 812, width: 375 };
 const DESKTOP = { height: 800, width: 1440 };
-
-const FAIR_OPENS_AT = new Date("2026-12-05T03:00:00.000Z").getTime();
-// The figure is in the page twice: once for screen readers, once for show.
-const DAYS_LEFT = /^\d+días? para la feria$/;
 
 test.describe("Launch switch off: the store is closed", () => {
   test.use({
@@ -110,18 +107,32 @@ test.describe("Launch switch off: the store is closed", () => {
     );
   });
 
-  test("it counts the days left until the fair", async ({ page }) => {
-    // The figure depends on the day the suite runs; before the fair there is
-    // always one, with its label.
-    test.skip(
-      Date.now() >= FAIR_OPENS_AT,
-      "The fair has opened: there is nothing left to count."
-    );
+  test("it counts the days left until the fair, and nothing once it has opened", async ({
+    page,
+  }) => {
     const comingSoon = new ComingSoonPage(page);
 
+    // The server reads its own clock between these two readings of the same
+    // one: the count is the first, or the second across a day's end.
+    const before = daysUntilFair(Date.now());
     await comingSoon.goto();
+    const label = (days: number) =>
+      `${days}${days}${days === 1 ? " día" : " días"} para la feria`;
 
-    await expect(comingSoon.getCountdown()).toHaveText(DAYS_LEFT);
+    if (before === 0) {
+      await expect(comingSoon.getCountdown()).toHaveCount(0);
+      return;
+    }
+
+    // The figure is in the page twice: for screen readers, and for show.
+    await expect(comingSoon.getCountdown()).toHaveText(
+      new RegExp(
+        `^(${label(before)}|${label(daysUntilFair(Date.now()))})$`.replaceAll(
+          " ",
+          "\\s*"
+        )
+      )
+    );
   });
 
   test("the toggle leads to the same page in English", async ({ page }) => {

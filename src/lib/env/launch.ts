@@ -11,6 +11,13 @@ export const COMING_SOON_PATH = "/coming-soon";
  */
 export const LAUNCH_OVERRIDE_HEADER = "x-e2e-storefront-launched";
 
+/** Production by either sign: the Vercel environment, or the branch and target. */
+function isProduction(env: LaunchEnv): boolean {
+  return (
+    isProductionDeploy(env) || detectStableEnvironment(env) === "production"
+  );
+}
+
 /**
  * Whether the storefront is open to the public (FER-034).
  *
@@ -28,22 +35,21 @@ export function isStorefrontLaunched(env: LaunchEnv = process.env): boolean {
     return false;
   }
 
-  return !(
-    isProductionDeploy(env) || detectStableEnvironment(env) === "production"
-  );
+  return !isProduction(env);
 }
 
 /**
  * The switch for one request. Only the server Playwright starts sets
- * `E2E_STOREFRONT_LAUNCH_OVERRIDE`, and a production deploy ignores it even
- * if someone sets it: there, a visitor's header never opens the store.
+ * `E2E_STOREFRONT_LAUNCH_OVERRIDE`, and production ignores it even if
+ * someone sets it, by the same definition of production that closes the
+ * store: there, a visitor's header never opens it.
  */
 export function isStorefrontLaunchedFor(
   override: string | null,
   env: LaunchEnv = process.env
 ): boolean {
   const honoured =
-    env.E2E_STOREFRONT_LAUNCH_OVERRIDE === "true" && !isProductionDeploy(env);
+    env.E2E_STOREFRONT_LAUNCH_OVERRIDE === "true" && !isProduction(env);
 
   if (honoured && (override === "true" || override === "false")) {
     return override === "true";

@@ -20,6 +20,7 @@ export class DesignPage extends BasePage {
 
   getSection(
     name:
+      | "bubbles"
       | "cards"
       | "chips"
       | "count-up"
