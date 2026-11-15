@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { PublicStore } from "@/server/services/store";
 
-import StoreOpenGraphImage, { alt, contentType, size } from "./opengraph-image";
+import StoreOpenGraphImage, { generateImageMetadata } from "./opengraph-image";
 
 const { getStoreForPath, ImageResponse } = vi.hoisted(() => ({
   getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
@@ -97,12 +97,6 @@ async function setup({
 }
 
 describe("StoreOpenGraphImage", () => {
-  test("is a 1200×630 PNG with no alt text of its own", () => {
-    expect(size).toEqual({ height: 630, width: 1200 });
-    expect(contentType).toBe("image/png");
-    expect(alt).toBe("");
-  });
-
   test("draws the store's name in capitals and its tagline, at the card's size", async () => {
     const { image, texts } = await setup();
 
@@ -157,4 +151,31 @@ describe("StoreOpenGraphImage", () => {
     ).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
     expect(ImageResponse).not.toHaveBeenCalled();
   });
+});
+
+describe("generateImageMetadata", () => {
+  test.each([
+    ["sample-store", "Sample Store"],
+    ["nobody", ""],
+  ])(
+    "for %s, describes one 1200×630 PNG card whose alt text is %j",
+    async (segment, alt) => {
+      getStoreForPath.mockImplementation(
+        async (asked) =>
+          await Promise.resolve(asked === "sample-store" ? makeStore() : null)
+      );
+
+      await expect(
+        generateImageMetadata({ params: { locale: "es", store: segment } })
+      ).resolves.toEqual([
+        {
+          alt,
+          contentType: "image/png",
+          id: "card",
+          size: { height: 630, width: 1200 },
+        },
+      ]);
+      expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith(segment);
+    }
+  );
 });

@@ -18,8 +18,10 @@ export interface StoreFooterProps {
   tagline: { lang: string; text: string } | null;
 }
 
+// `wrap-anywhere`: a label carries the store's name, up to 80 characters
+// with no space to break at.
 const LINK_CLASS =
-  "inline-flex min-h-11 items-center font-semibold underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
+  "inline-flex min-h-11 items-center font-semibold wrap-anywhere underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
 
 /**
  * Every page of a store ends here (FER-021): its tagline, its Instagram and
@@ -80,6 +82,7 @@ function StoreFooter({ className, copy, store, tagline }: StoreFooterProps) {
                   target="_blank"
                 >
                   {link.label}
+                  <span className="sr-only"> {copy.newTab}</span>
                 </a>
               </li>
             ))}
@@ -93,6 +96,7 @@ function StoreFooter({ className, copy, store, tagline }: StoreFooterProps) {
           target="_blank"
         >
           {copy.credit}
+          <span className="sr-only"> {copy.newTab}</span>
         </a>
       </div>
     </footer>

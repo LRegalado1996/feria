@@ -52,7 +52,7 @@ describe("StoreError", () => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
         new RegExp(`^${title}$`, "u")
       );
-      expect(screen.getByText(body)).toBeVisible();
+      expect(screen.getByRole("alert").textContent).toBe(body);
       await user.click(screen.getByRole("button", { name: label }));
 
       expect(retry.mock.calls).toEqual([[]]);

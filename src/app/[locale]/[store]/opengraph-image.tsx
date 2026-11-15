@@ -5,12 +5,25 @@ import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { getStoreForPath } from "@/server/cache/store";
 
-export const size = { height: 630, width: 1200 };
-export const contentType = "image/png";
-export const alt = "";
+const size = { height: 630, width: 1200 };
+const contentType = "image/png";
 
 interface StoreImageProps {
   params: Promise<{ locale: string; store: string }>;
+}
+
+/**
+ * The card's size, type and alternative text: the store's name, so a
+ * screen reader in a chat that shows the card says whose it is.
+ */
+export async function generateImageMetadata({
+  params,
+}: {
+  params: { locale: string; store: string };
+}) {
+  const store = await getStoreForPath(params.store);
+
+  return [{ alt: store?.name ?? "", contentType, id: "card", size }];
 }
 
 /**

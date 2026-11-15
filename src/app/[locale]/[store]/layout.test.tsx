@@ -127,6 +127,8 @@ describe("StoreLayout", () => {
     const main = screen.getByText("Page content").parentElement;
     expect(main).toHaveAttribute("id", "store-main");
     expect(main).toHaveAttribute("tabindex", "-1");
+    // Lands below the sticky header when the skip link scrolls to it.
+    expect(main).toHaveClass("scroll-mt-16");
     expect(theme).toHaveAttribute("data-slot", "store-theme");
     expect([...theme.children]).toEqual([header, main, footer]);
     expect(
@@ -152,7 +154,9 @@ describe("StoreLayout", () => {
     });
 
     expect(
-      within(footer).getByRole("link", { name: "Escribinos por WhatsApp" })
+      within(footer).getByRole("link", {
+        name: "Escribinos por WhatsApp (se abre en otra pestaña)",
+      })
     ).toHaveAttribute("href", "https://wa.me/59899123456");
   });
 
@@ -206,7 +210,11 @@ describe("generateMetadata", () => {
         generateMetadata({ params: makeParams(locale) })
       ).resolves.toEqual({
         description: tagline,
-        openGraph: { description: tagline, siteName: "Sample Store" },
+        openGraph: {
+          description: tagline,
+          siteName: "Sample Store",
+          type: "website",
+        },
         title: { default: "Sample Store", template: "%s · Sample Store" },
       });
     }
@@ -219,7 +227,11 @@ describe("generateMetadata", () => {
       generateMetadata({ params: makeParams("es") })
     ).resolves.toEqual({
       description: undefined,
-      openGraph: { description: undefined, siteName: "Sample Store" },
+      openGraph: {
+        description: undefined,
+        siteName: "Sample Store",
+        type: "website",
+      },
       title: { default: "Sample Store", template: "%s · Sample Store" },
     });
   });

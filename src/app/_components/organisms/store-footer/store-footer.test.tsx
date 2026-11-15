@@ -51,9 +51,10 @@ function setup({
   };
 }
 
-const IG = ["LR Market on Instagram", INSTAGRAM];
-const TT = ["LR Market on TikTok", TIKTOK];
-const WA = ["Write to us on WhatsApp", "https://wa.me/59899123456"];
+const NEW_TAB = " (opens in a new tab)";
+const IG = [`LR Market on Instagram${NEW_TAB}`, INSTAGRAM];
+const TT = [`LR Market on TikTok${NEW_TAB}`, TIKTOK];
+const WA = [`Write to us on WhatsApp${NEW_TAB}`, "https://wa.me/59899123456"];
 
 describe("StoreFooter", () => {
   test.each([
@@ -80,6 +81,22 @@ describe("StoreFooter", () => {
     expect(within(footer).queryByRole("list") === null).toBe(
       expected.length === 0
     );
+  });
+
+  test("says, out of sight, that each outside link opens a new tab", () => {
+    const { footer } = setup({ store: makeStore({ instagramUrl: INSTAGRAM }) });
+
+    const instagram = within(footer).getByRole("link", {
+      name: "LR Market on Instagram (opens in a new tab)",
+    });
+    expect(within(instagram).getByText("(opens in a new tab)")).toHaveClass(
+      "sr-only"
+    );
+    expect(
+      within(footer).getByRole("link", {
+        name: "Made by Lucas Regalado (opens in a new tab)",
+      })
+    ).toHaveAttribute("href", CREDIT_URL);
   });
 
   test("opens every outside link in a new tab, without handing it this page", () => {
@@ -111,9 +128,9 @@ describe("StoreFooter", () => {
     });
 
     expect(links().map(([name]) => name)).toEqual([
-      "Instagram de LR Market",
-      "TikTok de LR Market",
-      "Escribinos por WhatsApp",
+      "Instagram de LR Market (se abre en otra pestaña)",
+      "TikTok de LR Market (se abre en otra pestaña)",
+      "Escribinos por WhatsApp (se abre en otra pestaña)",
     ]);
   });
 
@@ -135,8 +152,12 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["en", "Store footer", "Made by Lucas Regalado"],
-    ["es", "Pie de la tienda", "Hecho por Lucas Regalado"],
+    ["en", "Store footer", "Made by Lucas Regalado (opens in a new tab)"],
+    [
+      "es",
+      "Pie de la tienda",
+      "Hecho por Lucas Regalado (se abre en otra pestaña)",
+    ],
   ] as const)(
     "in %s, is named and credits Lucas Regalado",
     (locale, name, credit) => {

@@ -35,7 +35,13 @@ function StoreStatusPage({
       <h1 className="font-display text-5xl leading-display tracking-display text-store-foreground uppercase md:text-7xl">
         {title}
       </h1>
-      <p className="max-w-prose text-base text-store-foreground">{body}</p>
+      {/* A failure is announced as it replaces the page; a miss is not. */}
+      <p
+        className="max-w-prose text-base text-store-foreground"
+        role={retry ? "alert" : undefined}
+      >
+        {body}
+      </p>
       {action}
       {retry ? (
         <button

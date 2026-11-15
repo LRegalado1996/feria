@@ -54,7 +54,8 @@ export async function generateMetadata({
 
   return {
     description: tagline,
-    openGraph: { description: tagline, siteName: store.name },
+    // The whole object replaces the root layout's: its type comes along.
+    openGraph: { description: tagline, siteName: store.name, type: "website" },
     title: { default: store.name, template: `%s · ${store.name}` },
   };
 }
@@ -103,7 +104,8 @@ export default async function StoreLayout({
       className="flex min-h-dvh flex-col"
     >
       <StoreHeader copy={copy} locale={locale} store={store} />
-      <div className="flex-1" id={STORE_MAIN_ID} tabIndex={-1}>
+      {/* Its top clears the sticky header when the skip link scrolls to it. */}
+      <div className="flex-1 scroll-mt-16" id={STORE_MAIN_ID} tabIndex={-1}>
         {children}
       </div>
       <StoreFooter

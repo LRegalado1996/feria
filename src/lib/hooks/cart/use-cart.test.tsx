@@ -2,6 +2,8 @@ import { act, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import type { useCart as UseCart } from "./use-cart";
+
 const { reportError } = vi.hoisted(() => ({ reportError: vi.fn() }));
 
 vi.mock("@/lib/errors/client", () => ({ reportError }));
@@ -98,6 +100,8 @@ async function setup({
     storedCart: (): unknown => JSON.parse(storage.getItem(KEY) ?? "null"),
   };
 }
+
+type CartApi = ReturnType<typeof UseCart>;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -264,19 +268,25 @@ describe("useCart", () => {
   );
 
   test.each(["getter", "read"] as const)(
-    "a storage refused on its %s is reported once, leaves the cart empty and writes nothing",
+    "a storage refused on its %s is reported once, and the cart lives in the page instead",
     async (refused) => {
-      const { result, storage } = await setup({ refused });
+      const { cart, result, storage } = await setup({ refused });
 
+      let added = false;
       act(() => {
-        result.current.add(4);
+        added = result.current.add(4);
       });
       act(() => {
         result.current.setQuantity(4, 3);
       });
 
-      expect(result.current.items).toEqual([]);
-      expect(result.current.count).toBe(0);
+      expect(added).toBe(true);
+      expect(result.current.items).toEqual([makeItem(4, 3)]);
+      expect(result.current.count).toBe(3);
+      // Another cart of the store on the page sees the same one.
+      expect(
+        renderHook(() => cart.useCart("lr-market")).result.current.count
+      ).toBe(3);
       expect(storage.setItem).not.toHaveBeenCalled();
       expect(reportError).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ name: "SecurityError" }),
@@ -285,18 +295,93 @@ describe("useCart", () => {
     }
   );
 
-  test("reports a write the storage refuses", async () => {
+  test("reports a write the storage refuses, and keeps the cart in the page", async () => {
     const { result } = await setup({ full: true });
 
+    let added = false;
     act(() => {
-      result.current.add(4);
+      added = result.current.add(4, 2);
     });
 
+    expect(added).toBe(true);
     expect(reportError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ name: "QuotaExceededError" }),
       { action: "Cart.write_storage" }
     );
-    expect(result.current.items).toEqual([]);
+    expect(result.current.items).toEqual([makeItem(4, 2)]);
+    expect(result.current.count).toBe(2);
+  });
+
+  test("a write the storage takes again drops the page's copy, so storage is read again", async () => {
+    const { result, storage, storedCart } = await setup();
+    storage.setItem.mockImplementationOnce(() => {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    });
+
+    act(() => {
+      result.current.add(4);
+    });
+    expect(storedCart()).toBeNull();
+    expect(result.current.items).toEqual([makeItem(4, 1)]);
+
+    act(() => {
+      result.current.add(4);
+    });
+    expect(storedCart()).toEqual([makeItem(4, 2)]);
+
+    // With the page's copy gone, what another tab stores is what shows.
+    act(() => {
+      storage.setItem(KEY, JSON.stringify([makeItem(9, 5)]));
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    });
+    expect(result.current.items).toEqual([makeItem(9, 5)]);
+  });
+
+  test.each([
+    ["add 0 units", (cart: CartApi) => cart.add(4, 0)],
+    ["add -1 units", (cart: CartApi) => cart.add(4, -1)],
+    ["add 1.5 units", (cart: CartApi) => cart.add(4, 1.5)],
+    ["add NaN units", (cart: CartApi) => cart.add(4, Number.NaN)],
+    ["set 1.5 units", (cart: CartApi) => cart.setQuantity(4, 1.5)],
+    ["set NaN units", (cart: CartApi) => cart.setQuantity(4, Number.NaN)],
+    // The write itself refuses a cart that would not parse back.
+    ["add article 0", (cart: CartApi) => cart.add(0)],
+    ["add article 1.5", (cart: CartApi) => cart.add(1.5)],
+  ])(
+    "refuses to %s, answering false and changing nothing",
+    async (_case, change) => {
+      const { result, storage, storedCart } = await setup({
+        stored: JSON.stringify([makeItem(4, 2)]),
+      });
+      storage.setItem.mockClear();
+
+      let answer = true;
+      act(() => {
+        answer = change(result.current);
+      });
+
+      expect(answer).toBe(false);
+      expect(result.current.items).toEqual([makeItem(4, 2)]);
+      expect(storedCart()).toEqual([makeItem(4, 2)]);
+      expect(storage.setItem).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    ["adding", (cart: CartApi) => cart.add(9)],
+    ["setting a quantity", (cart: CartApi) => cart.setQuantity(4, 3)],
+    ["taking an article out", (cart: CartApi) => cart.setQuantity(4, 0)],
+  ])("answers true after %s", async (_case, change) => {
+    const { result } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+
+    let answer = false;
+    act(() => {
+      answer = change(result.current);
+    });
+
+    expect(answer).toBe(true);
   });
 
   test("shows a change another tab made, announced by the storage event", async () => {

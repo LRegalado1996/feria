@@ -34,10 +34,14 @@ function subscribe(listener: () => void) {
 // `undefined` until first asked; `null` once the browser refused it.
 let storage: Storage | null | undefined;
 
+// Where a cart lives when storage refused it or could not hold it: in this
+// page only, gone when the page is left, but a cart all the same.
+const memory = new Map<string, string>();
+
 /**
  * The browser's storage, opened once. A browser that blocks site data
- * throws on the first touch: that is reported once, and the cart then
- * lives only as long as the page.
+ * throws on the first touch: that is reported once, and carts then live in
+ * the page's memory.
  */
 function cartStorage(): Storage | null {
   if (storage === undefined) {
@@ -55,7 +59,7 @@ function cartStorage(): Storage | null {
 
 /** The raw stored text, the snapshot React compares between renders. */
 function readRaw(key: string): string | null {
-  return cartStorage()?.getItem(key) ?? null;
+  return memory.get(key) ?? cartStorage()?.getItem(key) ?? null;
 }
 
 /** The stored cart, or an empty one when it is missing or does not parse. */
@@ -74,23 +78,44 @@ export function parseCart(raw: string | null): Cart {
   }
 }
 
-function write(key: string, cart: Cart) {
-  try {
-    cartStorage()?.setItem(key, JSON.stringify(cart));
-  } catch (error) {
-    // Full or refused: the cart lives only until the page is left.
-    reportError(error, { action: "Cart.write_storage" });
+/**
+ * Saves a cart, or refuses one that would not parse back (a bad quantity
+ * would otherwise empty the whole cart on the next read). Answers whether
+ * it was saved.
+ */
+function write(key: string, cart: Cart): boolean {
+  if (!cartSchema.safeParse(cart).success) {
+    return false;
+  }
+
+  const text = JSON.stringify(cart);
+  const browserStorage = cartStorage();
+
+  if (browserStorage) {
+    try {
+      browserStorage.setItem(key, text);
+      memory.delete(key);
+    } catch (error) {
+      // Full or refused: the cart lives in the page until it is left.
+      reportError(error, { action: "Cart.write_storage" });
+      memory.set(key, text);
+    }
+  } else {
+    memory.set(key, text);
   }
 
   for (const listener of listeners) {
     listener();
   }
+
+  return true;
 }
 
 /**
  * A store's cart in this browser (FER-021): the articles and their
  * quantities, how many units in all, and the changes FER-024 and FER-026
- * make. Before hydration, and where storage is refused, it is empty.
+ * make. Empty before hydration; where storage is refused, it lives in the
+ * page until the page is left.
  */
 export function useCart(storeSlug: string) {
   const key = cartStorageKey(storeSlug);
@@ -102,19 +127,21 @@ export function useCart(storeSlug: string) {
   const items = useMemo(() => parseCart(raw), [raw]);
 
   /**
-   * Adds `quantity` of an article, up to the per-article cap; a new article
-   * past the cart's cap of articles is not added (the answer says so).
+   * Adds `quantity` of an article, up to the per-article cap. Answers
+   * `false`, changing nothing, for a new article past the cart's cap of
+   * articles or an id or quantity that is not a positive whole number.
    */
   const add = useCallback(
     (productId: number, quantity = 1): boolean => {
       const current = parseCart(readRaw(key));
       const line = current.find((item) => item.productId === productId);
 
-      if (!line && current.length >= CART_ITEMS_MAX) {
+      // A fraction or a NaN is refused by `write`'s own check.
+      if (quantity < 1 || (!line && current.length >= CART_ITEMS_MAX)) {
         return false;
       }
 
-      write(
+      return write(
         key,
         line
           ? current.map((item) =>
@@ -133,18 +160,23 @@ export function useCart(storeSlug: string) {
               { productId, quantity: Math.min(quantity, CART_QUANTITY_MAX) },
             ]
       );
-
-      return true;
     },
     [key]
   );
 
-  /** Sets an article's quantity; 0 or less takes it out. */
+  /**
+   * Sets an article's quantity; 0 or less takes it out. Answers `false`,
+   * changing nothing, for a quantity that is not a whole number.
+   */
   const setQuantity = useCallback(
-    (productId: number, quantity: number) => {
+    (productId: number, quantity: number): boolean => {
+      if (!Number.isInteger(quantity)) {
+        return false;
+      }
+
       const current = parseCart(readRaw(key));
 
-      write(
+      return write(
         key,
         quantity <= 0
           ? current.filter((item) => item.productId !== productId)

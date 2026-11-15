@@ -40,13 +40,13 @@ afterEach(() => {
 describe("StoreCartButton", () => {
   test.each([
     ["en", [], "Cart, empty"],
-    ["en", [1], "Cart, 1 article"],
-    ["en", [2], "Cart, 2 articles"],
-    ["en", [1, 1], "Cart, 2 articles"],
-    ["en", [3, 4], "Cart, 7 articles"],
+    ["en", [1], "Cart, 1 item"],
+    ["en", [2], "Cart, 2 items"],
+    ["en", [1, 1], "Cart, 2 items"],
+    ["en", [3, 4], "Cart, 7 items"],
     ["es", [], "Carrito, vacío"],
-    ["es", [1], "Carrito, 1 artículo"],
-    ["es", [2, 3], "Carrito, 5 artículos"],
+    ["es", [1], "Carrito, 1 unidad"],
+    ["es", [2, 3], "Carrito, 5 unidades"],
   ] as const)(
     "in %s, with quantities %j, is named %j",
     (locale, cart, name) => {
@@ -96,5 +96,16 @@ describe("StoreCartButton", () => {
 
     expect(link).toHaveAccessibleName("Cart, empty");
     expect(badge()).toBeNull();
+  });
+
+  test("counts the cart of the store it is given, beside another store's", () => {
+    localStorage.setItem(
+      "feria:cart:lr-market",
+      JSON.stringify(makeCart([4, 4]))
+    );
+    const { badge, link } = setup({ cart: [2, 1], storeSlug: "tienda-demo" });
+
+    expect(link).toHaveAccessibleName("Cart, 3 items");
+    expect(badge()).toHaveTextContent(/^3$/u);
   });
 });

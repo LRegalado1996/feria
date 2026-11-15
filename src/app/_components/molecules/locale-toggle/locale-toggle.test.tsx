@@ -100,6 +100,8 @@ describe("LocaleToggle", () => {
 
       expect(link).toHaveClass("custom");
       expect(link.getAttribute("class")).not.toBe("custom");
+      expect(link).toHaveAttribute("data-variant", "ghost");
+      expect(link).toHaveAttribute("data-size", "sm");
       expect(link.querySelector("svg")).not.toBeNull();
     }
   );
@@ -112,6 +114,7 @@ describe("LocaleToggle", () => {
     });
 
     expect(link.getAttribute("class")).toBe("custom");
+    expect(link).not.toHaveAttribute("data-variant");
     expect(link.querySelector("svg")).toBeNull();
     expect(link).toHaveAccessibleName("English");
     expect(link).toHaveAttribute("href", "/en/lr-market/products?q=aros");

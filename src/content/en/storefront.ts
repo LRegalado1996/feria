@@ -13,9 +13,8 @@ export const storefront: Dictionary["storefront"] = {
     previous: "Was {price}",
   },
   shell: {
-    cart: "Cart",
-    cartCount: "Cart, {count} articles",
-    cartCountOne: "Cart, 1 article",
+    cartCount: "Cart, {count} items",
+    cartCountOne: "Cart, 1 item",
     cartEmpty: "Cart, empty",
     catalog: "Catalog",
     closeMenu: "Close the menu",
@@ -30,6 +29,7 @@ export const storefront: Dictionary["storefront"] = {
     instagram: "{store} on Instagram",
     menu: "Menu",
     navigation: "Store sections",
+    newTab: "(opens in a new tab)",
     notFound: {
       back: "Back to the store's home",
       body: "The link may be old, or that article may be gone.",

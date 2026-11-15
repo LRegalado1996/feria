@@ -11,9 +11,8 @@ export const storefront = {
     previous: "Antes {price}",
   },
   shell: {
-    cart: "Carrito",
-    cartCount: "Carrito, {count} artículos",
-    cartCountOne: "Carrito, 1 artículo",
+    cartCount: "Carrito, {count} unidades",
+    cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
     catalog: "Catálogo",
     closeMenu: "Cerrar el menú",
@@ -28,6 +27,7 @@ export const storefront = {
     instagram: "Instagram de {store}",
     menu: "Menú",
     navigation: "Secciones de la tienda",
+    newTab: "(se abre en otra pestaña)",
     notFound: {
       back: "Volver al inicio de la tienda",
       body: "Puede que el enlace sea viejo o que ese artículo ya no esté.",

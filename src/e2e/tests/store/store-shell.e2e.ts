@@ -54,6 +54,28 @@ test.describe("Storefront shell", () => {
     await expect(page.locator("#store-main")).toBeFocused();
   });
 
+  test("an address under a store that nothing answers is a 404 inside the store's shell", async ({
+    db,
+    page,
+  }) => {
+    const store = await db.seed.createStore({ name: "Shell Store" }, TEXTS);
+
+    const response = await page.goto(`/${store.slug}/no-such-page`);
+
+    expect(response?.status()).toBe(404);
+    const storePage = new StorePage(page, store.slug);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "No encontramos esta página",
+      })
+    ).toBeVisible();
+    await expect(storePage.getSiteHeader()).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Volver al inicio de la tienda" })
+    ).toHaveAttribute("href", `/${store.slug}`);
+  });
+
   test("the language toggle keeps the store", async ({ db, page }) => {
     const store = await db.seed.createStore({ name: "Shell Store" }, TEXTS);
     const storePage = new StorePage(page, store.slug);
@@ -88,6 +110,13 @@ test.describe("Storefront shell", () => {
 
       // The first open after the page loaded: repeated until React owns it.
       await clickUntilVisible(storePage.getMenuButton("Menú"), menu);
+      // Full screen: it covers the whole window.
+      expect(await menu.boundingBox()).toEqual({
+        height: 812,
+        width: 375,
+        x: 0,
+        y: 0,
+      });
       await expect(menu.getByRole("link", { name: "Catálogo" })).toBeVisible();
       await expect(menu.getByRole("link", { name: "English" })).toBeVisible();
       await menu.getByRole("button", { name: "Cerrar el menú" }).click();
@@ -152,7 +181,7 @@ test.describe("Storefront shell", () => {
     await storePage.goto();
 
     await expect(storePage.getCartButton()).toHaveAccessibleName(
-      "Carrito, 3 artículos"
+      "Carrito, 3 unidades"
     );
     await expect(storePage.getCartButton()).toHaveAttribute(
       "href",

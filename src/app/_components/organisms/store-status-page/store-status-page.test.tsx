@@ -37,6 +37,8 @@ describe("StoreStatusPage", () => {
     expect(screen.getByText("The link may be old.")).toBeVisible();
     expect(page).toHaveClass("custom");
     expect(screen.queryByRole("button")).toBeNull();
+    // A miss is not announced as it renders.
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   test("shows the action it is given", () => {
@@ -50,6 +52,11 @@ describe("StoreStatusPage", () => {
 
   test("tries again with its retry button", async () => {
     const { onRetry } = setup({ withRetry: true });
+
+    // A failure is announced: the body is the alert.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /^The link may be old\.$/u
+    );
 
     await userEvent
       .setup()
