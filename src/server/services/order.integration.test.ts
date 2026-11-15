@@ -473,10 +473,23 @@ test("a store deactivated before the order took its lock takes no order", async 
   const shop = await makeStore();
   const ring = await makeArticle(shop.id, { title: "Anillo" });
   await db.update(store).set({ isActive: false }).where(eq(store.id, shop.id));
+  const values = orderValues({ productId: ring.id });
 
-  await expect(
-    place(shop, orderValues({ productId: ring.id }))
-  ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Store not found" });
+  await expect(place(shop, values)).rejects.toMatchObject({
+    code: "NOT_FOUND",
+    message: "Store not found",
+  });
+  expect(
+    await db
+      .select({ id: customerOrder.id })
+      .from(customerOrder)
+      .where(
+        and(
+          eq(customerOrder.storeId, shop.id),
+          eq(customerOrder.requestKey, values.requestKey)
+        )
+      )
+  ).toEqual([]);
 });
 
 describe("abuse limits", () => {
