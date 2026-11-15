@@ -76,12 +76,16 @@ test.describe("robots.txt", () => {
     const rules = [
       "Allow: /",
       "Disallow: /admin$",
+      "Disallow: /admin?",
       "Disallow: /admin/",
       "Disallow: /en/admin$",
+      "Disallow: /en/admin?",
       "Disallow: /en/admin/",
       "Disallow: /api/",
       "Disallow: /coming-soon$",
+      "Disallow: /coming-soon?",
       "Disallow: /en/coming-soon$",
+      "Disallow: /en/coming-soon?",
     ];
 
     expect(response.status()).toBe(200);

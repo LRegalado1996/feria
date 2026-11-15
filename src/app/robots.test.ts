@@ -5,12 +5,16 @@ import robots from "./robots";
 
 const DISALLOWED = [
   "/admin$",
+  "/admin?",
   "/admin/",
   "/en/admin$",
+  "/en/admin?",
   "/en/admin/",
   "/api/",
   "/coming-soon$",
+  "/coming-soon?",
   "/en/coming-soon$",
+  "/en/coming-soon?",
 ];
 
 type Rule = Extract<MetadataRoute.Robots["rules"], { userAgent?: unknown }>;
@@ -91,6 +95,7 @@ describe("robots", () => {
     "/administracion/products",
     "/en/admin-shop",
     "/coming-soon-market",
+    "/administracion?ref=x",
   ])("lets crawlers read %s", (path) => {
     const { everyone } = setup();
 
@@ -105,6 +110,11 @@ describe("robots", () => {
     "/api/orpc/catalog.products",
     "/coming-soon",
     "/en/coming-soon",
+    // The roots with a query, as a sign-in link or a campaign leaves them.
+    "/admin?next=x",
+    "/en/admin?next=x",
+    "/coming-soon?utm_source=x",
+    "/en/coming-soon?utm_source=x",
   ])("keeps crawlers out of %s", (path) => {
     const { everyone } = setup();
 
