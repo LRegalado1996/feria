@@ -6,6 +6,7 @@ import { useState } from "react";
 import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
 import { useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,9 @@ function StoreArticlePurchase({
   const { add, items } = useCart(storeSlug);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState({ count: 0, text: "" });
+  // Disabled until React owns it: a press on the server's HTML would add
+  // nothing and say nothing.
+  const hydrated = useHydrated();
 
   return (
     <div
@@ -78,7 +82,8 @@ function StoreArticlePurchase({
         </div>
       </fieldset>
       <button
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={!hydrated}
         onClick={() => {
           const had =
             items.find((item) => item.productId === productId)?.quantity ?? 0;
