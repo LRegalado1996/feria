@@ -26,7 +26,8 @@ export interface StoreCartProps {
 /**
  * What changed in a line since it was added, if anything. An article the
  * shop's last answer does not name is gone, unless that answer is the one
- * kept on screen while a newer one, which asks for it, loads.
+ * kept on screen while a newer one, which asks for it, loads, or there is
+ * no answer to show after a failed read.
  */
 function flagOf(
   product: CartProduct | undefined,
@@ -178,44 +179,32 @@ function CartBody({
     );
   }
 
-  if (products.isError && !products.data) {
-    return (
-      <div className="flex flex-col items-start gap-3" role="alert">
-        <p className="flex items-center gap-2 font-semibold">
-          <CircleAlert aria-hidden="true" className="size-5" />
-          {copy.errors.refresh}
-        </p>
-        <button
-          className="inline-flex min-h-11 items-center border-2 border-store-contrast px-4 font-semibold hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
-          onClick={() => {
-            void products.refetch();
-          }}
-          type="button"
-        >
-          {copy.errors.retry}
-        </button>
-      </div>
-    );
-  }
-
-  if (!products.data) {
+  // Nothing to show before the shop's first answer. Once a read has failed,
+  // the page stays: the checkout form keeps what the shopper typed, and the
+  // lines wait for their prices.
+  if (!products.data && products.errorUpdateCount === 0) {
     return <output className="block text-store-muted">{copy.loading}</output>;
   }
 
-  const byId = new Map(products.data.map((product) => [product.id, product]));
+  const shown = products.data ?? [];
+  const byId = new Map(shown.map((product) => [product.id, product]));
   const lines = items.map((item) => {
     const product = byId.get(item.productId);
 
     return {
-      flag: flagOf(product, item.seenPriceAmount, products.isPlaceholderData),
+      flag: flagOf(
+        product,
+        item.seenPriceAmount,
+        products.isPlaceholderData || !products.data
+      ),
       item,
       product,
     };
   });
   let blockedReason: string | null = null;
 
-  // A refresh that failed after an earlier answer: the prices shown are not
-  // the shop's word now, so the order waits for one that is.
+  // A read that failed: the prices shown, if any, are not the shop's word
+  // now, so the order waits for one that is.
   if (products.isError) {
     blockedReason = copy.errors.refresh;
   } else if (products.isFetching) {
@@ -229,7 +218,7 @@ function CartBody({
     blockedReason = copy.errors.blocked;
   }
 
-  const [first] = products.data;
+  const [first] = shown;
   let total = 0;
 
   // Sold-out articles are not in the order: their price is not in its total.

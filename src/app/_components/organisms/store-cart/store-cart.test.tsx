@@ -279,9 +279,21 @@ describe("StoreCart", () => {
   });
 
   test("says the prices could not be read, and reads them again on retry", async () => {
-    const { cartProducts, lines, shown, user } = setup({ products: "fail" });
+    const { cartProducts, lines, shown, submit, user } = setup({
+      products: "fail",
+    });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not fetch the current prices."
+    );
+    // No prices to show: the lines wait for them, and so does the order.
+    expect(lines()).toEqual([
+      ["Fetching the current prices…", "pending"],
+      ["Fetching the current prices…", "pending"],
+    ]);
+    expect(screen.queryByTestId("store-cart-total")).toBeNull();
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
       "We could not fetch the current prices."
     );
     server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
@@ -573,6 +585,81 @@ describe("StoreCart", () => {
       ).toHaveFocus();
     });
     expect(announcement()).toBe("You removed Artículo 4 from the cart.\u2060");
+  });
+
+  test("a read that fails after a line is taken out keeps what the shopper typed, and the order goes through after a retry", async () => {
+    const { cartProducts, lines, shown, submit, user } = setup();
+    const create = vi.fn((_input: unknown) => ({ token: TOKEN }));
+    server.use(createOrpcHandler("order.create", create));
+    await shown();
+    await user.type(
+      screen.getByRole("textbox", { name: "Your name" }),
+      "Ana Pérez"
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Your mobile" }),
+      "099 123 456"
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Note for the store (optional)" }),
+      "Sin bolsa"
+    );
+    server.use(
+      createOrpcErrorHandler("catalog.cartProducts", {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal server error",
+        status: 500,
+      })
+    );
+
+    await user.click(screen.getByRole("button", { name: "Remove Artículo 4" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not fetch the current prices."
+    );
+    expect(lines()).toEqual([["Fetching the current prices…", "pending"]]);
+    expect(screen.getByRole("textbox", { name: "Your name" })).toHaveValue(
+      "Ana Pérez"
+    );
+    expect(screen.getByRole("textbox", { name: "Your mobile" })).toHaveValue(
+      "099 123 456"
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Note for the store (optional)" })
+    ).toHaveValue("Sin bolsa");
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
+      "We could not fetch the current prices."
+    );
+
+    server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
+    cartProducts.mockResolvedValue([makeProduct(9)]);
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => {
+      expect(lines()).toEqual([["Artículo 9", null]]);
+    });
+    await waitFor(() => {
+      expect(submit()).toBeEnabled();
+    });
+    await user.click(submit());
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledExactlyOnceWith(
+        `/en/lr-market/orders/${TOKEN}`
+      );
+    });
+    expect(create).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        customerName: "Ana Pérez",
+        customerPhone: "099 123 456",
+        items: [{ productId: 9, quantity: 1 }],
+        note: "Sin bolsa",
+      })
+    );
+    expect(cartProducts.mock.calls).toEqual([
+      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
+      [{ ids: [9], locale: "en", storeSlug: "lr-market" }],
+    ]);
   });
 
   test("taking out the last of several lines moves focus to the one before it", async () => {
