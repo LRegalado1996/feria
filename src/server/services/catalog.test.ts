@@ -304,6 +304,49 @@ describe("listPublishedProducts", () => {
     });
   });
 
+  test.each([
+    ["no groups", undefined],
+    ["an empty list of groups", []],
+  ])("asks no filter condition with %s", async (_case, valueGroups) => {
+    const { db } = setup();
+
+    await list(db, { valueGroups });
+
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, "published"],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2)',
+    });
+  });
+
+  test("narrows by one EXISTS per filter, its values alternatives, before the cursor", async () => {
+    const { db } = setup();
+
+    await list(db, {
+      cursor: { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" },
+      valueGroups: [[21, 22], [31]],
+    });
+
+    const carries = (placeholders: string) =>
+      'exists (select 1 from "product_attribute_value" where ' +
+      '("product_attribute_value"."productId" = "product"."id" and ' +
+      `"product_attribute_value"."attributeValueId" in (${placeholders})))`;
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [
+        STORE_ID,
+        "published",
+        21,
+        22,
+        31,
+        "2026-11-01T00:00:00.000Z",
+        40,
+      ],
+      sql:
+        '("product"."storeId" = $1 and "product"."status" = $2 and ' +
+        `${carries("$3, $4")} and ${carries("$5")} and ` +
+        '("product"."publishedAt", "product"."id") < ($6::timestamptz, $7::int))',
+    });
+  });
+
   test("returns a full page with no cursor when no row follows it", async () => {
     const { configOf, db } = setup();
     db.$["select.limit"].mockResolvedValue([

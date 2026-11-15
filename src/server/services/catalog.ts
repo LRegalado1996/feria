@@ -26,6 +26,7 @@ import type { DatabaseClient } from "@/server/db";
 import {
   category,
   product,
+  productAttributeValue,
   productImage,
   productTranslation,
 } from "@/server/db/schema";
@@ -101,6 +102,17 @@ function matchesSearch(search: string, locale: Locale): SQL {
       sql`unaccent(${shown.title}) ilike unaccent(${pattern})`,
       sql`unaccent(${shown.description}) ilike unaccent(${pattern})`
     )
+  )})`;
+}
+
+/**
+ * Whether the article carries one of `valueIds` (FER-033): the values of one
+ * filter are alternatives, and each filter adds its own condition.
+ */
+function carriesOneOf(valueIds: number[]): SQL {
+  return sql`exists (select 1 from ${productAttributeValue} where ${and(
+    eq(productAttributeValue.productId, product.id),
+    inArray(productAttributeValue.attributeValueId, valueIds)
   )})`;
 }
 
@@ -202,8 +214,13 @@ export async function listPublishedProducts(
     locale,
     q,
     storeId,
+    valueGroups = [],
   }: StoreScope &
-    Omit<ListProductsValues, "storeSlug"> & { currencyCode: Currency }
+    Omit<ListProductsValues, "filters" | "storeSlug"> & {
+      currencyCode: Currency;
+      /** The filters' value ids, one group per filter (`resolveCatalogFilters`). */
+      valueGroups?: number[][];
+    }
 ) {
   const page = await db
     .select({ id: product.id, publishedAt: product.publishedAt })
@@ -220,6 +237,7 @@ export async function listPublishedProducts(
           ? undefined
           : eq(category.slug, categorySlug),
         q === undefined ? undefined : matchesSearch(q, locale),
+        ...valueGroups.map((group) => carriesOneOf(group)),
         cursor === undefined ? undefined : afterCursor(cursor)
       )
     )

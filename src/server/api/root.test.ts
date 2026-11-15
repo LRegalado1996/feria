@@ -16,6 +16,7 @@ vi.mock("@/env", () => ({
 test("mounts each domain router at its own key, and nothing else", () => {
   expect(Object.keys(appRouter)).toEqual([
     "admin",
+    "attribute",
     "catalog",
     "category",
     "post",

@@ -32,6 +32,10 @@ const services = vi.hoisted(() => ({
     status: "published",
   })),
   reorderProductImages: vi.fn(async () => ({ id: 14, imageIds: [3, 1, 2] })),
+  setProductAttributeValues: vi.fn(async () => ({
+    id: 18,
+    valueIds: [21, 22],
+  })),
   setProductAvailability: vi.fn(async () => ({ id: 15, isAvailable: false })),
   unpublishProduct: vi.fn(async () => ({
     id: 16,
@@ -60,6 +64,10 @@ vi.mock("@/server/services/catalog", () => ({
   setProductAvailability: services.setProductAvailability,
   unpublishProduct: services.unpublishProduct,
   updateProduct: services.updateProduct,
+}));
+
+vi.mock("@/server/services/attribute", () => ({
+  setProductAttributeValues: services.setProductAttributeValues,
 }));
 
 vi.mock("@/server/services/access", () => ({
@@ -115,6 +123,8 @@ function setup({
       await call(productRouter.publish, input as never, options),
     reorderImages: async (input: unknown) =>
       await call(productRouter.reorderImages, input as never, options),
+    setAttributeValues: async (input: unknown) =>
+      await call(productRouter.setAttributeValues, input as never, options),
     setAvailability: async (input: unknown) =>
       await call(productRouter.setAvailability, input as never, options),
     unpublish: async (input: unknown) =>
@@ -232,6 +242,84 @@ describe("product router", () => {
       imageIds: [3, 1, 2],
       storeId: 7,
     });
+  });
+
+  test("replaces the article's filter values within the resolved store", async () => {
+    const { db, run } = setup();
+
+    await expect(
+      run("setAttributeValues", {
+        id: "5",
+        storeSlug: "lr-market",
+        valueIds: [21, 22],
+      })
+    ).resolves.toEqual({ id: 18, valueIds: [21, 22] });
+
+    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+      db,
+      ACCESS,
+      expect.any(Function)
+    );
+    // The path's id is the article's; the store is the resolved one.
+    expect(services.setProductAttributeValues).toHaveBeenCalledExactlyOnceWith(
+      TX,
+      { productId: 5, storeId: 7, valueIds: [21, 22] }
+    );
+  });
+
+  test("takes every value off with an empty list", async () => {
+    const { run } = setup();
+
+    await run("setAttributeValues", {
+      id: 5,
+      storeSlug: "lr-market",
+      valueIds: [],
+    });
+
+    expect(services.setProductAttributeValues).toHaveBeenCalledExactlyOnceWith(
+      TX,
+      { productId: 5, storeId: 7, valueIds: [] }
+    );
+  });
+
+  test.each([
+    ["repeats a value", [21, 21]],
+    ["sends an id as text", ["21"]],
+    [
+      "carries more than 50",
+      Array.from({ length: 51 }, (_, index) => index + 1),
+    ],
+  ])(
+    "refuses filter values when the list %s, before resolving the store",
+    async (_case, valueIds) => {
+      const { run } = setup();
+
+      await expect(
+        run("setAttributeValues", { id: 5, storeSlug: "lr-market", valueIds })
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Input validation failed",
+      });
+      expect(services.findAccessibleStore).not.toHaveBeenCalled();
+      expect(services.setProductAttributeValues).not.toHaveBeenCalled();
+    }
+  );
+
+  test("filter values on a store the caller may not work on are NOT_FOUND, before the service", async () => {
+    const { run } = setup({ mayWork: false });
+
+    await expect(
+      run("setAttributeValues", {
+        id: 5,
+        storeSlug: "tienda-demo",
+        valueIds: [21],
+      })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
+    });
+    expect(services.withStoreAccess).not.toHaveBeenCalled();
+    expect(services.setProductAttributeValues).not.toHaveBeenCalled();
   });
 
   test("a store the caller may not work on is NOT_FOUND, before any write", async () => {
