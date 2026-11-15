@@ -147,9 +147,14 @@ export function recordOrderList<T extends ListedOrder>(
 
   arrivals.baselines.set(key, shown);
 
+  // Only a received arrival is marked "New": one that came already packed
+  // (an empty list's first read, then the "all" tab) is said, but staff
+  // moving it back to received later must not make it new then.
   for (const order of arrived) {
-    fresh.set(order.id, now);
-    changed = true;
+    if (order.status === "received") {
+      fresh.set(order.id, now);
+      changed = true;
+    }
   }
 
   if (arrived.length > 0) {

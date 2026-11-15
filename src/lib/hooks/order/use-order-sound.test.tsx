@@ -27,7 +27,8 @@ function stubUserActivation(hasBeenActive: boolean) {
 
 /**
  * A Web Audio double that records the tones it was asked to play, as
- * `[frequency, start, stop]`.
+ * `[frequency, start, stop]`, and each oscillator start with the context's
+ * state at that moment.
  */
 function stubAudio({
   closeFails = false,
@@ -43,6 +44,7 @@ function stubAudio({
   state?: AudioContextState;
 } = {}) {
   const tones: [number, number, number][] = [];
+  const started: AudioContextState[] = [];
   const contexts: { closed: number; resumed: number }[] = [];
 
   class FakeAudioContext {
@@ -91,6 +93,7 @@ function stubAudio({
         connect: (next: unknown) => next,
         frequency: tone.frequency,
         start: (at: number) => {
+          started.push(this.state);
           tone.start = at;
         },
         stop: (at: number) => {
@@ -106,14 +109,15 @@ function stubAudio({
         throw new Error("not allowed to start");
       }
 
-      this.state = "running";
+      // As a browser does: the state changes once the promise settles.
       await Promise.resolve();
+      this.state = "running";
     }
   }
 
   vi.stubGlobal("AudioContext", FakeAudioContext);
 
-  return { contexts, tones };
+  return { contexts, started, tones };
 }
 
 function setup({
@@ -165,7 +169,8 @@ function setup({
 
   const recorded =
     audio === "missing"
-      ? (vi.stubGlobal("AudioContext", undefined), { contexts: [], tones: [] })
+      ? (vi.stubGlobal("AudioContext", undefined),
+        { contexts: [], started: [], tones: [] })
       : stubAudio({
           closeFails: audio === "unclosable",
           constructFails: audio === "refused",
@@ -263,15 +268,62 @@ describe("useOrderSound", () => {
     expect(contexts).toEqual([{ closed: 0, resumed: 0 }]);
   });
 
-  test("wakes a context the browser started suspended", () => {
-    const { contexts, result } = setup({ audio: "suspended", stored: "on" });
+  test("an arrival on a context the browser started suspended wakes it, without a tone", () => {
+    const { contexts, result, started } = setup({
+      audio: "suspended",
+      stored: "on",
+    });
 
     act(() => {
       result.current.play();
     });
 
     expect(contexts).toEqual([{ closed: 0, resumed: 1 }]);
+    expect(started).toEqual([]);
     expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("an arrival before the first gesture is dropped, not played once the sound wakes", async () => {
+    const { contexts, gesture, result, started, tones } = setup({
+      audio: "suspended",
+      stored: "on",
+    });
+
+    act(() => {
+      result.current.play();
+    });
+    await gesture();
+
+    // Woken twice, by the arrival and by the gesture: running, and silent.
+    expect(contexts).toEqual([{ closed: 0, resumed: 2 }]);
+    expect(result.current.needsGesture).toBe(false);
+    expect(started).toEqual([]);
+    expect(tones).toEqual([]);
+  });
+
+  test("once the gesture woke the sound, the next arrival beeps", async () => {
+    const { gesture, result, started, tones } = setup({
+      audio: "suspended",
+      stored: "on",
+    });
+
+    await gesture();
+    act(() => {
+      result.current.play();
+    });
+
+    expect(started).toEqual(["running"]);
+    expect(tones).toEqual([BEEP]);
+  });
+
+  test("turning it on in a tap on a suspended context still beeps once", () => {
+    const { result, started } = setup({ audio: "suspended" });
+
+    act(() => {
+      result.current.setEnabled(true);
+    });
+
+    expect(started).toEqual(["suspended"]);
   });
 
   test("reports a context the browser will not wake, without failing", async () => {
@@ -285,7 +337,7 @@ describe("useOrderSound", () => {
       await Promise.resolve();
     });
 
-    expect(tones).toEqual([BEEP]);
+    expect(tones).toEqual([]);
     expect(reportError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ message: "not allowed to start" }),
       { action: "Orders.resume_sound" }

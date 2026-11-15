@@ -7,6 +7,7 @@ import {
   forgetOrderArrivals,
   freshArrivals,
   isFreshArrival,
+  lastArrival,
   markOrderSeen,
   NO_ARRIVALS,
   recordOrderList,
@@ -220,6 +221,23 @@ describe("recordOrderList", () => {
     expect(recordOrderList(STORE, {}, [[makeOrder(1)]], AT)).toEqual([
       makeOrder(1),
     ]);
+  });
+
+  test("an arrival that comes packed is said but not new, nor new once moved back to received", () => {
+    recordOrderList(STORE, {}, [[]], AT);
+
+    expect(recordOrderList(STORE, {}, [[makeOrder(1, "packed")]], AT)).toEqual([
+      makeOrder(1, "packed"),
+    ]);
+    expect(lastArrival(STORE)).toEqual({ codes: ["C1"], seq: 1 });
+    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+
+    recordOrderList(STORE, {}, [[makeOrder(1)]], AT + 60_000);
+
+    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(
+      isFreshArrival(freshArrivals(STORE), makeOrder(1), AT + 60_000)
+    ).toBe(false);
   });
 
   test("an empty read records nothing and announces nothing", () => {

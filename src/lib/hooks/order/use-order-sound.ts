@@ -232,13 +232,20 @@ export function useOrderSound() {
     };
   }, [needsGesture]);
 
-  const beep = () => {
+  /**
+   * `inTap` is the toggle's own beep: the tap that asked for it is the
+   * browser's leave, so a suspended context wakes at once and plays it. An
+   * arrival comes without a tap: on a context still suspended its tone would
+   * wait for the next gesture and sound then, with every other one kept, so
+   * it is dropped (the announcement still says the order came).
+   */
+  const beep = (inTap: boolean) => {
     try {
       const output = unavailable
         ? null
         : wakeAudio(context, setAwake, setUnavailable);
 
-      if (!output) {
+      if (!output || !(inTap || isRunning(output))) {
         return;
       }
 
@@ -262,10 +269,10 @@ export function useOrderSound() {
     enabled,
     /** On, but silent until the staff taps or types anywhere on the page. */
     needsGesture,
-    /** Beeps if the staff turned the sound on. */
+    /** Beeps if the staff turned the sound on and the browser lets it sound now. */
     play: () => {
       if (enabled === true) {
-        beep();
+        beep(false);
       }
     },
     /**
@@ -277,7 +284,7 @@ export function useOrderSound() {
       preference.write(next);
 
       if (next) {
-        beep();
+        beep(true);
       }
     },
   };

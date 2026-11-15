@@ -120,29 +120,20 @@ function useArrivals(
 }
 
 /**
- * A store's orders (FER-027), newest first, refreshed every 15 seconds while
- * open: this screen is the only place a new order is announced. An order
- * that arrives while it is open is marked "New" (until it is opened, leaves
- * received or ten minutes pass) and said in a polite live region, with a beep
- * if the staff turned the sound on. The status tab and the search live in
- * the address, and each row's link carries them to the order and back.
+ * "Load more", and where focus goes once it brings its page: the first new
+ * row of the list (status and search) it was asked for.
  */
-function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
-  const { admin, common } = useDictionary();
-  const copy = admin.orders;
-  const orders = useOrders(storeSlug, query);
-  const now = useNow(renderedAt);
-  const sound = useOrderSound();
-  const soundHint = useId();
+function useLoadMore(
+  orders: Pick<
+    ReturnType<typeof useOrders>,
+    "fetchNextPage" | "isFetchingNextPage"
+  >,
+  { q, status }: OrdersQuery,
+  rowCount: number
+) {
   const list = useRef<HTMLUListElement>(null);
-  // Where focus goes once "Load more" brings its page: the first new row of
-  // the list (status and search) it was asked for.
   const focusRow = useRef<{ list: string; row: number } | null>(null);
-  const listName = JSON.stringify([query.status ?? null, query.q ?? null]);
-  const items = orders.data?.pages.flatMap((page) => page.items);
-  const arrivals = useArrivals(storeSlug, query, orders, sound.play);
-
-  const rowCount = items?.length ?? 0;
+  const listName = JSON.stringify([status ?? null, q ?? null]);
 
   useEffect(() => {
     const pending = focusRow.current;
@@ -162,11 +153,56 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
     }
   }, [listName, rowCount]);
 
-  let emptyMessage = copy.empty[query.status ?? "all"];
+  const loadMore = () => {
+    if (orders.isFetchingNextPage) {
+      return;
+    }
 
-  if (query.q) {
-    emptyMessage = interpolate(copy.empty.search, { q: query.q });
-  }
+    const asked = { list: listName, row: rowCount };
+    focusRow.current = asked;
+    // A failure lands in the query's state, which the list renders. A page
+    // that failed, or came back empty (its orders left the list meanwhile),
+    // brings no row to focus: the request is forgotten, so a later read
+    // that grows the list (an arrival) leaves focus where it is.
+    void (async () => {
+      const result = await orders.fetchNextPage();
+      const rows =
+        result.data?.pages.reduce((sum, page) => sum + page.items.length, 0) ??
+        0;
+
+      if ((result.isError || rows <= asked.row) && focusRow.current === asked) {
+        focusRow.current = null;
+      }
+    })();
+  };
+
+  return { list, loadMore };
+}
+
+/**
+ * A store's orders (FER-027), newest first, refreshed every 15 seconds while
+ * open: this screen is the only place a new order is announced. An order
+ * that arrives while it is open is marked "New" (until it is opened, leaves
+ * received or ten minutes pass) and said in a polite live region, with a beep
+ * if the staff turned the sound on. The status tab and the search live in
+ * the address, and each row's link carries them to the order and back.
+ */
+function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
+  const { admin, common } = useDictionary();
+  const copy = admin.orders;
+  const orders = useOrders(storeSlug, query);
+  const now = useNow(renderedAt);
+  const sound = useOrderSound();
+  const soundHint = useId();
+  const items = orders.data?.pages.flatMap((page) => page.items);
+  const arrivals = useArrivals(storeSlug, query, orders, sound.play);
+
+  const rowCount = items?.length ?? 0;
+  // An empty list kept on screen while another status or search loads is
+  // the last one's: it is no answer for this one, so the skeleton waits.
+  const waitsForList =
+    orders.isPending || (orders.isPlaceholderData && rowCount === 0);
+  const { list, loadMore } = useLoadMore(orders, query, rowCount);
 
   return (
     <section
@@ -215,7 +251,7 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
       <output aria-live="polite" className="sr-only">
         {arrivals.message}
       </output>
-      {orders.isPending ? (
+      {waitsForList ? (
         <div
           aria-busy="true"
           className="space-y-2"
@@ -228,7 +264,9 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
         </div>
       ) : null}
       <OrderListError orders={orders} />
-      {items?.length === 0 ? <EmptyState message={emptyMessage} /> : null}
+      {items?.length === 0 && !orders.isPlaceholderData ? (
+        <OrderListEmpty query={query} />
+      ) : null}
       {items && items.length > 0 ? (
         <ul
           aria-label={copy.list}
@@ -257,24 +295,7 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
         <Button
           aria-disabled={orders.isFetchingNextPage || undefined}
           className="h-11 w-full aria-disabled:opacity-50 md:h-9 md:w-auto"
-          onClick={() => {
-            if (orders.isFetchingNextPage) {
-              return;
-            }
-
-            const asked = { list: listName, row: rowCount };
-            focusRow.current = asked;
-            // A failure lands in the query's state, which the list renders;
-            // the row it would have focused is forgotten, so a later read
-            // that grows the list (an arrival) leaves focus where it is.
-            void (async () => {
-              const result = await orders.fetchNextPage();
-
-              if (result.isError && focusRow.current === asked) {
-                focusRow.current = null;
-              }
-            })();
-          }}
+          onClick={loadMore}
           type="button"
           variant="outline"
         >
@@ -323,6 +344,21 @@ function OrderListError({
         {common.tryAgain}
       </Button>
     </div>
+  );
+}
+
+/** What an empty list says: of its status, or that nothing matches. */
+function OrderListEmpty({ query }: { query: OrdersQuery }) {
+  const copy = useDictionary().admin.orders;
+
+  return (
+    <EmptyState
+      message={
+        query.q
+          ? interpolate(copy.empty.search, { q: query.q })
+          : copy.empty[query.status ?? "all"]
+      }
+    />
   );
 }
 

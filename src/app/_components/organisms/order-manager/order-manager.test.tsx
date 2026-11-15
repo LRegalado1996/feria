@@ -446,9 +446,28 @@ describe("OrderManager", () => {
     expect(screen.queryByTestId("order-list")).not.toBeInTheDocument();
   });
 
+  test("an empty list kept on screen while a new search loads shows the skeleton, not the last list's emptiness", async () => {
+    const { rerender } = setup({
+      lists: [onePage([]), "hang"],
+      query: { q: "zz" },
+    });
+    expect(await screen.findByTestId("empty-state")).toHaveTextContent(
+      /^No order matches “zz”\.$/u
+    );
+
+    rerender({ q: "ana" });
+
+    expect(await screen.findByTestId("order-list-skeleton")).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
+    expect(screen.queryByTestId("empty-state")).not.toBeInTheDocument();
+  });
+
   test("a failed list says so and reads again on retry, never showing it empty", async () => {
     const { list, user } = setup({
       lists: ["fail", onePage([makeOrder(1, "AB3CD")])],
+      query: { q: "ana", status: "received" },
     });
 
     const alert = await screen.findByRole("alert");
@@ -458,13 +477,18 @@ describe("OrderManager", () => {
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByTestId("order-row-AB3CD")).toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(2);
+    // The retry reads the same list again: the store, status and search.
+    expect(list.mock.calls).toEqual([
+      [{ q: "ana", status: "received", storeSlug: "lr-market" }],
+      [{ q: "ana", status: "received", storeSlug: "lr-market" }],
+    ]);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   test("a refresh that fails after an empty list says so with a retry, instead of passing for no orders", async () => {
     const { list, refresh, user } = setup({
       lists: [onePage([]), "fail", onePage([makeOrder(1, "AB3CD")])],
+      query: { q: "ana", status: "packed" },
     });
     await screen.findByTestId("empty-state");
 
@@ -479,7 +503,11 @@ describe("OrderManager", () => {
 
     expect(await screen.findByTestId("order-row-AB3CD")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(list).toHaveBeenCalledTimes(3);
+    expect(list.mock.calls).toEqual([
+      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
+      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
+      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
+    ]);
   });
 
   test("a refresh that fails keeps the orders it read on screen, and says so in Spanish", async () => {
@@ -967,6 +995,41 @@ describe("OrderManager's focus after Load more", () => {
       expect(codes()).toEqual(["K7P2Q", "AB3CD"]);
     });
     expect(screen.getByRole("button", { name: "Load more" })).toHaveFocus();
+  });
+
+  test("a next page that brought no rows focuses no row when a later read grows the list", async () => {
+    const cursor = { createdAt: "2026-11-14T21:59:00.000Z", id: 1 };
+    const { codes, list, refresh, user } = setup({
+      lists: [
+        { items: [makeOrder(1, "AB3CD")], nextCursor: cursor },
+        {
+          items: [makeOrder(9, "K7P2Q"), makeOrder(1, "AB3CD")],
+          nextCursor: cursor,
+        },
+      ],
+      // Its orders left the list (packed, say) before the page was read.
+      nextPage: { items: [], nextCursor: cursor },
+    });
+    await screen.findByTestId("order-row-AB3CD");
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => {
+      expect(list.mock.calls.filter(([input]) => hasCursor(input))).toEqual([
+        [{ cursor, storeSlug: "lr-market" }],
+      ]);
+    });
+    await screen.findByRole("button", { name: "Load more" });
+    // The staff moves on, to the first tab.
+    const tab = within(
+      screen.getByRole("navigation", { name: "Filter by status" })
+    ).getAllByRole("link")[0];
+    tab?.focus();
+
+    await refresh();
+
+    await waitFor(() => {
+      expect(codes()).toEqual(["K7P2Q", "AB3CD"]);
+    });
+    expect(tab).toHaveFocus();
   });
 
   test("a next page still on its way when the status changes focuses no row of the new list", async () => {
