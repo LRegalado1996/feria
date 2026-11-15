@@ -596,17 +596,18 @@ describe("useCart", () => {
       });
 
       expect(answer).toBe(false);
+      expect(result.current.items).toEqual([makeItem(4, 2)]);
       expect(storedCart()).toEqual([makeItem(4, 2)]);
       expect(storage.setItem).not.toHaveBeenCalled();
     }
   );
 
   test.each([
-    ["setting a quantity", 3],
-    ["taking an article out", 0],
-  ])("answers true after %s", async (_case, quantity) => {
-    const { result } = await setup({
-      stored: JSON.stringify([makeItem(4, 2)]),
+    ["setting a quantity", 3, [makeItem(4, 3), makeItem(9, 1)]],
+    ["taking an article out", 0, [makeItem(9, 1)]],
+  ])("answers true after %s", async (_case, quantity, expected) => {
+    const { result, storedCart } = await setup({
+      stored: JSON.stringify([makeItem(4, 2), makeItem(9, 1)]),
     });
 
     let answer = false;
@@ -615,6 +616,8 @@ describe("useCart", () => {
     });
 
     expect(answer).toBe(true);
+    expect(result.current.items).toEqual(expected);
+    expect(storedCart()).toEqual(expected);
   });
 
   test("shows a change another tab made, announced by the storage event", async () => {
