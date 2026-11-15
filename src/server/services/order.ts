@@ -478,45 +478,56 @@ export async function getOrder(
   db: DatabaseClient,
   { id, storeId }: StoreScope & { id: number }
 ) {
-  const [found] = await db
-    .select({
-      code: customerOrder.code,
-      createdAt: customerOrder.createdAt,
-      currencyCode: customerOrder.currencyCode,
-      customerName: customerOrder.customerName,
-      customerPhone: customerOrder.customerPhone,
-      id: customerOrder.id,
-      locale: customerOrder.locale,
-      note: customerOrder.note,
-      phoneVerifiedAt: customerOrder.phoneVerifiedAt,
-      status: customerOrder.status,
-      totalAmount: customerOrder.totalAmount,
-    })
-    .from(customerOrder)
-    .where(and(eq(customerOrder.id, id), eq(customerOrder.storeId, storeId)));
+  // One snapshot: a status change committing between the order and its
+  // history would show a status the history does not end in.
+  return await db.transaction(
+    async (tx) => {
+      const [found] = await tx
+        .select({
+          code: customerOrder.code,
+          createdAt: customerOrder.createdAt,
+          currencyCode: customerOrder.currencyCode,
+          customerName: customerOrder.customerName,
+          customerPhone: customerOrder.customerPhone,
+          id: customerOrder.id,
+          locale: customerOrder.locale,
+          note: customerOrder.note,
+          phoneVerifiedAt: customerOrder.phoneVerifiedAt,
+          status: customerOrder.status,
+          totalAmount: customerOrder.totalAmount,
+        })
+        .from(customerOrder)
+        .where(
+          and(eq(customerOrder.id, id), eq(customerOrder.storeId, storeId))
+        );
 
-  if (!found) {
-    throw orderNotFound();
-  }
+      if (!found) {
+        throw orderNotFound();
+      }
 
-  const history = await db
-    .select({
-      changedByName: user.name,
-      createdAt: orderStatusEvent.createdAt,
-      status: orderStatusEvent.status,
-    })
-    .from(orderStatusEvent)
-    .leftJoin(user, eq(user.id, orderStatusEvent.changedById))
-    .where(eq(orderStatusEvent.orderId, id))
-    .orderBy(asc(orderStatusEvent.createdAt), asc(orderStatusEvent.id));
-  const { phoneVerifiedAt, ...shown } = found;
+      const history = await tx
+        .select({
+          changedByName: user.name,
+          createdAt: orderStatusEvent.createdAt,
+          status: orderStatusEvent.status,
+        })
+        .from(orderStatusEvent)
+        .leftJoin(user, eq(user.id, orderStatusEvent.changedById))
+        .where(eq(orderStatusEvent.orderId, id))
+        // In the order they were appended: each move is appended under the
+        // order's row lock, so its id follows the move it waited for.
+        .orderBy(asc(orderStatusEvent.id));
+      const { phoneVerifiedAt, ...shown } = found;
 
-  return {
-    ...shown,
-    history,
-    items: await orderItems(db, id),
-    phoneVerified: phoneVerifiedAt !== null,
-  };
+      return {
+        ...shown,
+        history,
+        items: await orderItems(tx, id),
+        phoneVerified: phoneVerifiedAt !== null,
+      };
+    },
+    { accessMode: "read only", isolationLevel: "repeatable read" }
+  );
 }
 
 /**
@@ -556,7 +567,13 @@ export async function changeOrderStatus(
     .where(eq(customerOrder.id, id));
   await tx
     .insert(orderStatusEvent)
-    .values({ changedById: userId, orderId: id, status });
+    // Stamped now, after the lock, not when the transaction began.
+    .values({
+      changedById: userId,
+      createdAt: sql`clock_timestamp()`,
+      orderId: id,
+      status,
+    });
 
   return { id, status };
 }

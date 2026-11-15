@@ -92,7 +92,9 @@ export const createOrderSchema = z.object({
     .trim()
     .max(ORDER_NOTE_MAX_LENGTH)
     .transform((note) => (note === "" ? null : note))
-    .nullable(),
+    // Optional: left out, it is no note.
+    .nullish()
+    .transform((note) => note ?? null),
   // A v4 uuid, as `crypto.randomUUID()` makes: never the nil uuid or
   // another fixed one two checkouts could share.
   requestKey: z.uuidv4(),

@@ -80,6 +80,19 @@ describe("createOrderSchema", () => {
     });
   });
 
+  test.each([
+    ["left out", undefined],
+    ["null", null],
+    ["empty", ""],
+  ])("reads a note %s as none", (_case, note) => {
+    const { note: _omitted, ...rest } = makeOrder();
+
+    expect(
+      createOrderSchema.parse(note === undefined ? rest : { ...rest, note })
+        .note
+    ).toBeNull();
+  });
+
   test("keeps a note, trimmed", () => {
     expect(
       createOrderSchema.parse(makeOrder({ note: " Sin bolsa " })).note
@@ -129,7 +142,7 @@ describe("createOrderSchema", () => {
     ["a note of 500 characters", { note: "x".repeat(500) }, true],
     ["a note of 501 characters", { note: "x".repeat(501) }, false],
     ["no note", { note: null }, true],
-    ["no note field", { note: undefined }, false],
+    ["no note field", { note: undefined }, true],
     ["a phone that is not one", { customerPhone: "24001234" }, false],
     ["a blank phone", { customerPhone: "   " }, false],
     [

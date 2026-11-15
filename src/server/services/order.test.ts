@@ -858,9 +858,18 @@ describe("getOrder", () => {
     { changedByName: "Lucía", createdAt: NOW, status: "packed" },
   ];
 
+  /**
+   * The client and the read-only transaction it opens, as two doubles: a
+   * read sent through the client instead of the snapshot would land on
+   * `db` and find nothing.
+   */
   function setupGet(found: unknown) {
     const db = createMockDatabase();
-    db.$["select.where"].mockImplementation(async (where: unknown) => {
+    const tx = createMockDatabase();
+    db.$.transaction.mockImplementation(async (callback: unknown) =>
+      typeof callback === "function" ? await callback(tx) : undefined
+    );
+    tx.$["select.where"].mockImplementation(async (where: unknown) => {
       const { params, sql } = renderQuery(where);
 
       return await Promise.resolve(
@@ -873,8 +882,8 @@ describe("getOrder", () => {
           : []
       );
     });
-    db.$["select.orderBy"].mockImplementation(async () => {
-      const { sql } = renderQuery(db.$["select.where"].mock.calls.at(-1)?.[0]);
+    tx.$["select.orderBy"].mockImplementation(async () => {
+      const { sql } = renderQuery(tx.$["select.where"].mock.calls.at(-1)?.[0]);
 
       return await Promise.resolve(
         sql.startsWith('"order_status_event"') ? HISTORY : ITEMS
@@ -885,21 +894,22 @@ describe("getOrder", () => {
       db,
       read: async () =>
         await getOrder(db as never, { id: 70, storeId: STORE_ID }),
+      tx,
     };
   }
 
   test("answers NOT_FOUND for an order of another store, reading nothing else", async () => {
-    const { db, read } = setupGet(null);
+    const { read, tx } = setupGet(null);
 
     await expect(read()).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Order not found",
     });
-    expect(db.$["select.orderBy"]).not.toHaveBeenCalled();
+    expect(tx.$["select.orderBy"]).not.toHaveBeenCalled();
   });
 
-  test("shows the full phone, the items and who set each status", async () => {
-    const { db, read } = setupGet(
+  test("shows the full phone, the items and who set each status, from one snapshot", async () => {
+    const { db, read, tx } = setupGet(
       makeOrderRow({ locale: "en", phoneVerifiedAt: NOW })
     );
 
@@ -918,22 +928,34 @@ describe("getOrder", () => {
       status: "received",
       totalAmount: 138_000,
     });
-    expect(db.$["select.leftJoin"].mock.calls[0]?.[0]).toBe(user);
-    expect(renderQuery(db.$["select.leftJoin"].mock.calls[0]?.[1])).toEqual({
+    // A status change committing between the reads can't split them.
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function),
+      { accessMode: "read only", isolationLevel: "repeatable read" }
+    );
+    expect(db.$.select).not.toHaveBeenCalled();
+    expect(tx.$["select.from"].mock.calls).toEqual([
+      [customerOrder],
+      [orderStatusEvent],
+      [orderItem],
+    ]);
+    expect(tx.$["select.leftJoin"].mock.calls[0]?.[0]).toBe(user);
+    expect(renderQuery(tx.$["select.leftJoin"].mock.calls[0]?.[1])).toEqual({
       params: [],
       sql: '"user"."id" = "order_status_event"."changedById"',
     });
     expect(
-      db.$["select.where"].mock.calls
+      tx.$["select.where"].mock.calls
         .slice(1)
         .map(([where]) => renderQuery(where))
     ).toEqual([
       { params: [70], sql: '"order_status_event"."orderId" = $1' },
       { params: [70], sql: '"order_item"."orderId" = $1' },
     ]);
-    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
-      '"order_status_event"."createdAt" asc, "order_status_event"."id" asc'
-    );
+    // The history in the order it was appended, not by its clock.
+    expect(
+      tx.$["select.orderBy"].mock.calls.map((terms) => renderOrderBy(terms))
+    ).toEqual(['"order_status_event"."id" asc', '"order_item"."id" asc']);
   });
 });
 
@@ -1000,10 +1022,20 @@ describe("changeOrderStatus", () => {
         sql: '"customer_order"."id" = $1',
       });
       expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(orderStatusEvent);
-      expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
+      const [values] = db.$["insert.values"].mock.calls;
+      const { createdAt, ...event } = (values?.[0] ?? {}) as {
+        createdAt?: unknown;
+      };
+      expect(values).toHaveLength(1);
+      expect(event).toEqual({
         changedById: "staff-user-id",
         orderId: 70,
         status,
+      });
+      // Stamped by the database when written, after the lock was granted.
+      expect(renderQuery(createdAt)).toEqual({
+        params: [],
+        sql: "clock_timestamp()",
       });
     }
   );

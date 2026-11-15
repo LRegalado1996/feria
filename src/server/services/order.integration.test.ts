@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -643,7 +643,12 @@ describe("reading an order", () => {
         await db
           .select({ token: customerOrder.token })
           .from(customerOrder)
-          .where(eq(customerOrder.code, codes[2] ?? ""))
+          .where(
+            and(
+              eq(customerOrder.storeId, shop.id),
+              eq(customerOrder.code, codes[2] ?? "")
+            )
+          )
       )[0]?.token ?? ""
     );
     await db.transaction(
