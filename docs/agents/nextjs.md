@@ -44,6 +44,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 - **The page renders `organisms/admin-shell`** from what those checks returned, so the navigation can never show more than the procedures allow; the navigation is not the authorization.
 - **Params are read inside the boundary.** The store and the section are per request, so the page component passes `params` into its resolver; the fallback is `molecules/admin-shell-skeleton`, a client component that reads the language from the provider.
 - **A refused admin page renders the not-found page with a 200.** The check happens after the shell started streaming (the session is a request-time read), so the status is committed; what the user sees, and what the e2e asserts, is the not-found page.
+- **The orders pages (FER-027)** read their selection from `searchParams` inside the boundary (`readOrdersQuery`, `src/lib/admin/orders.ts`: an unknown status is all of them) and put the `HydrationBoundary` above `AdminShell`, so the navigation's count of orders to pack (`molecules/orders-pending-badge`) and the screen's tabs hydrate from the same prefetched counts. An order's page checks its id is a positive int before any session check or query (`readOrderId`), and answers the not-found page for an order the store does not have (`catchNotFound`); any other failed read renders the screen, which fetches again.
 - **`?next=` is untrusted:** `safeReturnPath` (`src/lib/admin/paths.ts`) keeps it only when it is an admin page of this site, never the sign-in page or another host.
 
 ## Navigation

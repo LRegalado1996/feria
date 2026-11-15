@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { AdminNav } from "@/app/_components/molecules/admin-nav";
 import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
+import { OrdersPendingBadge } from "@/app/_components/molecules/orders-pending-badge";
 import { SignOutButton } from "@/app/_components/molecules/sign-out-button";
 import { StoreSwitcher } from "@/app/_components/molecules/store-switcher";
 import { ThemeToggle } from "@/app/_components/molecules/theme-toggle";
@@ -115,6 +116,12 @@ function AdminShell({
           {currentStore ? (
             <AdminNav
               items={STORE_SECTIONS.map((section) => ({
+                // The orders still to pack, wherever in the store the staff
+                // is: the orders screen is where a new one is announced.
+                badge:
+                  section === "orders" ? (
+                    <OrdersPendingBadge storeSlug={currentStore.slug} />
+                  ) : undefined,
                 current:
                   location.kind === "store" && location.section === section,
                 href: storeSectionPath(currentStore.slug, section, locale),

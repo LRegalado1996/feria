@@ -82,4 +82,24 @@ describe("AdminNav", () => {
 
     expect(nav.firstElementChild?.tagName).toBe("UL");
   });
+
+  test("shows an item's badge inside its link, after the label, and nothing for the others", () => {
+    const { links } = setup({
+      items: [
+        makeItem(),
+        makeItem({
+          badge: <span data-testid="badge">3</span>,
+          href: "/en/admin/lr-market/orders",
+          label: "Orders",
+        }),
+      ],
+    });
+
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Articles",
+      "Orders3",
+    ]);
+    expect(links[1]?.lastElementChild).toBe(screen.getByTestId("badge"));
+    expect(links[0]?.children).toHaveLength(0);
+  });
 });

@@ -10,6 +10,14 @@ import { server } from "@/test/msw";
 
 import { AdminShell, type AdminLocation } from "./admin-shell";
 
+// The badge polls the API and has its own tests; here it shows the store
+// it was given.
+vi.mock("@/app/_components/molecules/orders-pending-badge", () => ({
+  OrdersPendingBadge: ({ storeSlug }: { storeSlug: string }) => (
+    <span data-store={storeSlug} data-testid="orders-pending-badge" />
+  ),
+}));
+
 // The language toggle reads the URL, which exists only inside a Next render.
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin",
@@ -127,6 +135,24 @@ describe("AdminShell", () => {
     expect(
       screen.getByRole("navigation", { name: "Admin sections" })
     ).toHaveTextContent(/^LR Market/);
+  });
+
+  test("shows the store's orders still to pack inside the orders link, and in no other", () => {
+    setup({ location: inStore("categories") });
+
+    const badges = screen.getAllByTestId("orders-pending-badge");
+    expect(badges.map((badge) => badge.dataset.store)).toEqual(["lr-market"]);
+    expect(screen.getByRole("link", { name: "Orders" })).toContainElement(
+      badges[0] ?? null
+    );
+  });
+
+  test("shows no orders count outside a store", () => {
+    setup({ location: { kind: "landing" } });
+
+    expect(
+      screen.queryByTestId("orders-pending-badge")
+    ).not.toBeInTheDocument();
   });
 
   test("shows a member no platform navigation", () => {
