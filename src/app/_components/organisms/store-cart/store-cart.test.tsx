@@ -662,6 +662,66 @@ describe("StoreCart", () => {
     ]);
   });
 
+  test("a line taken out after a failed first read keeps the form and what was typed while the shorter list loads", async () => {
+    const { cartProducts, submit, user } = setup({ products: "fail" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not fetch the current prices."
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Your name" }),
+      "Ana Pérez"
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Your mobile" }),
+      "099 123 456"
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Note for the store (optional)" }),
+      "Sin bolsa"
+    );
+    // The read for the shorter list never comes back.
+    server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
+    cartProducts.mockImplementation(
+      async () => await new Promise<never>(() => {})
+    );
+    const [first] = screen.getAllByRole("button", {
+      name: "Remove Fetching the current prices…",
+    });
+    if (!first) {
+      throw new Error("No line to remove");
+    }
+
+    await user.click(first);
+
+    await waitFor(() => {
+      expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
+        ids: [9],
+        locale: "en",
+        storeSlug: "lr-market",
+      });
+    });
+    // The lines' place says the prices are on their way.
+    const items = screen.getByRole("region", { name: "Your cart" });
+    expect(within(items).getByRole("status")).toHaveTextContent(
+      "Fetching the current prices…"
+    );
+    expect(screen.queryAllByTestId("store-cart-line")).toEqual([]);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Your name" })).toHaveValue(
+      "Ana Pérez"
+    );
+    expect(screen.getByRole("textbox", { name: "Your mobile" })).toHaveValue(
+      "099 123 456"
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Note for the store (optional)" })
+    ).toHaveValue("Sin bolsa");
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
+      "Fetching the current prices…"
+    );
+  });
+
   test("taking out the last of several lines moves focus to the one before it", async () => {
     const { shown, user } = setup();
 

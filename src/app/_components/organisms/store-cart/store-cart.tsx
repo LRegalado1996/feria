@@ -146,6 +146,15 @@ function CartBody({
   // loads, which must not read as "your cart is empty". A transition, so the
   // page shown again with the back button starts over, never "sending".
   const [placed, startNavigation] = useTransition();
+  const answered = products.data !== undefined || products.errorUpdateCount > 0;
+  // Whether the cart's layout has been on screen this visit. A line taken
+  // out after a failed read asks for a new list with nothing to keep in its
+  // place: the layout stays, so the checkout form keeps what was typed.
+  const [laidOut, setLaidOut] = useState(answered);
+
+  if (answered && !laidOut) {
+    setLaidOut(true);
+  }
 
   if (placed) {
     return (
@@ -179,12 +188,15 @@ function CartBody({
     );
   }
 
-  // Nothing to show before the shop's first answer. Once a read has failed,
-  // the page stays: the checkout form keeps what the shopper typed, and the
-  // lines wait for their prices.
-  if (!products.data && products.errorUpdateCount === 0) {
+  // Nothing to show before the shop's first answer. Once it has come, failed
+  // or not, the page stays: the checkout form keeps what the shopper typed,
+  // and the lines wait for their prices.
+  if (!laidOut) {
     return <output className="block text-store-muted">{copy.loading}</output>;
   }
+
+  // A newer read on its way with no earlier answer to keep on screen.
+  const loadingLines = !products.data && !products.isError;
 
   const shown = products.data ?? [];
   const byId = new Map(shown.map((product) => [product.id, product]));
@@ -257,25 +269,31 @@ function CartBody({
             </button>
           </div>
         ) : null}
-        <ul className="border-t-2 border-store-line">
-          {lines.map(({ flag, item, product }, index) => (
-            <StoreCartLine
-              flag={flag}
-              key={item.productId}
-              onQuantity={(quantity) => {
-                setQuantity(item.productId, quantity);
+        {loadingLines ? (
+          <output className="block border-t-2 border-store-line py-4 text-store-muted">
+            {copy.loading}
+          </output>
+        ) : (
+          <ul className="border-t-2 border-store-line">
+            {lines.map(({ flag, item, product }, index) => (
+              <StoreCartLine
+                flag={flag}
+                key={item.productId}
+                onQuantity={(quantity) => {
+                  setQuantity(item.productId, quantity);
 
-                if (quantity <= 0) {
-                  onRemoved(index, product?.title ?? copy.flags.goneTitle);
-                }
-              }}
-              product={product ?? null}
-              quantity={item.quantity}
-              seenPriceAmount={item.seenPriceAmount}
-              storeSlug={storeSlug}
-            />
-          ))}
-        </ul>
+                  if (quantity <= 0) {
+                    onRemoved(index, product?.title ?? copy.flags.goneTitle);
+                  }
+                }}
+                product={product ?? null}
+                quantity={item.quantity}
+                seenPriceAmount={item.seenPriceAmount}
+                storeSlug={storeSlug}
+              />
+            ))}
+          </ul>
+        )}
         {first ? (
           <p
             className="flex items-baseline justify-between gap-4 py-4 font-display text-3xl leading-none tracking-display uppercase tabular-nums"
