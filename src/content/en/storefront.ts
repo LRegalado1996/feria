@@ -25,6 +25,48 @@ export const storefront: Dictionary["storefront"] = {
     zoom: "Enlarge the photo",
     zoomClose: "Close the enlarged photo",
   },
+  cart: {
+    checkout: {
+      name: "Your name",
+      nameRequired: "Write your name.",
+      note: "Note for the store (optional)",
+      notePlaceholder: "For example, what time suits you.",
+      phone: "Your mobile",
+      phoneHint: "The store writes to you on WhatsApp to arrange delivery.",
+      phoneInvalid: "Write a mobile number, for example +598 99 123 456.",
+      submit: "Place order",
+      submitting: "Sending the order…",
+      title: "Your details",
+    },
+    continueShopping: "Keep browsing",
+    decrease: "One unit less of {title}",
+    empty: "Your cart is empty.",
+    errors: {
+      blocked:
+        "Remove the articles that can no longer be bought to place the order.",
+      changed:
+        "Something in your cart changed while you were looking. Check it and send again.",
+      failed: "We could not send the order. Try again.",
+      refresh: "We could not fetch the current prices.",
+      refused:
+        "We could not accept this order. If it keeps happening, write to the store.",
+      retry: "Try again",
+      tooMany:
+        "You placed several orders in a short time. Try again in {minutes} min.",
+    },
+    flags: {
+      gone: "No longer for sale.",
+      priceChanged: "The price changed: it was {before}.",
+      unavailable: "Sold out for now.",
+    },
+    increase: "One unit more of {title}",
+    loading: "Fetching the current prices…",
+    quantity: "Quantity of {title}",
+    remove: "Remove {title}",
+    subtotal: "Total",
+    title: "Your cart",
+    unitPrice: "{price} each",
+  },
   catalog: {
     addToCart: "Add to cart: {name}",
     addToCartShort: "Add",
@@ -78,6 +120,25 @@ export const storefront: Dictionary["storefront"] = {
   },
   marquee: {
     pause: "Pause the moving band",
+  },
+  order: {
+    code: "Your order code",
+    contactStore: "Write to the store",
+    contactStoreText: "Hi! I placed order {code}.",
+    items: "What you ordered",
+    keepShopping: "Keep browsing the store",
+    next: "The store will write to you at {phone} to arrange payment and delivery. Keep this link: it shows how your order is going.",
+    note: "Your note",
+    received: "We received your order!",
+    status: "Status",
+    statuses: {
+      delivered: "Delivered",
+      packed: "Packed: ready to deliver",
+      received: "Received: the store will pack it",
+      undeliverable: "Could not be delivered: the store will write to you",
+    },
+    title: "Order {code}",
+    total: "Total",
   },
   price: {
     previous: "Was {price}",

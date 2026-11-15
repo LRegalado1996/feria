@@ -4,3 +4,4 @@ export {
   parseCart,
   useCart,
 } from "./use-cart";
+export { type CartProduct, useCartProducts } from "./use-cart-products";

@@ -13,6 +13,8 @@ import { cn } from "@/lib/utils";
 
 export interface StoreArticlePurchaseProps {
   className?: string;
+  /** The price the page shows, so the cart can say if it changes. */
+  priceAmount: number;
   productId: number;
   storeSlug: string;
 }
@@ -27,6 +29,7 @@ const STEP_CLASS =
  */
 function StoreArticlePurchase({
   className,
+  priceAmount,
   productId,
   storeSlug,
 }: StoreArticlePurchaseProps) {
@@ -87,7 +90,7 @@ function StoreArticlePurchase({
         onClick={() => {
           const had =
             items.find((item) => item.productId === productId)?.quantity ?? 0;
-          const outcome = add(productId, quantity);
+          const outcome = add(productId, quantity, priceAmount);
           // The cart keeps at most the cap of one article: when it took
           // fewer than chosen, the shopper is told how many, not "added".
           const added = Math.min(quantity, CART_QUANTITY_MAX - had);

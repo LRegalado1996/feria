@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   changeOrderStatusSchema,
+  createCheckoutSchema,
   createOrderSchema,
   getOrderByTokenSchema,
   getOrderSchema,
@@ -288,5 +289,95 @@ describe("getOrderSchema and changeOrderStatusSchema", () => {
         storeSlug: "lr-market",
       }).success
     ).toBe(accepted);
+  });
+});
+
+const CHECKOUT_MESSAGES = {
+  nameRequired: "Name, please",
+  phoneInvalid: "A mobile, please",
+};
+
+function makeCheckout(overrides: Record<string, unknown> = {}) {
+  return {
+    customerName: "Ana Pérez",
+    customerPhone: "099 123 456",
+    note: "",
+    ...overrides,
+  };
+}
+
+/** Each issue as `[field, message]`, or `[]` when the form is valid. */
+const checkoutIssues = (overrides: Record<string, unknown>) =>
+  (
+    createCheckoutSchema(CHECKOUT_MESSAGES).safeParse(makeCheckout(overrides))
+      .error?.issues ?? []
+  ).map((issue) => [issue.path.join("."), issue.message]);
+
+describe("createCheckoutSchema", () => {
+  test("keeps the phone as typed and trims every field", () => {
+    expect(
+      createCheckoutSchema(CHECKOUT_MESSAGES).parse(
+        makeCheckout({
+          customerName: " Ana Pérez ",
+          customerPhone: " +598 99 123 456 ",
+          note: " Sin bolsa ",
+        })
+      )
+    ).toEqual({
+      customerName: "Ana Pérez",
+      customerPhone: "+598 99 123 456",
+      note: "Sin bolsa",
+    });
+  });
+
+  test.each([
+    ["a local mobile", { customerPhone: "099 123 456" }],
+    ["an international mobile", { customerPhone: "+598 99 123 456" }],
+    ["a name of 80 characters", { customerName: "x".repeat(80) }],
+    ["a note of 500 characters", { note: "x".repeat(500) }],
+    [
+      "a phone of 30 characters",
+      { customerPhone: `+598${" ".repeat(18)}99123456` },
+    ],
+  ])("accepts %s", (_case, overrides) => {
+    expect(checkoutIssues(overrides)).toEqual([]);
+  });
+
+  test.each([
+    ["a blank name", { customerName: "   " }, "customerName", "Name, please"],
+    [
+      "a landline",
+      { customerPhone: "24001234" },
+      "customerPhone",
+      "A mobile, please",
+    ],
+    [
+      "a blank phone",
+      { customerPhone: "" },
+      "customerPhone",
+      "A mobile, please",
+    ],
+  ])(
+    "says what is wrong with %s, in the page's words",
+    (_case, overrides, field, message) => {
+      expect(checkoutIssues(overrides)).toEqual([[field, message]]);
+    }
+  );
+
+  test("a phone of 31 characters is refused in the page's words", () => {
+    expect(
+      checkoutIssues({ customerPhone: `+598${" ".repeat(19)}99123456` })
+    ).toEqual([["customerPhone", "A mobile, please"]]);
+  });
+
+  test.each([
+    [
+      "a name of 81 characters",
+      { customerName: "x".repeat(81) },
+      "customerName",
+    ],
+    ["a note of 501 characters", { note: "x".repeat(501) }, "note"],
+  ])("refuses %s", (_case, overrides, field) => {
+    expect(checkoutIssues(overrides).map(([path]) => path)).toEqual([field]);
   });
 });

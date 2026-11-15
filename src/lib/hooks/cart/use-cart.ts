@@ -190,9 +190,12 @@ export function useCart(storeSlug: string) {
   /**
    * Adds `quantity` of an article, up to the per-article cap, and answers
    * what it did (`AddOutcome`); anything but `added` changed nothing.
+   * `seenPriceAmount` is the price the page showed, kept so the cart can
+   * say when it changed since.
    */
   const add = useCallback(
-    (productId: number, quantity = 1): AddOutcome => {
+    (productId: number, quantity = 1, seenPriceAmount?: number): AddOutcome => {
+      const seen = seenPriceAmount === undefined ? {} : { seenPriceAmount };
       const current = parseCart(readRaw(key));
       const line = current.find((item) => item.productId === productId);
 
@@ -218,6 +221,7 @@ export function useCart(storeSlug: string) {
               item.productId === productId
                 ? {
                     ...item,
+                    ...seen,
                     quantity: Math.min(
                       item.quantity + quantity,
                       CART_QUANTITY_MAX
@@ -227,7 +231,11 @@ export function useCart(storeSlug: string) {
             )
           : [
               ...current,
-              { productId, quantity: Math.min(quantity, CART_QUANTITY_MAX) },
+              {
+                productId,
+                quantity: Math.min(quantity, CART_QUANTITY_MAX),
+                ...seen,
+              },
             ]
       );
 

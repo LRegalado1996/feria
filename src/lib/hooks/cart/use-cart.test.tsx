@@ -184,6 +184,67 @@ describe("useCart", () => {
     }
   );
 
+  test("keeps the price seen on a new line", async () => {
+    const { result, storedCart } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+
+    act(() => {
+      result.current.add(9, 1, 125_000);
+    });
+
+    expect(storedCart()).toEqual([
+      makeItem(4, 2),
+      { ...makeItem(9, 1), seenPriceAmount: 125_000 },
+    ]);
+    expect(result.current.items).toEqual([
+      makeItem(4, 2),
+      { ...makeItem(9, 1), seenPriceAmount: 125_000 },
+    ]);
+  });
+
+  test.each([
+    ["a line with a price seen before", { seenPriceAmount: 100_000 }],
+    ["a line with no price seen", {}],
+  ])("takes the price seen now on %s", async (_case, seen) => {
+    const { storedCart, result } = await setup({
+      stored: JSON.stringify([{ ...makeItem(4, 2), ...seen }]),
+    });
+
+    act(() => {
+      result.current.add(4, 1, 125_000);
+    });
+
+    expect(storedCart()).toEqual([
+      { ...makeItem(4, 3), seenPriceAmount: 125_000 },
+    ]);
+  });
+
+  test("leaves the price seen alone when none is given", async () => {
+    const { storedCart, result } = await setup({
+      stored: JSON.stringify([{ ...makeItem(4, 2), seenPriceAmount: 100_000 }]),
+    });
+
+    act(() => {
+      result.current.add(4);
+    });
+
+    expect(storedCart()).toEqual([
+      { ...makeItem(4, 3), seenPriceAmount: 100_000 },
+    ]);
+  });
+
+  test("stores no price on a new line when none is given", async () => {
+    const { storage, result } = await setup();
+
+    act(() => {
+      result.current.add(9);
+    });
+
+    // No `seenPriceAmount` key at all, not one set to nothing.
+    expect(storage.getItem(KEY)).toBe('[{"productId":9,"quantity":1}]');
+  });
+
   test("an article at 9 still takes one more, to 10", async () => {
     const { result } = await setup({
       stored: JSON.stringify([makeItem(4, 9)]),
@@ -306,6 +367,8 @@ describe("useCart", () => {
     ["the same article twice", [makeItem(4), makeItem(4)]],
     ["21 articles", makeCart(21)],
     ["not a list", { productId: 4, quantity: 1 }],
+    ["a negative seen price", [{ ...makeItem(4), seenPriceAmount: -1 }]],
+    ["a fractional seen price", [{ ...makeItem(4), seenPriceAmount: 10.5 }]],
   ])(
     "treats a stored cart with %s as empty, without reporting it",
     async (_case, stored) => {
