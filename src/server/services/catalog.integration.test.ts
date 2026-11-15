@@ -339,6 +339,66 @@ describe("public catalog", () => {
     expect(pageThree.nextCursor).toBeNull();
   });
 
+  test.each([
+    ["price_asc", ["Barato", "Medio A", "Medio B", "Caro"]],
+    ["price_desc", ["Caro", "Medio B", "Medio A", "Barato"]],
+  ] as const)(
+    "sorts by %s across pages, a tie in price broken by id, never repeating a row",
+    async (sort, titles) => {
+      const shop = await makeStore();
+      const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+      const slugOf = new Map<string, string>();
+
+      for (const [title, priceAmount] of [
+        ["Medio A", 500],
+        ["Caro", 900],
+        ["Barato", 100],
+        ["Medio B", 500],
+      ] as const) {
+        const created = await makeArticle(shop.id, {
+          categoryId: chains.id,
+          priceAmount,
+          title,
+        });
+        slugOf.set(title, created.slug);
+      }
+
+      const pageOne = await list(shop.id, { limit: 2, sort });
+      const pageTwo = await list(shop.id, {
+        cursor: pageOne.nextCursor ?? undefined,
+        limit: 2,
+        sort,
+      });
+
+      expect(
+        [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
+      ).toEqual(titles.map((title) => slugOf.get(title)));
+      expect(pageOne.nextCursor).toMatchObject({
+        priceAmount: expect.any(Number),
+      });
+      expect(pageTwo.nextCursor).toBeNull();
+    }
+  );
+
+  test("a cursor from another sort is refused, never read as this one's", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    await makeArticle(shop.id, { categoryId: chains.id, title: "Uno" });
+    await makeArticle(shop.id, { categoryId: chains.id, title: "Dos" });
+    const newest = await list(shop.id, { limit: 1 });
+
+    await expect(
+      list(shop.id, {
+        cursor: newest.nextCursor ?? undefined,
+        limit: 1,
+        sort: "price_asc",
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "That cursor belongs to another sort",
+    });
+  });
+
   test("categories come in their order, named in the visitor's language or Spanish", async () => {
     const shop = await makeStore();
     await makeCategory(shop.id, "anillos", { es: "Anillos" }, 1);

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  PRODUCT_SORTS,
+  productCursorSchema,
   catalogFiltersSchema,
   createAttributeFormSchema,
   createAttributeSchema,
@@ -141,8 +143,30 @@ describe("listProductsSchema", () => {
       limit: 24,
       locale: "es",
       q: undefined,
+      sort: "newest",
       storeSlug: "lr-market",
     });
+  });
+
+  test.each([
+    ["newest", true],
+    ["price_asc", true],
+    ["price_desc", true],
+    ["price", false],
+    ["NEWEST", false],
+    ["", false],
+  ])("a sort of %j is accepted: %s", (sort, accepted) => {
+    expect(
+      listProductsSchema.safeParse({
+        locale: "es",
+        sort,
+        storeSlug: "lr-market",
+      }).success
+    ).toBe(accepted);
+  });
+
+  test("offers the newest first and both price orders, in that order", () => {
+    expect(PRODUCT_SORTS).toEqual(["newest", "price_asc", "price_desc"]);
   });
 
   test.each([
@@ -769,5 +793,47 @@ describe("createAttributeFormSchema", () => {
     expect(
       schema.parse({ nameEn: "  ", nameEs: " Dorado ", swatchColor: "#d4af37" })
     ).toEqual({ nameEn: "", nameEs: "Dorado", swatchColor: "#d4af37" });
+  });
+});
+
+describe("productCursorSchema", () => {
+  const PUBLISHED = "2026-11-15T10:00:00.000Z";
+
+  test.each([
+    ["the newest order's key", { publishedAt: PUBLISHED }, true],
+    ["a price order's key", { priceAmount: 69_000 }, true],
+    ["a price of 0", { priceAmount: 0 }, true],
+    ["the largest price", { priceAmount: 2_147_483_647 }, true],
+    ["a price past int4", { priceAmount: 2_147_483_648 }, false],
+    ["a negative price", { priceAmount: -1 }, false],
+    ["a fractional price", { priceAmount: 1.5 }, false],
+    // `Number("")` and `Number(" ")` are 0: empty text is no price at all.
+    ["an empty price", { priceAmount: "" }, false],
+    ["a blank price", { priceAmount: " " }, false],
+    ["a price sent as true", { priceAmount: true }, false],
+    ["a price that is not a number", { priceAmount: "12abc" }, false],
+    ["both keys", { priceAmount: 69_000, publishedAt: PUBLISHED }, false],
+    ["neither key", {}, false],
+  ])("a cursor with %s is accepted: %s", (_case, keys, accepted) => {
+    expect(productCursorSchema.safeParse({ id: 3, ...keys }).success).toBe(
+      accepted
+    );
+  });
+
+  test("reads a price from the query string as a number", () => {
+    expect(
+      productCursorSchema.parse({ id: "3", priceAmount: "69000" })
+    ).toEqual({
+      id: 3,
+      priceAmount: 69_000,
+    });
+  });
+
+  test("explains a cursor with both keys", () => {
+    expect(
+      productCursorSchema
+        .safeParse({ id: 3, priceAmount: 1, publishedAt: PUBLISHED })
+        .error?.issues.map((issue) => issue.message)
+    ).toEqual(["A cursor carries one sort key"]);
   });
 });

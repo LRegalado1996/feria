@@ -347,6 +347,124 @@ describe("listPublishedProducts", () => {
     });
   });
 
+  const BASE_WHERE =
+    '("product"."storeId" = $1 and "product"."status" = $2 and ';
+
+  test.each([
+    [undefined, '"product"."publishedAt" desc, "product"."id" desc'],
+    ["newest", '"product"."publishedAt" desc, "product"."id" desc'],
+    ["price_asc", '"product"."priceAmount" asc, "product"."id" asc'],
+    ["price_desc", '"product"."priceAmount" desc, "product"."id" desc'],
+  ] as const)("orders a sort of %j by %s", async (sort, orderBy) => {
+    const { db } = setup();
+
+    await list(db, sort === undefined ? {} : { sort });
+
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(orderBy);
+    // The page reads each sort's key, for the next cursor.
+    expect(db.$.select.mock.calls[0]).toEqual([
+      {
+        id: product.id,
+        priceAmount: product.priceAmount,
+        publishedAt: product.publishedAt,
+      },
+    ]);
+  });
+
+  test.each([
+    [
+      "newest",
+      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" },
+      '("product"."publishedAt", "product"."id") < ($3::timestamptz, $4::int))',
+      "2026-11-01T00:00:00.000Z",
+    ],
+    [
+      "price_asc",
+      { id: 40, priceAmount: 69_000 },
+      '("product"."priceAmount", "product"."id") > ($3::int, $4::int))',
+      69_000,
+    ],
+    [
+      "price_desc",
+      { id: 40, priceAmount: 69_000 },
+      '("product"."priceAmount", "product"."id") < ($3::int, $4::int))',
+      69_000,
+    ],
+  ] as const)(
+    "starts a %s page strictly after its cursor",
+    async (sort, cursor, predicate, key) => {
+      const { db } = setup();
+
+      await list(db, { cursor, sort });
+
+      expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+        params: [STORE_ID, "published", key, 40],
+        sql: `${BASE_WHERE}${predicate}`,
+      });
+    }
+  );
+
+  test.each([
+    ["newest", { id: 40, priceAmount: 69_000 }],
+    ["price_asc", { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" }],
+    ["price_desc", { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" }],
+  ] as const)(
+    "refuses a %s page from another sort's cursor, asking nothing",
+    async (sort, cursor) => {
+      const { db } = setup();
+
+      await expect(list(db, { cursor, sort })).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "That cursor belongs to another sort",
+      });
+      expect(db.$["select.limit"]).not.toHaveBeenCalled();
+      expect(db.query.product.findMany).not.toHaveBeenCalled();
+    }
+  );
+
+  /** Three page rows for a page of two: the second is the cursor's row. */
+  function pageRows(second: Record<string, unknown>) {
+    return [
+      { id: 5, priceAmount: 50_000, publishedAt: PUBLISHED_AT },
+      { id: 4, priceAmount: 60_000, publishedAt: PUBLISHED_AT, ...second },
+      { id: 3, priceAmount: 70_000, publishedAt: PUBLISHED_AT },
+    ];
+  }
+
+  test.each([
+    ["newest", {}, { id: 4, publishedAt: PUBLISHED_AT.toISOString() }],
+    ["price_asc", {}, { id: 4, priceAmount: 60_000 }],
+    ["price_desc", {}, { id: 4, priceAmount: 60_000 }],
+    // A free article is a price too, not a missing one.
+    ["price_asc", { priceAmount: 0 }, { id: 4, priceAmount: 0 }],
+    // Defensive: a published row always has both (the database's checks).
+    ["newest", { publishedAt: null }, null],
+    ["price_asc", { priceAmount: null }, null],
+  ] as const)(
+    "gives a %s page's next cursor that sort's key: %j → %j",
+    async (sort, second, nextCursor) => {
+      const { db } = setup();
+      db.$["select.limit"].mockResolvedValue(pageRows(second));
+      db.query.product.findMany.mockResolvedValue([cardRow(5), cardRow(4)]);
+
+      await expect(list(db, { sort })).resolves.toEqual({
+        items: [card(5), card(4)],
+        nextCursor,
+      });
+    }
+  );
+
+  test("has no next cursor for an empty page, even with a row past it", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValue(pageRows({}).slice(0, 1));
+
+    await expect(list(db, { limit: 0 })).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
+  });
+
   test("returns a full page with no cursor when no row follows it", async () => {
     const { configOf, db } = setup();
     db.$["select.limit"].mockResolvedValue([
