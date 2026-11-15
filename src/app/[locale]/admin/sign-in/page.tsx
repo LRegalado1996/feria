@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { AuthForm } from "@/app/_components/organisms/auth-form";
 import { getDictionary } from "@/content";
 import { safeReturnPath } from "@/lib/admin/paths";
@@ -36,14 +37,26 @@ export default async function SignInPage({
         <h1 className="text-2xl font-bold">{admin.signIn.title}</h1>
         <p className="text-sm text-muted-foreground">{admin.signIn.subtitle}</p>
       </div>
-      <Suspense
-        fallback={
-          <div aria-busy="true" className="h-64" title={common.loading} />
-        }
-      >
+      <Suspense fallback={<SignInFormSkeleton label={common.loading} />}>
         <SignInForm locale={locale} searchParams={searchParams} />
       </Suspense>
     </main>
+  );
+}
+
+/** The form's geometry while the page reads the query and the session. */
+function SignInFormSkeleton({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" className="space-y-4" data-testid="sign-in-skeleton">
+      <output className="sr-only">{label}</output>
+      {["email", "password"].map((field) => (
+        <div className="space-y-2" key={field}>
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      ))}
+      <Skeleton className="h-9 w-full" />
+    </div>
   );
 }
 

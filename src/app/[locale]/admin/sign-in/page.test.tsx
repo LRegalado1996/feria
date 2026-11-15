@@ -98,7 +98,7 @@ describe("SignInPage", () => {
       "Cargando",
     ],
   ])(
-    "in %s, titles the page and waits for the form behind a busy box",
+    "in %s, titles the page and waits for the form behind its skeleton",
     async (locale, title, subtitle, loading) => {
       const { page } = await setup({ locale });
 
@@ -108,7 +108,13 @@ describe("SignInPage", () => {
         new RegExp(`^${title}$`, "u")
       );
       expect(screen.getByText(subtitle)).toBeInTheDocument();
-      expect(screen.getByTitle(loading)).toHaveAttribute("aria-busy", "true");
+      const skeleton = screen.getByTestId("sign-in-skeleton");
+      expect(skeleton).toHaveAttribute("aria-busy", "true");
+      expect(skeleton).toHaveTextContent(loading);
+      // Two fields and the button, in the form's own geometry.
+      expect(skeleton.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(
+        5
+      );
     }
   );
 

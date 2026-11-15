@@ -6,7 +6,8 @@ import { describe, expect, test, vi } from "vitest";
 import { Toaster } from "@/app/_components/molecules/sonner";
 import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
-import { renderWithI18n } from "@/test/i18n";
+import { collectHydrationErrors } from "@/test/hydration";
+import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 import { server } from "@/test/msw";
 
 import { SignOutButton } from "./sign-out-button";
@@ -132,4 +133,25 @@ describe("SignOutButton", () => {
       ).toBeDisabled();
     }
   );
+});
+
+describe("SignOutButton before hydration", () => {
+  test("is disabled in the server's HTML and enabled once React owns it", () => {
+    const I18n = createI18nWrapper();
+    const { clientHtml, errors, serverHtml } = collectHydrationErrors(
+      <I18n>
+        <SignOutButton redirectTo="/admin/sign-in" />
+      </I18n>,
+      { clientNowMs: 1000, serverNowMs: 0 }
+    );
+    const buttonIn = (html: string) => {
+      const container = document.createElement("div");
+      container.innerHTML = html;
+      return container.querySelector("button");
+    };
+
+    expect(buttonIn(serverHtml)).toHaveProperty("disabled", true);
+    expect(buttonIn(clientHtml)).toHaveProperty("disabled", false);
+    expect(errors).toEqual([]);
+  });
 });

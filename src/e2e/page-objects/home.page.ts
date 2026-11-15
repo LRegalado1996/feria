@@ -134,6 +134,10 @@ export class HomePage extends BasePage {
    */
   async fillPostContent(content: string): Promise<void> {
     await expect(async () => {
+      // Cleared first: text typed before hydration stays in the DOM while
+      // React's state is empty, and filling the same text again fires no
+      // change, so every retry would see a disabled button.
+      await this.getComposeBox().fill("");
       await this.getComposeBox().fill(content);
       await expect(this.getButton("Publicar")).toBeEnabled({ timeout: 1000 });
     }).toPass();

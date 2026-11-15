@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/app/_components/atoms/button";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { localizePath } from "@/lib/i18n/paths";
 import { authClient } from "@/server/better-auth/client";
 
@@ -24,6 +25,8 @@ function SignOutButton({ className, redirectTo }: SignOutButtonProps) {
   const { auth } = useDictionary();
   const locale = useLocale();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  // Disabled until React owns it: a click on the server's HTML would be lost.
+  const hydrated = useHydrated();
 
   const signOut = async () => {
     setIsSigningOut(true);
@@ -48,7 +51,7 @@ function SignOutButton({ className, redirectTo }: SignOutButtonProps) {
     <Button
       className={className}
       data-slot="sign-out-button"
-      disabled={isSigningOut}
+      disabled={!hydrated || isSigningOut}
       onClick={() => {
         void signOut();
       }}

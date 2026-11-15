@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -18,6 +18,7 @@ import { PasswordInput } from "@/app/_components/molecules/password-input";
 import type { Dictionary } from "@/content";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { localizePath } from "@/lib/i18n/paths";
 import { type AuthFormValues, createAuthSchema } from "@/lib/schemas/auth";
 import { authClient } from "@/server/better-auth/client";
@@ -46,23 +47,6 @@ export interface AuthFormProps {
  */
 function reloadSignedIn(home: string) {
   window.location.assign(home);
-}
-
-function subscribeToNothing() {
-  return () => undefined;
-}
-
-/**
- * `false` in the server render and while hydrating, `true` once React owns
- * the form. Before that, a submit is the browser's own: a GET to this page
- * with the email and password in the URL, where logs and history keep them.
- */
-function useHydrated() {
-  return useSyncExternalStore(
-    subscribeToNothing,
-    () => true,
-    () => false
-  );
 }
 
 /**
