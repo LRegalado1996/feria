@@ -7,7 +7,10 @@ import {
   updateProductSchema,
 } from "@/lib/schemas/catalog";
 import { storeProcedure } from "@/server/api/orpc";
-import { writeToStore } from "@/server/api/utils/write-to-store";
+import {
+  writeToCatalog,
+  writeToStore,
+} from "@/server/api/utils/write-to-store";
 import { setProductAttributeValues } from "@/server/services/attribute";
 import {
   createProduct,
@@ -43,7 +46,7 @@ export const productRouter = {
   update: storeProcedure(updateProductSchema)
     .handler(
       async ({ context, input: { storeSlug: _storeSlug, ...values } }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) => await updateProduct(tx, { storeId, values })
         )
@@ -58,7 +61,7 @@ export const productRouter = {
   publish: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await publishProduct(tx, {
@@ -77,7 +80,7 @@ export const productRouter = {
   unpublish: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await unpublishProduct(tx, {
@@ -96,7 +99,7 @@ export const productRouter = {
   setAvailability: storeProcedure(setProductAvailabilitySchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await setProductAvailability(tx, {
@@ -116,7 +119,7 @@ export const productRouter = {
   delete: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await deleteProduct(tx, { id: input.id, storeId })
@@ -132,7 +135,7 @@ export const productRouter = {
   reorderImages: storeProcedure(reorderProductImagesSchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await reorderProductImages(tx, {

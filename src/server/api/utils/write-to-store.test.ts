@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { createMockDatabase } from "@/server/test/context";
 
-import { writeToStore } from "./write-to-store";
+import { writeToCatalog, writeToStore } from "./write-to-store";
 
 // The handle `withStoreAccess` hands its callback: distinct from the client,
 // so a write handed the outer client instead would be caught.
@@ -21,7 +21,14 @@ const { TX, withStoreAccess } = vi.hoisted(() => {
   };
 });
 
+const { invalidateCatalogCache } = vi.hoisted(() => ({
+  invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
+}));
+
 vi.mock("@/server/services/access", () => ({ withStoreAccess }));
+
+// Next's cache only exists inside a Next render.
+vi.mock("@/server/cache/catalog", () => ({ invalidateCatalogCache }));
 
 function setup() {
   const db = createMockDatabase();
@@ -62,5 +69,38 @@ describe("writeToStore", () => {
     await expect(writeToStore(context, write)).rejects.toThrow(
       "Category not found"
     );
+  });
+});
+
+describe("writeToCatalog", () => {
+  test("writes through the access check, then drops the store's cached catalog, and answers the write's result", async () => {
+    const { context, db, write } = setup();
+
+    await expect(writeToCatalog(context, write)).resolves.toEqual({
+      id: 11,
+      storeId: 7,
+    });
+
+    expect(withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+      db,
+      { storeId: 7, userId: "user-1" },
+      expect.any(Function)
+    );
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
+    // Dropped once the write committed, never before it ran.
+    expect(write.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateCatalogCache.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("keeps the cache when the write fails, and lets the failure reject the call", async () => {
+    const { context, write } = setup();
+    write.mockRejectedValueOnce(new Error("Product not found"));
+
+    await expect(writeToCatalog(context, write)).rejects.toThrow(
+      "Product not found"
+    );
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 });

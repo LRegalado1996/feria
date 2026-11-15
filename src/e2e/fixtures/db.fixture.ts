@@ -31,6 +31,8 @@ type PostInput = typeof post.$inferInsert;
  * `publishedAt` (now unless given); without one it stays a draft.
  */
 interface ArticleOptions {
+  /** How many photos a published article gets (one by default). */
+  images?: number;
   isAvailable?: boolean;
   priceAmount?: number;
   publishedAt?: Date;
@@ -252,7 +254,12 @@ export const test = userTest.extend<DbFixture>({
           storeId: number,
           categoryId: number,
           title: string,
-          { isAvailable = true, priceAmount, publishedAt }: ArticleOptions = {}
+          {
+            images = 1,
+            isAvailable = true,
+            priceAmount,
+            publishedAt,
+          }: ArticleOptions = {}
         ): Promise<{ id: number; slug: string }> => {
           const published = priceAmount !== undefined;
           const [created] = await db
@@ -279,14 +286,21 @@ export const test = userTest.extend<DbFixture>({
             title,
           });
 
-          if (published) {
-            await db.insert(productImage).values({
-              height: 1000,
-              position: 0,
-              productId: created.id,
-              url: "/seed/ring-1.jpg",
-              width: 800,
-            });
+          if (published && images > 0) {
+            const photos = [
+              "/seed/ring-1.jpg",
+              "/seed/ring-2.jpg",
+              "/seed/ring-3.jpg",
+            ];
+            await db.insert(productImage).values(
+              Array.from({ length: images }, (_, position) => ({
+                height: 1000,
+                position,
+                productId: created.id,
+                url: photos[position % photos.length] ?? "/seed/ring-1.jpg",
+                width: 800,
+              }))
+            );
           }
 
           return created;
