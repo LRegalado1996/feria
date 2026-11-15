@@ -342,6 +342,12 @@ describe("useCart", () => {
     ["add -1 units", (cart: CartApi) => cart.add(4, -1)],
     ["add 1.5 units", (cart: CartApi) => cart.add(4, 1.5)],
     ["add NaN units", (cart: CartApi) => cart.add(4, Number.NaN)],
+    // Above the cap: capping first would turn these into a valid 10.
+    ["add 10.5 units", (cart: CartApi) => cart.add(4, 10.5)],
+    [
+      "add infinite units",
+      (cart: CartApi) => cart.add(4, Number.POSITIVE_INFINITY),
+    ],
     ["set 1.5 units", (cart: CartApi) => cart.setQuantity(4, 1.5)],
     ["set NaN units", (cart: CartApi) => cart.setQuantity(4, Number.NaN)],
     // The write itself refuses a cart that would not parse back.

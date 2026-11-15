@@ -373,6 +373,9 @@ describe("DesignPage", () => {
     const shell = within(page).getByTestId("design-shell");
 
     expect(within(shell).getByTestId("store-header")).toHaveClass("static");
+    // Its skip link leads to the gallery's own content.
+    expect(page).toHaveAttribute("id", "store-main");
+    expect(page).toHaveAttribute("tabindex", "-1");
     expect(
       within(within(shell).getByTestId("store-footer"))
         .getAllByRole("link")

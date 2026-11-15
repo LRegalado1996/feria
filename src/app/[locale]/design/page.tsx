@@ -15,7 +15,10 @@ import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import { StoreSlider } from "@/app/_components/molecules/store-slider";
 import { StoreFooter } from "@/app/_components/organisms/store-footer";
-import { StoreHeader } from "@/app/_components/organisms/store-header";
+import {
+  STORE_MAIN_ID,
+  StoreHeader,
+} from "@/app/_components/organisms/store-header";
 import { type Dictionary, getDictionary } from "@/content";
 import { detectStableEnvironment, isProductionDeploy } from "@/lib/env/deploy";
 import { buildAlternates } from "@/lib/i18n/metadata";
@@ -120,6 +123,9 @@ export default async function DesignPage({ params }: DesignPageProps) {
       className="flex min-h-screen flex-col gap-16 bg-store-background pb-24 text-store-foreground"
       data-slot="design-page"
       data-testid="design-page"
+      // The target of the sample header's skip link.
+      id={STORE_MAIN_ID}
+      tabIndex={-1}
     >
       <header className="bg-store-contrast py-12 md:py-20">
         <div className={SECTION_CLASS}>

@@ -136,8 +136,13 @@ export function useCart(storeSlug: string) {
       const current = parseCart(readRaw(key));
       const line = current.find((item) => item.productId === productId);
 
-      // A fraction or a NaN is refused by `write`'s own check.
-      if (quantity < 1 || (!line && current.length >= CART_ITEMS_MAX)) {
+      // Checked before the cap: capped first, 10.5 or Infinity would become
+      // a valid 10.
+      if (
+        !Number.isInteger(quantity) ||
+        quantity < 1 ||
+        (!line && current.length >= CART_ITEMS_MAX)
+      ) {
         return false;
       }
 
