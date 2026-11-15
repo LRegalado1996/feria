@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -177,6 +177,15 @@ async function makeArticle(
 }
 
 /** An order's input, one of `productId` unless `items` says otherwise. */
+/**
+ * A Uruguayan mobile no other test, and no row the database was copied with,
+ * is likely to hold: the phone limit counts orders across every store, so a
+ * limit test with a shared number would count someone else's orders.
+ */
+function uniquePhone() {
+  return `+5989${String(randomInt(10_000_000)).padStart(7, "0")}`;
+}
+
 function orderValues(
   overrides: Partial<Parameters<typeof createOrder>[1]["values"]> & {
     productId?: number;
@@ -497,9 +506,10 @@ describe("abuse limits", () => {
     const shop = await makeStore();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const start = new Date();
+    const customerPhone = uniquePhone();
 
     for (let minute = 0; minute < 5; minute += 1) {
-      await place(shop, orderValues({ productId: ring.id }), {
+      await place(shop, orderValues({ customerPhone, productId: ring.id }), {
         now: new Date(start.getTime() + minute * 60_000),
       });
     }
@@ -513,7 +523,9 @@ describe("abuse limits", () => {
     const sixth = new Date(oldest.getTime() + 50 * 60_000);
 
     await expect(
-      place(shop, orderValues({ productId: ring.id }), { now: sixth })
+      place(shop, orderValues({ customerPhone, productId: ring.id }), {
+        now: sixth,
+      })
     ).rejects.toMatchObject({
       code: "TOO_MANY_REQUESTS",
       data: { retryAfter: 10 * 60 },
@@ -523,7 +535,7 @@ describe("abuse limits", () => {
     await expect(
       place(
         shop,
-        orderValues({ customerPhone: "+59899000111", productId: ring.id }),
+        orderValues({ customerPhone: uniquePhone(), productId: ring.id }),
         { now: sixth }
       )
     ).resolves.toMatchObject({
@@ -534,13 +546,14 @@ describe("abuse limits", () => {
   test("an hour after the oldest order, the phone can order again", async () => {
     const shop = await makeStore();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
+    const customerPhone = uniquePhone();
 
     for (let order = 0; order < 5; order += 1) {
-      await place(shop, orderValues({ productId: ring.id }));
+      await place(shop, orderValues({ customerPhone, productId: ring.id }));
     }
 
     await expect(
-      place(shop, orderValues({ productId: ring.id }), {
+      place(shop, orderValues({ customerPhone, productId: ring.id }), {
         now: new Date(Date.now() + 60 * 60_000 + 1000),
       })
     ).resolves.toMatchObject({
@@ -557,7 +570,7 @@ describe("abuse limits", () => {
       await place(
         shop,
         orderValues({
-          customerPhone: `+5989900${String(order).padStart(4, "0")}`,
+          customerPhone: uniquePhone(),
           productId: ring.id,
         }),
         { clientKey }
@@ -567,7 +580,7 @@ describe("abuse limits", () => {
     await expect(
       place(
         shop,
-        orderValues({ customerPhone: "+59899999999", productId: ring.id }),
+        orderValues({ customerPhone: uniquePhone(), productId: ring.id }),
         { clientKey }
       )
     ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
@@ -575,7 +588,7 @@ describe("abuse limits", () => {
     await expect(
       place(
         shop,
-        orderValues({ customerPhone: "+59899999999", productId: ring.id }),
+        orderValues({ customerPhone: uniquePhone(), productId: ring.id }),
         { clientKey: null }
       )
     ).resolves.toMatchObject({
