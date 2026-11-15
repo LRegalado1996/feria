@@ -66,8 +66,18 @@ describe("API docs route", () => {
         Object.keys(methods),
       ])
     ).toEqual([
+      ["/stores/{storeSlug}/categories", ["get"]],
+      ["/stores/{storeSlug}/products", ["get"]],
+      ["/stores/{storeSlug}/products/{slug}", ["get"]],
+      ["/stores/{storeSlug}/products/{slug}/related", ["get"]],
       ["/posts", ["post", "get"]],
       ["/posts/{id}", ["delete"]],
+      ["/stores/{storeSlug}/admin/products", ["post"]],
+      ["/stores/{storeSlug}/admin/products/{id}", ["put", "delete"]],
+      ["/stores/{storeSlug}/admin/products/{id}/publish", ["post"]],
+      ["/stores/{storeSlug}/admin/products/{id}/unpublish", ["post"]],
+      ["/stores/{storeSlug}/admin/products/{id}/availability", ["put"]],
+      ["/stores/{storeSlug}/admin/products/{id}/images/order", ["put"]],
       ["/stores/{slug}", ["get"]],
       ["/stores", ["post"]],
       ["/stores/{id}", ["put"]],
