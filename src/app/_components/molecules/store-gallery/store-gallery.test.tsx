@@ -25,7 +25,7 @@ function setup({
     makeImage(index + 1)
   );
   const user = userEvent.setup();
-  const { container } = renderWithI18n(
+  const { container, rerender } = renderWithI18n(
     <StoreGallery
       className="custom"
       images={images}
@@ -52,6 +52,16 @@ function setup({
     button,
     container,
     counter: () => screen.getByText(/^Foto \d+ de \d+$/u),
+    /** The same gallery with only its first `left` photos. */
+    rerender: (left: number) => {
+      rerender(
+        <StoreGallery
+          className="custom"
+          images={images.slice(0, left)}
+          title="Collar de perlas"
+        />
+      );
+    },
     scrollTo,
     /** Scrolls the track as a swipe does, `left` pixels in. */
     swipe: (left: number, width = 400) => {
@@ -258,6 +268,19 @@ describe("StoreGallery", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("store-gallery-zoom")).toBeNull();
     });
+  });
+
+  test("when the photos shrink under the one shown, shows the new last one", async () => {
+    const { button, counter, rerender, user } = setup();
+    await user.click(button("Ver la foto 3"));
+
+    rerender(2);
+
+    expect(counter()).toHaveTextContent(/^Foto 2 de 2$/u);
+    expect(button("Foto siguiente")).toHaveAttribute("aria-disabled", "true");
+    expect(
+      screen.getByRole("img", { name: "Foto 2 del collar" })
+    ).toBeVisible();
   });
 
   test("in English, names its controls in English", () => {

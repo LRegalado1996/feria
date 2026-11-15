@@ -32,7 +32,10 @@ export async function readPublishedArticle(
   slug: string,
   locale: Locale
 ) {
-  if (!catalogSlugSchema.safeParse(slug).success) {
+  const parsed = catalogSlugSchema.safeParse(slug);
+
+  // The schema trims, an address does not: " cadena " is not "cadena".
+  if (!parsed.success || parsed.data !== slug) {
     return null;
   }
 

@@ -41,8 +41,11 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
   // gliding to it: the photos it passes on the way are not where the visitor
   // is, so they neither move the counter nor become the next step's start.
   const target = useRef<number | null>(null);
-  const [index, setIndex] = useState(0);
+  const [chosen, setChosen] = useState(0);
   const [zoomed, setZoomed] = useState(false);
+  // Fewer photos than before (an edit revalidated the page) keep a photo
+  // that exists: the last one.
+  const index = Math.min(chosen, Math.max(images.length - 1, 0));
   const current = images[index];
 
   const show = (next: number) => {
@@ -54,7 +57,7 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
     target.current = next;
     // No `behavior`: the track's CSS glides, or not when motion is reduced.
     track.current?.scrollTo({ left: next * width });
-    setIndex(next);
+    setChosen(next);
   };
 
   const shown = (element: HTMLDivElement) =>
@@ -102,7 +105,7 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
             }
 
             if (next !== index) {
-              setIndex(next);
+              setChosen(next);
             }
           }}
           onScrollEnd={(event) => {
@@ -111,7 +114,7 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
             const next = shown(event.currentTarget);
 
             if (next !== index) {
-              setIndex(next);
+              setChosen(next);
             }
           }}
           ref={track}

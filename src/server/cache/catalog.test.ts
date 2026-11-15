@@ -132,6 +132,7 @@ describe("readPublishedArticle", () => {
     ["with a capital", "Cadena"],
     ["with an underscore", "__sample__"],
     ["empty", ""],
+    ["padded with spaces", " cadena "],
   ])(
     "answers null for an address %s without a query or a cache entry",
     async (_case, slug) => {

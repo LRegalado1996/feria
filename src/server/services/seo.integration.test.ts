@@ -123,12 +123,43 @@ async function makeArticle(
   return created;
 }
 
+/**
+ * Two stores, one open and one closed, with nothing in them yet.
+ */
+async function setupStores() {
+  return {
+    closed: await makeStore({ isActive: false }),
+    open: await makeStore(),
+  };
+}
+
+/**
+ * An active store (closed afterwards when `deactivate`) with "Anillos"
+ * holding a published article and a draft, "Aros" holding only a draft and
+ * "Pulseras" empty.
+ */
+async function setup({ deactivate = false } = {}) {
+  const shop = await makeStore();
+  const rings = await makeCategory(shop.id, "anillos", "Anillos");
+  const earrings = await makeCategory(shop.id, "aros", "Aros");
+  await makeCategory(shop.id, "pulseras", "Pulseras");
+  const published = await makeArticle(shop.id, rings.id, "Anillo sello");
+  await makeArticle(shop.id, rings.id, "Anillo borrador", { publish: false });
+  await makeArticle(shop.id, earrings.id, "Aro borrador", { publish: false });
+
+  if (deactivate) {
+    await db
+      .update(store)
+      .set({ isActive: false })
+      .where(eq(store.id, shop.id));
+  }
+
+  return { published, shop };
+}
+
 describe("what search engines and assistants are told about", () => {
   test("lists an active store with its texts, never an inactive one", async () => {
-    const [open, closed] = [
-      await makeStore(),
-      await makeStore({ isActive: false }),
-    ];
+    const { closed, open } = await setupStores();
 
     const listed = (await listIndexableStores(db)).filter((row) =>
       [open.id, closed.id].includes(row.id)
@@ -153,10 +184,7 @@ describe("what search engines and assistants are told about", () => {
   });
 
   test("lists a store's published articles only, never a draft", async () => {
-    const shop = await makeStore();
-    const rings = await makeCategory(shop.id, "anillos", "Anillos");
-    const published = await makeArticle(shop.id, rings.id, "Anillo sello");
-    await makeArticle(shop.id, rings.id, "Anillo borrador", { publish: false });
+    const { published, shop } = await setup();
 
     const articles = await listIndexableArticles(db, { storeId: shop.id });
 
@@ -167,13 +195,7 @@ describe("what search engines and assistants are told about", () => {
   });
 
   test("lists nothing of an inactive store, even its published articles", async () => {
-    const shop = await makeStore();
-    const rings = await makeCategory(shop.id, "anillos", "Anillos");
-    await makeArticle(shop.id, rings.id, "Anillo sello");
-    await db
-      .update(store)
-      .set({ isActive: false })
-      .where(eq(store.id, shop.id));
+    const { shop } = await setup({ deactivate: true });
 
     await expect(
       listIndexableArticles(db, { storeId: shop.id })
@@ -184,12 +206,7 @@ describe("what search engines and assistants are told about", () => {
   });
 
   test("lists the categories that hold a published article, by name", async () => {
-    const shop = await makeStore();
-    const rings = await makeCategory(shop.id, "anillos", "Anillos");
-    const drafts = await makeCategory(shop.id, "aros", "Aros");
-    await makeCategory(shop.id, "pulseras", "Pulseras");
-    await makeArticle(shop.id, rings.id, "Anillo sello");
-    await makeArticle(shop.id, drafts.id, "Aro borrador", { publish: false });
+    const { shop } = await setup();
 
     await expect(
       listIndexableCategories(db, { locale: "en", storeId: shop.id })
