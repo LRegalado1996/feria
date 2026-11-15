@@ -33,6 +33,7 @@ test.describe("Storefront design system", () => {
         "Banda en movimiento",
         "Burbujas",
         "Aparición al bajar",
+        "Encabezado y pie de cada tienda",
       ]);
       await expect(
         designPage.getSection("cards").getByRole("article")
