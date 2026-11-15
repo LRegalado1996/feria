@@ -215,6 +215,8 @@ describe("readTypedNumber", () => {
     "9007199254740991,01",
     "1234567890123,456",
     "0,00000000000001",
+    // A nonzero figure past six decimals, which `Number()` could even read as 0.
+    `0,${"0".repeat(323)}1`,
     "0,0000001",
     // Not a figure at all.
     "1a",
@@ -263,7 +265,9 @@ describe("fromPlainNumberText", () => {
   test.each(["es", "en"] as const)(
     "what it writes in %s, readTypedNumber reads back",
     (locale) => {
-      for (const value of [-1234.5, 1.234, 0.125, 12.5, 1500]) {
+      for (const value of [
+        -1234.5, 1.234, 0.125, 12.5, 1500, 123_456_789_012.125,
+      ]) {
         expect(
           readTypedNumber(fromPlainNumberText(String(value), locale))
         ).toStrictEqual({ kind: "number", value });

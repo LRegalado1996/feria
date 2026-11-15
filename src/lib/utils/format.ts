@@ -181,8 +181,9 @@ const MINUS_SIGN = "\u2212";
 // A JavaScript number holds 15 significant digits exactly; beyond that
 // `Number()` rounds the figure silently. No price or count gets near it.
 const MOST_SIGNIFICANT_DIGITS = 15;
-// Below this `String()` also switches to exponent form ("1e-7").
-const SMALLEST_READABLE = 1e-6;
+// Beyond six decimals `String()` writes a value in exponent form ("1e-7"),
+// and a long enough run of zeros reads as 0: no price or count needs more.
+const MOST_DECIMALS = 6;
 const DIGITS_AND_SEPARATORS = /^[\d.,]+$/u;
 const GROUPED_BY_DOT = /^[1-9]\d{0,2}(?:\.\d{3})+$/u;
 const GROUPED_BY_COMMA = /^[1-9]\d{0,2}(?:,\d{3})+$/u;
@@ -242,25 +243,22 @@ export function readTypedNumber(
     return { kind: "refused", reason: "decimal" };
   }
 
-  const significant = `${reading.integer}${reading.fraction ?? ""}`.replace(
-    /^0+/u,
-    ""
-  );
+  // Trailing zeros of a fraction change nothing ("12,50" is "12,5"), so they
+  // count toward neither limit: the field's own rewrite pads three decimals.
+  const fraction = (reading.fraction ?? "").replace(/0+$/u, "");
+  const significant = `${reading.integer}${fraction}`.replace(/^0+/u, "");
 
-  if (significant.length > MOST_SIGNIFICANT_DIGITS) {
+  if (
+    fraction.length > MOST_DECIMALS ||
+    significant.length > MOST_SIGNIFICANT_DIGITS
+  ) {
     return { kind: "refused", reason: "unreadable" };
   }
 
-  // A trailing 0 completes a fraction still being typed ("12," is "12.0")
-  // without changing one that is there ("12,5" is "12.50"), and a leading one
-  // an integer part left out (",5" is "0.5").
+  // The leading 0 stands in for an integer part left out (",5" is "0.5").
   const value = Number(
-    `${negative ? "-" : ""}0${reading.integer}.${reading.fraction ?? ""}0`
+    `${negative ? "-" : ""}0${reading.integer}.${fraction}0`
   );
-
-  if (value !== 0 && Math.abs(value) < SMALLEST_READABLE) {
-    return { kind: "refused", reason: "unreadable" };
-  }
 
   // `-0` reads back as "0" anyway; a field never holds a negative zero.
   return { kind: "number", value: value === 0 ? 0 : value };
