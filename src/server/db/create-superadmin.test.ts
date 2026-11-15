@@ -25,7 +25,18 @@ const ENV = {
 
 function setup({ superadminExists = false } = {}) {
   const db = createMockDatabase();
-  db.query.user.findFirst.mockResolvedValue(
+  // The transaction's own handle, and whether its callback is still running.
+  const tx = createMockDatabase();
+  const transaction = { open: false };
+  db.$.transaction.mockImplementation(async (callback: unknown) => {
+    transaction.open = true;
+    try {
+      return await (callback as (handle: unknown) => Promise<unknown>)(tx);
+    } finally {
+      transaction.open = false;
+    }
+  });
+  tx.query.user.findFirst.mockResolvedValue(
     superadminExists ? { id: "admin-0" } : undefined
   );
   const auth = { $context: Promise.resolve({}) };
@@ -33,6 +44,8 @@ function setup({ superadminExists = false } = {}) {
   return {
     auth,
     db,
+    transaction,
+    tx,
     run: async (env: Record<string, string | undefined> = ENV) =>
       await createSuperadmin({ auth: auth as never, db: db as never, env }),
   };
@@ -40,10 +53,10 @@ function setup({ superadminExists = false } = {}) {
 
 describe("createSuperadmin", () => {
   test("creates a superadmin from the environment's email and password", async () => {
-    const { auth, db, run } = setup();
+    const { auth, run, tx } = setup();
 
     await expect(run()).resolves.toMatchObject({ email: "admin@example.com" });
-    expect(createAccount).toHaveBeenCalledExactlyOnceWith(auth, db, {
+    expect(createAccount).toHaveBeenCalledExactlyOnceWith(auth, tx, {
       email: "admin@example.com",
       name: "Superadmin",
       password: "synthetic-pass-123",
@@ -64,20 +77,31 @@ describe("createSuperadmin", () => {
   });
 
   test("takes a lock for the whole check and creation, inside one transaction", async () => {
-    const { db, run } = setup();
+    const { db, run, transaction, tx } = setup();
+    let createdInsideTransaction = false;
+    createAccount.mockImplementationOnce(
+      async (_auth: unknown, handle: unknown, values: { email: string }) => {
+        createdInsideTransaction = transaction.open && handle === tx;
+        return {
+          email: values.email,
+          id: "admin-1",
+          name: "S",
+          role: "superadmin",
+        };
+      }
+    );
 
     await run();
 
-    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
-      expect.any(Function)
-    );
-    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+    expect(renderQuery(tx.$.execute.mock.calls[0]?.[0])).toEqual({
       params: ["user.first-superadmin"],
       sql: "select pg_advisory_xact_lock(hashtext($1))",
     });
-    expect(db.$.execute.mock.invocationCallOrder[0]).toBeLessThan(
-      db.query.user.findFirst.mock.invocationCallOrder[0] ?? 0
+    expect(tx.$.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.query.user.findFirst.mock.invocationCallOrder[0] ?? 0
     );
+    expect(db.$.execute).not.toHaveBeenCalled();
+    expect(createdInsideTransaction).toBe(true);
   });
 
   test("refuses once any superadmin exists, creating nothing", async () => {

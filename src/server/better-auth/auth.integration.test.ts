@@ -107,13 +107,17 @@ describe("createAccount", () => {
     });
   });
 
-  test("gives a login the member role unless told otherwise", async () => {
-    const created = await createLogin();
+  test("a user stored without a role is a member, by the database's default", async () => {
+    const id = `role-default-${randomUUID()}`;
+    await db
+      .insert(user)
+      .values({ email: uniqueEmail(), id, name: "No Role Given" });
+    createdUserIds.push(id);
 
     expect(
       await db.query.user.findFirst({
         columns: { role: true },
-        where: eq(user.id, created.id),
+        where: eq(user.id, id),
       })
     ).toEqual({ role: "member" });
   });

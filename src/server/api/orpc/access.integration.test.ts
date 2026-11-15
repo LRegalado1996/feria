@@ -237,9 +237,14 @@ describe("withStoreAccess against the database", () => {
     const demotion = demote(superadmin.id).then(() => {
       order.push("demotion");
     });
-    await waitUntilBlocked();
-    held.resolve(undefined);
-    await Promise.all([write, demotion]);
+    try {
+      await waitUntilBlocked();
+    } finally {
+      // Always release the held write, or its lock outlives the test and
+      // the cleanup waits on it.
+      held.resolve(undefined);
+      await Promise.allSettled([write, demotion]);
+    }
 
     expect(order).toEqual(["write", "demotion"]);
   });

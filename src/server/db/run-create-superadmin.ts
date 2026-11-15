@@ -9,7 +9,8 @@ import { createSuperadmin } from "./create-superadmin";
 // `create-superadmin.ts`.
 try {
   const created = await createSuperadmin({ auth, db, env: process.env });
-  console.log(`db:create-superadmin: ${created.email} created`);
+  // The id, never the email: logs carry ids and enums only.
+  console.log(`db:create-superadmin: superadmin ${created.id} created`);
 } catch (error) {
   process.exitCode = 1;
   console.error("db:create-superadmin failed:", sanitizeForLog(error));

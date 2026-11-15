@@ -30,12 +30,19 @@ function setup({
   insertFails = null,
 }: { existing?: boolean; insertFails?: Error | null } = {}) {
   const db = createMockDatabase();
-  db.query.user.findFirst.mockResolvedValue(
+  // The transaction's own handle, distinct from the client: every read and
+  // write must go through it to be part of the transaction.
+  const tx = createMockDatabase();
+  db.$.transaction.mockImplementation(
+    async (callback: unknown) =>
+      await (callback as (handle: unknown) => Promise<unknown>)(tx)
+  );
+  tx.query.user.findFirst.mockResolvedValue(
     existing ? { id: "other" } : undefined
   );
 
   if (insertFails) {
-    db.$["insert.values"].mockImplementationOnce(() => {
+    tx.$["insert.values"].mockImplementationOnce(() => {
       throw insertFails;
     });
   }
@@ -50,6 +57,7 @@ function setup({
 
   return {
     db,
+    tx,
     hash,
     create: async (overrides: Record<string, unknown> = {}) =>
       await createAccount(auth, db as never, makeValues(overrides)),
@@ -58,7 +66,7 @@ function setup({
 
 describe("createAccount", () => {
   test("writes the user with its role and a hashed credential in one transaction, normalized", async () => {
-    const { create, db, hash } = setup();
+    const { create, db, hash, tx } = setup();
 
     await expect(create({ role: "superadmin" })).resolves.toEqual({
       email: "owner@example.com",
@@ -70,8 +78,9 @@ describe("createAccount", () => {
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
       expect.any(Function)
     );
-    expect(db.$.insert.mock.calls).toEqual([[user], [account]]);
-    expect(db.$["insert.values"].mock.calls).toEqual([
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(tx.$.insert.mock.calls).toEqual([[user], [account]]);
+    expect(tx.$["insert.values"].mock.calls).toEqual([
       [
         {
           email: "owner@example.com",
@@ -94,11 +103,11 @@ describe("createAccount", () => {
   });
 
   test("looks for an existing login by the normalized email", async () => {
-    const { create, db } = setup();
+    const { create, tx } = setup();
 
     await create();
 
-    const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+    const [config] = tx.query.user.findFirst.mock.calls[0] ?? [];
     expect(renderQuery((config as { where: unknown }).where)).toEqual({
       params: ["owner@example.com"],
       sql: '"user"."email" = $1',
@@ -106,23 +115,23 @@ describe("createAccount", () => {
   });
 
   test("refuses an email that already has a login with CONFLICT, writing nothing", async () => {
-    const { create, db } = setup({ existing: true });
+    const { create, tx } = setup({ existing: true });
 
     await expect(create()).rejects.toMatchObject({
       code: "CONFLICT",
       message: "An account with that email already exists",
     });
-    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(tx.$.insert).not.toHaveBeenCalled();
   });
 
   test("answers CONFLICT when another request created the same email after the check", async () => {
-    const { create, db } = setup({ insertFails: emailUniqueViolation() });
+    const { create, tx } = setup({ insertFails: emailUniqueViolation() });
 
     await expect(create()).rejects.toMatchObject({
       code: "CONFLICT",
       message: "An account with that email already exists",
     });
-    expect(db.$.insert).not.toHaveBeenCalledWith(account);
+    expect(tx.$.insert).not.toHaveBeenCalledWith(account);
   });
 
   test("lets any other failure propagate, so the transaction rolls back", async () => {

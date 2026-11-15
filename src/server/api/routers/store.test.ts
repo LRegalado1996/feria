@@ -1,8 +1,10 @@
 import { call } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
 
+import { store } from "@/server/db/schema";
 import {
   createMockContext,
+  createMockDatabase,
   createUnauthenticatedMockContext,
 } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
@@ -253,14 +255,24 @@ describe("store.update", () => {
 describe("store writes", () => {
   test("re-check the superadmin under a share lock inside the write's transaction", async () => {
     const { create, db } = setup({ role: "superadmin" });
-    db.$["insert.returning"].mockResolvedValue([makeRow()]);
+    // The transaction's own handle: the lock and the write must both use it.
+    const tx = createMockDatabase();
+    db.$.transaction.mockImplementation(
+      async (callback: unknown) =>
+        await (callback as (handle: unknown) => Promise<unknown>)(tx)
+    );
+    tx.$["select.for"].mockResolvedValue([{ id: "test-user-id" }]);
+    tx.$["insert.returning"].mockResolvedValue([makeRow()]);
 
     await create(makeInput());
 
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
-    expect(db.$["select.for"].mock.invocationCallOrder[0]).toBeLessThan(
-      db.$.insert.mock.invocationCallOrder[0] ?? 0
+    expect(tx.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(tx.$.insert).toHaveBeenCalledWith(store);
+    expect(tx.$["select.for"].mock.invocationCallOrder[0]).toBeLessThan(
+      tx.$.insert.mock.invocationCallOrder[0] ?? 0
     );
+    expect(db.$["select.for"]).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
   });
 
   test("refuse a superadmin demoted after the procedure's check, writing nothing", async () => {
