@@ -117,6 +117,15 @@ function makeArticle(
   };
 }
 
+/** The same article as read in English: its own name and description. */
+function makeEnglishArticle(): PublishedProduct {
+  return makeArticle({
+    description: "Sterling silver, handmade.",
+    lang: "en",
+    title: "Silver ring",
+  });
+}
+
 function makeCard(): ProductCard {
   return {
     categorySlug: null,
@@ -139,27 +148,38 @@ async function makeParams(
   return await Promise.resolve({ locale, slug, store });
 }
 
-/** The reads answer for `store` and its `article` only. */
+/**
+ * The reads answer for `store` and its `article` only, in each language the
+ * article as `english` overrides it there (the same article unless given).
+ */
 function setup({
   article = makeArticle(),
+  english = article,
   locale = "es",
   related = [makeCard()],
   slug = article.slug,
   store = makeStore(),
 }: {
   article?: PublishedProduct;
+  english?: PublishedProduct;
   locale?: string;
   related?: ProductCard[];
   slug?: string;
   store?: PublicStore;
 } = {}) {
+  const translated: Record<Locale, PublishedProduct> = {
+    en: english,
+    es: article,
+  };
   getStoreForPath.mockImplementation(
     async (asked) => await Promise.resolve(asked === store.slug ? store : null)
   );
   readPublishedArticle.mockImplementation(
-    async (asked, askedSlug) =>
+    async (asked, askedSlug, askedLocale) =>
       await Promise.resolve(
-        asked === store && askedSlug === article.slug ? article : null
+        asked === store && askedSlug === article.slug
+          ? translated[askedLocale]
+          : null
       )
   );
   readRelated.mockResolvedValue(related);
@@ -233,13 +253,24 @@ describe("ArticlePage", () => {
     expect(getStoreForPath).not.toHaveBeenCalled();
   });
 
-  test.each(["es", "en"] as const)(
-    "in %s, hands the organism the article, the copy of that language and the articles beside it",
-    async (locale) => {
-      const { article, related, show, store } = setup({ locale });
+  test.each([
+    ["es", makeArticle()],
+    ["en", makeEnglishArticle()],
+  ] as const)(
+    "in %s, hands the organism the article read in that language, its copy and the articles beside it",
+    async (locale, article) => {
+      const { related, show, store } = setup({
+        english: makeEnglishArticle(),
+        locale,
+      });
 
       const { props } = await show();
 
+      expect(readPublishedArticle).toHaveBeenCalledExactlyOnceWith(
+        store,
+        "anillo-de-plata",
+        locale
+      );
       expect(readRelated).toHaveBeenCalledExactlyOnceWith(
         store,
         article,

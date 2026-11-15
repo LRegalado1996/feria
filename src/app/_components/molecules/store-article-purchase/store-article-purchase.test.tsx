@@ -97,6 +97,17 @@ describe("StoreArticlePurchase", () => {
     await user.click(decrease());
     expect(quantity()).toBe("9");
     expect(increase()).toBeEnabled();
+
+    for (let step = 0; step < 7; step += 1) {
+      await user.click(decrease());
+    }
+
+    expect(quantity()).toBe("2");
+    expect(decrease()).toBeEnabled();
+
+    await user.click(decrease());
+    expect(quantity()).toBe("1");
+    expect(decrease()).toBeDisabled();
   });
 
   test("adds the chosen quantity to the store's cart and says so", async () => {

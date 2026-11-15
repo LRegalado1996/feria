@@ -1,3 +1,5 @@
+import type { Locator } from "@playwright/test";
+
 import { type DbFixture, expect, test } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
@@ -64,11 +66,22 @@ test.describe("Article page", () => {
     await expect(gallery.getByText("Foto 3 de 3")).toBeVisible();
     await expect.poll(inView).toBe(2);
 
-    const third = await track.getByRole("img").nth(2).getAttribute("alt");
+    // Every photo shares the article's alt text: the zoom is told apart by
+    // its source, which next/image passes on as `url=`.
+    const source = async (image: Locator) => {
+      const src = await image.getAttribute("src");
+      return src === null
+        ? null
+        : new URL(src, page.url()).searchParams.get("url");
+    };
+    const third = await source(track.getByRole("img").nth(2));
+    expect(third).toBe("/seed/ring-3.jpg");
     const zoom = page.getByTestId("store-gallery-zoom");
     await gallery.getByRole("button", { name: "Ampliar la foto" }).click();
     await expect(zoom).toBeVisible();
-    await expect(zoom.getByRole("img")).toHaveAttribute("alt", third ?? "");
+    await expect
+      .poll(async () => await source(zoom.getByRole("img")))
+      .toBe(third);
     await zoom.getByRole("button", { name: "Cerrar la foto ampliada" }).click();
     await expectDialogRemoved(page, zoom);
   });
