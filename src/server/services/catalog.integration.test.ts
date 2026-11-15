@@ -695,26 +695,111 @@ describe("slug allocation under two writers", () => {
     expect([a.slug, b.slug]).toEqual(["collar-gemelo", "collar-gemelo-2"]);
   });
 
-  test("control: articles with different titles in two stores do not wait on each other", async () => {
+  test("control: a store's slug lock never makes another store's creation wait", async () => {
     const [storeA, storeB] = [await makeStore(), await makeStore()];
+    const held = deferred();
+    const allocated = deferred();
 
-    const [a, b] = await Promise.all([
-      db.transaction(
-        async (tx) =>
-          await createProduct(tx, {
-            storeId: storeA.id,
-            values: draftValues("Collar"),
-          })
-      ),
-      db.transaction(
+    const first = db.transaction(async (tx) => {
+      const created = await createProduct(tx, {
+        storeId: storeA.id,
+        values: draftValues("Collar"),
+      });
+      allocated.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+
+    try {
+      await allocated.promise;
+      // Finishes while store A's transaction still holds its lock: with one
+      // lock for every store this would wait for ever.
+      const second = await db.transaction(
         async (tx) =>
           await createProduct(tx, {
             storeId: storeB.id,
             values: draftValues("Collar"),
           })
-      ),
-    ]);
+      );
+      expect(second.slug).toBe("collar");
+    } finally {
+      held.resolve(undefined);
+    }
 
-    expect([a.slug, b.slug]).toEqual(["collar", "collar"]);
+    expect((await first).slug).toBe("collar");
+  });
+});
+
+describe("an edit and a publication of the same article", () => {
+  test("the publication waits for the edit's row lock, then publishes the edited article", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    const article = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      publish: false,
+      title: "Cadena vieja",
+    });
+    const held = deferred();
+    const locked = deferred();
+
+    const edit = db.transaction(async (tx) => {
+      const updated = await updateProduct(tx, {
+        storeId: shop.id,
+        values: {
+          categoryId: chains.id,
+          id: article.id,
+          isAvailable: true,
+          priceAmount: 99_000,
+          translations: [
+            {
+              description: "",
+              locale: "es",
+              seoDescription: null,
+              seoTitle: null,
+              title: "Cadena nueva",
+            },
+          ],
+        },
+      });
+      locked.resolve(undefined);
+      await held.promise;
+
+      return updated;
+    });
+    await locked.promise;
+    const publication = publishProduct(db, {
+      id: article.id,
+      storeId: shop.id,
+    });
+
+    try {
+      await waitUntilBlocked();
+    } finally {
+      held.resolve(undefined);
+      await Promise.allSettled([edit, publication]);
+    }
+
+    const [edited, published] = await Promise.all([edit, publication]);
+    expect(edited.slug).toBe("cadena-nueva");
+    expect(published).toEqual({
+      id: article.id,
+      slug: "cadena-nueva",
+      status: "published",
+    });
+  });
+
+  test("control: a publication after the edit committed waits on nothing", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    const article = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      publish: false,
+      title: "Cadena",
+    });
+
+    await expect(
+      publishProduct(db, { id: article.id, storeId: shop.id })
+    ).resolves.toEqual({ id: article.id, slug: "cadena", status: "published" });
   });
 });

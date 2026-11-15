@@ -19,14 +19,30 @@ const { TX } = vi.hoisted(() => ({
 }));
 
 const services = vi.hoisted(() => ({
-  createProduct: vi.fn(async () => ({ id: 1 })),
-  deleteProduct: vi.fn(async () => ({ id: 1 })),
+  createProduct: vi.fn(async () => ({
+    id: 11,
+    slug: "cadena",
+    status: "draft",
+  })),
+  deleteProduct: vi.fn(async () => ({ id: 12 })),
   findAccessibleStore: vi.fn(),
-  publishProduct: vi.fn(async () => ({ id: 1 })),
-  reorderProductImages: vi.fn(async () => ({ id: 1 })),
-  setProductAvailability: vi.fn(async () => ({ id: 1 })),
-  unpublishProduct: vi.fn(async () => ({ id: 1 })),
-  updateProduct: vi.fn(async () => ({ id: 1 })),
+  publishProduct: vi.fn(async () => ({
+    id: 13,
+    slug: "cadena",
+    status: "published",
+  })),
+  reorderProductImages: vi.fn(async () => ({ id: 14, imageIds: [3, 1, 2] })),
+  setProductAvailability: vi.fn(async () => ({ id: 15, isAvailable: false })),
+  unpublishProduct: vi.fn(async () => ({
+    id: 16,
+    slug: "cadena",
+    status: "draft",
+  })),
+  updateProduct: vi.fn(async () => ({
+    id: 17,
+    slug: "cadena",
+    status: "draft",
+  })),
   withStoreAccess: vi.fn(
     async (
       _db: unknown,
@@ -118,7 +134,9 @@ describe("product router", () => {
   test("creates the draft in the resolved store, inside the access check", async () => {
     const { db, run } = setup();
 
-    await run("create", { ...makeFields(), storeSlug: "lr-market" });
+    await expect(
+      run("create", { ...makeFields(), storeSlug: "lr-market" })
+    ).resolves.toEqual({ id: 11, slug: "cadena", status: "draft" });
 
     expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
       db,
@@ -134,7 +152,9 @@ describe("product router", () => {
   test("updates by id within the resolved store", async () => {
     const { run } = setup();
 
-    await run("update", { ...makeFields(), id: 5, storeSlug: "lr-market" });
+    await expect(
+      run("update", { ...makeFields(), id: 5, storeSlug: "lr-market" })
+    ).resolves.toEqual({ id: 17, slug: "cadena", status: "draft" });
 
     expect(services.updateProduct).toHaveBeenCalledExactlyOnceWith(TX, {
       storeId: 7,
@@ -143,15 +163,25 @@ describe("product router", () => {
   });
 
   test.each([
-    ["publish", services.publishProduct],
-    ["unpublish", services.unpublishProduct],
-    ["delete", services.deleteProduct],
+    [
+      "publish",
+      services.publishProduct,
+      { id: 13, slug: "cadena", status: "published" },
+    ],
+    [
+      "unpublish",
+      services.unpublishProduct,
+      { id: 16, slug: "cadena", status: "draft" },
+    ],
+    ["delete", services.deleteProduct, { id: 12 }],
   ] as const)(
     "%s acts on the article by id within the resolved store",
-    async (name, service) => {
+    async (name, service, answer) => {
       const { db, run } = setup();
 
-      await run(name, { id: 5, storeSlug: "lr-market" });
+      await expect(
+        run(name, { id: 5, storeSlug: "lr-market" })
+      ).resolves.toEqual(answer);
 
       expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
         db,
@@ -168,11 +198,13 @@ describe("product router", () => {
   test("sets availability within the resolved store", async () => {
     const { run } = setup();
 
-    await run("setAvailability", {
-      id: 5,
-      isAvailable: false,
-      storeSlug: "lr-market",
-    });
+    await expect(
+      run("setAvailability", {
+        id: 5,
+        isAvailable: false,
+        storeSlug: "lr-market",
+      })
+    ).resolves.toEqual({ id: 15, isAvailable: false });
 
     expect(services.setProductAvailability).toHaveBeenCalledExactlyOnceWith(
       TX,
@@ -187,11 +219,13 @@ describe("product router", () => {
   test("reorders images within the resolved store", async () => {
     const { run } = setup();
 
-    await run("reorderImages", {
-      id: 5,
-      imageIds: [3, 1, 2],
-      storeSlug: "lr-market",
-    });
+    await expect(
+      run("reorderImages", {
+        id: 5,
+        imageIds: [3, 1, 2],
+        storeSlug: "lr-market",
+      })
+    ).resolves.toEqual({ id: 14, imageIds: [3, 1, 2] });
 
     expect(services.reorderProductImages).toHaveBeenCalledExactlyOnceWith(TX, {
       id: 5,
