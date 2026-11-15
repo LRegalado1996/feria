@@ -30,6 +30,10 @@ function isClosed(request: Request): boolean {
   );
 }
 
+function notFound(): Response {
+  return new Response(null, { status: 404 });
+}
+
 export async function GET(request: Request): Promise<Response> {
   return isClosed(request) ? notFound() : await betterAuth.GET(request);
 }
