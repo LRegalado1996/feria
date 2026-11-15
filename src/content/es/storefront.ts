@@ -27,8 +27,10 @@ export const storefront = {
     checkout: {
       name: "Tu nombre",
       nameRequired: "Escribí tu nombre.",
+      nameTooLong: "El nombre puede tener hasta 80 letras.",
       note: "Nota para la tienda (opcional)",
       notePlaceholder: "Por ejemplo, a qué hora te queda bien.",
+      noteTooLong: "La nota puede tener hasta 500 letras.",
       phone: "Tu celular",
       phoneHint: "Te escriben por WhatsApp para coordinar la entrega.",
       phoneInvalid: "Escribí un celular, por ejemplo 099 123 456.",
@@ -53,7 +55,7 @@ export const storefront = {
         "Ya hiciste varios pedidos en poco tiempo. Probá de nuevo en {minutes} min.",
     },
     flags: {
-      gone: "Ya no está a la venta.",
+      goneTitle: "Artículo que ya no está a la venta",
       priceChanged: "El precio cambió: antes {before}.",
       unavailable: "Agotado por ahora.",
     },
@@ -61,6 +63,7 @@ export const storefront = {
     loading: "Trayendo los precios de ahora…",
     quantity: "Cantidad de {title}",
     remove: "Quitar {title}",
+    removed: "Quitaste {title} del carrito.",
     subtotal: "Total",
     title: "Tu carrito",
     unitPrice: "{price} c/u",

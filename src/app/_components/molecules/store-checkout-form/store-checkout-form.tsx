@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import {
@@ -29,6 +29,7 @@ import {
   ORDER_PHONE_MAX_LENGTH,
 } from "@/lib/schemas/order";
 import { cn } from "@/lib/utils";
+import { normalizePhone } from "@/lib/utils/phone";
 
 export interface StoreCheckoutFormProps {
   /** Why the order cannot be placed yet, said under the button; `null` when it can. */
@@ -36,8 +37,11 @@ export interface StoreCheckoutFormProps {
   className?: string;
   /** The order's articles and quantities, as the cart holds them. */
   items: { productId: number; quantity: number }[];
-  /** The order was taken: its link's token. */
-  onPlaced: (token: string) => void;
+  /** The order was taken: its link's token, and the items it ordered. */
+  onPlaced: (
+    token: string,
+    ordered: { productId: number; quantity: number }[]
+  ) => void;
   /** An article changed under the cart: read the articles again. */
   onStale: () => void;
   storeSlug: string;
@@ -118,25 +122,41 @@ function StoreCheckoutForm({
   // stable `form` object, and the button would never update.
   const { isSubmitting } = useFormState({ control: form.control });
   const sending = isSubmitting || createOrder.isPending;
+  // Set the moment a submit starts, before React re-renders: a second tap
+  // that lands first is dropped here, since the button stays enabled.
+  const inFlight = useRef(false);
 
   const onSubmit = async (values: CheckoutValues) => {
+    if (inFlight.current) {
+      return;
+    }
+
+    inFlight.current = true;
     setFailure(null);
-    const signature = JSON.stringify([items, values.customerPhone]);
+    // The number, not how it was typed: "099 123 456" and "+598 99 123 456"
+    // sent again are the same request.
+    const signature = JSON.stringify([
+      items,
+      normalizePhone(values.customerPhone),
+    ]);
     const requestKey =
       attempt?.signature === signature ? attempt.key : crypto.randomUUID();
     setAttempt({ key: requestKey, signature });
+
+    // What this submit orders, whatever the cart becomes while it is sent.
+    const ordered = items;
 
     try {
       const placed = await createOrder.mutateAsync({
         customerName: values.customerName,
         customerPhone: values.customerPhone,
-        items,
+        items: ordered,
         locale,
         note: values.note,
         requestKey,
         storeSlug,
       });
-      onPlaced(placed.token);
+      onPlaced(placed.token, ordered);
     } catch (error) {
       const kind = checkoutFailure(error);
 
@@ -149,6 +169,8 @@ function StoreCheckoutForm({
       }
 
       setFailure(checkoutErrorMessage(error, copy.errors));
+      // Free for a retry; after a success the page moves on instead.
+      inFlight.current = false;
     }
   };
 
@@ -257,9 +279,13 @@ function StoreCheckoutForm({
             aria-describedby={
               blockedReason ? "store-checkout-blocked" : undefined
             }
-            className="inline-flex min-h-14 w-full items-center justify-center bg-store-contrast px-6 text-base font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-14 w-full items-center justify-center bg-store-contrast px-6 text-base font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-wait aria-disabled:opacity-70"
+            // `aria-disabled` while sending, not `disabled`: a button that
+            // disables itself under the finger drops focus, and a failed
+            // order leaves the shopper nowhere to retry from.
+            aria-disabled={sending}
             data-testid="store-checkout-submit"
-            disabled={!hydrated || sending || blockedReason !== null}
+            disabled={!hydrated || blockedReason !== null}
             type="submit"
           >
             {sending ? copy.checkout.submitting : copy.checkout.submit}

@@ -29,8 +29,10 @@ export const storefront: Dictionary["storefront"] = {
     checkout: {
       name: "Your name",
       nameRequired: "Write your name.",
+      nameTooLong: "The name can be up to 80 characters.",
       note: "Note for the store (optional)",
       notePlaceholder: "For example, what time suits you.",
+      noteTooLong: "The note can be up to 500 characters.",
       phone: "Your mobile",
       phoneHint: "The store writes to you on WhatsApp to arrange delivery.",
       phoneInvalid: "Write a mobile number, for example +598 99 123 456.",
@@ -55,7 +57,7 @@ export const storefront: Dictionary["storefront"] = {
         "You placed several orders in a short time. Try again in {minutes} min.",
     },
     flags: {
-      gone: "No longer for sale.",
+      goneTitle: "Article no longer for sale",
       priceChanged: "The price changed: it was {before}.",
       unavailable: "Sold out for now.",
     },
@@ -63,6 +65,7 @@ export const storefront: Dictionary["storefront"] = {
     loading: "Fetching the current prices…",
     quantity: "Quantity of {title}",
     remove: "Remove {title}",
+    removed: "You removed {title} from the cart.",
     subtotal: "Total",
     title: "Your cart",
     unitPrice: "{price} each",

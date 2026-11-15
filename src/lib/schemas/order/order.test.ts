@@ -294,6 +294,8 @@ describe("getOrderSchema and changeOrderStatusSchema", () => {
 
 const CHECKOUT_MESSAGES = {
   nameRequired: "Name, please",
+  nameTooLong: "A shorter name, please",
+  noteTooLong: "A shorter note, please",
   phoneInvalid: "A mobile, please",
 };
 
@@ -375,9 +377,15 @@ describe("createCheckoutSchema", () => {
       "a name of 81 characters",
       { customerName: "x".repeat(81) },
       "customerName",
+      "A shorter name, please",
     ],
-    ["a note of 501 characters", { note: "x".repeat(501) }, "note"],
-  ])("refuses %s", (_case, overrides, field) => {
-    expect(checkoutIssues(overrides).map(([path]) => path)).toEqual([field]);
+    [
+      "a note of 501 characters",
+      { note: "x".repeat(501) },
+      "note",
+      "A shorter note, please",
+    ],
+  ])("refuses %s in the page's words", (_case, overrides, field, message) => {
+    expect(checkoutIssues(overrides)).toEqual([[field, message]]);
   });
 });

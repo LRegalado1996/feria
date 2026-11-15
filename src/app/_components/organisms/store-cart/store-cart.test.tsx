@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import type { CartProduct } from "@/lib/hooks/cart";
 import type { Locale } from "@/lib/i18n/config";
 import { collectHydrationErrors } from "@/test/hydration";
-import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
+import { createI18nWrapper, DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
@@ -87,7 +87,25 @@ function setup({
     wrapper,
   });
 
+  const dictionary = DICTIONARIES[locale].storefront.cart.checkout;
+
   return {
+    /** Writes the shopper's details and sends the order. */
+    placeOrder: async () => {
+      await user.type(
+        screen.getByRole("textbox", { name: dictionary.name }),
+        "Ana Pérez"
+      );
+      await user.type(
+        screen.getByRole("textbox", { name: dictionary.phone }),
+        "099 123 456"
+      );
+      await user.click(screen.getByTestId("store-checkout-submit"));
+    },
+    /** The polite announcement of the last line taken out. */
+    announcement: () =>
+      document.querySelector('[data-slot="store-cart"] > output')
+        ?.textContent ?? null,
     cartProducts,
     /** The lines on screen, as `[title, flag]`. */
     lines: () =>
@@ -196,7 +214,7 @@ describe("StoreCart", () => {
 
     expect(lines()).toEqual([
       ["Artículo 4", null],
-      ["No longer for sale.", "gone"],
+      ["Article no longer for sale", "gone"],
     ]);
     expect(total()).toBe("TotalUYU 800");
     expect(submit()).toBeDisabled();
@@ -213,8 +231,8 @@ describe("StoreCart", () => {
     await shown();
 
     expect(lines()).toEqual([
-      ["No longer for sale.", "gone"],
-      ["No longer for sale.", "gone"],
+      ["Article no longer for sale", "gone"],
+      ["Article no longer for sale", "gone"],
     ]);
     expect(screen.queryByTestId("store-cart-total")).toBeNull();
   });
@@ -288,37 +306,17 @@ describe("StoreCart", () => {
   );
 
   test.each([
-    [
-      "en",
-      "/en/lr-market/orders/",
-      "Sending the order…",
-      "Your name",
-      "Your mobile",
-    ],
-    [
-      "es",
-      "/lr-market/orders/",
-      "Enviando el pedido…",
-      "Tu nombre",
-      "Tu celular",
-    ],
+    ["en", "/en/lr-market/orders/"],
+    ["es", "/lr-market/orders/"],
   ] as const)(
-    "in %s, a placed order opens its page at %s and empties the cart, saying it is on its way",
-    async (locale, path, sending, nameLabel, phoneLabel) => {
-      const { shown, storedCart, user } = setup({ locale });
+    "in %s, a placed order opens its page at %s and takes its articles out of the cart",
+    async (locale, path) => {
+      const { placeOrder, shown, storedCart } = setup({ locale });
       const create = vi.fn((_input: unknown) => ({ token: TOKEN }));
       server.use(createOrpcHandler("order.create", create));
 
       await shown();
-      await user.type(
-        screen.getByRole("textbox", { name: nameLabel }),
-        "Ana Pérez"
-      );
-      await user.type(
-        screen.getByRole("textbox", { name: phoneLabel }),
-        "099 123 456"
-      );
-      await user.click(screen.getByTestId("store-checkout-submit"));
+      await placeOrder();
 
       await waitFor(() => {
         expect(push).toHaveBeenCalledExactlyOnceWith(`${path}${TOKEN}`);
@@ -335,10 +333,173 @@ describe("StoreCart", () => {
         })
       );
       expect(storedCart()).toEqual([]);
-      expect(screen.getByRole("status")).toHaveTextContent(sending);
-      expect(screen.queryByTestId("store-cart-empty")).toBeNull();
     }
   );
+
+  test("a placed order takes out only what it ordered, keeping what another tab added while it was sent", async () => {
+    const { placeOrder, shown, storedCart } = setup();
+    const answer: { release: () => void } = { release: () => undefined };
+    const create = vi.fn(
+      async (_input: unknown) =>
+        await new Promise<{ token: string }>((resolve) => {
+          answer.release = () => {
+            resolve({ token: TOKEN });
+          };
+        })
+    );
+    server.use(createOrpcHandler("order.create", create));
+
+    await shown();
+    await placeOrder();
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          items: [
+            { productId: 4, quantity: 2 },
+            { productId: 9, quantity: 1 },
+          ],
+        })
+      );
+    });
+    // Another tab raises article 4 and adds article 11 meanwhile.
+    act(() => {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify([
+          makeLine(4, 3, 40_000),
+          makeLine(9, 1, 90_000),
+          makeLine(11, 1),
+        ])
+      );
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    });
+    answer.release();
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledExactlyOnceWith(
+        `/en/lr-market/orders/${TOKEN}`
+      );
+    });
+    expect(storedCart()).toEqual([makeLine(4, 1, 40_000), makeLine(11, 1)]);
+  });
+
+  test("an article added while its price loads is pending, not gone, and holds the order until it arrives", async () => {
+    const { cartProducts, lines, shown, submit } = setup({
+      cart: [makeLine(4, 2, 40_000)],
+      products: [makeProduct(4)],
+    });
+
+    await shown();
+    // The answer for the longer list never comes: the first one stays on
+    // screen as placeholder data.
+    cartProducts.mockImplementation(
+      async () => await new Promise<never>(() => {})
+    );
+    act(() => {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify([makeLine(4, 2, 40_000), makeLine(11, 1)])
+      );
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+    });
+
+    await waitFor(() => {
+      expect(lines()).toEqual([
+        ["Artículo 4", null],
+        ["Fetching the current prices…", "pending"],
+      ]);
+    });
+    expect(cartProducts).toHaveBeenLastCalledWith({
+      ids: [4, 11],
+      locale: "en",
+      storeSlug: "lr-market",
+    });
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
+      "Fetching the current prices…"
+    );
+  });
+
+  test("taking out a line moves focus to the remove button now in its place, and says what was taken out", async () => {
+    const { announcement, shown, user } = setup({
+      cart: [...CART, makeLine(12, 1, 120_000)],
+      products: [makeProduct(4), makeProduct(9), makeProduct(12)],
+    });
+
+    await shown();
+    await user.click(screen.getByRole("button", { name: "Remove Artículo 4" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove Artículo 9" })
+      ).toHaveFocus();
+    });
+    expect(announcement()).toBe("You removed Artículo 4 from the cart.\u2060");
+  });
+
+  test("taking out the last of several lines moves focus to the one before it", async () => {
+    const { shown, user } = setup();
+
+    await shown();
+    await user.click(screen.getByRole("button", { name: "Remove Artículo 9" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove Artículo 4" })
+      ).toHaveFocus();
+    });
+  });
+
+  test.each([
+    ["en", "Keep browsing", "You removed Artículo 4 from the cart.\u2060"],
+    ["es", "Seguir mirando", "Quitaste Artículo 4 del carrito.\u2060"],
+  ] as const)(
+    "in %s, taking out the only line moves focus to %j and announces it",
+    async (locale, link, said) => {
+      const { announcement, shown, user } = setup({
+        cart: [makeLine(4, 2, 40_000)],
+        locale,
+        products: [makeProduct(4)],
+      });
+
+      await shown();
+      await user.click(
+        screen.getByRole("button", {
+          name: locale === "en" ? "Remove Artículo 4" : "Quitar Artículo 4",
+        })
+      );
+
+      const empty = await screen.findByTestId("store-cart-empty");
+      expect(within(empty).getByRole("link", { name: link })).toHaveFocus();
+      expect(announcement()).toBe(said);
+    }
+  );
+
+  test("the same message said twice flips its invisible mark, so it is announced again", async () => {
+    const { announcement, lines, shown, user } = setup({ products: [] });
+
+    await shown();
+    expect(announcement()).toBe("");
+    const [first] = screen.getAllByRole("button", {
+      name: "Remove Article no longer for sale",
+    });
+    if (!first) {
+      throw new Error("No line to remove");
+    }
+    await user.click(first);
+    await waitFor(() => {
+      expect(lines()).toEqual([["Article no longer for sale", "gone"]]);
+    });
+    expect(announcement()).toBe(
+      "You removed Article no longer for sale from the cart.\u2060"
+    );
+    await user.click(screen.getByRole("button", { name: /^Remove /u }));
+
+    await screen.findByTestId("store-cart-empty");
+    expect(announcement()).toBe(
+      "You removed Article no longer for sale from the cart."
+    );
+  });
 
   test("an article that changed under the order reads the prices again", async () => {
     const { cartProducts, shown, user } = setup();

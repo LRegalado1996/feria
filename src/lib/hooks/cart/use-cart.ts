@@ -274,11 +274,34 @@ export function useCart(storeSlug: string) {
     write(key, EMPTY);
   }, [key]);
 
+  /**
+   * After an order (FER-026): takes out what it ordered, and keeps what was
+   * added meanwhile, in this tab or another, while it was being sent.
+   */
+  const removeOrdered = useCallback(
+    (ordered: { productId: number; quantity: number }[]) => {
+      const taken = new Map(
+        ordered.map((item) => [item.productId, item.quantity])
+      );
+
+      write(
+        key,
+        parseCart(readRaw(key)).flatMap((item) => {
+          const left = item.quantity - (taken.get(item.productId) ?? 0);
+
+          return left > 0 ? [{ ...item, quantity: left }] : [];
+        })
+      );
+    },
+    [key]
+  );
+
   return {
     add,
     clear,
     count: items.reduce((sum, item) => sum + item.quantity, 0),
     items,
+    removeOrdered,
     setQuantity,
   };
 }

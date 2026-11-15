@@ -12,8 +12,11 @@ import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils/format";
 
-/** Why a line cannot go into the order as it is, or what changed in it. */
-export type CartLineFlag = "gone" | "price_changed" | "unavailable";
+/**
+ * Why a line cannot go into the order as it is, or what changed in it;
+ * `pending` while the shop's answer for a newly added article is on its way.
+ */
+export type CartLineFlag = "gone" | "pending" | "price_changed" | "unavailable";
 
 export interface StoreCartLineProps {
   className?: string;
@@ -48,13 +51,14 @@ function StoreCartLine({
   const { storefront } = useDictionary();
   const copy = storefront.cart;
   const locale = useLocale();
-  const title = product?.title ?? copy.flags.gone;
-  const blocked = flag === "gone" || flag === "unavailable";
+  const title =
+    product?.title ??
+    (flag === "pending" ? copy.loading : copy.flags.goneTitle);
+  const blocked = flag !== null && flag !== "price_changed";
   let notice: string | null = null;
 
-  if (flag === "gone") {
-    notice = copy.flags.gone;
-  } else if (flag === "unavailable") {
+  // A gone line's title already says it is gone.
+  if (flag === "unavailable") {
     notice = copy.flags.unavailable;
   } else if (
     flag === "price_changed" &&
@@ -118,7 +122,7 @@ function StoreCartLine({
             })}
           </p>
         ) : null}
-        {notice && flag !== "gone" ? (
+        {notice ? (
           <p className="flex items-center gap-1.5 text-sm font-semibold text-store-foreground">
             <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
             {notice}
@@ -175,7 +179,8 @@ function StoreCartLine({
           </fieldset>
         )}
         <button
-          className="inline-flex min-h-11 items-center gap-1.5 px-2 text-sm font-semibold text-store-foreground underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+          className="inline-flex size-11 shrink-0 items-center justify-center text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+          data-cart-remove=""
           onClick={() => {
             onQuantity(0);
           }}

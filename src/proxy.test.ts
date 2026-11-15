@@ -299,6 +299,9 @@ describe("proxy matcher", () => {
     "/seed/ring-1.jpg",
     "/robots.txt",
     "/sitemap.xml",
+    // BotID's script and its checks, which `withBotId` rewrites to Vercel.
+    "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js",
+    "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/check",
   ])("stays off %s, which has no language", (pathname) => {
     expect(matches(pathname)).toBe(false);
   });

@@ -44,8 +44,20 @@ const QUERY_PARAMS_TEXT_REGEX = /\bparams: [\s\S]*/;
 const CONSTRAINT_KEY_TEXT_REGEX = /\b(key \(.*?\)=)\([\s\S]*/i;
 const FAILING_ROW_TEXT_REGEX = /\bFailing row contains [\s\S]*/;
 
+/**
+ * An order's page address (FER-026): its token is the only key to the page,
+ * so a log line, an error report or an analytics event that held it would
+ * open the order to anyone who reads it.
+ */
+const ORDER_TOKEN_PATH_REGEX = /\/orders\/[\w-]{43}(?![\w-])/gu;
+
+/** `text` with every order page's token replaced by `[token]`. */
+export function redactOrderTokens(text: string): string {
+  return text.replaceAll(ORDER_TOKEN_PATH_REGEX, "/orders/[token]");
+}
+
 function scrubSensitiveText(text: string): string {
-  return text
+  return redactOrderTokens(text)
     .replace(QUERY_PARAMS_TEXT_REGEX, `params: ${REDACTED}`)
     .replace(CONSTRAINT_KEY_TEXT_REGEX, `$1(${REDACTED})`)
     .replace(FAILING_ROW_TEXT_REGEX, `Failing row contains (${REDACTED})`);

@@ -353,6 +353,95 @@ describe("useCart", () => {
     expect(storedCart()).toEqual([]);
   });
 
+  test.each([
+    [
+      "takes out exactly the quantities ordered",
+      [makeItem(4, 2), makeItem(9, 1)],
+      [makeItem(4, 2), makeItem(9, 1)],
+      [],
+    ],
+    [
+      "keeps the units added to an ordered line meanwhile",
+      [makeItem(4, 5), makeItem(9, 1)],
+      [makeItem(4, 2), makeItem(9, 1)],
+      [makeItem(4, 3)],
+    ],
+    [
+      "keeps a line added meanwhile",
+      [makeItem(4, 2), makeItem(7, 3)],
+      [makeItem(4, 2)],
+      [makeItem(7, 3)],
+    ],
+    [
+      "ignores an ordered line the cart no longer has",
+      [makeItem(9, 1)],
+      [makeItem(4, 2), makeItem(9, 1)],
+      [],
+    ],
+    [
+      "drops a line lowered below the quantity ordered",
+      [makeItem(4, 1), makeItem(9, 2)],
+      [makeItem(4, 3)],
+      [makeItem(9, 2)],
+    ],
+  ])("removeOrdered %s", async (_case, cartNow, ordered, left) => {
+    const { result, storedCart } = await setup({
+      stored: JSON.stringify(cartNow),
+    });
+
+    act(() => {
+      result.current.removeOrdered(ordered);
+    });
+
+    expect(result.current.items).toEqual(left);
+    expect(storedCart()).toEqual(left);
+  });
+
+  test("removeOrdered keeps a line's price seen", async () => {
+    const { result, storedCart } = await setup({
+      stored: JSON.stringify([{ ...makeItem(4, 3), seenPriceAmount: 125_000 }]),
+    });
+
+    act(() => {
+      result.current.removeOrdered([makeItem(4, 1)]);
+    });
+
+    expect(storedCart()).toEqual([
+      { ...makeItem(4, 2), seenPriceAmount: 125_000 },
+    ]);
+  });
+
+  test("removeOrdered works on what storage holds now, as another tab left it", async () => {
+    const { result, storage, storedCart } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+
+    // Another tab added a line; its storage event has not arrived yet.
+    storage.setItem(KEY, JSON.stringify([makeItem(4, 2), makeItem(7, 1)]));
+    act(() => {
+      result.current.removeOrdered([makeItem(4, 2)]);
+    });
+
+    expect(storedCart()).toEqual([makeItem(7, 1)]);
+    expect(result.current.items).toEqual([makeItem(7, 1)]);
+  });
+
+  test("removeOrdered leaves another store's cart alone", async () => {
+    const { result, storage } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+    storage.setItem("feria:cart:tienda-demo", JSON.stringify([makeItem(4, 2)]));
+
+    act(() => {
+      result.current.removeOrdered([makeItem(4, 2)]);
+    });
+
+    expect(result.current.items).toEqual([]);
+    expect(
+      JSON.parse(storage.getItem("feria:cart:tienda-demo") ?? "null")
+    ).toEqual([makeItem(4, 2)]);
+  });
+
   test("treats stored text that is not JSON as empty, and reports it", async () => {
     const { result } = await setup({ stored: "{not json" });
 

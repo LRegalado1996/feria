@@ -108,6 +108,8 @@ export type CreateOrderValues = z.infer<typeof createOrderSchema>;
 /** What the checkout form says when a field is wrong, in the page's words. */
 export interface CheckoutMessages {
   nameRequired: string;
+  nameTooLong: string;
+  noteTooLong: string;
   phoneInvalid: string;
 }
 
@@ -123,13 +125,13 @@ export function createCheckoutSchema(messages: CheckoutMessages) {
       .string()
       .trim()
       .min(1, messages.nameRequired)
-      .max(ORDER_CUSTOMER_NAME_MAX_LENGTH),
+      .max(ORDER_CUSTOMER_NAME_MAX_LENGTH, messages.nameTooLong),
     customerPhone: z
       .string()
       .trim()
       .max(ORDER_PHONE_MAX_LENGTH, messages.phoneInvalid)
       .refine((typed) => normalizePhone(typed) !== null, messages.phoneInvalid),
-    note: z.string().trim().max(ORDER_NOTE_MAX_LENGTH),
+    note: z.string().trim().max(ORDER_NOTE_MAX_LENGTH, messages.noteTooLong),
   });
 }
 

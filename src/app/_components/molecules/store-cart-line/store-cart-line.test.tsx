@@ -148,14 +148,17 @@ describe("StoreCartLine", () => {
   );
 
   test.each([
-    ["en", "No longer for sale."],
-    ["es", "Ya no está a la venta."],
+    ["en", "gone", "Article no longer for sale"],
+    ["es", "gone", "Artículo que ya no está a la venta"],
+    ["en", "pending", "Fetching the current prices…"],
+    ["es", "pending", "Trayendo los precios de ahora…"],
   ] as const)(
-    "in %s, a line whose article is gone is named %j, with no link, photo or stepper",
-    (locale, title) => {
-      const { line } = setup({ flag: "gone", locale, product: null });
+    "in %s, a %s line with no article is named %j, with no link, photo, stepper or notice",
+    (locale, flag, title) => {
+      const { line } = setup({ flag, locale, product: null });
 
-      expect(line()).toHaveAttribute("data-flag", "gone");
+      expect(line()).toHaveAttribute("data-flag", flag);
+      expect(line().querySelector("svg.lucide-circle-alert")).toBeNull();
       // Said once, as its name, not again as a notice.
       expect(line()).toHaveTextContent(
         new RegExp(
@@ -239,4 +242,15 @@ describe("StoreCartLine", () => {
 
     expect(onQuantity).toHaveBeenCalledExactlyOnceWith(0);
   });
+
+  test.each(["gone", "pending", null] as const)(
+    "a %s line's remove button is a 44 px target the cart can find",
+    (flag) => {
+      setup({ flag, product: flag === null ? makeProduct() : null });
+
+      const remove = screen.getByRole("button", { name: /^Remove /u });
+      expect(remove).toHaveClass("size-11");
+      expect(remove).toHaveAttribute("data-cart-remove", "");
+    }
+  );
 });

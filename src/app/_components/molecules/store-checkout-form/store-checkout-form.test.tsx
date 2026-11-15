@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
@@ -92,7 +92,7 @@ function setup({
     )
   );
   const copy = DICTIONARIES[locale].storefront.cart.checkout;
-  const onPlaced = vi.fn((_token: string) => undefined);
+  const onPlaced = vi.fn((_token: string, _ordered: Items) => undefined);
   const onStale = vi.fn(() => undefined);
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
@@ -215,7 +215,7 @@ describe("StoreCheckoutForm", () => {
       await send();
 
       await waitFor(() => {
-        expect(onPlaced.mock.calls).toEqual([[TOKEN]]);
+        expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
       });
       const [requestKey] = requestKeys();
       expect(requestKey).toMatch(UUID_V4);
@@ -262,11 +262,47 @@ describe("StoreCheckoutForm", () => {
     await send();
 
     await waitFor(() => {
-      expect(onPlaced.mock.calls).toEqual([[TOKEN]]);
+      expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
     const [first, second] = requestKeys();
     expect(first).toMatch(UUID_V4);
     expect(second).toBe(first);
+  });
+
+  test("the same number typed another way after a failure carries the same key", async () => {
+    const { fill, received, requestKeys, send } = setup({
+      answers: [SERVER_FAILURE, "ok"],
+    });
+
+    await fill({ phone: "099 123 456" });
+    await send();
+    await screen.findByRole("alert");
+    await fill({ phone: "+598 99 123 456" });
+    await send();
+
+    await waitFor(() => {
+      expect(received).toEqual([
+        expect.objectContaining({ customerPhone: "099 123 456" }),
+        expect.objectContaining({ customerPhone: "+598 99 123 456" }),
+      ]);
+    });
+    const [first, second] = requestKeys();
+    expect(first).toMatch(UUID_V4);
+    expect(second).toBe(first);
+  });
+
+  test("the cart's items as sent reach onPlaced with the token", async () => {
+    const items = makeItems([{ productId: 12, quantity: 5 }]);
+    const { fill, onPlaced, send } = setup({ items });
+
+    await fill();
+    await send();
+
+    await waitFor(() => {
+      expect(onPlaced.mock.calls).toEqual([
+        [TOKEN, [{ productId: 12, quantity: 5 }]],
+      ]);
+    });
   });
 
   test("another phone after a failure is a new request", async () => {
@@ -315,21 +351,69 @@ describe("StoreCheckoutForm", () => {
     expect(second).not.toBe(first);
   });
 
-  test("holds the button while the order is sent, saying so", async () => {
-    const { fill, requestKeys, send, submit, user } = setup({
+  test("holds the button while the order is sent, saying so, and keeps its focus", async () => {
+    const { fill, received, send, submit, user } = setup({
       answers: ["hang"],
     });
 
+    expect(submit()).toHaveAttribute("aria-disabled", "false");
     await fill();
     await send();
 
     await waitFor(() => {
       expect(submit()).toHaveTextContent("Sending the order…");
     });
-    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAttribute("aria-disabled", "true");
+    expect(submit()).toBeEnabled();
+    expect(submit()).toHaveFocus();
     await user.click(submit());
-    expect(requestKeys()).toEqual([expect.stringMatching(UUID_V4)]);
+    expect(received).toEqual([
+      expect.objectContaining({ customerPhone: "099 123 456" }),
+    ]);
   });
+
+  test("two taps at once send one order", async () => {
+    const { fill, onPlaced, received, submit } = setup({
+      answers: ["ok", "ok"],
+    });
+
+    await fill();
+    // Both land before React renders "sending".
+    fireEvent.click(submit());
+    fireEvent.click(submit());
+
+    await waitFor(() => {
+      expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
+    });
+    expect(received).toEqual([expect.objectContaining({ items: makeItems() })]);
+  });
+
+  test.each([
+    ["en", "customerName", "The name can be up to 80 characters.", 81],
+    ["es", "customerName", "El nombre puede tener hasta 80 letras.", 81],
+    ["en", "note", "The note can be up to 500 characters.", 501],
+    ["es", "note", "La nota puede tener hasta 500 letras.", 501],
+  ] as const)(
+    "in %s, a %s past its length says %j and sends nothing",
+    async (locale, field, message, length) => {
+      const { fill, received, send } = setup({ locale });
+      const copy = DICTIONARIES[locale].storefront.cart.checkout;
+
+      await fill();
+      // The field's maxLength stops typing; a pasted or scripted value
+      // still reaches the form.
+      fireEvent.change(
+        screen.getByRole("textbox", {
+          name: field === "note" ? copy.note : copy.name,
+        }),
+        { target: { value: "x".repeat(length) } }
+      );
+      await send();
+
+      expect(await screen.findByText(message)).toBeVisible();
+      expect(received).toEqual([]);
+    }
+  );
 
   test("a blocked cart holds the button and says why", async () => {
     const { fill, received, submit, user } = setup({
@@ -431,17 +515,25 @@ describe("StoreCheckoutForm", () => {
     });
   });
 
-  test("clears the failure once the next submit is sent", async () => {
-    const { fill, onPlaced, send } = setup({ answers: ["network", "ok"] });
+  test("after a failure keeps the button's focus, and the next submit is sent and clears it", async () => {
+    const { fill, onPlaced, received, send, submit } = setup({
+      answers: ["network", "ok"],
+    });
 
     await fill();
     await send();
     await screen.findByRole("alert");
+    expect(submit()).toHaveFocus();
+    expect(submit()).toHaveAttribute("aria-disabled", "false");
     await send();
 
     await waitFor(() => {
-      expect(onPlaced.mock.calls).toEqual([[TOKEN]]);
+      expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
+    expect(received).toEqual([
+      expect.objectContaining({ items: makeItems() }),
+      expect.objectContaining({ items: makeItems() }),
+    ]);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });

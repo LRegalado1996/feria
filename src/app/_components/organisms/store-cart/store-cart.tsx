@@ -3,7 +3,7 @@
 import { CircleAlert, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   type CartLineFlag,
@@ -13,6 +13,7 @@ import { StoreCheckoutForm } from "@/app/_components/molecules/store-checkout-fo
 import { type CartProduct, useCart, useCartProducts } from "@/lib/hooks/cart";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
+import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils/format";
@@ -22,13 +23,18 @@ export interface StoreCartProps {
   storeSlug: string;
 }
 
-/** What changed in a line since it was added, if anything. */
+/**
+ * What changed in a line since it was added, if anything. An article the
+ * shop's last answer does not name is gone, unless that answer is the one
+ * kept on screen while a newer one, which asks for it, loads.
+ */
 function flagOf(
   product: CartProduct | undefined,
-  seenPriceAmount: number | undefined
+  seenPriceAmount: number | undefined,
+  stale: boolean
 ): CartLineFlag | null {
   if (!product) {
-    return "gone";
+    return stale ? "pending" : "gone";
   }
 
   if (!product.isAvailable) {
@@ -50,6 +56,34 @@ function flagOf(
  */
 function StoreCart({ className, storeSlug }: StoreCartProps) {
   const copy = useDictionary().storefront.cart;
+  const root = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // The last line taken out: where it was, and its name to announce.
+  const [removed, setRemoved] = useState<{
+    count: number;
+    index: number;
+    title: string;
+  } | null>(null);
+
+  // A removed line takes its focused button with it: focus goes to the
+  // line now in its place (or the last one), else to the empty cart's
+  // link, else to the heading, never to the top of the document.
+  useEffect(() => {
+    if (!removed) {
+      return;
+    }
+
+    const buttons =
+      root.current?.querySelectorAll<HTMLElement>("[data-cart-remove]");
+    const next =
+      buttons && buttons.length > 0
+        ? buttons[Math.min(removed.index, buttons.length - 1)]
+        : root.current?.querySelector<HTMLElement>(
+            '[data-testid="store-cart-empty"] a'
+          );
+
+    (next ?? heading.current)?.focus();
+  }, [removed]);
 
   return (
     <div
@@ -58,42 +92,59 @@ function StoreCart({ className, storeSlug }: StoreCartProps) {
         className
       )}
       data-slot="store-cart"
+      ref={root}
     >
-      <h1 className="font-display store-display-section leading-display tracking-display uppercase">
+      <h1
+        className="font-display store-display-section leading-display tracking-display uppercase outline-none"
+        ref={heading}
+        tabIndex={-1}
+      >
         {copy.title}
       </h1>
-      <CartBody storeSlug={storeSlug} />
+      <CartBody
+        onRemoved={(index, title) => {
+          setRemoved((previous) => ({
+            count: (previous?.count ?? 0) + 1,
+            index,
+            title,
+          }));
+        }}
+        storeSlug={storeSlug}
+      />
+      <output aria-live="polite" className="sr-only">
+        {removed ? interpolate(copy.removed, { title: removed.title }) : ""}
+        {/* An invisible mark that alternates, so a repeated message is new. */}
+        {removed && removed.count % 2 === 1 ? "\u2060" : null}
+      </output>
     </div>
   );
 }
 
 /** What the cart holds, from "unknown yet" to the checkout. */
-function CartBody({ storeSlug }: { storeSlug: string }) {
+function CartBody({
+  onRemoved,
+  storeSlug,
+}: {
+  /** A line was taken out: its place in the list and its name. */
+  onRemoved: (index: number, title: string) => void;
+  storeSlug: string;
+}) {
   const { storefront } = useDictionary();
   const copy = storefront.cart;
   const locale = useLocale();
   const router = useRouter();
   const hydrated = useHydrated();
-  const { clear, items, setQuantity } = useCart(storeSlug);
+  const { items, removeOrdered, setQuantity } = useCart(storeSlug);
   const products = useCartProducts({
     ids: items.map((item) => item.productId),
     locale,
     storeSlug,
   });
   const catalogHref = localizePath(`/${storeSlug}/products`, locale);
-  // Taken: the cart is cleared while the order's page loads, which must not
-  // read as "your cart is empty".
-  const [placed, setPlaced] = useState(false);
-
-  // Next keeps a page it left mounted, hidden, for the back button: hiding
-  // runs this cleanup, so a shopper who goes back from the order's page
-  // finds the (now empty) cart instead of "sending" forever.
-  useEffect(
-    () => () => {
-      setPlaced(false);
-    },
-    []
-  );
+  // Taken: the ordered articles leave the cart while the order's page
+  // loads, which must not read as "your cart is empty". A transition, so the
+  // page shown again with the back button starts over, never "sending".
+  const [placed, startNavigation] = useTransition();
 
   if (placed) {
     return (
@@ -155,11 +206,22 @@ function CartBody({ storeSlug }: { storeSlug: string }) {
   const lines = items.map((item) => {
     const product = byId.get(item.productId);
 
-    return { flag: flagOf(product, item.seenPriceAmount), item, product };
+    return {
+      flag: flagOf(product, item.seenPriceAmount, products.isPlaceholderData),
+      item,
+      product,
+    };
   });
-  const blocked = lines.some(
-    (line) => line.flag === "gone" || line.flag === "unavailable"
-  );
+  let blockedReason: string | null = null;
+
+  if (
+    lines.some((line) => line.flag === "gone" || line.flag === "unavailable")
+  ) {
+    blockedReason = copy.errors.blocked;
+  } else if (lines.some((line) => line.flag === "pending")) {
+    blockedReason = copy.loading;
+  }
+
   const [first] = products.data;
   let total = 0;
 
@@ -180,12 +242,16 @@ function CartBody({ storeSlug }: { storeSlug: string }) {
           {copy.title}
         </h2>
         <ul className="border-t-2 border-store-line">
-          {lines.map(({ flag, item, product }) => (
+          {lines.map(({ flag, item, product }, index) => (
             <StoreCartLine
               flag={flag}
               key={item.productId}
               onQuantity={(quantity) => {
                 setQuantity(item.productId, quantity);
+
+                if (quantity <= 0) {
+                  onRemoved(index, product?.title ?? copy.flags.goneTitle);
+                }
               }}
               product={product ?? null}
               quantity={item.quantity}
@@ -205,15 +271,16 @@ function CartBody({ storeSlug }: { storeSlug: string }) {
         ) : null}
       </section>
       <StoreCheckoutForm
-        blockedReason={blocked ? copy.errors.blocked : null}
+        blockedReason={blockedReason}
         items={items.map(({ productId, quantity }) => ({
           productId,
           quantity,
         }))}
-        onPlaced={(token) => {
-          setPlaced(true);
-          router.push(localizePath(`/${storeSlug}/orders/${token}`, locale));
-          clear();
+        onPlaced={(token, ordered) => {
+          startNavigation(() => {
+            router.push(localizePath(`/${storeSlug}/orders/${token}`, locale));
+          });
+          removeOrdered(ordered);
         }}
         onStale={() => {
           void products.refetch();
