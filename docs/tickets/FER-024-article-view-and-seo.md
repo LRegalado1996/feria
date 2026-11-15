@@ -42,7 +42,7 @@ Read the `seo-ai-visibility` skill in `this-is-pepe` before starting.
 - `/{store}/llms.txt` and `/en/{store}/llms.txt` (`src/lib/seo/llms.ts`), per llmstxt.org: the store's name, tagline and description, its categories and its published articles with their prices; an inactive or unknown store is a 404.
 - Drafts and inactive stores are never listed: `src/server/services/seo.ts`, with integration tests that prove a draft, an article of an inactive store and an inactive store are absent.
 - E2E (`src/e2e/tests/store/article.e2e.ts`): the gallery and its zoom, adding a quantity, the sold-out state with WhatsApp, the title, canonical address and structured data in both languages, a draft's 404.
-- **Pending:** "Structured data validates in Google's Rich Results test" needs a public address, which this branch has none of until it is deployed; "Lighthouse on mobile ≥ 95" is not measured, Lighthouse not being part of this repo's tooling (Lucas, 2026-11-14). The ticket stays in progress until both are checked on a deployment.
+- **Pending:** "Structured data validates in Google's Rich Results test" and "a link pasted into WhatsApp shows the article photo, title and price" both need a public address, which this branch has none of until it is deployed (the card itself, its `og:image`, title and price, is covered by unit and e2e tests); "Lighthouse on mobile ≥ 95" is not measured, Lighthouse not being part of this repo's tooling (Lucas, 2026-11-14). The ticket stays in progress until both are checked on a deployment.
 
 ## Reporting
 
