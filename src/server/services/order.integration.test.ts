@@ -469,6 +469,16 @@ test("an order is stamped by the database's clock, and its first event with it",
   expect(event?.createdAt).toEqual(row.createdAt);
 });
 
+test("a store deactivated before the order took its lock takes no order", async () => {
+  const shop = await makeStore();
+  const ring = await makeArticle(shop.id, { title: "Anillo" });
+  await db.update(store).set({ isActive: false }).where(eq(store.id, shop.id));
+
+  await expect(
+    place(shop, orderValues({ productId: ring.id }))
+  ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Store not found" });
+});
+
 describe("abuse limits", () => {
   test("a phone places five orders an hour; the sixth waits for the oldest to leave the window", async () => {
     const shop = await makeStore();
