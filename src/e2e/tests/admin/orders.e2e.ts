@@ -25,24 +25,17 @@ const CHANGE_STATUS = "/api/orpc/order/changeStatus";
 
 /**
  * A Uruguayan mobile no other test uses, stored as `+5989…` and typed by
- * the staff in its local form (`09X XXX XXX`). `avoidCode` is another
- * order's code: a search by it also matches phones holding its digits (three
- * or more), so this phone never holds them.
+ * the staff in its local form (`09X XXX XXX`). A whole order code typed in
+ * the search is read as a code, never as phone digits, so a phone may hold
+ * another order's code digits without that search finding it.
  */
-function uniquePhone(avoidCode?: string) {
-  const avoid = avoidCode?.replaceAll(/\D/gu, "") ?? "";
+function uniquePhone() {
+  const digits = String(randomInt(10_000_000)).padStart(7, "0");
 
-  for (;;) {
-    const digits = String(randomInt(10_000_000)).padStart(7, "0");
-    const international = `+5989${digits}`;
-
-    if (avoid.length < 3 || !international.includes(avoid)) {
-      return {
-        international,
-        local: `09${digits.slice(0, 1)} ${digits.slice(1, 4)} ${digits.slice(4)}`,
-      };
-    }
-  }
+  return {
+    international: `+5989${digits}`,
+    local: `09${digits.slice(0, 1)} ${digits.slice(1, 4)} ${digits.slice(4)}`,
+  };
 }
 
 /** A store with one published article, and a login that works on it. */
@@ -377,10 +370,9 @@ test.describe("Order management", () => {
       productId: necklace.id,
       storeSlug: store.slug,
     });
-    // Ana's phone never holds Josefina's code: searching it finds one order.
     const ana = await placeOrder(page, {
       customerName: "Ana Prueba",
-      customerPhone: uniquePhone(josefina.code).international,
+      customerPhone: uniquePhone().international,
       productId: necklace.id,
       storeSlug: store.slug,
     });
@@ -527,7 +519,7 @@ test.describe("Order management", () => {
     );
     const second = await placeOrder(page, {
       customerName: "Josefina Núñez",
-      customerPhone: uniquePhone(first.code).international,
+      customerPhone: uniquePhone().international,
       productId: necklace.id,
       storeSlug: store.slug,
     });
