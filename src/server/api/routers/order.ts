@@ -12,6 +12,7 @@ import {
   listOrdersSchema,
 } from "@/lib/schemas/order";
 import { publicProcedure, storeProcedure } from "@/server/api/orpc";
+import { isBotRequest } from "@/server/api/utils/bot-check";
 import { orderClientKey } from "@/server/api/utils/client-key";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 import { writeToStore } from "@/server/api/utils/write-to-store";
@@ -38,6 +39,11 @@ export const orderRouter = {
         !isStorefrontLaunchedFor(context.headers.get(LAUNCH_OVERRIDE_HEADER))
       ) {
         throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+      }
+
+      // A script placing orders is refused before anything is read.
+      if (await isBotRequest()) {
+        throw new ORPCError("FORBIDDEN", { message: "Request refused" });
       }
 
       const { storeSlug, ...values } = input;

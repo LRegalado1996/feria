@@ -73,6 +73,7 @@ describe("API docs route", () => {
       ["/stores/{storeSlug}/admin/filter-values", ["post"]],
       ["/stores/{storeSlug}/admin/filter-values/{id}", ["put", "delete"]],
       ["/stores/{storeSlug}/admin/filter-values/order", ["put"]],
+      ["/stores/{storeSlug}/cart-products", ["get"]],
       ["/stores/{storeSlug}/categories", ["get"]],
       ["/stores/{storeSlug}/filters", ["get"]],
       ["/stores/{storeSlug}/products", ["get"]],

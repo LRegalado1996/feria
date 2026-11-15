@@ -232,6 +232,40 @@ async function loadCards(
 export type ProductCard = Awaited<ReturnType<typeof loadCards>>[number];
 
 /**
+ * The cart's articles as the shop has them now (FER-026): the cards of the
+ * ones still published in this store, in the order asked; an id of another
+ * store, a draft or a deleted article is left out, which the cart shows as
+ * gone. Prices are the shop's, never the cart's.
+ */
+export async function listCartProducts(
+  db: DatabaseClient,
+  {
+    currencyCode,
+    ids,
+    locale,
+    storeId,
+  }: StoreScope & { currencyCode: Currency; ids: number[]; locale: Locale }
+) {
+  const owned = await db
+    .select({ id: product.id })
+    .from(product)
+    .where(
+      and(
+        eq(product.storeId, storeId),
+        eq(product.status, "published"),
+        inArray(product.id, ids)
+      )
+    );
+  const ownIds = new Set(owned.map((row) => row.id));
+
+  return await loadCards(db, {
+    currencyCode,
+    ids: ids.filter((id) => ownIds.has(id)),
+    locale,
+  });
+}
+
+/**
  * One page of a store's published articles, newest first or by price,
  * narrowed by category, search and filters. Keyset pagination on the sort's
  * key and the id: a row inserted while the visitor scrolls never shifts the

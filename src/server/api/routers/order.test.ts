@@ -25,6 +25,8 @@ const services = vi.hoisted(() => ({
   getActiveStoreBySlug: vi.fn(),
   getOrder: vi.fn(async () => ({ code: "ABCDE", id: 70 })),
   getOrderByToken: vi.fn(async () => ({ code: "ABCDE" })),
+  // Vercel BotID's verdict; its own rules are `utils/bot-check.test.ts`'s.
+  isBotRequest: vi.fn<() => Promise<boolean>>(),
   isStorefrontLaunchedFor: vi.fn(),
   listOrders: vi.fn(async () => ({ items: [{ id: 70 }], nextCursor: null })),
   // The request's wide-event logger: `set` is what lands on its log line.
@@ -58,6 +60,10 @@ vi.mock("@/server/services/store", () => ({
 
 vi.mock("@/server/api/utils/client-key", () => ({
   orderClientKey: services.orderClientKey,
+}));
+
+vi.mock("@/server/api/utils/bot-check", () => ({
+  isBotRequest: services.isBotRequest,
 }));
 
 vi.mock("@/server/api/utils/logger", () => ({
@@ -106,12 +112,14 @@ function makeOrderInput(overrides: Record<string, unknown> = {}) {
  * `lr-market`. The storefront is open and `lr-market` active unless told not.
  */
 function setup({
+  bot = false,
   headers = {},
   launched = true,
   mayWork = true,
   signedIn = false,
   storeActive = true,
 }: {
+  bot?: boolean;
   headers?: Record<string, string>;
   launched?: boolean;
   mayWork?: boolean;
@@ -123,6 +131,7 @@ function setup({
     : createUnauthenticatedMockContext();
   mockCtx.headers = new Headers(headers);
   services.isStorefrontLaunchedFor.mockReturnValue(launched);
+  services.isBotRequest.mockResolvedValue(bot);
   services.findAccessibleStore.mockResolvedValue(mayWork ? STORE : null);
   services.getActiveStoreBySlug.mockImplementation(
     async (_db: unknown, { slug }: { slug: string }) => {
@@ -253,6 +262,39 @@ describe("order router: the shopper's side", () => {
     );
     expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
     expect(services.createOrder).not.toHaveBeenCalled();
+    // Closed answers the same to everyone: no bot check is spent on it.
+    expect(services.isBotRequest).not.toHaveBeenCalled();
+  });
+
+  test("refuses an order BotID judges a bot's, before reading the store or anything else", async () => {
+    const { db, run } = setup({
+      bot: true,
+      headers: { "x-real-ip": "203.0.113.7" },
+    });
+
+    await expect(run("create", makeOrderInput())).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Request refused",
+    });
+    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.orderClientKey).not.toHaveBeenCalled();
+    expect(services.createOrder).not.toHaveBeenCalled();
+    expect(db.$.select).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
+  });
+
+  test("an order BotID judges a person's goes through as before", async () => {
+    const { db, run } = setup({ bot: false });
+
+    await expect(run("create", makeOrderInput())).resolves.toEqual({
+      code: "ABCDE",
+      token: "the-token",
+    });
+    expect(services.isBotRequest).toHaveBeenCalledExactlyOnceWith();
+    expect(services.createOrder).toHaveBeenCalledExactlyOnceWith(
+      db,
+      expect.objectContaining({ storeId: 7 })
+    );
   });
 
   test.each([

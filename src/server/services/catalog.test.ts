@@ -19,6 +19,7 @@ import {
   deleteProduct,
   getPublishedProduct,
   getPublishedProductRef,
+  listCartProducts,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
@@ -737,6 +738,60 @@ describe("getPublishedProduct", () => {
     await expect(get(db)).resolves.toMatchObject({
       category: { name: "", slug: "collares" },
     });
+  });
+});
+
+describe("listCartProducts", () => {
+  async function cartProducts(
+    db: ReturnType<typeof setup>["db"],
+    ids: number[]
+  ) {
+    return await listCartProducts(db as never, {
+      currencyCode: "UYU",
+      ids,
+      locale: "es",
+      storeId: STORE_ID,
+    });
+  }
+
+  test("keeps only the store's published articles among the ids asked, then reads their cards", async () => {
+    const { configOf, db } = setup();
+    db.$["select.where"].mockResolvedValue([{ id: 5 }, { id: 8 }]);
+    db.query.product.findMany.mockResolvedValue([cardRow(5), cardRow(8)]);
+
+    await cartProducts(db, [8, 6, 5]);
+
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(product);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, "published", 8, 6, 5],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" in ($3, $4, $5))',
+    });
+    // The card query is asked only for the ids the store owns.
+    expect(
+      renderQuery(configOf(db.query.product.findMany).where).params
+    ).toEqual([8, 5, "published"]);
+  });
+
+  test("answers the cards in the order the cart asked, in the store's currency, leaving out an id it does not own", async () => {
+    const { db } = setup();
+    db.$["select.where"].mockResolvedValue([{ id: 5 }, { id: 8 }]);
+    db.query.product.findMany.mockResolvedValue([
+      cardRow(5),
+      cardRow(8, { isAvailable: false, priceAmount: 2100 }),
+    ]);
+
+    await expect(cartProducts(db, [8, 6, 5])).resolves.toEqual([
+      card(8, { isAvailable: false, priceAmount: 2100 }),
+      card(5),
+    ]);
+  });
+
+  test("answers none, with no card query, when the store owns none of the ids", async () => {
+    const { db } = setup();
+    db.$["select.where"].mockResolvedValue([]);
+
+    await expect(cartProducts(db, [41, 42])).resolves.toEqual([]);
+    expect(db.query.product.findMany).not.toHaveBeenCalled();
   });
 });
 

@@ -19,6 +19,7 @@ import {
   createProduct,
   deleteProduct,
   getPublishedProduct,
+  listCartProducts,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
@@ -473,6 +474,98 @@ describe("public catalog", () => {
     });
 
     expect(related.map((item) => item.slug)).toEqual([sibling.slug]);
+  });
+});
+
+describe("cart products", () => {
+  test("answers the store's published articles in the order the cart asked, leaving out another store's, a draft and a deleted one", async () => {
+    const [shop, other] = [await makeStore(), await makeStore()];
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    const otherChains = await makeCategory(other.id, "cadenas", {
+      es: "Cadenas",
+    });
+    const first = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      priceAmount: 129_000,
+      title: "Cadena primera",
+    });
+    const second = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      priceAmount: 54_000,
+      title: "Cadena segunda",
+    });
+    const draft = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      publish: false,
+      title: "Cadena borrador",
+    });
+    const foreign = await makeArticle(other.id, {
+      categoryId: otherChains.id,
+      title: "Cadena ajena",
+    });
+    const deleted = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      title: "Cadena borrada",
+    });
+    await deleteProduct(db, { id: deleted.id, storeId: shop.id });
+
+    const items = await listCartProducts(db, {
+      currencyCode: "UYU",
+      // The newer one first: the cart's order, not the catalog's.
+      ids: [second.id, foreign.id, draft.id, deleted.id, first.id],
+      locale: "es",
+      storeId: shop.id,
+    });
+
+    expect(
+      items.map(({ currencyCode, id, isAvailable, priceAmount, title }) => ({
+        currencyCode,
+        id,
+        isAvailable,
+        priceAmount,
+        title,
+      }))
+    ).toEqual([
+      {
+        currencyCode: "UYU",
+        id: second.id,
+        isAvailable: true,
+        priceAmount: 54_000,
+        title: "Cadena segunda",
+      },
+      {
+        currencyCode: "UYU",
+        id: first.id,
+        isAvailable: true,
+        priceAmount: 129_000,
+        title: "Cadena primera",
+      },
+    ]);
+  });
+
+  test("a sold-out article comes back, marked as not available", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    const soldOut = await makeArticle(shop.id, {
+      categoryId: chains.id,
+      title: "Cadena agotada",
+    });
+    await setProductAvailability(db, {
+      id: soldOut.id,
+      isAvailable: false,
+      storeId: shop.id,
+    });
+
+    const items = await listCartProducts(db, {
+      currencyCode: "UYU",
+      ids: [soldOut.id],
+      locale: "es",
+      storeId: shop.id,
+    });
+
+    expect(items.map(({ id, isAvailable }) => ({ id, isAvailable }))).toEqual([
+      { id: soldOut.id, isAvailable: false },
+    ]);
   });
 });
 

@@ -6,7 +6,9 @@ import {
   replayIntegration,
   zodErrorsIntegration,
 } from "@sentry/nextjs";
+import { initBotId } from "botid/client/core";
 
+import { BOT_PROTECTED_REQUESTS } from "./src/lib/env/bot-protection";
 import { readClientDeployEnv } from "./src/lib/env/deploy";
 import {
   filterClientEvent,
@@ -47,4 +49,11 @@ if (dsn && environment) {
       replayIntegration(),
     ],
   });
+}
+
+// BotID (FER-026): only on Vercel, where the server can check what this
+// script attaches; elsewhere the server skips the check too
+// (`src/server/api/utils/bot-check.ts`).
+if (process.env.NEXT_PUBLIC_VERCEL === "1") {
+  initBotId({ protect: BOT_PROTECTED_REQUESTS });
 }

@@ -1,3 +1,4 @@
+import { listCartProductsSchema } from "@/lib/schemas/cart";
 import {
   getProductSchema,
   listCatalogFiltersSchema,
@@ -13,6 +14,7 @@ import {
 import {
   getPublishedProduct,
   getPublishedProductRef,
+  listCartProducts,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
@@ -21,6 +23,27 @@ import { getActiveStoreBySlug } from "@/server/services/store";
 
 /** The storefront's reads (FER-010): published articles only, no session. */
 export const catalogRouter = {
+  cartProducts: publicProcedure
+    .input(listCartProductsSchema)
+    .handler(async ({ context, input }) => {
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: input.storeSlug,
+      });
+
+      return await listCartProducts(context.db, {
+        currencyCode: store.currencyCode,
+        ids: input.ids,
+        locale: input.locale,
+        storeId: store.id,
+      });
+    })
+    .route({
+      method: "GET",
+      path: "/stores/{storeSlug}/cart-products",
+      summary: "The cart's articles with their current price and stock",
+      tags: ["catalog"],
+    }),
+
   categories: publicProcedure
     .input(listCategoriesSchema)
     .handler(async ({ context, input }) => {
