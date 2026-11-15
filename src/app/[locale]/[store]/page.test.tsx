@@ -158,7 +158,7 @@ describe("generateMetadata", () => {
           },
         },
         description,
-        title: "Sample Store",
+        title: { absolute: "Sample Store" },
       });
     }
   );
@@ -168,7 +168,7 @@ describe("generateMetadata", () => {
 
     const metadata = await generateMetadata({ params: makeParams("es") });
 
-    expect(metadata.title).toBe("Sample Store");
+    expect(metadata.title).toEqual({ absolute: "Sample Store" });
     expect(metadata.description).toBeUndefined();
   });
 

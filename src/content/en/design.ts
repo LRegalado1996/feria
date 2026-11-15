@@ -48,6 +48,7 @@ export const design: Dictionary["design"] = {
     marquee: "Marquee band",
     price: "Price",
     reveal: "Reveal on scroll",
+    shell: "Every store's header and footer",
     type: "Headings",
   },
 };

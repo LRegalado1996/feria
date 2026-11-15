@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import {
   expect,
   IGNORE_HTTPS_ERRORS,
@@ -16,6 +18,15 @@ const ENGLISH = {
   locale: "en",
   tagline: "Jewelry at the fair",
 } as const;
+
+/**
+ * The home's intro, where the tagline is checked: the footer repeats it
+ * (FER-021). The visible one, since a page left by a language switch stays
+ * mounted, hidden.
+ */
+function introOf(page: Page) {
+  return page.getByTestId("store-intro-header").filter({ visible: true });
+}
 
 /** A second palette: every color differs from the default one's. */
 const WARM = {
@@ -96,7 +107,7 @@ test.describe("Store pages", () => {
     // color-mix(in srgb, #fff4e6 74%, #3d1f47), the tagline on the contrast
     // block, as Chromium reports a mixed color: a warm pink. Derived from the
     // default palette instead, it would be a gray with three equal channels.
-    await expect(page.getByText("Joyas en la feria")).toHaveCSS(
+    await expect(introOf(page).getByText("Joyas en la feria")).toHaveCSS(
       "color",
       "color(srgb 0.802196 0.739686 0.739843)"
     );
@@ -115,7 +126,7 @@ test.describe("Store pages", () => {
     await storePage.goto();
 
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
-    await expect(page.getByText("Joyas en la feria")).toBeVisible();
+    await expect(introOf(page).getByText("Joyas en la feria")).toBeVisible();
     await expect(storePage.getDescription()).toHaveText(
       "Anillos y cadenas hechos a mano."
     );
@@ -124,7 +135,7 @@ test.describe("Store pages", () => {
     await storePage.gotoEnglish();
 
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(page.getByText("Jewelry at the fair")).toBeVisible();
+    await expect(introOf(page).getByText("Jewelry at the fair")).toBeVisible();
     await expect(storePage.getDescription()).toHaveText(
       "Handmade rings and chains."
     );
@@ -248,7 +259,7 @@ test.describe("Editing a store", () => {
       "background-color",
       "rgb(255, 244, 230)"
     );
-    await expect(page.getByText("Texto nuevo")).toBeVisible();
+    await expect(introOf(page).getByText("Texto nuevo")).toBeVisible();
 
     // A second edit, now of a page that is cached as found.
     const recolor = await page.request.post("/api/orpc/store/update", {
@@ -278,7 +289,7 @@ test.describe("Editing a store", () => {
       "background-color",
       "rgb(242, 243, 240)"
     );
-    await expect(page.getByText("Joyas en la feria")).toBeVisible();
+    await expect(introOf(page).getByText("Joyas en la feria")).toBeVisible();
   });
 
   test("the API refuses a reserved address and an unreadable palette, and the store keeps its own", async ({
@@ -319,7 +330,7 @@ test.describe("Editing a store", () => {
     await storePage.goto();
 
     await expect(storePage.getHeading(1)).toHaveText("Kept Store");
-    await expect(page.getByText("Joyas en la feria")).toBeVisible();
+    await expect(introOf(page).getByText("Joyas en la feria")).toBeVisible();
   });
 
   test("a signed-out caller cannot edit a store", async ({

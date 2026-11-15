@@ -17,11 +17,17 @@ function setup({
   locale = "es",
   pathname = "/",
   search = "",
-}: { locale?: Locale; pathname?: string; search?: string } = {}) {
+  tone,
+}: {
+  locale?: Locale;
+  pathname?: string;
+  search?: string;
+  tone?: "app" | "bare";
+} = {}) {
   usePathname.mockReturnValue(pathname);
   useSearchParams.mockReturnValue(new URLSearchParams(search));
 
-  renderWithI18n(<LocaleToggle className="custom" />, { locale });
+  renderWithI18n(<LocaleToggle className="custom" tone={tone} />, { locale });
 
   return { link: screen.getByRole("link") };
 }
@@ -85,5 +91,32 @@ describe("LocaleToggle", () => {
 
     expect(link).toHaveAccessibleName("English");
     expect(link.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  test.each([undefined, "app"] as const)(
+    "with tone %s, is the app's ghost button with its icon",
+    (tone) => {
+      const { link } = setup({ tone });
+
+      expect(link).toHaveClass("custom");
+      expect(link.getAttribute("class")).not.toBe("custom");
+      expect(link.querySelector("svg")).not.toBeNull();
+    }
+  );
+
+  test("bare, is a plain link styled only by its className, without the icon", () => {
+    const { link } = setup({
+      pathname: "/lr-market/products",
+      search: "q=aros",
+      tone: "bare",
+    });
+
+    expect(link.getAttribute("class")).toBe("custom");
+    expect(link.querySelector("svg")).toBeNull();
+    expect(link).toHaveAccessibleName("English");
+    expect(link).toHaveAttribute("href", "/en/lr-market/products?q=aros");
+    expect(link).toHaveAttribute("lang", "en");
+    expect(link).toHaveAttribute("hreflang", "en");
+    expect(link).toHaveAttribute("data-slot", "locale-toggle");
   });
 });

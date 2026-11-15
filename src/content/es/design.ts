@@ -51,6 +51,7 @@ export const design = {
     marquee: "Banda en movimiento",
     price: "Precio",
     reveal: "Aparición al bajar",
+    shell: "Encabezado y pie de cada tienda",
     type: "Titulares",
   },
 };
