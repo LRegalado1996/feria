@@ -90,6 +90,28 @@ describe("StoreOrder", () => {
     expect(total()).toBe("TotalUYU 3,000.50");
   });
 
+  test("lets a long title wrap anywhere so its price stays on screen", () => {
+    setup({
+      order: makeOrder({
+        items: [
+          {
+            quantity: 1,
+            title: "Collardeperlascultivadasconcierredeoroyplata",
+            unitPriceAmount: 125_000,
+          },
+        ],
+        totalAmount: 125_000,
+      }),
+    });
+    const [line] = within(screen.getByRole("list")).getAllByRole("listitem");
+
+    expect(line?.firstElementChild).toHaveTextContent(
+      "1 × Collardeperlascultivadasconcierredeoroyplata"
+    );
+    expect(line?.firstElementChild).toHaveClass("min-w-0", "wrap-anywhere");
+    expect(line?.lastElementChild).toHaveClass("shrink-0");
+  });
+
   test("says what happens next, at the masked phone", () => {
     setup();
 

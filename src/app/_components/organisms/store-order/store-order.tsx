@@ -99,7 +99,7 @@ function StoreOrder({
               // change afterwards: they make a stable key.
               key={`${item.title}|${item.quantity}|${item.unitPriceAmount}`}
             >
-              <span>
+              <span className="min-w-0 wrap-anywhere">
                 <span className="font-semibold tabular-nums">
                   {item.quantity} ×
                 </span>{" "}
