@@ -13,10 +13,14 @@ describe("auth config", () => {
     expect(auth.options.rateLimit?.storage).toBe("database");
   });
 
-  test("allows 5 sign-in attempts a minute, and has no sign-up to limit", () => {
+  test("allows 10 sign-in attempts a minute, and has no sign-up to limit", () => {
     expect(auth.options.rateLimit?.customRules).toEqual({
-      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-in/email": { window: 60, max: 10 },
     });
+  });
+
+  test("takes the sign-up path out of Better Auth's router", () => {
+    expect(auth.options.disabledPaths).toEqual(["/sign-up/email"]);
   });
 
   test("closes sign-up: logins are created on the server only", () => {

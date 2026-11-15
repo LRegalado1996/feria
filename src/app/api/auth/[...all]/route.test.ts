@@ -30,6 +30,9 @@ describe("auth route", () => {
     ["GET", GET, "/api/auth/sign-up/email"],
     ["POST", POST, "/api/auth/sign-up"],
     ["POST", POST, "/api/auth/sign-up/social"],
+    ["POST", POST, "/api/auth//sign-up/email"],
+    ["POST", POST, "/api/auth/sign%2Dup/email"],
+    ["POST", POST, "/api/auth/Sign-Up/email"],
   ])(
     "%s %s answers 404 without reaching Better Auth: sign-up is closed",
     async (method, route, path) => {

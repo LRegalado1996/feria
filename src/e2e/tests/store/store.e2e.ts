@@ -202,10 +202,11 @@ test.describe("Store pages", () => {
 });
 
 test.describe("Editing a store", () => {
-  // Signed in as the worker's user: the write procedures need a session.
+  // Signed in as the worker's superadmin: store writes are a superadmin's
+  // (FER-009).
   test("an edit through the API reaches the cached storefront at once: new colors, new texts, and a 404 that becomes a page", async ({
     db,
-    page,
+    superadminPage: page,
   }) => {
     const store = await db.seed.createStore(
       { isActive: false, name: "Edited Store" },
@@ -280,7 +281,7 @@ test.describe("Editing a store", () => {
 
   test("the API refuses a reserved address and an unreadable palette, and the store keeps its own", async ({
     db,
-    page,
+    superadminPage: page,
   }) => {
     const store = await db.seed.createStore({ name: "Kept Store" }, [SPANISH]);
     const valid = {

@@ -11,7 +11,13 @@ import {
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { SEED_MEMBERS, SEED_STORES, SEED_USER, seed } from "./seed";
+import {
+  isLocalDatabase,
+  SEED_MEMBERS,
+  SEED_STORES,
+  SEED_USER,
+  seed,
+} from "./seed";
 
 const { createAccount } = vi.hoisted(() => ({
   createAccount: vi.fn(async (_auth: unknown, values: { email: string }) => ({
@@ -37,11 +43,15 @@ function emailOf(config: unknown): string {
   return renderQuery((config as { where: unknown }).where).params[0] as string;
 }
 
+const LOCAL_URL = "postgresql://feria:secret@localhost:5432/feria";
+
 function setup({
+  databaseUrl = LOCAL_URL,
   existingEmails = [],
   postCount = 0,
   takenSlugs = BOTH_STORES,
 }: {
+  databaseUrl?: string;
   /** The seed logins already in the database, by email. */
   existingEmails?: string[];
   postCount?: number;
@@ -79,7 +89,12 @@ function setup({
     auth,
     db,
     run: async (nodeEnv: string | undefined) =>
-      await seed({ auth: auth as never, db: db as never, nodeEnv }),
+      await seed({
+        auth: auth as never,
+        databaseUrl,
+        db: db as never,
+        nodeEnv,
+      }),
     /** The memberships the seed inserted, as (store id, user id) pairs. */
     memberships: () =>
       db.$.insert.mock.calls.flatMap(([table], index) =>
@@ -197,6 +212,24 @@ describe("seed", () => {
     await run("test");
 
     expect(db.$.insert).not.toHaveBeenCalledWith(post);
+  });
+
+  test("on a remote database (qa) creates the stores but no login, post or membership", async () => {
+    const { db, memberships, run } = setup({
+      databaseUrl:
+        "postgresql://app:secret@ep-qa-123.us-east-2.aws.neon.tech/feria",
+      takenSlugs: [],
+    });
+
+    await expect(run("development")).resolves.toEqual({
+      createdAccounts: [],
+      createdPost: false,
+      createdStores: ["lr-market", "tienda-demo"],
+    });
+    expect(createAccount).not.toHaveBeenCalled();
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalledWith(post);
+    expect(memberships()).toEqual([]);
   });
 
   test("every seed login has a store to land in, except the superadmin who needs none", () => {
@@ -318,5 +351,21 @@ describe("seed", () => {
       { contact: [null, null, null], locales: ["es", "en"] },
       { contact: [null, null, null], locales: ["es", "en"] },
     ]);
+  });
+});
+
+describe("isLocalDatabase", () => {
+  test.each([
+    ["postgresql://u:p@localhost:5432/db", true],
+    ["postgresql://u:p@127.0.0.1:17892/db", true],
+    ["postgresql://u:p@[::1]:5432/db", true],
+    ["postgresql://u:p@db:5432/db", true],
+    ["postgresql://u:p@postgres:5432/e2e_test", true],
+    ["postgresql://u:p@ep-qa-123.us-east-2.aws.neon.tech/db", false],
+    ["postgresql://u:p@localhost.example.com/db", false],
+    ["not a url", false],
+    [undefined, false],
+  ])("%s is local: %s", (url, local) => {
+    expect(isLocalDatabase(url)).toBe(local);
   });
 });

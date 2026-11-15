@@ -126,8 +126,37 @@ export const SEED_STORES = [
 
 interface SeedOptions {
   auth: AccountAuth;
+  /** Where the seed writes: logins with a known password only go to a local one. */
+  databaseUrl: string | undefined;
   db: DatabaseClient;
   nodeEnv: string | undefined;
+}
+
+/**
+ * Hosts that can only be this machine or a container beside it (Docker
+ * Compose's `db`, CI's `postgres` service). qa and previews live on Neon.
+ */
+const LOCAL_DATABASE_HOSTS = new Set([
+  "127.0.0.1",
+  "::1",
+  "[::1]",
+  "db",
+  "localhost",
+  "postgres",
+]);
+
+/**
+ * Whether `databaseUrl` points at a database only this machine reaches. The
+ * seed's logins share one published password and include a superadmin, so a
+ * seed pointed at qa's database (to give it the two stores) must not leave
+ * them there.
+ */
+export function isLocalDatabase(databaseUrl: string | undefined): boolean {
+  if (!databaseUrl || !URL.canParse(databaseUrl)) {
+    return false;
+  }
+
+  return LOCAL_DATABASE_HOSTS.has(new URL(databaseUrl).hostname);
 }
 
 /**
@@ -157,11 +186,11 @@ async function ensureAccount(
 }
 
 /**
- * Development data: a superadmin and two members who can sign in, a first
- * post and two stores the members belong to. Safe to run again: whatever
- * already exists is left alone.
+ * Development data: two stores, and on a local database a superadmin and two
+ * members who can sign in, a first post and the members' memberships. Safe
+ * to run again: whatever already exists is left alone.
  */
-export async function seed({ auth, db, nodeEnv }: SeedOptions) {
+export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
   // No override: known passwords and demo rows must never reach production.
   if (nodeEnv === "production") {
     throw new Error("db:seed refuses to run with NODE_ENV=production");
@@ -169,8 +198,11 @@ export async function seed({ auth, db, nodeEnv }: SeedOptions) {
 
   const accounts = new Map<string, string>();
   const createdAccounts: string[] = [];
+  // A remote database (qa) gets the stores and no login: its superadmin is
+  // created with `pnpm db:create-superadmin`, with a password nobody knows.
+  const seedLogins = isLocalDatabase(databaseUrl);
 
-  for (const account of SEED_ACCOUNTS) {
+  for (const account of seedLogins ? SEED_ACCOUNTS : []) {
     const { created, id } = await ensureAccount({ auth, db }, account);
     accounts.set(account.email, id);
 
@@ -179,11 +211,11 @@ export async function seed({ auth, db, nodeEnv }: SeedOptions) {
     }
   }
 
-  const [posts] = await db.select({ total: count() }).from(post);
-  const createPost = (posts?.total ?? 0) === 0;
   const authorId = accounts.get(SEED_USER.email);
+  const [posts] = await db.select({ total: count() }).from(post);
+  const createPost = authorId !== undefined && (posts?.total ?? 0) === 0;
 
-  if (createPost && authorId) {
+  if (createPost) {
     await db
       .insert(post)
       .values({ name: "Welcome to the feed!", createdById: authorId });

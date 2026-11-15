@@ -79,6 +79,11 @@ describe("createSuperadmin", () => {
       "SUPERADMIN_PASSWORD is required",
     ],
     [
+      "a name over 120 characters",
+      { ...ENV, SUPERADMIN_NAME: "x".repeat(121) },
+      "SUPERADMIN_NAME must be at most 120 characters",
+    ],
+    [
       "a password one character short",
       { ...ENV, SUPERADMIN_PASSWORD: "1234567" },
       "SUPERADMIN_PASSWORD must be at least 8 characters",

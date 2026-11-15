@@ -15,7 +15,12 @@ import { hasSuperadmin } from "@/server/services/access";
  */
 const superadminEnvSchema = z.object({
   SUPERADMIN_EMAIL: z.email("SUPERADMIN_EMAIL must be an email address"),
-  SUPERADMIN_NAME: z.string().trim().min(1).default("Superadmin"),
+  SUPERADMIN_NAME: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120, "SUPERADMIN_NAME must be at most 120 characters")
+    .default("Superadmin"),
   SUPERADMIN_PASSWORD: z
     .string(`SUPERADMIN_PASSWORD is required`)
     .min(

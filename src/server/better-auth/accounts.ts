@@ -1,11 +1,21 @@
 import { ORPCError } from "@orpc/server";
 
+import { isUniqueViolation } from "@/lib/errors/postgres";
 import {
   type CreateAccountValues,
   createAccountSchema,
 } from "@/lib/schemas/access";
 
 import type { auth as appAuth } from "./config";
+
+// The name Postgres gives `user.email`'s unique constraint (migration 0000).
+const EMAIL_UNIQUE_CONSTRAINT = "user_email_unique";
+
+function emailTaken() {
+  return new ORPCError("CONFLICT", {
+    message: "An account with that email already exists",
+  });
+}
 
 /** The part of Better Auth this needs: its internal adapter and hasher. */
 export type AccountAuth = Pick<typeof appAuth, "$context">;
@@ -32,20 +42,37 @@ export async function createAccount(
   auth: AccountAuth,
   values: CreateAccountValues
 ): Promise<CreatedAccount> {
-  const { email, name, password, role } = createAccountSchema.parse(values);
-  const context = await auth.$context;
+  const parsed = createAccountSchema.safeParse(values);
 
-  if (await context.internalAdapter.findUserByEmail(email)) {
-    throw new ORPCError("CONFLICT", {
-      message: "An account with that email already exists",
+  if (!parsed.success) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "The account's email, name, password or role is not valid",
     });
   }
 
+  const { email, name, password, role } = parsed.data;
+  const context = await auth.$context;
+
+  if (await context.internalAdapter.findUserByEmail(email)) {
+    throw emailTaken();
+  }
+
   const hash = await context.password.hash(password);
-  const user = await context.internalAdapter.createUser(
-    { email, emailVerified: false, name, role },
-    { method: "admin" }
-  );
+  let user: Awaited<ReturnType<typeof context.internalAdapter.createUser>>;
+
+  try {
+    user = await context.internalAdapter.createUser(
+      { email, emailVerified: false, name, role },
+      { method: "admin" }
+    );
+  } catch (error) {
+    // Another request created the same email between the check and here.
+    if (isUniqueViolation(error, EMAIL_UNIQUE_CONSTRAINT)) {
+      throw emailTaken();
+    }
+
+    throw error;
+  }
 
   try {
     await context.internalAdapter.linkAccount({

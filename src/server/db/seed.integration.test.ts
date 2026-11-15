@@ -30,7 +30,12 @@ const createdStoreSlugs: string[] = [];
 
 /** Runs the seed on the worker's database and keeps what it says it created. */
 async function runSeed() {
-  const result = await seed({ auth, db, nodeEnv: "test" });
+  const result = await seed({
+    auth,
+    databaseUrl: process.env.DATABASE_URL,
+    db,
+    nodeEnv: "test",
+  });
   createdStoreSlugs.push(...result.createdStores);
 
   return result;
@@ -106,8 +111,18 @@ test("leaves two active stores with different palettes and texts in both languag
   const run = db.transaction(async (tx) => {
     await tx.delete(store).where(inArray(store.slug, SEED_SLUGS));
 
-    const first = await seed({ auth, db: tx, nodeEnv: "test" });
-    const second = await seed({ auth, db: tx, nodeEnv: "test" });
+    const first = await seed({
+      auth,
+      databaseUrl: process.env.DATABASE_URL,
+      db: tx,
+      nodeEnv: "test",
+    });
+    const second = await seed({
+      auth,
+      databaseUrl: process.env.DATABASE_URL,
+      db: tx,
+      nodeEnv: "test",
+    });
 
     expect(first.createdStores).toEqual(["lr-market", "tienda-demo"]);
     expect(second.createdStores).toEqual([]);

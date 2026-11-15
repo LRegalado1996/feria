@@ -32,6 +32,9 @@ export const auth = betterAuth({
   trustedOrigins: getTrustedOrigins(baseURL),
   // Better Auth's default logger prints raw errors, session tokens included.
   logger: betterAuthLogger,
+  // Closed sign-up (FER-009): also out of Better Auth's own router and the
+  // OpenAPI reference. The route answers 404 for every other spelling.
+  disabledPaths: ["/sign-up/email"],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
@@ -74,11 +77,11 @@ export const auth = betterAuth({
     // instance, so each one would grant its own quota.
     storage: "database",
     customRules: {
-      // Five tries a minute per IP: enough for a mistyped password on a
-      // phone, too few to guess one.
+      // Ten tries a minute per IP: the fair's staff can share one Wi-Fi and
+      // mistype on a phone, and it is still far too few to guess a password.
       "/sign-in/email": {
         window: 60,
-        max: 5,
+        max: 10,
       },
     },
   },

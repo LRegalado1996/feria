@@ -13,15 +13,31 @@ function makeValues(overrides: Record<string, unknown> = {}) {
 }
 
 /** A Better Auth context double: the adapter and hasher `createAccount` calls. */
+/** What Postgres raises when the email's unique constraint is hit. */
+function emailUniqueViolation() {
+  return Object.assign(new Error("duplicate key"), {
+    code: "23505",
+    constraint: "user_email_unique",
+  });
+}
+
 function setup({
+  createFails = null,
   existing = null,
   linkFails = false,
-}: { existing?: { id: string } | null; linkFails?: boolean } = {}) {
+}: {
+  createFails?: Error | null;
+  existing?: { id: string } | null;
+  linkFails?: boolean;
+} = {}) {
   const internalAdapter = {
-    createUser: vi.fn(async (user: { email: string; name: string }) => ({
-      ...user,
-      id: "new-user",
-    })),
+    createUser: vi.fn(async (user: { email: string; name: string }) => {
+      if (createFails) {
+        throw createFails;
+      }
+
+      return { ...user, id: "new-user" };
+    }),
     deleteUser: vi.fn(async (_id: string) => undefined),
     findUserByEmail: vi.fn(async (_email: string) => existing),
     linkAccount: vi.fn(async (_account: Record<string, string>) => {
@@ -84,6 +100,21 @@ describe("createAccount", () => {
     expect(internalAdapter.createUser).not.toHaveBeenCalled();
   });
 
+  test("answers CONFLICT when another request created the same email after the check", async () => {
+    const { create } = setup({ createFails: emailUniqueViolation() });
+
+    await expect(create()).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "An account with that email already exists",
+    });
+  });
+
+  test("lets any other failure to create the user propagate", async () => {
+    const { create } = setup({ createFails: new Error("connection lost") });
+
+    await expect(create()).rejects.toThrow("connection lost");
+  });
+
   test("deletes the user again when its credential cannot be stored", async () => {
     const { create, internalAdapter } = setup({ linkFails: true });
 
@@ -101,7 +132,10 @@ describe("createAccount", () => {
   ])("refuses %s before touching the database", async (_case, overrides) => {
     const { create, internalAdapter } = setup();
 
-    await expect(create(overrides)).rejects.toMatchObject({ name: "ZodError" });
+    await expect(create(overrides)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The account's email, name, password or role is not valid",
+    });
     expect(internalAdapter.findUserByEmail).not.toHaveBeenCalled();
   });
 

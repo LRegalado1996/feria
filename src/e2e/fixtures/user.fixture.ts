@@ -42,7 +42,6 @@ export interface CreatedRows {
   postIds: number[];
   /** Why a created row's id could not be read: that row leaks. */
   unreadable: string[];
-  userEmails: string[];
 }
 
 export interface UserFixtures {
@@ -54,9 +53,12 @@ export interface UserFixtures {
   freshAuthenticatedPage: Page;
   /** Who the worker's user is. */
   identity: Identity;
+  /** A page signed in as the worker's superadmin, in its own context. */
+  superadminPage: Page;
 }
 
 interface WorkerFixtures {
+  workerSuperadmin: Identity & { storageState: StorageState };
   workerUser: Identity & { storageState: StorageState };
 }
 
@@ -84,7 +86,8 @@ function workerBaseURL(): string {
  */
 async function provisionUser(
   index: number,
-  baseURL: string
+  baseURL: string,
+  role: "member" | "superadmin" = "member"
 ): Promise<Identity> {
   const connectionString = process.env.DATABASE_URL;
 
@@ -92,9 +95,12 @@ async function provisionUser(
     throw new Error("DATABASE_URL is required for e2e tests");
   }
 
+  // One login per worker and role (FER-009): a member with no store, and a
+  // superadmin for the specs that call platform procedures.
+  const prefix = role === "superadmin" ? "e2e-admin" : "e2e";
   const identity = {
-    email: `e2e-w${index}@example.com`,
-    name: `E2E User w${index}`,
+    email: `${prefix}-w${index}@example.com`,
+    name: `E2E ${role === "superadmin" ? "Superadmin" : "User"} w${index}`,
     password: PASSWORD,
   };
   const pool = new Pool({ connectionString, max: 1 });
@@ -110,12 +116,18 @@ async function provisionUser(
       return { ...identity, id: existing.id };
     }
 
+    // The app closes sign-up (FER-009); this fixture-local instance does not,
+    // and the role is set after, as `input: false` keeps it out of sign-up.
     const auth = betterAuth({
       baseURL,
       database: drizzleAdapter(db, { provider: "pg", schema }),
       emailAndPassword: { enabled: true },
     });
     const { user } = await auth.api.signUpEmail({ body: identity });
+    await db
+      .update(schema.user)
+      .set({ role })
+      .where(eq(schema.user.id, user.id));
 
     return { ...identity, id: user.id };
   } finally {
@@ -152,7 +164,7 @@ async function signIn(
 }
 
 /**
- * Records the rows a page creates through the UI (a post, a signed-up user)
+ * Records the rows a page creates through the UI (a post)
  * from the responses that created them, so teardown deletes exactly those.
  */
 function captureCreatedRows(page: Page, rows: CreatedRows): void {
@@ -200,6 +212,27 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     { scope: "worker" },
   ],
 
+  workerSuperadmin: [
+    async (
+      { browser }: { browser: Browser },
+      use: (user: WorkerFixtures["workerSuperadmin"]) => Promise<void>,
+      workerInfo: WorkerInfo
+    ) => {
+      const baseURL = workerBaseURL();
+      const identity = await provisionUser(
+        workerInfo.parallelIndex,
+        baseURL,
+        "superadmin"
+      );
+      const context = await signIn(browser, baseURL, identity);
+      const storageState = await context.storageState();
+      await context.close();
+
+      await use({ ...identity, storageState });
+    },
+    { scope: "worker" },
+  ],
+
   identity: async ({ workerUser }, use) => {
     const { storageState: _storageState, ...identity } = workerUser;
     await use(identity);
@@ -215,7 +248,7 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
 
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
   createdRows: async ({}, use) => {
-    await use({ pending: [], postIds: [], unreadable: [], userEmails: [] });
+    await use({ pending: [], postIds: [], unreadable: [] });
   },
 
   page: async ({ createdRows, page }, use) => {
@@ -231,6 +264,22 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
       baseURL: requireBaseURL(baseURL),
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerUser.storageState,
+    });
+    const page = await context.newPage();
+    captureCreatedRows(page, createdRows);
+
+    await use(page);
+    await context.close();
+  },
+
+  superadminPage: async (
+    { baseURL, browser, createdRows, workerSuperadmin },
+    use
+  ) => {
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      storageState: workerSuperadmin.storageState,
     });
     const page = await context.newPage();
     captureCreatedRows(page, createdRows);
