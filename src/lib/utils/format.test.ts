@@ -7,7 +7,7 @@ import {
   formatPrice,
   formatRelativeTime,
   fromPlainNumberText,
-  toPlainNumberText,
+  readTypedNumber,
 } from "./format";
 
 const NOW = new Date("2024-06-15T12:00:00Z").getTime();
@@ -137,27 +137,87 @@ describe("formatDate", () => {
   );
 });
 
-describe("toPlainNumberText", () => {
+describe("readTypedNumber", () => {
   test.each([
-    ["1,500", "1500"],
-    ["1,500.25", "1500.25"],
-    ["1,234,567", "1234567"],
-    ["-0.5", "-0.5"],
-    ["12", "12"],
-    ["", ""],
-  ])("reads the English %j as %j", (typed, plain) => {
-    expect(toPlainNumberText(typed, "en")).toBe(plain);
+    // FER-035: either separator before one or two digits is the decimal point.
+    ["12,50", 12.5],
+    ["12.50", 12.5],
+    ["12,5", 12.5],
+    ["12.5", 12.5],
+    ["0,05", 0.05],
+    [",5", 0.5],
+    // Exactly three digits after one separator group thousands, both ways.
+    ["1.500", 1500],
+    ["1,500", 1500],
+    ["1.234.567", 1_234_567],
+    ["1,234,567", 1_234_567],
+    // Both separators: the last one is the decimal point.
+    ["1.500,25", 1500.25],
+    ["1,500.25", 1500.25],
+    ["1.234.567,8", 1_234_567.8],
+    // More than three decimals cannot be grouping.
+    ["1,5000", 1.5],
+    // Pasted with spaces, no-break spaces or narrow no-break spaces.
+    [" 1 500 ", 1500],
+    ["1\u00A0500,50", 1500.5],
+    ["1\u202F500", 1500],
+    // A separator still waiting for its digits reads as the number so far.
+    ["12,", 12],
+    ["12.", 12],
+    ["1.234,", 1234],
+    ["-12,5", -12.5],
+    ["-0", 0],
+    ["1500", 1500],
+    ["0", 0],
+  ])("reads %j as %d", (typed, value) => {
+    expect(readTypedNumber(typed)).toStrictEqual({ kind: "number", value });
+  });
+
+  test.each(["", "-", ".", ",", "-.", "  "])(
+    "reads %j as no number yet",
+    (typed) => {
+      expect(readTypedNumber(typed)).toStrictEqual({ kind: "empty" });
+    }
+  );
+
+  test.each([
+    // Could be a decimal or a group: refused, never guessed.
+    "0,500",
+    "0.500",
+    ",500",
+    "1234,567",
+    "1234.567",
+    // Groups that are not three digits.
+    "1.23.4",
+    "1,23,456",
+    "12.34.567",
+    "1.2345.678",
+    // The decimal point given twice, or before the groups.
+    "1.500,25,5",
+    "1,500.25.5",
+    "1,5.000",
+    "1.234.",
+    // Not a figure at all.
+    "1a",
+    "1-2",
+    "--1",
+  ])("refuses %j as unreadable", (typed) => {
+    expect(readTypedNumber(typed)).toStrictEqual({
+      kind: "refused",
+      reason: "unreadable",
+    });
   });
 
   test.each([
-    ["1.500", "1500"],
-    ["1.500,25", "1500.25"],
-    ["1.234.567", "1234567"],
-    ["-0,5", "-0.5"],
-    ["12", "12"],
-    ["", ""],
-  ])("reads the Spanish %j as %j", (typed, plain) => {
-    expect(toPlainNumberText(typed, "es")).toBe(plain);
+    ["12,5", { kind: "refused", reason: "decimal" }],
+    ["12,", { kind: "refused", reason: "decimal" }],
+    ["1.500", { kind: "number", value: 1500 }],
+    ["1,500", { kind: "number", value: 1500 }],
+    ["42", { kind: "number", value: 42 }],
+  ])("in a whole-number field reads %j as %j", (typed, reading) => {
+    expect(readTypedNumber(typed, { allowDecimal: false })).toStrictEqual(
+      reading
+    );
   });
 });
 
@@ -179,11 +239,11 @@ describe("fromPlainNumberText", () => {
   );
 
   test.each(["es", "en"] as const)(
-    "what it writes in %s, toPlainNumberText reads back",
+    "what it writes in %s, readTypedNumber reads back",
     (locale) => {
       expect(
-        toPlainNumberText(fromPlainNumberText("-1234.5", locale), locale)
-      ).toBe("-1234.5");
+        readTypedNumber(fromPlainNumberText("-1234.5", locale))
+      ).toStrictEqual({ kind: "number", value: -1234.5 });
     }
   );
 });

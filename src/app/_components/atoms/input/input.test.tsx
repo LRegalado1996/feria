@@ -7,6 +7,9 @@ import { renderWithI18n } from "@/test/i18n";
 
 import { Input, type TextInputProps } from "./input";
 
+const UNREADABLE_EN =
+  "We couldn't read this number. Type it without a thousands separator, for example 1500 or 12.50.";
+
 function setupText(props: TextInputProps = {}) {
   const user = userEvent.setup();
   renderWithI18n(<Input aria-label="Field" {...props} />);
@@ -35,6 +38,7 @@ function setupNumber({
       <>
         <Input
           allowDecimal={allowDecimal}
+          aria-describedby="form-hint"
           aria-label="Amount"
           onBlur={onBlur}
           onValueChange={(next) => {
@@ -119,13 +123,38 @@ describe("Input (number)", () => {
     ]);
   });
 
-  test("reads and shows Spanish notation on a Spanish page: 1.500,5 is fifteen hundred and a half", async () => {
+  test.each([
+    ["es", "12,50", 12.5, "12,5"],
+    ["es", "12.50", 12.5, "12,5"],
+    ["en", "12,50", 12.5, "12.5"],
+    ["en", "12.50", 12.5, "12.5"],
+    ["es", "1.500", 1500, "1500"],
+    ["en", "1,500", 1500, "1500"],
+    ["en", "1.500,5", 1500.5, "1500.5"],
+  ] as const)(
+    "on a %s page reads %j as %d and shows it as %j once focus leaves",
+    async (locale, typed, value, shown) => {
+      const { input, onValueChange, user } = setupNumber({ locale });
+
+      await user.type(input, typed);
+
+      expect(input).toHaveValue(typed);
+      expect(onValueChange).toHaveBeenLastCalledWith(value);
+
+      await user.tab();
+
+      expect(input).toHaveValue(shown);
+      expect(input).not.toHaveAttribute("aria-invalid");
+    }
+  );
+
+  test("reads a pasted figure in the other notation without changing its magnitude", async () => {
     const { input, onValueChange, user } = setupNumber({ locale: "es" });
 
-    await user.type(input, "1.500,5");
+    await user.click(input);
+    await user.paste("12.50");
 
-    expect(input).toHaveValue("1500,5");
-    expect(onValueChange).toHaveBeenLastCalledWith(1500.5);
+    expect(onValueChange).toHaveBeenLastCalledWith(12.5);
   });
 
   test("on a Spanish page, shows an outside value with a decimal comma and settles dangling text to it", async () => {
@@ -147,23 +176,63 @@ describe("Input (number)", () => {
     expect(input).toHaveValue("-3");
   });
 
-  test("reads the locale's grouping, so the English 1,500 is fifteen hundred", async () => {
+  test("refuses an ambiguous figure with a visible reason once focus leaves, and keeps it to be corrected", async () => {
     const { input, onValueChange, user } = setupNumber();
 
-    await user.type(input, "1,500");
+    await user.type(input, "0,500");
 
-    expect(input).toHaveValue("1500");
-    expect(onValueChange).toHaveBeenLastCalledWith(1500);
+    expect(onValueChange).toHaveBeenLastCalledWith(null);
+    expect(screen.queryByText(UNREADABLE_EN)).not.toBeInTheDocument();
+
+    await user.tab();
+
+    const message = screen.getByText(UNREADABLE_EN);
+    expect(input).toHaveValue("0,500");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute(
+      "aria-describedby",
+      `form-hint ${message.id}`
+    );
+
+    await user.clear(input);
+    await user.type(input, "0,50");
+
+    expect(onValueChange).toHaveBeenLastCalledWith(0.5);
+    expect(screen.queryByText(UNREADABLE_EN)).not.toBeInTheDocument();
+    expect(input).toHaveAttribute("aria-describedby", "form-hint");
+    expect(input).not.toHaveAttribute("aria-invalid");
   });
 
-  test("refuses letters, and a decimal point in an integer field", async () => {
+  test("says why in Spanish on a Spanish page", async () => {
+    const { input, user } = setupNumber({ locale: "es" });
+
+    await user.type(input, "1.23.4");
+    await user.tab();
+
+    expect(
+      screen.getByText(
+        "No pudimos leer este número. Escribilo sin separador de miles, por ejemplo 1500 o 12,50."
+      )
+    ).toBeVisible();
+  });
+
+  test("refuses letters as they are typed, and a decimal in a whole-number field with its reason", async () => {
     const { input, onValueChange, user } = setupNumber({ allowDecimal: false });
 
-    await user.type(input, "4a.2");
+    await user.type(input, "4a2");
 
     expect(input).toHaveAttribute("inputmode", "numeric");
     expect(input).toHaveValue("42");
     expect(onValueChange).toHaveBeenLastCalledWith(42);
+
+    await user.type(input, ",5");
+    await user.tab();
+
+    expect(onValueChange).toHaveBeenLastCalledWith(null);
+    expect(input).toHaveValue("42,5");
+    expect(
+      screen.getByText("This field takes whole numbers only.")
+    ).toBeVisible();
   });
 
   test("settles dangling text to the value when focus leaves", async () => {
@@ -184,6 +253,17 @@ describe("Input (number)", () => {
     await user.click(screen.getByRole("button", { name: "Set 42" }));
 
     expect(input).toHaveValue("42");
+  });
+
+  test("a value set from outside replaces a refused figure and its reason", async () => {
+    const { input, user } = setupNumber();
+
+    await user.type(input, "0,500");
+    await user.tab();
+    await user.click(screen.getByRole("button", { name: "Set 42" }));
+
+    expect(input).toHaveValue("42");
+    expect(screen.queryByText(UNREADABLE_EN)).not.toBeInTheDocument();
   });
 
   test("shows NaN as an empty field", () => {

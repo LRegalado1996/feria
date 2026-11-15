@@ -157,33 +157,134 @@ export function formatDate(date: Date, locale: Locale): string {
   return dateFormat(INTL_LOCALES[locale]).format(date);
 }
 
-const numberSeparators = cached((tag: string) => {
-  const parts = new Intl.NumberFormat(tag).formatToParts(12_345.6);
-  const separator = (type: "decimal" | "group") =>
-    parts.find((part) => part.type === type)?.value ?? "";
+const decimalSeparator = cached(
+  (tag: string) =>
+    new Intl.NumberFormat(tag)
+      .formatToParts(1.5)
+      .find((part) => part.type === "decimal")?.value ?? "."
+);
 
-  return { decimal: separator("decimal"), group: separator("group") };
-});
+/** What a number field's text stands for. */
+export type TypedNumber =
+  | { kind: "empty" }
+  | { kind: "number"; value: number }
+  | { kind: "refused"; reason: "decimal" | "unreadable" };
+
+// Spaces, no-break spaces and narrow no-break spaces: what a pasted figure
+// groups its thousands with in several languages.
+const SPACES = /[\s\u00A0\u202F]/gu;
+const DIGITS_AND_SEPARATORS = /^[\d.,]+$/u;
+const GROUPED_BY_DOT = /^[1-9]\d{0,2}(?:\.\d{3})+$/u;
+const GROUPED_BY_COMMA = /^[1-9]\d{0,2}(?:,\d{3})+$/u;
+const THOUSANDS_DIGITS = 3;
+
+/** The integer digits of `text` when it is grouped by `separator`, or null. */
+function readGrouped(text: string, separator: "," | "."): string | null {
+  const grouped = separator === "." ? GROUPED_BY_DOT : GROUPED_BY_COMMA;
+  return grouped.test(text) ? text.replaceAll(separator, "") : null;
+}
 
 /**
- * What a user typed into a number field, in their language's notation, as the
- * plain `-1234.5` text `Number()` reads: grouping separators dropped, the
- * decimal separator turned into a dot. "1.500,5" in Spanish and "1,500.5" in
- * English are both 1500.5; hard-coding either convention would read the other
- * as 1.5005.
+ * What a person typed or pasted into a number field, whatever the page's
+ * language and whatever keypad their phone shows (FER-035). The keypad follows
+ * the phone's region, not the page, so the notation cannot come from the
+ * locale: either separator is read the same way on `/` and on `/en`.
+ *
+ * - One separator followed by one or two digits (or none yet) is the decimal
+ *   point: `12,50` and `12.50` are twelve and a half.
+ * - One separator followed by exactly three digits groups thousands, the way a
+ *   Uruguayan writes a price: `1.500` and `1,500` are fifteen hundred. A price
+ *   never has three decimals.
+ * - Both separators: the last one is the decimal point and the other groups
+ *   thousands (`1.500,25`, `1,500.25`).
+ * - Anything else that could be read two ways (`0,500`, `1.23.4`, `1234,567`)
+ *   is refused instead of guessed, so a value never changes magnitude
+ *   silently.
  */
-export function toPlainNumberText(typed: string, locale: Locale): string {
-  const { decimal, group } = numberSeparators(INTL_LOCALES[locale]);
+export function readTypedNumber(
+  typed: string,
+  { allowDecimal = true }: { allowDecimal?: boolean } = {}
+): TypedNumber {
+  const compact = typed.replaceAll(SPACES, "");
+  const negative = compact.startsWith("-");
+  const body = negative ? compact.slice(1) : compact;
 
-  return typed.replaceAll(group, "").replaceAll(decimal, ".");
+  if (body === "" || body === "." || body === ",") {
+    return { kind: "empty" };
+  }
+
+  if (!DIGITS_AND_SEPARATORS.test(body)) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  const reading = readDigits(body);
+
+  if (reading === null) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  if (reading.fraction !== null && !allowDecimal) {
+    return { kind: "refused", reason: "decimal" };
+  }
+
+  // A trailing 0 completes a fraction still being typed ("12," is "12.0")
+  // without changing one that is there ("12,5" is "12.50"), and a leading one
+  // an integer part left out (",5" is "0.5").
+  const value = Number(
+    `${negative ? "-" : ""}0${reading.integer}.${reading.fraction ?? ""}0`
+  );
+
+  // `-0` reads back as "0" anyway; a field never holds a negative zero.
+  return { kind: "number", value: value === 0 ? 0 : value };
+}
+
+/** The integer and fraction digits of an unsigned figure, or null. */
+function readDigits(
+  body: string
+): { fraction: string | null; integer: string } | null {
+  const lastSeparatorAt = Math.max(
+    body.lastIndexOf("."),
+    body.lastIndexOf(",")
+  );
+
+  if (lastSeparatorAt === -1) {
+    return { integer: body, fraction: null };
+  }
+
+  const last = body[lastSeparatorAt] === "." ? "." : ",";
+  const other = last === "." ? "," : ".";
+  const before = body.slice(0, lastSeparatorAt);
+  const after = body.slice(lastSeparatorAt + 1);
+
+  if (before.includes(other)) {
+    // Both separators: the last is the decimal point, the other groups.
+    const integer = readGrouped(before, other);
+    return integer === null || before.includes(last)
+      ? null
+      : { integer, fraction: after };
+  }
+
+  if (before.includes(last)) {
+    // The same separator more than once can only group thousands.
+    const integer = readGrouped(body, last);
+    return integer === null ? null : { integer, fraction: null };
+  }
+
+  if (after.length === THOUSANDS_DIGITS) {
+    // `1.500` is fifteen hundred; `0,500` or `1234,567` could be either.
+    const integer = readGrouped(body, last);
+    return integer === null ? null : { integer, fraction: null };
+  }
+
+  return { integer: before, fraction: after };
 }
 
 /**
  * The other direction: plain `-1234.5` text written with the language's
  * decimal separator and no grouping ("-1234,5" in Spanish), which is what a
- * number field shows while it is being typed in. `toPlainNumberText` reads it
- * back to the same number.
+ * number field shows once focus leaves it. `readTypedNumber` reads it back to
+ * the same number.
  */
 export function fromPlainNumberText(plain: string, locale: Locale): string {
-  return plain.replace(".", numberSeparators(INTL_LOCALES[locale]).decimal);
+  return plain.replace(".", decimalSeparator(INTL_LOCALES[locale]));
 }

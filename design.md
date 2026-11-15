@@ -80,7 +80,7 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - **Never discard typed input.** Reset only on success (`onSuccess`, or after `mutateAsync` resolves); a failure keeps the text and says why. Never silently clamp or default.
 - After a save, `form.reset(storedRow)` and key the form by entity: react-hook-form ignores new `defaultValues`.
 - An error on a hidden tab or step brings the user to it; `noValidate` so zod owns messages.
-- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing; the decimal separator follows the page's language (a comma in Spanish, a dot in English).
+- **Numeric inputs** hold `number | null` and emit `null` when cleared; callers use `?? current`, never `?? 0`; the schema rejects empty before coercing. What is typed is read the same in either language, whatever keypad the phone shows (`readTypedNumber`): one separator before one or two digits is the decimal point, before three it groups thousands, and a figure that could be read two ways is refused with its reason under the field once focus leaves, never guessed. On blur the field shows the value in the page's notation (a decimal comma in Spanish, a dot in English).
 - **Narrow Radix values:** `onValueChange` returns any string. `safeParse` it and ignore unknowns and the `""` echo.
 - Never ask users to type internal ids; don't prefill fields that decide money or dates.
 
