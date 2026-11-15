@@ -28,6 +28,10 @@ export const env = createEnv({
     SENTRY_PROJECT: z.string().optional(),
     // Unset: /api/health is public. Set: callers present it (bearer or ?secret=).
     HEALTH_SECRET: z.string().min(16).optional(),
+    // The launch switch (FER-034, src/lib/env/launch.ts). Unset: production
+    // is closed behind the coming-soon page and everything else is open.
+    // `true` in production opens the store; `false` closes any environment.
+    STOREFRONT_LAUNCHED: z.enum(["true", "false"]).optional(),
     // Vercel Blob (article, banner and logo images). Production has its own
     // store; qa, previews and local runs share a second one. Optional until
     // the upload pipeline reads it (FER-011).
@@ -64,6 +68,7 @@ export const env = createEnv({
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
     HEALTH_SECRET: process.env.HEALTH_SECRET,
+    STOREFRONT_LAUNCHED: process.env.STOREFRONT_LAUNCHED,
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
   },

@@ -12,8 +12,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ORIGIN = "http://localhost:3000";
 
 /** What the proxy did with a page request: the three outcomes it has. */
-async function route(path: string) {
-  const response = await proxy(new NextRequest(`${ORIGIN}${path}`));
+async function route(path: string, headers: Record<string, string> = {}) {
+  const response = await proxy(
+    new NextRequest(`${ORIGIN}${path}`, { headers })
+  );
 
   return {
     // evlog types its response by the two header methods it uses.
@@ -132,6 +134,116 @@ describe("proxy: page requests", () => {
       });
     }
   );
+});
+
+describe("proxy: the launch switch", () => {
+  const redirect = (target: string) => ({
+    status: 307,
+    redirectedTo: `${ORIGIN}${target}`,
+    rewrittenTo: null,
+    passedThrough: false,
+    requestId: null,
+  });
+
+  function close() {
+    vi.stubEnv("STOREFRONT_LAUNCHED", "false");
+  }
+
+  test.each([
+    ["/", "/coming-soon"],
+    ["/lr-market", "/coming-soon"],
+    ["/lr-market/collar-de-perlas?color=dorado", "/coming-soon"],
+    ["/es/lr-market", "/coming-soon"],
+    ["/design", "/coming-soon"],
+    // Only the admin itself stays open, not a page that starts like it.
+    ["/administracion", "/coming-soon"],
+    ["/en", "/en/coming-soon"],
+    ["/en/lr-market/pearl-necklace?ref=qr", "/en/coming-soon"],
+  ])(
+    "closed, temporarily redirects %s to %s, in its language and without its query",
+    async (path, target) => {
+      close();
+
+      expect(await route(path)).toEqual(redirect(target));
+    }
+  );
+
+  test.each([
+    ["/coming-soon", "/es/coming-soon"],
+    ["/admin", "/es/admin"],
+    ["/admin/articles/new", "/es/admin/articles/new"],
+  ])(
+    "closed, still serves %s (rewritten to %s like any Spanish page)",
+    async (path, rewritten) => {
+      close();
+
+      expect(await route(path)).toMatchObject({
+        status: 200,
+        redirectedTo: null,
+        rewrittenTo: `${ORIGIN}${rewritten}`,
+      });
+    }
+  );
+
+  test.each(["/en/coming-soon", "/en/admin", "/en/admin/orders"])(
+    "closed, still lets %s through",
+    async (path) => {
+      close();
+
+      expect(await route(path)).toMatchObject({
+        status: 200,
+        redirectedTo: null,
+        passedThrough: true,
+      });
+    }
+  );
+
+  test.each(["/api/health", "/api/orpc/post/create", "/api/auth/sign-in"])(
+    "closed, never touches %s",
+    async (path) => {
+      close();
+
+      expect(await route(path)).toMatchObject({
+        status: 200,
+        redirectedTo: null,
+        passedThrough: true,
+      });
+    }
+  );
+
+  test.each([
+    ["/coming-soon", "/"],
+    ["/coming-soon?ref=qr", "/"],
+    ["/es/coming-soon", "/"],
+    ["/en/coming-soon", "/en"],
+  ])("open, the coming-soon page %s leads home to %s", async (path, target) => {
+    expect(await route(path)).toEqual(redirect(target));
+  });
+
+  test("is closed on production until the variable says otherwise", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+
+    expect(await route("/")).toEqual(redirect("/coming-soon"));
+
+    vi.stubEnv("STOREFRONT_LAUNCHED", "true");
+
+    expect(await route("/")).toMatchObject({
+      redirectedTo: null,
+      rewrittenTo: `${ORIGIN}/es`,
+    });
+  });
+
+  test("a browser test's header decides for its request on a server that opted in, and for nobody else", async () => {
+    const header = { "x-e2e-storefront-launched": "false" };
+
+    // Not opted in: a visitor's header changes nothing.
+    expect(await route("/", header)).toMatchObject({ redirectedTo: null });
+
+    vi.stubEnv("E2E_STOREFRONT_LAUNCH_OVERRIDE", "true");
+
+    expect(await route("/", header)).toEqual(redirect("/coming-soon"));
+    expect(await route("/")).toMatchObject({ redirectedTo: null });
+  });
 });
 
 describe("proxy matcher", () => {

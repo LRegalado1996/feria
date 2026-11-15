@@ -11,6 +11,7 @@ import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { StorePriceTag } from "@/app/_components/atoms/store-price-tag";
 import { StoreReveal } from "@/app/_components/atoms/store-reveal";
 import { StoreArticleCard } from "@/app/_components/molecules/store-article-card";
+import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import { StoreSlider } from "@/app/_components/molecules/store-slider";
 import { type Dictionary, getDictionary } from "@/content";
@@ -86,7 +87,7 @@ export default async function DesignPage({ params }: DesignPageProps) {
     notFound();
   }
 
-  const { design, storefront } = getDictionary(locale);
+  const { comingSoon, design, storefront } = getDictionary(locale);
   const { sample, sections } = design;
   const heroLines = [sample.hero.lineOne, sample.hero.lineTwo];
   const sectionLines = [sample.section.lineOne, sample.section.lineTwo];
@@ -274,6 +275,16 @@ export default async function DesignPage({ params }: DesignPageProps) {
         </h2>
         <StoreMarquee items={marquee} tone="contrast" />
         <StoreMarquee items={marquee} tone="accent" />
+      </section>
+
+      <section className={SECTION_CLASS} data-testid="design-bubbles">
+        <h2 className={SECTION_TITLE_CLASS}>{sections.bubbles}</h2>
+        {/* Positioned and tall: the burst is drawn over this block. */}
+        <div className="relative flex min-h-80 items-start bg-store-contrast p-6">
+          <StoreBubbles label={comingSoon.bubbles}>
+            <StoreLogo className="h-12" variant="mark" />
+          </StoreBubbles>
+        </div>
       </section>
 
       <section className={SECTION_CLASS} data-testid="design-reveal">

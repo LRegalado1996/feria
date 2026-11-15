@@ -101,6 +101,7 @@ describe("DesignPage", () => {
         "Count-up",
         "Article card and slider",
         "Marquee band",
+        "Bubbles",
         "Reveal on scroll",
       ],
     ],
@@ -116,6 +117,7 @@ describe("DesignPage", () => {
         "Número que cuenta",
         "Tarjeta de artículo y carrusel",
         "Banda en movimiento",
+        "Burbujas",
         "Aparición al bajar",
       ],
     ],
@@ -343,6 +345,20 @@ describe("DesignPage", () => {
       ["contrast", "LR MarketJewelry and bubble gunsChristmas fair"],
       ["accent", "LR MarketJewelry and bubble gunsChristmas fair"],
     ]);
+  });
+
+  test("shows the bubbles blown from the logo, on a contrast block that holds the burst", async () => {
+    await setup();
+
+    const section = screen.getByTestId("design-bubbles");
+    const button = within(section).getByRole("button", {
+      name: "LR Market: make bubbles",
+    });
+
+    expect(button.parentElement).toHaveClass("relative", "bg-store-contrast");
+    expect(
+      button.parentElement?.querySelector('[data-slot="store-bubbles-layer"]')
+    ).toBeInTheDocument();
   });
 
   test("ends with a block that reveals on scroll", async () => {

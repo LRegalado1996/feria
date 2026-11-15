@@ -54,6 +54,25 @@ export abstract class BasePage {
     );
   }
 
+  /** The document's language, which screen readers and search engines read. */
+  async expectDocumentLanguage(lang: "en" | "es"): Promise<void> {
+    await expect(this.page.locator("html")).toHaveAttribute("lang", lang);
+  }
+
+  /** The page is never wider than the window it is shown in. */
+  async expectNoHorizontalScroll(): Promise<void> {
+    await expect
+      .poll(
+        async () =>
+          await this.page.evaluate(
+            () =>
+              document.documentElement.scrollWidth -
+              document.documentElement.clientWidth
+          )
+      )
+      .toBe(0);
+  }
+
   // ── Common UI Elements ──────────────────────────────────────
 
   getHeading(level: 1 | 2 | 3 = 1): Locator {

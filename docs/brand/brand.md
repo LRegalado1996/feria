@@ -6,7 +6,7 @@ The identity of the product and of its first store: the name, the logo, the colo
 
 **LR Market.** Lucas Regalado's initials and a word that reads the same in Spanish and English, and that does not name a product: the mix changes (bubble guns and jewelry today), the name stays. Written with a space, capital L, R and M. Never "LR market", "LRMarket" or "L.R. Market". Decided by Lucas on 2026-11-13 ([FER-006](../tickets/FER-006-brand-identity.md)).
 
-Instagram and TikTok handles: assumed available on 2026-11-13, **to be confirmed by Lucas** before the profiles are created ([FER-007](../tickets/FER-007-social-media-kit.md)).
+Instagram and TikTok: `lrmarket` on both, chosen by Lucas on 2026-11-14 and linked from the coming-soon page. The links live in `src/lib/brand/social.ts`; the profiles themselves are created in [FER-007](../tickets/FER-007-social-media-kit.md), so check they resolve before launch.
 
 ## Logo
 

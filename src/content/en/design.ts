@@ -39,6 +39,7 @@ export const design: Dictionary["design"] = {
     sliderLabel: "Sample articles",
   },
   sections: {
+    bubbles: "Bubbles",
     cards: "Article card and slider",
     chips: "Chips and badges",
     countUp: "Count-up",

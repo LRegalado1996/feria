@@ -42,6 +42,7 @@ export const design = {
     sliderLabel: "Artículos de muestra",
   },
   sections: {
+    bubbles: "Burbujas",
     cards: "Tarjeta de artículo y carrusel",
     chips: "Chips y avisos",
     countUp: "Número que cuenta",

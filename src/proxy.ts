@@ -1,8 +1,13 @@
 import { evlogMiddleware } from "evlog/next";
 import { type NextRequest, NextResponse } from "next/server";
 
+import {
+  COMING_SOON_PATH,
+  isStorefrontLaunchedFor,
+  LAUNCH_OVERRIDE_HEADER,
+} from "@/lib/env/launch";
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
-import { splitLocale } from "@/lib/i18n/paths";
+import { localizePath, splitLocale } from "@/lib/i18n/paths";
 
 /**
  * Stamps an `/api` request with an `x-request-id` (kept when the caller sent
@@ -12,9 +17,41 @@ import { splitLocale } from "@/lib/i18n/paths";
 const stampApiRequest = evlogMiddleware();
 
 const PERMANENT_REDIRECT = 308;
+// Temporary on purpose: a search engine keeps the address it asked for and
+// comes back to it, which is right for a store that opens in a few weeks.
+const TEMPORARY_REDIRECT = 307;
+
+/** The admin stays reachable while the store is closed, to load the catalog. */
+function isAdminPath(pathname: string) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
 
 /**
- * Two jobs, and no database or auth decision in either: real authorization
+ * Where the launch switch sends a page request, or `null` to let it through.
+ * Closed, every address but the admin and the coming-soon page itself leads
+ * to that page, in the language of the address. Open, the coming-soon page
+ * leads home: it must not outlive the launch in someone's bookmarks.
+ */
+function resolveLaunchRedirect(
+  request: NextRequest,
+  { locale, pathname }: ReturnType<typeof splitLocale>
+): string | null {
+  const language = locale ?? DEFAULT_LOCALE;
+  const launched = isStorefrontLaunchedFor(
+    request.headers.get(LAUNCH_OVERRIDE_HEADER)
+  );
+
+  if (pathname === COMING_SOON_PATH) {
+    return launched ? localizePath("/", language) : null;
+  }
+
+  return launched || isAdminPath(pathname)
+    ? null
+    : localizePath(COMING_SOON_PATH, language);
+}
+
+/**
+ * Three jobs, and no database or auth decision in any: real authorization
  * happens per page and per procedure.
  *
  * `/api` requests are stamped for logging. Every page request gets its
@@ -23,6 +60,10 @@ const PERMANENT_REDIRECT = 308;
  * to its Spanish route (the address bar keeps the short URL), `/en/...` passes
  * through, and `/es/...` redirects to the unprefixed URL so each Spanish page
  * has exactly one address.
+ *
+ * Before that, the launch switch (`src/lib/env/launch.ts`): until the store
+ * opens, page requests are redirected to the coming-soon page. The API, the
+ * health check and the admin are never behind it.
  */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,7 +72,19 @@ export async function proxy(request: NextRequest) {
     return await stampApiRequest(request);
   }
 
-  const { locale, pathname: bare } = splitLocale(pathname);
+  const split = splitLocale(pathname);
+  const launchRedirect = resolveLaunchRedirect(request, split);
+
+  if (launchRedirect !== null) {
+    const url = request.nextUrl.clone();
+    url.pathname = launchRedirect;
+    // The query belonged to the page that was asked for, not to this one.
+    url.search = "";
+
+    return NextResponse.redirect(url, TEMPORARY_REDIRECT);
+  }
+
+  const { locale, pathname: bare } = split;
 
   if (locale === null) {
     const url = request.nextUrl.clone();

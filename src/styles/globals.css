@@ -21,6 +21,9 @@
   --animate-store-marquee: store-marquee var(--store-marquee-duration, 30s)
     linear infinite;
   --animate-store-line: store-line 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* One bubble of a burst; the bubble sets its own drift, time and delay. */
+  --animate-store-bubble: store-bubble var(--store-bubble-duration, 3s)
+    cubic-bezier(0.22, 1, 0.36, 1) var(--store-bubble-delay, 0s) both;
 
   /* The track holds two copies of its content, so half its width is one lap. */
   @keyframes store-marquee {
@@ -32,6 +35,25 @@
   @keyframes store-line {
     from {
       transform: translateY(105%);
+    }
+  }
+
+  /* Blown from where it starts to its drift, growing, then gone. */
+  @keyframes store-bubble {
+    from {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.2);
+    }
+
+    15%,
+    75% {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+      transform: translate(var(--store-bubble-x, 0), var(--store-bubble-y, 0))
+        scale(1);
     }
   }
 }

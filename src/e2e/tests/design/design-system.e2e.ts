@@ -31,6 +31,7 @@ test.describe("Storefront design system", () => {
         "Número que cuenta",
         "Tarjeta de artículo y carrusel",
         "Banda en movimiento",
+        "Burbujas",
         "Aparición al bajar",
       ]);
       await expect(
