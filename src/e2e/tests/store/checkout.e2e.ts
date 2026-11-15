@@ -190,6 +190,17 @@ test.describe("Cart and checkout", () => {
     await expect(storePage(page).getCartButton()).toHaveAccessibleName(
       "Carrito, vacío"
     );
+    // The address is the order's key: no link followed from it sends it on.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(() =>
+            [...document.querySelectorAll("[name='referrer']")].map((meta) =>
+              meta.getAttribute("content")
+            )
+          )
+      )
+      .toEqual(["no-referrer"]);
   });
 
   test("a double tap on the submit places one order, and the cart is empty afterwards", async ({

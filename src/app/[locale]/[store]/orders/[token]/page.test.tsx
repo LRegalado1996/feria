@@ -230,11 +230,12 @@ describe("generateMetadata", () => {
     ["es", "Pedido K7P2Q"],
     ["en", "Order K7P2Q"],
   ] as const)(
-    "titles the %s page after the order's code, never indexed nor followed",
+    "titles the %s page after the order's code, never indexed nor followed, and sends no referrer",
     async (locale, title) => {
       const { metadata } = setup({ locale });
 
       await expect(metadata()).resolves.toEqual({
+        referrer: "no-referrer",
         robots: { follow: false, index: false },
         title,
       });
@@ -246,11 +247,12 @@ describe("generateMetadata", () => {
     ["an order that is not there", { token: "U".repeat(43) }],
     ["a malformed token", { token: "short" }],
   ])(
-    "for %s is still never indexed, and leaves the title to the 404 page",
+    "for %s is still never indexed nor a referrer, and leaves the title to the 404 page",
     async (_case, options) => {
       const { metadata } = setup(options);
 
       await expect(metadata()).resolves.toEqual({
+        referrer: "no-referrer",
         robots: { follow: false, index: false },
       });
     }

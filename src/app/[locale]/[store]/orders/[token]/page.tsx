@@ -40,7 +40,11 @@ const loadOrder = cache(async (segment: string, token: string) => {
   return order ? { order, store } : null;
 });
 
-/** Someone's order: never indexed, its title its code. */
+/**
+ * Someone's order: never indexed, its title its code. No referrer from it:
+ * its address is the order's key, and a link followed from it (the shop's
+ * WhatsApp, an article) must not carry the token to another server.
+ */
 export async function generateMetadata({
   params,
 }: OrderPageProps): Promise<Metadata> {
@@ -49,6 +53,7 @@ export async function generateMetadata({
   const found = await loadOrder(segment, token);
 
   return {
+    referrer: "no-referrer",
     robots: { follow: false, index: false },
     ...(found
       ? {
