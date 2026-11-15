@@ -85,6 +85,7 @@ describe("storeSlugSchema", () => {
     expect(RESERVED_STORE_SLUGS).toEqual([
       "admin",
       "api",
+      "coming-soon",
       "design",
       "en",
       "es",
@@ -126,7 +127,7 @@ describe("RESERVED_STORE_SLUGS", () => {
       ...literalSegments(path.join(appDirectory, "[locale]")),
     ];
 
-    expect(routes).toEqual(["api", "design"]);
+    expect(routes).toEqual(["api", "coming-soon", "design"]);
     expect(RESERVED_STORE_SLUGS).toEqual(expect.arrayContaining(routes));
   });
 });

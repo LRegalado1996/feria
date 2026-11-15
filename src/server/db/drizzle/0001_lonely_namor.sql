@@ -21,7 +21,7 @@ CREATE TABLE "store" (
 	CONSTRAINT "store_slug_unique" UNIQUE("slug"),
 	CONSTRAINT "store_default_is_active" CHECK (NOT "store"."isDefault" OR "store"."isActive"),
 	CONSTRAINT "store_slug_format" CHECK ("store"."slug" ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' AND char_length("store"."slug") BETWEEN 2 AND 40),
-	CONSTRAINT "store_slug_not_reserved" CHECK ("store"."slug" NOT IN ('admin', 'api', 'design', 'en', 'es', 'monitoring')),
+	CONSTRAINT "store_slug_not_reserved" CHECK ("store"."slug" NOT IN ('admin', 'api', 'coming-soon', 'design', 'en', 'es', 'monitoring')),
 	CONSTRAINT "store_color_background_hex" CHECK ("store"."colorBackground" ~ '^#[0-9a-f]{6}$'),
 	CONSTRAINT "store_color_surface_hex" CHECK ("store"."colorSurface" ~ '^#[0-9a-f]{6}$'),
 	CONSTRAINT "store_color_foreground_hex" CHECK ("store"."colorForeground" ~ '^#[0-9a-f]{6}$'),

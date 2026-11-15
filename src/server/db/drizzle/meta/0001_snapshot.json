@@ -1,5 +1,5 @@
 {
-  "id": "0b381c82-dba4-4755-b208-68bb1f798675",
+  "id": "968a4410-6f46-49d3-be72-db53aa660efd",
   "prevId": "2d031959-5a82-4ceb-89e8-2519d2468731",
   "version": "7",
   "dialect": "postgresql",
@@ -539,7 +539,7 @@
         },
         "store_slug_not_reserved": {
           "name": "store_slug_not_reserved",
-          "value": "\"store\".\"slug\" NOT IN ('admin', 'api', 'design', 'en', 'es', 'monitoring')"
+          "value": "\"store\".\"slug\" NOT IN ('admin', 'api', 'coming-soon', 'design', 'en', 'es', 'monitoring')"
         },
         "store_color_background_hex": {
           "name": "store_color_background_hex",

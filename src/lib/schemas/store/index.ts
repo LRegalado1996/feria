@@ -26,6 +26,7 @@ export const STORE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const RESERVED_STORE_SLUGS = [
   "admin",
   "api",
+  "coming-soon",
   "design",
   "en",
   "es",
