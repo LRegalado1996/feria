@@ -134,6 +134,16 @@ describe("redactOrderTokens", () => {
       "GET /a/orders/[token] then /b/orders/[token]/",
     ],
     [
+      "a token with a percent-encoded character, which opens the same order",
+      `/lr-market/orders/%61${makeToken(42)}`,
+      "/lr-market/orders/[token]",
+    ],
+    [
+      "a token of 42 characters, one of them percent-encoded, which is no order's",
+      `/lr-market/orders/%61${makeToken(41)}`,
+      `/lr-market/orders/%61${makeToken(41)}`,
+    ],
+    [
       "a token of 42 characters, which is no order's",
       `/lr-market/orders/${makeToken(42)}`,
       `/lr-market/orders/${makeToken(42)}`,

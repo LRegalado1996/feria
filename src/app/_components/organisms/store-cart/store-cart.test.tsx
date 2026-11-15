@@ -1,4 +1,4 @@
-import { QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -127,6 +127,8 @@ function setup({
 
 afterEach(() => {
   localStorage.clear();
+  // Back to the browser's own word on whether the window has focus.
+  focusManager.setFocused(undefined);
 });
 
 describe("StoreCart", () => {
@@ -381,6 +383,45 @@ describe("StoreCart", () => {
       );
     });
     expect(storedCart()).toEqual([makeLine(4, 1, 40_000), makeLine(11, 1)]);
+  });
+
+  test("a refresh that fails after an earlier answer keeps the lines, says so, holds the order, and reads again on retry", async () => {
+    const { cartProducts, lines, shown, submit, user } = setup();
+    await shown();
+    server.use(
+      createOrpcErrorHandler("catalog.cartProducts", {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal server error",
+        status: 500,
+      })
+    );
+
+    // Back to the tab: the prices are read again, and that read fails.
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not fetch the current prices."
+    );
+    expect(lines()).toEqual([
+      ["Artículo 4", null],
+      ["Artículo 9", null],
+    ]);
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
+      "We could not fetch the current prices."
+    );
+
+    server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(submit()).toBeEnabled();
+    expect(cartProducts).toHaveBeenCalledTimes(2);
   });
 
   test("an article added while its price loads is pending, not gone, and holds the order until it arrives", async () => {

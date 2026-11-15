@@ -1,9 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
@@ -154,6 +154,11 @@ function setup({
 
 const alert = () => screen.getByTestId("store-checkout-error");
 
+// The request key lives in the tab's session: each test starts a new tab.
+afterEach(() => {
+  window.sessionStorage.clear();
+});
+
 describe("StoreCheckoutForm", () => {
   test("asks for a name, a mobile and an optional note, in English", () => {
     setup();
@@ -202,6 +207,11 @@ describe("StoreCheckoutForm", () => {
     expect(screen.getByRole("textbox", { name: "Your name" })).toHaveAttribute(
       "aria-invalid",
       "true"
+    );
+    // Each error is announced as it appears.
+    expect(screen.getByText("Write your name.")).toHaveAttribute(
+      "role",
+      "alert"
     );
     expect(received).toEqual([]);
   });
@@ -267,6 +277,50 @@ describe("StoreCheckoutForm", () => {
     const [first, second] = requestKeys();
     expect(first).toMatch(UUID_V4);
     expect(second).toBe(first);
+  });
+
+  test("the same cart and phone sent again after a reload carry the same key", async () => {
+    const before = setup({ answers: ["network"] });
+    await before.fill();
+    await before.send();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not send the order. Try again."
+    );
+    const [first] = before.requestKeys();
+    // A reload: the page and its state are gone, the tab's session is not.
+    cleanup();
+    const after = setup({ answers: ["ok"] });
+
+    await after.fill();
+    await after.send();
+
+    await waitFor(() => {
+      expect(after.onPlaced).toHaveBeenCalledOnce();
+    });
+    expect(after.requestKeys()).toEqual([first]);
+  });
+
+  test("a placed order forgets its key: the next checkout is a new request", async () => {
+    const before = setup({ answers: ["ok"] });
+    await before.fill();
+    await before.send();
+    await waitFor(() => {
+      expect(before.onPlaced).toHaveBeenCalledOnce();
+    });
+    const [first] = before.requestKeys();
+    // The same cart and phone again, in a later visit of the same tab.
+    cleanup();
+    const after = setup({ answers: ["ok"] });
+
+    await after.fill();
+    await after.send();
+
+    await waitFor(() => {
+      expect(after.onPlaced).toHaveBeenCalledOnce();
+    });
+    const [second] = after.requestKeys();
+    expect(second).toMatch(UUID_V4);
+    expect(second).not.toBe(first);
   });
 
   test("the same number typed another way after a failure carries the same key", async () => {

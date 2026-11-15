@@ -49,7 +49,9 @@ const FAILING_ROW_TEXT_REGEX = /\bFailing row contains [\s\S]*/;
  * so a log line, an error report or an analytics event that held it would
  * open the order to anyone who reads it.
  */
-const ORDER_TOKEN_PATH_REGEX = /\/orders\/[\w-]{43}(?![\w-])/gu;
+// A token character as typed or percent-encoded (`%61` opens the same order).
+const ORDER_TOKEN_PATH_REGEX =
+  /\/orders\/(?:[\w-]|%[\dA-Fa-f]{2}){43}(?![\w-]|%[\dA-Fa-f]{2})/gu;
 
 /** `text` with every order page's token replaced by `[token]`. */
 export function redactOrderTokens(text: string): string {

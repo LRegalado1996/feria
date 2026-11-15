@@ -214,7 +214,11 @@ function CartBody({
   });
   let blockedReason: string | null = null;
 
-  if (
+  // A refresh that failed after an earlier answer: the prices shown are not
+  // the shop's word now, so the order waits for one that is.
+  if (products.isError) {
+    blockedReason = copy.errors.refresh;
+  } else if (
     lines.some((line) => line.flag === "gone" || line.flag === "unavailable")
   ) {
     blockedReason = copy.errors.blocked;
@@ -241,6 +245,26 @@ function CartBody({
         <h2 className="sr-only" id="store-cart-items">
           {copy.title}
         </h2>
+        {products.isError ? (
+          <div
+            className="mb-4 flex flex-wrap items-center gap-3 border-2 border-store-contrast p-3"
+            role="alert"
+          >
+            <p className="flex items-center gap-2 font-semibold">
+              <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
+              {copy.errors.refresh}
+            </p>
+            <button
+              className="inline-flex min-h-11 items-center border-2 border-store-contrast px-4 font-semibold hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+              onClick={() => {
+                void products.refetch();
+              }}
+              type="button"
+            >
+              {copy.errors.retry}
+            </button>
+          </div>
+        ) : null}
         <ul className="border-t-2 border-store-line">
           {lines.map(({ flag, item, product }, index) => (
             <StoreCartLine

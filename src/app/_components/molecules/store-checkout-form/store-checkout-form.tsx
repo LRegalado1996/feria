@@ -17,6 +17,10 @@ import {
   checkoutErrorMessage,
   checkoutFailure,
 } from "@/lib/cart/checkout-error";
+import {
+  checkoutRequestKey,
+  forgetCheckoutRequest,
+} from "@/lib/cart/request-key";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useCreateOrder } from "@/lib/hooks/order";
@@ -78,6 +82,7 @@ function StoreField({
         <p
           className="flex items-center gap-1.5 text-sm font-semibold"
           id={formMessageId}
+          role="alert"
         >
           <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
           {error.message}
@@ -108,12 +113,6 @@ function StoreCheckoutForm({
   const hydrated = useHydrated();
   const createOrder = useCreateOrder();
   const [failure, setFailure] = useState<string | null>(null);
-  // The last submit's key and what it was for: the same cart and phone
-  // reuse it; anything else draws a new one.
-  const [attempt, setAttempt] = useState<{
-    key: string;
-    signature: string;
-  } | null>(null);
   const form = useForm<CheckoutValues>({
     defaultValues: { customerName: "", customerPhone: "", note: "" },
     resolver: zodResolver(createCheckoutSchema(copy.checkout)),
@@ -139,9 +138,7 @@ function StoreCheckoutForm({
       items,
       normalizePhone(values.customerPhone),
     ]);
-    const requestKey =
-      attempt?.signature === signature ? attempt.key : crypto.randomUUID();
-    setAttempt({ key: requestKey, signature });
+    const requestKey = checkoutRequestKey(storeSlug, signature);
 
     // What this submit orders, whatever the cart becomes while it is sent.
     const ordered = items;
@@ -156,6 +153,7 @@ function StoreCheckoutForm({
         requestKey,
         storeSlug,
       });
+      forgetCheckoutRequest(storeSlug);
       onPlaced(placed.token, ordered);
     } catch (error) {
       const kind = checkoutFailure(error);
