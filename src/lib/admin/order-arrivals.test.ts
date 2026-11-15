@@ -225,16 +225,21 @@ describe("recordOrderList", () => {
 
   test("an arrival that comes packed is said but not new, nor new once moved back to received", () => {
     recordOrderList(STORE, {}, [[]], AT);
+    const listener = vi.fn<() => void>();
+    const unsubscribe = subscribeArrivals(listener);
 
     expect(recordOrderList(STORE, {}, [[makeOrder(1, "packed")]], AT)).toEqual([
       makeOrder(1, "packed"),
     ]);
+    // Said to the screen, which announces and beeps it, though nothing is new.
+    expect(listener).toHaveBeenCalledOnce();
     expect(lastArrival(STORE)).toEqual({ codes: ["C1"], seq: 1 });
-    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(freshArrivals(STORE).size).toBe(0);
 
     recordOrderList(STORE, {}, [[makeOrder(1)]], AT + 60_000);
+    unsubscribe();
 
-    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(freshArrivals(STORE).size).toBe(0);
     expect(
       isFreshArrival(freshArrivals(STORE), makeOrder(1), AT + 60_000)
     ).toBe(false);

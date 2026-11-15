@@ -165,7 +165,9 @@ export function recordOrderList<T extends ListedOrder>(
     };
   }
 
-  if (changed) {
+  // An arrival is said (and beeped) even when it marks nothing new, as a
+  // packed one does: subscribers hear of every arrival.
+  if (changed || arrived.length > 0) {
     publish(arrivals, fresh);
   }
 

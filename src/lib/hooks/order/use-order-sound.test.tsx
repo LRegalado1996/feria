@@ -183,7 +183,9 @@ function setup({
   return {
     ...recorded,
     /** A tap or a key anywhere on the page. */
-    gesture: async (type: "keydown" | "pointerdown" = "pointerdown") => {
+    gesture: async (
+      type: "keydown" | "pointerdown" | "pointerup" = "pointerdown"
+    ) => {
       await act(async () => {
         document.body.dispatchEvent(new Event(type, { bubbles: true }));
         await Promise.resolve();
@@ -407,7 +409,7 @@ describe("useOrderSound", () => {
     );
   });
 
-  test.each(["pointerdown", "keydown"] as const)(
+  test.each(["pointerdown", "pointerup", "keydown"] as const)(
     "a choice remembered as on waits for a gesture, and %s wakes the sound without a beep",
     async (type) => {
       const { contexts, gesture, result, tones } = setup({

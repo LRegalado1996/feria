@@ -149,7 +149,9 @@ function wakeAudio(
 }
 
 /** The gestures a browser takes as leave to start a page's sound. */
-const WAKING_GESTURES = ["pointerdown", "keydown"] as const;
+// A touch grants the page its user activation on `pointerup`, not on
+// `pointerdown`: both are listened to, so the first tap wakes the sound.
+const WAKING_GESTURES = ["pointerdown", "pointerup", "keydown"] as const;
 
 /**
  * Whether a new order beeps (FER-027): off unless the staff turned it on,
