@@ -31,7 +31,7 @@ afterEach(async () => {
 async function setup() {
   const email = `session-cache-${randomUUID()}@example.test`;
   const password = "synthetic-pass-123";
-  const created = await createAccount(auth, {
+  const created = await createAccount(auth, db, {
     email,
     name: "Cache Test",
     password,

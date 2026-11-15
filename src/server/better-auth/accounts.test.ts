@@ -1,5 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 
+import { account, user } from "@/server/db/schema";
+import { createMockDatabase } from "@/server/test/context";
+import { renderQuery } from "@/server/test/render-sql";
+
 import { type AccountAuth, createAccount } from "./accounts";
 
 function makeValues(overrides: Record<string, unknown> = {}) {
@@ -12,7 +16,6 @@ function makeValues(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** A Better Auth context double: the adapter and hasher `createAccount` calls. */
 /** What Postgres raises when the email's unique constraint is hit. */
 function emailUniqueViolation() {
   return Object.assign(new Error("duplicate key"), {
@@ -21,107 +24,111 @@ function emailUniqueViolation() {
   });
 }
 
+/** A database double and Better Auth's hasher and id generator. */
 function setup({
-  createFails = null,
-  existing = null,
-  linkFails = false,
-}: {
-  createFails?: Error | null;
-  existing?: { id: string } | null;
-  linkFails?: boolean;
-} = {}) {
-  const internalAdapter = {
-    createUser: vi.fn(async (user: { email: string; name: string }) => {
-      if (createFails) {
-        throw createFails;
-      }
+  existing = false,
+  insertFails = null,
+}: { existing?: boolean; insertFails?: Error | null } = {}) {
+  const db = createMockDatabase();
+  db.query.user.findFirst.mockResolvedValue(
+    existing ? { id: "other" } : undefined
+  );
 
-      return { ...user, id: "new-user" };
-    }),
-    deleteUser: vi.fn(async (_id: string) => undefined),
-    findUserByEmail: vi.fn(async (_email: string) => existing),
-    linkAccount: vi.fn(async (_account: Record<string, string>) => {
-      if (linkFails) {
-        throw new Error("account insert failed");
-      }
-    }),
-  };
+  if (insertFails) {
+    db.$["insert.values"].mockImplementationOnce(() => {
+      throw insertFails;
+    });
+  }
+
   const hash = vi.fn(async (password: string) => `hashed:${password}`);
+  const generateId = vi.fn(
+    ({ model }: { model: string }) => `generated-${model}`
+  );
   const auth = {
-    $context: Promise.resolve({ internalAdapter, password: { hash } }),
+    $context: Promise.resolve({ generateId, password: { hash } }),
   } as unknown as AccountAuth;
 
   return {
+    db,
     hash,
-    internalAdapter,
     create: async (overrides: Record<string, unknown> = {}) =>
-      await createAccount(auth, makeValues(overrides)),
+      await createAccount(auth, db as never, makeValues(overrides)),
   };
 }
 
 describe("createAccount", () => {
-  test("creates the user with its role and a hashed credential, normalized", async () => {
-    const { create, hash, internalAdapter } = setup();
+  test("writes the user with its role and a hashed credential in one transaction, normalized", async () => {
+    const { create, db, hash } = setup();
 
     await expect(create({ role: "superadmin" })).resolves.toEqual({
       email: "owner@example.com",
-      id: "new-user",
+      id: "generated-user",
       name: "Store Owner",
       role: "superadmin",
     });
-    expect(internalAdapter.findUserByEmail).toHaveBeenCalledExactlyOnceWith(
-      "owner@example.com"
-    );
     expect(hash).toHaveBeenCalledExactlyOnceWith("synthetic-pass-123");
-    expect(internalAdapter.createUser).toHaveBeenCalledExactlyOnceWith(
-      {
-        email: "owner@example.com",
-        emailVerified: false,
-        name: "Store Owner",
-        role: "superadmin",
-      },
-      { method: "admin" }
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function)
     );
-    expect(internalAdapter.linkAccount).toHaveBeenCalledExactlyOnceWith({
-      accountId: "new-user",
-      password: "hashed:synthetic-pass-123",
-      providerId: "credential",
-      userId: "new-user",
+    expect(db.$.insert.mock.calls).toEqual([[user], [account]]);
+    expect(db.$["insert.values"].mock.calls).toEqual([
+      [
+        {
+          email: "owner@example.com",
+          emailVerified: false,
+          id: "generated-user",
+          name: "Store Owner",
+          role: "superadmin",
+        },
+      ],
+      [
+        {
+          accountId: "generated-user",
+          id: "generated-account",
+          password: "hashed:synthetic-pass-123",
+          providerId: "credential",
+          userId: "generated-user",
+        },
+      ],
+    ]);
+  });
+
+  test("looks for an existing login by the normalized email", async () => {
+    const { create, db } = setup();
+
+    await create();
+
+    const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+    expect(renderQuery((config as { where: unknown }).where)).toEqual({
+      params: ["owner@example.com"],
+      sql: '"user"."email" = $1',
     });
   });
 
-  test("refuses an email that already has an account with CONFLICT, creating nothing", async () => {
-    const { create, internalAdapter } = setup({ existing: { id: "other" } });
+  test("refuses an email that already has a login with CONFLICT, writing nothing", async () => {
+    const { create, db } = setup({ existing: true });
 
     await expect(create()).rejects.toMatchObject({
       code: "CONFLICT",
       message: "An account with that email already exists",
     });
-    expect(internalAdapter.createUser).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
   });
 
   test("answers CONFLICT when another request created the same email after the check", async () => {
-    const { create } = setup({ createFails: emailUniqueViolation() });
+    const { create, db } = setup({ insertFails: emailUniqueViolation() });
 
     await expect(create()).rejects.toMatchObject({
       code: "CONFLICT",
       message: "An account with that email already exists",
     });
+    expect(db.$.insert).not.toHaveBeenCalledWith(account);
   });
 
-  test("lets any other failure to create the user propagate", async () => {
-    const { create } = setup({ createFails: new Error("connection lost") });
+  test("lets any other failure propagate, so the transaction rolls back", async () => {
+    const { create } = setup({ insertFails: new Error("connection lost") });
 
     await expect(create()).rejects.toThrow("connection lost");
-  });
-
-  test("deletes the user again when its credential cannot be stored", async () => {
-    const { create, internalAdapter } = setup({ linkFails: true });
-
-    await expect(create()).rejects.toThrow("account insert failed");
-    expect(internalAdapter.deleteUser).toHaveBeenCalledExactlyOnceWith(
-      "new-user"
-    );
   });
 
   test.each([
@@ -129,21 +136,24 @@ describe("createAccount", () => {
     ["a blank name", { name: "   " }],
     ["an email that is not one", { email: "owner" }],
     ["a role that does not exist", { role: "owner" }],
-  ])("refuses %s before touching the database", async (_case, overrides) => {
-    const { create, internalAdapter } = setup();
+  ])(
+    "refuses %s with BAD_REQUEST before touching the database",
+    async (_case, overrides) => {
+      const { create, db } = setup();
 
-    await expect(create(overrides)).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "The account's email, name, password or role is not valid",
-    });
-    expect(internalAdapter.findUserByEmail).not.toHaveBeenCalled();
-  });
+      await expect(create(overrides)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "The account's email, name, password or role is not valid",
+      });
+      expect(db.$.transaction).not.toHaveBeenCalled();
+    }
+  );
 
   test("accepts a password of exactly eight characters", async () => {
     const { create } = setup();
 
     await expect(create({ password: "12345678" })).resolves.toMatchObject({
-      id: "new-user",
+      id: "generated-user",
     });
   });
 });

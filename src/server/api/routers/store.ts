@@ -5,6 +5,7 @@ import {
 } from "@/lib/schemas/store";
 import { publicProcedure, superadminProcedure } from "@/server/api/orpc";
 import { invalidateStoreCache } from "@/server/cache/store";
+import { withStoreAccess } from "@/server/services/access";
 import {
   createStore,
   getActiveStoreBySlug,
@@ -31,7 +32,11 @@ export const storeRouter = {
   create: superadminProcedure
     .input(createStoreSchema)
     .handler(async ({ context, input }) => {
-      const created = await createStore(context.db, input);
+      const created = await withStoreAccess(
+        context.db,
+        { storeId: null, userId: context.session.user.id },
+        async (tx) => await createStore(tx, input)
+      );
       invalidateStoreCache(created);
 
       return created;
@@ -46,7 +51,11 @@ export const storeRouter = {
   update: superadminProcedure
     .input(updateStoreSchema)
     .handler(async ({ context, input }) => {
-      const updated = await updateStore(context.db, input);
+      const updated = await withStoreAccess(
+        context.db,
+        { storeId: null, userId: context.session.user.id },
+        async (tx) => await updateStore(tx, input)
+      );
       invalidateStoreCache(updated);
 
       return updated;

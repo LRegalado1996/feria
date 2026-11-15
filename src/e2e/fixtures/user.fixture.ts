@@ -113,6 +113,12 @@ async function provisionUser(
     });
 
     if (existing) {
+      // A run that died between creating the user and setting its role
+      // leaves a member where a superadmin is wanted: set it every time.
+      await db
+        .update(schema.user)
+        .set({ role })
+        .where(eq(schema.user.id, existing.id));
       return { ...identity, id: existing.id };
     }
 

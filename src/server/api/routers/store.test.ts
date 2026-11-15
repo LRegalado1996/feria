@@ -83,6 +83,10 @@ function setup({
   mockCtx.db.query.user.findFirst.mockImplementation(async () =>
     role === null ? undefined : { role }
   );
+  // The role re-read under a lock inside the write's transaction.
+  mockCtx.db.$["select.for"].mockImplementation(async () =>
+    role === "superadmin" ? [{ id: "test-user-id" }] : []
+  );
   const options = { context: mockCtx as never };
 
   return {
@@ -247,6 +251,30 @@ describe("store.update", () => {
 });
 
 describe("store writes", () => {
+  test("re-check the superadmin under a share lock inside the write's transaction", async () => {
+    const { create, db } = setup({ role: "superadmin" });
+    db.$["insert.returning"].mockResolvedValue([makeRow()]);
+
+    await create(makeInput());
+
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(db.$["select.for"].mock.invocationCallOrder[0]).toBeLessThan(
+      db.$.insert.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("refuse a superadmin demoted after the procedure's check, writing nothing", async () => {
+    const { create, db } = setup({ role: "superadmin" });
+    db.$["select.for"].mockResolvedValue([]);
+
+    await expect(create(makeInput())).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Forbidden",
+    });
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(invalidateStoreCache).not.toHaveBeenCalled();
+  });
+
   test("refuse a member before touching the database: opening and editing stores is a superadmin's", async () => {
     const { create, db, update } = setup({ role: "member" });
     const refused = { code: "FORBIDDEN", message: "Forbidden" };

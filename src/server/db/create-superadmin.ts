@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from "@/lib/schemas/access";
@@ -33,6 +34,9 @@ const superadminEnvSchema = z.object({
     ),
 });
 
+// What `pg_advisory_xact_lock` is keyed on while the first superadmin is made.
+const BOOTSTRAP_LOCK = "user.first-superadmin";
+
 interface CreateSuperadminOptions {
   auth: AccountAuth;
   db: DatabaseClient;
@@ -59,16 +63,24 @@ export async function createSuperadmin({
     );
   }
 
-  if (await hasSuperadmin(db)) {
-    throw new Error(
-      "A superadmin already exists: this script only creates the first one"
+  // One run at a time: two runs with different emails would both see no
+  // superadmin and both create one. The lock is released at commit.
+  return await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${BOOTSTRAP_LOCK}))`
     );
-  }
 
-  return await createAccount(auth, {
-    email: parsed.data.SUPERADMIN_EMAIL,
-    name: parsed.data.SUPERADMIN_NAME,
-    password: parsed.data.SUPERADMIN_PASSWORD,
-    role: "superadmin",
+    if (await hasSuperadmin(tx)) {
+      throw new Error(
+        "A superadmin already exists: this script only creates the first one"
+      );
+    }
+
+    return await createAccount(auth, tx, {
+      email: parsed.data.SUPERADMIN_EMAIL,
+      name: parsed.data.SUPERADMIN_NAME,
+      password: parsed.data.SUPERADMIN_PASSWORD,
+      role: "superadmin",
+    });
   });
 }

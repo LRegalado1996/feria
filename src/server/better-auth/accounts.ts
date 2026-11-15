@@ -1,23 +1,19 @@
+import { randomUUID } from "node:crypto";
+
 import { ORPCError } from "@orpc/server";
+import { eq } from "drizzle-orm";
 
 import { isUniqueViolation } from "@/lib/errors/postgres";
 import {
   type CreateAccountValues,
   createAccountSchema,
 } from "@/lib/schemas/access";
+import type { DatabaseClient } from "@/server/db";
+import { account, user } from "@/server/db/schema";
 
 import type { auth as appAuth } from "./config";
 
-// The name Postgres gives `user.email`'s unique constraint (migration 0000).
-const EMAIL_UNIQUE_CONSTRAINT = "user_email_unique";
-
-function emailTaken() {
-  return new ORPCError("CONFLICT", {
-    message: "An account with that email already exists",
-  });
-}
-
-/** The part of Better Auth this needs: its internal adapter and hasher. */
+/** The part of Better Auth this needs: its hasher and id generator. */
 export type AccountAuth = Pick<typeof appAuth, "$context">;
 
 /** A created login, without anything secret. */
@@ -28,18 +24,29 @@ export interface CreatedAccount {
   role: CreateAccountValues["role"];
 }
 
+// The name Postgres gives `user.email`'s unique constraint (migration 0000).
+const EMAIL_UNIQUE_CONSTRAINT = "user_email_unique";
+
+function emailTaken() {
+  return new ORPCError("CONFLICT", {
+    message: "An account with that email already exists",
+  });
+}
+
 /**
- * Creates a login with an email and password, the way Better Auth's sign-up
- * would (its hasher, its `credential` account), now that sign-up is closed to
- * visitors (FER-009). The role is the caller's to decide; nothing here reads a
- * request.
+ * Creates a login with an email and password the way Better Auth's sign-up
+ * would (its hasher and ids, a `credential` account), now that sign-up is
+ * closed to visitors (FER-009). The role is the caller's to decide; nothing
+ * here reads a request.
  *
- * Better Auth writes the user and the credential in two statements. If the
- * second fails, the user is deleted again, so no login exists without a way
- * to sign in.
+ * The user and its credential are written in one transaction, on `db` (the
+ * app's client or the caller's transaction): Better Auth's own adapter writes
+ * them in two statements, and a failure between them would leave a login
+ * nobody can sign in with and whose email is taken.
  */
 export async function createAccount(
   auth: AccountAuth,
+  db: DatabaseClient,
   values: CreateAccountValues
 ): Promise<CreatedAccount> {
   const parsed = createAccountSchema.safeParse(values);
@@ -52,39 +59,42 @@ export async function createAccount(
 
   const { email, name, password, role } = parsed.data;
   const context = await auth.$context;
-
-  if (await context.internalAdapter.findUserByEmail(email)) {
-    throw emailTaken();
-  }
-
   const hash = await context.password.hash(password);
-  let user: Awaited<ReturnType<typeof context.internalAdapter.createUser>>;
+  // `false` only when ids are left to the database, which this app never does.
+  const userId = context.generateId({ model: "user" }) || randomUUID();
+  const accountId = context.generateId({ model: "account" }) || randomUUID();
 
-  try {
-    user = await context.internalAdapter.createUser(
-      { email, emailVerified: false, name, role },
-      { method: "admin" }
-    );
-  } catch (error) {
-    // Another request created the same email between the check and here.
-    if (isUniqueViolation(error, EMAIL_UNIQUE_CONSTRAINT)) {
+  return await db.transaction(async (tx) => {
+    const existing = await tx.query.user.findFirst({
+      columns: { id: true },
+      where: eq(user.email, email),
+    });
+
+    if (existing) {
       throw emailTaken();
     }
 
-    throw error;
-  }
+    try {
+      await tx
+        .insert(user)
+        .values({ email, emailVerified: false, id: userId, name, role });
+    } catch (error) {
+      // Another request created the same email between the check and here.
+      if (isUniqueViolation(error, EMAIL_UNIQUE_CONSTRAINT)) {
+        throw emailTaken();
+      }
 
-  try {
-    await context.internalAdapter.linkAccount({
-      accountId: user.id,
+      throw error;
+    }
+
+    await tx.insert(account).values({
+      accountId: userId,
+      id: accountId,
       password: hash,
       providerId: "credential",
-      userId: user.id,
+      userId,
     });
-  } catch (error) {
-    await context.internalAdapter.deleteUser(user.id);
-    throw error;
-  }
 
-  return { email: user.email, id: user.id, name: user.name, role };
+    return { email, id: userId, name, role };
+  });
 }

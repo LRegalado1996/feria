@@ -180,7 +180,12 @@ async function ensureAccount(
   // Through Better Auth's adapter and hasher, so the credential account
   // exists: a user inserted by hand cannot sign in.
   const { email, name, password, role } = account;
-  const created = await createAccount(auth, { email, name, password, role });
+  const created = await createAccount(auth, db, {
+    email,
+    name,
+    password,
+    role,
+  });
 
   return { created: true, id: created.id };
 }

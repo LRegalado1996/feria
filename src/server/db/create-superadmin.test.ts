@@ -1,16 +1,19 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { createMockDatabase } from "@/server/test/context";
+import { renderQuery } from "@/server/test/render-sql";
 
 import { createSuperadmin } from "./create-superadmin";
 
 const { createAccount } = vi.hoisted(() => ({
-  createAccount: vi.fn(async (_auth: unknown, values: { email: string }) => ({
-    email: values.email,
-    id: "admin-1",
-    name: "Superadmin",
-    role: "superadmin" as const,
-  })),
+  createAccount: vi.fn(
+    async (_auth: unknown, _db: unknown, values: { email: string }) => ({
+      email: values.email,
+      id: "admin-1",
+      name: "Superadmin",
+      role: "superadmin" as const,
+    })
+  ),
 }));
 
 vi.mock("@/server/better-auth/accounts", () => ({ createAccount }));
@@ -29,6 +32,7 @@ function setup({ superadminExists = false } = {}) {
 
   return {
     auth,
+    db,
     run: async (env: Record<string, string | undefined> = ENV) =>
       await createSuperadmin({ auth: auth as never, db: db as never, env }),
   };
@@ -36,10 +40,10 @@ function setup({ superadminExists = false } = {}) {
 
 describe("createSuperadmin", () => {
   test("creates a superadmin from the environment's email and password", async () => {
-    const { auth, run } = setup();
+    const { auth, db, run } = setup();
 
     await expect(run()).resolves.toMatchObject({ email: "admin@example.com" });
-    expect(createAccount).toHaveBeenCalledExactlyOnceWith(auth, {
+    expect(createAccount).toHaveBeenCalledExactlyOnceWith(auth, db, {
       email: "admin@example.com",
       name: "Superadmin",
       password: "synthetic-pass-123",
@@ -54,7 +58,25 @@ describe("createSuperadmin", () => {
 
     expect(createAccount).toHaveBeenCalledExactlyOnceWith(
       auth,
+      expect.anything(),
       expect.objectContaining({ name: "Lucía" })
+    );
+  });
+
+  test("takes a lock for the whole check and creation, inside one transaction", async () => {
+    const { db, run } = setup();
+
+    await run();
+
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function)
+    );
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+      params: ["user.first-superadmin"],
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+    });
+    expect(db.$.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      db.query.user.findFirst.mock.invocationCallOrder[0] ?? 0
     );
   });
 

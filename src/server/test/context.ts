@@ -50,6 +50,7 @@ interface MockChain {
   "insert.returning": MockFn;
   "insert.values": MockFn;
   select: MockFn;
+  "select.for": MockFn;
   "select.from": MockFn;
   "select.innerJoin": MockFn;
   "select.leftJoin": MockFn;

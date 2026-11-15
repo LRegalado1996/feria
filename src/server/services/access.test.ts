@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { store, storeMember, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
@@ -11,6 +11,7 @@ import {
   hasSuperadmin,
   listStoreIdsBySlug,
   setUserRole,
+  withStoreAccess,
 } from "./access";
 
 function setup() {
@@ -161,5 +162,75 @@ describe("listStoreIdsBySlug", () => {
       new Map()
     );
     expect(db.query.store.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("withStoreAccess", () => {
+  /** The double's answers to the two locked reads, in the order they run. */
+  function setupLocked({
+    member = false,
+    superadmin = false,
+  }: {
+    member?: boolean;
+    superadmin?: boolean;
+  }) {
+    const { db } = setup();
+    db.$["select.for"]
+      .mockResolvedValueOnce(superadmin ? [{ id: "user-1" }] : [])
+      .mockResolvedValueOnce(member ? [{ id: 9 }] : []);
+    const write = vi.fn(async (_tx: unknown) => "written");
+
+    return {
+      db,
+      write,
+      run: async (storeId: number | null) =>
+        await withStoreAccess(
+          db as never,
+          { storeId, userId: "user-1" },
+          write
+        ),
+    };
+  }
+
+  test("writes for a superadmin after locking their row, on any store or none", async () => {
+    const { db, run, write } = setupLocked({ superadmin: true });
+
+    await expect(run(null)).resolves.toBe("written");
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: ["user-1", "superadmin"],
+      sql: '("user"."id" = $1 and "user"."role" = $2)',
+    });
+    expect(write).toHaveBeenCalledExactlyOnceWith(db);
+  });
+
+  test("writes for a member of the store after locking the membership", async () => {
+    const { db, run, write } = setupLocked({ member: true });
+
+    await expect(run(3)).resolves.toBe("written");
+    expect(db.$["select.for"].mock.calls).toEqual([["share"], ["share"]]);
+    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
+      params: [3, "user-1"],
+      sql: '("store_member"."storeId" = $1 and "store_member"."userId" = $2)',
+    });
+    expect(write).toHaveBeenCalledExactlyOnceWith(db);
+  });
+
+  test("answers NOT_FOUND to a login that is no member of the store, writing nothing", async () => {
+    const { run, write } = setupLocked({});
+
+    await expect(run(3)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  test("answers FORBIDDEN to a non-superadmin for a platform write, writing nothing", async () => {
+    const { db, run, write } = setupLocked({ member: true });
+
+    await expect(run(null)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(write).not.toHaveBeenCalled();
   });
 });

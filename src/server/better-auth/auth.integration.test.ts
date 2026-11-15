@@ -44,7 +44,7 @@ async function createLogin({
   name = "Auth Test User",
   role = "member",
 }: { email?: string; name?: string; role?: UserRole } = {}) {
-  const created = await createAccount(auth, {
+  const created = await createAccount(auth, db, {
     email,
     name,
     password: PASSWORD,
@@ -80,7 +80,13 @@ describe("sign-up", () => {
       auth.api.signUpEmail({
         body: { email, name: "Visitor", password: PASSWORD },
       })
-    ).rejects.toMatchObject({ statusCode: 400 });
+    ).rejects.toMatchObject({
+      body: {
+        code: "EMAIL_PASSWORD_SIGN_UP_DISABLED",
+        message: "Email and password sign up is not enabled",
+      },
+      statusCode: 400,
+    });
     expect(
       await db.query.user.findFirst({ where: eq(user.email, email) })
     ).toBeUndefined();

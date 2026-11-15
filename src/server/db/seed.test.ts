@@ -20,12 +20,14 @@ import {
 } from "./seed";
 
 const { createAccount } = vi.hoisted(() => ({
-  createAccount: vi.fn(async (_auth: unknown, values: { email: string }) => ({
-    email: values.email,
-    id: `id:${values.email}`,
-    name: "Seeded",
-    role: "member" as const,
-  })),
+  createAccount: vi.fn(
+    async (_auth: unknown, _db: unknown, values: { email: string }) => ({
+      email: values.email,
+      id: `id:${values.email}`,
+      name: "Seeded",
+      role: "member" as const,
+    })
+  ),
 }));
 
 vi.mock("@/server/better-auth/accounts", () => ({ createAccount }));
@@ -130,13 +132,14 @@ describe("seed", () => {
   );
 
   test("creates a superadmin and two members through Better Auth, with the documented password", async () => {
-    const { auth, run } = setup();
+    const { auth, db, run } = setup();
 
     await run("development");
 
     expect(createAccount.mock.calls).toEqual([
       [
         auth,
+        db,
         {
           email: "test@example.com",
           name: "Test User",
@@ -146,6 +149,7 @@ describe("seed", () => {
       ],
       [
         auth,
+        db,
         {
           email: "member@example.com",
           name: "Store Member",
@@ -155,6 +159,7 @@ describe("seed", () => {
       ],
       [
         auth,
+        db,
         {
           email: "multi@example.com",
           name: "Two Stores Member",
@@ -203,6 +208,16 @@ describe("seed", () => {
       [{ role: "superadmin" }],
       [{ role: "member" }],
       [{ role: "member" }],
+    ]);
+    // Each role reaches the login it belongs to.
+    expect(
+      db.$["update.where"].mock.calls.map(
+        ([where]) => renderQuery(where).params
+      )
+    ).toEqual([
+      ["old:test@example.com"],
+      ["old:member@example.com"],
+      ["old:multi@example.com"],
     ]);
   });
 

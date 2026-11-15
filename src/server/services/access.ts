@@ -114,3 +114,46 @@ export async function listStoreIdsBySlug(
 
   return new Map(rows.map((row) => [row.slug, row.id]));
 }
+
+/**
+ * Runs `write` in a transaction that first re-derives the caller's access
+ * under a row lock (resolve, lock, commit in `docs/agents/database.md`):
+ * `FOR SHARE` on the superadmin's user row, or on the membership, so a
+ * demotion or a removal that commits first is seen and one that comes later
+ * waits for this write. The procedure's own check is a snapshot taken before
+ * the transaction; this is the one that holds while the row is written.
+ */
+export async function withStoreAccess<T>(
+  db: DatabaseClient,
+  { storeId, userId }: { storeId: number | null; userId: string },
+  write: (tx: DatabaseClient) => Promise<T>
+): Promise<T> {
+  return await db.transaction(async (tx) => {
+    const [superadmin] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.id, userId), eq(user.role, "superadmin")))
+      .for("share");
+
+    if (!superadmin) {
+      // `null` asks for a superadmin: a platform write, no store to belong to.
+      if (storeId === null) {
+        throw new ORPCError("FORBIDDEN");
+      }
+
+      const [membership] = await tx
+        .select({ id: storeMember.id })
+        .from(storeMember)
+        .where(
+          and(eq(storeMember.storeId, storeId), eq(storeMember.userId, userId))
+        )
+        .for("share");
+
+      if (!membership) {
+        throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+      }
+    }
+
+    return await write(tx);
+  });
+}
