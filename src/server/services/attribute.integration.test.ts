@@ -13,6 +13,11 @@ import {
 } from "@/server/services/catalog";
 import { createCategory } from "@/server/services/category";
 import { createStore } from "@/server/services/store";
+import {
+  backendPid,
+  deferred,
+  waitUntilAdvisoryBlocked,
+} from "@/server/test/two-writers";
 
 import {
   createAttribute,
@@ -246,6 +251,19 @@ describe("catalog filters", () => {
     ).toEqual(new Set([goldSteel.slug]));
   });
 
+  test("a filter named twice is still one filter: its values stay alternatives", async () => {
+    const { article, gold, listed, necklaces, purple } = await setup();
+    const goldOnly = await article("Dorado", necklaces.id, [gold.id]);
+    const purpleOnly = await article("Violeta", necklaces.id, [purple.id]);
+
+    expect(
+      await listed([
+        { attribute: "color", values: ["dorado"] },
+        { attribute: "color", values: ["violeta"] },
+      ])
+    ).toEqual(new Set([goldOnly.slug, purpleOnly.slug]));
+  });
+
   test("an unknown filter or value in the URL is ignored, so an old link still lists", async () => {
     const { article, listed, necklaces, purple } = await setup();
     const purpleNecklace = await article("Collar violeta", necklaces.id, [
@@ -386,5 +404,99 @@ describe("filter management", () => {
       ["violeta", 1],
       ["plateado", 0],
     ]);
+  });
+});
+
+describe("filter names under two writers", () => {
+  /**
+   * Two transactions adding a filter named `first` then `second`, the second
+   * started once the first wrote and still holds its transaction open.
+   */
+  async function race(
+    stores: { first: number; second: number },
+    names: { first: string; second: string }
+  ) {
+    const held = deferred();
+    const written = deferred();
+    const firstPid = deferred<number>();
+    const secondPid = deferred<number>();
+    const add = async (tx: DatabaseClient, storeId: number, nameEs: string) =>
+      await createAttribute(tx, {
+        storeId,
+        values: { nameEn: null, nameEs },
+      });
+
+    const first = db.transaction(async (tx) => {
+      firstPid.resolve(await backendPid(tx));
+      const created = await add(tx, stores.first, names.first);
+      written.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+    await written.promise;
+    const second = db.transaction(async (tx) => {
+      secondPid.resolve(await backendPid(tx));
+
+      return await add(tx, stores.second, names.second);
+    });
+
+    return {
+      first,
+      firstPid: firstPid.promise,
+      release: async () => {
+        held.resolve(undefined);
+        await Promise.allSettled([first, second]);
+      },
+      second,
+      secondPid: secondPid.promise,
+    };
+  }
+
+  test("the same name added twice at once ends in one filter and one CONFLICT", async () => {
+    const shop = await makeStore();
+    const run = await race(
+      { first: shop.id, second: shop.id },
+      { first: "Color", second: "colór" }
+    );
+
+    try {
+      await waitUntilAdvisoryBlocked(
+        db,
+        await run.secondPid,
+        await run.firstPid
+      );
+    } finally {
+      await run.release();
+    }
+
+    await expect(run.first).resolves.toMatchObject({ slug: "color" });
+    await expect(run.second).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "That name is already in use here",
+    });
+    expect(
+      (await listStoreAttributes(db, { storeId: shop.id })).map(
+        (row) => row.nameEs
+      )
+    ).toEqual(["Color"]);
+  });
+
+  test("control: a store's filter lock never makes another store wait", async () => {
+    const [storeA, storeB] = [await makeStore(), await makeStore()];
+    const run = await race(
+      { first: storeA.id, second: storeB.id },
+      { first: "Color", second: "Color" }
+    );
+
+    try {
+      // Finishes while store A's transaction still holds its lock: with one
+      // lock for every store this would wait for ever.
+      await expect(run.second).resolves.toMatchObject({ slug: "color" });
+    } finally {
+      await run.release();
+    }
+
+    await expect(run.first).resolves.toMatchObject({ slug: "color" });
   });
 });

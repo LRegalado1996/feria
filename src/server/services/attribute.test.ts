@@ -1308,4 +1308,24 @@ describe("resolveCatalogFilters", () => {
       },
     ]);
   });
+
+  test("merges a filter named twice into one group, so its values stay alternatives", async () => {
+    const { db } = setup();
+    db.$["select.where"].mockResolvedValue([
+      { attributeSlug: "color", id: 21, slug: "dorado" },
+      { attributeSlug: "color", id: 22, slug: "violeta" },
+      { attributeSlug: "material", id: 41, slug: "oro" },
+    ]);
+
+    await expect(
+      resolveCatalogFilters(db as never, {
+        filters: [
+          { attribute: "color", values: ["dorado"] },
+          { attribute: "material", values: ["oro"] },
+          { attribute: "color", values: ["violeta", "dorado"] },
+        ],
+        storeId: STORE_ID,
+      })
+    ).resolves.toEqual([[21, 22], [41]]);
+  });
 });

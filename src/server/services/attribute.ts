@@ -718,13 +718,25 @@ export async function resolveCatalogFilters(
       )
     );
 
-  return filters
-    .map((filter) =>
+  // One group per filter, however many times the query names it:
+  // `?color=dorado` twice with `violeta` is still "gold or purple".
+  const wanted = new Map<string, Set<string>>();
+
+  for (const filter of filters) {
+    const values = wanted.get(filter.attribute) ?? new Set<string>();
+
+    for (const value of filter.values) {
+      values.add(value);
+    }
+
+    wanted.set(filter.attribute, values);
+  }
+
+  return [...wanted]
+    .map(([attributeSlug, values]) =>
       rows
         .filter(
-          (row) =>
-            row.attributeSlug === filter.attribute &&
-            filter.values.includes(row.slug)
+          (row) => row.attributeSlug === attributeSlug && values.has(row.slug)
         )
         .map((row) => row.id)
     )
