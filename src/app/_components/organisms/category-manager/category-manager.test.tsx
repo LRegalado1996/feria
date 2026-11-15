@@ -689,6 +689,59 @@ describe("CategoryManager", () => {
     });
   });
 
+  test("a deletion puts focus on the page title, its row being gone", async () => {
+    const { row, user } = setup();
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    await user.click(
+      within(await screen.findByTestId("delete-category-dialog")).getByRole(
+        "button",
+        { name: "Delete category" }
+      )
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
+    });
+  });
+
+  test.each([
+    [
+      "Cancel",
+      async (user: ReturnType<typeof setup>["user"]) => {
+        await user.click(screen.getByRole("button", { name: "Cancel" }));
+      },
+    ],
+    [
+      "Escape",
+      async (user: ReturnType<typeof setup>["user"]) => {
+        await user.keyboard("{Escape}");
+      },
+    ],
+  ])(
+    "closing the delete dialog with %s gives focus back to the delete button",
+    async (_how, close) => {
+      const { row, spies, user } = setup();
+      await shown();
+      const trigger = within(row("pulseras")).getByRole("button", {
+        name: "Delete: Pulseras",
+      });
+
+      await user.click(trigger);
+      await screen.findByTestId("delete-category-dialog");
+      await close(user);
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("delete-category-dialog")).toBeNull();
+      });
+      expect(trigger).toHaveFocus();
+      expect(spies.delete).not.toHaveBeenCalled();
+    }
+  );
+
   test("a deletion refused because the category gained articles asks where they move, unreported", async () => {
     const { row, spies, user } = setup();
     await shown();

@@ -24,7 +24,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { ORPCError } from "@orpc/client";
 import { ArrowDown, ArrowUp, GripVertical, Pencil, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { type RefObject, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -76,6 +77,7 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
   const create = useCreateCategory(storeSlug);
   const reorder = useReorderCategories(storeSlug);
   const [announcement, setAnnouncement] = useState("");
+  const titleRef = useRef<HTMLHeadingElement>(null);
 
   const countLabel = (count: number) =>
     count === 1
@@ -121,7 +123,13 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
       data-testid="category-manager"
     >
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold">{copy.title}</h1>
+        <h1
+          className="text-2xl font-bold focus-visible:outline-none"
+          ref={titleRef}
+          tabIndex={-1}
+        >
+          {copy.title}
+        </h1>
         <p className="text-sm text-muted-foreground">{copy.description}</p>
       </div>
       <div className="space-y-2">
@@ -178,6 +186,7 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
           move={move}
           rows={categories.data}
           storeSlug={storeSlug}
+          titleRef={titleRef}
         />
       ) : null}
     </section>
@@ -189,11 +198,13 @@ function CategoryList({
   move,
   rows,
   storeSlug,
+  titleRef,
 }: {
   countLabel: (count: number) => string;
   move: (rows: StoreCategory[], from: number, to: number) => void;
   rows: StoreCategory[];
   storeSlug: string;
+  titleRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const { admin } = useDictionary();
   // dnd-kit numbers its accessibility ids per page load, so the server's and
@@ -278,6 +289,7 @@ function CategoryList({
               others={rows.filter((other) => other.id !== row.id)}
               row={row}
               storeSlug={storeSlug}
+              titleRef={titleRef}
             />
           ))}
         </ul>
@@ -294,6 +306,7 @@ function CategoryRow({
   others,
   row,
   storeSlug,
+  titleRef,
 }: {
   countLabel: string;
   first: boolean;
@@ -302,6 +315,8 @@ function CategoryRow({
   others: StoreCategory[];
   row: StoreCategory;
   storeSlug: string;
+  /** Where focus goes once the category is deleted and its row is gone. */
+  titleRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const { admin } = useDictionary();
   const copy = admin.categories;
@@ -310,6 +325,7 @@ function CategoryRow({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteButton = useRef<HTMLButtonElement>(null);
   const {
     attributes,
     isDragging,
@@ -413,6 +429,7 @@ function CategoryRow({
                 setDeleteError(null);
                 setDeleting(true);
               }}
+              ref={deleteButton}
               size="icon"
               variant="ghost"
             >
@@ -443,7 +460,12 @@ function CategoryRow({
                 // after the deletion unmounts this row, and TanStack runs no
                 // per-call callback for an unmounted component.
                 await remove.mutateAsync({ id: row.id, moveToId, storeSlug });
-                setDeleting(false);
+                // Closed first: while open, the dialog's focus trap would pull
+                // focus back into it.
+                flushSync(() => {
+                  setDeleting(false);
+                });
+                titleRef.current?.focus();
                 toast.success(copy.toasts.deleted);
               } catch (error) {
                 // Refused because it gained articles since it was loaded:
@@ -461,7 +483,15 @@ function CategoryRow({
               }
             })();
           }}
-          onOpenChange={setDeleting}
+          // It has no trigger of its own, so it only ever reports closing.
+          // It is unmounted as it closes and cannot give focus back itself:
+          // the delete button that opened it takes it.
+          onOpenChange={() => {
+            flushSync(() => {
+              setDeleting(false);
+            });
+            deleteButton.current?.focus();
+          }}
           open={deleting}
           others={others.map((other) => ({ id: other.id, name: other.nameEs }))}
         />
