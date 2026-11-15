@@ -841,6 +841,8 @@ describe("FilterManager", () => {
       "“Color” will be deleted with all its values, and they will be taken off the articles that carry them. This cannot be undone."
     );
     expect(spies.delete).not.toHaveBeenCalled();
+    // The list read after the deletion no longer has it.
+    spies.list.mockImplementation(() => ROWS.slice(1));
     await press(dialog, "Delete filter");
 
     expect(await screen.findByText("Filter deleted.")).toBeVisible();
@@ -850,6 +852,9 @@ describe("FilterManager", () => {
     });
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("filter-card-color")).toBeNull();
     });
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
@@ -983,6 +988,14 @@ describe("FilterManager", () => {
 
     await press(value("plateado"), "Delete value: Plateado");
     const dialog = await screen.findByTestId("confirm-dialog");
+    // The list read after the deletion no longer has it.
+    spies.list.mockImplementation(() => [
+      {
+        ...ROWS[0],
+        values: ROWS[0]?.values.filter((row) => row.id !== 22) ?? [],
+      },
+      ...ROWS.slice(1),
+    ]);
     await press(dialog, "Delete value");
 
     expect(await screen.findByText("Value deleted.")).toBeVisible();
@@ -992,6 +1005,9 @@ describe("FilterManager", () => {
     });
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("filter-value-plateado")).toBeNull();
     });
     await waitFor(() => {
       expect(within(card("color")).getByTestId("filter-name")).toHaveFocus();

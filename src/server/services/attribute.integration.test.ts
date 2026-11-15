@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { inArray } from "drizzle-orm";
-import { afterEach, describe, expect, onTestFinished, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
 import { type DatabaseClient, db } from "@/server/db";
@@ -16,6 +16,8 @@ import { createStore } from "@/server/services/store";
 import {
   backendPid,
   deferred,
+  releaseHeldWriters,
+  releaseOnTeardown,
   waitUntilAdvisoryBlocked,
 } from "@/server/test/two-writers";
 
@@ -40,6 +42,7 @@ vi.mock("@/env", () => ({
 const createdStoreIds: number[] = [];
 
 afterEach(async () => {
+  releaseHeldWriters();
   await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
 });
 
@@ -428,7 +431,7 @@ describe("filter names under two writers", () => {
 
     // Released however the test ends, a timeout included: an open first
     // transaction would hold its lock and the store row past the test.
-    onTestFinished(() => {
+    releaseOnTeardown(() => {
       held.resolve(undefined);
     });
 

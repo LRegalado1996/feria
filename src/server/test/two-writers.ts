@@ -2,6 +2,25 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseClient } from "@/server/db";
 
+const heldWriters: (() => void)[] = [];
+
+/**
+ * Registers a held writer's release. A test that times out never reaches
+ * its own `finally`, and Vitest runs `onTestFinished` after `afterEach`, so
+ * a cleanup deleting the writer's rows would wait on its open transaction:
+ * `releaseHeldWriters()` first thing in `afterEach` lets it commit.
+ */
+export function releaseOnTeardown(release: () => void) {
+  heldWriters.push(release);
+}
+
+/** Releases every writer still held; call it first in `afterEach`. */
+export function releaseHeldWriters() {
+  for (const release of heldWriters.splice(0)) {
+    release();
+  }
+}
+
 /** A promise and the function that settles it, for ordering two writers. */
 export function deferred<T = undefined>() {
   let settle: (value: T) => void = () => undefined;
