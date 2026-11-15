@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** done
+- **Status:** in progress
 - **Depends on:** FER-002, FER-005
 
 ## Goal
@@ -31,7 +31,7 @@ The page uses the FER-006 logo. Lucas asked for it to be fun: the headline rises
 
 `/admin` is left out of the switch, but no admin page exists until FER-013: until then nobody signs in on production, because today's sign-in form lives at `/`.
 
-Lighthouse was not measured in this ticket: the tool is not a dependency of the repo. Measure it on the first production deployment.
+Still open: the Lighthouse criterion. Everything else is built and merged, but the two scores have not been measured (the tool is not a dependency of the repo). Measure the deployed coming-soon page on mobile, fix what falls under 95, and only then mark this ticket done.
 
 ## Reporting
 
