@@ -202,15 +202,17 @@ test.describe("Catalog", () => {
     const { store } = await setup({ db });
     await page.goto(`/${store.slug}/products`);
     const storePage = new StorePage(page, store.slug);
+    // Enabled only once React owns it; a retried click would add twice.
+    const add = page.getByRole("button", {
+      name: "Agregar al carrito: Collar dorado",
+    });
+    await expect(add).toBeEnabled();
     await expect(
       page.getByRole("button", { name: "Agregar al carrito: Pulsera violeta" })
     ).toHaveCount(0);
+    await add.click();
 
-    await clickUntilVisible(
-      page.getByRole("button", { name: "Agregar al carrito: Collar dorado" }),
-      page.getByText("Agregado al carrito.")
-    );
-
+    await expect(page.getByText("Agregado al carrito.")).toBeVisible();
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, 1 unidad"
     );

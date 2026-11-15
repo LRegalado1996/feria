@@ -32,7 +32,11 @@ function makeItem(id: number): CatalogPage["items"][number] {
   };
 }
 
-const CURSOR = { id: 2, publishedAt: "2026-11-01T12:00:00.000Z" };
+const CURSOR = {
+  id: 2,
+  publishedAt: "2026-11-01T12:00:00.000Z",
+  sort: "newest" as const,
+};
 
 function makePage(
   ids: number[],

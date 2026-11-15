@@ -57,15 +57,18 @@ const publicCatalogSchema = z.object({
 export const listCategoriesSchema = publicCatalogSchema;
 
 /**
- * The keyset cursor of the public list: the last row's sort key, whole
- * (`publishedAt`, then `id` to break ties), so a page never repeats or skips
- * a row while others are inserted.
+ * The keyset cursor of the public list: the sort that made it and the last
+ * row's key in that sort, whole (`publishedAt` or `priceAmount`, then `id` to
+ * break ties), so a page never repeats or skips a row while others are
+ * inserted. Both price orders share a key, so the sort itself is what tells
+ * a cursor from one apart from the other.
  */
 export const productCursorSchema = z
   .object({
     id: idSchema,
-    // The key of the sort that made it: `publishedAt` for the newest first,
-    // `priceAmount` for a price order. Exactly one.
+    sort: z.enum(PRODUCT_SORTS),
+    // The key of that sort: `publishedAt` for the newest first,
+    // `priceAmount` for a price order. Only that one.
     // Empty text is refused before coercion: `Number("")` is a price of 0.
     priceAmount: z
       .union([z.number(), z.string().trim().min(1).transform(Number)])
@@ -81,8 +84,10 @@ export const productCursorSchema = z
   })
   .refine(
     (cursor) =>
-      (cursor.priceAmount === undefined) !== (cursor.publishedAt === undefined),
-    "A cursor carries one sort key"
+      cursor.sort === "newest"
+        ? cursor.publishedAt !== undefined && cursor.priceAmount === undefined
+        : cursor.priceAmount !== undefined && cursor.publishedAt === undefined,
+    "A cursor carries its sort's key, and only it"
   );
 
 /**

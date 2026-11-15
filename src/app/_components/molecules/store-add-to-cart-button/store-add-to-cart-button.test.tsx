@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
-import { renderWithI18n } from "@/test/i18n";
+import { collectHydrationErrors } from "@/test/hydration";
+import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 
 import { StoreAddToCartButton } from "./store-add-to-cart-button";
 
@@ -156,4 +157,29 @@ describe("StoreAddToCartButton", () => {
       expect(said()).toBe(message);
     }
   );
+});
+
+describe("StoreAddToCartButton before hydration", () => {
+  test("is disabled in the server's HTML and enabled once React owns it", () => {
+    const I18n = createI18nWrapper("es");
+    const { clientHtml, errors, serverHtml } = collectHydrationErrors(
+      <I18n>
+        <StoreAddToCartButton
+          name="Collar de perlas"
+          productId={42}
+          storeSlug="lr-market"
+        />
+      </I18n>,
+      { clientNowMs: 1000, serverNowMs: 0 }
+    );
+    const buttonIn = (html: string) => {
+      const container = document.createElement("div");
+      container.innerHTML = html;
+      return container.querySelector("button");
+    };
+
+    expect(buttonIn(serverHtml)).toHaveProperty("disabled", true);
+    expect(buttonIn(clientHtml)).toHaveProperty("disabled", false);
+    expect(errors).toEqual([]);
+  });
 });

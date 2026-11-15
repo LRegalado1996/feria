@@ -79,9 +79,13 @@ function makeItem(
   };
 }
 
-const CURSOR = { id: 2, publishedAt: "2026-11-01T12:00:00.000Z" };
+const CURSOR = {
+  id: 2,
+  publishedAt: "2026-11-01T12:00:00.000Z",
+  sort: "newest" as const,
+};
 // A price order's cursor carries the price, not the date.
-const PRICE_CURSOR = { id: 2, priceAmount: 2000 };
+const PRICE_CURSOR = { id: 2, priceAmount: 2000, sort: "price_asc" as const };
 
 function makePage(
   items: CatalogItem[],
@@ -144,22 +148,28 @@ function setup({
   }
 
   const user = userEvent.setup();
-  const catalog = (next: CatalogQuery) => (
+  const catalog = (next: CatalogQuery, page: CatalogPage) => (
     <StoreCatalog
       categories={CATEGORIES}
       filters={FILTERS}
-      firstPage={firstPage}
+      firstPage={page}
       heading="Collares"
       query={next}
       storeSlug="lr-market"
     />
   );
-  const view = renderWithI18n(catalog(query), { locale, wrapper: Providers });
+  const view = renderWithI18n(catalog(query, firstPage), {
+    locale,
+    wrapper: Providers,
+  });
 
   return {
-    /** Renders the catalog again for another selection, as the router does. */
-    navigate: (next: CatalogQuery) => {
-      view.rerender(catalog(next));
+    /**
+     * Renders the catalog again for another selection, as the router does,
+     * with that selection's first page (the same one unless given).
+     */
+    navigate: (next: CatalogQuery, page: CatalogPage = firstPage) => {
+      view.rerender(catalog(next, page));
     },
     observers,
     products,
@@ -504,6 +514,27 @@ describe("StoreCatalog", () => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
     });
     expect(screen.getByRole("link", { name: "Artículo 3" })).toHaveFocus();
+  });
+
+  test("forgets a press of load more once the selection changes, leaving focus on the button", async () => {
+    const { navigate, titles, user } = setup({
+      firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
+      next: "hang",
+    });
+    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await screen.findByRole("button", { name: "Cargando…" });
+
+    // Another selection's first page is longer than the one pressed in.
+    navigate(
+      makeQuery({ sort: "price_desc" }),
+      makePage([makeItem(4), makeItem(5), makeItem(6)], {
+        ...PRICE_CURSOR,
+        sort: "price_desc",
+      })
+    );
+
+    expect(titles()).toEqual(["Artículo 4", "Artículo 5", "Artículo 6"]);
+    expect(screen.getByRole("button", { name: "Cargar más" })).toHaveFocus();
   });
 
   test("leaves focus alone when a page arrives by scrolling", async () => {

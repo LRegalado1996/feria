@@ -148,21 +148,27 @@ describe("listProductsSchema", () => {
     });
   });
 
-  test.each([
-    ["newest", true],
-    ["price_asc", true],
-    ["price_desc", true],
-    ["price", false],
-    ["NEWEST", false],
-    ["", false],
-  ])("a sort of %j is accepted: %s", (sort, accepted) => {
+  test.each(["newest", "price_asc", "price_desc"])(
+    "a sort of %j is accepted as itself",
+    (sort) => {
+      expect(
+        listProductsSchema.safeParse({
+          locale: "es",
+          sort,
+          storeSlug: "lr-market",
+        }).data?.sort
+      ).toBe(sort);
+    }
+  );
+
+  test.each(["price", "NEWEST", ""])("a sort of %j is refused", (sort) => {
     expect(
       listProductsSchema.safeParse({
         locale: "es",
         sort,
         storeSlug: "lr-market",
       }).success
-    ).toBe(accepted);
+    ).toBe(false);
   });
 
   test("offers the newest first and both price orders, in that order", () => {
@@ -177,19 +183,54 @@ describe("listProductsSchema", () => {
     [{ q: "x".repeat(101) }, false],
     [{ category: "Cadenas Doradas" }, false],
     [{ category: "cadenas-doradas" }, true],
-    [{ cursor: { id: 3, publishedAt: "2026-11-15T10:00:00.000Z" } }, true],
-    [{ cursor: { id: 3, publishedAt: "yesterday" } }, false],
-    [{ cursor: { id: 3, publishedAt: "0000-01-01T00:00:00.000Z" } }, false],
-    [{ cursor: { id: 3, publishedAt: "0001-01-01T00:00:00.000Z" } }, true],
     [
       {
-        cursor: { id: 2_147_483_647, publishedAt: "2026-11-15T10:00:00.000Z" },
+        cursor: {
+          id: 3,
+          publishedAt: "2026-11-15T10:00:00.000Z",
+          sort: "newest",
+        },
+      },
+      true,
+    ],
+    [{ cursor: { id: 3, publishedAt: "yesterday", sort: "newest" } }, false],
+    [
+      {
+        cursor: {
+          id: 3,
+          publishedAt: "0000-01-01T00:00:00.000Z",
+          sort: "newest",
+        },
+      },
+      false,
+    ],
+    [
+      {
+        cursor: {
+          id: 3,
+          publishedAt: "0001-01-01T00:00:00.000Z",
+          sort: "newest",
+        },
       },
       true,
     ],
     [
       {
-        cursor: { id: 2_147_483_648, publishedAt: "2026-11-15T10:00:00.000Z" },
+        cursor: {
+          id: 2_147_483_647,
+          publishedAt: "2026-11-15T10:00:00.000Z",
+          sort: "newest",
+        },
+      },
+      true,
+    ],
+    [
+      {
+        cursor: {
+          id: 2_147_483_648,
+          publishedAt: "2026-11-15T10:00:00.000Z",
+          sort: "newest",
+        },
       },
       false,
     ],
@@ -798,42 +839,77 @@ describe("createAttributeFormSchema", () => {
 
 describe("productCursorSchema", () => {
   const PUBLISHED = "2026-11-15T10:00:00.000Z";
+  const NEWEST = { publishedAt: PUBLISHED, sort: "newest" };
+  const ASC = { sort: "price_asc" };
 
-  test.each([
-    ["the newest order's key", { publishedAt: PUBLISHED }, true],
-    ["a price order's key", { priceAmount: 69_000 }, true],
-    ["a price of 0", { priceAmount: 0 }, true],
-    ["the largest price", { priceAmount: 2_147_483_647 }, true],
-    ["a price past int4", { priceAmount: 2_147_483_648 }, false],
-    ["a negative price", { priceAmount: -1 }, false],
-    ["a fractional price", { priceAmount: 1.5 }, false],
+  test.each<[string, Record<string, unknown>, boolean]>([
+    ["the newest order's key", NEWEST, true],
+    ["a price order's key", { ...ASC, priceAmount: 69_000 }, true],
+    [
+      "the other price order's key",
+      { priceAmount: 69_000, sort: "price_desc" },
+      true,
+    ],
+    ["a price of 0", { ...ASC, priceAmount: 0 }, true],
+    ["the largest price", { ...ASC, priceAmount: 2_147_483_647 }, true],
+    ["a price past int4", { ...ASC, priceAmount: 2_147_483_648 }, false],
+    ["a negative price", { ...ASC, priceAmount: -1 }, false],
+    ["a fractional price", { ...ASC, priceAmount: 1.5 }, false],
     // `Number("")` and `Number(" ")` are 0: empty text is no price at all.
-    ["an empty price", { priceAmount: "" }, false],
-    ["a blank price", { priceAmount: " " }, false],
-    ["a price sent as true", { priceAmount: true }, false],
-    ["a price that is not a number", { priceAmount: "12abc" }, false],
-    ["both keys", { priceAmount: 69_000, publishedAt: PUBLISHED }, false],
-    ["neither key", {}, false],
+    ["an empty price", { ...ASC, priceAmount: "" }, false],
+    ["a blank price", { ...ASC, priceAmount: " " }, false],
+    ["a price sent as true", { ...ASC, priceAmount: true }, false],
+    ["a price that is not a number", { ...ASC, priceAmount: "12abc" }, false],
+    ["both keys, newest", { ...NEWEST, priceAmount: 69_000 }, false],
+    [
+      "both keys, by price",
+      { ...ASC, priceAmount: 69_000, publishedAt: PUBLISHED },
+      false,
+    ],
+    ["neither key, newest", { sort: "newest" }, false],
+    ["neither key, by price", ASC, false],
+    // The key of another sort than the one it names.
+    ["newest with a price", { priceAmount: 69_000, sort: "newest" }, false],
+    ["by price with a date", { ...ASC, publishedAt: PUBLISHED }, false],
+    // Without its sort a price cannot say which way it was read.
+    ["no sort", { priceAmount: 69_000 }, false],
+    ["an unknown sort", { priceAmount: 69_000, sort: "price" }, false],
   ])("a cursor with %s is accepted: %s", (_case, keys, accepted) => {
     expect(productCursorSchema.safeParse({ id: 3, ...keys }).success).toBe(
       accepted
     );
   });
 
-  test("reads a price from the query string as a number", () => {
-    expect(
-      productCursorSchema.parse({ id: "3", priceAmount: "69000" })
-    ).toEqual({
+  test.each(PRODUCT_SORTS)("keeps the sort %s it was made by", (sort) => {
+    const key =
+      sort === "newest" ? { publishedAt: PUBLISHED } : { priceAmount: 500 };
+
+    expect(productCursorSchema.parse({ id: 3, sort, ...key })).toEqual({
       id: 3,
-      priceAmount: 69_000,
+      sort,
+      ...key,
     });
   });
 
-  test("explains a cursor with both keys", () => {
+  test("reads a price from the query string as a number", () => {
+    expect(
+      productCursorSchema.parse({
+        id: "3",
+        priceAmount: "69000",
+        sort: "price_desc",
+      })
+    ).toEqual({
+      id: 3,
+      priceAmount: 69_000,
+      sort: "price_desc",
+    });
+  });
+
+  test("explains a cursor without its sort's key", () => {
     expect(
       productCursorSchema
-        .safeParse({ id: 3, priceAmount: 1, publishedAt: PUBLISHED })
+        .safeParse({ id: 3, priceAmount: 1, sort: "newest" })
         .error?.issues.map((issue) => issue.message)
-    ).toEqual(["A cursor carries one sort key"]);
+    ).toEqual(["A cursor carries its sort's key, and only it"]);
   });
 });

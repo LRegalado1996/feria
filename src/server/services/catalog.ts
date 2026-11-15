@@ -118,18 +118,21 @@ function carriesOneOf(valueIds: number[]): SQL {
 }
 
 /**
- * The rows after `cursor` in `sort`'s order. A cursor carries the key of the
- * sort that made it; one from another sort is refused, not misread.
+ * The rows after `cursor` in `sort`'s order. A cursor carries the sort that
+ * made it and that sort's key; one from another sort is refused, not
+ * misread (both price orders share a key, read the other way round).
  */
 function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
-  if (sort === "newest" && cursor.publishedAt !== undefined) {
-    return sql`(${product.publishedAt}, ${product.id}) < (${cursor.publishedAt}::timestamptz, ${cursor.id}::int)`;
-  }
+  if (cursor.sort === sort) {
+    if (sort === "newest" && cursor.publishedAt !== undefined) {
+      return sql`(${product.publishedAt}, ${product.id}) < (${cursor.publishedAt}::timestamptz, ${cursor.id}::int)`;
+    }
 
-  if (sort !== "newest" && cursor.priceAmount !== undefined) {
-    return sort === "price_asc"
-      ? sql`(${product.priceAmount}, ${product.id}) > (${cursor.priceAmount}::int, ${cursor.id}::int)`
-      : sql`(${product.priceAmount}, ${product.id}) < (${cursor.priceAmount}::int, ${cursor.id}::int)`;
+    if (sort !== "newest" && cursor.priceAmount !== undefined) {
+      return sort === "price_asc"
+        ? sql`(${product.priceAmount}, ${product.id}) > (${cursor.priceAmount}::int, ${cursor.id}::int)`
+        : sql`(${product.priceAmount}, ${product.id}) < (${cursor.priceAmount}::int, ${cursor.id}::int)`;
+    }
   }
 
   throw new ORPCError("BAD_REQUEST", {
@@ -295,27 +298,27 @@ export async function listPublishedProducts(
   };
 }
 
-/** The cursor after `row` in `sort`'s order, carrying that sort's key. */
+/** The cursor after `row` in `sort`'s order, carrying that sort and its key. */
 function cursorAt(
   row:
     | { id: number; priceAmount: number | null; publishedAt: Date | null }
     | undefined,
   sort: ProductSort
-) {
+): ProductCursor | null {
   if (!row) {
     return null;
   }
 
   if (sort === "newest") {
     return row.publishedAt
-      ? { id: row.id, publishedAt: row.publishedAt.toISOString() }
+      ? { id: row.id, publishedAt: row.publishedAt.toISOString(), sort }
       : null;
   }
 
   // A published article always has a price (the database's check).
   return row.priceAmount === null
     ? null
-    : { id: row.id, priceAmount: row.priceAmount };
+    : { id: row.id, priceAmount: row.priceAmount, sort };
 }
 
 /**

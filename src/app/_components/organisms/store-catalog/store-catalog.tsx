@@ -65,8 +65,10 @@ function StoreCatalog({
   const [sheetOpen, setSheetOpen] = useState(false);
   const grid = useRef<HTMLUListElement>(null);
   // Set when "Cargar más" is pressed: the first card of the page it asked
-  // for takes focus once it lands, since the button may then be gone.
-  const focusFrom = useRef<number | null>(null);
+  // for takes focus once it lands, since the button may then be gone. It
+  // names the selection it was pressed in: another selection's first page
+  // is no page it asked for.
+  const focusFrom = useRef<{ from: number; selection: string } | null>(null);
   const { attachSentinel, fetchNextPage, ...products } = useCatalogProducts({
     firstPage,
     locale,
@@ -74,17 +76,24 @@ function StoreCatalog({
     storeSlug,
   });
   const href = (next: CatalogQuery) => catalogHref(storeSlug, locale, next);
+  const selection = href(query);
 
   // Moving focus to a page that just arrived is the DOM work this effect
   // synchronises with the list's length.
   useEffect(() => {
-    const from = focusFrom.current;
+    const pending = focusFrom.current;
 
-    if (from !== null && products.items.length > from) {
-      focusFrom.current = null;
-      grid.current?.children[from]?.querySelector("a")?.focus();
+    if (pending === null) {
+      return;
     }
-  }, [products.items.length]);
+
+    if (pending.selection !== selection) {
+      focusFrom.current = null;
+    } else if (products.items.length > pending.from) {
+      focusFrom.current = null;
+      grid.current?.children[pending.from]?.querySelector("a")?.focus();
+    }
+  }, [products.items.length, selection]);
   const chosen = chosenChips(query, categories, filters);
   const filterProps = { categories, copy, filters, locale, query, storeSlug };
 
@@ -98,7 +107,7 @@ function StoreCatalog({
         <h1 className="font-display store-display-section leading-display tracking-display wrap-anywhere text-store-foreground uppercase">
           {heading}
         </h1>
-        <StoreShareButton path={href(query)} title={heading} />
+        <StoreShareButton path={selection} title={heading} />
       </div>
       {/* Links, like the other choices: a sort works before the page's
           script loads, and moving through it never navigates by itself. */}
@@ -287,7 +296,10 @@ function StoreCatalog({
                 className={CONTROL_CLASS}
                 onClick={() => {
                   if (!products.isFetchingNextPage) {
-                    focusFrom.current = products.items.length;
+                    focusFrom.current = {
+                      from: products.items.length,
+                      selection,
+                    };
                     fetchNextPage();
                   }
                 }}

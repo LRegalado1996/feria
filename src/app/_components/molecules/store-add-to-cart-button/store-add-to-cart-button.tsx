@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { type AddOutcome, useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_ITEMS_MAX, CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,9 @@ function StoreAddToCartButton({
   // The count changes the text even when the message repeats, so a second
   // "Added" is announced like the first.
   const [status, setStatus] = useState({ count: 0, text: "" });
+  // Disabled until React owns it: a press on the server's HTML would add
+  // nothing and say nothing.
+  const hydrated = useHydrated();
   const messages: Record<AddOutcome, string> = {
     added: copy.added,
     at_max: interpolate(copy.atMax, { max: CART_QUANTITY_MAX }),
@@ -45,8 +49,9 @@ function StoreAddToCartButton({
     <div className={cn("flex flex-col gap-1", className)}>
       <button
         aria-label={interpolate(copy.addToCart, { name })}
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-store-contrast px-4 text-sm font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-store-contrast px-4 text-sm font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50"
         data-slot="store-add-to-cart-button"
+        disabled={!hydrated}
         onClick={() => {
           const text = messages[add(productId)];
           setStatus((previous) => ({ count: previous.count + 1, text }));

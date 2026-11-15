@@ -276,7 +276,11 @@ describe("listPublishedProducts", () => {
 
     await list(db, {
       category: "collares",
-      cursor: { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" },
+      cursor: {
+        id: 40,
+        publishedAt: "2026-11-01T00:00:00.000Z",
+        sort: "newest",
+      },
       locale: "en",
       q: String.raw`50%_off\x`,
     });
@@ -322,7 +326,11 @@ describe("listPublishedProducts", () => {
     const { db } = setup();
 
     await list(db, {
-      cursor: { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" },
+      cursor: {
+        id: 40,
+        publishedAt: "2026-11-01T00:00:00.000Z",
+        sort: "newest",
+      },
       valueGroups: [[21, 22], [31]],
     });
 
@@ -374,19 +382,19 @@ describe("listPublishedProducts", () => {
   test.each([
     [
       "newest",
-      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" },
+      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z", sort: "newest" },
       '("product"."publishedAt", "product"."id") < ($3::timestamptz, $4::int))',
       "2026-11-01T00:00:00.000Z",
     ],
     [
       "price_asc",
-      { id: 40, priceAmount: 69_000 },
+      { id: 40, priceAmount: 69_000, sort: "price_asc" },
       '("product"."priceAmount", "product"."id") > ($3::int, $4::int))',
       69_000,
     ],
     [
       "price_desc",
-      { id: 40, priceAmount: 69_000 },
+      { id: 40, priceAmount: 69_000, sort: "price_desc" },
       '("product"."priceAmount", "product"."id") < ($3::int, $4::int))',
       69_000,
     ],
@@ -405,11 +413,26 @@ describe("listPublishedProducts", () => {
   );
 
   test.each([
-    ["newest", { id: 40, priceAmount: 69_000 }],
-    ["price_asc", { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" }],
-    ["price_desc", { id: 40, publishedAt: "2026-11-01T00:00:00.000Z" }],
+    ["newest", { id: 40, priceAmount: 69_000, sort: "price_asc" }],
+    [
+      "price_asc",
+      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z", sort: "newest" },
+    ],
+    [
+      "price_desc",
+      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z", sort: "newest" },
+    ],
+    // Both price orders carry a price: only the sort tells them apart.
+    ["price_desc", { id: 40, priceAmount: 69_000, sort: "price_asc" }],
+    ["price_asc", { id: 40, priceAmount: 69_000, sort: "price_desc" }],
+    // Its own sort without that sort's key is no cursor of it either.
+    ["newest", { id: 40, priceAmount: 69_000, sort: "newest" }],
+    [
+      "price_asc",
+      { id: 40, publishedAt: "2026-11-01T00:00:00.000Z", sort: "price_asc" },
+    ],
   ] as const)(
-    "refuses a %s page from another sort's cursor, asking nothing",
+    "refuses a %s page from cursor %j, asking nothing",
     async (sort, cursor) => {
       const { db } = setup();
 
@@ -432,11 +455,19 @@ describe("listPublishedProducts", () => {
   }
 
   test.each([
-    ["newest", {}, { id: 4, publishedAt: PUBLISHED_AT.toISOString() }],
-    ["price_asc", {}, { id: 4, priceAmount: 60_000 }],
-    ["price_desc", {}, { id: 4, priceAmount: 60_000 }],
+    [
+      "newest",
+      {},
+      { id: 4, publishedAt: PUBLISHED_AT.toISOString(), sort: "newest" },
+    ],
+    ["price_asc", {}, { id: 4, priceAmount: 60_000, sort: "price_asc" }],
+    ["price_desc", {}, { id: 4, priceAmount: 60_000, sort: "price_desc" }],
     // A free article is a price too, not a missing one.
-    ["price_asc", { priceAmount: 0 }, { id: 4, priceAmount: 0 }],
+    [
+      "price_asc",
+      { priceAmount: 0 },
+      { id: 4, priceAmount: 0, sort: "price_asc" },
+    ],
     // Defensive: a published row always has both (the database's checks).
     ["newest", { publishedAt: null }, null],
     ["price_asc", { priceAmount: null }, null],
@@ -494,7 +525,11 @@ describe("listPublishedProducts", () => {
 
     await expect(list(db)).resolves.toEqual({
       items: [card(5), card(4)],
-      nextCursor: { id: 4, publishedAt: "2026-11-09T08:00:00.000Z" },
+      nextCursor: {
+        id: 4,
+        publishedAt: "2026-11-09T08:00:00.000Z",
+        sort: "newest",
+      },
     });
     expect(
       renderQuery(configOf(db.query.product.findMany).where).params
