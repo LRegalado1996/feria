@@ -90,7 +90,9 @@ describe("storeSlugSchema", () => {
       "en",
       "es",
       "monitoring",
+      "platform",
       "seed",
+      "sign-in",
     ]);
   });
 
@@ -128,7 +130,7 @@ describe("RESERVED_STORE_SLUGS", () => {
       ...literalSegments(path.join(appDirectory, "[locale]")),
     ];
 
-    expect(routes).toEqual(["api", "coming-soon", "design"]);
+    expect(routes).toEqual(["api", "admin", "coming-soon", "design"]);
     expect(RESERVED_STORE_SLUGS).toEqual(expect.arrayContaining(routes));
   });
 });

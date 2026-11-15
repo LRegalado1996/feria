@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { UserRole } from "@/lib/schemas/access";
 import type { DatabaseClient } from "@/server/db";
@@ -156,4 +156,22 @@ export async function withStoreAccess<T>(
 
     return await write(tx);
   });
+}
+
+/**
+ * The stores `userId` may work on, by name: every store for a superadmin,
+ * the member's own otherwise (inactive ones included, as in
+ * `findAccessibleStore`). What the admin's landing and store switcher show.
+ */
+export async function listAccessibleStores(db: DatabaseClient, userId: string) {
+  return await db
+    .select({
+      id: store.id,
+      isActive: store.isActive,
+      name: store.name,
+      slug: store.slug,
+    })
+    .from(store)
+    .where(mayWorkOnStore(userId))
+    .orderBy(asc(store.name), asc(store.id));
 }

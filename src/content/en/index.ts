@@ -1,5 +1,6 @@
 import type { Dictionary } from "@/content/es";
 
+import { admin } from "./admin";
 import { auth } from "./auth";
 import { comingSoon } from "./coming-soon";
 import { common } from "./common";
@@ -14,6 +15,7 @@ import { theme } from "./theme";
 
 /** The English interface text, held to the Spanish dictionary's shape. */
 export const en: Dictionary = {
+  admin,
   auth,
   comingSoon,
   common,

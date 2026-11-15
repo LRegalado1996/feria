@@ -2,13 +2,14 @@ import { describe, expect, test, vi } from "vitest";
 
 import { store, storeMember, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
-import { renderQuery } from "@/server/test/render-sql";
+import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 
 import {
   addStoreMember,
   findAccessibleStore,
   getUserRole,
   hasSuperadmin,
+  listAccessibleStores,
   listStoreIdsBySlug,
   setUserRole,
   withStoreAccess,
@@ -232,5 +233,29 @@ describe("withStoreAccess", () => {
     await expect(run(null)).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
     expect(write).not.toHaveBeenCalled();
+  });
+});
+
+describe("listAccessibleStores", () => {
+  test("lists the stores the caller may work on, by name then id, in one query", async () => {
+    const { db } = setup();
+    const rows = [
+      { id: 3, isActive: true, name: "LR Market", slug: "lr-market" },
+    ];
+    db.$["select.orderBy"].mockResolvedValue(rows);
+
+    await expect(listAccessibleStores(db as never, "user-1")).resolves.toBe(
+      rows
+    );
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: ["user-1", "superadmin", "user-1"],
+      sql:
+        '(exists (select 1 from "user" where ("user"."id" = $1 and "user"."role" = $2)) or ' +
+        'exists (select 1 from "store_member" where ("store_member"."storeId" = "store"."id" and "store_member"."userId" = $3)))',
+    });
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
+      '"store"."name" asc, "store"."id" asc'
+    );
   });
 });

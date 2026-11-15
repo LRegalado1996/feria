@@ -1,3 +1,4 @@
+import { admin } from "./admin";
 import { auth } from "./auth";
 import { comingSoon } from "./coming-soon";
 import { common } from "./common";
@@ -17,6 +18,7 @@ import { theme } from "./theme";
  * missing or extra.
  */
 export const es = {
+  admin,
   auth,
   comingSoon,
   common,

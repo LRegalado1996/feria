@@ -66,6 +66,8 @@ describe("API docs route", () => {
         Object.keys(methods),
       ])
     ).toEqual([
+      ["/admin/me", ["get"]],
+      ["/admin/stores/{storeSlug}", ["get"]],
       ["/stores/{storeSlug}/categories", ["get"]],
       ["/stores/{storeSlug}/products", ["get"]],
       ["/stores/{storeSlug}/products/{slug}", ["get"]],
