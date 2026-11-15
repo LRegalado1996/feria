@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
+import { inArray } from "drizzle-orm";
 
+import { productAttributeValue } from "../../../server/db/schema";
 import { type DbFixture, expect, test } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
@@ -100,6 +102,8 @@ test.describe("Filter management", () => {
     db,
     page,
   }) => {
+    const articleIds: number[] = [];
+    const valueIds: number[] = [];
     const { store } = await setup({ db, page }, async (storeId) => {
       const necklaces = await db.seed.createCategory(storeId, {
         nameEs: "Collares",
@@ -108,7 +112,8 @@ test.describe("Filter management", () => {
       });
       const first = await db.seed.createArticle(storeId, necklaces.id, "Uno");
       const second = await db.seed.createArticle(storeId, necklaces.id, "Dos");
-      await db.seed.createFilter(storeId, {
+      articleIds.push(first.id, second.id);
+      const filter = await db.seed.createFilter(storeId, {
         nameEs: "Color",
         slug: "color",
         values: [
@@ -121,6 +126,7 @@ test.describe("Filter management", () => {
           { articleIds: [first.id], nameEs: "Violeta", slug: "violeta" },
         ],
       });
+      valueIds.push(...filter.valueIds);
     });
     const gold = page.getByTestId("filter-value-dorado");
     await expect(gold).toContainText("2 artículos");
@@ -147,6 +153,17 @@ test.describe("Filter management", () => {
     await expect(page.getByTestId("filter-value-violeta")).toContainText(
       "1 artículo"
     );
+    // Taken off both articles; the first keeps its other value.
+    const [, purpleId] = valueIds;
+    expect(
+      await db.drizzle
+        .select({
+          attributeValueId: productAttributeValue.attributeValueId,
+          productId: productAttributeValue.productId,
+        })
+        .from(productAttributeValue)
+        .where(inArray(productAttributeValue.productId, articleIds))
+    ).toEqual([{ attributeValueId: purpleId, productId: articleIds[0] }]);
     // Drafts are never offered on the storefront, so nothing is yet.
     expect(await storefrontFilters(page, store.slug)).toEqual([]);
   });

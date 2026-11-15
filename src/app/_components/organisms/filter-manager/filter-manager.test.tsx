@@ -450,6 +450,10 @@ describe("FilterManager", () => {
     await press(card("color"), "Rename filter: Color");
     const form = formWith("Save", card("color"));
     expect(form.getByLabelText(/^Name in Spanish/u)).toHaveValue("Color");
+    // The button that opened it is gone: focus moves into the editor.
+    await waitFor(() => {
+      expect(form.getByLabelText(/^Name in Spanish/u)).toHaveFocus();
+    });
     expect(form.getByLabelText("Name in English (optional)")).toHaveValue(
       "Colour"
     );
@@ -602,6 +606,9 @@ describe("FilterManager", () => {
     await press(value("dorado"), "Edit value: Dorado");
     const form = formWith("Save", value("dorado"));
     expect(form.getByLabelText(/^Name in Spanish/u)).toHaveValue("Dorado");
+    await waitFor(() => {
+      expect(form.getByLabelText(/^Name in Spanish/u)).toHaveFocus();
+    });
     expect(form.getByLabelText("Name in English (optional)")).toHaveValue(
       "Gold"
     );

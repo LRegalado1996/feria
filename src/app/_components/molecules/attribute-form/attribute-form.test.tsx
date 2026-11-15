@@ -12,6 +12,8 @@ import {
 } from "./attribute-form";
 
 interface SetupOptions {
+  /** An editor opened from a button: it takes focus once shown. */
+  focusOnOpen?: boolean;
   /** Names the form by a heading beside it, as a filter's value form is. */
   labelledBy?: boolean;
   locale?: Locale;
@@ -27,6 +29,7 @@ function makeSaved(overrides: Partial<AttributeFormSaved> = {}) {
 }
 
 function setup({
+  focusOnOpen = false,
   labelledBy = false,
   locale = "en",
   result = "saved",
@@ -46,6 +49,7 @@ function setup({
     <>
       {labelledBy ? <h3 id="value-form-title">New value of “Color”</h3> : null}
       <AttributeForm
+        focusOnOpen={focusOnOpen}
         labelledBy={labelledBy ? "value-form-title" : undefined}
         onCancel={values ? onCancel : undefined}
         onSave={onSave}
@@ -434,6 +438,20 @@ describe("AttributeForm", () => {
 
     expect(document.querySelector("form")).toHaveAccessibleName(name);
   });
+
+  test.each([
+    [true, true],
+    [false, false],
+  ])(
+    "with focusOnOpen %s, the Spanish name has focus once shown: %s",
+    async (focusOnOpen, focused) => {
+      const { spanish } = setup({ focusOnOpen });
+
+      await waitFor(() => {
+        expect(document.activeElement === spanish()).toBe(focused);
+      });
+    }
+  );
 
   test("locks Cancel while saving, so a late save cannot close a reopened editor", async () => {
     const { onCancel, submit, user } = setup({

@@ -25,8 +25,18 @@ describe("inOrder", () => {
     ]);
   });
 
-  test("leaves out a row whose id is not listed", () => {
-    expect(inOrder(ROWS, [3, 1])).toEqual([makeRow(3, 0), makeRow(1, 1)]);
+  test("keeps a row the ids do not list (one read after the move) after the listed ones", () => {
+    const rows = [
+      makeRow(4, 0),
+      ...ROWS.map((row) => makeRow(row.id, row.position + 1)),
+    ];
+
+    expect(inOrder(rows, [3, 1, 2])).toEqual([
+      makeRow(3, 0),
+      makeRow(1, 1),
+      makeRow(2, 2),
+      makeRow(4, 3),
+    ]);
   });
 
   test("copies the rows, leaving the ones it was given as they were", () => {
@@ -36,7 +46,7 @@ describe("inOrder", () => {
     expect(rows).toEqual([makeRow(1, 5), makeRow(2, 7)]);
   });
 
-  test("answers no rows for no ids", () => {
-    expect(inOrder(ROWS, [])).toEqual([]);
+  test("with no ids, keeps the rows in their own order", () => {
+    expect(inOrder(ROWS, [])).toEqual(ROWS);
   });
 });

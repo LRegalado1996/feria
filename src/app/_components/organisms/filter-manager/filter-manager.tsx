@@ -311,6 +311,7 @@ function FilterCard({
     >
       {editing ? (
         <AttributeForm
+          focusOnOpen
           onCancel={() => {
             closeEditor(setEditing, editButton);
           }}
@@ -517,6 +518,7 @@ function ValueRow({
       {editing ? (
         <AttributeForm
           className="min-w-0 flex-1 basis-full"
+          focusOnOpen
           onCancel={() => {
             closeEditor(setEditing, editButton);
           }}

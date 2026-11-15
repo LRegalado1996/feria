@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { inArray } from "drizzle-orm";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, onTestFinished, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
 import { type DatabaseClient, db } from "@/server/db";
@@ -425,6 +425,12 @@ describe("filter names under two writers", () => {
         storeId,
         values: { nameEn: null, nameEs },
       });
+
+    // Released however the test ends, a timeout included: an open first
+    // transaction would hold its lock and the store row past the test.
+    onTestFinished(() => {
+      held.resolve(undefined);
+    });
 
     const first = db.transaction(async (tx) => {
       firstPid.resolve(await backendPid(tx));

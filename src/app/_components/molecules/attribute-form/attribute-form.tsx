@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type RefCallback, useId, useRef, useState } from "react";
+import { type RefCallback, useEffect, useId, useRef, useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button, buttonVariants } from "@/app/_components/atoms/button";
@@ -34,6 +34,8 @@ export interface AttributeFormSaved {
 
 export interface AttributeFormProps {
   className?: string;
+  /** Focus the Spanish name once shown: an editor opened from a button. */
+  focusOnOpen?: boolean;
   /** The id of the heading that names the form, among several alike. */
   labelledBy?: string;
   /** Present when the form edits a filter or a value: shows "Cancel". */
@@ -56,6 +58,7 @@ export interface AttributeFormProps {
  */
 function AttributeForm({
   className,
+  focusOnOpen = false,
   labelledBy,
   onCancel,
   onSave,
@@ -76,6 +79,14 @@ function AttributeForm({
     resolver: zodResolver(createAttributeFormSchema(copy.errors)),
   });
   const { isSubmitting } = useFormState({ control: form.control });
+
+  // The button that opened the editor is gone once it shows: focus moves
+  // into it, or a keyboard user would be left on the page itself.
+  useEffect(() => {
+    if (focusOnOpen) {
+      form.setFocus("nameEs");
+    }
+  }, [focusOnOpen, form]);
 
   const submit = async ({
     nameEn,
