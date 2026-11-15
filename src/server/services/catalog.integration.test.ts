@@ -732,17 +732,19 @@ describe("slug allocation under two writers", () => {
 });
 
 describe("an edit and a publication of the same article", () => {
-  test("the publication waits for the edit's row lock, then publishes the edited article", async () => {
+  test("the publication waits for the edit's row lock, then refuses the price the edit took away", async () => {
     const shop = await makeStore();
     const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
     const article = await makeArticle(shop.id, {
       categoryId: chains.id,
       publish: false,
-      title: "Cadena vieja",
+      title: "Cadena",
     });
     const held = deferred();
     const locked = deferred();
 
+    // The edit clears a field publishing needs: only a publication that
+    // waited for it (the row lock) reads the cleared price and refuses.
     const edit = db.transaction(async (tx) => {
       const updated = await updateProduct(tx, {
         storeId: shop.id,
@@ -750,14 +752,14 @@ describe("an edit and a publication of the same article", () => {
           categoryId: chains.id,
           id: article.id,
           isAvailable: true,
-          priceAmount: 99_000,
+          priceAmount: null,
           translations: [
             {
               description: "",
               locale: "es",
               seoDescription: null,
               seoTitle: null,
-              title: "Cadena nueva",
+              title: "Cadena",
             },
           ],
         },
@@ -767,7 +769,7 @@ describe("an edit and a publication of the same article", () => {
 
       return updated;
     });
-    await locked.promise;
+    await Promise.race([locked.promise, edit]);
     const publication = publishProduct(db, {
       id: article.id,
       storeId: shop.id,
@@ -780,12 +782,10 @@ describe("an edit and a publication of the same article", () => {
       await Promise.allSettled([edit, publication]);
     }
 
-    const [edited, published] = await Promise.all([edit, publication]);
-    expect(edited.slug).toBe("cadena-nueva");
-    expect(published).toEqual({
-      id: article.id,
-      slug: "cadena-nueva",
-      status: "published",
+    await expect(edit).resolves.toMatchObject({ id: article.id });
+    await expect(publication).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The article cannot be published yet. Missing: price",
     });
   });
 
