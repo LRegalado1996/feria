@@ -478,70 +478,78 @@ describe("public catalog", () => {
 });
 
 describe("cart products", () => {
-  test("answers the store's published articles in the order the cart asked, leaving out another store's, a draft and a deleted one", async () => {
-    const [shop, other] = [await makeStore(), await makeStore()];
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const otherChains = await makeCategory(other.id, "cadenas", {
-      es: "Cadenas",
-    });
-    const first = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      priceAmount: 129_000,
-      title: "Cadena primera",
-    });
-    const second = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      priceAmount: 54_000,
-      title: "Cadena segunda",
-    });
-    const draft = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      publish: false,
-      title: "Cadena borrador",
-    });
-    const foreign = await makeArticle(other.id, {
-      categoryId: otherChains.id,
-      title: "Cadena ajena",
-    });
-    const deleted = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      title: "Cadena borrada",
-    });
-    await deleteProduct(db, { id: deleted.id, storeId: shop.id });
-
-    const items = await listCartProducts(db, {
-      currencyCode: "UYU",
-      // The newer one first: the cart's order, not the catalog's.
-      ids: [second.id, foreign.id, draft.id, deleted.id, first.id],
-      locale: "es",
-      storeId: shop.id,
-    });
-
-    expect(
-      items.map(({ currencyCode, id, isAvailable, priceAmount, title }) => ({
-        currencyCode,
-        id,
-        isAvailable,
-        priceAmount,
-        title,
-      }))
-    ).toEqual([
-      {
-        currencyCode: "UYU",
-        id: second.id,
-        isAvailable: true,
+  test.each(["newer", "older"] as const)(
+    "answers the store's published articles in the order the cart asked (the %s first), leaving out another store's, a draft and a deleted one",
+    async (lead) => {
+      const [shop, other] = [await makeStore(), await makeStore()];
+      const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+      const otherChains = await makeCategory(other.id, "cadenas", {
+        es: "Cadenas",
+      });
+      const first = await makeArticle(shop.id, {
+        categoryId: chains.id,
+        priceAmount: 129_000,
+        title: "Cadena primera",
+      });
+      const second = await makeArticle(shop.id, {
+        categoryId: chains.id,
         priceAmount: 54_000,
         title: "Cadena segunda",
-      },
-      {
+      });
+      const draft = await makeArticle(shop.id, {
+        categoryId: chains.id,
+        publish: false,
+        title: "Cadena borrador",
+      });
+      const foreign = await makeArticle(other.id, {
+        categoryId: otherChains.id,
+        title: "Cadena ajena",
+      });
+      const deleted = await makeArticle(shop.id, {
+        categoryId: chains.id,
+        title: "Cadena borrada",
+      });
+      await deleteProduct(db, { id: deleted.id, storeId: shop.id });
+
+      const firstRow = {
         currencyCode: "UYU",
         id: first.id,
         isAvailable: true,
         priceAmount: 129_000,
         title: "Cadena primera",
-      },
-    ]);
-  });
+      };
+      const secondRow = {
+        currencyCode: "UYU",
+        id: second.id,
+        isAvailable: true,
+        priceAmount: 54_000,
+        title: "Cadena segunda",
+      };
+      // Both orders: the cart's order, so an implementation sorting newest
+      // first, or by id, fails one of them.
+      const [askedFirst, askedLast, expected] =
+        lead === "newer"
+          ? [second, first, [secondRow, firstRow]]
+          : [first, second, [firstRow, secondRow]];
+
+      const items = await listCartProducts(db, {
+        currencyCode: "UYU",
+        ids: [askedFirst.id, foreign.id, draft.id, deleted.id, askedLast.id],
+        locale: "es",
+        storeId: shop.id,
+      });
+
+      expect(
+        items.map(({ currencyCode, id, isAvailable, priceAmount, title }) => ({
+          currencyCode,
+          id,
+          isAvailable,
+          priceAmount,
+          title,
+        }))
+      ).toEqual(expected);
+    }
+  );
 
   test("a sold-out article comes back, marked as not available", async () => {
     const shop = await makeStore();
