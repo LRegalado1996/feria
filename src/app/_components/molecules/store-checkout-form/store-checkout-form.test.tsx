@@ -304,7 +304,7 @@ describe("StoreCheckoutForm", () => {
     await after.send();
 
     await waitFor(() => {
-      expect(after.onPlaced).toHaveBeenCalledOnce();
+      expect(after.onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
     expect(after.requestKeys()).toEqual([first]);
   });
@@ -314,7 +314,7 @@ describe("StoreCheckoutForm", () => {
     await before.fill();
     await before.send();
     await waitFor(() => {
-      expect(before.onPlaced).toHaveBeenCalledOnce();
+      expect(before.onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
     const [first] = before.requestKeys();
     // The same cart and phone again, in a later visit of the same tab.
@@ -325,7 +325,7 @@ describe("StoreCheckoutForm", () => {
     await after.send();
 
     await waitFor(() => {
-      expect(after.onPlaced).toHaveBeenCalledOnce();
+      expect(after.onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
     const [second] = after.requestKeys();
     expect(second).toMatch(UUID_V4);
