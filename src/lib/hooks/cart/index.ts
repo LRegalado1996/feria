@@ -1,1 +1,6 @@
-export { cartStorageKey, parseCart, useCart } from "./use-cart";
+export {
+  type AddOutcome,
+  cartStorageKey,
+  parseCart,
+  useCart,
+} from "./use-cart";

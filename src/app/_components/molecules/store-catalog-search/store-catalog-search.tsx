@@ -2,7 +2,7 @@
 
 import { Search } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type CatalogQuery, catalogHref } from "@/lib/catalog/query";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
@@ -35,6 +35,17 @@ function StoreCatalogSearch({
   const locale = useLocale();
   const router = useRouter();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A search still waiting when the field goes away (a card opened, or a
+  // chip that remounts it) would navigate back to the old selection, so it
+  // is dropped; the pending timer is the external work this cleans up.
+  useEffect(
+    () => () => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+    },
+    []
+  );
   const [value, setValue] = useState(query.q ?? "");
   // The search the address last brought, and the ones this field sent since:
   // a new search in the address that is one of them is this field's own

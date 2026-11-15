@@ -2,9 +2,8 @@
 
 import { SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { StoreArrowLink } from "@/app/_components/atoms/store-arrow-link";
 import { StoreChip } from "@/app/_components/atoms/store-chip";
@@ -28,7 +27,7 @@ import { type CatalogPage, useCatalogProducts } from "@/lib/hooks/catalog";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
-import { PRODUCT_SORTS, type ProductSort } from "@/lib/schemas/catalog";
+import { PRODUCT_SORTS } from "@/lib/schemas/catalog";
 
 export interface StoreCatalogProps {
   categories: CatalogCategory[];
@@ -63,8 +62,11 @@ function StoreCatalog({
   const copy = storefront.catalog;
   const cardLabels = { card: storefront.articleCard, price: storefront.price };
   const locale = useLocale();
-  const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const grid = useRef<HTMLUListElement>(null);
+  // Set when "Cargar más" is pressed: the first card of the page it asked
+  // for takes focus once it lands, since the button may then be gone.
+  const focusFrom = useRef<number | null>(null);
   const { attachSentinel, fetchNextPage, ...products } = useCatalogProducts({
     firstPage,
     locale,
@@ -72,6 +74,17 @@ function StoreCatalog({
     storeSlug,
   });
   const href = (next: CatalogQuery) => catalogHref(storeSlug, locale, next);
+
+  // Moving focus to a page that just arrived is the DOM work this effect
+  // synchronises with the list's length.
+  useEffect(() => {
+    const from = focusFrom.current;
+
+    if (from !== null && products.items.length > from) {
+      focusFrom.current = null;
+      grid.current?.children[from]?.querySelector("a")?.focus();
+    }
+  }, [products.items.length]);
   const chosen = chosenChips(query, categories, filters);
   const filterProps = { categories, copy, filters, locale, query, storeSlug };
 
@@ -85,37 +98,36 @@ function StoreCatalog({
         <h1 className="font-display store-display-section leading-display tracking-display wrap-anywhere text-store-foreground uppercase">
           {heading}
         </h1>
-        <StoreShareButton title={heading} />
+        <StoreShareButton path={href(query)} title={heading} />
       </div>
+      {/* Links, like the other choices: a sort works before the page's
+          script loads, and moving through it never navigates by itself. */}
+      <nav aria-label={copy.sort.label}>
+        <ul className="flex flex-wrap gap-2">
+          {PRODUCT_SORTS.map((sort) => (
+            <li key={sort}>
+              <StoreChip asChild selected={query.sort === sort}>
+                <Link
+                  aria-current={query.sort === sort ? "true" : undefined}
+                  href={href({ ...query, sort })}
+                  scroll={false}
+                >
+                  {copy.sort[sort]}
+                </Link>
+              </StoreChip>
+            </li>
+          ))}
+        </ul>
+      </nav>
       <div className="flex flex-wrap items-center gap-3">
         <StoreCatalogSearch
           className="min-w-48 flex-1"
+          // A new selection other than the search starts the field afresh,
+          // dropping a search that was still waiting to be sent.
+          key={href({ ...query, q: null })}
           query={query}
           storeSlug={storeSlug}
         />
-        <label className="sr-only" htmlFor="store-catalog-sort">
-          {copy.sort.label}
-        </label>
-        <select
-          className={CONTROL_CLASS}
-          id="store-catalog-sort"
-          onChange={(event) => {
-            const sort = PRODUCT_SORTS.find(
-              (known) => known === event.target.value
-            );
-
-            if (sort) {
-              router.push(href({ ...query, sort }), { scroll: false });
-            }
-          }}
-          value={query.sort}
-        >
-          {PRODUCT_SORTS.map((sort: ProductSort) => (
-            <option key={sort} value={sort}>
-              {copy.sort[sort]}
-            </option>
-          ))}
-        </select>
         <DialogPrimitive.Root onOpenChange={setSheetOpen} open={sheetOpen}>
           <DialogPrimitive.Trigger
             className={`${CONTROL_CLASS} inline-flex items-center gap-2 md:hidden`}
@@ -215,9 +227,10 @@ function StoreCatalog({
             <ul
               className="grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-3"
               data-testid="store-catalog-grid"
+              ref={grid}
             >
               {products.items.map((item) => (
-                <li key={item.id} lang={item.lang}>
+                <li key={item.id}>
                   <StoreArticleCard
                     action={
                       item.isAvailable ? (
@@ -243,6 +256,7 @@ function StoreCatalog({
                     }
                     locale={locale}
                     name={item.title}
+                    nameLang={item.lang}
                     unavailable={!item.isAvailable}
                   />
                 </li>
@@ -265,12 +279,17 @@ function StoreCatalog({
           ) : null}
           {products.hasNextPage && !products.isFetchNextPageError ? (
             <div className="flex justify-center" ref={attachSentinel}>
+              {/* Never disabled: a disabled button drops the keyboard's focus
+                  to the page. While a page loads, a press does nothing. */}
               <button
                 aria-busy={products.isFetchingNextPage}
+                aria-disabled={products.isFetchingNextPage}
                 className={CONTROL_CLASS}
-                disabled={products.isFetchingNextPage}
                 onClick={() => {
-                  fetchNextPage();
+                  if (!products.isFetchingNextPage) {
+                    focusFrom.current = products.items.length;
+                    fetchNextPage();
+                  }
                 }}
                 type="button"
               >

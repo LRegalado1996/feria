@@ -9,40 +9,58 @@ import { cn } from "@/lib/utils";
 
 export interface StoreShareButtonProps {
   className?: string;
+  /**
+   * The page's own path, as the store writes its links: shared instead of
+   * the address bar's, so `fbclid` or `utm_source` are not passed on.
+   */
+  path: string;
   /** What the shared link is called in the share sheet. */
   title: string;
 }
 
 /**
- * Shares the page the shopper is on (FER-023): the phone's share sheet when
- * the browser has one, else the link copied, said in a polite live region.
- * Closing the share sheet is not a failure.
+ * Shares the page (FER-023): the phone's share sheet when the browser has
+ * one, else the link copied, said in a polite live region. Closing the
+ * share sheet is not a failure; a share sheet that fails copies the link
+ * instead.
  */
-function StoreShareButton({ className, title }: StoreShareButtonProps) {
+function StoreShareButton({ className, path, title }: StoreShareButtonProps) {
   const copy = useDictionary().storefront.catalog;
-  const [status, setStatus] = useState("");
+  // The count changes the text even when the message repeats, so a second
+  // "Link copied" is announced like the first.
+  const [status, setStatus] = useState({ count: 0, text: "" });
+
+  const say = (text: string) => {
+    setStatus((previous) => ({ count: previous.count + 1, text }));
+  };
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      say(copy.shareCopied);
+    } catch (error) {
+      reportError(error, { action: "Catalog.copy_link" });
+      say(copy.shareFailed);
+    }
+  };
 
   const share = async () => {
-    const url = window.location.href;
+    const url = new URL(path, window.location.origin).href;
 
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title, url });
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          reportError(error, { action: "Catalog.share" });
-        }
-      }
-
+    if (typeof navigator.share !== "function") {
+      await copyLink(url);
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(url);
-      setStatus(copy.shareCopied);
+      await navigator.share({ title, url });
     } catch (error) {
-      reportError(error, { action: "Catalog.copy_link" });
-      setStatus(copy.shareFailed);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      reportError(error, { action: "Catalog.share" });
+      await copyLink(url);
     }
   };
 
@@ -60,7 +78,9 @@ function StoreShareButton({ className, title }: StoreShareButtonProps) {
         {copy.share}
       </button>
       <output aria-live="polite" className="text-sm text-store-muted">
-        {status}
+        {status.text}
+        {/* An invisible mark that alternates, so a repeated message is new. */}
+        {status.count % 2 === 1 ? "⁠" : null}
       </output>
     </div>
   );

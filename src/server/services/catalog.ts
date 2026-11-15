@@ -117,7 +117,6 @@ function carriesOneOf(valueIds: number[]): SQL {
   )})`;
 }
 
-/** Rows strictly after the cursor in the newest-first order. */
 /**
  * The rows after `cursor` in `sort`'s order. A cursor carries the key of the
  * sort that made it; one from another sort is refused, not misread.

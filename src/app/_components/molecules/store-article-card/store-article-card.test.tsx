@@ -224,6 +224,22 @@ describe("StoreArticleCard", () => {
     expect(card.querySelector(".z-10")).toBeNull();
   });
 
+  test("marks the name's language on its link only, so the price keeps the page's", () => {
+    const { card, link } = setup({ nameLang: "en" });
+
+    expect(link).toHaveAttribute("lang", "en");
+    expect(card).not.toHaveAttribute("lang");
+    expect(
+      card.querySelector('[data-slot="store-price-tag"]')?.closest("[lang]")
+    ).toBeNull();
+  });
+
+  test("leaves the name's language to the page when none is given", () => {
+    const { link } = setup();
+
+    expect(link).not.toHaveAttribute("lang");
+  });
+
   test("keeps a caller's class", () => {
     const { card } = setup({ className: "w-70" });
 

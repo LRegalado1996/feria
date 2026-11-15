@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -18,12 +18,10 @@ import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 
 import { StoreCatalog } from "./store-catalog";
 
-const { push, replace } = vi.hoisted(() => ({
-  push: vi.fn(),
-  replace: vi.fn(),
-}));
+const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace }) }));
+// The search navigates with the router; it has its own tests.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
 vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
@@ -144,19 +142,23 @@ function setup({
   }
 
   const user = userEvent.setup();
-  renderWithI18n(
+  const catalog = (next: CatalogQuery) => (
     <StoreCatalog
       categories={CATEGORIES}
       filters={FILTERS}
       firstPage={firstPage}
       heading="Collares"
-      query={query}
+      query={next}
       storeSlug="lr-market"
-    />,
-    { locale, wrapper: Providers }
+    />
   );
+  const view = renderWithI18n(catalog(query), { locale, wrapper: Providers });
 
   return {
+    /** Renders the catalog again for another selection, as the router does. */
+    navigate: (next: CatalogQuery) => {
+      view.rerender(catalog(next));
+    },
     observers,
     products,
     /** The grid's article names, in order. */
@@ -170,6 +172,8 @@ function setup({
 
 afterEach(() => {
   localStorage.clear();
+  Reflect.deleteProperty(navigator, "share");
+  Reflect.deleteProperty(navigator, "clipboard");
 });
 
 describe("StoreCatalog", () => {
@@ -185,44 +189,82 @@ describe("StoreCatalog", () => {
     ).toBeVisible();
   });
 
-  test("offers the three sorts, the current one chosen", () => {
+  test("offers the three sorts as links, the current one marked, keeping the selection", () => {
     setup({ query: CHOSEN });
 
-    const select = screen.getByRole("combobox", { name: "Ordenar" });
-    expect(select).toHaveValue("price_asc");
+    const sorts = within(screen.getByRole("navigation", { name: "Ordenar" }));
     expect(
-      within(select)
-        .getAllByRole("option")
-        .map((option) => [option.getAttribute("value"), option.textContent])
+      sorts
+        .getAllByRole("link")
+        .map((link) => [
+          link.textContent,
+          link.getAttribute("href"),
+          link.getAttribute("aria-current"),
+        ])
     ).toEqual([
-      ["newest", "Más nuevos"],
-      ["price_asc", "Precio: menor a mayor"],
-      ["price_desc", "Precio: mayor a menor"],
+      [
+        "Más nuevos",
+        "/lr-market/products?category=collares&color=dorado&q=perla",
+        null,
+      ],
+      [
+        "Precio: menor a mayor",
+        "/lr-market/products?category=collares&color=dorado&q=perla&sort=price_asc",
+        "true",
+      ],
+      [
+        "Precio: mayor a menor",
+        "/lr-market/products?category=collares&color=dorado&q=perla&sort=price_desc",
+        null,
+      ],
     ]);
   });
 
-  test("a sort chosen pushes the address with it, keeping the selection", async () => {
-    const { user } = setup({ query: CHOSEN });
+  test("in English, names the sorts in English and marks the newest by default", () => {
+    setup({ locale: "en" });
 
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Ordenar" }),
-      "price_desc"
+    const sorts = within(screen.getByRole("navigation", { name: "Sort" }));
+    expect(sorts.getByRole("link", { name: "Newest" })).toHaveAttribute(
+      "aria-current",
+      "true"
     );
+    expect(
+      sorts.getByRole("link", { name: "Price: low to high" })
+    ).toHaveAttribute("href", "/en/lr-market/products?sort=price_asc");
+  });
 
-    expect(push).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?category=collares&color=dorado&q=perla&sort=price_desc",
-      { scroll: false }
+  test("shares the selection's own link", async () => {
+    const writeText = vi.fn(async (_text: string) => {});
+    const { user } = setup({ query: CHOSEN });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Compartir" }));
+
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(
+      "http://localhost:3000/lr-market/products?category=collares&color=dorado&q=perla&sort=price_asc"
     );
   });
 
-  test("ignores a sort it does not know", () => {
-    setup();
+  test("starts the search afresh when another choice changes, not when only the search does", () => {
+    const { navigate } = setup({ query: makeQuery({ q: "perla" }) });
+    const field = screen.getByRole("searchbox", { name: "Buscar artículos" });
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Ordenar" }), {
-      target: { value: "cheapest" },
-    });
+    navigate(makeQuery({ q: "perla fina" }));
+    expect(screen.getByRole("searchbox", { name: "Buscar artículos" })).toBe(
+      field
+    );
 
-    expect(push).not.toHaveBeenCalled();
+    navigate(makeQuery({ category: "aros", q: "perla fina" }));
+    expect(
+      screen.getByRole("searchbox", { name: "Buscar artículos" })
+    ).not.toBe(field);
   });
 
   test("on a phone, opens its choices in a sheet, closed by either of its buttons", async () => {
@@ -326,9 +368,13 @@ describe("StoreCatalog", () => {
     expect(titles()).toEqual(["Artículo 1", "Artículo 2"]);
     const grid = within(screen.getByTestId("store-catalog-grid"));
     const [first, second] = grid.getAllByRole("article");
-    expect(
-      within(first ?? document.body).getByRole("link", { name: "Artículo 1" })
-    ).toHaveAttribute("href", "/lr-market/products/articulo-1");
+    const link = within(first ?? document.body).getByRole("link", {
+      name: "Artículo 1",
+    });
+    expect(link).toHaveAttribute("href", "/lr-market/products/articulo-1");
+    // The name's language is on its link; the card keeps the page's.
+    expect(link).toHaveAttribute("lang", "es");
+    expect(first?.closest("li")).not.toHaveAttribute("lang");
     expect(
       within(first ?? document.body).getByRole("button", {
         name: "Agregar al carrito: Artículo 1",
@@ -424,8 +470,8 @@ describe("StoreCatalog", () => {
     expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
   });
 
-  test("says it is loading, and takes no second click, while the next page is on its way", async () => {
-    const { user } = setup({
+  test("says it is loading and ignores presses meanwhile, keeping its focus", async () => {
+    const { products, user } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
       next: "hang",
     });
@@ -433,8 +479,44 @@ describe("StoreCatalog", () => {
     await user.click(screen.getByRole("button", { name: "Cargar más" }));
 
     const loading = await screen.findByRole("button", { name: "Cargando…" });
-    expect(loading).toBeDisabled();
+    expect(loading).toBeEnabled();
+    expect(loading).toHaveAttribute("aria-disabled", "true");
     expect(loading).toHaveAttribute("aria-busy", "true");
+    expect(loading).toHaveFocus();
+    await user.click(loading);
+    expect(products).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ cursor: CURSOR })
+    );
+  });
+
+  test("moves focus to the first new card once a page asked for with the button lands", async () => {
+    const { titles, user } = setup({
+      firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
+    });
+    const button = screen.getByRole("button", { name: "Cargar más" });
+    expect(button).toHaveAttribute("aria-disabled", "false");
+
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
+    });
+    expect(screen.getByRole("link", { name: "Artículo 3" })).toHaveFocus();
+  });
+
+  test("leaves focus alone when a page arrives by scrolling", async () => {
+    const { observers, titles } = setup({
+      firstPage: makePage([makeItem(1)], CURSOR),
+    });
+    const search = screen.getByRole("searchbox", { name: "Buscar artículos" });
+    search.focus();
+
+    observers.active()?.emit(true);
+
+    await waitFor(() => {
+      expect(titles()).toEqual(["Artículo 1", "Artículo 3"]);
+    });
+    expect(search).toHaveFocus();
   });
 
   test("loads the next page when the end of the grid scrolls into view", async () => {

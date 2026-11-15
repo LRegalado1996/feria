@@ -38,6 +38,12 @@ export type StoreArticleCardProps = Pick<
     price: Dictionary["storefront"]["price"];
   };
   name: string;
+  /**
+   * The language the name is in, when it may differ from the page's (an
+   * article with no English title on an English page): set on the name
+   * only, never on the card's interface text.
+   */
+  nameLang?: string;
   /** Marks an article that cannot be bought now; it outranks every badge. */
   unavailable?: boolean;
 };
@@ -60,6 +66,7 @@ function StoreArticleCard({
   labels,
   locale,
   name,
+  nameLang,
   previousAmount = null,
   unavailable = false,
 }: StoreArticleCardProps) {
@@ -115,6 +122,7 @@ function StoreArticleCard({
           // The focus ring is drawn on the card, which is what the link covers.
           className="outline-none after:absolute after:inset-0"
           href={href}
+          lang={nameLang}
         >
           {name}
         </Link>

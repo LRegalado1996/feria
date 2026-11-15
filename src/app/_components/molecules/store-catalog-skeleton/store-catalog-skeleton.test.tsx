@@ -1,18 +1,16 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { screen } from "@testing-library/react";
+import { describe, expect, test } from "vitest";
+
+import { renderWithI18n } from "@/test/i18n";
 
 import { StoreCatalogSkeleton } from "./store-catalog-skeleton";
 
-// `server-only` throws on import outside a React Server Components build.
-vi.mock("server-only", () => ({}));
-
 describe("StoreCatalogSkeleton", () => {
   test.each([
-    [undefined, "Cargando"],
     ["es", "Cargando"],
     ["en", "Loading"],
   ] as const)("in %s, is busy and says %j", (locale, text) => {
-    render(<StoreCatalogSkeleton locale={locale} />);
+    renderWithI18n(<StoreCatalogSkeleton />, { locale });
 
     const skeleton = screen.getByTestId("store-catalog-skeleton");
     expect(skeleton).toHaveAttribute("aria-busy", "true");

@@ -61,6 +61,9 @@ function setup({
       field().focus();
       fireEvent.change(field(), { target: { value: text } });
     },
+    unmount: () => {
+      view.unmount();
+    },
     rerender: (next: CatalogQuery) => {
       view.rerender(
         <StoreCatalogSearch
@@ -89,6 +92,17 @@ describe("StoreCatalogSearch", () => {
       "/lr-market/products?category=collares&color=dorado,plateado&q=perla&sort=price_asc",
       { scroll: false }
     );
+  });
+
+  test("navigates nowhere once unmounted, though typing had not paused yet", () => {
+    const { advance, type, unmount } = setup();
+
+    type("perla");
+    advance(SEARCH_DEBOUNCE_MS - 1);
+    unmount();
+    advance(SEARCH_DEBOUNCE_MS);
+
+    expect(replace).not.toHaveBeenCalled();
   });
 
   test("sends the search trimmed, once, after the last keystroke", () => {

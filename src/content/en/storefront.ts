@@ -4,8 +4,11 @@ export const storefront: Dictionary["storefront"] = {
   catalog: {
     addToCart: "Add to cart: {name}",
     addToCartShort: "Add",
+    addFailed: "We could not add it. Try again.",
     added: "Added to cart.",
-    cartFull: "The cart already holds 20 different articles.",
+    atMax: "You already have {max} of this article, the most an order takes.",
+    cartFull:
+      "The cart already holds {max} different articles, the most it takes.",
     categories: "Categories",
     allCategories: "All",
     clearAll: "Clear all",

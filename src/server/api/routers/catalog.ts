@@ -81,7 +81,7 @@ export const catalogRouter = {
     .route({
       method: "GET",
       path: "/stores/{storeSlug}/products",
-      summary: "List a store's published articles, newest first",
+      summary: "List a store's published articles, newest first or by price",
       tags: ["catalog"],
     }),
 

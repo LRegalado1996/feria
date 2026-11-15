@@ -10,7 +10,11 @@ import { StoreShareButton } from "./store-share-button";
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
+// The page's own address carries noise the shared link must not.
+const LOCATION = "/lr-market/products?category=collares&utm_source=ig";
 const PATH = "/lr-market/products?category=collares";
+const URL_SHARED = `http://localhost:3000${PATH}`;
+const MARK = "\u2060";
 
 interface SetupOptions {
   /** What the clipboard does with the link. */
@@ -25,7 +29,7 @@ function setup({
   locale = "es",
   share = "none",
 }: SetupOptions = {}) {
-  window.history.replaceState(null, "", PATH);
+  window.history.replaceState(null, "", LOCATION);
   // Set before the browser's own objects are swapped: user-event installs
   // a clipboard of its own.
   const user = userEvent.setup();
@@ -52,9 +56,12 @@ function setup({
     value: { writeText },
   });
 
-  renderWithI18n(<StoreShareButton className="custom" title="Collares" />, {
-    locale,
-  });
+  renderWithI18n(
+    <StoreShareButton className="custom" path={PATH} title="Collares" />,
+    {
+      locale,
+    }
+  );
 
   return {
     click: async () => {
@@ -64,6 +71,8 @@ function setup({
         })
       );
     },
+    /** What the live region says, without its invisible mark. */
+    said: () => screen.getByRole("status").textContent?.replaceAll(MARK, ""),
     shareSheet,
     status: () => screen.getByRole("status"),
     writeText,
@@ -76,65 +85,82 @@ afterEach(() => {
 });
 
 describe("StoreShareButton", () => {
-  test("opens the share sheet with the page's title and address", async () => {
-    const { click, shareSheet, status, writeText } = setup({ share: "ok" });
+  test("opens the share sheet with the title and the link it is given", async () => {
+    const { click, said, shareSheet, writeText } = setup({ share: "ok" });
 
     await click();
 
     expect(shareSheet).toHaveBeenCalledExactlyOnceWith({
       title: "Collares",
-      url: `http://localhost:3000${PATH}`,
+      url: URL_SHARED,
     });
     expect(writeText).not.toHaveBeenCalled();
-    expect(status()).toHaveTextContent(/^$/u);
+    expect(said()).toBe("");
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  test("closing the share sheet is no failure: nothing is reported", async () => {
-    const { click, shareSheet } = setup({ share: "abort" });
+  test("closing the share sheet does nothing more: no report, no copy", async () => {
+    const { click, said, shareSheet, writeText } = setup({ share: "abort" });
 
     await click();
 
     await waitFor(() => {
-      expect(shareSheet).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ title: "Collares" })
-      );
+      expect(shareSheet).toHaveBeenCalledExactlyOnceWith({
+        title: "Collares",
+        url: URL_SHARED,
+      });
     });
+    expect(writeText).not.toHaveBeenCalled();
+    expect(said()).toBe("");
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  test("reports a share sheet that failed", async () => {
-    const { click } = setup({ share: "fail" });
+  test("a share sheet that failed is reported, then the link is copied instead", async () => {
+    const { click, said, writeText } = setup({ share: "fail" });
 
     await click();
 
     await waitFor(() => {
-      expect(reportError).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ name: "NotAllowedError" }),
-        { action: "Catalog.share" }
-      );
+      expect(said()).toBe("Enlace copiado.");
     });
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(URL_SHARED);
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ name: "NotAllowedError" }),
+      { action: "Catalog.share" }
+    );
   });
 
   test.each([
     ["es", "Enlace copiado."],
     ["en", "Link copied."],
   ] as const)(
-    "in %s, without a share sheet, copies the address and says %j",
+    "in %s, without a share sheet, copies the link and says %j",
     async (locale, message) => {
-      const { click, status, writeText } = setup({ locale });
+      const { click, said, status, writeText } = setup({ locale });
 
       await click();
 
-      expect(writeText).toHaveBeenCalledExactlyOnceWith(
-        `http://localhost:3000${PATH}`
-      );
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(URL_SHARED);
       await waitFor(() => {
-        expect(status().textContent).toBe(message);
+        expect(said()).toBe(message);
       });
       expect(status()).toHaveAttribute("aria-live", "polite");
     }
   );
+
+  test("a second copy is announced again: the same words, the mark flipped", async () => {
+    const { click, status } = setup();
+
+    await click();
+    await waitFor(() => {
+      expect(status().textContent).toBe(`Enlace copiado.${MARK}`);
+    });
+    await click();
+
+    await waitFor(() => {
+      expect(status().textContent).toBe("Enlace copiado.");
+    });
+  });
 
   test.each([
     ["es", "No pudimos copiar el enlace."],
@@ -142,12 +168,12 @@ describe("StoreShareButton", () => {
   ] as const)(
     "in %s, a copy that failed is reported and says %j",
     async (locale, message) => {
-      const { click, status } = setup({ copy: "fail", locale });
+      const { click, said } = setup({ copy: "fail", locale });
 
       await click();
 
       await waitFor(() => {
-        expect(status().textContent).toBe(message);
+        expect(said()).toBe(message);
       });
       expect(reportError).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ name: "NotAllowedError" }),

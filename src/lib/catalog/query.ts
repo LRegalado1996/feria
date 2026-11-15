@@ -157,7 +157,9 @@ export function clearFilters(query: CatalogQuery): CatalogQuery {
  * `query` without a category or filter values the store does not have (an
  * old link, a typo): they are ignored, as the API ignores an unknown
  * filter, instead of narrowing the catalog to nothing under a heading that
- * does not name them.
+ * does not name them. The filters and their values come in the store's own
+ * order, whatever order the address gave them, so one selection is always
+ * one link (and one canonical address).
  */
 export function knownOnly(
   query: CatalogQuery,
@@ -169,13 +171,15 @@ export function knownOnly(
     category: categories.some((entry) => entry.slug === query.category)
       ? query.category
       : null,
-    filters: query.filters.flatMap((entry) => {
-      const filter = filters.find((known) => known.slug === entry.attribute);
-      const values = entry.values.filter((slug) =>
-        filter?.values.some((known) => known.slug === slug)
-      );
+    filters: filters.flatMap((filter) => {
+      const chosen =
+        query.filters.find((entry) => entry.attribute === filter.slug)
+          ?.values ?? [];
+      const values = filter.values
+        .map((value) => value.slug)
+        .filter((slug) => chosen.includes(slug));
 
-      return values.length > 0 ? [{ attribute: entry.attribute, values }] : [];
+      return values.length > 0 ? [{ attribute: filter.slug, values }] : [];
     }),
   };
 }

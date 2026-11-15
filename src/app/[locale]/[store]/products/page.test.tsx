@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { StoreCatalogProps } from "@/app/_components/organisms/store-catalog";
 import type { RawSearchParams } from "@/lib/catalog/query";
 import type { PublicStore } from "@/server/services/store";
+import { renderWithI18n } from "@/test/i18n";
 
 import CatalogPage, { generateMetadata, instant } from "./page";
 
@@ -142,7 +143,7 @@ describe("CatalogPage", () => {
   test("waits behind the catalog's skeleton", () => {
     const { fallback } = setup();
 
-    render(fallback);
+    renderWithI18n(fallback, { locale: "es" });
 
     expect(screen.getByTestId("store-catalog-skeleton")).toHaveAttribute(
       "aria-busy",
@@ -292,7 +293,6 @@ describe("generateMetadata", () => {
       search: {
         category: "collares",
         color: "dorado,verde",
-        q: "perla",
         sort: "price_asc",
       },
     });
@@ -306,13 +306,71 @@ describe("generateMetadata", () => {
           "x-default": "/lr-market/products?category=collares&color=dorado",
         },
       },
-      description: "Collares · Dorado · «perla», en LR Market.",
+      description: "Collares · Dorado, en LR Market.",
       openGraph: {
-        description: "Collares · Dorado · «perla», en LR Market.",
-        title: "Collares · Dorado · «perla»",
+        description: "Collares · Dorado, en LR Market.",
+        title: "Collares · Dorado",
         type: "website",
       },
-      title: "Collares · Dorado · «perla»",
+      title: "Collares · Dorado",
     });
   });
+
+  test("names the search in the title only: the share card leaves it out, and search engines skip the page", async () => {
+    const { metadata } = setup({
+      search: { category: "collares", q: "perla" },
+    });
+
+    await expect(metadata()).resolves.toEqual({
+      alternates: {
+        canonical: "/lr-market/products?category=collares",
+        languages: {
+          en: "/en/lr-market/products?category=collares",
+          es: "/lr-market/products?category=collares",
+          "x-default": "/lr-market/products?category=collares",
+        },
+      },
+      description: "Collares · «perla», en LR Market.",
+      openGraph: {
+        description: "Collares, en LR Market.",
+        title: "Collares",
+        type: "website",
+      },
+      robots: { follow: true, index: false },
+      title: "Collares · «perla»",
+    });
+  });
+
+  test.each([
+    [
+      "es",
+      "«perla»",
+      "«perla», en LR Market.",
+      "Catálogo",
+      "Todos los artículos de LR Market.",
+    ],
+    [
+      "en",
+      "“perla”",
+      "“perla”, at LR Market.",
+      "Catalog",
+      "Every article of LR Market.",
+    ],
+  ] as const)(
+    "in %s, a search alone titles the page %j, and the share card is the plain catalog's",
+    async (locale, title, description, sharedTitle, sharedDescription) => {
+      const { metadata } = setup({ locale, search: { q: "perla" } });
+
+      await expect(metadata()).resolves.toMatchObject({
+        description,
+        openGraph: {
+          description: sharedDescription,
+          title: sharedTitle,
+          type: "website",
+        },
+        robots: { follow: true, index: false },
+        title,
+      });
+    }
+  );
 });

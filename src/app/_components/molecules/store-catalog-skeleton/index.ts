@@ -1,4 +1,1 @@
-export {
-  StoreCatalogSkeleton,
-  type StoreCatalogSkeletonProps,
-} from "./store-catalog-skeleton";
+export { StoreCatalogSkeleton } from "./store-catalog-skeleton";

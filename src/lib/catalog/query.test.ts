@@ -311,14 +311,57 @@ describe("knownOnly", () => {
     const query = makeQuery({
       category: "aros",
       filters: [
-        { attribute: "color", values: ["plateado", "dorado"] },
+        { attribute: "color", values: ["dorado", "plateado"] },
         { attribute: "talle", values: ["m"] },
       ],
-      q: "oro",
-      sort: "price_asc",
+      q: "perla",
+      sort: "price_desc",
     });
 
     expect(knownOnly(query, CATEGORIES, FILTERS)).toEqual(query);
+  });
+
+  test("puts filters and values in the store's order, whatever the address's", () => {
+    const filters = [
+      { slug: "color", values: [{ slug: "dorado" }, { slug: "rojo" }] },
+      { slug: "talle", values: [{ slug: "s" }, { slug: "m" }] },
+    ];
+
+    expect(
+      knownOnly(
+        makeQuery({
+          filters: [
+            { attribute: "talle", values: ["m", "s"] },
+            { attribute: "color", values: ["rojo", "dorado"] },
+          ],
+        }),
+        CATEGORIES,
+        filters
+      ).filters
+    ).toEqual([
+      { attribute: "color", values: ["dorado", "rojo"] },
+      { attribute: "talle", values: ["s", "m"] },
+    ]);
+  });
+
+  test("gives two orders of the same selection the same link", () => {
+    const filters = [
+      { slug: "color", values: [{ slug: "dorado" }, { slug: "rojo" }] },
+      { slug: "talle", values: [{ slug: "m" }] },
+    ];
+    const link = (raw: Record<string, string>) =>
+      catalogHref(
+        "lr-market",
+        "es",
+        knownOnly(readCatalogQuery(raw), CATEGORIES, filters)
+      );
+
+    expect(link({ color: "rojo,dorado", talle: "m" })).toBe(
+      link({ talle: "m", color: "dorado,rojo" })
+    );
+    expect(link({ talle: "m", color: "rojo,dorado" })).toBe(
+      "/lr-market/products?color=dorado,rojo&talle=m"
+    );
   });
 
   test("drops an unknown category, filter and values, keeping search and sort", () => {

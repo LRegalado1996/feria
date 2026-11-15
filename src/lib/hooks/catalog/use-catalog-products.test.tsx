@@ -95,22 +95,18 @@ function setup({
     { wrapper }
   );
 
-  return { observers, products, result };
+  return { observers, products, queryClient, result };
 }
 
 describe("useCatalogProducts", () => {
-  test("starts from the server's first page without asking again", async () => {
-    const { products, result } = setup();
+  test("starts from the server's first page without asking again", () => {
+    const { products, queryClient, result } = setup();
 
     expect(result.current.items).toEqual([makeItem(1), makeItem(2)]);
     expect(result.current.hasNextPage).toBe(true);
     expect(result.current.isFetchingNextPage).toBe(false);
-    // Time for a refetch on mount to go out, were there one.
-    await act(async () => {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
-    });
+    // A refetch on mount starts as the hook mounts: none is in flight.
+    expect(queryClient.isFetching()).toBe(0);
     expect(products).not.toHaveBeenCalled();
   });
 

@@ -86,15 +86,35 @@ export async function generateMetadata({
     filters,
     copy.searchResult
   );
-  const description = selection
-    ? interpolate(copy.filteredDescription, { selection, store: store.name })
-    : interpolate(copy.description, { store: store.name });
   const title = selection ?? copy.title;
+  // The share card names the selection without the search: a search is
+  // whatever someone typed, and a store's link must not carry it into a
+  // chat preview under the store's name.
+  const shared =
+    selectionName(
+      { ...query, q: null },
+      categories,
+      filters,
+      copy.searchResult
+    ) ?? copy.title;
+  const describe = (name: string | null) =>
+    name
+      ? interpolate(copy.filteredDescription, {
+          selection: name,
+          store: store.name,
+        })
+      : interpolate(copy.description, { store: store.name });
 
   return {
     alternates: alternatesOf(store.slug, locale, query),
-    description,
-    openGraph: { description, title, type: "website" },
+    description: describe(selection),
+    openGraph: {
+      description: describe(shared === copy.title ? null : shared),
+      title: shared,
+      type: "website",
+    },
+    // A search result is not a page of its own for a search engine.
+    ...(query.q ? { robots: { follow: true, index: false } } : {}),
     title,
   };
 }

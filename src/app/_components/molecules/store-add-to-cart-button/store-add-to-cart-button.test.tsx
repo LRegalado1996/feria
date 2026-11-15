@@ -17,16 +17,23 @@ function makeCart(count: number) {
   }));
 }
 
+const MARK = "\u2060";
+
 function setup({
   cart = [],
   locale = "es",
-}: { cart?: ReturnType<typeof makeCart>; locale?: Locale } = {}) {
+  productId = 42,
+}: {
+  cart?: { productId: number; quantity: number }[];
+  locale?: Locale;
+  productId?: number;
+} = {}) {
   localStorage.setItem(KEY, JSON.stringify(cart));
   renderWithI18n(
     <StoreAddToCartButton
       className="custom"
       name="Collar de perlas"
-      productId={42}
+      productId={productId}
       storeSlug="lr-market"
     />,
     { locale }
@@ -34,6 +41,8 @@ function setup({
 
   return {
     status: () => screen.getByRole("status"),
+    /** What the live region says, without its invisible mark. */
+    said: () => screen.getByRole("status").textContent?.replaceAll(MARK, ""),
     storedCart: (): unknown => JSON.parse(localStorage.getItem(KEY) ?? "null"),
     user: userEvent.setup(),
   };
@@ -63,7 +72,7 @@ describe("StoreAddToCartButton", () => {
   });
 
   test("adds one of the article to the store's cart and says so", async () => {
-    const { status, storedCart, user } = setup({ cart: makeCart(2) });
+    const { said, storedCart, user } = setup({ cart: makeCart(2) });
 
     await user.click(screen.getByRole("button"));
 
@@ -71,33 +80,80 @@ describe("StoreAddToCartButton", () => {
       ...makeCart(2),
       { productId: 42, quantity: 1 },
     ]);
-    expect(status()).toHaveTextContent(/^Agregado al carrito\.$/u);
+    expect(said()).toBe("Agregado al carrito.");
   });
 
-  test("adds one more on a second click", async () => {
-    const { storedCart, user } = setup();
+  test("adds one more on a second click, and says it again as news", async () => {
+    const { status, storedCart, user } = setup();
 
     await user.click(screen.getByRole("button"));
+    const first = status().textContent;
     await user.click(screen.getByRole("button"));
 
     expect(storedCart()).toEqual([{ productId: 42, quantity: 2 }]);
+    // The same words with the mark flipped: a screen reader hears it again.
+    expect([first, status().textContent]).toEqual([
+      `Agregado al carrito.${MARK}`,
+      "Agregado al carrito.",
+    ]);
   });
 
   test.each([
-    ["es", "El carrito ya tiene 20 artículos distintos."],
-    ["en", "The cart already holds 20 different articles."],
+    [
+      "es",
+      "an article already at 10",
+      { cart: [{ productId: 42, quantity: 10 }] },
+      "Ya tenés 10 de este artículo, el máximo por pedido.",
+      [{ productId: 42, quantity: 10 }],
+    ],
+    [
+      "en",
+      "an article already at 10",
+      { cart: [{ productId: 42, quantity: 10 }] },
+      "You already have 10 of this article, the most an order takes.",
+      [{ productId: 42, quantity: 10 }],
+    ],
+    [
+      "es",
+      "a cart of 20 articles",
+      { cart: makeCart(20) },
+      "El carrito ya tiene 20 artículos distintos, el máximo.",
+      makeCart(20),
+    ],
+    [
+      "en",
+      "a cart of 20 articles",
+      { cart: makeCart(20) },
+      "The cart already holds 20 different articles, the most it takes.",
+      makeCart(20),
+    ],
+    [
+      "es",
+      "an article the cart cannot hold",
+      { productId: 0 },
+      "No pudimos agregarlo. Probá de nuevo.",
+      [],
+    ],
+    [
+      "en",
+      "an article the cart cannot hold",
+      { productId: 0 },
+      "We could not add it. Try again.",
+      [],
+    ],
   ] as const)(
-    "in %s, with 20 articles already in the cart, adds nothing and says %j",
-    async (locale, message) => {
-      const { status, storedCart, user } = setup({
-        cart: makeCart(20),
+    "in %s, with %s, adds nothing and says so",
+    async (locale, _case, options, message, cart) => {
+      const { said, storedCart, user } = setup({
+        cart: "cart" in options ? [...options.cart] : [],
         locale,
+        productId: "productId" in options ? options.productId : 42,
       });
 
       await user.click(screen.getByRole("button"));
 
-      expect(storedCart()).toEqual(makeCart(20));
-      expect(status().textContent).toBe(message);
+      expect(storedCart()).toEqual(cart);
+      expect(said()).toBe(message);
     }
   );
 });

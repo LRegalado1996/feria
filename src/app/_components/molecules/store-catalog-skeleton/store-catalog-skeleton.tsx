@@ -1,18 +1,15 @@
-import { getDictionary } from "@/content";
-import type { Locale } from "@/lib/i18n/config";
+"use client";
 
-export interface StoreCatalogSkeletonProps {
-  /** The page's language when known; Spanish otherwise, the default. */
-  locale?: Locale;
-}
+import { useDictionary } from "@/lib/hooks/i18n";
 
 /**
  * The catalog's shape while its selection loads: a heading bar, the
  * toolbar and six cards, in the store's line color, busy for assistive
- * technology.
+ * technology. A client component: the page's fallback cannot wait for its
+ * language, and the provider above it already knows it.
  */
-function StoreCatalogSkeleton({ locale = "es" }: StoreCatalogSkeletonProps) {
-  const { common } = getDictionary(locale);
+function StoreCatalogSkeleton() {
+  const { common } = useDictionary();
 
   return (
     <div

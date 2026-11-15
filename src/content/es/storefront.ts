@@ -2,8 +2,10 @@ export const storefront = {
   catalog: {
     addToCart: "Agregar al carrito: {name}",
     addToCartShort: "Agregar",
+    addFailed: "No pudimos agregarlo. Probá de nuevo.",
     added: "Agregado al carrito.",
-    cartFull: "El carrito ya tiene 20 artículos distintos.",
+    atMax: "Ya tenés {max} de este artículo, el máximo por pedido.",
+    cartFull: "El carrito ya tiene {max} artículos distintos, el máximo.",
     categories: "Categorías",
     allCategories: "Todas",
     clearAll: "Limpiar todo",
