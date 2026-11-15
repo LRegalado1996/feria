@@ -68,19 +68,35 @@ test.describe("robots.txt", () => {
   }) => {
     const response = await request.get("/robots.txt");
     const body = await response.text();
+    // One group per blank line; each group's lines in order.
+    const groups = body
+      .trim()
+      .split(/\n\s*\n/u)
+      .map((group) => group.split("\n"));
+    const rules = [
+      "Allow: /",
+      "Disallow: /admin$",
+      "Disallow: /admin/",
+      "Disallow: /en/admin$",
+      "Disallow: /en/admin/",
+      "Disallow: /api/",
+      "Disallow: /coming-soon$",
+      "Disallow: /en/coming-soon$",
+    ];
 
     expect(response.status()).toBe(200);
+    expect(groups.find((group) => group[0] === "User-Agent: *")).toEqual([
+      "User-Agent: *",
+      ...rules,
+    ]);
+    // The named crawlers read only their own group, which repeats the rules.
+    const named = groups.find((group) =>
+      group.includes("User-Agent: ClaudeBot")
+    );
+    expect(named?.filter((line) => !line.startsWith("User-Agent:"))).toEqual(
+      rules
+    );
     expect(body).toMatch(/^Sitemap: https?:\/\/[^/\s]+\/sitemap\.xml$/mu);
-    for (const path of [
-      "/admin",
-      "/en/admin",
-      "/api",
-      "/coming-soon",
-      "/en/coming-soon",
-    ]) {
-      expect(body).toContain(`Disallow: ${path}\n`);
-    }
-    expect(body).toContain("User-Agent: ClaudeBot\n");
   });
 });
 

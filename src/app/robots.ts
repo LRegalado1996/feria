@@ -4,14 +4,18 @@ import { absoluteUrl } from "@/lib/seo/origin";
 
 /**
  * Never worth crawling: the admin, the API and the coming-soon page, in
- * every language they answer in.
+ * every language they answer in. A rule is a prefix, and a store's address
+ * may start like one of these (`/apio`, `/administracion`), so each root is
+ * anchored with `$` and only the paths under it are matched by its slash.
  */
 const DISALLOWED = [
-  "/admin",
-  "/en/admin",
-  "/api",
-  "/coming-soon",
-  "/en/coming-soon",
+  "/admin$",
+  "/admin/",
+  "/en/admin$",
+  "/en/admin/",
+  "/api/",
+  "/coming-soon$",
+  "/en/coming-soon$",
 ];
 
 /**

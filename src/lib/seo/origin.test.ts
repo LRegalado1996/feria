@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { absoluteUrl, siteOrigin } from "./origin";
+import { absoluteUrl, ownUrl, siteOrigin } from "./origin";
 
 describe("siteOrigin", () => {
   test("is the configured auth URL's origin, without its path", () => {
@@ -59,5 +59,39 @@ describe("absoluteUrl", () => {
     expect(absoluteUrl("/lr-market")).toBe(
       "https://from-process.example/lr-market"
     );
+  });
+});
+
+describe("ownUrl", () => {
+  test.each([
+    [
+      "a site path",
+      "/seed/anillo.jpg",
+      "https://feria.example/seed/anillo.jpg",
+    ],
+    [
+      "an absolute URL on this site",
+      "https://feria.example/uploads/a.webp",
+      "https://feria.example/uploads/a.webp",
+    ],
+  ])("answers %s as an absolute URL", (_case, url, expected) => {
+    expect(ownUrl(url, "https://feria.example")).toBe(expected);
+  });
+
+  test.each([
+    ["another host", "https://cdn.example/photo.webp"],
+    ["the cloud's metadata address", "http://169.254.169.254/latest/meta-data"],
+    ["a protocol-relative address", "//evil.example/a.jpg"],
+    ["this host over another scheme", "http://feria.example/a.jpg"],
+    ["this host on another port", "https://feria.example:8443/a.jpg"],
+  ])("answers null for %s", (_case, url) => {
+    expect(ownUrl(url, "https://feria.example")).toBeNull();
+  });
+
+  test("checks against the site's origin when given none", () => {
+    vi.stubEnv("BETTER_AUTH_URL", "https://from-process.example");
+
+    expect(ownUrl("/a.jpg")).toBe("https://from-process.example/a.jpg");
+    expect(ownUrl("https://feria.example/a.jpg")).toBeNull();
   });
 });

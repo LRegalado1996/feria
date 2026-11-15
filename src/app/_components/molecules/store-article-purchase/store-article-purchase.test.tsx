@@ -114,6 +114,39 @@ describe("StoreArticlePurchase", () => {
     expect(said()).toBe("Agregado al carrito.");
   });
 
+  test.each([
+    [9, 3, "Agregamos 1: con ellos tenés 10, el máximo por pedido."],
+    [7, 4, "Agregamos 3: con ellos tenés 10, el máximo por pedido."],
+  ])(
+    "with %i in the cart, choosing %i fills it to 10 and says how many it took",
+    async (had, chosen, text) => {
+      const { add, increase, said, storedCart, user } = setup({
+        cart: [{ productId: 42, quantity: had }],
+      });
+
+      for (let step = 1; step < chosen; step += 1) {
+        await user.click(increase());
+      }
+      await add();
+
+      expect(storedCart()).toEqual([{ productId: 42, quantity: 10 }]);
+      expect(said()).toBe(text);
+    }
+  );
+
+  test("with 7 in the cart, choosing 3 fits exactly and says it was added", async () => {
+    const { add, increase, said, storedCart, user } = setup({
+      cart: [{ productId: 42, quantity: 7 }],
+    });
+
+    await user.click(increase());
+    await user.click(increase());
+    await add();
+
+    expect(storedCart()).toEqual([{ productId: 42, quantity: 10 }]);
+    expect(said()).toBe("Agregado al carrito.");
+  });
+
   test("a repeated message is announced again: the mark flips", async () => {
     const { add, message: region, storedCart } = setup();
 

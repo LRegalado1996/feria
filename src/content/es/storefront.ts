@@ -1,5 +1,7 @@
 export const storefront = {
   article: {
+    addedCapped:
+      "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
     askWhatsapp: "Consultar por WhatsApp",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",

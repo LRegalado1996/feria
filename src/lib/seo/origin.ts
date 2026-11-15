@@ -21,3 +21,15 @@ export function siteOrigin(
 export function absoluteUrl(path: string, origin = siteOrigin()): string {
   return new URL(path, origin).href;
 }
+
+/**
+ * `url` as an absolute URL on this site, or `null` when it points anywhere
+ * else. For what the server itself fetches from a stored address (a share
+ * card's photo): a row that names another host, or the cloud's metadata
+ * address, is never fetched.
+ */
+export function ownUrl(url: string, origin = siteOrigin()): string | null {
+  const resolved = new URL(url, origin);
+
+  return resolved.origin === origin ? resolved.href : null;
+}

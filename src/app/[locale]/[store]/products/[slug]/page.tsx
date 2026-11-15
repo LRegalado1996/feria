@@ -93,13 +93,20 @@ export async function generateMetadata({
       ? excerpt(article.description)
       : pickTranslation(store.translations, locale)?.tagline);
 
+  const path = `/${store.slug}/products/${article.slug}`;
+
   return {
-    alternates: buildAlternates(
-      `/${store.slug}/products/${article.slug}`,
-      locale
-    ),
+    alternates: buildAlternates(path, locale),
     description,
-    openGraph: { description, title, type: "website" },
+    // The whole object replaces the store layout's, so the store's name is
+    // said again here.
+    openGraph: {
+      description,
+      siteName: store.name,
+      title,
+      type: "website",
+      url: localizePath(path, locale),
+    },
     title,
   };
 }

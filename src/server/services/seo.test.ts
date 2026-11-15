@@ -206,14 +206,21 @@ describe("listIndexableCategories", () => {
       [category],
       [categoryTranslation],
     ]);
+    const [joined, on] = db.$["select.innerJoin"].mock.calls[0] ?? [];
+    expect(joined).toBe(store);
+    expect(renderQuery(on)).toEqual({
+      params: [],
+      sql: '"store"."id" = "category"."storeId"',
+    });
+    // Nothing of an inactive store, even when its id is asked for.
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
       {
-        params: [STORE_ID, "published"],
+        params: [STORE_ID, true, "published"],
         sql:
-          '("category"."storeId" = $1 and exists (select 1 from "product" where ' +
-          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $2)))',
+          '("category"."storeId" = $1 and "store"."isActive" = $2 and exists (select 1 from "product" where ' +
+          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $3)))',
       },
       {
         params: [1, 2, 3],

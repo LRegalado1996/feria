@@ -484,8 +484,10 @@ describe("generateMetadata", () => {
         description: "El anillo de plata que buscabas.",
         openGraph: {
           description: "El anillo de plata que buscabas.",
+          siteName: "Sample Store",
           title: "Anillo de plata 925 | Sample Store",
           type: "website",
+          url: canonical,
         },
         title: "Anillo de plata 925 | Sample Store",
       });
@@ -559,8 +561,10 @@ describe("generateMetadata", () => {
       description: undefined,
       openGraph: {
         description: undefined,
+        siteName: "Sample Store",
         title: "Anillo de plata",
         type: "website",
+        url: "/sample-store/products/anillo-de-plata",
       },
       title: "Anillo de plata",
     });

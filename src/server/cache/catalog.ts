@@ -2,7 +2,10 @@ import { ORPCError } from "@orpc/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import type { Locale } from "@/lib/i18n/config";
-import { RELATED_PRODUCTS_DEFAULT } from "@/lib/schemas/catalog";
+import {
+  catalogSlugSchema,
+  RELATED_PRODUCTS_DEFAULT,
+} from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
@@ -20,9 +23,23 @@ function catalogTag(storeId: number): string {
  * across requests (FER-024): the article page is static output, so its
  * read is cached and every write that changes what it shows drops it
  * (`invalidateCatalogCache`). A draft or a missing article is `null`, never
- * an error, so the page answers a real 404.
+ * an error, so the page answers a real 404. An address that can never be an
+ * article's (malformed or too long) is answered here, before the cache, so a
+ * stream of made-up addresses costs neither a query nor a cache entry.
  */
 export async function readPublishedArticle(
+  store: { currencyCode: Currency; id: number },
+  slug: string,
+  locale: Locale
+) {
+  if (!catalogSlugSchema.safeParse(slug).success) {
+    return null;
+  }
+
+  return await readCachedArticle(store, slug, locale);
+}
+
+async function readCachedArticle(
   store: { currencyCode: Currency; id: number },
   slug: string,
   locale: Locale

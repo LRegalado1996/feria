@@ -25,7 +25,7 @@ export interface StoreGalleryProps {
 }
 
 const BUTTON_CLASS =
-  "inline-flex size-11 items-center justify-center bg-store-contrast text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:opacity-40";
+  "inline-flex size-11 items-center justify-center bg-store-contrast text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground aria-disabled:opacity-40";
 
 /**
  * An article's photos (FER-024): swiped on a phone (native scroll with
@@ -37,15 +37,30 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
   const track = useRef<HTMLDivElement>(null);
+  // The photo a button or a thumbnail asked for, while the track is still
+  // gliding to it: the photos it passes on the way are not where the visitor
+  // is, so they neither move the counter nor become the next step's start.
+  const target = useRef<number | null>(null);
   const [index, setIndex] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   const current = images[index];
 
   const show = (next: number) => {
+    if (next < 0 || next >= images.length) {
+      return;
+    }
+
     const width = track.current?.clientWidth ?? 0;
-    track.current?.scrollTo({ behavior: "smooth", left: next * width });
+    target.current = next;
+    // No `behavior`: the track's CSS glides, or not when motion is reduced.
+    track.current?.scrollTo({ left: next * width });
     setIndex(next);
   };
+
+  const shown = (element: HTMLDivElement) =>
+    element.clientWidth > 0
+      ? Math.round(element.scrollLeft / element.clientWidth)
+      : 0;
 
   if (!current) {
     return (
@@ -72,11 +87,28 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
     >
       <div className="relative">
         <div
-          className="flex aspect-4/5 snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto bg-store-line"
+          data-testid="store-gallery-track"
+          className="flex aspect-4/5 snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto scroll-smooth bg-store-line motion-reduce:scroll-auto"
           onScroll={(event) => {
-            const { clientWidth, scrollLeft } = event.currentTarget;
-            const next =
-              clientWidth > 0 ? Math.round(scrollLeft / clientWidth) : 0;
+            const next = shown(event.currentTarget);
+
+            if (target.current !== null) {
+              // Arrived: from here a swipe moves the counter again.
+              if (next === target.current) {
+                target.current = null;
+              }
+
+              return;
+            }
+
+            if (next !== index) {
+              setIndex(next);
+            }
+          }}
+          onScrollEnd={(event) => {
+            // A swipe that interrupted the glide ends wherever it ends.
+            target.current = null;
+            const next = shown(event.currentTarget);
 
             if (next !== index) {
               setIndex(next);
@@ -144,9 +176,11 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
       </div>
       {images.length > 1 ? (
         <div className="flex items-center gap-3">
+          {/* `aria-disabled`, not `disabled`: a button that disables itself
+              under the finger drops keyboard focus on the floor. */}
           <button
+            aria-disabled={index === 0}
             className={BUTTON_CLASS}
-            disabled={index === 0}
             onClick={() => {
               show(index - 1);
             }}
@@ -162,8 +196,8 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
             })}
           </p>
           <button
+            aria-disabled={index === images.length - 1}
             className={BUTTON_CLASS}
-            disabled={index === images.length - 1}
             onClick={() => {
               show(index + 1);
             }}

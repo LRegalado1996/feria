@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
+import { CATALOG_SLUG_MAX_LENGTH } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 
@@ -113,6 +114,35 @@ describe("readPublishedArticle", () => {
 
     await expect(readArticle()).rejects.toBe(error);
   });
+
+  test("reads an address as long as an article's can be", async () => {
+    const { article, readArticle } = setup();
+    const slug = "a".repeat(CATALOG_SLUG_MAX_LENGTH);
+
+    await expect(readArticle({ slug })).resolves.toBe(article);
+
+    expect(getPublishedProduct).toHaveBeenCalledExactlyOnceWith(
+      db,
+      expect.objectContaining({ slug })
+    );
+  });
+
+  test.each([
+    ["one character too long", "a".repeat(CATALOG_SLUG_MAX_LENGTH + 1)],
+    ["with a capital", "Cadena"],
+    ["with an underscore", "__sample__"],
+    ["empty", ""],
+  ])(
+    "answers null for an address %s without a query or a cache entry",
+    async (_case, slug) => {
+      const { readArticle } = setup();
+
+      await expect(readArticle({ slug })).resolves.toBeNull();
+
+      expect(getPublishedProduct).not.toHaveBeenCalled();
+      expect(cacheTag).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe("readRelatedArticles", () => {

@@ -2,6 +2,8 @@ import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
   article: {
+    addedCapped:
+      "Added {added}: with them you have {max}, the most an order takes.",
     addToCart: "Add to cart",
     askWhatsapp: "Ask on WhatsApp",
     askWhatsappText: "Hi! I'm writing about “{title}”: {url}",

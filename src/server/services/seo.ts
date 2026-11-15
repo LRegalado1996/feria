@@ -116,9 +116,11 @@ export async function listIndexableCategories(
   const rows = await db
     .select({ id: category.id, slug: category.slug })
     .from(category)
+    .innerJoin(store, eq(store.id, category.storeId))
     .where(
       and(
         eq(category.storeId, storeId),
+        eq(store.isActive, true),
         sql`exists (select 1 from ${product} where ${and(
           eq(product.categoryId, category.id),
           eq(product.storeId, category.storeId),

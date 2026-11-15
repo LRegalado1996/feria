@@ -178,6 +178,9 @@ describe("what search engines and assistants are told about", () => {
     await expect(
       listIndexableArticles(db, { storeId: shop.id })
     ).resolves.toEqual([]);
+    await expect(
+      listIndexableCategories(db, { locale: "es", storeId: shop.id })
+    ).resolves.toEqual([]);
   });
 
   test("lists the categories that hold a published article, by name", async () => {

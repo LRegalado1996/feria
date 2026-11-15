@@ -53,12 +53,22 @@ test.describe("Article page", () => {
       gallery.getByRole("button", { name: "Foto siguiente" }),
       gallery.getByText("Foto 2 de 3")
     );
+    const track = gallery.getByTestId("store-gallery-track");
+    // The photo in view, by its place on the track.
+    const inView = async () =>
+      await track.evaluate((element) =>
+        Math.round(element.scrollLeft / element.clientWidth)
+      );
+    await expect.poll(inView).toBe(1);
     await gallery.getByRole("button", { name: "Ver la foto 3" }).click();
     await expect(gallery.getByText("Foto 3 de 3")).toBeVisible();
+    await expect.poll(inView).toBe(2);
 
+    const third = await track.getByRole("img").nth(2).getAttribute("alt");
     const zoom = page.getByTestId("store-gallery-zoom");
     await gallery.getByRole("button", { name: "Ampliar la foto" }).click();
     await expect(zoom).toBeVisible();
+    await expect(zoom.getByRole("img")).toHaveAttribute("alt", third ?? "");
     await zoom.getByRole("button", { name: "Cerrar la foto ampliada" }).click();
     await expectDialogRemoved(page, zoom);
   });

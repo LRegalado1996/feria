@@ -266,6 +266,9 @@ describe("proxy matcher", () => {
     // Only the root files are metadata routes, not a path that ends alike.
     "/lr-market/robots.txt",
     "/en/sitemap.xml",
+    // A dot in the name is a dot, not any character.
+    "/robots-txt",
+    "/sitemap-xml",
     // Only the tunnel itself is skipped, not a page that starts like it.
     "/monitoring-pedidos",
     // Only the generated images and the brand folder, not pages named alike.

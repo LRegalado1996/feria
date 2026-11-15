@@ -6,6 +6,7 @@ import { useState } from "react";
 import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
 import { useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ function StoreArticlePurchase({
 }: StoreArticlePurchaseProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
-  const { add } = useCart(storeSlug);
+  const { add, items } = useCart(storeSlug);
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState({ count: 0, text: "" });
 
@@ -79,10 +80,19 @@ function StoreArticlePurchase({
       <button
         className="inline-flex min-h-12 w-full items-center justify-center gap-2 bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
         onClick={() => {
-          const text = addOutcomeMessage(
-            add(productId, quantity),
-            storefront.catalog
-          );
+          const had =
+            items.find((item) => item.productId === productId)?.quantity ?? 0;
+          const outcome = add(productId, quantity);
+          // The cart keeps at most the cap of one article: when it took
+          // fewer than chosen, the shopper is told how many, not "added".
+          const added = Math.min(quantity, CART_QUANTITY_MAX - had);
+          const text =
+            outcome === "added" && added < quantity
+              ? interpolate(copy.addedCapped, {
+                  added,
+                  max: CART_QUANTITY_MAX,
+                })
+              : addOutcomeMessage(outcome, storefront.catalog);
           setStatus((previous) => ({ count: previous.count + 1, text }));
         }}
         type="button"

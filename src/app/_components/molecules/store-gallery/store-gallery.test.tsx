@@ -62,6 +62,13 @@ function setup({
       track.scrollLeft = left;
       fireEvent.scroll(track);
     },
+    /** The track coming to rest at `left` pixels in. */
+    settle: (left: number) => {
+      track.scrollLeft = left;
+      fireEvent.scroll(track);
+      fireEvent(track, new Event("scrollend"));
+    },
+    track,
     thumbs: () =>
       [1, 2, 3].map((position) =>
         button(`Ver la foto ${position}`).getAttribute("aria-current")
@@ -119,9 +126,37 @@ describe("StoreGallery", () => {
 
     expect(counter()).toHaveTextContent(/^Foto 1 de 3$/u);
     expect(counter()).toHaveAttribute("aria-live", "polite");
-    expect(button("Foto anterior")).toBeDisabled();
-    expect(button("Foto siguiente")).toBeEnabled();
+    expect(button("Foto anterior")).toHaveAttribute("aria-disabled", "true");
+    expect(button("Foto siguiente")).toHaveAttribute("aria-disabled", "false");
     expect(thumbs()).toEqual(["true", null, null]);
+  });
+
+  test("glides between photos with CSS, which stops gliding when motion is reduced", () => {
+    const { track } = setup();
+
+    expect(track).toHaveClass("scroll-smooth", "motion-reduce:scroll-auto");
+  });
+
+  test("at the last photo, next keeps the focus and goes nowhere", async () => {
+    const { button, counter, scrollTo, user } = setup();
+    await user.click(button("Ver la foto 3"));
+    scrollTo.mockClear();
+
+    await user.click(button("Foto siguiente"));
+
+    expect(button("Foto siguiente")).toHaveFocus();
+    expect(counter()).toHaveTextContent(/^Foto 3 de 3$/u);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  test("at the first photo, previous keeps the focus and goes nowhere", async () => {
+    const { button, counter, scrollTo, user } = setup();
+
+    await user.click(button("Foto anterior"));
+
+    expect(button("Foto anterior")).toHaveFocus();
+    expect(counter()).toHaveTextContent(/^Foto 1 de 3$/u);
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   test("steps forward and back, scrolling the track a photo's width at a time", async () => {
@@ -131,17 +166,17 @@ describe("StoreGallery", () => {
     await user.click(button("Foto siguiente"));
 
     expect(counter()).toHaveTextContent(/^Foto 3 de 3$/u);
-    expect(button("Foto siguiente")).toBeDisabled();
-    expect(button("Foto anterior")).toBeEnabled();
+    expect(button("Foto siguiente")).toHaveAttribute("aria-disabled", "true");
+    expect(button("Foto anterior")).toHaveAttribute("aria-disabled", "false");
     expect(thumbs()).toEqual([null, null, "true"]);
 
     await user.click(button("Foto anterior"));
 
     expect(counter()).toHaveTextContent(/^Foto 2 de 3$/u);
     expect(scrollTo.mock.calls).toEqual([
-      [{ behavior: "smooth", left: 400 }],
-      [{ behavior: "smooth", left: 800 }],
-      [{ behavior: "smooth", left: 400 }],
+      [{ left: 400 }],
+      [{ left: 800 }],
+      [{ left: 400 }],
     ]);
   });
 
@@ -152,10 +187,31 @@ describe("StoreGallery", () => {
 
     expect(counter()).toHaveTextContent(/^Foto 3 de 3$/u);
     expect(thumbs()).toEqual([null, null, "true"]);
-    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({
-      behavior: "smooth",
-      left: 800,
-    });
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ left: 800 });
+  });
+
+  test("while gliding to a thumbnail's photo, the photos passed on the way neither move the counter nor start the next step", async () => {
+    const { button, counter, scrollTo, swipe, user } = setup({ count: 4 });
+    await user.click(button("Ver la foto 4"));
+
+    swipe(400);
+    swipe(800);
+
+    expect(counter()).toHaveTextContent(/^Foto 4 de 4$/u);
+
+    await user.click(button("Foto anterior"));
+
+    expect(counter()).toHaveTextContent(/^Foto 3 de 4$/u);
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: 800 });
+  });
+
+  test("a swipe that interrupts the glide ends where it comes to rest", async () => {
+    const { button, counter, settle, user } = setup();
+    await user.click(button("Ver la foto 3"));
+
+    settle(0);
+
+    expect(counter()).toHaveTextContent(/^Foto 1 de 3$/u);
   });
 
   test.each([
@@ -176,6 +232,8 @@ describe("StoreGallery", () => {
   test("a swipe back after a step follows the track", async () => {
     const { button, counter, swipe, user } = setup();
     await user.click(button("Foto siguiente"));
+    // The glide arrives.
+    swipe(400);
 
     swipe(0);
 

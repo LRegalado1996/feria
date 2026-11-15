@@ -207,6 +207,25 @@ describe("ArticleOpenGraphImage", () => {
     expect(photo.style.backgroundSize).toBe("cover");
   });
 
+  test.each([
+    ["on another host", "https://cdn.example/anillo.jpg"],
+    ["at the cloud's metadata address", "http://169.254.169.254/latest"],
+  ])(
+    "never fetches a photo stored %s: the block keeps the contrast color",
+    async (_case, url) => {
+      const { draw } = setup({
+        article: makeArticle({
+          images: [{ alt: "Anillo", height: 800, id: 1, url, width: 800 }],
+        }),
+      });
+
+      const { photo } = await draw();
+
+      expect(photo.style.backgroundImage).toBe("");
+      expect(photo.style.backgroundColor).toBe("#3d1f47");
+    }
+  );
+
   test("paints the photo block in the store's contrast color when the article has no photo", async () => {
     const { draw } = setup({ article: makeArticle({ images: [] }) });
 

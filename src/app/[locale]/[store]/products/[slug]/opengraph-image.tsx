@@ -3,7 +3,7 @@ import { ImageResponse } from "next/og";
 
 import { isLocale } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
-import { absoluteUrl } from "@/lib/seo/origin";
+import { ownUrl } from "@/lib/seo/origin";
 import { formatPrice } from "@/lib/utils/format";
 import { readPublishedArticle } from "@/server/cache/catalog";
 import { getStoreForPath } from "@/server/cache/store";
@@ -51,6 +51,8 @@ export default async function ArticleOpenGraphImage({
   }
 
   const [photo] = article.images;
+  // Only a photo on this site: the renderer fetches it from the server.
+  const photoUrl = photo ? ownUrl(photo.url) : null;
 
   return new ImageResponse(
     <div
@@ -67,7 +69,7 @@ export default async function ArticleOpenGraphImage({
       <div
         style={{
           background: store.colorContrast,
-          backgroundImage: photo ? `url(${absoluteUrl(photo.url)})` : undefined,
+          backgroundImage: photoUrl ? `url("${photoUrl}")` : undefined,
           backgroundPosition: "center",
           backgroundSize: "cover",
           display: "flex",
