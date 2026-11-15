@@ -337,18 +337,16 @@ describe("the default store", () => {
     expect(db.$.update).not.toHaveBeenCalled();
   });
 
-  test("an edit that makes a store the default locks both rows in id order, then unmarks the other one", async () => {
+  test("an edit that makes a store the default takes the one lock for that, then unmarks the other store", async () => {
     const { answerWrites, db, update } = setup();
     answerWrites("update", makeRow({ isDefault: true }));
 
     await update({ ...makeValues({ isDefault: true }), id: 7 });
 
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      sql: '("store"."id" = $1 or "store"."isDefault" = $2)',
-      params: [7, true],
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+      params: ["store.default"],
     });
-    expect(db.$["select.orderBy"]).toHaveBeenCalledExactlyOnceWith(store.id);
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
     expect(db.$["update.set"].mock.calls[0]).toEqual([{ isDefault: false }]);
     // Never the store being edited: it is about to be marked.
     expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
@@ -358,18 +356,34 @@ describe("the default store", () => {
     expect(db.$["update.set"].mock.calls[1]).toEqual([
       expect.objectContaining({ isDefault: true }),
     ]);
-    expect(firstCallOrder(db.$["select.for"])).toBeLessThan(
+    // The lock comes before any row is written.
+    expect(firstCallOrder(db.$.execute)).toBeLessThan(
       firstCallOrder(db.$["update.set"])
     );
   });
 
-  test("an edit that does not make the store the default locks and unmarks nothing", async () => {
+  test("a store created as the default takes the same lock before unmarking", async () => {
+    const { answerWrites, create, db } = setup();
+    answerWrites("insert", makeRow({ isDefault: true }));
+
+    await create(makeValues({ isDefault: true }));
+
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+      params: ["store.default"],
+    });
+    expect(firstCallOrder(db.$.execute)).toBeLessThan(
+      firstCallOrder(db.$["update.set"])
+    );
+  });
+
+  test("an edit that does not make the store the default takes no lock and unmarks nothing", async () => {
     const { answerWrites, db, update } = setup();
     answerWrites("update", makeRow());
 
     await update({ ...makeValues({ isDefault: false }), id: 7 });
 
-    expect(db.$.select).not.toHaveBeenCalled();
+    expect(db.$.execute).not.toHaveBeenCalled();
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ isDefault: false, name: "Sample Store" })
     );

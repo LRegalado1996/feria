@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 
 import { isUniqueViolation } from "@/lib/errors/postgres";
 import type {
@@ -14,6 +14,8 @@ import { store, storeTranslation } from "@/server/db/schema";
 const SLUG_UNIQUE_CONSTRAINT = "store_slug_unique";
 // The partial unique index that allows one default store.
 const SINGLE_DEFAULT_INDEX = "store_single_default";
+// What `pg_advisory_xact_lock` is keyed on while the default mark moves.
+const DEFAULT_STORE_LOCK = "store.default";
 
 const TRANSLATION_COLUMNS = {
   description: storeTranslation.description,
@@ -86,8 +88,19 @@ async function refusingKnownConflicts<T>(write: () => Promise<T>): Promise<T> {
  * Makes room for a new default store: the one that holds the mark, if it is
  * another store, loses it. Called in the transaction that then marks
  * `keepId`, so there is never a moment with two.
+ *
+ * Moving the mark writes two rows, and which the second one is depends on
+ * who moved it last, so no order of row locks is safe: of three writers, one
+ * can hold its own row and want the new default's while another holds that
+ * and wants the first. So every writer that claims the default first takes
+ * one advisory lock, held until its transaction ends, and they go one at a
+ * time. A writer that does not claim it locks only its own row and waits on
+ * nobody else.
  */
 async function unmarkOtherDefault(tx: DatabaseClient, keepId: number | null) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${DEFAULT_STORE_LOCK}))`
+  );
   await tx
     .update(store)
     .set({ isDefault: false })
@@ -215,15 +228,6 @@ export async function updateStore(
     async () =>
       await db.transaction(async (tx) => {
         if (values.isDefault) {
-          // Both rows this edit writes, locked in id order before either is
-          // written: two edits that each make their own store the default
-          // would otherwise lock one row each and wait on the other's.
-          await tx
-            .select({ id: store.id })
-            .from(store)
-            .where(or(eq(store.id, values.id), eq(store.isDefault, true)))
-            .orderBy(store.id)
-            .for("update");
           await unmarkOtherDefault(tx, values.id);
         }
 

@@ -397,33 +397,37 @@ describe("the default store", () => {
     expect(await defaultIds()).toEqual([created.id]);
   });
 
-  test("two stores made the default at once end with exactly one, and neither edit deadlocks", async () => {
+  test("three stores made the default at once end with exactly one, and no edit deadlocks or is refused", async () => {
     await rememberDefault();
-    const older = await create();
-    const newer = await create();
+    const first = await create();
+    const second = await create();
+    const third = await create();
 
-    // Each edit locks both rows; in id order, so they queue instead of
-    // holding one row each. Repeated, because one lucky interleaving proves
+    // Moving the mark writes two rows, and which the second one is depends
+    // on who moved it last: with row locks alone, three writers can wait on
+    // each other in a circle. Repeated, because one lucky interleaving proves
     // nothing.
-    for (let round = 0; round < 10; round += 1) {
-      const results = await Promise.allSettled([
-        updateStore(db, {
-          ...makeValues({ isDefault: true, slug: newer.slug }),
-          id: newer.id,
-        }),
-        updateStore(db, {
-          ...makeValues({ isDefault: true, slug: older.slug }),
-          id: older.id,
-        }),
-      ]);
+    for (let round = 0; round < 15; round += 1) {
+      const results = await Promise.allSettled(
+        // The same store twice as well: two writers after one row.
+        [first, second, third, second].map(
+          async (target) =>
+            await updateStore(db, {
+              ...makeValues({ isDefault: true, slug: target.slug }),
+              id: target.id,
+            })
+        )
+      );
 
       expect(results.map((result) => result.status)).toEqual([
+        "fulfilled",
+        "fulfilled",
         "fulfilled",
         "fulfilled",
       ]);
       const marked = await defaultIds();
       expect(marked).toHaveLength(1);
-      expect([older.id, newer.id]).toContain(marked[0]);
+      expect([first.id, second.id, third.id]).toContain(marked[0]);
     }
   });
 
