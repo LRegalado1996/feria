@@ -766,10 +766,12 @@ describe("listCartProducts", () => {
       params: [STORE_ID, "published", 8, 6, 5],
       sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" in ($3, $4, $5))',
     });
-    // The card query is asked only for the ids the store owns.
-    expect(
-      renderQuery(configOf(db.query.product.findMany).where).params
-    ).toEqual([8, 5, "published"]);
+    // The card query is asked only for the ids the store owns, still
+    // published.
+    expect(renderQuery(configOf(db.query.product.findMany).where)).toEqual({
+      params: [8, 5, "published"],
+      sql: '("product"."id" in ($1, $2) and "product"."status" = $3)',
+    });
   });
 
   test("answers the cards in the order the cart asked, in the store's currency, leaving out an id it does not own", async () => {
