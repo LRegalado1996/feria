@@ -109,17 +109,6 @@
  * `text-*` theme keys: tailwind-merge reads an unknown `text-…` class as a
  * color and would drop the real color next to it.
  */
-/*
- * Visually hidden text that stays an inline box, for words that join the
- * text before them in a link's name ("Pedidos, 1 sin preparar"). Chromium
- * puts a space around any positioned box when it names a link, and `sr-only`
- * is one; a zero font size hides the text without leaving the line.
- */
-@utility sr-only-inline {
-  font-size: 0;
-  white-space: nowrap;
-}
-
 @utility store-display-hero {
   font-size: clamp(3.4rem, 12vw, 9.5rem);
 }

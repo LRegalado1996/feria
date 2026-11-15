@@ -313,6 +313,9 @@ describe("useOrderSound", () => {
     act(() => {
       result.current.setEnabled(true);
     });
+
+    expect(result.current.enabled).toBe(true);
+
     act(() => {
       result.current.setEnabled(false);
     });

@@ -11,10 +11,18 @@ import { server } from "@/test/msw";
 import { AdminShell, type AdminLocation } from "./admin-shell";
 
 // The badge polls the API and has its own tests; here it shows the store
-// it was given.
+// it was given and says the label, as the real one names the link.
 vi.mock("@/app/_components/molecules/orders-pending-badge", () => ({
-  OrdersPendingBadge: ({ storeSlug }: { storeSlug: string }) => (
-    <span data-store={storeSlug} data-testid="orders-pending-badge" />
+  OrdersPendingBadge: ({
+    label,
+    storeSlug,
+  }: {
+    label: string;
+    storeSlug: string;
+  }) => (
+    <span data-store={storeSlug} data-testid="orders-pending-badge">
+      {label}
+    </span>
   ),
 }));
 
@@ -65,11 +73,23 @@ function setup({
     { locale }
   );
 
+  // What a screen reader hears of a link: its text without the parts
+  // hidden from it (the orders label, which the badge says instead).
+  const spoken = (link: HTMLElement) => {
+    const copy = link.cloneNode(true);
+    if (!(copy instanceof HTMLElement)) {
+      return null;
+    }
+    for (const hidden of copy.querySelectorAll("[aria-hidden='true']")) {
+      hidden.remove();
+    }
+    return copy.textContent;
+  };
   const links = (name: string) =>
     within(screen.getByRole("navigation", { name }))
       .getAllByRole("link")
       .map((link) => [
-        link.textContent,
+        spoken(link),
         link.getAttribute("href"),
         link.getAttribute("aria-current"),
       ]);
@@ -141,7 +161,9 @@ describe("AdminShell", () => {
     setup({ location: inStore("categories") });
 
     const badges = screen.getAllByTestId("orders-pending-badge");
-    expect(badges.map((badge) => badge.dataset.store)).toEqual(["lr-market"]);
+    expect(
+      badges.map((badge) => [badge.dataset.store, badge.textContent])
+    ).toEqual([["lr-market", "Orders"]]);
     expect(screen.getByRole("link", { name: "Orders" })).toContainElement(
       badges[0] ?? null
     );

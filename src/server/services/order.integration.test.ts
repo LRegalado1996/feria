@@ -922,14 +922,12 @@ describe("searching and counting the orders", () => {
       "packed",
       "delivered",
       "delivered",
+      "undeliverable",
     ];
 
     // A phone each: one phone's hourly limit would stop the sixth.
-    for (const [index, status] of statuses.entries()) {
-      await makeOrder(shop, {
-        customerPhone: `+5989400010${String(index)}`,
-        status,
-      });
+    for (const status of statuses) {
+      await makeOrder(shop, { customerPhone: uniquePhone(), status });
     }
 
     await makeOrder(other, { status: "undeliverable" });
@@ -939,7 +937,7 @@ describe("searching and counting the orders", () => {
       delivered: 2,
       packed: 1,
       received: 3,
-      undeliverable: 0,
+      undeliverable: 1,
     });
     await expect(countOrders(db, { storeId: empty.id })).resolves.toEqual({
       delivered: 0,

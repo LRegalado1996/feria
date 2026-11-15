@@ -83,12 +83,12 @@ describe("AdminNav", () => {
     expect(nav.firstElementChild?.tagName).toBe("UL");
   });
 
-  test("shows an item's badge inside its link, after the label, and nothing for the others", () => {
+  test("shows an item's badge inside its link, after the label, and lets it name the link", () => {
     const { links } = setup({
       items: [
         makeItem(),
         makeItem({
-          badge: <span data-testid="badge">3</span>,
+          badge: <span data-testid="badge">Orders, 3 waiting</span>,
           href: "/en/admin/lr-market/orders",
           label: "Orders",
         }),
@@ -97,16 +97,17 @@ describe("AdminNav", () => {
 
     expect(links.map((link) => link.textContent)).toEqual([
       "Articles",
-      "Orders3",
+      "OrdersOrders, 3 waiting",
     ]);
-    // The label and the badge share one inline box, so the link's name
-    // joins them with no space between.
-    expect(links[1]?.firstElementChild?.tagName).toBe("SPAN");
-    expect(links[1]?.firstElementChild?.lastElementChild).toBe(
-      screen.getByTestId("badge")
-    );
-    expect(links[1]?.firstElementChild?.firstChild?.textContent).toBe("Orders");
+    // The badge says the whole name: the label is there for the eye only.
+    expect(links[1]).toHaveAccessibleName("Orders, 3 waiting");
+    const [label, badge] = [...(links[1]?.firstElementChild?.children ?? [])];
+    expect(label).toHaveAttribute("aria-hidden", "true");
+    expect(label).toHaveTextContent(/^Orders$/u);
+    expect(badge).toBe(screen.getByTestId("badge"));
     expect(links[1]?.children).toHaveLength(1);
+    // Without a badge the label is the name, hidden from no one.
+    expect(links[0]).toHaveAccessibleName("Articles");
     expect(links[0]?.firstElementChild?.textContent).toBe("Articles");
     expect(links[0]?.firstElementChild?.children).toHaveLength(0);
   });

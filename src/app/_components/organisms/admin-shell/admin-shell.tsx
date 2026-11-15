@@ -120,7 +120,10 @@ function AdminShell({
                 // is: the orders screen is where a new one is announced.
                 badge:
                   section === "orders" ? (
-                    <OrdersPendingBadge storeSlug={currentStore.slug} />
+                    <OrdersPendingBadge
+                      label={dictionary.storeSections[section]}
+                      storeSlug={currentStore.slug}
+                    />
                   ) : undefined,
                 current:
                   location.kind === "store" && location.section === section,

@@ -5,8 +5,9 @@ import { cn } from "@/lib/utils";
 
 export interface AdminNavItem {
   /**
-   * Shown after the label, inside the link (the orders still to pack): its
-   * text joins the link's name.
+   * Shown after the label, inside the link (the orders still to pack). It
+   * names the link: the label is hidden from assistive technology while a
+   * badge is given, so the badge says the whole name, label included.
    */
   badge?: ReactNode;
   current: boolean;
@@ -53,11 +54,15 @@ function AdminNav({ className, items, label, title }: AdminNavProps) {
               )}
               href={item.href}
             >
-              {/* One inline box for the label and the badge: a browser
-                  puts a space between boxes when it names the link. */}
               <span>
-                {item.label}
-                {item.badge}
+                {item.badge ? (
+                  <>
+                    <span aria-hidden="true">{item.label}</span>
+                    {item.badge}
+                  </>
+                ) : (
+                  item.label
+                )}
               </span>
             </Link>
           </li>

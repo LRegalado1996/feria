@@ -236,6 +236,23 @@ describe("OrderPage", () => {
   );
 
   test.each([
+    ["1", 1],
+    ["2147483647", 2_147_483_647],
+  ] as const)(
+    "reads %j, the edge of an order's id, as the order %i",
+    async (id, expected) => {
+      const { show } = setup({ id });
+
+      await show();
+
+      expect(get).toHaveBeenCalledExactlyOnceWith({
+        id: expected,
+        storeSlug: "lr-market",
+      });
+    }
+  );
+
+  test.each([
     ["en", "/en/admin/lr-market/orders/42"],
     ["es", "/admin/lr-market/orders/42"],
   ] as const)(

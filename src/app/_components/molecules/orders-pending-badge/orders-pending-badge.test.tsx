@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import { AdminNav } from "@/app/_components/molecules/admin-nav";
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
@@ -45,71 +45,89 @@ function setup({
     );
   }
 
+  const label = locale === "en" ? "Orders" : "Pedidos";
   renderWithI18n(
-    // As the navigation renders it: inside the section's link.
-    <Link href="/admin/lr-market/orders">
-      <span>
-        {locale === "en" ? "Orders" : "Pedidos"}
-        <OrdersPendingBadge className="custom" storeSlug="lr-market" />
-      </span>
-    </Link>,
+    // As the shell renders it: the badge of the navigation's orders link.
+    <AdminNav
+      items={[
+        {
+          badge: (
+            <OrdersPendingBadge
+              className="custom"
+              label={label}
+              storeSlug="lr-market"
+            />
+          ),
+          current: false,
+          href: "/admin/lr-market/orders",
+          label,
+        },
+      ]}
+      label="Sections"
+    />,
     { locale, wrapper: Providers }
   );
 
-  return { counts, queryClient };
+  return { counts, label, queryClient };
 }
 
 describe("OrdersPendingBadge", () => {
-  // happy-dom computes no display for a span, so the name it gives has a
-  // space between every box: the exact name, "Pedidos, 1 sin preparar", is
-  // asserted in Chromium (`e2e/tests/admin/orders.e2e.ts`). Here: the text
-  // that joins the label, and the plain inline boxes that let it join.
   test.each([
-    ["en", 3, ", 3 to pack", "3"],
-    ["en", 1, ", 1 to pack", "1"],
-    ["en", 1280, ", 1,280 to pack", "1,280"],
-    ["es", 3, ", 3 sin preparar", "3"],
-    ["es", 1, ", 1 sin preparar", "1"],
+    ["en", 3, "Orders, 3 to pack", "3"],
+    ["en", 1, "Orders, 1 to pack", "1"],
+    ["en", 1280, "Orders, 1,280 to pack", "1,280"],
+    ["es", 3, "Pedidos, 3 sin preparar", "3"],
+    ["es", 1, "Pedidos, 1 sin preparar", "1"],
   ] as const)(
-    "in %s, with %i to pack, adds %j to the link's name and shows %j",
-    async (locale, received, spoken, figure) => {
-      const { counts } = setup({ locale, received });
+    "in %s, with %i to pack, names the link %j and shows %j",
+    async (locale, received, name, figure) => {
+      const { counts, label } = setup({ locale, received });
 
-      const badge = await screen.findByTestId("orders-pending-badge");
-      const label = locale === "en" ? "Orders" : "Pedidos";
+      const shown = await screen.findByTestId("orders-pending-badge");
       const link = screen.getByRole("link");
-      expect(link).toContainElement(badge);
-      expect(link.textContent).toBe(`${label}${spoken}${figure}`);
-      expect(badge).toHaveAttribute("data-slot", "orders-pending-badge");
-      // No layout of its own: a flex or positioned box would part the name.
-      expect(badge.className).toBe("custom");
-      const [text, shown] = [...badge.children];
-      expect(text).toHaveTextContent(new RegExp(`^${spoken}$`, "u"));
-      expect(text?.className).toBe("sr-only-inline");
-      expect(text).not.toHaveAttribute("aria-hidden");
+      expect(link).toHaveAccessibleName(name);
+      expect(link).toContainElement(shown);
       expect(shown).toHaveAttribute("aria-hidden", "true");
       expect(shown).toHaveTextContent(new RegExp(`^${figure}$`, "u"));
+      const badge = shown.parentElement;
+      expect(badge).toHaveAttribute("data-slot", "orders-pending-badge");
+      expect(badge).toHaveClass("custom");
+      // The whole name in one ordinary sr-only span, never zero-size text.
+      const spoken = badge?.firstElementChild;
+      expect(spoken?.className).toBe("sr-only");
+      expect(spoken).toHaveTextContent(new RegExp(`^${name}$`, "u"));
+      expect(spoken).not.toHaveAttribute("aria-hidden");
+      expect(link.textContent).toBe(`${label}${name}${figure}`);
       expect(counts).toHaveBeenCalledExactlyOnceWith({
         storeSlug: "lr-market",
       });
     }
   );
 
-  test("shows nothing when no order waits to be packed", async () => {
-    const { counts } = setup({ received: 0 });
+  test("names the link with its label alone while the count is on its way", () => {
+    setup({ locale: "es" });
+
+    expect(screen.getByRole("link")).toHaveAccessibleName("Pedidos");
+    expect(
+      screen.queryByTestId("orders-pending-badge")
+    ).not.toBeInTheDocument();
+  });
+
+  test("names the link with its label alone and shows no figure when no order waits to be packed", async () => {
+    const { counts } = setup({ locale: "es", received: 0 });
 
     await waitFor(() => {
       expect(counts).toHaveBeenCalledExactlyOnceWith({
         storeSlug: "lr-market",
       });
     });
-    expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument();
+    expect(screen.getByRole("link")).toHaveAccessibleName("Pedidos");
     expect(
       screen.queryByTestId("orders-pending-badge")
     ).not.toBeInTheDocument();
   });
 
-  test("shows nothing, never a zero, when the count cannot be read", async () => {
+  test("names the link with its label alone, never a zero, when the count cannot be read", async () => {
     const { queryClient } = setup({ fails: true });
 
     await waitFor(() => {
@@ -117,7 +135,7 @@ describe("OrdersPendingBadge", () => {
         "error"
       );
     });
-    expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument();
+    expect(screen.getByRole("link")).toHaveAccessibleName("Orders");
     expect(
       screen.queryByTestId("orders-pending-badge")
     ).not.toBeInTheDocument();

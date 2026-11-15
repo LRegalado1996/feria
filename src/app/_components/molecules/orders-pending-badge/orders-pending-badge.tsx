@@ -7,49 +7,48 @@ import { formatInteger } from "@/lib/utils/format";
 
 export interface OrdersPendingBadgeProps {
   className?: string;
+  /** The link's label ("Pedidos"), which the navigation hides: this says it. */
+  label: string;
   storeSlug: string;
 }
 
 /**
  * How many of the store's orders are still to pack, inside the navigation's
  * orders link (FER-027); read again every 15 seconds. The figure is for the
- * eye; a screen reader hears it as part of the link's name ("Orders, 3 to
- * pack"). Nothing while there are none, or before the count is known.
- *
- * The root and the spoken text are plain inline boxes, so the text joins the
- * label with no space before its comma: a browser naming the link puts one
- * around any other box, the usual `sr-only` (positioned) included, hence
- * `sr-only-inline`.
+ * eye; a screen reader hears the link's whole name from one `sr-only` span
+ * ("Orders, 3 to pack"), or the label alone while there are none or the
+ * count is not known yet. One span, because Chromium puts a space before a
+ * positioned box when it joins it to the text in front.
  */
-function OrdersPendingBadge({ className, storeSlug }: OrdersPendingBadgeProps) {
+function OrdersPendingBadge({
+  className,
+  label,
+  storeSlug,
+}: OrdersPendingBadgeProps) {
   const { admin } = useDictionary();
   const locale = useLocale();
   const counts = useOrderCounts(storeSlug);
   const received = counts.data?.received ?? 0;
-
-  if (received === 0) {
-    return null;
+  const figure = formatInteger(received, locale);
+  let name = label;
+  if (received === 1) {
+    name = interpolate(admin.orders.pendingBadgeOne, { label });
+  } else if (received > 1) {
+    name = interpolate(admin.orders.pendingBadge, { count: figure, label });
   }
 
   return (
-    <span
-      className={className}
-      data-slot="orders-pending-badge"
-      data-testid="orders-pending-badge"
-    >
-      <span className="sr-only-inline">
-        {received === 1
-          ? admin.orders.pendingBadgeOne
-          : interpolate(admin.orders.pendingBadge, {
-              count: formatInteger(received, locale),
-            })}
-      </span>
-      <span
-        aria-hidden="true"
-        className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums"
-      >
-        {formatInteger(received, locale)}
-      </span>
+    <span className={className} data-slot="orders-pending-badge">
+      <span className="sr-only">{name}</span>
+      {received > 0 ? (
+        <span
+          aria-hidden="true"
+          className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums"
+          data-testid="orders-pending-badge"
+        >
+          {figure}
+        </span>
+      ) : null}
     </span>
   );
 }
