@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
@@ -19,13 +20,23 @@ function makeImage(id: number): StoreGalleryImage {
 
 function setup({
   count = 3,
+  fakeTimers = false,
   locale = "es",
-}: { count?: number; locale?: Locale } = {}) {
+}: {
+  count?: number;
+  /** Fake timers on a frozen clock, for the settle fallback. */
+  fakeTimers?: boolean;
+  locale?: Locale;
+} = {}) {
+  if (fakeTimers) {
+    vi.useFakeTimers({ now: new Date("2026-11-15T12:00:00.000Z") });
+  }
+
   const images = Array.from({ length: count }, (_, index) =>
     makeImage(index + 1)
   );
   const user = userEvent.setup();
-  const { container, rerender } = renderWithI18n(
+  const { container, rerender, unmount } = renderWithI18n(
     <StoreGallery
       className="custom"
       images={images}
@@ -49,6 +60,12 @@ function setup({
   const button = (name: string) => screen.getByRole("button", { name });
 
   return {
+    /** Lets `ms` of fake time pass. */
+    advance: (ms: number) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    },
     button,
     container,
     counter: () => screen.getByText(/^Foto \d+ de \d+$/u),
@@ -79,6 +96,7 @@ function setup({
       fireEvent(track, new Event("scrollend"));
     },
     track,
+    unmount,
     thumbs: () =>
       [1, 2, 3].map((position) =>
         button(`Ver la foto ${position}`).getAttribute("aria-current")
@@ -283,12 +301,77 @@ describe("StoreGallery", () => {
     ).toBeVisible();
   });
 
-  test("in English, names its controls in English", () => {
-    setup({ locale: "en" });
+  test("a step to the photo the track already rests on waits for no glide, so the next swipe moves the counter", async () => {
+    const { button, counter, swipe, user } = setup();
+
+    await user.click(button("Ver la foto 1"));
+    swipe(400);
+
+    expect(counter()).toHaveTextContent(/^Foto 2 de 3$/u);
+  });
+
+  test("a glide that stops without scrollend comes to rest 150 ms after its last scroll", () => {
+    const { advance, button, counter, swipe } = setup({ fakeTimers: true });
+    fireEvent.click(button("Ver la foto 3"));
+
+    // Stopped short of the third photo, with no scrollend (Safari < 26.2).
+    swipe(200);
+    advance(100);
+    // Each scroll waits afresh.
+    swipe(400);
+    advance(149);
+    expect(counter()).toHaveTextContent(/^Foto 3 de 3$/u);
+
+    advance(1);
+    expect(counter()).toHaveTextContent(/^Foto 2 de 3$/u);
+
+    // Waiting no more, a swipe moves the counter again.
+    swipe(0);
+    expect(counter()).toHaveTextContent(/^Foto 1 de 3$/u);
+  });
+
+  test.each([
+    ["arriving at the photo", "arrive"],
+    ["scrollend", "scrollend"],
+    ["unmounting", "unmount"],
+  ] as const)("%s drops the settle timer", (_name, how) => {
+    const { button, settle, swipe, unmount } = setup({ fakeTimers: true });
+    fireEvent.click(button("Ver la foto 3"));
+    swipe(400);
+    expect(vi.getTimerCount()).toBe(1);
+
+    if (how === "arrive") {
+      swipe(800);
+    } else if (how === "scrollend") {
+      settle(400);
+    } else {
+      unmount();
+    }
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("in English, names its controls in English", async () => {
+    const { button, user } = setup({ locale: "en" });
 
     expect(
       screen.getByRole("region", { name: "Photos of Collar de perlas" })
     ).toBeVisible();
     expect(screen.getByText("Photo 1 of 3")).toBeVisible();
+    expect(button("Previous photo")).toHaveAttribute("aria-disabled", "true");
+    expect(button("Next photo")).toHaveAttribute("aria-disabled", "false");
+    expect(
+      [1, 2, 3].map((position) =>
+        button(`Show photo ${position}`).getAttribute("aria-current")
+      )
+    ).toEqual(["true", null, null]);
+
+    await user.click(button("Enlarge the photo"));
+
+    expect(
+      within(
+        screen.getByRole("dialog", { name: "Foto 1 del collar" })
+      ).getByRole("button", { name: "Close the enlarged photo" })
+    ).toBeVisible();
   });
 });

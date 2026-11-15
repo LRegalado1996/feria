@@ -3,7 +3,7 @@
 import { ChevronLeft, ChevronRight, ImageOff, X, ZoomIn } from "lucide-react";
 import Image from "next/image";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -24,6 +24,10 @@ export interface StoreGalleryProps {
   title: string;
 }
 
+// Safari before 26.2 fires no `scrollend`: a glide that stops this long
+// without another scroll event has come to rest.
+const SCROLL_SETTLE_MS = 150;
+
 const BUTTON_CLASS =
   "inline-flex size-11 items-center justify-center bg-store-contrast text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground aria-disabled:opacity-40";
 
@@ -41,6 +45,8 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
   // gliding to it: the photos it passes on the way are not where the visitor
   // is, so they neither move the counter nor become the next step's start.
   const target = useRef<number | null>(null);
+  // Ends the wait for `target` where `scrollend` never comes.
+  const settling = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chosen, setChosen] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   // Fewer photos than before (an edit revalidated the page) keep a photo
@@ -48,22 +54,33 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
   const index = Math.min(chosen, Math.max(images.length - 1, 0));
   const current = images[index];
 
+  // A timer left running would set the photo of a gallery that is gone.
+  useEffect(
+    () => () => {
+      stopSettling(settling);
+    },
+    []
+  );
+
+  const shown = (element: HTMLDivElement) =>
+    element.clientWidth > 0
+      ? Math.round(element.scrollLeft / element.clientWidth)
+      : 0;
+
   const show = (next: number) => {
     if (next < 0 || next >= images.length) {
       return;
     }
 
     const width = track.current?.clientWidth ?? 0;
-    target.current = next;
+    // A track already resting on that photo does not scroll, so nothing
+    // would ever arrive to end the wait.
+    target.current =
+      track.current && shown(track.current) === next ? null : next;
     // No `behavior`: the track's CSS glides, or not when motion is reduced.
     track.current?.scrollTo({ left: next * width });
     setChosen(next);
   };
-
-  const shown = (element: HTMLDivElement) =>
-    element.clientWidth > 0
-      ? Math.round(element.scrollLeft / element.clientWidth)
-      : 0;
 
   if (!current) {
     return (
@@ -96,10 +113,20 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
             const next = shown(event.currentTarget);
 
             if (target.current !== null) {
+              stopSettling(settling);
+
               // Arrived: from here a swipe moves the counter again.
               if (next === target.current) {
                 target.current = null;
+                return;
               }
+
+              const element = event.currentTarget;
+              settling.current = setTimeout(() => {
+                settling.current = null;
+                target.current = null;
+                setChosen(shown(element));
+              }, SCROLL_SETTLE_MS);
 
               return;
             }
@@ -110,6 +137,7 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
           }}
           onScrollEnd={(event) => {
             // A swipe that interrupted the glide ends wherever it ends.
+            stopSettling(settling);
             target.current = null;
             const next = shown(event.currentTarget);
 
@@ -243,6 +271,16 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
       ) : null}
     </section>
   );
+}
+
+/** Clears a pending settle timer, if any. */
+function stopSettling(
+  settling: RefObject<ReturnType<typeof setTimeout> | null>
+) {
+  if (settling.current !== null) {
+    clearTimeout(settling.current);
+    settling.current = null;
+  }
 }
 
 export { StoreGallery };
