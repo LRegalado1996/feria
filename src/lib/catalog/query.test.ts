@@ -143,42 +143,26 @@ describe("readCatalogQuery", () => {
     ).toEqual([]);
   });
 
-  test.each([
-    [10, 10],
-    [11, 10],
-  ])("keeps %d filters as %d", (count, kept) => {
+  // The caps wait for `knownOnly`: until the store's filters are known, a
+  // stray parameter cannot be told from a real one.
+  test("keeps an 11th filter, for the store's filters to judge", () => {
     expect(
-      readCatalogQuery(manyFilters(count)).filters.map(
+      readCatalogQuery(manyFilters(11)).filters.map(
         (filter) => filter.attribute
       )
     ).toEqual(
-      Array.from({ length: kept }, (_, index) => `filtro-${String(index)}`)
+      Array.from({ length: 11 }, (_, index) => `filtro-${String(index)}`)
     );
   });
 
-  test("counts only the valid filters toward the 10", () => {
-    expect(
-      readCatalogQuery({
-        Malo: "x",
-        vacio: "",
-        ...manyFilters(10),
-      }).filters.map((filter) => filter.attribute)
-    ).toEqual(
-      Array.from({ length: 10 }, (_, index) => `filtro-${String(index)}`)
-    );
-  });
-
-  test.each([
-    [20, 20],
-    [21, 20],
-  ])("keeps %d values of a filter as %d", (count, kept) => {
+  test("keeps a 21st value of a filter, for the store's values to judge", () => {
     const values = Array.from(
-      { length: count },
+      { length: 21 },
       (_, index) => `v${String(index)}`
     );
 
     expect(readCatalogQuery({ color: values.join(",") }).filters).toEqual([
-      { attribute: "color", values: values.slice(0, kept) },
+      { attribute: "color", values },
     ]);
   });
 });
@@ -407,5 +391,72 @@ describe("knownOnly", () => {
 
   test("keeps no category when none was asked", () => {
     expect(knownOnly(makeQuery(), CATEGORIES, FILTERS).category).toBeNull();
+  });
+
+  test("keeps a real filter that ten stray parameters come before", () => {
+    expect(
+      knownOnly(
+        readCatalogQuery({ ...manyFilters(10), color: "dorado" }),
+        CATEGORIES,
+        FILTERS
+      ).filters
+    ).toEqual([{ attribute: "color", values: ["dorado"] }]);
+  });
+
+  test("keeps a real value that twenty unknown ones come before", () => {
+    const unknown = Array.from(
+      { length: 20 },
+      (_, index) => `otro-${String(index)}`
+    );
+
+    expect(
+      knownOnly(
+        readCatalogQuery({ color: [...unknown, "plateado"].join(",") }),
+        CATEGORIES,
+        FILTERS
+      ).filters
+    ).toEqual([{ attribute: "color", values: ["plateado"] }]);
+  });
+
+  test.each([
+    [10, 10],
+    [11, 10],
+  ])(
+    "holds %d of the store's filters to %d, in the store's order",
+    (count, kept) => {
+      const slugs = Array.from(
+        { length: count },
+        (_, index) => `filtro-${String(index)}`
+      );
+
+      expect(
+        knownOnly(
+          readCatalogQuery(manyFilters(count)),
+          CATEGORIES,
+          slugs.map((slug) => ({ slug, values: [{ slug: "valor" }] }))
+        ).filters
+      ).toEqual(
+        slugs.slice(0, kept).map((attribute) => ({
+          attribute,
+          values: ["valor"],
+        }))
+      );
+    }
+  );
+
+  test.each([
+    [20, 20],
+    [21, 20],
+  ])("holds %d of a filter's values to %d", (count, kept) => {
+    const values = Array.from(
+      { length: count },
+      (_, index) => `v${String(index)}`
+    );
+
+    expect(
+      knownOnly(readCatalogQuery({ color: values.join(",") }), CATEGORIES, [
+        { slug: "color", values: values.map((slug) => ({ slug })) },
+      ]).filters
+    ).toEqual([{ attribute: "color", values: values.slice(0, kept) }]);
   });
 });

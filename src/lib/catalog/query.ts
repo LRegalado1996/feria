@@ -45,9 +45,12 @@ function single(value: string | string[] | undefined) {
  * Reads a catalog address the way a shared link must be read: anything
  * malformed is dropped, never sent to the API, which refuses a malformed
  * filter. `category`, `q` and `sort` are the catalog's own; every other
- * parameter whose name and comma-separated values are slugs is a filter, at
- * most 10 of 20 values each. `fbclid`, `utm_source` or a stray capital fall
- * away, so a link with them still shows its selection.
+ * parameter whose name and comma-separated values are slugs is a filter.
+ * `fbclid`, `utm_source` or a stray capital fall away, so a link with them
+ * still shows its selection. Nothing is capped here: a slug-shaped tracking
+ * parameter only counts once `knownOnly` has dropped it, or ten of them
+ * before `color=dorado` would push the real filter out. The request's own
+ * size limit bounds how much there is to read.
  */
 export function readCatalogQuery(raw: RawSearchParams): CatalogQuery {
   const category = single(raw.category);
@@ -59,11 +62,10 @@ export function readCatalogQuery(raw: RawSearchParams): CatalogQuery {
     .flatMap(([attribute, value]) => {
       const values = [
         ...new Set((single(value) ?? "").split(",").filter(isSlug)),
-      ].slice(0, CATALOG_FILTER_VALUES_MAX);
+      ];
 
       return values.length > 0 ? [{ attribute, values }] : [];
-    })
-    .slice(0, CATALOG_FILTERS_MAX);
+    });
 
   return {
     category: category !== null && isSlug(category) ? category : null,
@@ -159,7 +161,9 @@ export function clearFilters(query: CatalogQuery): CatalogQuery {
  * filter, instead of narrowing the catalog to nothing under a heading that
  * does not name them. The filters and their values come in the store's own
  * order, whatever order the address gave them, so one selection is always
- * one link (and one canonical address).
+ * one link (and one canonical address). What is left is held to what the
+ * API takes, at most 10 filters of 20 values each, counting only what the
+ * store has.
  */
 export function knownOnly(
   query: CatalogQuery,
@@ -171,15 +175,18 @@ export function knownOnly(
     category: categories.some((entry) => entry.slug === query.category)
       ? query.category
       : null,
-    filters: filters.flatMap((filter) => {
-      const chosen =
-        query.filters.find((entry) => entry.attribute === filter.slug)
-          ?.values ?? [];
-      const values = filter.values
-        .map((value) => value.slug)
-        .filter((slug) => chosen.includes(slug));
+    filters: filters
+      .flatMap((filter) => {
+        const chosen =
+          query.filters.find((entry) => entry.attribute === filter.slug)
+            ?.values ?? [];
+        const values = filter.values
+          .map((value) => value.slug)
+          .filter((slug) => chosen.includes(slug))
+          .slice(0, CATALOG_FILTER_VALUES_MAX);
 
-      return values.length > 0 ? [{ attribute: filter.slug, values }] : [];
-    }),
+        return values.length > 0 ? [{ attribute: filter.slug, values }] : [];
+      })
+      .slice(0, CATALOG_FILTERS_MAX),
   };
 }
