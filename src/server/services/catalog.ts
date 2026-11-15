@@ -4,7 +4,6 @@ import {
   asc,
   desc,
   eq,
-  ilike,
   inArray,
   ne,
   or,
@@ -30,6 +29,12 @@ import {
   productImage,
   productTranslation,
 } from "@/server/db/schema";
+
+/**
+ * How much of a slug's base every suffixed variant still starts with: the
+ * column holds 80 characters and a suffix up to `-99999` takes 6.
+ */
+const SUFFIXED_PREFIX_LENGTH = 74;
 
 /** What names an article whose title has nothing readable in it. */
 const PRODUCT_SLUG_FALLBACK = "articulo";
@@ -73,7 +78,7 @@ function likePattern(search: string): string {
 /**
  * Whether the article's text in `locale` (or its Spanish text, when it has
  * none in `locale`: what the visitor is shown) holds `search` in its title or
- * description, case- and accent-blind on the case only.
+ * description, blind to case and accents ("nandu" finds "Ñandú").
  */
 function matchesSearch(search: string, locale: Locale): SQL {
   const shown = alias(productTranslation, "shown");
@@ -92,7 +97,10 @@ function matchesSearch(search: string, locale: Locale): SQL {
         sql`not exists (select 1 from ${fromOwn} where ${and(eq(own.productId, product.id), eq(own.locale, locale))})`
       )
     ),
-    or(ilike(shown.title, pattern), ilike(shown.description, pattern))
+    or(
+      sql`unaccent(${shown.title}) ilike unaccent(${pattern})`,
+      sql`unaccent(${shown.description}) ilike unaccent(${pattern})`
+    )
   )})`;
 }
 
@@ -324,6 +332,30 @@ export async function getPublishedProduct(
 export type PublishedProduct = Awaited<ReturnType<typeof getPublishedProduct>>;
 
 /**
+ * The id and category of a published article of the store, or NOT_FOUND:
+ * what the related list needs, without the article's images and texts.
+ */
+export async function getPublishedProductRef(
+  db: DatabaseClient,
+  { slug, storeId }: StoreScope & { slug: string }
+) {
+  const found = await db.query.product.findFirst({
+    columns: { categoryId: true, id: true },
+    where: and(
+      eq(product.storeId, storeId),
+      eq(product.slug, slug),
+      eq(product.status, "published")
+    ),
+  });
+
+  if (!found) {
+    throw notFound();
+  }
+
+  return found;
+}
+
+/**
  * Other published articles of the same category, newest first, without the
  * article itself. An article without a category has none.
  */
@@ -463,7 +495,9 @@ async function allocateSlug(
     .where(
       and(
         eq(product.storeId, storeId),
-        sql`${product.slug} like ${`${base}%`}`,
+        // The prefix a suffixed slug keeps once the base is cut to fit it
+        // (`base-2` cuts a full-length base), not the whole base.
+        sql`${product.slug} like ${`${base.slice(0, SUFFIXED_PREFIX_LENGTH)}%`}`,
         excludeId === null ? undefined : ne(product.id, excludeId)
       )
     );
@@ -620,7 +654,11 @@ export async function updateProduct(
     .insert(productTranslation)
     .values(toTranslationRows(current.id, values.translations));
 
-  return updated ?? { id: current.id, slug, status: current.status };
+  if (!updated) {
+    throw new Error("Updating a locked article matched no row");
+  }
+
+  return updated;
 }
 
 /**
@@ -658,9 +696,11 @@ export async function publishProduct(
     .where(and(eq(product.id, current.id), eq(product.storeId, storeId)))
     .returning({ id: product.id, slug: product.slug, status: product.status });
 
-  return (
-    published ?? { id: current.id, slug: current.slug, status: "published" }
-  );
+  if (!published) {
+    throw new Error("Publishing a locked article matched no row");
+  }
+
+  return published;
 }
 
 /** Back to draft: off the storefront, its slug and first date kept. */

@@ -18,6 +18,7 @@ import {
   createProduct,
   deleteProduct,
   getPublishedProduct,
+  getPublishedProductRef,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
@@ -34,6 +35,7 @@ const PUBLISHED_AT = new Date("2026-11-10T12:00:00.123Z");
 
 /** The `where`, `orderBy` and `columns` a relational read was handed. */
 interface ReadConfig {
+  columns?: Record<string, boolean>;
   orderBy?: unknown;
   where: unknown;
 }
@@ -278,7 +280,7 @@ describe("listPublishedProducts", () => {
         'exists (select 1 from "product_translation" as "shown" where ("shown"."productId" = "product"."id" and ' +
         '("shown"."locale" = $4 or ("shown"."locale" = $5 and not exists (select 1 from "product_translation" as "own" ' +
         'where ("own"."productId" = "product"."id" and "own"."locale" = $6)))) and ' +
-        '("shown"."title" ilike $7 or "shown"."description" ilike $8))) and ' +
+        '(unaccent("shown"."title") ilike unaccent($7) or unaccent("shown"."description") ilike unaccent($8)))) and ' +
         '("product"."publishedAt", "product"."id") < ($9::timestamptz, $10::int))',
     });
   });
@@ -793,6 +795,9 @@ describe("updateProduct", () => {
       db.$["select.for"].mockResolvedValue([
         lockedRow({ publishedAt: PUBLISHED_AT, status }),
       ]);
+      db.$["update.returning"].mockResolvedValue([
+        { id: 7, slug: "collar-viejo", status },
+      ]);
       db.query.category.findFirst.mockResolvedValue({ id: 9 });
       answerWhere({ imageTotal: 1 });
 
@@ -839,6 +844,77 @@ describe("updateProduct", () => {
       );
     }
   );
+});
+
+describe("updateProduct when its update matches nothing", () => {
+  test("fails loudly instead of answering a made-up row", async () => {
+    const { answerWhere, db } = setup();
+    db.$["select.for"].mockResolvedValue([lockedRow()]);
+    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    answerWhere({});
+    db.$["update.returning"].mockResolvedValue([]);
+
+    await expect(
+      updateProduct(db as never, {
+        storeId: STORE_ID,
+        values: { ...productValues(), id: 7 },
+      })
+    ).rejects.toThrow("Updating a locked article matched no row");
+  });
+});
+
+describe("getPublishedProductRef", () => {
+  test("answers the id and category of a published article of the store", async () => {
+    const { configOf, db } = setup();
+    db.query.product.findFirst.mockResolvedValue({ categoryId: 4, id: 3 });
+
+    await expect(
+      getPublishedProductRef(db as never, { slug: "cadena", storeId: STORE_ID })
+    ).resolves.toEqual({ categoryId: 4, id: 3 });
+    const config = configOf(db.query.product.findFirst);
+    expect(config.columns).toEqual({ categoryId: true, id: true });
+    expect(renderQuery(config.where)).toEqual({
+      params: [STORE_ID, "cadena", "published"],
+      sql: '("product"."storeId" = $1 and "product"."slug" = $2 and "product"."status" = $3)',
+    });
+  });
+
+  test("answers NOT_FOUND for a draft or another store's article", async () => {
+    const { db } = setup();
+
+    await expect(
+      getPublishedProductRef(db as never, { slug: "cadena", storeId: STORE_ID })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Article not found",
+    });
+  });
+});
+
+describe("createProduct with a long title", () => {
+  test("looks for taken slugs by the prefix a suffixed one keeps, not the whole base", async () => {
+    const { answerWhere, db } = setup();
+    const base = "a".repeat(80);
+    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    answerWhere({ takenSlugs: [base, `${"a".repeat(78)}-2`] });
+    db.$["insert.returning"].mockResolvedValue([
+      { id: 7, slug: `${"a".repeat(78)}-3`, status: "draft" },
+    ]);
+
+    await createProduct(db as never, {
+      storeId: STORE_ID,
+      values: productValues({
+        translations: [translationInput({ title: base })],
+      }),
+    });
+
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0]).params).toEqual(
+      [STORE_ID, `${"a".repeat(74)}%`]
+    );
+    expect(db.$["insert.values"].mock.calls[0]?.[0]).toMatchObject({
+      slug: `${"a".repeat(78)}-3`,
+    });
+  });
 });
 
 describe("publishProduct", () => {
@@ -891,17 +967,18 @@ describe("publishProduct", () => {
     });
   });
 
-  test("answers the locked row as published when the update returns none", async () => {
+  test("fails loudly when the update of the locked row returns none", async () => {
     const { answerWhere, db } = setup();
     db.$["select.for"].mockResolvedValue([lockedRow()]);
     db.query.productTranslation.findMany.mockResolvedValue([
       { locale: "es", title: "Collar" },
     ]);
     answerWhere({ imageTotal: 1 });
+    db.$["update.returning"].mockResolvedValue([]);
 
     await expect(
       publishProduct(db as never, { id: 7, storeId: STORE_ID })
-    ).resolves.toEqual({ id: 7, slug: "collar-viejo", status: "published" });
+    ).rejects.toThrow("Publishing a locked article matched no row");
   });
 });
 

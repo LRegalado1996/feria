@@ -12,10 +12,12 @@ const EDGE_DASHES = /^-+|-+$/gu;
  * `fallback` names the row when nothing readable is left ("¡¡¡").
  */
 export function slugify(text: string, fallback: string): string {
+  // Lowercase first: some capitals lowercase into a letter plus a mark
+  // ("İ" is "i" and a dot above), which the next step removes.
   const slug = text
+    .toLowerCase()
     .normalize("NFD")
     .replaceAll(COMBINING_MARKS, "")
-    .toLowerCase()
     .replaceAll(NOT_SLUG, "-")
     .replaceAll(EDGE_DASHES, "")
     .slice(0, CATALOG_SLUG_MAX_LENGTH)

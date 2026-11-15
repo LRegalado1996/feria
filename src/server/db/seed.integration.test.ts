@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";

@@ -6,6 +6,7 @@ import {
   updateProductSchema,
 } from "@/lib/schemas/catalog";
 import { storeProcedure } from "@/server/api/orpc";
+import type { DatabaseClient } from "@/server/db";
 import { withStoreAccess } from "@/server/services/access";
 import {
   createProduct,
@@ -17,6 +18,29 @@ import {
   updateProduct,
 } from "@/server/services/catalog";
 
+/** What a store-scoped handler knows: the resolved store and the caller. */
+interface StoreWriteContext {
+  db: DatabaseClient;
+  session: { user: { id: string } };
+  store: { id: number };
+}
+
+/**
+ * Runs a write on the resolved store with the caller's access re-checked
+ * inside its transaction: the one place every procedure below goes through,
+ * so none can forget the re-check or pass another store's id.
+ */
+async function writeToStore<T>(
+  context: StoreWriteContext,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+): Promise<T> {
+  return await withStoreAccess(
+    context.db,
+    { storeId: context.store.id, userId: context.session.user.id },
+    async (tx) => await write(tx, context.store.id)
+  );
+}
+
 /**
  * A store's own articles (FER-010): every procedure resolves the store from
  * `storeSlug` against the caller and runs its write with the caller's access
@@ -26,11 +50,9 @@ export const productRouter = {
   create: storeProcedure(createProductSchema)
     .handler(
       async ({ context, input: { storeSlug: _storeSlug, ...values } }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
-            await createProduct(tx, { storeId: context.store.id, values })
+        await writeToStore(
+          context,
+          async (tx, storeId) => await createProduct(tx, { storeId, values })
         )
     )
     .route({
@@ -43,11 +65,9 @@ export const productRouter = {
   update: storeProcedure(updateProductSchema)
     .handler(
       async ({ context, input: { storeSlug: _storeSlug, ...values } }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
-            await updateProduct(tx, { storeId: context.store.id, values })
+        await writeToStore(
+          context,
+          async (tx, storeId) => await updateProduct(tx, { storeId, values })
         )
     )
     .route({
@@ -60,13 +80,12 @@ export const productRouter = {
   publish: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
             await publishProduct(tx, {
               id: input.id,
-              storeId: context.store.id,
+              storeId,
             })
         )
     )
@@ -80,13 +99,12 @@ export const productRouter = {
   unpublish: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
             await unpublishProduct(tx, {
               id: input.id,
-              storeId: context.store.id,
+              storeId,
             })
         )
     )
@@ -100,14 +118,13 @@ export const productRouter = {
   setAvailability: storeProcedure(setProductAvailabilitySchema)
     .handler(
       async ({ context, input }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
             await setProductAvailability(tx, {
               id: input.id,
               isAvailable: input.isAvailable,
-              storeId: context.store.id,
+              storeId,
             })
         )
     )
@@ -121,11 +138,10 @@ export const productRouter = {
   delete: storeProcedure(productIdSchema)
     .handler(
       async ({ context, input }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
-            await deleteProduct(tx, { id: input.id, storeId: context.store.id })
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
+            await deleteProduct(tx, { id: input.id, storeId })
         )
     )
     .route({
@@ -138,14 +154,13 @@ export const productRouter = {
   reorderImages: storeProcedure(reorderProductImagesSchema)
     .handler(
       async ({ context, input }) =>
-        await withStoreAccess(
-          context.db,
-          { storeId: context.store.id, userId: context.session.user.id },
-          async (tx) =>
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
             await reorderProductImages(tx, {
               id: input.id,
               imageIds: input.imageIds,
-              storeId: context.store.id,
+              storeId,
             })
         )
     )

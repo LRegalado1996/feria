@@ -293,6 +293,11 @@ describe("public catalog", () => {
     expect(await search("golden", "en")).toEqual([both.slug]);
     expect(await search("plata", "en")).toEqual([spanishOnly.slug]);
     expect(await search("cadena", "en")).toEqual([spanishOnly.slug]);
+    // Accents and case are ignored, as a phone keyboard types.
+    expect(await search("ORO DE 18K", "es")).toEqual([both.slug]);
+    expect(await search("plateada", "es")).toEqual([spanishOnly.slug]);
+    expect(await search("baño", "es")).toEqual([both.slug]);
+    expect(await search("bano", "es")).toEqual([both.slug]);
     // `%` and `_` are taken literally.
     expect(await search("%", "es")).toEqual([]);
   });

@@ -8,6 +8,7 @@ describe("slugify", () => {
     ["  Aros   de plata  ", "aros-de-plata"],
     ["Anillo 18k — oro/plata", "anillo-18k-oro-plata"],
     ["PULSERA", "pulsera"],
+    ["İstanbul", "istanbul"],
     ["¡¡¡", "articulo"],
     ["", "articulo"],
   ])("makes %j into %j", (text, slug) => {

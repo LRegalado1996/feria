@@ -1,5 +1,3 @@
-import { ORPCError } from "@orpc/server";
-
 import {
   getProductSchema,
   listCategoriesSchema,
@@ -7,35 +5,23 @@ import {
   listRelatedProductsSchema,
 } from "@/lib/schemas/catalog";
 import { publicProcedure } from "@/server/api/orpc";
-import type { DatabaseClient } from "@/server/db";
 import {
   getPublishedProduct,
+  getPublishedProductRef,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
 } from "@/server/services/catalog";
-import { findActiveStoreBySlug } from "@/server/services/store";
-
-/**
- * The active store at the address, or NOT_FOUND: every public read is
- * scoped by the store it resolves, never by an id from the input.
- */
-async function activeStore(db: DatabaseClient, slug: string) {
-  const found = await findActiveStoreBySlug(db, slug);
-
-  if (!found) {
-    throw new ORPCError("NOT_FOUND", { message: "Store not found" });
-  }
-
-  return found;
-}
+import { getActiveStoreBySlug } from "@/server/services/store";
 
 /** The storefront's reads (FER-010): published articles only, no session. */
 export const catalogRouter = {
   categories: publicProcedure
     .input(listCategoriesSchema)
     .handler(async ({ context, input }) => {
-      const store = await activeStore(context.db, input.storeSlug);
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: input.storeSlug,
+      });
 
       return await listCategories(context.db, {
         locale: input.locale,
@@ -53,7 +39,9 @@ export const catalogRouter = {
     .input(listProductsSchema)
     .handler(async ({ context, input }) => {
       const { storeSlug, ...filters } = input;
-      const store = await activeStore(context.db, storeSlug);
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: storeSlug,
+      });
 
       return await listPublishedProducts(context.db, {
         ...filters,
@@ -71,7 +59,9 @@ export const catalogRouter = {
   product: publicProcedure
     .input(getProductSchema)
     .handler(async ({ context, input }) => {
-      const store = await activeStore(context.db, input.storeSlug);
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: input.storeSlug,
+      });
 
       return await getPublishedProduct(context.db, {
         currencyCode: store.currencyCode,
@@ -90,10 +80,10 @@ export const catalogRouter = {
   related: publicProcedure
     .input(listRelatedProductsSchema)
     .handler(async ({ context, input }) => {
-      const store = await activeStore(context.db, input.storeSlug);
-      const article = await getPublishedProduct(context.db, {
-        currencyCode: store.currencyCode,
-        locale: input.locale,
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: input.storeSlug,
+      });
+      const article = await getPublishedProductRef(context.db, {
         slug: input.slug,
         storeId: store.id,
       });

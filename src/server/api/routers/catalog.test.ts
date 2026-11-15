@@ -1,4 +1,4 @@
-import { call } from "@orpc/server";
+import { call, ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
 
 import { createUnauthenticatedMockContext } from "@/server/test/context";
@@ -9,8 +9,9 @@ import { catalogRouter } from "./catalog";
 // `src/server/services/catalog.test.ts`'s.
 
 const services = vi.hoisted(() => ({
-  findActiveStoreBySlug: vi.fn(),
+  getActiveStoreBySlug: vi.fn(),
   getPublishedProduct: vi.fn(),
+  getPublishedProductRef: vi.fn(),
   listCategories: vi.fn(),
   listPublishedProducts: vi.fn(),
   listRelatedProducts: vi.fn(),
@@ -18,13 +19,14 @@ const services = vi.hoisted(() => ({
 
 vi.mock("@/server/services/catalog", () => ({
   getPublishedProduct: services.getPublishedProduct,
+  getPublishedProductRef: services.getPublishedProductRef,
   listCategories: services.listCategories,
   listPublishedProducts: services.listPublishedProducts,
   listRelatedProducts: services.listRelatedProducts,
 }));
 
 vi.mock("@/server/services/store", () => ({
-  findActiveStoreBySlug: services.findActiveStoreBySlug,
+  getActiveStoreBySlug: services.getActiveStoreBySlug,
 }));
 
 vi.mock("@/env", () => ({
@@ -40,9 +42,14 @@ const STORE = { currencyCode: "USD", id: 7, slug: "tienda-demo" };
 /** A signed-out visitor; the store at `tienda-demo` is active unless told not. */
 function setup({ storeActive = true } = {}) {
   const { mockCtx } = createUnauthenticatedMockContext();
-  services.findActiveStoreBySlug.mockImplementation(
-    async (_db: unknown, slug: string) =>
-      storeActive && slug === STORE.slug ? STORE : null
+  services.getActiveStoreBySlug.mockImplementation(
+    async (_db: unknown, { slug }: { slug: string }) => {
+      if (storeActive && slug === STORE.slug) {
+        return STORE;
+      }
+
+      throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+    }
   );
   const options = { context: mockCtx as never };
 
@@ -116,7 +123,7 @@ describe("catalog router", () => {
 
   test("lists the related articles of the article's own category, without it", async () => {
     const { db, related } = setup();
-    services.getPublishedProduct.mockResolvedValue({ categoryId: 4, id: 3 });
+    services.getPublishedProductRef.mockResolvedValue({ categoryId: 4, id: 3 });
     services.listRelatedProducts.mockResolvedValue([{ id: 9 }]);
 
     await expect(
@@ -130,6 +137,14 @@ describe("catalog router", () => {
       productId: 3,
       storeId: 7,
     });
+    expect(services.getPublishedProductRef).toHaveBeenCalledExactlyOnceWith(
+      db,
+      {
+        slug: "cadena",
+        storeId: 7,
+      }
+    );
+    expect(services.getPublishedProduct).not.toHaveBeenCalled();
   });
 
   test.each(["categories", "products", "product", "related"] as const)(
@@ -147,6 +162,7 @@ describe("catalog router", () => {
       expect(services.listCategories).not.toHaveBeenCalled();
       expect(services.listPublishedProducts).not.toHaveBeenCalled();
       expect(services.getPublishedProduct).not.toHaveBeenCalled();
+      expect(services.getPublishedProductRef).not.toHaveBeenCalled();
     }
   );
 
@@ -156,6 +172,6 @@ describe("catalog router", () => {
     await expect(
       products({ limit: 49, locale: "es", storeSlug: "tienda-demo" })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
-    expect(services.findActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
   });
 });
