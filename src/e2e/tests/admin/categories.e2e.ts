@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "../../fixtures";
+import { type DbFixture, expect, test } from "../../fixtures";
+import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
 import { AdminPage } from "../../page-objects/admin.page";
@@ -9,18 +10,52 @@ import { AdminPage } from "../../page-objects/admin.page";
 // and works on that store's categories.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-async function openCategories(
-  page: Page,
-  login: { email: string; password: string },
-  storeSlug: string
+interface SeedCategory {
+  /** How many draft articles the category holds. */
+  articles?: number;
+  nameEs: string;
+  slug: string;
+}
+
+/**
+ * A store with these categories (in this order), a member of it signed in
+ * through the form, and the categories screen open.
+ */
+async function setup(
+  { db, page }: { db: DbFixture["db"]; page: Page },
+  { categories = [] }: { categories?: SeedCategory[] } = {}
 ) {
+  const store = await db.seed.createStore();
+
+  for (const [position, seeded] of categories.entries()) {
+    const created = await db.seed.createCategory(store.id, {
+      nameEs: seeded.nameEs,
+      position,
+      slug: seeded.slug,
+    });
+
+    for (let article = 0; article < (seeded.articles ?? 0); article += 1) {
+      await db.seed.createArticle(
+        store.id,
+        created.id,
+        `${seeded.nameEs} ${article}`
+      );
+    }
+  }
+
+  const login = await db.seed.createLogin({
+    role: "member",
+    storeIds: [store.id],
+  });
   const signIn = new AdminSignInPage(page);
   await signIn.goto();
   await signIn.signIn(login.email, login.password);
   const admin = new AdminPage(page);
   await admin.waitForLoad();
-  await admin.goto(`/admin/${storeSlug}/categories`);
+  await admin.goto(`/admin/${store.slug}/categories`);
   await expect(admin.heading()).toHaveText("Categorías");
+
+  return { admin, store };
 }
 
 /** The Spanish names of the list's rows, in order. */
@@ -47,21 +82,17 @@ test.describe("Category management", () => {
     db,
     page,
   }) => {
-    const store = await db.seed.createStore();
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    await openCategories(page, login, store.slug);
+    await setup({ db, page });
     await expect(page.getByTestId("empty-state")).toBeVisible();
 
     const spanish = page.getByLabel("Nombre en español");
+    const add = page.getByRole("button", { name: "Agregar" });
     // React owns the form once its button can be pressed.
-    await expect(page.getByRole("button", { name: "Agregar" })).toBeEnabled();
+    await expect(add).toBeEnabled();
     await spanish.fill("Collares");
     await page.getByLabel("Nombre en inglés (opcional)").fill("Necklaces");
     await completeRpcAction(page, "/api/orpc/category/create", async () => {
-      await page.getByRole("button", { name: "Agregar" }).click();
+      await add.click();
     });
 
     await expect(page.getByTestId("category-row-collares")).toContainText(
@@ -76,7 +107,7 @@ test.describe("Category management", () => {
       page,
       "/api/orpc/category/create",
       async () => {
-        await page.getByRole("button", { name: "Agregar" }).click();
+        await add.click();
       },
       { status: 409 }
     );
@@ -90,19 +121,16 @@ test.describe("Category management", () => {
     db,
     page,
   }) => {
-    const store = await db.seed.createStore();
-    for (const [position, slug] of ["anillos", "aros", "cadenas"].entries()) {
-      await db.seed.createCategory(store.id, {
-        nameEs: slug.charAt(0).toUpperCase() + slug.slice(1),
-        position,
-        slug,
-      });
-    }
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    await openCategories(page, login, store.slug);
+    const { store } = await setup(
+      { db, page },
+      {
+        categories: [
+          { nameEs: "Anillos", slug: "anillos" },
+          { nameEs: "Aros", slug: "aros" },
+          { nameEs: "Cadenas", slug: "cadenas" },
+        ],
+      }
+    );
     expect(await namesInOrder(page)).toEqual(["Anillos", "Aros", "Cadenas"]);
 
     await completeRpcAction(page, "/api/orpc/category/reorder", async () => {
@@ -115,11 +143,12 @@ test.describe("Category management", () => {
     });
     expect(await namesInOrder(page)).toEqual(["Aros", "Cadenas", "Anillos"]);
 
-    // Dragged by its handle onto the row below, as a person does it.
-    const handle = page.getByRole("button", {
-      name: "Arrastrar para ordenar: Aros",
-    });
-    const from = await handle.boundingBox();
+    // Dragged by its handle onto the row below, as a person does it. The
+    // drag goes last: dnd-kit swallows clicks for 50 ms after a drop (so the
+    // drop is not also a click), faster than a person but not a test.
+    const from = await page
+      .getByRole("button", { name: "Arrastrar para ordenar: Aros" })
+      .boundingBox();
     const to = await page.getByTestId("category-row-cadenas").boundingBox();
 
     if (!from || !to) {
@@ -134,10 +163,8 @@ test.describe("Category management", () => {
       });
       await page.mouse.up();
     });
-
-    // The drag goes last: dnd-kit swallows clicks for 50 ms after a drop (so
-    // the drop is not also a click), faster than a person but not a test.
     expect(await namesInOrder(page)).toEqual(["Cadenas", "Aros", "Anillos"]);
+
     await page.reload();
     await expect(page.getByTestId("category-list")).toBeVisible();
     expect(await namesInOrder(page)).toEqual(["Cadenas", "Aros", "Anillos"]);
@@ -152,30 +179,25 @@ test.describe("Category management", () => {
     db,
     page,
   }) => {
-    const store = await db.seed.createStore();
-    const chains = await db.seed.createCategory(store.id, {
-      nameEs: "Cadenas",
-      position: 0,
-      slug: "cadenas",
-    });
-    await db.seed.createCategory(store.id, {
-      nameEs: "Pulseras",
-      position: 1,
-      slug: "pulseras",
-    });
-    await db.seed.createArticle(store.id, chains.id, "Cadena dorada");
-    await db.seed.createArticle(store.id, chains.id, "Cadena plateada");
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    await openCategories(page, login, store.slug);
+    await setup(
+      { db, page },
+      {
+        categories: [
+          { articles: 2, nameEs: "Cadenas", slug: "cadenas" },
+          { nameEs: "Pulseras", slug: "pulseras" },
+        ],
+      }
+    );
     await expect(page.getByTestId("category-row-cadenas")).toContainText(
       "2 artículos"
     );
-
-    await page.getByRole("button", { name: "Eliminar: Cadenas" }).click();
     const dialog = page.getByTestId("delete-category-dialog");
+
+    // The first open after the page loaded: repeated until React owns it.
+    await clickUntilVisible(
+      page.getByRole("button", { name: "Eliminar: Cadenas" }),
+      dialog
+    );
     await expect(dialog).toContainText("«Cadenas» tiene 2 artículos.");
     await dialog.getByRole("button", { name: "Eliminar categoría" }).click();
     await expect(
@@ -196,16 +218,8 @@ test.describe("Category management", () => {
   });
 
   test("another store's categories page is not found", async ({ db, page }) => {
-    const own = await db.seed.createStore();
+    await setup({ db, page });
     const other = await db.seed.createStore();
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [own.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-    await signIn.signIn(login.email, login.password);
-    await new AdminPage(page).waitForLoad();
 
     await page.goto(`/admin/${other.slug}/categories`);
 

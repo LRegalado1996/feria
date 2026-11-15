@@ -16,6 +16,11 @@ export function useReorderCategories(storeSlug: string) {
 
   return useMutation({
     ...orpc.category.reorder.mutationOptions(),
+    // One move at a time per store: two quick moves in flight could reach
+    // the server in the other order, and a rollback would undo the second.
+    scope: { id: `category-reorder:${storeSlug}` },
+    // The screen reports a failure itself, once.
+    meta: { suppressGlobalErrorReport: true },
     onMutate: async ({ ids }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<StoreCategories>(queryKey);

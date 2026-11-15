@@ -12,7 +12,10 @@ export function useDeleteCategory(storeSlug: string) {
     ...orpc.category.delete.mutationOptions(),
     // The dialog shows the failure itself.
     meta: { suppressGlobalErrorReport: true },
-    onSuccess: async () => {
+    // Read the list again either way: after a refusal the category may have
+    // gained articles since it was loaded, and the dialog must ask where
+    // they go.
+    onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: storeCategoriesKey(storeSlug),
       });

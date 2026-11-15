@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
@@ -274,5 +274,106 @@ describe("category management", () => {
           })
       )
     ).rejects.toMatchObject(notFound);
+  });
+});
+
+/** A promise and the function that settles it, for ordering two writers. */
+function deferred() {
+  let settle: (value: undefined) => void = () => undefined;
+  const promise = new Promise<undefined>((resolve) => {
+    settle = resolve;
+  });
+
+  return { promise, resolve: settle };
+}
+
+/** Waits until some query on this database waits on another's lock. */
+async function waitUntilBlocked() {
+  for (let attempt = 0; attempt < 2000; attempt += 1) {
+    const result = await db.execute<{ blocked: number }>(sql`
+      select count(*)::int as blocked
+      from pg_stat_activity
+      where datname = current_database()
+        and cardinality(pg_blocking_pids(pid)) > 0
+    `);
+
+    if ((result.rows[0]?.blocked ?? 0) > 0) {
+      return;
+    }
+  }
+
+  throw new Error("The second writer never waited on the category lock");
+}
+
+/**
+ * Two creations in one store, the second started while the first holds the
+ * store's category lock: it waits, then decides on what the first wrote.
+ */
+async function overlappingCreations(storeId: number, names: [string, string]) {
+  const held = deferred();
+  const locked = deferred();
+  const first = db.transaction(async (tx) => {
+    const created = await createCategory(tx, {
+      storeId,
+      values: { nameEn: null, nameEs: names[0] },
+    });
+    locked.resolve(undefined);
+    await held.promise;
+
+    return created;
+  });
+  await locked.promise;
+  const second = db.transaction(
+    async (tx) =>
+      await createCategory(tx, {
+        storeId,
+        values: { nameEn: null, nameEs: names[1] },
+      })
+  );
+
+  try {
+    await waitUntilBlocked();
+  } finally {
+    held.resolve(undefined);
+  }
+
+  return await Promise.allSettled([first, second]);
+}
+
+describe("category writes under two writers", () => {
+  test("the same name created twice at once ends in one category and one CONFLICT", async () => {
+    const shop = await makeStore();
+
+    const [first, second] = await overlappingCreations(shop.id, [
+      "Collares",
+      "collares",
+    ]);
+
+    expect(first.status).toBe("fulfilled");
+    expect(second).toMatchObject({
+      reason: { code: "CONFLICT" },
+      status: "rejected",
+    });
+    expect(
+      (await listStoreCategories(db, { storeId: shop.id })).map(
+        (row) => row.nameEs
+      )
+    ).toEqual(["Collares"]);
+  });
+
+  test("two different names created at once get their own places", async () => {
+    const shop = await makeStore();
+
+    await overlappingCreations(shop.id, ["Collares", "Pulseras"]);
+
+    expect(
+      (await listStoreCategories(db, { storeId: shop.id })).map((row) => [
+        row.nameEs,
+        row.position,
+      ])
+    ).toEqual([
+      ["Collares", 0],
+      ["Pulseras", 1],
+    ]);
   });
 });

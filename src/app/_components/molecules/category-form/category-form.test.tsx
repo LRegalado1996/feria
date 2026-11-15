@@ -213,6 +213,27 @@ describe("CategoryForm", () => {
     });
   });
 
+  test("locks its fields while saving, so nothing typed meanwhile is lost to the reset", async () => {
+    const { english, onSave, spanish, submit, type, user } = setup({
+      result: "hang",
+    });
+    await type(spanish(), "Collares");
+    await type(english(), "Necklaces");
+
+    await submit();
+
+    await waitFor(() => {
+      expect(spanish()).toBeDisabled();
+    });
+    expect(english()).toBeDisabled();
+    await user.type(spanish(), " de plata");
+    expect(spanish()).toHaveValue("Collares");
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      nameEn: "Necklaces",
+      nameEs: "Collares",
+    });
+  });
+
   test("an edit form starts from the category's names, keeps them once saved, and can be cancelled", async () => {
     const { english, onCancel, onSave, spanish, submit, user } = setup({
       values: { nameEn: "Necklaces", nameEs: "Collares" },

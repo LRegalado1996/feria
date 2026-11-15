@@ -54,7 +54,7 @@ describe("useDeleteCategory", () => {
     });
   });
 
-  test("rejects a refused deletion with its code, leaves the list and the report to the dialog", async () => {
+  test("rejects a refused deletion with its code, reads the list again, and leaves the report to the dialog", async () => {
     const { invalidateQueries, metas, result } = setup({ fails: true });
 
     await expect(result.current.mutateAsync(INPUT)).rejects.toMatchObject({
@@ -62,7 +62,10 @@ describe("useDeleteCategory", () => {
       message: "Choose another category for its articles",
     });
 
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    // The category may have gained articles since the list was read.
+    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+      queryKey: storeCategoriesKey("lr-market"),
+    });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });
 });

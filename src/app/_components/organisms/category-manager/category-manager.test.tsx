@@ -250,6 +250,55 @@ describe("CategoryManager", () => {
     expect(screen.getByLabelText(/^Name in Spanish/u)).toHaveValue("");
   });
 
+  test("locks the add form while the category is being added", async () => {
+    const { spies, user } = setup({ writes: { create: "hang" } });
+    await shown();
+    const spanish = screen.getByLabelText(/^Name in Spanish/u);
+
+    await user.type(spanish, "Anillos");
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    await waitFor(() => {
+      expect(spanish).toBeDisabled();
+    });
+    await user.type(spanish, " de oro");
+    expect(spanish).toHaveValue("Anillos");
+    expect(screen.getByRole("button", { name: "Adding…" })).toBeDisabled();
+    await waitFor(() => {
+      expect(spies.create).toHaveBeenCalledExactlyOnceWith({
+        nameEn: null,
+        nameEs: "Anillos",
+        storeSlug: STORE_SLUG,
+      });
+    });
+  });
+
+  test("keeps the delete dialog open, with no toast, until the deletion is answered", async () => {
+    const { row, spies, user } = setup({ writes: { delete: "hang" } });
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    await waitFor(() => {
+      expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
+        id: 3,
+        moveToId: null,
+        storeSlug: STORE_SLUG,
+      });
+    });
+    expect(
+      await within(dialog).findByRole("button", { name: "Deleting…" })
+    ).toBeDisabled();
+    expect(screen.getByTestId("delete-category-dialog")).toBe(dialog);
+    expect(screen.queryByText("Category deleted.")).toBeNull();
+  });
+
   test("puts a name the store already has on the Spanish field, without reporting it", async () => {
     const { user } = setup();
     server.use(
@@ -431,8 +480,17 @@ describe("CategoryManager", () => {
       })
     );
 
+    // The move it announced did not happen: the live region says so, and a
+    // toast says it too.
+    await waitFor(() => {
+      expect(announcer()).toHaveTextContent(
+        /^We could not save the change\. Try again\.$/u
+      );
+    });
     expect(
-      await screen.findByText("We could not save the change. Try again.")
+      screen
+        .getAllByText("We could not save the change. Try again.")
+        .find((node) => node.closest("output") === null)
     ).toBeVisible();
     expect(reportError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
@@ -556,6 +614,42 @@ describe("CategoryManager", () => {
         storeSlug: STORE_SLUG,
       });
     });
+  });
+
+  test("a deletion refused because the category gained articles asks where they move, unreported", async () => {
+    const { row, spies, user } = setup();
+    await shown();
+    server.use(
+      createOrpcErrorHandler("category.delete", {
+        code: "BAD_REQUEST",
+        message: "Choose where its articles move before deleting it",
+        status: 400,
+      }),
+      createOrpcHandler("category.list", () => [
+        ROWS[0],
+        ROWS[1],
+        makeRow(3, "Pulseras", { productCount: 2 }),
+      ])
+    );
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Delete: Pulseras" })
+    );
+    const dialog = await screen.findByTestId("delete-category-dialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Delete category" })
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      /^Choose which category its articles move to\.$/u
+    );
+    expect(
+      await within(dialog).findByRole("combobox", {
+        name: "Move its articles to",
+      })
+    ).toBeVisible();
+    expect(reportError).not.toHaveBeenCalled();
+    expect(spies.delete).not.toHaveBeenCalled();
   });
 
   test("reports a failed deletion and keeps the dialog open with the error", async () => {

@@ -60,8 +60,13 @@ function setup({ answer = "save", list = LIST }: SetupOptions = {}) {
     wrapper,
   });
   const listNow = () => wrapper.queryClient.getQueryData(KEY);
+  const metas = () =>
+    wrapper.queryClient
+      .getMutationCache()
+      .getAll()
+      .map((mutation) => mutation.meta);
 
-  return { invalidateQueries, listNow, reorder, result };
+  return { invalidateQueries, listNow, metas, reorder, result };
 }
 
 describe("useReorderCategories", () => {
@@ -73,9 +78,12 @@ describe("useReorderCategories", () => {
     await waitFor(() => {
       expect(listNow()).toEqual([makeRow(3, 0), makeRow(1, 1), makeRow(2, 2)]);
     });
-    expect(reorder).toHaveBeenCalledExactlyOnceWith({
-      ids: [3, 1, 2],
-      storeSlug: "lr-market",
+    // The request starts after the optimistic update: wait for it on its own.
+    await waitFor(() => {
+      expect(reorder).toHaveBeenCalledExactlyOnceWith({
+        ids: [3, 1, 2],
+        storeSlug: "lr-market",
+      });
     });
   });
 
@@ -117,6 +125,60 @@ describe("useReorderCategories", () => {
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
       queryKey: KEY,
     });
+  });
+
+  test("leaves reporting a failure to the screen, so it is reported once", async () => {
+    const { metas, result } = setup({ answer: "fail" });
+
+    await expect(
+      result.current.mutateAsync({ ids: [3, 2, 1], storeSlug: "lr-market" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+    expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
+  });
+
+  test("sends a second quick move only once the first was answered", async () => {
+    const { result } = setup();
+    const received: unknown[] = [];
+    const releases: (() => void)[] = [];
+    server.use(
+      createOrpcHandler("category.reorder", async (input) => {
+        received.push(input);
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+        return { ids: (input as { ids: number[] }).ids };
+      })
+    );
+
+    const first = result.current.mutateAsync({
+      ids: [2, 1, 3],
+      storeSlug: "lr-market",
+    });
+    const second = result.current.mutateAsync({
+      ids: [2, 3, 1],
+      storeSlug: "lr-market",
+    });
+
+    await waitFor(() => {
+      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+    });
+    // Time for a second request to arrive, were it sent in parallel.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+    expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+
+    releases[0]?.();
+    await expect(first).resolves.toEqual({ ids: [2, 1, 3] });
+    await waitFor(() => {
+      expect(received).toEqual([
+        { ids: [2, 1, 3], storeSlug: "lr-market" },
+        { ids: [2, 3, 1], storeSlug: "lr-market" },
+      ]);
+    });
+    releases[1]?.();
+    await expect(second).resolves.toEqual({ ids: [2, 3, 1] });
   });
 
   test("creates no list when none is cached yet", async () => {

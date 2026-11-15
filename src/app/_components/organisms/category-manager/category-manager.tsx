@@ -92,6 +92,8 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
         onError: (error) => {
           reportError(error, { action: "Category.reorder" });
           toast.error(copy.errors.generic);
+          // The list went back to its order: say so where the move was said.
+          setAnnouncement(copy.errors.generic);
         },
       }
     );
@@ -387,19 +389,29 @@ function CategoryRow({
           error={deleteError}
           isPending={remove.isPending}
           onConfirm={(moveToId) => {
-            remove.mutate(
-              { id: row.id, moveToId, storeSlug },
-              {
-                onError: (error) => {
-                  reportError(error, { action: "Category.delete" });
-                  setDeleteError(copy.errors.generic);
-                },
-                onSuccess: () => {
-                  setDeleting(false);
-                  toast.success(copy.toasts.deleted);
-                },
+            void (async () => {
+              try {
+                // Awaited here, not in a per-call callback: the list read
+                // after the deletion unmounts this row, and TanStack runs no
+                // per-call callback for an unmounted component.
+                await remove.mutateAsync({ id: row.id, moveToId, storeSlug });
+                setDeleting(false);
+                toast.success(copy.toasts.deleted);
+              } catch (error) {
+                // Refused because it gained articles since it was loaded:
+                // the list is read again and the dialog asks where they go.
+                if (
+                  error instanceof ORPCError &&
+                  error.code === "BAD_REQUEST"
+                ) {
+                  setDeleteError(copy.delete.moveRequired);
+                  return;
+                }
+
+                reportError(error, { action: "Category.delete" });
+                setDeleteError(copy.errors.generic);
               }
-            );
+            })();
           }}
           onOpenChange={setDeleting}
           open={deleting}

@@ -95,33 +95,38 @@ function CategoryForm({
           void form.handleSubmit(submit)(event);
         }}
       >
-        <FormField
-          control={form.control}
-          name="nameEs"
-          render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel required>{copy.fields.nameEs}</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="nameEn"
-          render={({ field }) => (
-            <FormItem className="min-w-0">
-              <FormLabel>{copy.fields.nameEn}</FormLabel>
-              <FormControl>
-                <Input autoComplete="off" lang="en" {...field} />
-              </FormControl>
-              <FormDescription>{copy.fields.nameEnHint}</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Fields are locked while saving: what is typed meanwhile was not
+            sent, and the reset after a save would erase it. A fieldset
+            keeps the grid's columns with `contents`. */}
+        <fieldset className="contents" disabled={isSubmitting}>
+          <FormField
+            control={form.control}
+            name="nameEs"
+            render={({ field }) => (
+              <FormItem className="min-w-0">
+                <FormLabel required>{copy.fields.nameEs}</FormLabel>
+                <FormControl>
+                  <Input autoComplete="off" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="nameEn"
+            render={({ field }) => (
+              <FormItem className="min-w-0">
+                <FormLabel>{copy.fields.nameEn}</FormLabel>
+                <FormControl>
+                  <Input autoComplete="off" lang="en" {...field} />
+                </FormControl>
+                <FormDescription>{copy.fields.nameEnHint}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </fieldset>
         <div className="flex gap-2 sm:pt-6">
           <Button disabled={isSubmitting} type="submit">
             {isSubmitting ? pendingLabel : submitLabel}

@@ -28,27 +28,48 @@ export async function listStoreCategories(
   db: DatabaseClient,
   { storeId }: StoreScope
 ) {
-  const rows = await db.query.category.findMany({
-    columns: { id: true, position: true, slug: true },
-    orderBy: [asc(category.position), asc(category.id)],
-    where: eq(category.storeId, storeId),
-    with: { translations: { columns: { locale: true, name: true } } },
-  });
-  const counts = await db
-    .select({ categoryId: product.categoryId, total: count() })
-    .from(product)
-    .where(eq(product.storeId, storeId))
-    .groupBy(product.categoryId);
-  const totals = new Map(counts.map((row) => [row.categoryId, row.total]));
+  // One statement, so the counts and the list come from the same snapshot.
+  // A join, not a correlated subquery: Drizzle leaves a single table's
+  // columns unqualified, and inside a subquery "id" would be the product's.
+  const rows = await db
+    .select({
+      id: category.id,
+      position: category.position,
+      productCount: count(product.id),
+      slug: category.slug,
+    })
+    .from(category)
+    .leftJoin(product, eq(product.categoryId, category.id))
+    .where(eq(category.storeId, storeId))
+    .groupBy(category.id)
+    .orderBy(asc(category.position), asc(category.id));
+  const names =
+    rows.length === 0
+      ? []
+      : await db
+          .select({
+            categoryId: categoryTranslation.categoryId,
+            locale: categoryTranslation.locale,
+            name: categoryTranslation.name,
+          })
+          .from(categoryTranslation)
+          .where(
+            inArray(
+              categoryTranslation.categoryId,
+              rows.map((row) => row.id)
+            )
+          );
+  const nameOf = (categoryId: number, locale: "en" | "es") =>
+    names.find(
+      (name) => name.categoryId === categoryId && name.locale === locale
+    )?.name;
 
-  return rows.map(({ translations, ...row }) => ({
+  return rows.map((row) => ({
     ...row,
-    nameEn: translations.find((name) => name.locale === "en")?.name ?? null,
-    nameEs: translations.find((name) => name.locale === "es")?.name ?? "",
-    productCount: totals.get(row.id) ?? 0,
+    nameEn: nameOf(row.id, "en") ?? null,
+    nameEs: nameOf(row.id, "es") ?? "",
   }));
 }
-
 export type StoreCategory = Awaited<
   ReturnType<typeof listStoreCategories>
 >[number];
@@ -150,15 +171,21 @@ export async function createCategory(
   return created;
 }
 
-/** The store's category, or NOT_FOUND: an id from input is not trusted. */
+/**
+ * The store's category, or NOT_FOUND: an id from input is not trusted. Its
+ * row is locked for the rest of the transaction: `update` for the one being
+ * deleted, `share` for one articles move into, against an article write
+ * attaching to it at the same time (it locks the row `share` too).
+ */
 async function findStoreCategory(
   tx: DatabaseClient,
-  { id, storeId }: StoreScope & { id: number }
+  { id, lock, storeId }: StoreScope & { id: number; lock: "share" | "update" }
 ) {
   const [found] = await tx
     .select({ id: category.id, slug: category.slug })
     .from(category)
-    .where(and(eq(category.id, id), eq(category.storeId, storeId)));
+    .where(and(eq(category.id, id), eq(category.storeId, storeId)))
+    .for(lock);
 
   if (!found) {
     throw notFound();
@@ -173,7 +200,7 @@ export async function renameCategory(
   { id, storeId, values }: StoreScope & { id: number; values: CategoryNames }
 ) {
   await lockStoreCategories(tx, storeId);
-  const found = await findStoreCategory(tx, { id, storeId });
+  const found = await findStoreCategory(tx, { id, lock: "update", storeId });
   await assertNameFree(tx, { excludeId: id, nameEs: values.nameEs, storeId });
 
   await tx
@@ -240,7 +267,9 @@ export async function deleteCategory(
   }: StoreScope & { id: number; moveToId: number | null }
 ) {
   await lockStoreCategories(tx, storeId);
-  await findStoreCategory(tx, { id, storeId });
+  // Locked first: an article written into it meanwhile waits for the
+  // deletion, then finds the category gone instead of a foreign-key error.
+  await findStoreCategory(tx, { id, lock: "update", storeId });
 
   const [held] = await tx
     .select({ total: count() })
@@ -261,16 +290,23 @@ export async function deleteCategory(
       });
     }
 
-    await findStoreCategory(tx, { id: moveToId, storeId });
-    await tx
+    await findStoreCategory(tx, { id: moveToId, lock: "share", storeId });
+    const moved = await tx
       .update(product)
       .set({ categoryId: moveToId })
-      .where(and(eq(product.storeId, storeId), eq(product.categoryId, id)));
+      .where(and(eq(product.storeId, storeId), eq(product.categoryId, id)))
+      .returning({ id: product.id });
+
+    await tx
+      .delete(category)
+      .where(and(eq(category.id, id), eq(category.storeId, storeId)));
+
+    return { id, movedArticles: moved.length };
   }
 
   await tx
     .delete(category)
     .where(and(eq(category.id, id), eq(category.storeId, storeId)));
 
-  return { id, movedArticles: articles };
+  return { id, movedArticles: 0 };
 }

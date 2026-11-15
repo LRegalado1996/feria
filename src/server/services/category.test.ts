@@ -47,9 +47,10 @@ function makeNames(
 /**
  * The mock database answering the store's queries by the SQL they send, so
  * an answer reaches only the query it is for:
- * - `own`: the store's categories, found by id within the store;
+ * - `own`: the store's categories, found (and row-locked) by id in the store;
  * - `existing`: what the store's category list (`slug`, `position`) holds;
- * - `held`: how many articles the category being deleted has;
+ * - `held`: how many articles the category being deleted has (`null`: the
+ *   count returned no row);
  * - `taken`: whether the duplicate-name check finds another category.
  */
 function setup({
@@ -59,7 +60,7 @@ function setup({
   taken = false,
 }: {
   existing?: ReturnType<typeof makeRow>[];
-  held?: number;
+  held?: number | null;
   own?: number[];
   taken?: boolean;
 } = {}) {
@@ -67,59 +68,59 @@ function setup({
   db.$["select.where"].mockImplementation(async (where: unknown) => {
     const { params, sql } = renderQuery(where);
 
-    if (sql === FIND_SQL) {
-      const [id, storeId] = params;
-      return await Promise.resolve(
-        storeId === STORE_ID && own.includes(id as number)
-          ? [{ id, slug: `categoria-${String(id)}` }]
-          : []
-      );
-    }
-
     if (sql === STORE_SQL && params[0] === STORE_ID) {
       return await Promise.resolve(existing);
     }
 
     if (sql === HELD_SQL && params[0] === STORE_ID) {
-      return await Promise.resolve([{ total: held }]);
+      return await Promise.resolve(held === null ? [] : [{ total: held }]);
     }
 
     return await Promise.resolve([]);
+  });
+  // A lookup by id ends in `.for(lock)`: it answers by the `where` it locks.
+  db.$["select.for"].mockImplementation(async () => {
+    const { params, sql } = renderQuery(
+      db.$["select.where"].mock.calls.at(-1)?.[0]
+    );
+    const [id, storeId] = params;
+
+    return await Promise.resolve(
+      sql === FIND_SQL && storeId === STORE_ID && own.includes(id as number)
+        ? [{ id, slug: `categoria-${String(id)}` }]
+        : []
+    );
   });
   db.$["select.limit"].mockResolvedValue(taken ? [{ id: 99 }] : []);
 
   /** Every `where` the plain selects sent, as SQL and parameters. */
   const selectWheres = () =>
     db.$["select.where"].mock.calls.map(([where]) => renderQuery(where));
+  /** The row locks the lookups took, in order. */
+  const locks = () => db.$["select.for"].mock.calls.map(([lock]) => lock);
 
-  return { db, selectWheres };
+  return { db, locks, selectWheres };
 }
 
 describe("listStoreCategories", () => {
   test("names each category by locale, counts its articles, in the store's order", async () => {
     const { db, selectWheres } = setup();
-    db.query.category.findMany.mockResolvedValue([
-      {
-        id: 4,
-        position: 0,
-        slug: "collares",
-        translations: [
-          { locale: "en", name: "Necklaces" },
-          { locale: "es", name: "Collares" },
-        ],
-      },
-      {
-        id: 2,
-        position: 1,
-        slug: "aros",
-        translations: [{ locale: "es", name: "Aros" }],
-      },
-      { id: 9, position: 2, slug: "sin-nombre", translations: [] },
+    db.$["select.orderBy"].mockResolvedValue([
+      { id: 4, position: 0, productCount: 3, slug: "collares" },
+      { id: 2, position: 1, productCount: 0, slug: "aros" },
+      { id: 9, position: 2, productCount: 0, slug: "sin-nombre" },
     ]);
-    db.$["select.groupBy"].mockResolvedValue([
-      { categoryId: 4, total: 3 },
-      { categoryId: null, total: 5 },
-    ]);
+    db.$["select.where"].mockImplementation(async (where: unknown) =>
+      renderQuery(where).sql.startsWith('"category_translation"')
+        ? await Promise.resolve([
+            { categoryId: 4, locale: "en", name: "Necklaces" },
+            { categoryId: 2, locale: "es", name: "Aros" },
+            { categoryId: 4, locale: "es", name: "Collares" },
+            // Another category's names never land on these rows.
+            { categoryId: 7, locale: "es", name: "Ajena" },
+          ])
+        : await Promise.resolve([])
+    );
 
     await expect(
       listStoreCategories(db as never, { storeId: STORE_ID })
@@ -150,33 +151,56 @@ describe("listStoreCategories", () => {
       },
     ]);
 
-    const [config] = db.query.category.findMany.mock.calls[0] ?? [];
-    const read = config as {
-      columns: unknown;
-      orderBy: unknown;
-      where: unknown;
-      with: unknown;
-    };
-    expect(renderQuery(read.where)).toEqual({
-      params: [STORE_ID],
-      sql: STORE_SQL,
+    const [columns] = db.$.select.mock.calls[0] ?? [];
+    const { productCount, ...plain } = columns as Record<string, unknown>;
+    expect(plain).toEqual({
+      id: category.id,
+      position: category.position,
+      slug: category.slug,
     });
-    expect(renderOrderBy(read.orderBy)).toBe(
+    // Drafts count too: every article joined to the category, in one
+    // statement; a category with none counts 0, not 1.
+    expect(renderQuery(productCount)).toEqual({
+      params: [],
+      sql: 'count("product"."id")',
+    });
+    expect(db.$["select.leftJoin"].mock.calls[0]?.[0]).toBe(product);
+    expect(renderQuery(db.$["select.leftJoin"].mock.calls[0]?.[1])).toEqual({
+      params: [],
+      sql: '"product"."categoryId" = "category"."id"',
+    });
+    expect(db.$["select.groupBy"]).toHaveBeenCalledExactlyOnceWith(category.id);
+    expect(db.$["select.from"].mock.calls).toEqual([
+      [category],
+      [categoryTranslation],
+    ]);
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
       '"category"."position" asc, "category"."id" asc'
     );
-    expect(read.columns).toEqual({ id: true, position: true, slug: true });
-    expect(read.with).toEqual({
-      translations: { columns: { locale: true, name: true } },
-    });
-
-    // Drafts count too: the article count is filtered by the store only.
-    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(product);
-    expect(selectWheres()).toEqual([
-      { params: [STORE_ID], sql: '"product"."storeId" = $1' },
+    expect(db.$.select.mock.calls[1]).toEqual([
+      {
+        categoryId: categoryTranslation.categoryId,
+        locale: categoryTranslation.locale,
+        name: categoryTranslation.name,
+      },
     ]);
-    expect(db.$["select.groupBy"]).toHaveBeenCalledExactlyOnceWith(
-      product.categoryId
-    );
+    expect(selectWheres()).toEqual([
+      { params: [STORE_ID], sql: STORE_SQL },
+      {
+        params: [4, 2, 9],
+        sql: '"category_translation"."categoryId" in ($1, $2, $3)',
+      },
+    ]);
+  });
+
+  test("reads no names for a store without categories", async () => {
+    const { db, selectWheres } = setup();
+
+    await expect(
+      listStoreCategories(db as never, { storeId: STORE_ID })
+    ).resolves.toEqual([]);
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(category);
+    expect(selectWheres()).toEqual([{ params: [STORE_ID], sql: STORE_SQL }]);
   });
 });
 
@@ -321,12 +345,19 @@ describe("renameCategory", () => {
   });
 
   test("replaces both names and returns the category with its slug", async () => {
-    const { db } = setup({ own: [5] });
+    const { db, locks } = setup({ own: [5] });
 
     await expect(rename(db)).resolves.toEqual({
       id: 5,
       slug: "categoria-5",
     });
+
+    // The category's row is held until the names are replaced.
+    expect(locks()).toEqual(["update"]);
+    // The store's lock comes first, before the category is read.
+    expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      db.$["select.where"].mock.invocationCallOrder[0] ?? 0
+    );
 
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(categoryTranslation);
     expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
@@ -434,12 +465,17 @@ describe("deleteCategory", () => {
   test.each([null, 6, 5])(
     "deletes a category with no articles, ignoring a destination of %j",
     async (moveToId) => {
-      const { db, selectWheres } = setup({ own: [5] });
+      const { db, locks, selectWheres } = setup({ own: [5] });
 
       await expect(remove(db, { moveToId })).resolves.toEqual({
         id: 5,
         movedArticles: 0,
       });
+
+      expect(locks()).toEqual(["update"]);
+      expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+        db.$["select.where"].mock.invocationCallOrder[0] ?? 0
+      );
 
       expect(selectWheres()).toEqual([
         { params: [5, STORE_ID], sql: FIND_SQL },
@@ -452,12 +488,7 @@ describe("deleteCategory", () => {
   );
 
   test("reads a count with no row as no articles", async () => {
-    const { db } = setup({ own: [5] });
-    db.$["select.where"].mockImplementation(async (where: unknown) =>
-      renderQuery(where).sql === FIND_SQL
-        ? await Promise.resolve([{ id: 5, slug: "collares" }])
-        : await Promise.resolve([])
-    );
+    const { db } = setup({ held: null, own: [5] });
 
     await expect(remove(db)).resolves.toEqual({ id: 5, movedArticles: 0 });
     expect(deletedWhere(db)).toEqual(DELETED);
@@ -493,13 +524,24 @@ describe("deleteCategory", () => {
   });
 
   test("moves the articles to the destination, then deletes the category", async () => {
-    const { db } = setup({ held: 3, own: [5, 6] });
+    // Counted 4, but 3 moved: the answer is what the UPDATE moved.
+    const { db, locks } = setup({ held: 4, own: [5, 6] });
+    db.$["update.returning"].mockResolvedValue([
+      { id: 1 },
+      { id: 2 },
+      { id: 3 },
+    ]);
 
     await expect(remove(db, { moveToId: 6 })).resolves.toEqual({
       id: 5,
       movedArticles: 3,
     });
 
+    // The deleted category is locked to write, its destination to keep.
+    expect(locks()).toEqual(["update", "share"]);
+    expect(db.$["update.returning"]).toHaveBeenCalledExactlyOnceWith({
+      id: product.id,
+    });
     expect(db.$.update).toHaveBeenCalledExactlyOnceWith(product);
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
       categoryId: 6,
