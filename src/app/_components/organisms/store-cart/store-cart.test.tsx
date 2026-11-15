@@ -52,6 +52,18 @@ function makeLine(productId: number, quantity: number, seen?: number) {
     : { productId, quantity, seenPriceAmount: seen };
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+/** A promise the test settles when it chooses: a slow answer. */
+function deferred<T>() {
+  let settle: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
+  });
+
+  return { promise, resolve: settle };
+}
+
 /** Two articles, as added: 2 of article 4 at its price then, 1 of 9. */
 const CART = [makeLine(4, 2, 40_000), makeLine(9, 1, 90_000)];
 
@@ -421,8 +433,93 @@ describe("StoreCart", () => {
       expect(screen.queryByRole("alert")).toBeNull();
     });
     expect(submit()).toBeEnabled();
-    expect(cartProducts).toHaveBeenCalledTimes(2);
+    // The first answer and the retry; the failed read went to the error
+    // handler in between.
+    expect(cartProducts.mock.calls).toEqual([
+      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
+      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
+    ]);
   });
+
+  test.each([
+    [
+      "back to the tab",
+      async (_user: User) => {
+        act(() => {
+          focusManager.setFocused(false);
+          focusManager.setFocused(true);
+        });
+        await Promise.resolve();
+      },
+    ],
+    [
+      "an article that changed under the order",
+      async (user: User) => {
+        server.use(
+          createOrpcErrorHandler("order.create", {
+            code: "BAD_REQUEST",
+            message: "Article not available",
+            status: 400,
+          })
+        );
+        await user.type(
+          screen.getByRole("textbox", { name: "Your name" }),
+          "Ana Pérez"
+        );
+        await user.type(
+          screen.getByRole("textbox", { name: "Your mobile" }),
+          "099 123 456"
+        );
+        await user.click(screen.getByTestId("store-checkout-submit"));
+      },
+    ],
+  ])(
+    "a refresh on its way after %s keeps the lines and holds the order until the shop answers",
+    async (_case, refresh) => {
+      const { cartProducts, lines, shown, submit, total, user } = setup();
+      await shown();
+      const answer = deferred<CartProduct[]>();
+      cartProducts.mockImplementation(async () => await answer.promise);
+
+      await refresh(user);
+
+      await waitFor(() => {
+        expect(submit()).toBeDisabled();
+      });
+      expect(submit()).toHaveAccessibleDescription(
+        "Fetching the current prices…"
+      );
+      // The cached answer stays on screen meanwhile.
+      expect(lines()).toEqual([
+        ["Artículo 4", null],
+        ["Artículo 9", null],
+      ]);
+      expect(total()).toBe("TotalUYU 1,700");
+      expect(cartProducts).toHaveBeenLastCalledWith({
+        ids: [4, 9],
+        locale: "en",
+        storeSlug: "lr-market",
+      });
+
+      await act(async () => {
+        answer.resolve([
+          makeProduct(4, { priceAmount: 50_000 }),
+          makeProduct(9),
+        ]);
+        await answer.promise;
+      });
+
+      await waitFor(() => {
+        expect(lines()).toEqual([
+          ["Artículo 4", "price_changed"],
+          ["Artículo 9", null],
+        ]);
+      });
+      expect(total()).toBe("TotalUYU 1,900");
+      expect(submit()).toBeEnabled();
+      expect(submit()).not.toHaveAttribute("aria-describedby");
+    }
+  );
 
   test("an article added while its price loads is pending, not gone, and holds the order until it arrives", async () => {
     const { cartProducts, lines, shown, submit } = setup({

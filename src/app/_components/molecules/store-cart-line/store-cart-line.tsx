@@ -122,12 +122,25 @@ function StoreCartLine({
             })}
           </p>
         ) : null}
-        {notice ? (
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-store-foreground">
-            <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
-            {notice}
-          </p>
-        ) : null}
+        {/* Mounted always, so a notice a refresh brings is announced: a
+            live region added together with its text is often not read.
+            Empty, it is `sr-only`, out of the column's flow and its gap. */}
+        <output
+          aria-live="polite"
+          className={
+            notice
+              ? "flex items-center gap-1.5 text-sm font-semibold text-store-foreground"
+              : "sr-only"
+          }
+          data-testid="store-cart-line-notice"
+        >
+          {notice ? (
+            <>
+              <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+              {notice}
+            </>
+          ) : null}
+        </output>
       </div>
       <div className="flex items-center justify-between gap-3">
         {blocked ? (

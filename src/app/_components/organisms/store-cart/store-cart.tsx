@@ -218,12 +218,15 @@ function CartBody({
   // the shop's word now, so the order waits for one that is.
   if (products.isError) {
     blockedReason = copy.errors.refresh;
+  } else if (products.isFetching) {
+    // A refresh on its way (back to the tab, an article that changed under
+    // the order, a line added and still pending): the lines stay on screen,
+    // but the order waits for the shop's word on them.
+    blockedReason = copy.loading;
   } else if (
     lines.some((line) => line.flag === "gone" || line.flag === "unavailable")
   ) {
     blockedReason = copy.errors.blocked;
-  } else if (lines.some((line) => line.flag === "pending")) {
-    blockedReason = copy.loading;
   }
 
   const [first] = products.data;

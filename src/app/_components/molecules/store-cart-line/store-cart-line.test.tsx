@@ -44,24 +44,29 @@ function setup({
   seenPriceAmount,
 }: SetupOptions = {}) {
   const onQuantity = vi.fn((_quantity: number) => undefined);
-  renderWithI18n(
+  const lineOf = (props: Required<Pick<SetupOptions, "flag" | "product">>) => (
     <ul>
       <StoreCartLine
         className="custom"
-        flag={flag}
+        flag={props.flag}
         onQuantity={onQuantity}
-        product={product}
+        product={props.product}
         quantity={quantity}
         seenPriceAmount={seenPriceAmount}
         storeSlug="lr-market"
       />
-    </ul>,
-    { locale }
+    </ul>
   );
+  const { rerender } = renderWithI18n(lineOf({ flag, product }), { locale });
 
   return {
     line: () => screen.getByTestId("store-cart-line"),
+    notice: () => screen.getByTestId("store-cart-line-notice"),
     onQuantity,
+    /** Renders the same line again, as the cart does after a refresh. */
+    refresh: (props: Required<Pick<SetupOptions, "flag" | "product">>) => {
+      rerender(lineOf(props));
+    },
     user: userEvent.setup(),
   };
 }
@@ -169,6 +174,38 @@ describe("StoreCartLine", () => {
       expect(screen.queryByRole("link")).toBeNull();
       expect(line().querySelector("img")).toBeNull();
       expect(screen.queryByRole("group")).toBeNull();
+    }
+  );
+
+  test.each([
+    [
+      "sold out",
+      "unavailable",
+      makeProduct({ isAvailable: false }),
+      "Sold out for now.",
+    ],
+    [
+      "at a new price",
+      "price_changed",
+      makeProduct({ priceAmount: 150_000 }),
+      "The price changed: it was UYU 1,250.",
+    ],
+  ] as const)(
+    "a refresh that finds the line %s announces it in the region that was already there",
+    (_case, flag, product, notice) => {
+      const { notice: region, refresh } = setup({ seenPriceAmount: 125_000 });
+      const before = region();
+
+      expect(before).toHaveAttribute("aria-live", "polite");
+      expect(before).toHaveTextContent(/^$/u);
+      // Empty, it is out of the column's flow, so it adds no gap.
+      expect(before).toHaveAttribute("class", "sr-only");
+
+      refresh({ flag, product });
+
+      expect(region()).toBe(before);
+      expect(region()).toHaveTextContent(new RegExp(`^${notice}$`, "u"));
+      expect(region()).not.toHaveClass("sr-only");
     }
   );
 
