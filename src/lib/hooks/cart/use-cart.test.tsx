@@ -316,8 +316,12 @@ describe("useCart", () => {
     const { result, storage } = await setup({
       stored: JSON.stringify([makeItem(4, 2)]),
     });
+    const refused = new DOMException(
+      "The operation is insecure.",
+      "SecurityError"
+    );
     storage.getItem.mockImplementation(() => {
-      throw new DOMException("The operation is insecure.", "SecurityError");
+      throw refused;
     });
     storage.setItem.mockClear();
 
@@ -330,10 +334,9 @@ describe("useCart", () => {
 
     expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 2)]);
     expect(storage.setItem).not.toHaveBeenCalled();
-    expect(reportError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ name: "SecurityError" }),
-      { action: "Cart.read_storage" }
-    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(refused, {
+      action: "Cart.read_storage",
+    });
 
     // Another tab's write cannot be read, so it leaves the page's copy alone.
     act(() => {
@@ -375,8 +378,12 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
 
     // The other store's next read throws.
+    const refused = new DOMException(
+      "The operation is insecure.",
+      "SecurityError"
+    );
     storage.getItem.mockImplementation(() => {
-      throw new DOMException("The operation is insecure.", "SecurityError");
+      throw refused;
     });
     act(() => {
       window.dispatchEvent(
@@ -394,10 +401,9 @@ describe("useCart", () => {
       makeItem(9, 1),
       makeItem(5, 1),
     ]);
-    expect(reportError).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "SecurityError" }),
-      { action: "Cart.read_storage" }
-    );
+    expect(reportError).toHaveBeenCalledWith(refused, {
+      action: "Cart.read_storage",
+    });
   });
 
   test("a cart another tab removed is not brought back when a later read throws", async () => {
@@ -411,18 +417,21 @@ describe("useCart", () => {
     });
     expect(result.current.items).toEqual([]);
 
+    const refused = new DOMException(
+      "The operation is insecure.",
+      "SecurityError"
+    );
     storage.getItem.mockImplementation(() => {
-      throw new DOMException("The operation is insecure.", "SecurityError");
+      throw refused;
     });
     act(() => {
       window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
     });
 
     expect(result.current.items).toEqual([]);
-    expect(reportError).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ name: "SecurityError" }),
-      { action: "Cart.read_storage" }
-    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(refused, {
+      action: "Cart.read_storage",
+    });
   });
 
   test("a write the storage takes again drops the page's copy, so storage is read again", async () => {
