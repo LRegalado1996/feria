@@ -182,10 +182,16 @@ export async function listAccessibleStores(db: DatabaseClient, userId: string) {
  * no longer exists (a session that outlived it).
  */
 export async function getAdminProfile(db: DatabaseClient, userId: string) {
-  const [role, stores] = await Promise.all([
-    getUserRole(db, userId),
-    listAccessibleStores(db, userId),
-  ]);
+  // One read-only snapshot: a promotion between the two reads would
+  // otherwise pair the old role with the new store list.
+  const [role, stores] = await db.transaction(
+    async (tx) =>
+      await Promise.all([
+        getUserRole(tx, userId),
+        listAccessibleStores(tx, userId),
+      ]),
+    { accessMode: "read only", isolationLevel: "repeatable read" }
+  );
 
   return role === null ? null : { role, stores };
 }

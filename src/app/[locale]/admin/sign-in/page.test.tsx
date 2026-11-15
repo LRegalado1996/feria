@@ -111,10 +111,21 @@ describe("SignInPage", () => {
       const skeleton = screen.getByTestId("sign-in-skeleton");
       expect(skeleton).toHaveAttribute("aria-busy", "true");
       expect(skeleton).toHaveTextContent(loading);
-      // Two fields and the button, in the form's own geometry.
-      expect(skeleton.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(
-        5
-      );
+      // Two fields (a label and an input each) and the button, in the
+      // form's own geometry.
+      expect(
+        [...skeleton.querySelectorAll('[data-slot="skeleton"]')].map((block) =>
+          ["h-4", "h-9", "w-20", "w-full"]
+            .filter((size) => block.classList.contains(size))
+            .join(" ")
+        )
+      ).toEqual([
+        "h-4 w-20",
+        "h-9 w-full",
+        "h-4 w-20",
+        "h-9 w-full",
+        "h-9 w-full",
+      ]);
     }
   );
 

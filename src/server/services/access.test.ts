@@ -262,6 +262,19 @@ describe("listAccessibleStores", () => {
 });
 
 describe("getAdminProfile", () => {
+  test("reads both in one read-only, repeatable-read transaction", async () => {
+    const { db } = setup();
+    db.query.user.findFirst.mockResolvedValue({ role: "member" });
+    db.$["select.orderBy"].mockResolvedValue([]);
+
+    await getAdminProfile(db as never, "user-1");
+
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function),
+      { accessMode: "read only", isolationLevel: "repeatable read" }
+    );
+  });
+
   test("answers the role and the stores together", async () => {
     const { db } = setup();
     const stores = [

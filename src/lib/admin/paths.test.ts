@@ -89,6 +89,7 @@ describe("safeReturnPath", () => {
     [""],
     [undefined],
     [["/admin"]],
+    ["/\t/example.com:bad/admin"],
   ])("falls back to the landing for %j", (next) => {
     expect(safeReturnPath(next, "en")).toBe("/en/admin");
   });

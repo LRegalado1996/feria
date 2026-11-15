@@ -70,7 +70,12 @@ export function safeReturnPath(next: unknown, locale: Locale): string {
     return fallback;
   }
 
-  // A path that starts with a single slash always parses against an origin.
+  // The URL parser drops tabs and newlines, so text that passed the checks
+  // above can still name an authority it refuses ("/\t/host:bad").
+  if (!URL.canParse(next, PROBE_ORIGIN)) {
+    return fallback;
+  }
+
   const url = new URL(next, PROBE_ORIGIN);
   const { pathname } = splitLocale(url.pathname);
   const inAdmin =
