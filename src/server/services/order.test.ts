@@ -13,6 +13,7 @@ import {
   orderStatusEvent,
   product,
   productTranslation,
+  store,
   user,
 } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
@@ -69,6 +70,7 @@ const CODE_SQL =
   '("customer_order"."storeId" = $1 and "customer_order"."code" = $2)';
 const LOCK_SQL = "select pg_advisory_xact_lock(hashtext($1))";
 const CLOCK_SQL = "select clock_timestamp() as now";
+const STORE_ROW_SQL = '"store"."id" = $1';
 
 /** `minutes` after an hour ago: an order still inside the window. */
 function minutesIntoWindow(minutes: number) {
@@ -102,7 +104,8 @@ function makeValues(overrides: Record<string, unknown> = {}) {
  * - `articles` / `titles`: what the store's orderable articles hold;
  * - `takenCodes`: the codes the store already used;
  * - `created`: what the order insert returns (`null`: no row);
- * - `clock`: what `clock_timestamp()` answers (`null`: no row).
+ * - `clock`: what `clock_timestamp()` answers (`null`: no row);
+ * - `shop`: the store's row, its currency (`null`: the store is gone).
  */
 function setup({
   already = null,
@@ -111,6 +114,7 @@ function setup({
   clock = NOW,
   created = { code: "33333", id: 70, token: "the-token" },
   phoneTimes = [],
+  shop = { currencyCode: "USD" },
   takenCodes = [],
   titles = [],
 }: {
@@ -120,6 +124,7 @@ function setup({
   clock?: Date | string | null;
   created?: { code: string; id: number; token: string } | null;
   phoneTimes?: { createdAt: Date }[];
+  shop?: { currencyCode: string } | null;
   takenCodes?: string[];
   titles?: { locale: string; productId: number; title: string }[];
 } = {}) {
@@ -161,11 +166,15 @@ function setup({
 
     return await Promise.resolve([]);
   });
-  db.$["select.for"].mockImplementation(async () =>
-    lastWhere().sql === ARTICLES_SQL
-      ? await Promise.resolve(articles)
-      : await Promise.resolve([])
-  );
+  db.$["select.for"].mockImplementation(async () => {
+    const { params, sql } = lastWhere();
+
+    if (sql === STORE_ROW_SQL && params[0] === STORE_ID) {
+      return await Promise.resolve(shop ? [shop] : []);
+    }
+
+    return await Promise.resolve(sql === ARTICLES_SQL ? articles : []);
+  });
   db.$["insert.returning"].mockResolvedValue(created ? [created] : []);
   // The locks answer nothing; the clock answers its row, or none.
   db.$.execute.mockImplementation(async (query: unknown) =>
@@ -186,7 +195,6 @@ function setup({
   } = {}) =>
     await createOrder(db as never, {
       clientKey,
-      currencyCode: "UYU",
       ...(now === null ? {} : { now }),
       storeId: STORE_ID,
       values,
@@ -469,6 +477,38 @@ describe("createOrder", () => {
     }
   );
 
+  test("reads the store's currency under a share lock, after the limits and before the articles", async () => {
+    const { create, db, selectWheres } = setup();
+
+    await create();
+
+    expect(selectWheres().slice(0, 5)).toEqual([
+      { params: [STORE_ID, REQUEST_KEY], sql: REQUEST_SQL },
+      { params: [PHONE, HOUR_AGO.toISOString()], sql: PHONE_HOUR_SQL },
+      { params: [CLIENT_KEY, HOUR_AGO.toISOString()], sql: CLIENT_HOUR_SQL },
+      { params: [STORE_ID], sql: STORE_ROW_SQL },
+      { params: [11, 12, STORE_ID, "published"], sql: ARTICLES_SQL },
+    ]);
+    expect(db.$.select.mock.calls[3]).toEqual([
+      { currencyCode: store.currencyCode },
+    ]);
+    expect(db.$["select.from"].mock.calls[3]).toEqual([store]);
+    expect(db.$["select.for"].mock.calls[0]).toEqual(["share"]);
+  });
+
+  test("answers NOT_FOUND when the store is gone, reading no articles", async () => {
+    const { create, db, selectWheres } = setup({ shop: null });
+
+    await expect(create()).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
+    });
+    expect(selectWheres().filter(({ sql }) => sql === ARTICLES_SQL)).toEqual(
+      []
+    );
+    expect(db.$.insert).not.toHaveBeenCalled();
+  });
+
   test("refuses an article the store does not sell, writing nothing", async () => {
     const { create, db } = setup({ articles: [makeArticle()] });
 
@@ -551,7 +591,8 @@ describe("createOrder", () => {
       params: [11, 12, STORE_ID, "published"],
       sql: ARTICLES_SQL,
     });
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    // The store's row, then the articles: both held to share.
+    expect(db.$["select.for"].mock.calls).toEqual([["share"], ["share"]]);
     expect(db.$["select.from"].mock.calls).toContainEqual([product]);
     expect(db.$["select.from"].mock.calls).toContainEqual([productTranslation]);
     expect(db.$.insert.mock.calls).toEqual([
@@ -564,7 +605,8 @@ describe("createOrder", () => {
       clientKey: CLIENT_KEY,
       code: expect.stringMatching(/^[2-9A-HJKMNP-Z]{5}$/u),
       createdAt: NOW,
-      currencyCode: "UYU",
+      // The store's currency, never the caller's.
+      currencyCode: "USD",
       customerName: "Ana Pérez",
       customerPhone: PHONE,
       locale: "en",

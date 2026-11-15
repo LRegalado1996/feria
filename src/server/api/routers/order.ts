@@ -53,7 +53,6 @@ export const orderRouter = {
 
       return await createOrder(context.db, {
         clientKey,
-        currencyCode: store.currencyCode,
         storeId: store.id,
         values,
       });

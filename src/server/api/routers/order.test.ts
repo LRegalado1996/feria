@@ -190,9 +190,9 @@ describe("order router: the shopper's side", () => {
     );
     // With a client key, both limits apply: nothing to flag.
     expect(orderLogFields()).toEqual([]);
+    // No currency: the service reads the store's own under its lock.
     expect(services.createOrder).toHaveBeenCalledExactlyOnceWith(db, {
       clientKey: "key-of:203.0.113.7",
-      currencyCode: "USD",
       storeId: 7,
       values: {
         customerName: "Ana Pérez",

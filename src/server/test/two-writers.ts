@@ -100,3 +100,25 @@ export async function waitUntilAdvisoryBlocked(
 
   throw new Error("The second writer never waited on the first's lock");
 }
+
+/**
+ * Waits until the `waiter` process waits on any lock the `holder` process
+ * holds: a row lock, where the advisory one above does not apply.
+ */
+export async function waitUntilBlockedBy(
+  db: DatabaseClient,
+  waiter: number,
+  holder: number
+) {
+  for (let attempt = 0; attempt < 2000; attempt += 1) {
+    const result = await db.execute<{ waiting: boolean }>(
+      sql`select ${holder} = any(pg_blocking_pids(${waiter})) as waiting`
+    );
+
+    if (result.rows[0]?.waiting) {
+      return;
+    }
+  }
+
+  throw new Error("The second writer never waited on the first");
+}

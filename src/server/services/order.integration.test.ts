@@ -26,9 +26,11 @@ import { createStore } from "@/server/services/store";
 import {
   backendPid,
   deferred,
+  readyOrFailed,
   releaseHeldWriters,
   releaseOnTeardown,
   waitUntilAdvisoryBlocked,
+  waitUntilBlockedBy,
 } from "@/server/test/two-writers";
 
 import {
@@ -51,7 +53,7 @@ const createdStoreIds: number[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
-  releaseHeldWriters();
+  await releaseHeldWriters();
   await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
 });
@@ -194,13 +196,12 @@ function orderValues(
 }
 
 async function place(
-  shop: { currencyCode: "UYU" | "USD"; id: number },
+  shop: { id: number },
   values: ReturnType<typeof orderValues>,
   { clientKey = null, now }: { clientKey?: string | null; now?: Date } = {}
 ) {
   return await createOrder(db, {
     clientKey,
-    currencyCode: shop.currencyCode,
     now,
     storeId: shop.id,
     values,
@@ -780,15 +781,18 @@ describe("one client ordering in two stores at once", () => {
     const written = deferred();
     const firstPid = deferred<number>();
     const secondPid = deferred<number>();
-    releaseOnTeardown(() => {
-      held.resolve(undefined);
-    });
+    const writers: Promise<unknown>[] = [];
+    releaseOnTeardown(
+      () => {
+        held.resolve(undefined);
+      },
+      async () => await Promise.allSettled(writers)
+    );
 
     const first = db.transaction(async (tx) => {
       firstPid.resolve(await backendPid(tx));
       const created = await createOrder(tx, {
         clientKey,
-        currencyCode: "UYU",
         storeId: storeA.id,
         values: orderValues({ productId: ringA.id }),
       });
@@ -797,14 +801,14 @@ describe("one client ordering in two stores at once", () => {
 
       return created;
     });
-    await written.promise;
+    writers.push(first);
+    await readyOrFailed(written.promise, first);
     // Another phone and another store: only the client's lock is shared.
     const second = db.transaction(async (tx) => {
       secondPid.resolve(await backendPid(tx));
 
       return await createOrder(tx, {
         clientKey,
-        currencyCode: "UYU",
         storeId: storeB.id,
         values: orderValues({
           customerPhone: "+59899000333",
@@ -812,12 +816,13 @@ describe("one client ordering in two stores at once", () => {
         }),
       });
     });
+    writers.push(second);
 
     try {
       await waitUntilAdvisoryBlocked(
         db,
-        await secondPid.promise,
-        await firstPid.promise
+        await readyOrFailed(secondPid.promise, second),
+        await readyOrFailed(firstPid.promise, first)
       );
     } finally {
       held.resolve(undefined);
@@ -830,6 +835,69 @@ describe("one client ordering in two stores at once", () => {
   });
 });
 
+describe("an order and a currency change at once", () => {
+  test("the change waits for the order, which keeps the currency its prices were read in", async () => {
+    const shop = await makeStore("UYU");
+    const ring = await makeArticle(shop.id, {
+      priceAmount: 1000,
+      title: "Anillo",
+    });
+    const held = deferred();
+    const written = deferred();
+    const orderPid = deferred<number>();
+    const changePid = deferred<number>();
+    const writers: Promise<unknown>[] = [];
+    releaseOnTeardown(
+      () => {
+        held.resolve(undefined);
+      },
+      async () => await Promise.allSettled(writers)
+    );
+
+    const order = db.transaction(async (tx) => {
+      orderPid.resolve(await backendPid(tx));
+      const created = await createOrder(tx, {
+        clientKey: null,
+        storeId: shop.id,
+        values: orderValues({ productId: ring.id }),
+      });
+      written.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+    writers.push(order);
+    await readyOrFailed(written.promise, order);
+    const change = db.transaction(async (tx) => {
+      changePid.resolve(await backendPid(tx));
+      await tx
+        .update(store)
+        .set({ currencyCode: "USD" })
+        .where(eq(store.id, shop.id));
+    });
+    writers.push(change);
+
+    try {
+      await waitUntilBlockedBy(
+        db,
+        await readyOrFailed(changePid.promise, change),
+        await readyOrFailed(orderPid.promise, order)
+      );
+    } finally {
+      held.resolve(undefined);
+      await Promise.allSettled([order, change]);
+    }
+
+    const { token } = await order;
+    expect((await orderRow(token)).currencyCode).toBe("UYU");
+    const [after] = await db
+      .select({ currencyCode: store.currencyCode })
+      .from(store)
+      .where(eq(store.id, shop.id));
+    expect(after?.currencyCode).toBe("USD");
+  });
+});
+
 describe("one submit sent twice at once", () => {
   test("the second waits for the first's lock and answers the same order", async () => {
     const shop = await makeStore();
@@ -839,13 +907,16 @@ describe("one submit sent twice at once", () => {
     const written = deferred();
     const firstPid = deferred<number>();
     const secondPid = deferred<number>();
-    releaseOnTeardown(() => {
-      held.resolve(undefined);
-    });
+    const writers: Promise<unknown>[] = [];
+    releaseOnTeardown(
+      () => {
+        held.resolve(undefined);
+      },
+      async () => await Promise.allSettled(writers)
+    );
     const submit = async (tx: DatabaseClient) =>
       await createOrder(tx, {
         clientKey: null,
-        currencyCode: "UYU",
         storeId: shop.id,
         values,
       });
@@ -858,18 +929,20 @@ describe("one submit sent twice at once", () => {
 
       return created;
     });
-    await written.promise;
+    writers.push(first);
+    await readyOrFailed(written.promise, first);
     const second = db.transaction(async (tx) => {
       secondPid.resolve(await backendPid(tx));
 
       return await submit(tx);
     });
+    writers.push(second);
 
     try {
       await waitUntilAdvisoryBlocked(
         db,
-        await secondPid.promise,
-        await firstPid.promise
+        await readyOrFailed(secondPid.promise, second),
+        await readyOrFailed(firstPid.promise, first)
       );
     } finally {
       held.resolve(undefined);

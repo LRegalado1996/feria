@@ -23,6 +23,7 @@ import {
   orderStatusEvent,
   product,
   productTranslation,
+  store,
   user,
 } from "@/server/db/schema";
 
@@ -165,14 +166,12 @@ export async function createOrder(
   db: DatabaseClient,
   {
     clientKey,
-    currencyCode,
     now: givenNow,
     storeId,
     values,
   }: StoreScope & {
     /** A keyed hash of the client's IP, `null` when the platform gives none. */
     clientKey: string | null;
-    currencyCode: (typeof customerOrder.$inferInsert)["currencyCode"];
     /** The moment the order is taken at; the database's clock unless given. */
     now?: Date;
     values: Omit<CreateOrderValues, "storeSlug">;
@@ -243,6 +242,19 @@ export async function createOrder(
       );
     }
 
+    // The store's currency, read here and kept from changing until the
+    // order is written: read before the transaction, a change committing
+    // meanwhile would pair the old currency with the new prices.
+    const [shop] = await tx
+      .select({ currencyCode: store.currencyCode })
+      .from(store)
+      .where(eq(store.id, storeId))
+      .for("share");
+
+    if (!shop) {
+      throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+    }
+
     const articles = await lockOrderableArticles(tx, {
       ids: values.items.map((item) => item.productId),
       locale: values.locale,
@@ -285,7 +297,7 @@ export async function createOrder(
         clientKey,
         code,
         createdAt: now,
-        currencyCode,
+        currencyCode: shop.currencyCode,
         customerName: values.customerName,
         customerPhone: values.customerPhone,
         locale: values.locale,
