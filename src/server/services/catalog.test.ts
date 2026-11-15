@@ -747,17 +747,32 @@ describe("updateProduct", () => {
   }
 
   test("answers NOT_FOUND when the store has no such article, writing nothing", async () => {
-    const { db } = setup();
+    const { answerLocks, db } = setup();
+    answerLocks();
 
     await expect(update(db)).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Article not found",
     });
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+    // The category under a share lock first, then the article: the order a
+    // category's deletion takes them in, so the two never deadlock.
+    expect(db.$["select.for"].mock.calls).toEqual([["share"], ["update"]]);
+    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
       params: [7, STORE_ID],
       sql: '("product"."id" = $1 and "product"."storeId" = $2)',
     });
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test("refuses a category the store does not have before it locks the article", async () => {
+    const { answerLocks, db } = setup();
+    answerLocks([lockedRow()], { category: false });
+
+    await expect(update(db)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Category not found",
+    });
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
     expect(db.$.update).not.toHaveBeenCalled();
   });
 

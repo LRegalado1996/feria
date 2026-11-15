@@ -620,8 +620,11 @@ export async function updateProduct(
     values,
   }: StoreScope & { values: Omit<UpdateProductValues, "storeSlug"> }
 ) {
-  const current = await lockStoreProduct(tx, { id: values.id, storeId });
+  // The category before the article, the order a category's deletion takes
+  // them in: the other way round, an edit and that deletion could each hold
+  // the lock the other waits for.
   await assertStoreCategory(tx, { categoryId: values.categoryId, storeId });
+  const current = await lockStoreProduct(tx, { id: values.id, storeId });
 
   if (current.status === "published") {
     const gaps = resolvePublishGaps({
