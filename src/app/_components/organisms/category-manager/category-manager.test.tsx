@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { RequestHandler } from "msw";
+import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
@@ -498,6 +498,53 @@ describe("CategoryManager", () => {
     );
     await waitFor(() => {
       expect(order()).toEqual(["Collares", "Aros", "Pulseras"]);
+    });
+  });
+
+  test("reports a failed first move even when a second one was made meanwhile", async () => {
+    const { row, user } = setup();
+    const received: unknown[] = [];
+    // The first save fails, the next goes through.
+    server.use(
+      http.post<never, { json?: unknown }>(
+        "*/api/orpc/category/reorder",
+        async ({ request }) => {
+          const { json } = await request.json();
+          received.push(json);
+
+          return received.length === 1
+            ? HttpResponse.json(
+                {
+                  code: FAILURE.code,
+                  defined: true,
+                  message: FAILURE.message,
+                  status: 500,
+                },
+                { status: 500 }
+              )
+            : HttpResponse.json({ json, meta: [] });
+        }
+      )
+    );
+    await shown();
+
+    await user.click(
+      within(row("collares")).getByRole("button", {
+        name: "Move down: Collares",
+      })
+    );
+    await user.click(
+      within(row("pulseras")).getByRole("button", { name: "Move up: Pulseras" })
+    );
+
+    await waitFor(() => {
+      expect(received).toHaveLength(2);
+    });
+    await waitFor(() => {
+      expect(reportError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
+        { action: "Category.reorder" }
+      );
     });
   });
 

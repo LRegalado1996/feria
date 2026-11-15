@@ -86,17 +86,21 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
     }
 
     const next = arrayMove(rows, from, to);
-    reorder.mutate(
-      { ids: next.map((row) => row.id), storeSlug },
-      {
-        onError: (error) => {
-          reportError(error, { action: "Category.reorder" });
-          toast.error(copy.errors.generic);
-          // The list went back to its order: say so where the move was said.
-          setAnnouncement(copy.errors.generic);
-        },
+    // Awaited, not a per-call callback: those run only for the latest call
+    // and only while mounted, so a failed first move of two would go unsaid.
+    void (async () => {
+      try {
+        await reorder.mutateAsync({
+          ids: next.map((row) => row.id),
+          storeSlug,
+        });
+      } catch (error) {
+        reportError(error, { action: "Category.reorder" });
+        toast.error(copy.errors.generic);
+        // The list went back to its order: say so where the move was said.
+        setAnnouncement(copy.errors.generic);
       }
-    );
+    })();
     setAnnouncement(
       interpolate(copy.move.moved, {
         name: moved.nameEs,
@@ -325,7 +329,12 @@ function CategoryRow({
       ) : (
         <>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{row.nameEs}</p>
+            <p
+              className="truncate text-sm font-semibold"
+              data-testid="category-name"
+            >
+              {row.nameEs}
+            </p>
             <p className="truncate text-xs text-muted-foreground">
               {row.nameEn ? <span lang="en">{row.nameEn} · </span> : null}
               <span data-testid="category-count">{countLabel}</span>

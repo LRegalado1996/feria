@@ -157,7 +157,10 @@ describe("category management", () => {
             values: { nameEn: null, nameEs: "aros" },
           })
       )
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "Another category of this store already has that name",
+    });
   });
 
   test("reorders all categories at once, and refuses a partial or foreign list", async () => {
@@ -322,7 +325,8 @@ async function overlappingCreations(storeId: number, names: [string, string]) {
 
     return created;
   });
-  await locked.promise;
+  // A first writer that fails never signals: its failure ends the wait.
+  await Promise.race([locked.promise, first]);
   const second = db.transaction(
     async (tx) =>
       await createCategory(tx, {
@@ -351,7 +355,10 @@ describe("category writes under two writers", () => {
 
     expect(first.status).toBe("fulfilled");
     expect(second).toMatchObject({
-      reason: { code: "CONFLICT" },
+      reason: {
+        code: "CONFLICT",
+        message: "Another category of this store already has that name",
+      },
       status: "rejected",
     });
     expect(

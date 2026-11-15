@@ -58,13 +58,9 @@ async function setup(
   return { admin, store };
 }
 
-/** The Spanish names of the list's rows, in order. */
-async function namesInOrder(page: Page) {
-  return await page
-    .getByTestId("category-list")
-    .locator("li")
-    .locator("p.font-semibold")
-    .allTextContents();
+/** Waits until the list's rows read these Spanish names, in this order. */
+async function expectNamesInOrder(page: Page, names: string[]) {
+  await expect(page.getByTestId("category-name")).toHaveText(names);
 }
 
 /** The store's categories as the storefront reads them, in order. */
@@ -131,17 +127,17 @@ test.describe("Category management", () => {
         ],
       }
     );
-    expect(await namesInOrder(page)).toEqual(["Anillos", "Aros", "Cadenas"]);
+    await expectNamesInOrder(page, ["Anillos", "Aros", "Cadenas"]);
 
     await completeRpcAction(page, "/api/orpc/category/reorder", async () => {
       await page.getByRole("button", { name: "Bajar: Anillos" }).click();
     });
-    expect(await namesInOrder(page)).toEqual(["Aros", "Anillos", "Cadenas"]);
+    await expectNamesInOrder(page, ["Aros", "Anillos", "Cadenas"]);
 
     await completeRpcAction(page, "/api/orpc/category/reorder", async () => {
       await page.getByRole("button", { name: "Subir: Cadenas" }).click();
     });
-    expect(await namesInOrder(page)).toEqual(["Aros", "Cadenas", "Anillos"]);
+    await expectNamesInOrder(page, ["Aros", "Cadenas", "Anillos"]);
 
     // Dragged by its handle onto the row below, as a person does it. The
     // drag goes last: dnd-kit swallows clicks for 50 ms after a drop (so the
@@ -163,11 +159,11 @@ test.describe("Category management", () => {
       });
       await page.mouse.up();
     });
-    expect(await namesInOrder(page)).toEqual(["Cadenas", "Aros", "Anillos"]);
+    await expectNamesInOrder(page, ["Cadenas", "Aros", "Anillos"]);
 
     await page.reload();
     await expect(page.getByTestId("category-list")).toBeVisible();
-    expect(await namesInOrder(page)).toEqual(["Cadenas", "Aros", "Anillos"]);
+    await expectNamesInOrder(page, ["Cadenas", "Aros", "Anillos"]);
     expect(await storefrontOrder(page, store.slug)).toEqual([
       "cadenas",
       "aros",
