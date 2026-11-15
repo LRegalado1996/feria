@@ -54,6 +54,8 @@ interface SetupOptions {
   blockedReason?: string | null;
   items?: Items;
   locale?: Locale;
+  /** What the first `onPlaced` throws, as a page that fails to move on. */
+  placedFailure?: Error;
 }
 
 function setup({
@@ -61,6 +63,7 @@ function setup({
   blockedReason = null,
   items = makeItems(),
   locale = "en",
+  placedFailure,
 }: SetupOptions = {}) {
   // Every body the server received, in order: the spy on what was sent.
   const received: unknown[] = [];
@@ -93,6 +96,11 @@ function setup({
   );
   const copy = DICTIONARIES[locale].storefront.cart.checkout;
   const onPlaced = vi.fn((_token: string, _ordered: Items) => undefined);
+  if (placedFailure) {
+    onPlaced.mockImplementationOnce(() => {
+      throw placedFailure;
+    });
+  }
   const onStale = vi.fn(() => undefined);
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
@@ -157,6 +165,7 @@ const alert = () => screen.getByTestId("store-checkout-error");
 // The request key lives in the tab's session: each test starts a new tab.
 afterEach(() => {
   window.sessionStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe("StoreCheckoutForm", () => {
@@ -321,6 +330,65 @@ describe("StoreCheckoutForm", () => {
     const [second] = after.requestKeys();
     expect(second).toMatch(UUID_V4);
     expect(second).not.toBe(first);
+  });
+
+  test("a page that fails to move on after the order is taken is not a failed order, and keeps the key", async () => {
+    const failure = new Error("Navigation failed");
+    const { fill, onPlaced, requestKeys, send, submit } = setup({
+      answers: ["ok", "ok"],
+      placedFailure: failure,
+    });
+
+    await fill();
+    await send();
+
+    await waitFor(() => {
+      expect(reportError).toHaveBeenCalledExactlyOnceWith(failure, {
+        action: "Checkout.show_order",
+      });
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(submit()).toHaveAttribute("aria-disabled", "false");
+    // The button again: the same key, so the server answers the same order.
+    await send();
+
+    await waitFor(() => {
+      expect(onPlaced.mock.calls).toEqual([
+        [TOKEN, makeItems()],
+        [TOKEN, makeItems()],
+      ]);
+    });
+    const [first, second] = requestKeys();
+    expect(first).toMatch(UUID_V4);
+    expect(second).toBe(first);
+    expect(
+      window.sessionStorage.getItem("feria:checkout:lr-market")
+    ).toBeNull();
+  });
+
+  test("a key that cannot be drawn is a failure that frees the button, sending nothing", async () => {
+    const failure = new Error("No random source");
+    const { fill, onPlaced, received, send } = setup();
+    vi.spyOn(crypto, "randomUUID").mockImplementationOnce(() => {
+      throw failure;
+    });
+
+    await fill();
+    await send();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not send the order. Try again."
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(failure, {
+      action: "Checkout.place_order",
+    });
+    expect(received).toEqual([]);
+    await send();
+
+    await waitFor(() => {
+      expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
+    });
+    expect(received).toEqual([expect.objectContaining({ items: makeItems() })]);
   });
 
   test("the same number typed another way after a failure carries the same key", async () => {

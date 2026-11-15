@@ -132,29 +132,28 @@ function StoreCheckoutForm({
 
     inFlight.current = true;
     setFailure(null);
-    // The number, not how it was typed: "099 123 456" and "+598 99 123 456"
-    // sent again are the same request.
-    const signature = JSON.stringify([
-      items,
-      normalizePhone(values.customerPhone),
-    ]);
-    const requestKey = checkoutRequestKey(storeSlug, signature);
-
     // What this submit orders, whatever the cart becomes while it is sent.
     const ordered = items;
+    let placed: Awaited<ReturnType<typeof createOrder.mutateAsync>>;
 
+    // Only the order itself is guarded here: whatever throws before it is
+    // sent frees the button too, and nothing after it reads as a failed order.
     try {
-      const placed = await createOrder.mutateAsync({
+      // The number, not how it was typed: "099 123 456" and
+      // "+598 99 123 456" sent again are the same request.
+      const signature = JSON.stringify([
+        ordered,
+        normalizePhone(values.customerPhone),
+      ]);
+      placed = await createOrder.mutateAsync({
         customerName: values.customerName,
         customerPhone: values.customerPhone,
         items: ordered,
         locale,
         note: values.note,
-        requestKey,
+        requestKey: checkoutRequestKey(storeSlug, signature),
         storeSlug,
       });
-      forgetCheckoutRequest(storeSlug);
-      onPlaced(placed.token, ordered);
     } catch (error) {
       const kind = checkoutFailure(error);
 
@@ -169,7 +168,20 @@ function StoreCheckoutForm({
       setFailure(checkoutErrorMessage(error, copy.errors));
       // Free for a retry; after a success the page moves on instead.
       inFlight.current = false;
+      return;
     }
+
+    try {
+      onPlaced(placed.token, ordered);
+    } catch (error) {
+      // The order was taken; moving on to it failed. The key stays, so the
+      // button sent again answers this same order instead of a second one.
+      reportError(error, { action: "Checkout.show_order" });
+      inFlight.current = false;
+      return;
+    }
+
+    forgetCheckoutRequest(storeSlug);
   };
 
   return (
