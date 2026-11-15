@@ -7,9 +7,12 @@ const storedRequestSchema = z.object({
   signature: z.string(),
 });
 
-// Where a request lives when the browser refuses session storage: this page
-// only, which still covers a double tap and a retry without a reload.
-const memory = new Map<string, string>();
+// The request as this page last wrote it, kept only while session storage
+// refuses to: from then on it outranks what storage still holds, which is
+// older. `null` marks a request forgotten after its order was taken, so a
+// removal storage refused cannot bring that request back. A write storage
+// takes again drops the entry, and storage is the record once more.
+const memory = new Map<string, string | null>();
 
 function storageKey(storeSlug: string) {
   return `feria:checkout:${storeSlug}`;
@@ -17,23 +20,22 @@ function storageKey(storeSlug: string) {
 
 function readStored(storeSlug: string): string | null {
   const key = storageKey(storeSlug);
+  const kept = memory.get(key);
+
+  if (kept !== undefined) {
+    return kept;
+  }
 
   try {
-    return window.sessionStorage.getItem(key) ?? memory.get(key) ?? null;
+    return window.sessionStorage.getItem(key);
   } catch (error) {
     reportError(error, { action: "Checkout.read_request" });
-    return memory.get(key) ?? null;
+    return null;
   }
 }
 
 function writeStored(storeSlug: string, text: string | null) {
   const key = storageKey(storeSlug);
-
-  if (text === null) {
-    memory.delete(key);
-  } else {
-    memory.set(key, text);
-  }
 
   try {
     if (text === null) {
@@ -41,8 +43,11 @@ function writeStored(storeSlug: string, text: string | null) {
     } else {
       window.sessionStorage.setItem(key, text);
     }
+
+    memory.delete(key);
   } catch (error) {
     reportError(error, { action: "Checkout.write_request" });
+    memory.set(key, text);
   }
 }
 
@@ -51,7 +56,8 @@ function writeStored(storeSlug: string, text: string | null) {
  * when it was for the same cart and phone (`signature`), else a new one.
  * Kept in the tab's session storage, so a reload after a lost answer still
  * sends the same key, and the server answers the order it already took
- * instead of taking a second one.
+ * instead of taking a second one. When storage refuses, the page keeps it,
+ * which still covers a double tap and a retry without a reload.
  */
 export function checkoutRequestKey(
   storeSlug: string,
