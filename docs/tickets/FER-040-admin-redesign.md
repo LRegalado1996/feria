@@ -3,7 +3,7 @@
 - **Milestone:** M3 Admin
 - **Priority:** P0
 - **Status:** done
-- **Depends on:** FER-038, FER-039
+- **Depends on:** FER-038 (built before FER-039, which it does not need: the admin's logo and tokens are its own)
 
 ## Goal
 

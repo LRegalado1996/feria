@@ -3,7 +3,7 @@
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
 - **Status:** todo
-- **Depends on:** FER-038
+- **Depends on:** FER-038, FER-040 (stacked after it)
 
 ## Goal
 
