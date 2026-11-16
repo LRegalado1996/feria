@@ -2,8 +2,6 @@ import type { Page } from "@playwright/test";
 
 import {
   expect,
-  IGNORE_HTTPS_ERRORS,
-  requireBaseURL,
   STORE_SETTINGS,
   STORE_TEXTS,
   test,
@@ -163,23 +161,18 @@ test.describe("Editing the store", () => {
   });
 
   test("a signed-out caller cannot edit the store", async ({
-    baseURL,
-    browser,
     db,
+    page,
+    // Asked for its teardown alone: were the refusal to fail, the edit it
+    // let through is undone before anything else reads the store.
+    storeEdit: _restoresTheSettings,
   }) => {
-    const context = await browser.newContext({
-      baseURL: requireBaseURL(baseURL),
-      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
-      storageState: { cookies: [], origins: [] },
-    });
-
-    const response = await context.request.post("/api/orpc/store/update", {
+    // The page's own request context, signed out like the page (above).
+    const response = await page.request.post("/api/orpc/store/update", {
       data: { json: { ...STORE_SETTINGS, name: "Taken Over" } },
     });
-    const status = response.status();
-    await context.close();
 
-    expect(status).toBe(401);
+    expect(response.status()).toBe(401);
     await expect(
       db.drizzle.query.store.findFirst({ columns: { name: true } })
     ).resolves.toEqual({ name: STORE_SETTINGS.name });
