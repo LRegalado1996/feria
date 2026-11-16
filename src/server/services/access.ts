@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { UserRole } from "@/lib/schemas/access";
 import type { DatabaseClient } from "@/server/db";
@@ -156,4 +156,42 @@ export async function withStoreAccess<T>(
 
     return await write(tx);
   });
+}
+
+/**
+ * The stores `userId` may work on, by name: every store for a superadmin,
+ * the member's own otherwise (inactive ones included, as in
+ * `findAccessibleStore`). What the admin's landing and store switcher show.
+ */
+export async function listAccessibleStores(db: DatabaseClient, userId: string) {
+  return await db
+    .select({
+      id: store.id,
+      isActive: store.isActive,
+      name: store.name,
+      slug: store.slug,
+    })
+    .from(store)
+    .where(mayWorkOnStore(userId))
+    .orderBy(asc(store.name), asc(store.id));
+}
+
+/**
+ * What the admin's pages decide with: the role the database holds for the
+ * login and the stores it may work on, read together; `null` when the user
+ * no longer exists (a session that outlived it).
+ */
+export async function getAdminProfile(db: DatabaseClient, userId: string) {
+  // One read-only snapshot: a promotion between the two reads would
+  // otherwise pair the old role with the new store list.
+  const [role, stores] = await db.transaction(
+    async (tx) =>
+      await Promise.all([
+        getUserRole(tx, userId),
+        listAccessibleStores(tx, userId),
+      ]),
+    { accessMode: "read only", isolationLevel: "repeatable read" }
+  );
+
+  return role === null ? null : { role, stores };
 }

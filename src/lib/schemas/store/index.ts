@@ -32,8 +32,13 @@ export const RESERVED_STORE_SLUGS = [
   "es",
   // The Sentry tunnel (`src/proxy.ts`).
   "monitoring",
+  // The admin's own segments after `/admin/` (FER-013), where a store's
+  // slug is the first segment too: a store named after one would be
+  // unreachable in the admin.
+  "platform",
   // The sample articles' photos (`public/seed/`, FER-010).
   "seed",
+  "sign-in",
 ] as const;
 
 /** The currencies a store can sell in, pesos first. */

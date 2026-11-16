@@ -62,7 +62,7 @@ The contract is `AGENTS.md` § Components and forms. Also:
 - After `shadcn add`: move default strings into the dictionaries, in both languages; apply the layout rules above.
 - Key lists by stable id (`kind:id` when a list mixes entities), never index. One label map per enum, `satisfies Record<…>`.
 - Icons: `lucide-react` only, default stroke; `size-4` default, `size-3.5` dense, `size-6` headers, `size-12` empty states. Decorative ones get `aria-hidden`; meaningful ones a name. No icon tiles.
-- References: `atoms/button` (variants, focus ring), `atoms/input`, `molecules/locale-toggle` (a link styled as a button, `lang` on its label), `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
+- References: `organisms/admin-shell` (the admin's chrome: on a phone the sections are a row that scrolls in its own box and the store gets its own line, from `md` up a sidebar), `atoms/button` (variants, focus ring), `atoms/input`, `molecules/locale-toggle` (a link styled as a button, `lang` on its label), `molecules/form` (`FormControl` wires `aria-invalid`/`aria-describedby`), `molecules/post-card` (`PostCardSkeleton` mirrors the card), `molecules/row-actions` (icon-only trigger named after its row, tooltip), `molecules/confirm-dialog` (destructive confirm, focus returned on close), `src/lib/hooks/post/use-create-post.ts` and `use-delete-post.ts` (optimistic update, rollback).
 
 ## Data
 

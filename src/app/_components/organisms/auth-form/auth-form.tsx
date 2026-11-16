@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -18,6 +18,7 @@ import { PasswordInput } from "@/app/_components/molecules/password-input";
 import type { Dictionary } from "@/content";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { localizePath } from "@/lib/i18n/paths";
 import { type AuthFormValues, createAuthSchema } from "@/lib/schemas/auth";
 import { authClient } from "@/server/better-auth/client";
@@ -32,40 +33,27 @@ const ERROR_KEYS: Partial<Record<string, keyof Dictionary["auth"]["errors"]>> =
 
 export interface AuthFormProps {
   onSuccess?: () => void;
+  /**
+   * Where to land once signed in, already localized and checked by the page
+   * (`safeReturnPath`); the home page of the language by default.
+   */
+  redirectTo?: string;
 }
 
 /**
  * A full page load, not `router.refresh()`: the session changed, and a soft
  * refresh can keep a shell rendered for the old session, or drop the page
- * behind a server redirect (docs/agents/nextjs.md § Navigation). To the home
- * page of the language the visitor signed in from.
+ * behind a server redirect (docs/agents/nextjs.md § Navigation).
  */
 function reloadSignedIn(home: string) {
   window.location.assign(home);
-}
-
-function subscribeToNothing() {
-  return () => undefined;
-}
-
-/**
- * `false` in the server render and while hydrating, `true` once React owns
- * the form. Before that, a submit is the browser's own: a GET to this page
- * with the email and password in the URL, where logs and history keep them.
- */
-function useHydrated() {
-  return useSyncExternalStore(
-    subscribeToNothing,
-    () => true,
-    () => false
-  );
 }
 
 /**
  * Email and password sign-in. There is no sign-up: logins are created by a
  * superadmin or a store member (FER-009).
  */
-export function AuthForm({ onSuccess }: AuthFormProps) {
+export function AuthForm({ onSuccess, redirectTo }: AuthFormProps) {
   const { auth } = useDictionary();
   const locale = useLocale();
   const copy = auth.signIn;
@@ -95,7 +83,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
       }
 
       onSuccess?.();
-      reloadSignedIn(localizePath("/", locale));
+      reloadSignedIn(redirectTo ?? localizePath("/", locale));
     } catch (error) {
       reportError(error, { action: "Auth.sign_in" });
       setError(auth.errors.unreachable);

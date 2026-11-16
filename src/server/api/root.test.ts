@@ -15,6 +15,7 @@ vi.mock("@/env", () => ({
 // mounted by accident is reachable, and one dropped is a 404 for every client.
 test("mounts each domain router at its own key, and nothing else", () => {
   expect(Object.keys(appRouter)).toEqual([
+    "admin",
     "catalog",
     "post",
     "product",

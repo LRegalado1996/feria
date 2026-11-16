@@ -1,9 +1,17 @@
+import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import * as schema from "../../server/db/schema";
-import { post, store, storeTranslation, user } from "../../server/db/schema";
+import {
+  account,
+  post,
+  store,
+  storeMember,
+  storeTranslation,
+  user,
+} from "../../server/db/schema";
 import { test as userTest } from "./user.fixture";
 
 type PostInput = typeof post.$inferInsert;
@@ -20,6 +28,16 @@ type StoreTextInput = Pick<
 >;
 
 type CreatedStore = typeof store.$inferSelect;
+
+/** A seeded login and the password it signs in with. */
+export interface SeededLogin {
+  email: string;
+  id: string;
+  name: string;
+  password: string;
+}
+
+const LOGIN_PASSWORD = "synthetic-e2e-login-password-123";
 
 export interface DbFixture {
   db: {
@@ -44,6 +62,14 @@ export interface DbFixture {
       ) => Promise<CreatedStore>;
       /** Another user, for "someone else's" cases. */
       createUser: (name: string) => Promise<CreatedUser>;
+      /**
+       * A login that can sign in through the form (FER-009): its role, a
+       * password, and a membership in each store given. Unique per call.
+       */
+      createLogin: (options: {
+        role: "member" | "superadmin";
+        storeIds?: number[];
+      }) => Promise<SeededLogin>;
     };
   };
 }
@@ -130,6 +156,47 @@ export const test = userTest.extend<DbFixture>({
           return created;
         },
 
+        createLogin: async ({
+          role,
+          storeIds = [],
+        }: {
+          role: "member" | "superadmin";
+          storeIds?: number[];
+        }): Promise<SeededLogin> => {
+          const id = crypto.randomUUID();
+          const login = {
+            email: `e2e-login-${id}@example.com`,
+            id,
+            name: `E2E ${role} ${id.slice(0, 8)}`,
+            password: LOGIN_PASSWORD,
+          };
+          // Better Auth's own hasher, so the sign-in form accepts it.
+          const hash = await hashPassword(login.password);
+
+          await db.insert(user).values({
+            email: login.email,
+            id,
+            name: login.name,
+            role,
+          });
+          seededUserIds.push(id);
+          await db.insert(account).values({
+            accountId: id,
+            id: crypto.randomUUID(),
+            password: hash,
+            providerId: "credential",
+            userId: id,
+          });
+
+          if (storeIds.length > 0) {
+            await db
+              .insert(storeMember)
+              .values(storeIds.map((storeId) => ({ storeId, userId: id })));
+          }
+
+          return login;
+        },
+
         createUser: async (name: string): Promise<CreatedUser> => {
           const id = crypto.randomUUID();
           const [created] = await db
@@ -162,7 +229,7 @@ export const test = userTest.extend<DbFixture>({
         await db.delete(post).where(inArray(post.id, seededPostIds));
         // Cascades to the stores' texts.
         await db.delete(store).where(inArray(store.id, seededStoreIds));
-        // Cascades to the users' sessions, accounts and posts.
+        // Cascades to the users' sessions, accounts, posts and memberships.
         await db.delete(user).where(inArray(user.id, seededUserIds));
         await pool.end();
       }
