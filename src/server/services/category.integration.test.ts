@@ -198,9 +198,11 @@ describe("category management", () => {
         .map((row) => row.nameEs)
     ).toEqual([`C ${tag}`, `A ${tag}`, `B ${tag}`]);
 
+    // The second list is as long as the store's: only the id it holds in
+    // place of `c`, one the store no longer has, can refuse it.
     for (const ids of [
       [a.id, b.id, ...rest],
-      [a.id, b.id, c.id, ...rest, gone.id],
+      [a.id, b.id, gone.id, ...rest],
     ]) {
       await expect(reorder(ids)).rejects.toMatchObject({
         code: "BAD_REQUEST",
