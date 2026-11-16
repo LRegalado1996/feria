@@ -74,7 +74,7 @@ pnpm verify:ci           # all of CI on this machine; run before pushing routing
 
 pnpm db:generate         # SQL migration from a schema diff (ask first)
 pnpm db:migrate          # apply migrations (dev, CI, deploy); db:push only on a throwaway DB
-pnpm db:seed             # dev data (three logins, two stores), refused in production; superadmin test@example.com / password123
+pnpm db:seed             # dev data (one login, the store's texts, a sample catalog), refused in production; test@example.com / password123
 pnpm db:create-superadmin  # first login of a fresh database, from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD
 
 pnpm wt:provision        # .env + node_modules, no containers (harnesses run it on create)
@@ -116,12 +116,12 @@ src/e2e/ · src/test/ · src/instrumentation.ts · src/proxy.ts · src/env.js
 
 ## API (oRPC)
 
-| What                            | Import                                                            |
-| ------------------------------- | ----------------------------------------------------------------- |
-| Procedure builders              | `publicProcedure` / `protectedProcedure` from `@/server/api/orpc` |
-| Client-side calls               | `orpc` from `@/lib/orpc/client`                                   |
-| Server-side calls (RSC)         | `caller` from `@/lib/orpc/server`                                 |
-| RSC prefetch for client queries | `getQueryClient()` + `orpc` from `@/lib/orpc/server`              |
+| What                            | Import                                                        |
+| ------------------------------- | ------------------------------------------------------------- |
+| Procedure builders              | `publicProcedure` / `adminProcedure` from `@/server/api/orpc` |
+| Client-side calls               | `orpc` from `@/lib/orpc/client`                               |
+| Server-side calls (RSC)         | `caller` from `@/lib/orpc/server`                             |
+| RSC prefetch for client queries | `getQueryClient()` + `orpc` from `@/lib/orpc/server`          |
 
 A procedure is input schema → auth check → one service call. Routers hold no Drizzle, even for one-step CRUD (`pnpm check` fails): queries live in `src/server/services/<domain>.ts`, plain functions taking a `DatabaseClient` first and importing nothing request-scoped. Any id in input, a header or a cookie is attacker-controlled: authorize it, filter by owner and id, take the actor from the session.
 

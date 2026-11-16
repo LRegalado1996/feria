@@ -4,17 +4,15 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 
 ## Authorization
 
-`protectedProcedure` proves the caller is signed in, nothing more. Every procedure that touches a resource authorizes it on the server.
+`adminProcedure` proves the caller is a login, nothing more. Every procedure that touches a resource authorizes it on the server.
 
-### Roles and stores (FER-009)
+### Roles and the store (FER-009, FER-038)
 
-- **Two roles,** on `user.role`: `superadmin` (every store, every user, the platform area) and `member` (the stores they belong to, through `store_member`; every member of a store has the same permissions). Shoppers have no account. A new login is a `member` with no store: it reaches nothing until it is added to one.
-- **Nobody signs themselves up.** Better Auth runs with `disableSignUp` and `disabledPaths`, `/api/auth/sign-up/*` answers 404 in any spelling (`src/app/api/auth/[...all]/route.ts`), and the form has no sign-up mode. Logins are created on the server with `createAccount` (`src/server/better-auth/accounts.ts`): by `pnpm db:create-superadmin` for the first one, the seed, and the user screens (FER-015). The role is a Better Auth field with `input: false`, so no request can set it.
-- **`superadminProcedure`** re-reads the role from the database on every call (the session's copy sits in a cookie for up to 5 minutes) and answers FORBIDDEN to anyone else.
-- **`storeProcedure(schema)`** is every procedure on one store. Its input extends `storeScopeSchema` (`storeSlug`); the slug is resolved in one query against the caller's access (superadmin, or a `store_member` row) and the handler gets the trusted row as `context.store`. A store the caller may not work on answers NOT_FOUND, the same as one that does not exist. Every query in the handler filters by `context.store.id`, never by a store id from the input, and every other id in the input (an article, a category, an order) is checked to belong to `context.store` in the same query that uses it.
-- **Writes re-check inside their transaction.** A procedure's check is a snapshot; a write runs its service through `withStoreAccess(db, { storeId, userId }, write)` (`src/server/services/access.ts`), which re-reads the superadmin row or the membership `FOR SHARE` in the write's own transaction, so a demotion or a removal either commits first and refuses the write, or waits for it. `storeId: null` asks for a superadmin (a platform write). `src/server/api/orpc/access.integration.test.ts` holds the two-writer test.
+- **One role, `admin`.** Every login is an admin and reaches the whole admin; the site is one store, the `store` table's one row, and the database refuses a second. `user.role` stays as a column for roles that may come later (its type becomes the single value `admin` with FER-041). Shoppers have no account. Nothing in a request names a store.
+- **Nobody signs themselves up.** Better Auth runs with `disableSignUp` and `disabledPaths`, `/api/auth/sign-up/*` answers 404 in any spelling (`src/app/api/auth/[...all]/route.ts`), and the form has no sign-up mode. Logins are created on the server with `createAccount` (`src/server/better-auth/accounts.ts`): by `pnpm db:create-superadmin` for the first one (refused once any login exists), the seed, and the user screens (FER-015). The role is a Better Auth field with `input: false`, so no request can set it.
+- **`adminProcedure`** is every procedure of the admin. It refuses a caller without a session (UNAUTHORIZED), validates the input, then re-reads the login from the database (the session's copy sits in a cookie for up to 5 minutes, so a removed login is refused at once) and gives the handler the store as `context.store`. Every query in the handler filters by `context.store.id`, never by a store id from the input, and every other id in the input (an article, a category, an order) is checked to belong to that store in the same query that uses it.
+- **Writes re-check inside their transaction.** A procedure's check is a snapshot; a write runs its service through `withAdmin(db, userId, write)` (`src/server/services/access.ts`, through `writeToStore`), which re-reads the login `FOR SHARE` in the write's own transaction, so a removal that commits first refuses the write, and one that comes later waits for it. `src/server/api/orpc/access.integration.test.ts` holds the two-writer test.
 - **Pages check too, and separately.** A page reads the session with `getSession()` (which bypasses the cookie cache) and the same services; hiding a link is not authorization (FER-013).
-- **Tests:** each builder has a unit test and an integration test (`src/server/api/orpc/access.integration.test.ts`) with a member of store A asking for store B.
 
 - **Scope ids are attacker-controlled.** An owner, tenant or parent id from input, a header or a cookie is authorized in the procedure before any query uses it.
 - **Filter by owner (or tenant) and id together** (`id = $id AND ownerId = $actor`). A row the caller may not see answers NOT_FOUND; FORBIDDEN confirms it exists.
@@ -29,7 +27,7 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 
 ## Encode for every sink
 
-- **CSS and `href` from the database:** a store's colors reach a `style` attribute and its links an `href`. Both are validated when they are stored, by the schema and (colors) by a database check: a color is `#` and six hex digits; a link is `https://` only, never `javascript:`, carries no user name, and a social link stays on its own site.
+- **`href` from the database:** the store's links reach an `href`. They are validated when they are stored, by the schema: a link is `https://` only, never `javascript:`, carries no user name, and a social link stays on its own site. The colors in a `style` attribute are constants of the theme file (`src/styles/theme.ts`), never data.
 - **CSV:** quote every field, escape quotes and newlines, and prefix a cell starting with `=`, `+`, `-`, `@`, tab or carriage return with `'`: spreadsheets run it as a formula.
 - **Email HTML:** escape every interpolated value.
 - **User HTML:** a DOM-free sanitizer, never `dangerouslySetInnerHTML` on raw input.
@@ -54,8 +52,8 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 ## Rate limits
 
 - **Orders** (`order.create`, FER-025): 5 an hour per phone and 20 an hour per client, counted from the orders themselves under advisory locks per phone and per client (always phone, then client, then store), at the database's clock read after the locks, answered with `TOO_MANY_REQUESTS` and its `retryAfter`. The client is a keyed hash of the platform's IP (`orderClientKey`, `src/server/api/utils/client-key.ts`), an IPv6 address by its /64 since one connection holds the whole block; with no IP (a local server) only the phone limit applies, never one shared bucket, and the request's log line says `order.clientLimit: "skipped"`. At most 20 distinct articles of at most 10 units each.
-- **Bots on the checkout** (FER-026): `order.create` asks Vercel BotID first (`isBotRequest`, `src/server/api/utils/bot-check.ts`) and refuses a bot with FORBIDDEN before any read. The browser signs the requests listed in `src/lib/env/bot-protection.ts` (`initBotId` in `instrumentation-client.ts`); both sides run only on Vercel (`VERCEL` / `NEXT_PUBLIC_VERCEL`), since the check needs the platform's token: elsewhere it is skipped and the log line says `botCheck: "skipped"`. A request that did not come through the browser's script, the REST twin `POST /api/docs/stores/{slug}/orders` included, is judged a bot on Vercel. Basic mode needs no dashboard setting; Deep Analysis is a Firewall setting Lucas can turn on.
-- **An order's page** (`/{store}/orders/{token}`) is reached by a 32-byte random token, answers only within its store, is never indexed, and masks the phone (`maskPhone`). The referrer policy (`strict-origin-when-cross-origin`) keeps the token out of the WhatsApp link's referrer.
+- **Bots on the checkout** (FER-026): `order.create` asks Vercel BotID first (`isBotRequest`, `src/server/api/utils/bot-check.ts`) and refuses a bot with FORBIDDEN before any read. The browser signs the requests listed in `src/lib/env/bot-protection.ts` (`initBotId` in `instrumentation-client.ts`); both sides run only on Vercel (`VERCEL` / `NEXT_PUBLIC_VERCEL`), since the check needs the platform's token: elsewhere it is skipped and the log line says `botCheck: "skipped"`. A request that did not come through the browser's script, the REST twin `POST /api/docs/orders` included, is judged a bot on Vercel. Basic mode needs no dashboard setting; Deep Analysis is a Firewall setting Lucas can turn on.
+- **An order's page** (`/orders/{token}`) is reached by a 32-byte random token, is never indexed, and masks the phone (`maskPhone`). The referrer policy (`strict-origin-when-cross-origin`) keeps the token out of the WhatsApp link's referrer.
 - **One shared, atomic store.** In-memory counters are per instance, so Better Auth's limiter needs `rateLimit.storage: "database"` (or secondary storage), never the default `"memory"`.
 - **Sliding window for guessable secrets** (codes, PINs, passwords): a fixed window lets an attacker spend twice the budget across its edge.
 - **Sign-in** is limited by Better Auth to 10 attempts a minute per IP (the fair's staff may share one Wi-Fi) (`customRules` in `src/server/better-auth/config.ts`). Its limiter is a fixed window, so the worst case is 20 tries across a window's edge; FER-037 adds 2FA for the superadmin, the login worth guessing.
@@ -71,7 +69,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 
 ## 2FA recipe
 
-For apps with privileged users (the superadmin, since FER-009; [FER-037](../tickets/FER-037-superadmin-two-factor.md) enables it):
+For apps with privileged users (every admin, since FER-038; [FER-037](../tickets/FER-037-superadmin-two-factor.md) enables it):
 
 - Add Better Auth's `twoFactor` plugin and require it of privileged users on the live production deploy only (`VERCEL_ENV === "production"`), so previews, qa and local stay usable.
 - Enforce it in pages and in every protected procedure, not only at sign-in, and block disabling it for privileged users on production.

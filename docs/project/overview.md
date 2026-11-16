@@ -64,8 +64,6 @@ Every signed-in login is an admin and reaches all of it.
 | Users                | `/admin/users`                         |
 | Metrics              | `/admin/metrics`                       |
 
-These addresses arrive with FER-038; until it lands the code still serves `/{store}/...` and `/admin/{store}/...`.
-
 ## Template rules this project amends
 
 Each amendment is made in the ticket named, in the same PR as the code that needs it.
