@@ -99,15 +99,32 @@ describe("HomeRedirect", () => {
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
     const { open } = setup();
+    // The request has not arrived yet: `connection()` stays pending until
+    // the test lets it through.
+    let arrive: () => void = () => undefined;
+    const arrived = new Promise<undefined>((resolve) => {
+      arrive = () => {
+        resolve(undefined);
+      };
+    });
+    connection.mockImplementationOnce(async () => {
+      await arrived;
+    });
 
-    await expect(open("es")).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    const opened = open("es");
+    // Every callback already queued runs before this timer fires.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
     });
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(getDefaultStore).not.toHaveBeenCalled();
+
+    arrive();
+
+    await expect(opened).rejects.toMatchObject({
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
     expect(getDefaultStore).toHaveBeenCalledExactlyOnceWith();
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      getDefaultStore.mock.invocationCallOrder[0] ?? 0
-    );
   });
 });
