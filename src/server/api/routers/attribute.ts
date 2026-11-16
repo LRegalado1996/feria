@@ -3,13 +3,12 @@ import {
   createAttributeValueSchema,
   deleteAttributeSchema,
   deleteAttributeValueSchema,
-  listStoreAttributesSchema,
   renameAttributeSchema,
   reorderAttributesSchema,
   reorderAttributeValuesSchema,
   updateAttributeValueSchema,
 } from "@/lib/schemas/catalog";
-import { storeProcedure } from "@/server/api/orpc";
+import { adminProcedure } from "@/server/api/orpc";
 import { writeToStore } from "@/server/api/utils/write-to-store";
 import {
   createAttribute,
@@ -24,24 +23,25 @@ import {
 } from "@/server/services/attribute";
 
 /**
- * A store's own filters and their values (FER-033): the store comes from
- * `storeSlug` resolved against the caller, and every write re-checks that
- * access inside its transaction.
+ * The store's filters and their values (FER-033), for the admin: every query
+ * is on the store `adminProcedure` puts in the context, and every write
+ * re-checks the caller's login inside its transaction.
  */
 export const attributeRouter = {
-  list: storeProcedure(listStoreAttributesSchema)
+  list: adminProcedure
     .handler(
       async ({ context }) =>
         await listStoreAttributes(context.db, { storeId: context.store.id })
     )
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/admin/filters",
+      path: "/admin/filters",
       summary: "List a store's filters with their values and article counts",
       tags: ["filters"],
     }),
 
-  create: storeProcedure(createAttributeSchema)
+  create: adminProcedure
+    .input(createAttributeSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -55,12 +55,13 @@ export const attributeRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/filters",
+      path: "/admin/filters",
       summary: "Add a filter",
       tags: ["filters"],
     }),
 
-  rename: storeProcedure(renameAttributeSchema)
+  rename: adminProcedure
+    .input(renameAttributeSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -75,12 +76,13 @@ export const attributeRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/filters/{id}",
+      path: "/admin/filters/{id}",
       summary: "Rename a filter",
       tags: ["filters"],
     }),
 
-  reorder: storeProcedure(reorderAttributesSchema)
+  reorder: adminProcedure
+    .input(reorderAttributesSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -91,12 +93,13 @@ export const attributeRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/filters/order",
+      path: "/admin/filters/order",
       summary: "Put a store's filters in a new order",
       tags: ["filters"],
     }),
 
-  delete: storeProcedure(deleteAttributeSchema)
+  delete: adminProcedure
+    .input(deleteAttributeSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -107,12 +110,13 @@ export const attributeRouter = {
     )
     .route({
       method: "DELETE",
-      path: "/stores/{storeSlug}/admin/filters/{id}",
+      path: "/admin/filters/{id}",
       summary: "Delete a filter and its values",
       tags: ["filters"],
     }),
 
-  createValue: storeProcedure(createAttributeValueSchema)
+  createValue: adminProcedure
+    .input(createAttributeValueSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -128,12 +132,13 @@ export const attributeRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/filter-values",
+      path: "/admin/filter-values",
       summary: "Add a value to a filter",
       tags: ["filters"],
     }),
 
-  updateValue: storeProcedure(updateAttributeValueSchema)
+  updateValue: adminProcedure
+    .input(updateAttributeValueSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -149,12 +154,13 @@ export const attributeRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/filter-values/{id}",
+      path: "/admin/filter-values/{id}",
       summary: "Rename a filter value or change its swatch",
       tags: ["filters"],
     }),
 
-  reorderValues: storeProcedure(reorderAttributeValuesSchema)
+  reorderValues: adminProcedure
+    .input(reorderAttributeValuesSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -169,12 +175,13 @@ export const attributeRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/filter-values/order",
+      path: "/admin/filter-values/order",
       summary: "Put a filter's values in a new order",
       tags: ["filters"],
     }),
 
-  deleteValue: storeProcedure(deleteAttributeValueSchema)
+  deleteValue: adminProcedure
+    .input(deleteAttributeValueSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -185,7 +192,7 @@ export const attributeRouter = {
     )
     .route({
       method: "DELETE",
-      path: "/stores/{storeSlug}/admin/filter-values/{id}",
+      path: "/admin/filter-values/{id}",
       summary: "Delete a filter value, taking it off its articles",
       tags: ["filters"],
     }),

@@ -10,9 +10,8 @@ import {
   getOrderByTokenSchema,
   getOrderSchema,
   listOrdersSchema,
-  orderCountsSchema,
 } from "@/lib/schemas/order";
-import { publicProcedure, storeProcedure } from "@/server/api/orpc";
+import { adminProcedure, publicProcedure } from "@/server/api/orpc";
 import { isBotRequest } from "@/server/api/utils/bot-check";
 import { orderClientKey } from "@/server/api/utils/client-key";
 import { safeRequestLogger } from "@/server/api/utils/logger";
@@ -25,12 +24,12 @@ import {
   getOrderByToken,
   listOrders,
 } from "@/server/services/order";
-import { getActiveStoreBySlug } from "@/server/services/store";
+import { getStore } from "@/server/services/store";
 
 /**
  * Orders (FER-025). A shopper creates one and reads it back by its link's
- * token, without an account; a store's members list, read and move its
- * orders through `storeProcedure`.
+ * token, without an account; an admin lists, reads and moves them through
+ * `adminProcedure`.
  */
 export const orderRouter = {
   create: publicProcedure
@@ -48,8 +47,7 @@ export const orderRouter = {
         throw new ORPCError("FORBIDDEN", { message: "Request refused" });
       }
 
-      const { storeSlug, ...values } = input;
-      const store = await getActiveStoreBySlug(context.db, { slug: storeSlug });
+      const store = await getStore(context.db);
       const clientKey = orderClientKey(context.headers);
 
       // The per-client limit fails open (only the phone limit applies); on
@@ -62,12 +60,12 @@ export const orderRouter = {
       return await createOrder(context.db, {
         clientKey,
         storeId: store.id,
-        values,
+        values: input,
       });
     })
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/orders",
+      path: "/orders",
       summary: "Place an order; prices come from the server",
       tags: ["orders"],
     }),
@@ -75,9 +73,7 @@ export const orderRouter = {
   getByToken: publicProcedure
     .input(getOrderByTokenSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
 
       return await getOrderByToken(context.db, {
         storeId: store.id,
@@ -86,12 +82,13 @@ export const orderRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/orders/{token}",
+      path: "/orders/{token}",
       summary: "An order's public page, by its link's token",
       tags: ["orders"],
     }),
 
-  list: storeProcedure(listOrdersSchema)
+  list: adminProcedure
+    .input(listOrdersSchema)
     .handler(
       async ({ context, input }) =>
         await listOrders(context.db, {
@@ -103,36 +100,38 @@ export const orderRouter = {
     )
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/admin/orders",
+      path: "/admin/orders",
       summary: "A store's orders, newest first",
       tags: ["orders"],
     }),
 
-  counts: storeProcedure(orderCountsSchema)
+  counts: adminProcedure
     .handler(
       async ({ context }) =>
         await countOrders(context.db, { storeId: context.store.id })
     )
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/admin/order-counts",
+      path: "/admin/order-counts",
       summary: "How many of the store's orders are in each status",
       tags: ["orders"],
     }),
 
-  get: storeProcedure(getOrderSchema)
+  get: adminProcedure
+    .input(getOrderSchema)
     .handler(
       async ({ context, input }) =>
         await getOrder(context.db, { id: input.id, storeId: context.store.id })
     )
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/admin/orders/{id}",
+      path: "/admin/orders/{id}",
       summary: "One order with its items and status history",
       tags: ["orders"],
     }),
 
-  changeStatus: storeProcedure(changeOrderStatusSchema)
+  changeStatus: adminProcedure
+    .input(changeOrderStatusSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -148,7 +147,7 @@ export const orderRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/orders/{id}/status",
+      path: "/admin/orders/{id}/status",
       summary: "Move an order to its next status, or one step back",
       tags: ["orders"],
     }),

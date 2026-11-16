@@ -8,12 +8,12 @@ import {
 
 import { categoryRouter } from "./category";
 
-// The router is input → store access → service, writes inside the access
-// check. The queries are `src/server/services/category.test.ts`'s and the
-// access rules `src/server/services/access.test.ts`'s.
+// The router is input → the admin's login and store → service, writes inside
+// the login's re-check. The queries are `src/server/services/category.test.ts`'s
+// and the access rules `src/server/services/access.test.ts`'s.
 
-// The handle `withStoreAccess` hands its write: distinct from the client, so
-// a write that went through the outer client instead would be caught.
+// The handle `withAdmin` hands its write: distinct from the client, so a
+// write that went through the outer client instead would be caught.
 const { TX } = vi.hoisted(() => ({
   TX: { handle: "the write's transaction" },
 }));
@@ -25,7 +25,7 @@ const services = vi.hoisted(() => ({
     slug: "collares",
   })),
   deleteCategory: vi.fn(async () => ({ id: 12, movedArticles: 3 })),
-  findAccessibleStore: vi.fn(),
+  findAdminStore: vi.fn(),
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   listStoreCategories: vi.fn(async () => [
     {
@@ -39,10 +39,10 @@ const services = vi.hoisted(() => ({
   ]),
   renameCategory: vi.fn(async () => ({ id: 13, slug: "collares" })),
   reorderCategories: vi.fn(async () => ({ ids: [3, 1, 2] })),
-  withStoreAccess: vi.fn(
+  withAdmin: vi.fn(
     async (
       _db: unknown,
-      _scope: unknown,
+      _userId: unknown,
       write: (handle: unknown) => Promise<unknown>
     ) => await write(TX)
   ),
@@ -57,9 +57,8 @@ vi.mock("@/server/services/category", () => ({
 }));
 
 vi.mock("@/server/services/access", () => ({
-  findAccessibleStore: services.findAccessibleStore,
-  getUserRole: vi.fn(),
-  withStoreAccess: services.withStoreAccess,
+  findAdminStore: services.findAdminStore,
+  withAdmin: services.withAdmin,
 }));
 
 // Next's cache only exists inside a Next render: the catalog's invalidation is
@@ -76,18 +75,21 @@ vi.mock("@/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 
-const STORE = { id: 7, slug: "lr-market" };
-const ACCESS = { storeId: 7, userId: "test-user-id" };
+const STORE = { id: 7 };
+const USER_ID = "test-user-id";
 
-/** A caller who may work on `lr-market` (or no store at all, or nobody). */
+/**
+ * A signed-in admin working on the store (or a login the database no longer
+ * has, or nobody).
+ */
 function setup({
-  mayWork = true,
+  isLogin = true,
   signedIn = true,
-}: { mayWork?: boolean; signedIn?: boolean } = {}) {
+}: { isLogin?: boolean; signedIn?: boolean } = {}) {
   const { mockCtx } = signedIn
     ? createMockContext()
     : createUnauthenticatedMockContext();
-  services.findAccessibleStore.mockResolvedValue(mayWork ? STORE : null);
+  services.findAdminStore.mockResolvedValue(isLogin ? STORE : null);
   const options = { context: mockCtx as never };
   const procedures = {
     create: async (input: unknown) =>
@@ -108,10 +110,10 @@ function setup({
 }
 
 describe("category router", () => {
-  test("lists the resolved store's categories, outside any write", async () => {
+  test("lists the store's categories, outside any write", async () => {
     const { db, run } = setup();
 
-    await expect(run("list", { storeSlug: "lr-market" })).resolves.toEqual([
+    await expect(run("list", undefined)).resolves.toEqual([
       {
         id: 1,
         nameEn: "Necklaces",
@@ -122,30 +124,29 @@ describe("category router", () => {
       },
     ]);
 
-    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-      userId: "test-user-id",
-    });
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID
+    );
     expect(services.listStoreCategories).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });
-    expect(services.withStoreAccess).not.toHaveBeenCalled();
+    expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
-  test("creates the category in the resolved store, a blank English name as none", async () => {
+  test("creates the category in the store, a blank English name as none", async () => {
     const { db, run } = setup();
 
     await expect(
       run("create", {
         nameEn: "  ",
         nameEs: " Collares ",
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ id: 11, position: 2, slug: "collares" });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.createCategory).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -156,7 +157,7 @@ describe("category router", () => {
     expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
-  test("renames by id within the resolved store, then drops its cached catalog", async () => {
+  test("renames by id within the store, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
     await expect(
@@ -164,13 +165,12 @@ describe("category router", () => {
         id: "5",
         nameEn: "Necklaces",
         nameEs: "Collares",
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ id: 13, slug: "collares" });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.renameCategory).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -181,16 +181,16 @@ describe("category router", () => {
     expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
-  test("reorders within the resolved store", async () => {
+  test("reorders within the store", async () => {
     const { db, run } = setup();
 
-    await expect(
-      run("reorder", { ids: [3, 1, 2], storeSlug: "lr-market" })
-    ).resolves.toEqual({ ids: [3, 1, 2] });
+    await expect(run("reorder", { ids: [3, 1, 2] })).resolves.toEqual({
+      ids: [3, 1, 2],
+    });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.reorderCategories).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -201,16 +201,17 @@ describe("category router", () => {
     expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
-  test("deletes by id within the resolved store, with where its articles move, then drops its cached catalog", async () => {
+  test("deletes by id within the store, with where its articles move, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
-    await expect(
-      run("delete", { id: "5", moveToId: 6, storeSlug: "lr-market" })
-    ).resolves.toEqual({ id: 12, movedArticles: 3 });
+    await expect(run("delete", { id: "5", moveToId: 6 })).resolves.toEqual({
+      id: 12,
+      movedArticles: 3,
+    });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.deleteCategory).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -222,50 +223,45 @@ describe("category router", () => {
   });
 
   test.each([
-    ["list", { storeSlug: "tienda-demo" }, services.listStoreCategories],
-    [
-      "delete",
-      { id: 5, moveToId: null, storeSlug: "tienda-demo" },
-      services.deleteCategory,
-    ],
+    ["list", undefined, services.listStoreCategories],
+    ["delete", { id: 5, moveToId: null }, services.deleteCategory],
   ] as const)(
-    "%s on a store the caller may not work on is NOT_FOUND, before the service",
+    "%s by a login the database no longer has is UNAUTHORIZED, before the service",
     async (name, input, service) => {
-      const { run } = setup({ mayWork: false });
+      const { run } = setup({ isLogin: false });
 
       await expect(run(name, input)).rejects.toMatchObject({
-        code: "NOT_FOUND",
-        message: "Store not found",
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
       });
-      expect(services.withStoreAccess).not.toHaveBeenCalled();
+      expect(services.withAdmin).not.toHaveBeenCalled();
       expect(service).not.toHaveBeenCalled();
       expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
     }
   );
 
-  test("a signed-out caller is UNAUTHORIZED, before the store is resolved", async () => {
+  test("a signed-out caller is UNAUTHORIZED, before the login is read", async () => {
     const { run } = setup({ signedIn: false });
 
     await expect(
       run("create", {
         nameEn: null,
         nameEs: "Collares",
-        storeSlug: "lr-market",
       })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });
-    expect(services.findAccessibleStore).not.toHaveBeenCalled();
+    expect(services.findAdminStore).not.toHaveBeenCalled();
     expect(services.createCategory).not.toHaveBeenCalled();
   });
 
   test.each([
-    ["create", { nameEn: null, nameEs: "  ", storeSlug: "lr-market" }],
-    ["reorder", { ids: [1, 1], storeSlug: "lr-market" }],
-    ["delete", { id: 5, moveToId: "6", storeSlug: "lr-market" }],
+    ["create", { nameEn: null, nameEs: "  " }],
+    ["reorder", { ids: [1, 1] }],
+    ["delete", { id: 5, moveToId: "6" }],
   ] as const)(
-    "refuses invalid %s input before resolving the store",
+    "refuses invalid %s input before reading the login",
     async (name, input) => {
       const { run } = setup();
 
@@ -273,7 +269,7 @@ describe("category router", () => {
         code: "BAD_REQUEST",
         message: "Input validation failed",
       });
-      expect(services.findAccessibleStore).not.toHaveBeenCalled();
+      expect(services.findAdminStore).not.toHaveBeenCalled();
     }
   );
 });

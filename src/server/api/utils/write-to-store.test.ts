@@ -4,17 +4,17 @@ import { createMockDatabase } from "@/server/test/context";
 
 import { writeToCatalog, writeToStore } from "./write-to-store";
 
-// The handle `withStoreAccess` hands its callback: distinct from the client,
-// so a write handed the outer client instead would be caught.
-const { TX, withStoreAccess } = vi.hoisted(() => {
+// The handle `withAdmin` hands its callback: distinct from the client, so a
+// write handed the outer client instead would be caught.
+const { TX, withAdmin } = vi.hoisted(() => {
   const handle = { handle: "the write's transaction" };
 
   return {
     TX: handle,
-    withStoreAccess: vi.fn(
+    withAdmin: vi.fn(
       async (
         _db: unknown,
-        _scope: unknown,
+        _userId: unknown,
         write: (tx: unknown) => Promise<unknown>
       ) => await write(handle)
     ),
@@ -25,7 +25,7 @@ const { invalidateCatalogCache } = vi.hoisted(() => ({
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
 }));
 
-vi.mock("@/server/services/access", () => ({ withStoreAccess }));
+vi.mock("@/server/services/access", () => ({ withAdmin }));
 
 // Next's cache only exists inside a Next render.
 vi.mock("@/server/cache/catalog", () => ({ invalidateCatalogCache }));
@@ -46,7 +46,7 @@ function setup() {
 }
 
 describe("writeToStore", () => {
-  test("runs the write on the resolved store inside the caller's access check, and answers its result", async () => {
+  test("runs the write on the store inside the re-check of the caller's login, and answers its result", async () => {
     const { context, db, write } = setup();
 
     await expect(writeToStore(context, write)).resolves.toEqual({
@@ -54,9 +54,9 @@ describe("writeToStore", () => {
       storeId: 7,
     });
 
-    expect(withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      { storeId: 7, userId: "user-1" },
+      "user-1",
       expect.any(Function)
     );
     expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
@@ -73,7 +73,7 @@ describe("writeToStore", () => {
 });
 
 describe("writeToCatalog", () => {
-  test("writes through the access check, then drops the store's cached catalog, and answers the write's result", async () => {
+  test("writes through the login's re-check, then drops the store's cached catalog, and answers the write's result", async () => {
     const { context, db, write } = setup();
 
     await expect(writeToCatalog(context, write)).resolves.toEqual({
@@ -81,9 +81,9 @@ describe("writeToCatalog", () => {
       storeId: 7,
     });
 
-    expect(withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      { storeId: 7, userId: "user-1" },
+      "user-1",
       expect.any(Function)
     );
     expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);

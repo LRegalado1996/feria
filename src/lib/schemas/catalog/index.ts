@@ -1,8 +1,6 @@
 import { z } from "zod";
 
 import { LOCALES } from "@/lib/i18n/config";
-import { storeScopeSchema } from "@/lib/schemas/access";
-import { storeSlugSchema } from "@/lib/schemas/store";
 
 /** A category's or an article's address segment: what `slugify` produces. */
 export const CATALOG_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -48,11 +46,8 @@ export const catalogSlugSchema = z
   .max(CATALOG_SLUG_MAX_LENGTH)
   .regex(CATALOG_SLUG_PATTERN);
 
-/** A public read: the store by its address and the language to answer in. */
-const publicCatalogSchema = z.object({
-  locale: localeSchema,
-  storeSlug: storeSlugSchema,
-});
+/** A public read: the language to answer in. */
+const publicCatalogSchema = z.object({ locale: localeSchema });
 
 export const listCategoriesSchema = publicCatalogSchema;
 
@@ -178,13 +173,11 @@ const productFieldsSchema = z.object({
     }),
 });
 
-export const createProductSchema = storeScopeSchema.extend(
-  productFieldsSchema.shape
-);
+export const createProductSchema = z.object(productFieldsSchema.shape);
 
 export type CreateProductValues = z.infer<typeof createProductSchema>;
 
-export const productIdSchema = storeScopeSchema.extend({ id: idSchema });
+export const productIdSchema = z.object({ id: idSchema });
 
 export const updateProductSchema = productIdSchema.extend(
   productFieldsSchema.shape
@@ -223,22 +216,18 @@ const categoryNamesSchema = z.object({
   nameEs: z.string().trim().min(1).max(CATEGORY_NAME_MAX_LENGTH),
 });
 
-export const listStoreCategoriesSchema = storeScopeSchema.extend({});
-
-export const createCategorySchema = storeScopeSchema.extend(
-  categoryNamesSchema.shape
-);
+export const createCategorySchema = z.object(categoryNamesSchema.shape);
 
 export type CreateCategoryValues = z.infer<typeof createCategorySchema>;
 
-export const renameCategorySchema = storeScopeSchema
-  .extend({ id: idSchema })
+export const renameCategorySchema = z
+  .object({ id: idSchema })
   .extend(categoryNamesSchema.shape);
 
 export type RenameCategoryValues = z.infer<typeof renameCategorySchema>;
 
 /** Every category of the store, once each, in the new order. */
-export const reorderCategoriesSchema = storeScopeSchema.extend({
+export const reorderCategoriesSchema = z.object({
   ids: z
     .array(bodyIdSchema)
     .min(1)
@@ -251,7 +240,7 @@ export const reorderCategoriesSchema = storeScopeSchema.extend({
  * A category to delete and, when it still has articles, the category of the
  * same store they move to: none is ever left without one.
  */
-export const deleteCategorySchema = storeScopeSchema.extend({
+export const deleteCategorySchema = z.object({
   id: idSchema,
   moveToId: bodyIdSchema.nullable(),
 });
@@ -340,17 +329,13 @@ const swatchColorSchema = z
   .regex(SWATCH_COLOR_PATTERN)
   .nullable();
 
-export const listStoreAttributesSchema = storeScopeSchema.extend({});
+export const createAttributeSchema = z.object(attributeNamesSchema.shape);
 
-export const createAttributeSchema = storeScopeSchema.extend(
-  attributeNamesSchema.shape
-);
-
-export const renameAttributeSchema = storeScopeSchema
-  .extend({ id: idSchema })
+export const renameAttributeSchema = z
+  .object({ id: idSchema })
   .extend(attributeNamesSchema.shape);
 
-export const reorderAttributesSchema = storeScopeSchema.extend({
+export const reorderAttributesSchema = z.object({
   ids: z
     .array(bodyIdSchema)
     .min(1)
@@ -359,17 +344,17 @@ export const reorderAttributesSchema = storeScopeSchema.extend({
     }),
 });
 
-export const deleteAttributeSchema = storeScopeSchema.extend({ id: idSchema });
+export const deleteAttributeSchema = z.object({ id: idSchema });
 
-export const createAttributeValueSchema = storeScopeSchema
-  .extend({ attributeId: bodyIdSchema, swatchColor: swatchColorSchema })
+export const createAttributeValueSchema = z
+  .object({ attributeId: bodyIdSchema, swatchColor: swatchColorSchema })
   .extend(attributeNamesSchema.shape);
 
-export const updateAttributeValueSchema = storeScopeSchema
-  .extend({ id: idSchema, swatchColor: swatchColorSchema })
+export const updateAttributeValueSchema = z
+  .object({ id: idSchema, swatchColor: swatchColorSchema })
   .extend(attributeNamesSchema.shape);
 
-export const reorderAttributeValuesSchema = storeScopeSchema.extend({
+export const reorderAttributeValuesSchema = z.object({
   attributeId: bodyIdSchema,
   ids: z
     .array(bodyIdSchema)
@@ -379,7 +364,7 @@ export const reorderAttributeValuesSchema = storeScopeSchema.extend({
     }),
 });
 
-export const deleteAttributeValueSchema = storeScopeSchema.extend({
+export const deleteAttributeValueSchema = z.object({
   id: idSchema,
 });
 

@@ -19,16 +19,14 @@ import {
   listPublishedProducts,
   listRelatedProducts,
 } from "@/server/services/catalog";
-import { getActiveStoreBySlug } from "@/server/services/store";
+import { getStore } from "@/server/services/store";
 
 /** The storefront's reads (FER-010): published articles only, no session. */
 export const catalogRouter = {
   cartProducts: publicProcedure
     .input(listCartProductsSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
 
       return await listCartProducts(context.db, {
         currencyCode: store.currencyCode,
@@ -39,7 +37,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/cart-products",
+      path: "/cart-products",
       summary: "The cart's articles with their current price and stock",
       tags: ["catalog"],
     }),
@@ -47,9 +45,7 @@ export const catalogRouter = {
   categories: publicProcedure
     .input(listCategoriesSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
 
       return await listCategories(context.db, {
         locale: input.locale,
@@ -58,7 +54,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/categories",
+      path: "/categories",
       summary: "List a store's categories in their order",
       tags: ["catalog"],
     }),
@@ -66,9 +62,7 @@ export const catalogRouter = {
   filters: publicProcedure
     .input(listCatalogFiltersSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
 
       return await listCatalogFilters(context.db, {
         locale: input.locale,
@@ -77,7 +71,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/filters",
+      path: "/filters",
       summary: "List a store's filters with the values its articles carry",
       tags: ["catalog"],
     }),
@@ -85,10 +79,8 @@ export const catalogRouter = {
   products: publicProcedure
     .input(listProductsSchema)
     .handler(async ({ context, input }) => {
-      const { filters = [], storeSlug, ...query } = input;
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: storeSlug,
-      });
+      const { filters = [], ...query } = input;
+      const store = await getStore(context.db);
       const valueGroups = await resolveCatalogFilters(context.db, {
         filters,
         storeId: store.id,
@@ -103,7 +95,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/products",
+      path: "/products",
       summary: "List a store's published articles, newest first or by price",
       tags: ["catalog"],
     }),
@@ -111,9 +103,7 @@ export const catalogRouter = {
   product: publicProcedure
     .input(getProductSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
 
       return await getPublishedProduct(context.db, {
         currencyCode: store.currencyCode,
@@ -124,7 +114,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/products/{slug}",
+      path: "/products/{slug}",
       summary: "Get a published article by its address",
       tags: ["catalog"],
     }),
@@ -132,9 +122,7 @@ export const catalogRouter = {
   related: publicProcedure
     .input(listRelatedProductsSchema)
     .handler(async ({ context, input }) => {
-      const store = await getActiveStoreBySlug(context.db, {
-        slug: input.storeSlug,
-      });
+      const store = await getStore(context.db);
       const article = await getPublishedProductRef(context.db, {
         slug: input.slug,
         storeId: store.id,
@@ -151,7 +139,7 @@ export const catalogRouter = {
     })
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/products/{slug}/related",
+      path: "/products/{slug}/related",
       summary: "List other published articles of the same category",
       tags: ["catalog"],
     }),

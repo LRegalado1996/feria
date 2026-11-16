@@ -8,12 +8,13 @@ import {
 
 import { attributeRouter } from "./attribute";
 
-// The router is input → store access → service, writes inside the access
-// check. The queries are `src/server/services/attribute.test.ts`'s and the
-// access rules `src/server/services/access.test.ts`'s.
+// The router is input → the admin's login and store → service, writes
+// inside the login's re-check. The queries are
+// `src/server/services/attribute.test.ts`'s and the access rules
+// `src/server/services/access.test.ts`'s.
 
-// The handle `withStoreAccess` hands its write: distinct from the client, so
-// a write that went through the outer client instead would be caught.
+// The handle `withAdmin` hands its write: distinct from the client, so a
+// write that went through the outer client instead would be caught.
 const { TX } = vi.hoisted(() => ({
   TX: { handle: "the write's transaction" },
 }));
@@ -27,7 +28,7 @@ const services = vi.hoisted(() => ({
   })),
   deleteAttribute: vi.fn(async () => ({ id: 12 })),
   deleteAttributeValue: vi.fn(async () => ({ id: 22, removedFromArticles: 3 })),
-  findAccessibleStore: vi.fn(),
+  findAdminStore: vi.fn(),
   listStoreAttributes: vi.fn(async () => [
     {
       id: 1,
@@ -42,10 +43,10 @@ const services = vi.hoisted(() => ({
   reorderAttributeValues: vi.fn(async () => ({ ids: [23, 21] })),
   reorderAttributes: vi.fn(async () => ({ ids: [3, 1, 2] })),
   updateAttributeValue: vi.fn(async () => ({ id: 24 })),
-  withStoreAccess: vi.fn(
+  withAdmin: vi.fn(
     async (
       _db: unknown,
-      _scope: unknown,
+      _userId: unknown,
       write: (handle: unknown) => Promise<unknown>
     ) => await write(TX)
   ),
@@ -64,9 +65,8 @@ vi.mock("@/server/services/attribute", () => ({
 }));
 
 vi.mock("@/server/services/access", () => ({
-  findAccessibleStore: services.findAccessibleStore,
-  getUserRole: vi.fn(),
-  withStoreAccess: services.withStoreAccess,
+  findAdminStore: services.findAdminStore,
+  withAdmin: services.withAdmin,
 }));
 
 vi.mock("@/env", () => ({
@@ -77,18 +77,21 @@ vi.mock("@/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 
-const STORE = { id: 7, slug: "lr-market" };
-const ACCESS = { storeId: 7, userId: "test-user-id" };
+const STORE = { id: 7 };
+const USER_ID = "test-user-id";
 
-/** A caller who may work on `lr-market` (or no store at all, or nobody). */
+/**
+ * A signed-in admin working on the store (or a login the database no longer
+ * has, or nobody).
+ */
 function setup({
-  mayWork = true,
+  isLogin = true,
   signedIn = true,
-}: { mayWork?: boolean; signedIn?: boolean } = {}) {
+}: { isLogin?: boolean; signedIn?: boolean } = {}) {
   const { mockCtx } = signedIn
     ? createMockContext()
     : createUnauthenticatedMockContext();
-  services.findAccessibleStore.mockResolvedValue(mayWork ? STORE : null);
+  services.findAdminStore.mockResolvedValue(isLogin ? STORE : null);
   const options = { context: mockCtx as never };
   const procedures = {
     create: async (input: unknown) =>
@@ -117,10 +120,10 @@ function setup({
 }
 
 describe("attribute router", () => {
-  test("lists the resolved store's filters, outside any write", async () => {
+  test("lists the store's filters, outside any write", async () => {
     const { db, run } = setup();
 
-    await expect(run("list", { storeSlug: "lr-market" })).resolves.toEqual([
+    await expect(run("list", undefined)).resolves.toEqual([
       {
         id: 1,
         nameEn: "Color",
@@ -131,26 +134,26 @@ describe("attribute router", () => {
       },
     ]);
 
-    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-      userId: "test-user-id",
-    });
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID
+    );
     expect(services.listStoreAttributes).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });
-    expect(services.withStoreAccess).not.toHaveBeenCalled();
+    expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
-  test("creates the filter in the resolved store, a blank English name as none", async () => {
+  test("creates the filter in the store, a blank English name as none", async () => {
     const { db, run } = setup();
 
     await expect(
-      run("create", { nameEn: "  ", nameEs: " Color ", storeSlug: "lr-market" })
+      run("create", { nameEn: "  ", nameEs: " Color " })
     ).resolves.toEqual({ id: 11, position: 2, slug: "color" });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.createAttribute).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -159,7 +162,7 @@ describe("attribute router", () => {
     });
   });
 
-  test("renames by id within the resolved store", async () => {
+  test("renames by id within the store", async () => {
     const { run } = setup();
 
     await expect(
@@ -167,7 +170,6 @@ describe("attribute router", () => {
         id: "5",
         nameEn: "Colour",
         nameEs: "Color",
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ id: 13, slug: "color" });
 
@@ -178,12 +180,12 @@ describe("attribute router", () => {
     });
   });
 
-  test("reorders the filters within the resolved store", async () => {
+  test("reorders the filters within the store", async () => {
     const { run } = setup();
 
-    await expect(
-      run("reorder", { ids: [3, 1, 2], storeSlug: "lr-market" })
-    ).resolves.toEqual({ ids: [3, 1, 2] });
+    await expect(run("reorder", { ids: [3, 1, 2] })).resolves.toEqual({
+      ids: [3, 1, 2],
+    });
 
     expect(services.reorderAttributes).toHaveBeenCalledExactlyOnceWith(TX, {
       ids: [3, 1, 2],
@@ -191,12 +193,10 @@ describe("attribute router", () => {
     });
   });
 
-  test("deletes a filter by id within the resolved store", async () => {
+  test("deletes a filter by id within the store", async () => {
     const { run } = setup();
 
-    await expect(
-      run("delete", { id: "5", storeSlug: "lr-market" })
-    ).resolves.toEqual({ id: 12 });
+    await expect(run("delete", { id: "5" })).resolves.toEqual({ id: 12 });
 
     expect(services.deleteAttribute).toHaveBeenCalledExactlyOnceWith(TX, {
       id: 5,
@@ -204,7 +204,7 @@ describe("attribute router", () => {
     });
   });
 
-  test("adds a value to a filter of the resolved store, its swatch in lowercase", async () => {
+  test("adds a value to a filter of the store, its swatch in lowercase", async () => {
     const { db, run } = setup();
 
     await expect(
@@ -212,14 +212,13 @@ describe("attribute router", () => {
         attributeId: 5,
         nameEn: "Gold",
         nameEs: "Dorado",
-        storeSlug: "lr-market",
         swatchColor: " #D4AF37 ",
       })
     ).resolves.toEqual({ id: 21, position: 0, slug: "dorado" });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.createAttributeValue).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -230,7 +229,7 @@ describe("attribute router", () => {
     });
   });
 
-  test("updates a value by id within the resolved store, without a swatch", async () => {
+  test("updates a value by id within the store, without a swatch", async () => {
     const { run } = setup();
 
     await expect(
@@ -238,7 +237,6 @@ describe("attribute router", () => {
         id: "24",
         nameEn: "",
         nameEs: "Plateado",
-        storeSlug: "lr-market",
         swatchColor: null,
       })
     ).resolves.toEqual({ id: 24 });
@@ -251,14 +249,13 @@ describe("attribute router", () => {
     });
   });
 
-  test("reorders a filter's values within the resolved store", async () => {
+  test("reorders a filter's values within the store", async () => {
     const { run } = setup();
 
     await expect(
       run("reorderValues", {
         attributeId: 5,
         ids: [23, 21],
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ ids: [23, 21] });
 
@@ -271,9 +268,10 @@ describe("attribute router", () => {
   test("deletes a value by id, answering how many articles lost it", async () => {
     const { run } = setup();
 
-    await expect(
-      run("deleteValue", { id: "22", storeSlug: "lr-market" })
-    ).resolves.toEqual({ id: 22, removedFromArticles: 3 });
+    await expect(run("deleteValue", { id: "22" })).resolves.toEqual({
+      id: 22,
+      removedFromArticles: 3,
+    });
 
     expect(services.deleteAttributeValue).toHaveBeenCalledExactlyOnceWith(TX, {
       id: 22,
@@ -282,61 +280,55 @@ describe("attribute router", () => {
   });
 
   test.each([
-    ["list", { storeSlug: "tienda-demo" }, services.listStoreAttributes],
-    ["delete", { id: 5, storeSlug: "tienda-demo" }, services.deleteAttribute],
+    ["list", undefined, services.listStoreAttributes],
+    ["delete", { id: 5 }, services.deleteAttribute],
     [
       "createValue",
       {
         attributeId: 5,
         nameEn: null,
         nameEs: "Dorado",
-        storeSlug: "tienda-demo",
         swatchColor: null,
       },
       services.createAttributeValue,
     ],
-    [
-      "deleteValue",
-      { id: 22, storeSlug: "tienda-demo" },
-      services.deleteAttributeValue,
-    ],
+    ["deleteValue", { id: 22 }, services.deleteAttributeValue],
   ] as const)(
-    "%s on a store the caller may not work on is NOT_FOUND, before the service",
+    "%s by a login the database no longer has is UNAUTHORIZED, before the service",
     async (name, input, service) => {
-      const { run } = setup({ mayWork: false });
+      const { run } = setup({ isLogin: false });
 
       await expect(run(name, input)).rejects.toMatchObject({
-        code: "NOT_FOUND",
-        message: "Store not found",
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
       });
-      expect(services.withStoreAccess).not.toHaveBeenCalled();
+      expect(services.withAdmin).not.toHaveBeenCalled();
       expect(service).not.toHaveBeenCalled();
     }
   );
 
-  test("a signed-out caller is UNAUTHORIZED, before the store is resolved", async () => {
+  test("a signed-out caller is UNAUTHORIZED, before the login is read", async () => {
     const { run } = setup({ signedIn: false });
 
     await expect(
-      run("create", { nameEn: null, nameEs: "Color", storeSlug: "lr-market" })
+      run("create", { nameEn: null, nameEs: "Color" })
     ).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });
-    expect(services.findAccessibleStore).not.toHaveBeenCalled();
+    expect(services.findAdminStore).not.toHaveBeenCalled();
     expect(services.createAttribute).not.toHaveBeenCalled();
   });
 
   test.each([
-    ["create", { nameEn: null, nameEs: "  ", storeSlug: "lr-market" }],
-    ["reorder", { ids: [1, 1], storeSlug: "lr-market" }],
+    ["create", { nameEn: null, nameEs: "  " }],
+    ["reorder", { ids: [1, 1] }],
     [
       "createValue",
       {
         attributeId: 5,
         nameEn: null,
         nameEs: "Dorado",
-        storeSlug: "lr-market",
         swatchColor: "gold",
       },
     ],
@@ -346,14 +338,13 @@ describe("attribute router", () => {
         id: 24,
         nameEn: null,
         nameEs: "Dorado",
-        storeSlug: "lr-market",
         swatchColor: "#d4af3",
       },
     ],
-    ["reorderValues", { attributeId: "5", ids: [21], storeSlug: "lr-market" }],
-    ["deleteValue", { id: "", storeSlug: "lr-market" }],
+    ["reorderValues", { attributeId: "5", ids: [21] }],
+    ["deleteValue", { id: "" }],
   ] as const)(
-    "refuses invalid %s input before resolving the store",
+    "refuses invalid %s input before reading the login",
     async (name, input) => {
       const { run } = setup();
 
@@ -361,7 +352,7 @@ describe("attribute router", () => {
         code: "BAD_REQUEST",
         message: "Input validation failed",
       });
-      expect(services.findAccessibleStore).not.toHaveBeenCalled();
+      expect(services.findAdminStore).not.toHaveBeenCalled();
     }
   );
 });

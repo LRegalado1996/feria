@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 import { LOCALES } from "@/lib/i18n/config";
-import { storeScopeSchema } from "@/lib/schemas/access";
 import { INT4_MAX } from "@/lib/schemas/catalog";
-import { storeSlugSchema } from "@/lib/schemas/store";
 import { normalizePhone } from "@/lib/utils/phone";
 
 /** An order's states, in the order it moves through them (FER-025). */
@@ -100,7 +98,6 @@ export const createOrderSchema = z.strictObject({
   // A v4 uuid, as `crypto.randomUUID()` makes: never the nil uuid or
   // another fixed one two checkouts could share.
   requestKey: z.uuidv4(),
-  storeSlug: storeSlugSchema,
 });
 
 export type CreateOrderValues = z.infer<typeof createOrderSchema>;
@@ -138,7 +135,6 @@ export function createCheckoutSchema(messages: CheckoutMessages) {
 export type CheckoutValues = z.infer<ReturnType<typeof createCheckoutSchema>>;
 
 export const getOrderByTokenSchema = z.object({
-  storeSlug: storeSlugSchema,
   token: z.string().regex(ORDER_TOKEN_PATTERN),
 });
 
@@ -146,7 +142,7 @@ export const getOrderByTokenSchema = z.object({
 export const ORDER_SEARCH_MAX_LENGTH = 80;
 
 /** The store's orders, newest first, one status or all, a page at a time. */
-export const listOrdersSchema = storeScopeSchema.extend({
+export const listOrdersSchema = z.object({
   cursor: z
     .object({
       createdAt: z.coerce.date(),
@@ -165,12 +161,9 @@ export const listOrdersSchema = storeScopeSchema.extend({
 
 export type ListOrdersValues = z.infer<typeof listOrdersSchema>;
 
-/** How many of the store's orders are in each status (FER-027). */
-export { storeScopeSchema as orderCountsSchema } from "@/lib/schemas/access";
+export const getOrderSchema = z.object({ id: idSchema });
 
-export const getOrderSchema = storeScopeSchema.extend({ id: idSchema });
-
-export const changeOrderStatusSchema = storeScopeSchema.extend({
+export const changeOrderStatusSchema = z.object({
   id: idSchema,
   status: z.enum(ORDER_STATUSES),
 });

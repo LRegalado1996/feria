@@ -1,8 +1,8 @@
 import { invalidateCatalogCache } from "@/server/cache/catalog";
 import type { DatabaseClient } from "@/server/db";
-import { withStoreAccess } from "@/server/services/access";
+import { withAdmin } from "@/server/services/access";
 
-/** What a store-scoped handler knows: the resolved store and the caller. */
+/** What an admin handler knows: the store and the caller. */
 interface StoreWriteContext {
   db: DatabaseClient;
   session: { user: { id: string } };
@@ -10,17 +10,17 @@ interface StoreWriteContext {
 }
 
 /**
- * Runs a write on the resolved store with the caller's access re-checked
- * inside its transaction: the one place every store-scoped write goes through,
- * so none can forget the re-check or pass another store's id.
+ * Runs a write on the store with the caller's login re-checked inside its
+ * transaction: the one place every admin write goes through, so none can
+ * forget the re-check or reach for a store id of its own.
  */
 export async function writeToStore<T>(
   context: StoreWriteContext,
   write: (tx: DatabaseClient, storeId: number) => Promise<T>
 ): Promise<T> {
-  return await withStoreAccess(
+  return await withAdmin(
     context.db,
-    { storeId: context.store.id, userId: context.session.user.id },
+    context.session.user.id,
     async (tx) => await write(tx, context.store.id)
   );
 }

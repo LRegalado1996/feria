@@ -1,21 +1,15 @@
 import { call, ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
+import { z } from "zod";
 
 import { ERROR_WHYS } from "@/lib/errors";
-import { storeScopeSchema } from "@/lib/schemas/access";
 import {
   createMockContext,
   createUnauthenticatedMockContext,
 } from "@/server/test";
 import { renderQuery } from "@/server/test/render-sql";
 
-import {
-  createORPCContext,
-  protectedProcedure,
-  publicProcedure,
-  storeProcedure,
-  superadminProcedure,
-} from ".";
+import { adminProcedure, createORPCContext, publicProcedure } from ".";
 
 const { getSession } = vi.hoisted(() => ({
   getSession: vi.fn(
@@ -167,7 +161,7 @@ describe("timing", () => {
 
   test("records a call that failed too", async () => {
     const { mockCtx } = createUnauthenticatedMockContext();
-    const procedure = protectedProcedure.handler(() => "never");
+    const procedure = adminProcedure.handler(() => "never");
     vi.spyOn(performance, "now")
       .mockReturnValueOnce(1000)
       .mockReturnValueOnce(1003);
@@ -181,166 +175,124 @@ describe("timing", () => {
   });
 });
 
-describe("protectedProcedure", () => {
-  test("refuses a caller without a session", async () => {
-    const { mockCtx } = createUnauthenticatedMockContext();
-    const procedure = protectedProcedure.handler(() => "protected");
-
-    await expect(
-      call(procedure, undefined, { context: mockCtx as never })
-    ).rejects.toMatchObject(UNAUTHORIZED);
-  });
-
-  test("refuses a session without a user", async () => {
-    const { mockCtx } = createMockContext();
-    const procedure = protectedProcedure.handler(() => "protected");
-
-    await expect(
-      call(procedure, undefined, {
-        context: { ...mockCtx, session: { ...SESSION, user: null } } as never,
-      })
-    ).rejects.toMatchObject(UNAUTHORIZED);
-  });
-
-  test("hands the signed-in user to the handler", async () => {
-    const { mockCtx } = createMockContext();
-    const procedure = protectedProcedure.handler(
-      ({ context }) => context.session.user.id
-    );
-
-    await expect(
-      call(procedure, undefined, { context: mockCtx as never })
-    ).resolves.toBe("test-user-id");
-  });
-});
-
 /**
- * A signed-in caller (or none) whose role the database answers with, and a
- * store the access query answers with: the builders read both there.
+ * A signed-in caller (or none) the database still has as a login (or not),
+ * and the store row it answers with (or none): `adminProcedure` reads both.
  */
-function setupAccess({
-  role = "member",
+function setupAdmin({
+  login = true,
   signedIn = true,
-  store = null,
+  store = { id: 4 },
 }: {
-  role?: "member" | "superadmin" | null;
+  login?: boolean;
   signedIn?: boolean;
-  store?: { id: number; slug: string } | null;
+  store?: { id: number } | null;
 } = {}) {
   const { mockCtx } = signedIn
     ? createMockContext()
     : createUnauthenticatedMockContext();
   mockCtx.db.query.user.findFirst.mockImplementation(async () =>
-    role === null ? undefined : { role }
+    login ? { id: "test-user-id" } : undefined
   );
   mockCtx.db.$["select.limit"].mockImplementation(async () =>
     store ? [store] : []
   );
-  const options = { context: mockCtx as never };
-
-  const platform = superadminProcedure.handler(() => "platform");
-  const scoped = storeProcedure(storeScopeSchema).handler(({ context }) => ({
-    storeId: context.store.id,
-  }));
+  const procedure = adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .handler(({ context, input }) => ({
+      id: input.id,
+      storeId: context.store.id,
+      userId: context.session.user.id,
+    }));
 
   return {
     db: mockCtx.db,
-    callPlatform: async () => await call(platform, undefined, options),
-    callStore: async (input: unknown) =>
-      await call(scoped, input as never, options),
+    callAdmin: async (input: unknown, context: unknown = mockCtx) =>
+      await call(procedure, input as never, { context: context as never }),
   };
 }
 
-describe("superadminProcedure", () => {
-  test("lets a superadmin through", async () => {
-    const { callPlatform } = setupAccess({ role: "superadmin" });
+describe("adminProcedure", () => {
+  test("hands the handler the signed-in login and the store", async () => {
+    const { callAdmin } = setupAdmin();
 
-    await expect(callPlatform()).resolves.toBe("platform");
-  });
-
-  test.each([
-    ["a member", "member"],
-    ["a user the database no longer has", null],
-  ] as const)("refuses %s with FORBIDDEN", async (_case, role) => {
-    const { callPlatform } = setupAccess({ role });
-
-    await expect(callPlatform()).rejects.toMatchObject({
-      code: "FORBIDDEN",
-      message: "Forbidden",
+    await expect(callAdmin({ id: 7 })).resolves.toEqual({
+      id: 7,
+      storeId: 4,
+      userId: "test-user-id",
     });
   });
 
-  test("reads the role of the signed-in user from the database", async () => {
-    const { callPlatform, db } = setupAccess({ role: "superadmin" });
+  test("re-reads the login by its id, then reads the store's one row", async () => {
+    const { callAdmin, db } = setupAdmin();
 
-    await callPlatform();
+    await callAdmin({ id: 7 });
 
     const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
-    expect(config).toMatchObject({ columns: { role: true } });
+    expect(config).toMatchObject({ columns: { id: true } });
     expect(renderQuery((config as { where: unknown }).where)).toEqual({
       params: ["test-user-id"],
       sql: '"user"."id" = $1',
     });
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
+    expect(db.query.user.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      db.$.select.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("refuses a login the database no longer has, whatever the session says, before reading the store", async () => {
+    const { callAdmin, db } = setupAdmin({ login: false });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("answers NOT_FOUND when the store's row does not exist", async () => {
+    const { callAdmin } = setupAdmin({ store: null });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
+    });
   });
 
   test("refuses a caller without a session before reading anything", async () => {
-    const { callPlatform, db } = setupAccess({ signedIn: false });
+    const { callAdmin, db } = setupAdmin({ signedIn: false });
 
-    await expect(callPlatform()).rejects.toMatchObject(UNAUTHORIZED);
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
-  });
-});
-
-describe("storeProcedure", () => {
-  test("hands the handler the store the caller may work on", async () => {
-    const { callStore } = setupAccess({
-      store: { id: 4, slug: "lr-market" },
-    });
-
-    await expect(callStore({ storeSlug: "lr-market" })).resolves.toEqual({
-      storeId: 4,
-    });
-  });
-
-  test("resolves the slug against the signed-in user's access, in one query", async () => {
-    const { callStore, db } = setupAccess({
-      store: { id: 4, slug: "lr-market" },
-    });
-
-    await callStore({ storeSlug: "lr-market" });
-
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["lr-market", "test-user-id", "superadmin", "test-user-id"],
-      sql:
-        '("store"."slug" = $1 and (exists (select 1 from "user" where ("user"."id" = $2 and "user"."role" = $3)) or ' +
-        'exists (select 1 from "store_member" where ("store_member"."storeId" = "store"."id" and "store_member"."userId" = $4))))',
-    });
-  });
-
-  test("answers NOT_FOUND for a store the caller may not work on, as for one that does not exist", async () => {
-    const { callStore } = setupAccess({ store: null });
-
-    await expect(callStore({ storeSlug: "tienda-demo" })).rejects.toMatchObject(
-      { code: "NOT_FOUND", message: "Store not found" }
-    );
-  });
-
-  test("refuses a caller without a session before resolving the store", async () => {
-    const { callStore, db } = setupAccess({ signedIn: false });
-
-    await expect(callStore({ storeSlug: "lr-market" })).rejects.toMatchObject(
-      UNAUTHORIZED
-    );
     expect(db.$.select).not.toHaveBeenCalled();
   });
 
-  test("refuses an input without a valid store slug before resolving it", async () => {
-    const { callStore, db } = setupAccess();
+  test("refuses a session without a user before reading anything", async () => {
+    const { callAdmin, db } = setupAdmin();
+    const { mockCtx } = createMockContext();
 
-    await expect(callStore({ storeSlug: "Not A Slug" })).rejects.toMatchObject({
+    await expect(
+      callAdmin(
+        { id: 7 },
+        { ...mockCtx, db, session: { ...SESSION, user: null } }
+      )
+    ).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("refuses a malformed input before reading the login or the store", async () => {
+    const { callAdmin, db } = setupAdmin();
+
+    await expect(callAdmin({ id: "seven" })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "Input validation failed",
     });
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
     expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("checks the session before the input: a caller without one is UNAUTHORIZED, malformed input or not", async () => {
+    const { callAdmin } = setupAdmin({ signedIn: false });
+
+    await expect(callAdmin({ id: "seven" })).rejects.toMatchObject(
+      UNAUTHORIZED
+    );
   });
 });

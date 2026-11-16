@@ -1,11 +1,10 @@
 import {
   createCategorySchema,
   deleteCategorySchema,
-  listStoreCategoriesSchema,
   renameCategorySchema,
   reorderCategoriesSchema,
 } from "@/lib/schemas/catalog";
-import { storeProcedure } from "@/server/api/orpc";
+import { adminProcedure } from "@/server/api/orpc";
 import {
   writeToCatalog,
   writeToStore,
@@ -19,24 +18,25 @@ import {
 } from "@/server/services/category";
 
 /**
- * A store's own categories (FER-016): the store comes from `storeSlug`
- * resolved against the caller, and every write re-checks that access inside
- * its transaction.
+ * The store's categories (FER-016), for the admin: every query is on the
+ * store `adminProcedure` puts in the context, and every write re-checks the
+ * caller's login inside its transaction.
  */
 export const categoryRouter = {
-  list: storeProcedure(listStoreCategoriesSchema)
+  list: adminProcedure
     .handler(
       async ({ context }) =>
         await listStoreCategories(context.db, { storeId: context.store.id })
     )
     .route({
       method: "GET",
-      path: "/stores/{storeSlug}/admin/categories",
+      path: "/admin/categories",
       summary: "List a store's categories with their article counts",
       tags: ["categories"],
     }),
 
-  create: storeProcedure(createCategorySchema)
+  create: adminProcedure
+    .input(createCategorySchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -50,12 +50,13 @@ export const categoryRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/categories",
+      path: "/admin/categories",
       summary: "Add a category at the end of the list",
       tags: ["categories"],
     }),
 
-  rename: storeProcedure(renameCategorySchema)
+  rename: adminProcedure
+    .input(renameCategorySchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -70,12 +71,13 @@ export const categoryRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/categories/{id}",
+      path: "/admin/categories/{id}",
       summary: "Rename a category in both languages",
       tags: ["categories"],
     }),
 
-  reorder: storeProcedure(reorderCategoriesSchema)
+  reorder: adminProcedure
+    .input(reorderCategoriesSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -86,12 +88,13 @@ export const categoryRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/categories/order",
+      path: "/admin/categories/order",
       summary: "Put a store's categories in a new order",
       tags: ["categories"],
     }),
 
-  delete: storeProcedure(deleteCategorySchema)
+  delete: adminProcedure
+    .input(deleteCategorySchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -106,7 +109,7 @@ export const categoryRouter = {
     )
     .route({
       method: "DELETE",
-      path: "/stores/{storeSlug}/admin/categories/{id}",
+      path: "/admin/categories/{id}",
       summary: "Delete a category, moving its articles to another one",
       tags: ["categories"],
     }),

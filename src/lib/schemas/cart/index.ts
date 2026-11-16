@@ -3,7 +3,6 @@ import { z } from "zod";
 import { LOCALES } from "@/lib/i18n/config";
 import { INT4_MAX } from "@/lib/schemas/catalog";
 import { ORDER_ITEMS_MAX, orderItemInputSchema } from "@/lib/schemas/order";
-import { storeSlugSchema } from "@/lib/schemas/store";
 
 /**
  * One line of the cart: an order's item, plus the price the shopper saw when
@@ -47,7 +46,6 @@ export const listCartProductsSchema = z.object({
       "Each article is asked for once"
     ),
   locale: z.enum(LOCALES),
-  storeSlug: storeSlugSchema,
 });
 
 export type ListCartProductsValues = z.infer<typeof listCartProductsSchema>;

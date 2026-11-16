@@ -6,7 +6,7 @@ import {
   setProductAvailabilitySchema,
   updateProductSchema,
 } from "@/lib/schemas/catalog";
-import { storeProcedure } from "@/server/api/orpc";
+import { adminProcedure } from "@/server/api/orpc";
 import {
   writeToCatalog,
   writeToStore,
@@ -23,14 +23,15 @@ import {
 } from "@/server/services/catalog";
 
 /**
- * A store's own articles (FER-010): every procedure resolves the store from
- * `storeSlug` against the caller and runs its write with the caller's access
- * re-checked inside the transaction. Every query filters by that store.
+ * The store's articles (FER-010), for the admin: every procedure runs its
+ * write with the caller's login re-checked inside the transaction, and every
+ * query filters by the store `adminProcedure` puts in the context.
  */
 export const productRouter = {
-  create: storeProcedure(createProductSchema)
+  create: adminProcedure
+    .input(createProductSchema)
     .handler(
-      async ({ context, input: { storeSlug: _storeSlug, ...values } }) =>
+      async ({ context, input: values }) =>
         await writeToStore(
           context,
           async (tx, storeId) => await createProduct(tx, { storeId, values })
@@ -38,14 +39,15 @@ export const productRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/products",
+      path: "/admin/products",
       summary: "Create a draft article",
       tags: ["products"],
     }),
 
-  update: storeProcedure(updateProductSchema)
+  update: adminProcedure
+    .input(updateProductSchema)
     .handler(
-      async ({ context, input: { storeSlug: _storeSlug, ...values } }) =>
+      async ({ context, input: values }) =>
         await writeToCatalog(
           context,
           async (tx, storeId) => await updateProduct(tx, { storeId, values })
@@ -53,12 +55,13 @@ export const productRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/products/{id}",
+      path: "/admin/products/{id}",
       summary: "Replace an article's fields and texts",
       tags: ["products"],
     }),
 
-  publish: storeProcedure(productIdSchema)
+  publish: adminProcedure
+    .input(productIdSchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -72,12 +75,13 @@ export const productRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/products/{id}/publish",
+      path: "/admin/products/{id}/publish",
       summary: "Publish an article that has everything it needs",
       tags: ["products"],
     }),
 
-  unpublish: storeProcedure(productIdSchema)
+  unpublish: adminProcedure
+    .input(productIdSchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -91,12 +95,13 @@ export const productRouter = {
     )
     .route({
       method: "POST",
-      path: "/stores/{storeSlug}/admin/products/{id}/unpublish",
+      path: "/admin/products/{id}/unpublish",
       summary: "Take an article back to draft",
       tags: ["products"],
     }),
 
-  setAvailability: storeProcedure(setProductAvailabilitySchema)
+  setAvailability: adminProcedure
+    .input(setProductAvailabilitySchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -111,12 +116,13 @@ export const productRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/products/{id}/availability",
+      path: "/admin/products/{id}/availability",
       summary: "Mark an article available or not",
       tags: ["products"],
     }),
 
-  delete: storeProcedure(productIdSchema)
+  delete: adminProcedure
+    .input(productIdSchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -127,12 +133,13 @@ export const productRouter = {
     )
     .route({
       method: "DELETE",
-      path: "/stores/{storeSlug}/admin/products/{id}",
+      path: "/admin/products/{id}",
       summary: "Delete an article",
       tags: ["products"],
     }),
 
-  reorderImages: storeProcedure(reorderProductImagesSchema)
+  reorderImages: adminProcedure
+    .input(reorderProductImagesSchema)
     .handler(
       async ({ context, input }) =>
         await writeToCatalog(
@@ -147,12 +154,13 @@ export const productRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/products/{id}/images/order",
+      path: "/admin/products/{id}/images/order",
       summary: "Put an article's images in a new order",
       tags: ["products"],
     }),
 
-  setAttributeValues: storeProcedure(setProductAttributeValuesSchema)
+  setAttributeValues: adminProcedure
+    .input(setProductAttributeValuesSchema)
     .handler(
       async ({ context, input }) =>
         await writeToStore(
@@ -167,7 +175,7 @@ export const productRouter = {
     )
     .route({
       method: "PUT",
-      path: "/stores/{storeSlug}/admin/products/{id}/filter-values",
+      path: "/admin/products/{id}/filter-values",
       summary: "Replace the filter values an article carries",
       tags: ["products"],
     }),
