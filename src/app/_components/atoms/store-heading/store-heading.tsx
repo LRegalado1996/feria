@@ -4,13 +4,12 @@ import { type ComponentProps, Fragment } from "react";
 import { cn } from "@/lib/utils";
 
 const storeHeadingVariants = cva(
-  "font-display leading-display font-normal tracking-display uppercase",
+  "font-display leading-display font-extrabold uppercase",
   {
     variants: {
       size: {
         hero: "store-display-hero",
         section: "store-display-section",
-        title: "store-display-title",
       },
     },
     defaultVariants: { size: "section" },
@@ -31,10 +30,11 @@ export type StoreHeadingProps = Omit<ComponentProps<"h2">, "children"> &
   };
 
 /**
- * A storefront display heading: condensed, uppercase and tight, broken where
- * the copy says and not where the viewport does. Its lines rise into place
- * one after another, from CSS alone, so the text is in the server's HTML and
- * reads without JavaScript; under reduced motion they are simply there.
+ * A storefront display heading: the wide face, extra bold and uppercase,
+ * broken where the copy says and not where the viewport does. Its lines rise
+ * into place one after another, from CSS alone, so the text is in the
+ * server's HTML and reads without JavaScript; under reduced motion they are
+ * simply there.
  *
  * The rise plays when the page loads, so it is seen in the first viewport.
  * Below the fold, put the heading inside a `StoreReveal`: a waiting block

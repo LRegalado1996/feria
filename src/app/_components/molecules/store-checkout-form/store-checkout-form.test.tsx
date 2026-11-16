@@ -189,6 +189,27 @@ describe("StoreCheckoutForm", () => {
     expect(screen.getByRole("button", { name: "Place order" })).toBeEnabled();
   });
 
+  test("is the cart's one action: a primary pill as wide as the form, its title in the display face", () => {
+    setup();
+
+    const submit = screen.getByRole("button", { name: "Place order" });
+    expect(submit).toHaveAttribute("data-slot", "store-button");
+    expect(submit).toHaveAttribute("data-variant", "primary");
+    expect(submit).toHaveAttribute("data-size", "lg");
+    expect(submit).toHaveClass("w-full");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Your details" })
+    ).toHaveClass("font-display", "font-extrabold", "uppercase");
+    // Fields stay square, and large enough that a phone does not zoom in.
+    expect(screen.getByRole("textbox", { name: "Your name" })).toHaveClass(
+      "text-base",
+      "border-2"
+    );
+    expect(screen.getByRole("textbox", { name: "Your name" })).not.toHaveClass(
+      "rounded-full"
+    );
+  });
+
   test("speaks Spanish on a Spanish page", async () => {
     const { send } = setup({ locale: "es" });
 

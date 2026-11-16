@@ -1,15 +1,21 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import useEmblaCarousel from "embla-carousel-react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
+import { createFakeEmbla } from "@/test/embla";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { stubReducedMotion } from "@/test/reduced-motion";
 
 import {
   StoreArticle,
   type StoreArticleData,
   type StoreRelatedArticle,
 } from "./store-article";
+
+// The gallery and the row measure a layout happy-dom does not have.
+vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
 
 // Intl separates a currency from its amount with a no-break space.
 const NBSP = "\u00A0";
@@ -70,6 +76,10 @@ function setup({
   whatsappHref = WHATSAPP,
 }: SetupOptions = {}) {
   window.history.replaceState(null, "", "/elsewhere");
+  stubReducedMotion(false);
+  vi.mocked(useEmblaCarousel).mockReturnValue(
+    createFakeEmbla({ snaps: 2 }).hook
+  );
   const user = userEvent.setup();
   renderWithI18n(
     <StoreArticle
@@ -102,11 +112,10 @@ afterEach(() => {
 });
 
 describe("StoreArticle", () => {
-  test("leads back home, to the catalog and to the article's category", () => {
+  test("leads back to the catalog and to the article's category", () => {
     const { breadcrumb } = setup();
 
     expect(breadcrumb()).toEqual([
-      ["Inicio", "/"],
       ["Catálogo", "/products"],
       ["Collares", "/products?category=collares"],
     ]);
@@ -115,10 +124,7 @@ describe("StoreArticle", () => {
   test("leads back without a category when the article has none", () => {
     const { breadcrumb } = setup({ article: makeArticle({ category: null }) });
 
-    expect(breadcrumb()).toEqual([
-      ["Inicio", "/"],
-      ["Catálogo", "/products"],
-    ]);
+    expect(breadcrumb()).toEqual([["Catálogo", "/products"]]);
   });
 
   test("names the article in a heading marked with its language, and shows its price and photos", () => {
@@ -144,16 +150,16 @@ describe("StoreArticle", () => {
     expect(within(page).queryByText("Agotado por ahora")).toBeNull();
   });
 
-  test("a sold-out article says so instead of offering to add it", () => {
+  test("a sold-out article says so where its price would be, instead of offering to add it", () => {
     const { page } = setup({
       article: makeArticle({ isAvailable: false }),
       related: [],
     });
 
-    expect(within(page).getByText("Agotado por ahora")).toHaveAttribute(
-      "data-slot",
-      "store-badge"
+    expect(within(page).getByText("Agotado por ahora")).toHaveClass(
+      "text-store-muted"
     );
+    expect(page.querySelector('[data-slot="store-price-tag"]')).toBeNull();
     expect(
       within(page).getByText(
         "No lo podés agregar al carrito ahora. Escribinos y te avisamos cuando vuelva."
@@ -246,6 +252,36 @@ describe("StoreArticle", () => {
     expect(soldOut).toHaveTextContent("Sin foto");
   });
 
+  test.each([
+    [
+      "its category",
+      { name: "Collares", slug: "collares" },
+      "/products?category=collares",
+    ],
+    ["the catalog, for an article with no category", null, "/products"],
+  ] as const)(
+    "the related row's “Ver todo” leads to %s",
+    (_case, category, href) => {
+      setup({ article: makeArticle({ category }) });
+
+      expect(
+        screen.getByRole("link", { name: "Ver todo: También te puede gustar" })
+      ).toHaveAttribute("href", href);
+    }
+  );
+
+  test("puts the photos first on a phone and on the right on a computer", () => {
+    const { page } = setup();
+
+    const gallery = within(page).getByRole("region", {
+      name: "Fotos de Collar de perlas",
+    });
+    expect(gallery).toHaveClass("lg:order-last");
+    expect(
+      gallery.compareDocumentPosition(screen.getByRole("heading", { level: 1 }))
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   test("shows no related section when there are none", () => {
     setup({ related: [] });
 
@@ -259,7 +295,6 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup({ locale: "en" });
 
     expect(breadcrumb()).toEqual([
-      ["Home", "/en"],
       ["Catalog", "/en/products"],
       ["Collares", "/en/products?category=collares"],
     ]);

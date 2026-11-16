@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import { cn } from "@/lib/utils";
 
 export interface StoreStatusPageProps {
@@ -14,7 +15,7 @@ export interface StoreStatusPageProps {
 
 /**
  * A page that could not show what was asked (FER-021), under the store's
- * header: what happened, in the store's type, and the way out.
+ * header: what happened, in the display face, and the way out.
  */
 function StoreStatusPage({
   action,
@@ -26,33 +27,30 @@ function StoreStatusPage({
   return (
     <main
       className={cn(
-        "mx-auto flex w-full max-w-7xl flex-col items-start gap-6 px-4 py-16 md:py-24",
+        "flex w-full flex-col items-start gap-6 px-4 py-16 text-store-foreground md:px-7 md:py-28",
         className
       )}
       data-slot="store-status-page"
       data-testid="store-status-page"
     >
-      <h1 className="font-display text-5xl leading-display tracking-display text-store-foreground uppercase md:text-7xl">
+      <h1 className="max-w-4xl font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
         {title}
       </h1>
       {/* A failure is announced as it replaces the page; a miss is not. */}
-      <p
-        className="max-w-prose text-base text-store-foreground"
-        role={retry ? "alert" : undefined}
-      >
+      <p className="max-w-prose text-base" role={retry ? "alert" : undefined}>
         {body}
       </p>
       {action}
       {retry ? (
-        <button
-          className="inline-flex min-h-11 items-center bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+        <StoreButton
           onClick={() => {
             retry.onRetry();
           }}
+          size="lg"
           type="button"
         >
           {retry.label}
-        </button>
+        </StoreButton>
       ) : null}
     </main>
   );

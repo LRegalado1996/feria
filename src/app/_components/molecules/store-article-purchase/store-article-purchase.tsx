@@ -1,8 +1,9 @@
 "use client";
 
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
 import { useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
@@ -18,13 +19,11 @@ export interface StoreArticlePurchaseProps {
   productId: number;
 }
 
-const STEP_CLASS =
-  "inline-flex size-11 items-center justify-center border-2 border-store-contrast text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:opacity-40";
-
 /**
- * How many to take and the button that adds them (FER-024), from 1 to the
- * per-article cap; what adding did is said in a polite live region, a
- * repeat included.
+ * How many to take and the button that adds them (FER-024): a pill with the
+ * two steps and the count, beside the page's one primary pill, which takes
+ * the rest of the row (FER-039). From 1 to the per-article cap; what adding
+ * did is said in a polite live region, a repeat included.
  */
 function StoreArticlePurchase({
   className,
@@ -45,67 +44,73 @@ function StoreArticlePurchase({
       className={cn("flex flex-col gap-3", className)}
       data-slot="store-article-purchase"
     >
-      <fieldset className="flex items-center gap-3">
-        {/* Floated so it sits beside the stepper; a legend ignores flex. */}
-        <legend className="float-left mr-3 text-sm font-semibold">
-          {copy.quantity}
-        </legend>
-        <div className="flex items-center">
-          <button
-            className={STEP_CLASS}
+      {/* On a narrow phone the button drops under the quantity rather
+          than squeezing it. */}
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        <fieldset className="inline-flex h-13 shrink-0 items-center rounded-full border-2 border-store-foreground px-0.5">
+          {/* Its steps say what they do; the group's name is for a screen
+              reader, which hears it on entering. */}
+          <legend className="sr-only">{copy.quantity}</legend>
+          <StoreButton
             disabled={quantity <= 1}
             onClick={() => {
               setQuantity((value) => Math.max(value - 1, 1));
             }}
+            size="icon"
             type="button"
+            variant="ghost"
           >
             <Minus aria-hidden="true" className="size-4" />
             <span className="sr-only">{copy.decrease}</span>
-          </button>
+          </StoreButton>
           <output
             aria-live="polite"
-            className="inline-flex h-11 min-w-12 items-center justify-center border-y-2 border-store-contrast font-display text-2xl leading-none tracking-display tabular-nums"
+            className="min-w-8 text-center text-base font-semibold tabular-nums"
             data-testid="store-article-quantity"
           >
             {quantity}
           </output>
-          <button
-            className={STEP_CLASS}
+          <StoreButton
             disabled={quantity >= CART_QUANTITY_MAX}
             onClick={() => {
               setQuantity((value) => Math.min(value + 1, CART_QUANTITY_MAX));
             }}
+            size="icon"
             type="button"
+            variant="ghost"
           >
             <Plus aria-hidden="true" className="size-4" />
             <span className="sr-only">{copy.increase}</span>
-          </button>
-        </div>
-      </fieldset>
-      <button
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!hydrated}
-        onClick={() => {
-          const had =
-            items.find((item) => item.productId === productId)?.quantity ?? 0;
-          const outcome = add(productId, quantity, priceAmount);
-          // The cart keeps at most the cap of one article: when it took
-          // fewer than chosen, the shopper is told how many, not "added".
-          const added = Math.min(quantity, CART_QUANTITY_MAX - had);
-          const text =
-            outcome === "added" && added < quantity
-              ? interpolate(copy.addedCapped, {
-                  added,
-                  max: CART_QUANTITY_MAX,
-                })
-              : addOutcomeMessage(outcome, storefront.catalog);
-          setStatus((previous) => ({ count: previous.count + 1, text }));
-        }}
-        type="button"
-      >
-        <ShoppingBag aria-hidden="true" className="size-5" />
-        {copy.addToCart}
-      </button>
+          </StoreButton>
+        </fieldset>
+        <StoreButton
+          // Beside the quantity only where its label fits on one line there;
+          // otherwise (a phone, the article's column on a computer) it takes
+          // a row of its own, full width, rather than breaking its label.
+          className="min-w-0 grow basis-60 px-5 text-center text-xs whitespace-normal"
+          disabled={!hydrated}
+          onClick={() => {
+            const had =
+              items.find((item) => item.productId === productId)?.quantity ?? 0;
+            const outcome = add(productId, quantity, priceAmount);
+            // The cart keeps at most the cap of one article: when it took
+            // fewer than chosen, the shopper is told how many, not "added".
+            const added = Math.min(quantity, CART_QUANTITY_MAX - had);
+            const text =
+              outcome === "added" && added < quantity
+                ? interpolate(copy.addedCapped, {
+                    added,
+                    max: CART_QUANTITY_MAX,
+                  })
+                : addOutcomeMessage(outcome, storefront.catalog);
+            setStatus((previous) => ({ count: previous.count + 1, text }));
+          }}
+          size="lg"
+          type="button"
+        >
+          {copy.addToCart}
+        </StoreButton>
+      </div>
       <output aria-live="polite" className="text-sm text-store-muted">
         {status.text}
         {/* An invisible mark that alternates, so a repeated message is new. */}

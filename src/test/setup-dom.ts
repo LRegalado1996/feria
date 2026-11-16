@@ -50,6 +50,13 @@ class ResizeObserverStub implements ResizeObserver {
 
 globalThis.ResizeObserver ??= ResizeObserverStub;
 
+// A browser hides a closed popover with its own stylesheet, which happy-dom
+// does not have; without this rule what a closed popover holds counts as
+// visible to Testing Library's role queries. No test opens one.
+const popoverStyle = document.createElement("style");
+popoverStyle.textContent = "[popover] { display: none; }";
+document.head.append(popoverStyle);
+
 // `globals: false` means Testing Library cannot find a global `afterEach` to
 // register its own cleanup, so it is registered here.
 afterEach(() => {

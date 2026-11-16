@@ -20,7 +20,12 @@ describe("StoreChip", () => {
     expect(chip.tagName).toBe("SPAN");
     expect(chip).toHaveAttribute("data-slot", "store-chip");
     expect(chip).toHaveAttribute("data-selected", "false");
-    expect(chip).toHaveClass("min-h-11", "border", "text-store-foreground");
+    expect(chip).toHaveClass(
+      "min-h-11",
+      "rounded-full",
+      "border-2",
+      "text-store-foreground"
+    );
     expect(chip).not.toHaveClass("bg-store-foreground");
   });
 

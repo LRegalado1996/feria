@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 
 import { BasePage } from "./base.page";
 
@@ -26,7 +26,7 @@ export class StorePage extends BasePage {
     return this.getByTestId("store-theme");
   }
 
-  /** The block the store's name sits on, in the theme's contrast color. */
+  /** The home's intro, where the store's name sits on the white page. */
   getHeader(): Locator {
     return this.getByTestId("store-intro-header").filter({ visible: true });
   }
@@ -43,6 +43,39 @@ export class StorePage extends BasePage {
   /** The cart's link in the header, named after its count. */
   getCartButton(): Locator {
     return this.getByTestId("store-cart-button").filter({ visible: true });
+  }
+
+  /** The lime line above the header, with the store's tagline (FER-039). */
+  getAnnouncementBar(): Locator {
+    return this.getByTestId("store-announcement-bar").filter({
+      visible: true,
+    });
+  }
+
+  /** The header's search icon, which opens the search panel. */
+  getSearchButton(): Locator {
+    return this.getByTestId("store-search-button").filter({ visible: true });
+  }
+
+  /**
+   * The search icon once React owns it, ready to open the dialog. Before
+   * then it opens the browser's own plain panel, which covers the header
+   * until it is closed; the icon drops its `popovertarget` when React takes
+   * over, so that is what this waits for.
+   */
+  async getLiveSearchButton(): Promise<Locator> {
+    const button = this.getSearchButton();
+    await this.expectVisible(button, 60_000);
+    await expect(button).not.toHaveAttribute("popovertarget", {
+      timeout: 60_000,
+    });
+
+    return button;
+  }
+
+  /** The dark panel under the header, with the one search field. */
+  getSearchPanel(): Locator {
+    return this.getByTestId("store-search-panel").filter({ visible: true });
   }
 
   /** The phone menu's button, by its name in the page's language. */

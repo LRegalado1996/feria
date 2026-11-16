@@ -22,18 +22,30 @@ test.describe("Storefront design system", () => {
 
       await expect(designPage.getHeading(1)).toHaveText("Sistema de diseño");
       await expect(page.locator("html")).toHaveAttribute("lang", "es");
-      await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      await expect(
+        designPage.getByTestId("design-page").getByRole("heading", {
+          level: 2,
+        })
+      ).toHaveText([
         "Logo",
+        "Colores",
         "Titulares",
-        "Chips y avisos",
+        "Botones",
+        "Chips y etiquetas",
         "Precio",
         "Enlace con flecha",
         "Número que cuenta",
-        "Tarjeta de artículo y carrusel",
+        "Fila de artículos",
+        "Banner",
+        "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",
         "Aparición al bajar",
-        "Encabezado y pie de cada tienda",
+        "Barra, encabezado y pie",
+        // The sample footer's own headings close the gallery.
+        "Tienda",
+        "Ayuda",
+        "Seguinos",
       ]);
       await expect(
         designPage.getSection("cards").getByRole("article")
@@ -51,9 +63,12 @@ test.describe("Storefront design system", () => {
 
     await expect(designPage.getHeading(1)).toHaveText("Design system");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    // The large price, then the reduced one, read with what it cost before.
     await expect(
-      designPage.getSection("price").getByText("UYU 1,290", { exact: true })
-    ).toBeVisible();
+      designPage
+        .getSection("price")
+        .locator('[data-slot="store-price-tag"][data-size="lg"]')
+    ).toHaveText("UYU 1,290");
     await expect(
       designPage.getSection("price").getByText("Was UYU 1,290")
     ).toBeVisible();
@@ -128,57 +143,122 @@ test.describe("Storefront design system", () => {
     await designPage.expectNoHorizontalScroll();
   });
 
-  test("the slider moves with its buttons and the counter follows", async ({
+  test("the row's round arrow pages through the cards, then leads back to the start", async ({
     page,
   }) => {
     await page.setViewportSize(PHONE);
     const designPage = new DesignPage(page);
     await designPage.goto();
-    const cards = designPage.getSection("cards");
-    const next = cards.getByRole("button", { name: "Siguiente" });
-    const previous = cards.getByRole("button", { name: "Anterior" });
+    const row = designPage.getRow();
+    const next = row.getByRole("button", { name: "Ver más de Novedades" });
+    const restart = row.getByRole("button", {
+      name: "Volver al principio de Novedades",
+    });
+    await row.scrollIntoViewIfNeeded();
 
-    await expect(designPage.getSliderPosition()).toHaveText("1 / 6");
-    await expect(previous).toHaveAttribute("aria-disabled", "true");
-
-    // A click before React owns the button is lost. It is repeated only
-    // while the slider has not left the start, so exactly one lands.
+    // A click before React owns the arrow is lost. It is repeated only while
+    // the row has not left its start, so exactly one lands.
     await expect(async () => {
-      const scrolled = await designPage
-        .getSliderTrack()
-        .evaluate((track) => track.scrollLeft);
-
-      if (scrolled === 0) {
+      if ((await designPage.firstCardOffset()) === 0) {
         await next.click();
       }
 
-      await expect(previous).toHaveAttribute("aria-disabled", "false", {
-        timeout: 1000,
-      });
+      await expect
+        .poll(async () => await designPage.firstCardOffset(), {
+          timeout: 1000,
+        })
+        .toBeLessThan(0);
     }).toPass();
-    await expect(designPage.getSliderPosition()).not.toHaveText("1 / 6");
 
-    // One "next" moved less than a screenful, so one "previous" undoes it.
-    await previous.click();
+    // The arrow pages until the last card is in view, then turns back.
+    await expect(async () => {
+      if (await next.isVisible()) {
+        await next.click();
+      }
 
-    await expect(designPage.getSliderPosition()).toHaveText("1 / 6");
-    await expect(previous).toHaveAttribute("aria-disabled", "true");
+      await expect(restart).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await restart.click();
+
+    await expect.poll(async () => await designPage.firstCardOffset()).toBe(0);
+    await expect(next).toBeVisible();
   });
 
-  test("the slider scrolls with the arrow keys once it has focus", async ({
+  test("the row steps with the arrow keys while a card has focus", async ({
     page,
   }) => {
     await page.setViewportSize(PHONE);
     const designPage = new DesignPage(page);
     await designPage.goto();
-    const track = designPage.getSliderTrack();
+    const firstCard = designPage
+      .getRow()
+      .getByRole("link", { name: "Collar de perlas" });
+    await firstCard.scrollIntoViewIfNeeded();
 
-    await track.focus();
-    await page.keyboard.press("ArrowRight");
+    // A key pressed before React owns the row moves nothing: pressed again
+    // only while the row still rests at its start.
+    await expect(async () => {
+      if ((await designPage.firstCardOffset()) === 0) {
+        await firstCard.focus();
+        await page.keyboard.press("ArrowRight");
+      }
 
-    await expect
-      .poll(async () => await track.evaluate((element) => element.scrollLeft))
-      .toBeGreaterThan(0);
+      await expect
+        .poll(async () => await designPage.firstCardOffset(), {
+          timeout: 1000,
+        })
+        .toBeLessThan(0);
+    }).toPass();
+  });
+
+  test("the cover moves to its next banner on its own, and its pause button says it stopped", async ({
+    page,
+  }) => {
+    const designPage = new DesignPage(page);
+    await designPage.goto();
+    const cover = designPage.getCover();
+    await cover.scrollIntoViewIfNeeded();
+    // Moving the pointer off the cover: hovering it holds it.
+    await page.mouse.move(0, 0);
+
+    // Each banner stays six seconds before the next one comes.
+    await expect(
+      cover.getByRole("button", { name: "Ver la portada 2" })
+    ).toHaveAttribute("aria-current", "true", { timeout: 15_000 });
+
+    const pause = cover.getByRole("button", { name: "Pausar la portada" });
+    await pause.click();
+    await expect(pause).toHaveAttribute("aria-pressed", "true");
+    // Still, it announces the banner a dot shows.
+    await expect(cover.locator('[data-slot="carousel-track"]')).toHaveAttribute(
+      "aria-live",
+      "polite"
+    );
+    await cover.getByRole("button", { name: "Ver la portada 3" }).click();
+    await expect(
+      cover.getByRole("button", { name: "Ver la portada 3" })
+    ).toHaveAttribute("aria-current", "true");
+  });
+
+  test("under reduced motion the cover stays still and offers no pause button", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const designPage = new DesignPage(page);
+    await designPage.goto();
+    const cover = designPage.getCover();
+    await cover.scrollIntoViewIfNeeded();
+
+    await expect(
+      cover.getByRole("button", { name: "Ver la portada 1" })
+    ).toHaveAttribute("aria-current", "true");
+    await expect(
+      cover.getByRole("button", { name: "Pausar la portada" })
+    ).toHaveCount(0);
+    await expect(cover.locator('[data-slot="carousel-track"]')).toHaveAttribute(
+      "aria-live",
+      "polite"
+    );
   });
 
   test("a block below the fold waits, then reveals when scrolled to", async ({

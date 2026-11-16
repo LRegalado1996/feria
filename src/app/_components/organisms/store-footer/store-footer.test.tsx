@@ -11,6 +11,11 @@ type Store = StoreFooterProps["store"];
 const INSTAGRAM = "https://instagram.com/lrmarket";
 const TIKTOK = "https://tiktok.com/@lrmarket";
 
+const CATEGORIES = [
+  { lang: "es", name: "Anillos", slug: "anillos" },
+  { lang: "es", name: "Aros", slug: "aros" },
+];
+
 function makeStore(overrides: Partial<Store> = {}): Store {
   return {
     instagramUrl: null,
@@ -22,18 +27,22 @@ function makeStore(overrides: Partial<Store> = {}): Store {
 }
 
 function setup({
+  categories = CATEGORIES,
   locale = "en",
   store = makeStore(),
   tagline = null,
 }: {
+  categories?: StoreFooterProps["categories"];
   locale?: Locale;
   store?: Store;
   tagline?: StoreFooterProps["tagline"];
 } = {}) {
   render(
     <StoreFooter
+      categories={categories}
       className="custom"
       copy={DICTIONARIES[locale].storefront.shell}
+      locale={locale}
       store={store}
       tagline={tagline}
     />
@@ -42,11 +51,15 @@ function setup({
 
   return {
     footer,
-    /** Each social link's name and address, in order. */
-    links: () =>
+    /** The links that leave the site, but the credit: name and address. */
+    outside: () =>
       within(footer)
         .queryAllByRole("link")
-        .filter((link) => link.dataset.testid !== "store-footer-credit")
+        .filter(
+          (link) =>
+            link.getAttribute("target") === "_blank" &&
+            link.dataset.testid !== "store-footer-credit"
+        )
         .map((link) => [link.textContent, link.getAttribute("href")]),
   };
 }
@@ -63,24 +76,111 @@ describe("StoreFooter", () => {
     [{ tiktokUrl: TIKTOK }, [TT]],
     [{ whatsappNumber: "+598 99 123 456" }, [WA]],
     [{ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }, [IG, TT]],
-    [{ instagramUrl: INSTAGRAM, whatsappNumber: "+59899123456" }, [IG, WA]],
-    [{ tiktokUrl: TIKTOK, whatsappNumber: "+598-99-123-456" }, [TT, WA]],
+    [{ instagramUrl: INSTAGRAM, whatsappNumber: "+59899123456" }, [WA, IG]],
+    [{ tiktokUrl: TIKTOK, whatsappNumber: "+598-99-123-456" }, [WA, TT]],
     [
       {
         instagramUrl: INSTAGRAM,
         tiktokUrl: TIKTOK,
         whatsappNumber: "+598 99 123 456",
       },
-      [IG, TT, WA],
+      [WA, IG, TT],
     ],
-  ])("with %j, links exactly %j", (overrides, expected) => {
-    const { footer, links } = setup({ store: makeStore(overrides) });
+  ])("with %j, links out to exactly %j", (overrides, expected) => {
+    const { outside } = setup({ store: makeStore(overrides) });
 
-    expect(links()).toEqual(expected);
-    // No empty list is left behind when the store has no links.
-    expect(within(footer).queryByRole("list") === null).toBe(
-      expected.length === 0
+    expect(outside()).toEqual(expected);
+  });
+
+  test("leaves out the follow section when the store has no social link", () => {
+    const { footer } = setup({ store: makeStore({ whatsappNumber: "+1" }) });
+
+    expect(
+      within(footer).queryByRole("heading", { name: "Follow us" })
+    ).toBeNull();
+  });
+
+  test.each([
+    ["en", "Shop", "Catalog", "/en/products", "/en/products?category=anillos"],
+    ["es", "Tienda", "Catálogo", "/products", "/products?category=anillos"],
+  ] as const)(
+    "in %s, the %s links lead to the catalog and to each category",
+    (locale, heading, catalog, catalogHref, ringsHref) => {
+      const { footer } = setup({ locale });
+
+      const shop = within(
+        within(footer).getByRole("navigation", { name: heading })
+      );
+      expect(
+        shop
+          .getAllByRole("link")
+          .map((link) => [link.textContent, link.getAttribute("href")])
+      ).toEqual([
+        [catalog, catalogHref],
+        ["Anillos", ringsHref],
+        [
+          "Aros",
+          locale === "en"
+            ? "/en/products?category=aros"
+            : "/products?category=aros",
+        ],
+      ]);
+      expect(shop.getByRole("link", { name: "Anillos" })).toHaveAttribute(
+        "lang",
+        "es"
+      );
+    }
+  );
+
+  test("with no category, the shop links lead to the catalog alone", () => {
+    const { footer } = setup({ categories: [] });
+
+    const shop = within(
+      within(footer).getByRole("navigation", { name: "Shop" })
     );
+    expect(shop.getAllByRole("link")).toHaveLength(1);
+  });
+
+  test.each([
+    ["en", "Help", "Pick what you like, add it to the cart"],
+    ["es", "Ayuda", "Elegí lo que te guste, agregalo al carrito"],
+  ] as const)("in %s, %s says how to order", (locale, heading, howTo) => {
+    const { footer } = setup({ locale });
+
+    const help = within(footer).getByRole("region", { name: heading });
+    expect(help).toHaveTextContent(howTo);
+  });
+
+  test.each([
+    ["en", "/en", "LR Market, go to the home page"],
+    ["es", "/", "LR Market, ir al inicio"],
+  ] as const)(
+    "in %s, leads home at %s from the full logo",
+    (locale, href, name) => {
+      const { footer } = setup({ locale });
+
+      const home = within(footer).getByRole("link", { name });
+      expect(home).toHaveAttribute("href", href);
+      expect(home.querySelector('[data-slot="store-logo"]')).toHaveAttribute(
+        "data-variant",
+        "full"
+      );
+    }
+  );
+
+  test("its headings are the accent on the moss, in the display face", () => {
+    const { footer } = setup({ store: makeStore({ tiktokUrl: TIKTOK }) });
+
+    expect(footer).toHaveClass("bg-store-contrast", "text-store-background");
+    for (const heading of within(footer).getAllByRole("heading", {
+      level: 2,
+    })) {
+      expect(heading).toHaveClass(
+        "text-store-accent",
+        "font-display",
+        "uppercase"
+      );
+    }
   });
 
   test("says, out of sight, that each outside link opens a new tab", () => {
@@ -108,17 +208,21 @@ describe("StoreFooter", () => {
       }),
     });
 
+    const outside = within(footer)
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("href")?.startsWith("https://"));
     expect(
-      within(footer)
-        .getAllByRole("link")
-        .map((link) => [link.getAttribute("target"), link.getAttribute("rel")])
+      outside.map((link) => [
+        link.getAttribute("target"),
+        link.getAttribute("rel"),
+      ])
     ).toEqual(
       Array.from({ length: 4 }, () => ["_blank", "noopener noreferrer"])
     );
   });
 
-  test("names the social links in Spanish on a Spanish page", () => {
-    const { links } = setup({
+  test("names the outside links in Spanish on a Spanish page", () => {
+    const { outside } = setup({
       locale: "es",
       store: makeStore({
         instagramUrl: INSTAGRAM,
@@ -127,10 +231,10 @@ describe("StoreFooter", () => {
       }),
     });
 
-    expect(links().map(([name]) => name)).toEqual([
+    expect(outside().map(([name]) => name)).toEqual([
+      "Escribinos por WhatsApp (se abre en otra pestaña)",
       "Instagram de LR Market (se abre en otra pestaña)",
       "TikTok de LR Market (se abre en otra pestaña)",
-      "Escribinos por WhatsApp (se abre en otra pestaña)",
     ]);
   });
 
@@ -148,7 +252,7 @@ describe("StoreFooter", () => {
   test("shows no tagline when the store has none", () => {
     const { footer } = setup();
 
-    expect(footer.querySelector("p")).toBeNull();
+    expect(footer.querySelector("p[lang]")).toBeNull();
   });
 
   test.each([
@@ -159,12 +263,16 @@ describe("StoreFooter", () => {
       "Hecho por Lucas Regalado (se abre en otra pestaña)",
     ],
   ] as const)(
-    "in %s, is named and credits Lucas Regalado",
+    "in %s, is named, signs with the store and credits Lucas Regalado",
     (locale, name, credit) => {
-      const { footer } = setup({ locale });
+      const { footer } = setup({
+        locale,
+        store: makeStore({ name: "Tienda Uno" }),
+      });
 
       expect(footer).toHaveAccessibleName(name);
       expect(footer).toHaveClass("custom");
+      expect(within(footer).getByText("© Tienda Uno")).toBeVisible();
       expect(CREDIT_URL).toBe("https://lucasregalado.com");
       expect(
         within(footer).getByRole("link", { name: credit })

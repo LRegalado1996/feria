@@ -2,13 +2,15 @@
 
 import { useEffect } from "react";
 
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreStatusPage } from "@/app/_components/organisms/store-status-page";
 import { reportError } from "@/lib/errors/client";
-import { useDictionary } from "@/lib/hooks/i18n";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 
 /**
- * A page of the store that threw while rendering, under the store's header:
- * reported once, with a retry.
+ * A page of the store that threw while rendering, in the store's frame:
+ * reported once, with a retry. It replaces the page, frame included, so it
+ * brings its own, without the bar or the categories it cannot read.
  */
 export default function StoreError({
   error,
@@ -17,7 +19,8 @@ export default function StoreError({
   error: unknown;
   retry: () => void;
 }) {
-  const copy = useDictionary().storefront.shell.error;
+  const { shell } = useDictionary().storefront;
+  const locale = useLocale();
 
   useEffect(() => {
     // Reporting is the external system this effect synchronises with.
@@ -25,10 +28,12 @@ export default function StoreError({
   }, [error]);
 
   return (
-    <StoreStatusPage
-      body={copy.body}
-      retry={{ label: copy.retry, onRetry: retry }}
-      title={copy.title}
-    />
+    <StoreFrame copy={shell} locale={locale}>
+      <StoreStatusPage
+        body={shell.error.body}
+        retry={{ label: shell.error.retry, onRetry: retry }}
+        title={shell.error.title}
+      />
+    </StoreFrame>
   );
 }

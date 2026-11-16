@@ -61,14 +61,14 @@ function setup({
       className="custom"
       copy={DICTIONARIES[locale].storefront.catalog}
       filters={FILTERS}
-      idPrefix="sidebar"
+      idPrefix="panel"
       locale={locale}
       query={query}
     />
   );
 
-  /** The links in a group, as name, address and whether it is the current one. */
-  const linksIn = (scope: HTMLElement) =>
+  /** The choices in a group, as name, address and whether it is chosen. */
+  const choicesIn = (scope: HTMLElement) =>
     within(scope)
       .getAllByRole("link")
       .map((link) => [
@@ -87,15 +87,19 @@ function setup({
     return scope;
   };
 
-  return { container, group, linksIn };
+  return {
+    choicesIn,
+    group,
+    root: container.querySelector('[data-slot="store-catalog-filters"]'),
+  };
 }
 
 describe("StoreCatalogFilters", () => {
   test("lists the categories after All, keeping the rest of the selection", () => {
-    const { linksIn } = setup();
+    const { choicesIn } = setup();
 
     const nav = screen.getByRole("navigation", { name: "Categorías" });
-    expect(linksIn(nav)).toEqual([
+    expect(choicesIn(nav)).toEqual([
       ["Todas", "/products?sort=price_asc", "true"],
       ["Collares", "/products?category=collares&sort=price_asc", null],
       ["Rings", "/products?category=anillos&sort=price_asc", null],
@@ -107,13 +111,13 @@ describe("StoreCatalogFilters", () => {
   });
 
   test("marks the chosen category, whose link takes it out again", () => {
-    const { linksIn } = setup({
+    const { choicesIn } = setup({
       locale: "en",
       query: makeQuery({ category: "collares" }),
     });
 
     expect(
-      linksIn(screen.getByRole("navigation", { name: "Categories" }))
+      choicesIn(screen.getByRole("navigation", { name: "Categories" }))
     ).toEqual([
       ["All", "/en/products", null],
       ["Collares", "/en/products", "true"],
@@ -122,73 +126,120 @@ describe("StoreCatalogFilters", () => {
   });
 
   test("leaves the categories out for a store with none", () => {
-    const { container } = setup({ categories: [] });
+    const { root } = setup({ categories: [] });
 
     expect(screen.queryByRole("navigation")).toBeNull();
-    expect(container.querySelector("#sidebar-categories")).toBeNull();
+    expect(root?.querySelector("#panel-categories")).toBeNull();
   });
 
   test("lists each filter's values under its heading, with their counts, as toggles", () => {
-    const { group, linksIn } = setup({
+    const { choicesIn, group } = setup({
       query: makeQuery({
         filters: [{ attribute: "color", values: ["dorado"] }],
       }),
     });
 
-    expect(linksIn(group("sidebar-color"))).toEqual([
-      ["Dorado(4)", "/products", "true"],
-      ["Plateado(1)", "/products?color=dorado,plateado", null],
+    expect(choicesIn(group("panel-color"))).toEqual([
+      ["Dorado4", "/products", "true"],
+      ["Plateado1", "/products?color=dorado,plateado", null],
     ]);
-    expect(linksIn(group("sidebar-talle"))).toEqual([
-      ["M(3)", "/products?color=dorado&talle=m", null],
+    expect(choicesIn(group("panel-talle"))).toEqual([
+      ["M3", "/products?color=dorado&talle=m", null],
     ]);
+    expect(screen.getByRole("list", { name: "Color" }).closest("div")).toBe(
+      group("panel-color")
+    );
   });
 
-  test("names every heading by its prefix and filter, in the language it is in", () => {
-    const { container } = setup();
+  test("names every group by its prefix and filter, in the language it is in, under the panel's title", () => {
+    const { root } = setup();
 
     expect(
-      [...container.querySelectorAll("h2")].map((heading) => [
+      [...(root?.querySelectorAll("h3") ?? [])].map((heading) => [
         heading.id,
         heading.textContent,
         heading.getAttribute("lang"),
       ])
     ).toEqual([
-      ["sidebar-categories", "Categorías", null],
-      ["sidebar-color", "Color", "es"],
-      ["sidebar-talle", "Size", "en"],
+      ["panel-categories", "Categorías", null],
+      ["panel-color", "Color", "es"],
+      ["panel-talle", "Size", "en"],
     ]);
+    expect(root?.querySelector("h2")).toBeNull();
   });
 
-  test("marks each value with its language, and a swatch only where it has one", () => {
-    const { group } = setup();
-
-    const dorado = within(group("sidebar-color")).getByRole("link", {
-      name: "Dorado (4)",
-    });
-    const swatch = dorado.querySelector('[aria-hidden="true"]');
-    expect(swatch).toHaveStyle({ backgroundColor: "#d4af37" });
-    expect(dorado).toHaveAttribute("lang", "es");
-    expect(
-      within(group("sidebar-color"))
-        .getByRole("link", { name: "Plateado (1)" })
-        .querySelector('[aria-hidden="true"]')
-    ).toBeNull();
-    expect(
-      within(group("sidebar-talle")).getByRole("link", { name: "M (3)" })
-    ).toHaveAttribute("lang", "en");
-  });
-
-  test("mutes the count of a value not chosen", () => {
+  test("ticks the box of a chosen choice only", () => {
     const { group } = setup({
       query: makeQuery({
         filters: [{ attribute: "color", values: ["dorado"] }],
       }),
     });
 
-    const counts = within(group("sidebar-color"))
-      .getAllByText(/^\(\d+\)$/u)
-      .map((count) => count.className);
-    expect(counts).toEqual(["", "text-store-muted"]);
+    const [dorado, plateado] = within(group("panel-color")).getAllByRole(
+      "link"
+    );
+    const box = (link: HTMLElement | undefined) =>
+      link?.querySelector('[data-slot="store-catalog-choice-box"]');
+    expect(dorado).toHaveAttribute("data-chosen", "true");
+    expect(box(dorado)).toHaveClass("bg-store-foreground");
+    expect(box(dorado)?.querySelector("svg")).not.toBeNull();
+    expect(plateado).toHaveAttribute("data-chosen", "false");
+    expect(box(plateado)).not.toHaveClass("bg-store-foreground");
+    expect(box(plateado)?.querySelector("svg")).toBeNull();
+    expect(box(dorado)).toHaveAttribute("aria-hidden", "true");
+  });
+
+  test("marks each value with its language, and a round swatch only where it has one", () => {
+    const { group } = setup();
+
+    const dorado = within(group("panel-color")).getByRole("link", {
+      name: "Dorado 4",
+    });
+    const swatch = dorado.querySelector(
+      '[data-slot="store-catalog-choice-swatch"]'
+    );
+    expect(swatch).toHaveStyle({ backgroundColor: "#d4af37" });
+    expect(swatch).toHaveClass("rounded-full");
+    expect(swatch).toHaveAttribute("aria-hidden", "true");
+    expect(dorado).toHaveAttribute("lang", "es");
+    expect(
+      within(group("panel-color"))
+        .getByRole("link", { name: "Plateado 1" })
+        .querySelector('[data-slot="store-catalog-choice-swatch"]')
+    ).toBeNull();
+    expect(
+      within(group("panel-talle")).getByRole("link", { name: "M 3" })
+    ).toHaveAttribute("lang", "en");
+  });
+
+  test("shows each count muted, and none for All", () => {
+    const { group } = setup();
+
+    const counts = within(group("panel-color"))
+      .getAllByText(/^\d+$/u)
+      .map((count) => [count.textContent, count.className]);
+    expect(counts).toEqual([
+      ["4", "text-xs text-store-muted tabular-nums"],
+      ["1", "text-xs text-store-muted tabular-nums"],
+    ]);
+    expect(screen.getByRole("link", { name: "Todas" }).textContent).toBe(
+      "Todas"
+    );
+  });
+
+  test("each choice is a row a thumb can tap, that keeps the page where it is", () => {
+    setup();
+
+    const choice = screen.getByRole("link", { name: "Collares" });
+    expect(choice).toHaveClass(
+      "min-h-11",
+      "focus-visible:outline-store-foreground"
+    );
+  });
+
+  test("keeps a caller's class", () => {
+    const { root } = setup();
+
+    expect(root).toHaveClass("custom", "flex");
   });
 });

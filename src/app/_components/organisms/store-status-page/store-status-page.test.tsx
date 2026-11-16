@@ -28,12 +28,21 @@ describe("StoreStatusPage", () => {
   test("says what happened in a heading and a body", () => {
     const { page } = setup();
 
-    expect(
-      screen.getByRole("heading", {
-        level: 1,
-        name: "We could not find this page",
-      })
-    ).toBeVisible();
+    const heading = screen.getByRole("heading", {
+      level: 1,
+      name: "We could not find this page",
+    });
+    expect(heading).toBeVisible();
+    // The page's title in the wide display face; the body in the body face.
+    expect(heading).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "uppercase",
+      "store-display-page"
+    );
+    expect(screen.getByText("The link may be old.")).not.toHaveClass(
+      "font-display"
+    );
     expect(screen.getByText("The link may be old.")).toBeVisible();
     expect(page).toHaveClass("custom");
     expect(screen.queryByRole("button")).toBeNull();
@@ -58,9 +67,13 @@ describe("StoreStatusPage", () => {
       /^The link may be old\.$/u
     );
 
-    await userEvent
-      .setup()
-      .click(screen.getByRole("button", { name: "Try again" }));
+    const retry = screen.getByRole("button", { name: "Try again" });
+    // The one way out: the store's primary pill.
+    expect(retry).toHaveAttribute("data-slot", "store-button");
+    expect(retry).toHaveAttribute("data-variant", "primary");
+    expect(retry).toHaveAttribute("type", "button");
+
+    await userEvent.setup().click(retry);
 
     expect(onRetry.mock.calls).toEqual([[]]);
   });

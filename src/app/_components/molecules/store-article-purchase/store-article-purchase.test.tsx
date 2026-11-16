@@ -85,6 +85,29 @@ describe("StoreArticlePurchase", () => {
     expect(message()?.textContent).toBe("");
   });
 
+  test("draws the quantity as a pill beside the page's one primary pill, which takes the rest of the row", () => {
+    const { decrease, group, increase } = setup();
+
+    expect(group()).toHaveClass(
+      "rounded-full",
+      "border-2",
+      "border-store-foreground",
+      "h-13"
+    );
+    for (const step of [decrease(), increase()]) {
+      expect(step).toHaveAttribute("data-slot", "store-button");
+      expect(step).toHaveAttribute("data-size", "icon");
+    }
+    const add = screen.getByRole("button", { name: "Agregar al carrito" });
+    expect(add).toHaveAttribute("data-variant", "primary");
+    expect(add).toHaveAttribute("data-size", "lg");
+    // Beside the quantity, in one row that wraps where the column is narrow:
+    // there the button, at least 240 px, takes a full-width row of its own.
+    expect(add).toHaveClass("grow", "basis-60");
+    expect(add.parentElement).toBe(group().parentElement);
+    expect(add.parentElement).toHaveClass("flex-wrap");
+  });
+
   test("steps the quantity up to 10 and back down to 1, no further either way", async () => {
     const { decrease, increase, quantity, user } = setup();
 

@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
-import { StoreHeading, type StoreHeadingProps } from "./store-heading";
+import {
+  StoreHeading,
+  type StoreHeadingProps,
+  storeHeadingVariants,
+} from "./store-heading";
 
 const LINES = ["See you", "at the fair"] as const;
 
@@ -20,7 +24,7 @@ function setup(props: Partial<StoreHeadingProps> = {}) {
 }
 
 describe("StoreHeading", () => {
-  test("is an h2 in the display face at the section size by default", () => {
+  test("is an h2 in the wide display face, extra bold, at the section size by default", () => {
     const { heading } = setup();
 
     expect(heading.tagName).toBe("H2");
@@ -28,21 +32,29 @@ describe("StoreHeading", () => {
     expect(heading).toHaveAttribute("data-size", "section");
     expect(heading).toHaveClass(
       "font-display",
+      "font-extrabold",
       "uppercase",
       "leading-display",
       "store-display-section"
     );
+    // The condensed face's tracking and regular weight are gone.
+    expect(heading).not.toHaveClass("tracking-display");
+    expect(heading).not.toHaveClass("font-normal");
   });
 
-  test.each([
-    ["hero", "store-display-hero"],
-    ["title", "store-display-title"],
-  ] as const)("the %s size carries %s", (size, expected) => {
-    const { heading } = setup({ size });
+  test("the hero size carries the hero's fluid size", () => {
+    const { heading } = setup({ size: "hero" });
 
-    expect(heading).toHaveAttribute("data-size", size);
-    expect(heading).toHaveClass(expected);
+    expect(heading).toHaveAttribute("data-size", "hero");
+    expect(heading).toHaveClass("store-display-hero");
     expect(heading).not.toHaveClass("store-display-section");
+  });
+
+  test("exposes its sizes", () => {
+    expect(storeHeadingVariants({ size: "hero" })).toContain(
+      "store-display-hero"
+    );
+    expect(storeHeadingVariants()).toContain("store-display-section");
   });
 
   test.each([

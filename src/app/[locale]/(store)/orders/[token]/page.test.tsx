@@ -10,11 +10,31 @@ import { DICTIONARIES } from "@/test/i18n";
 
 import OrderPage, { generateMetadata, instant } from "./page";
 
-const { getByToken, orderProps, readStore } = vi.hoisted(() => ({
-  getByToken:
-    vi.fn<(input: { token: string }) => Promise<StoreOrderProps["order"]>>(),
-  orderProps: vi.fn<(props: StoreOrderProps) => void>(),
-  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+const { frameProps, getByToken, orderProps, readStore, shellOf } = vi.hoisted(
+  () => ({
+    frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
+    getByToken:
+      vi.fn<(input: { token: string }) => Promise<StoreOrderProps["order"]>>(),
+    orderProps: vi.fn<(props: StoreOrderProps) => void>(),
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
+    shellOf: vi.fn((store: { name: string }, locale: string) => ({
+      shellOf: `${store.name} ${locale}`,
+    })),
+  })
+);
+
+// The frame's parts have their own tests (`store-shell.test.ts`).
+vi.mock("../../store-shell", () => ({ shellOf }));
+
+// The frame has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-frame", () => ({
+  StoreFrame: ({
+    children,
+    ...props
+  }: Record<string, unknown> & { children: ReactNode }) => {
+    frameProps(props);
+    return <div data-testid="store-frame">{children}</div>;
+  },
 }));
 
 // `server-only` throws on import outside a React Server Components build.
@@ -158,6 +178,21 @@ describe("OrderPage", () => {
       expect(getByToken).toHaveBeenCalledExactlyOnceWith({ token: TOKEN });
     }
   );
+
+  test("sits in the store's frame, made from the store it read, in the page's language", async () => {
+    const { resolve } = setup({ locale: "en" });
+
+    render(await resolve());
+
+    expect(screen.getByTestId("store-frame")).toContainElement(
+      screen.getByTestId("store-order-page")
+    );
+    expect(frameProps).toHaveBeenCalledExactlyOnceWith({
+      copy: DICTIONARIES.en.storefront.shell,
+      locale: "en",
+      shellOf: "LR Market en",
+    });
+  });
 
   test("ends with the store's footer, after the order, in the page's language", async () => {
     const { resolve } = setup({ locale: "en" });

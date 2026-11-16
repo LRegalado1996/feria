@@ -6,24 +6,22 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { cn } from "@/lib/utils";
 import { type Currency, formatPrice } from "@/lib/utils/format";
 
-const amountVariants = cva(
-  "font-display leading-none font-normal tracking-display uppercase",
+const storePriceTagVariants = cva(
+  "flex flex-wrap items-baseline gap-x-2 text-store-foreground tabular-nums",
   {
     variants: {
       size: {
-        sm: "px-3 py-1.5 text-2xl",
-        lg: "px-4 py-2 text-4xl",
-      },
-      sale: {
-        // A reduced price is the one place a price takes the accent.
-        true: "bg-store-accent text-store-foreground",
-        false: "bg-store-contrast text-store-background",
+        // Under a card's name.
+        sm: "text-sm",
+        // Under an article's name, on its page.
+        lg: "text-xl",
       },
     },
+    defaultVariants: { size: "sm" },
   }
 );
 
-export type StorePriceTagProps = VariantProps<typeof amountVariants> & {
+export type StorePriceTagProps = VariantProps<typeof storePriceTagVariants> & {
   /** In minor units (cents), as the database stores it. */
   amount: number;
   className?: string;
@@ -37,9 +35,10 @@ export type StorePriceTagProps = VariantProps<typeof amountVariants> & {
 };
 
 /**
- * An article's price, in the display face on a solid block so it is the first
- * thing read on a card. It takes its words as a prop, so it renders on the
- * server and in the browser alike.
+ * An article's price in the body face, regular weight (FER-039): the reduced
+ * one comes after the price it had, struck through, which a screen reader
+ * hears as "Antes $ 1.290". It takes its words as a prop, so it renders on
+ * the server and in the browser alike.
  */
 function StorePriceTag({
   amount,
@@ -54,29 +53,29 @@ function StorePriceTag({
 
   return (
     <p
-      className={cn("flex flex-wrap items-center gap-2.5", className)}
+      className={cn(storePriceTagVariants({ size }), className)}
       data-sale={sale}
       data-size={size}
       data-slot="store-price-tag"
     >
-      <span
-        className={amountVariants({ sale, size })}
-        data-slot="store-price-tag-amount"
-      >
-        {formatPrice(amount, currency, locale)}
-      </span>
       {sale ? (
-        <s
-          className="text-sm text-store-muted"
-          data-slot="store-price-tag-previous"
-        >
-          {interpolate(labels.previous, {
-            price: formatPrice(previousAmount, currency, locale),
-          })}
+        <s className="text-store-muted" data-slot="store-price-tag-previous">
+          {/* Strikethrough is not read aloud: the words say it instead. */}
+          <span aria-hidden="true">
+            {formatPrice(previousAmount, currency, locale)}
+          </span>
+          <span className="sr-only">
+            {interpolate(labels.previous, {
+              price: formatPrice(previousAmount, currency, locale),
+            })}
+          </span>
         </s>
       ) : null}
+      <span data-slot="store-price-tag-amount">
+        {formatPrice(amount, currency, locale)}
+      </span>
     </p>
   );
 }
 
-export { StorePriceTag };
+export { StorePriceTag, storePriceTagVariants };

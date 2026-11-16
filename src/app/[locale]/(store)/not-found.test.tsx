@@ -1,10 +1,17 @@
-import { screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { screen, within } from "@testing-library/react";
+import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
 
 import StoreNotFound from "./not-found";
+
+// The frame's header reads the router (its search and language link).
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/no-such-page",
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 function setup({ locale = "en" }: { locale?: Locale } = {}) {
   renderWithI18n(<StoreNotFound />, { locale });
@@ -13,6 +20,17 @@ function setup({ locale = "en" }: { locale?: Locale } = {}) {
 }
 
 describe("StoreNotFound", () => {
+  test("sits in the store's frame, under its header, with no bar: it reads nothing of the store", () => {
+    setup({ locale: "es" });
+
+    const frameMain = screen.getByTestId("store-main");
+    expect(screen.getByTestId("store-header")).toBeVisible();
+    expect(
+      within(frameMain).getByRole("heading", { level: 1 })
+    ).toHaveTextContent("No encontramos esta página");
+    expect(screen.queryByTestId("store-announcement-bar")).toBeNull();
+  });
+
   test.each([
     [
       "en",

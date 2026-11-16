@@ -12,7 +12,9 @@ import {
 vi.mock("server-only", () => ({}));
 
 // Intl separates a currency from its amount with a no-break space.
-const NBSP = "\u00A0";
+const NBSP = " ";
+
+const PHOTO = { alt: "A pearl necklace on a stand", src: "/pearl.jpg" };
 
 /** The card, its words those of the page's language unless given. */
 function setup(props: Partial<StoreArticleCardProps> = {}) {
@@ -25,7 +27,7 @@ function setup(props: Partial<StoreArticleCardProps> = {}) {
       }}
       amount={89_000}
       currency="UYU"
-      href="/en/lr/articles/pearl-necklace"
+      href="/en/products/pearl-necklace"
       image={null}
       locale="en"
       name="Pearl necklace"
@@ -37,8 +39,11 @@ function setup(props: Partial<StoreArticleCardProps> = {}) {
   return {
     badge: card.querySelector('[data-slot="store-badge"]'),
     card,
+    heading: within(card).getByRole("heading"),
     link: within(card).getByRole("link"),
-    price: card.querySelector('[data-slot="store-price-tag-amount"]'),
+    price: card.querySelector('[data-slot="store-price-tag"]'),
+    soldOut: card.querySelector('[data-slot="store-article-card-sold-out"]'),
+    tile: card.querySelector('[data-slot="store-article-card-tile"]'),
   };
 }
 
@@ -48,20 +53,28 @@ describe("StoreArticleCard", () => {
 
     expect(within(card).getAllByRole("link")).toEqual([link]);
     expect(link).toHaveAccessibleName("Pearl necklace");
-    expect(link).toHaveAttribute("href", "/en/lr/articles/pearl-necklace");
+    expect(link).toHaveAttribute("href", "/en/products/pearl-necklace");
     expect(link).toHaveClass("after:absolute", "after:inset-0");
     expect(card).toHaveClass("relative");
     expect(card).toHaveAttribute("data-slot", "store-article-card");
   });
 
-  test("draws the keyboard focus ring on the card its link covers", () => {
+  test("draws the keyboard focus ring inside the card its link covers", () => {
     const { card, link } = setup();
 
     expect(link).toHaveClass("outline-none");
     expect(card).toHaveClass(
       "has-[a:focus-visible]:outline-3",
+      "has-[a:focus-visible]:-outline-offset-3",
       "has-[a:focus-visible]:outline-store-foreground"
     );
+  });
+
+  test("sets the photo on a square grey tile, then the name in the display face", () => {
+    const { heading, tile } = setup({ image: PHOTO });
+
+    expect(tile).toHaveClass("aspect-square", "bg-store-surface");
+    expect(heading).toHaveClass("font-display", "uppercase", "text-xs");
   });
 
   test.each([
@@ -79,25 +92,38 @@ describe("StoreArticleCard", () => {
     }
   );
 
-  test("shows the price in the page's language", () => {
+  test("shows the price in the page's language, in regular type", () => {
     const { price } = setup();
 
     expect(price?.textContent).toBe(`UYU${NBSP}890`);
+    expect(price).not.toHaveClass("font-display");
   });
 
-  test("shows the photo with its alternative text when there is one", () => {
-    const { card } = setup({
-      image: { alt: "A pearl necklace on a stand", src: "/pearl.jpg" },
-    });
+  test("shows the photo with its alternative text and the widths it is given", () => {
+    const { card } = setup({ image: PHOTO, sizes: "280px" });
 
     const photo = within(card).getByRole("img", {
       name: "A pearl necklace on a stand",
     });
     expect(photo.getAttribute("src")).toContain("pearl.jpg");
-    expect(photo).toHaveClass("object-cover", "motion-reduce:transition-none");
+    expect(photo).toHaveAttribute("sizes", "280px");
+    expect(photo).toHaveClass(
+      "object-cover",
+      "motion-safe:transition-transform"
+    );
+    expect(photo).not.toHaveClass("opacity-60");
     expect(
       card.querySelector('[data-slot="store-article-card-no-image"]')
     ).toBeNull();
+  });
+
+  test("asks for a quarter of the screen's width on a computer by default", () => {
+    const { card } = setup({ image: PHOTO });
+
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "sizes",
+      "(min-width: 768px) 25vw, 50vw"
+    );
   });
 
   test.each([
@@ -112,7 +138,7 @@ describe("StoreArticleCard", () => {
     expect(within(card).queryByRole("img")).toBeNull();
   });
 
-  test("carries no badge by default", () => {
+  test("carries no label by default", () => {
     const { badge } = setup();
 
     expect(badge).toBeNull();
@@ -122,72 +148,75 @@ describe("StoreArticleCard", () => {
     ["en", "New"],
     ["es", "Nuevo"],
   ] as const)(
-    "in %s, a new article is marked %j on the accent",
+    "in %s, a new article is marked %j on the tile's corner",
     (locale, text) => {
-      const { badge } = setup({ isNew: true, locale });
+      const { badge, tile } = setup({ isNew: true, locale });
 
       expect(badge).toHaveTextContent(text);
-      expect(badge).toHaveAttribute("data-tone", "accent");
+      expect(tile).toContainElement(badge as HTMLElement);
+      expect(badge).toHaveClass("absolute", "top-2.5", "left-2.5");
     }
   );
 
   test.each([
-    ["en", "Price drop", `Was UYU${NBSP}1,290`],
-    ["es", "Bajó de precio", `Antes $${NBSP}1.290`],
+    ["en", `Was UYU${NBSP}1,290`],
+    ["es", `Antes $${NBSP}1.290`],
   ] as const)(
-    "in %s, a reduced article is marked %j and shows what it cost",
-    (locale, text, previous) => {
-      const { badge, card } = setup({ locale, previousAmount: 129_000 });
+    "in %s, a reduced article strikes the price it had, read as %j",
+    (locale, spoken) => {
+      const { badge, price } = setup({ locale, previousAmount: 129_000 });
 
-      expect(badge).toHaveTextContent(text);
-      expect(badge).toHaveAttribute("data-tone", "contrast");
+      expect(price).toHaveAttribute("data-sale", "true");
       expect(
-        card.querySelector('[data-slot="store-price-tag-previous"]')
+        price?.querySelector('[data-slot="store-price-tag-previous"] .sr-only')
           ?.textContent
-      ).toBe(previous);
+      ).toBe(spoken);
+      // The struck price says it: no label for a deal.
+      expect(badge).toBeNull();
     }
   );
-
-  test("a reduced price outranks new: one badge a card", () => {
-    const { card } = setup({ isNew: true, previousAmount: 129_000 });
-
-    const badges = [...card.querySelectorAll('[data-slot="store-badge"]')];
-    expect(badges.map((badge) => badge.textContent)).toEqual(["Price drop"]);
-  });
-
-  test("a previous price that was not higher leaves a new article marked new", () => {
-    const { badge } = setup({ isNew: true, previousAmount: 89_000 });
-
-    expect(badge).toHaveTextContent("New");
-  });
 
   test.each([
     ["en", "Sold out"],
     ["es", "Agotado"],
-  ] as const)("in %s, an unavailable article is marked %j", (locale, text) => {
-    const { badge } = setup({ locale, unavailable: true });
+  ] as const)(
+    "in %s, an unavailable article dims its name and says %j where the price was",
+    (locale, text) => {
+      const { card, heading, price, soldOut } = setup({
+        image: PHOTO,
+        locale,
+        unavailable: true,
+      });
 
-    expect(badge).toHaveTextContent(new RegExp(`^${text}$`, "u"));
-    expect(badge).toHaveAttribute("data-tone", "contrast");
+      expect(soldOut).toHaveTextContent(new RegExp(`^${text}$`, "u"));
+      expect(soldOut).toHaveClass("text-store-muted");
+      expect(price).toBeNull();
+      expect(heading).toHaveClass("text-store-muted");
+      expect(within(card).getByRole("img")).toHaveClass("opacity-60");
+      expect(card).toHaveAttribute("data-unavailable", "true");
+    }
+  );
+
+  test("a sold-out article is not marked new", () => {
+    const { badge } = setup({ isNew: true, unavailable: true });
+
+    expect(badge).toBeNull();
   });
 
-  test("sold out outranks a reduced price and new: one badge a card", () => {
-    const { card } = setup({
+  test("an available article keeps its name in the foreground", () => {
+    const { card, heading, soldOut } = setup();
+
+    expect(heading).not.toHaveClass("text-store-muted");
+    expect(soldOut).toBeNull();
+    expect(card).toHaveAttribute("data-unavailable", "false");
+  });
+
+  test("uses the words it is given for its label, its price and its photo", () => {
+    const { badge, card, price } = setup({
       isNew: true,
-      previousAmount: 129_000,
-      unavailable: true,
-    });
-
-    const badges = [...card.querySelectorAll('[data-slot="store-badge"]')];
-    expect(badges.map((badge) => badge.textContent)).toEqual(["Sold out"]);
-  });
-
-  test("uses the words it is given for its badges and prices", () => {
-    const { badge, card } = setup({
       labels: {
         card: {
           badgeNew: "Fresh",
-          badgeSale: "Deal",
           noImage: "Nothing to see",
           unavailable: "Gone",
         },
@@ -196,9 +225,10 @@ describe("StoreArticleCard", () => {
       previousAmount: 129_000,
     });
 
-    expect(badge).toHaveTextContent(/^Deal$/u);
+    expect(badge).toHaveTextContent(/^Fresh$/u);
     expect(
-      card.querySelector('[data-slot="store-price-tag-previous"]')?.textContent
+      price?.querySelector('[data-slot="store-price-tag-previous"] .sr-only')
+        ?.textContent
     ).toBe(`Before: UYU${NBSP}1,290`);
     expect(
       card.querySelector('[data-slot="store-article-card-no-image"]')

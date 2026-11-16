@@ -6,30 +6,18 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 const storeArrowLinkVariants = cva(
-  "group inline-flex min-h-11 items-center gap-3 text-base font-semibold underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-3",
+  // The display face and the arrow say it is a link; the underline joins
+  // them on hover. 44 px tall: tapped with a thumb.
+  "group inline-flex min-h-11 items-center gap-2 font-display text-xs leading-none font-extrabold uppercase underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 md:text-sm",
   {
     variants: {
       tone: {
         default: "text-store-foreground focus-visible:outline-store-foreground",
-        // On a contrast block.
-        contrast: "text-store-background focus-visible:outline-store-accent",
+        // On a contrast block: the accent, 11:1 on the contrast.
+        contrast: "text-store-accent focus-visible:outline-store-accent",
       },
     },
     defaultVariants: { tone: "default" },
-  }
-);
-
-const arrowBoxVariants = cva(
-  "flex size-11 shrink-0 items-center justify-center transition-colors",
-  {
-    variants: {
-      tone: {
-        default:
-          "bg-store-contrast text-store-background group-hover:bg-store-accent group-hover:text-store-foreground",
-        contrast:
-          "bg-store-accent text-store-foreground group-hover:bg-store-background",
-      },
-    },
   }
 );
 
@@ -37,8 +25,9 @@ export type StoreArrowLinkProps = ComponentProps<typeof Link> &
   VariantProps<typeof storeArrowLinkVariants>;
 
 /**
- * A storefront link that leads somewhere else in the store, with its arrow.
- * The caller builds `href` with `localizePath()`.
+ * A storefront link that leads somewhere else in the store ("Comprar ahora
+ * →"), its arrow nudged forward on hover. The caller builds `href` with
+ * `localizePath()`.
  */
 function StoreArrowLink({
   children,
@@ -54,13 +43,11 @@ function StoreArrowLink({
       {...props}
     >
       <span>{children}</span>
-      <span
+      <ArrowRight
         aria-hidden="true"
-        className={arrowBoxVariants({ tone })}
+        className="size-4 shrink-0 motion-safe:transition-transform motion-safe:group-hover:translate-x-1"
         data-slot="store-arrow-link-arrow"
-      >
-        <ArrowRight className="size-5 motion-safe:transition-transform motion-safe:group-hover:translate-x-1" />
-      </span>
+      />
     </Link>
   );
 }

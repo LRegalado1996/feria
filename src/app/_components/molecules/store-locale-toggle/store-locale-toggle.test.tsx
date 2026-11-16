@@ -18,14 +18,16 @@ function setup({ locale = "es" }: { locale?: Locale } = {}) {
 }
 
 describe("StoreLocaleToggle", () => {
-  test("is the language link in the store's colors, keeping the store, path and query", () => {
+  test("is the language link in the header's colors, keeping the path and the query", () => {
     const { link } = setup();
 
     expect(link).toHaveAccessibleName("English");
     expect(link).toHaveAttribute("href", "/en/products?q=aros");
     expect(link).toHaveClass(
-      "text-store-foreground",
-      "focus-visible:outline-store-foreground",
+      "text-store-accent",
+      "font-display",
+      "uppercase",
+      "focus-visible:outline-store-accent",
       "min-h-11",
       "self-start"
     );

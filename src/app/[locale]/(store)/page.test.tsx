@@ -2,16 +2,30 @@ import { render, screen } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
+import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 
 import StoreHome, { generateMetadata, StoreHomeContent } from "./page";
 
-const { connection, readStore } = vi.hoisted(() => ({
-  connection: vi.fn(async () => undefined),
-  readStore: vi.fn<() => Promise<PublicStore | null>>(),
-}));
+const { connection, readStore, SHELL, streamedShell } = vi.hoisted(() => {
+  const shell = {
+    announcement: Promise.resolve(null),
+    categories: Promise.resolve([]),
+  };
+
+  return {
+    connection: vi.fn(async () => undefined),
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
+    SHELL: shell,
+    streamedShell: vi.fn(() => shell),
+  };
+});
+
+// The frame's streamed parts have their own tests (`store-shell.test.ts`).
+vi.mock("./store-shell", () => ({ streamedShell }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
@@ -78,20 +92,43 @@ describe("StoreHome", () => {
   ] as const)(
     "in %s, streams the home behind an empty, busy main, reading nothing yet",
     async (locale, loading) => {
-      const page: ReactElement<{
-        children: ReactElement<{ locale: Locale }>;
-        fallback: ReactNode;
-      }> = await StoreHome({ params: makeParams(locale) });
+      const page = (await StoreHome({
+        params: makeParams(locale),
+      })) as ReactElement<{
+        children: ReactElement<{
+          children: ReactElement<{ locale: Locale }>;
+          fallback: ReactNode;
+        }>;
+      }>;
+      const boundary = page.props.children;
 
-      render(page.props.fallback);
+      render(boundary.props.fallback);
 
       expect(screen.getByTestId("store-home-skeleton")).toHaveAttribute(
         "aria-busy",
         "true"
       );
       expect(screen.getByRole("status")).toHaveTextContent(loading);
-      expect(page.props.children.props).toEqual({ locale });
+      expect(boundary.props.children.props).toEqual({ locale });
       expect(readStore).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each(["es", "en"] as const)(
+    "in %s, sits in the store's frame, with the shell's words and what streams of the store",
+    async (locale) => {
+      const page = (await StoreHome({
+        params: makeParams(locale),
+      })) as ReactElement<Record<string, unknown>>;
+
+      expect(page.type).toBe(StoreFrame);
+      expect(page.props).toMatchObject({
+        announcement: SHELL.announcement,
+        categories: SHELL.categories,
+        copy: getDictionary(locale).storefront.shell,
+        locale,
+      });
+      expect(streamedShell).toHaveBeenLastCalledWith(locale);
     }
   );
 
@@ -104,6 +141,21 @@ describe("StoreHome", () => {
 });
 
 describe("StoreHomeContent", () => {
+  test.each([
+    ["es", "Ver el catálogo", "/products"],
+    ["en", "See the catalog", "/en/products"],
+  ] as const)(
+    "in %s, leads into the catalog from the intro with %j",
+    async (locale, label, href) => {
+      await setup({ locale });
+
+      expect(screen.getByRole("link", { name: label })).toHaveAttribute(
+        "href",
+        href
+      );
+    }
+  );
+
   test("introduces the store by name in the page's h1, inside its main landmark, then its footer", async () => {
     const { page } = await setup();
 
@@ -146,10 +198,10 @@ describe("StoreHomeContent", () => {
     );
   });
 
-  test("a store with no texts yet shows its name and nothing empty", async () => {
+  test("a store with no texts yet shows its name, the way into the catalog, and nothing empty", async () => {
     const { page } = await setup({ store: makeStore({ translations: [] }) });
 
-    expect(page).toHaveTextContent(/^Sample Store$/u);
+    expect(page).toHaveTextContent(/^Sample StoreVer el catálogo$/u);
   });
 
   test("waits for a request before reading the store, so the build needs no database", async () => {

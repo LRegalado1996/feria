@@ -75,6 +75,20 @@ describe("StoreOrder", () => {
     );
   });
 
+  test("puts the code on the moss block, in the wide display face", () => {
+    setup();
+
+    expect(screen.getByTestId("store-order-banner")).toHaveClass(
+      "bg-store-contrast",
+      "text-store-background"
+    );
+    expect(screen.getByTestId("store-order-code")).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "store-display-page"
+    );
+  });
+
   test("lists what was ordered, each line at its quantity, and the total", () => {
     const { items, total } = setup();
 
@@ -173,6 +187,9 @@ describe("StoreOrder", () => {
     expect(link).toHaveAttribute("href", WHATSAPP);
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    // A convenience, so the second look: an outlined pill.
+    expect(link).toHaveAttribute("data-slot", "store-button");
+    expect(link).toHaveAttribute("data-variant", "outline");
   });
 
   test("offers no WhatsApp link when the store has none", () => {
@@ -189,7 +206,11 @@ describe("StoreOrder", () => {
   ] as const)("in %s, %j goes back to the catalog", (locale, name, href) => {
     setup({ locale });
 
-    expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
+    const link = screen.getByRole("link", { name });
+    expect(link).toHaveAttribute("href", href);
+    // The page's one next step: the primary pill.
+    expect(link).toHaveAttribute("data-slot", "store-button");
+    expect(link).toHaveAttribute("data-variant", "primary");
   });
 
   test("speaks Spanish on a Spanish page", () => {

@@ -1,17 +1,36 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreCartProps } from "@/app/_components/organisms/store-cart";
+import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 
 import * as cartModule from "./page";
 
-const { cartProps, connection, readStore } = vi.hoisted(() => ({
-  cartProps: vi.fn<(props: StoreCartProps) => void>(),
-  connection: vi.fn(async () => undefined),
-  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+const { cartProps, connection, frameProps, readStore, streamedShell } =
+  vi.hoisted(() => ({
+    cartProps: vi.fn<(props: StoreCartProps) => void>(),
+    connection: vi.fn(async () => undefined),
+    frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
+    streamedShell: vi.fn((locale: string) => ({ shellOf: locale })),
+  }));
+
+// The frame's streamed parts have their own tests (`store-shell.test.ts`).
+vi.mock("../store-shell", () => ({ streamedShell }));
+
+// The frame has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-frame", () => ({
+  StoreFrame: ({
+    children,
+    ...props
+  }: Record<string, unknown> & { children: ReactNode }) => {
+    frameProps(props);
+    return <div data-testid="store-frame">{children}</div>;
+  },
 }));
 
 // `server-only` throws on import outside a React Server Components build.
@@ -83,6 +102,21 @@ describe("CartPage", () => {
     expect(main.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  test("sits in the store's frame, with the shell's words and what streams of the store", async () => {
+    const { page } = setup({ locale: "en" });
+
+    render(await page());
+
+    expect(screen.getByTestId("store-frame")).toContainElement(
+      screen.getByTestId("store-cart-page")
+    );
+    expect(frameProps).toHaveBeenCalledExactlyOnceWith({
+      copy: getDictionary("en").storefront.shell,
+      locale: "en",
+      shellOf: "en",
+    });
   });
 
   test("reads nothing of the store itself: the cart lives in the browser and the page is prerendered", async () => {

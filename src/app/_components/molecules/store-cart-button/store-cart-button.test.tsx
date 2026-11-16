@@ -81,4 +81,20 @@ describe("StoreCartButton", () => {
     expect(link).toHaveAttribute("data-slot", "store-cart-button");
     expect(link).toHaveClass("custom");
   });
+
+  test("is a round accent icon on the header's moss, its count a round accent badge", () => {
+    const { badge, link } = setup({ cart: [2] });
+
+    expect(link).toHaveClass(
+      "size-11",
+      "rounded-full",
+      "text-store-accent",
+      "focus-visible:outline-store-accent"
+    );
+    expect(badge()).toHaveClass(
+      "rounded-full",
+      "bg-store-accent",
+      "text-store-foreground"
+    );
+  });
 });

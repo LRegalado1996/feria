@@ -5,16 +5,18 @@ import { StoreFooter } from "@/app/_components/organisms/store-footer";
 import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
+import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
 
 /**
- * The footer every store page ends with (FER-021), from the store the page
- * already read. Pages render it, not the layout: the layout has no address
- * to wait for, so it is prerendered at build, where there is no database
- * (docs/agents/nextjs.md § Store pages).
+ * The footer every store page ends with (FER-021, FER-039), from the store
+ * the page already read and its categories, a cached read. Pages render it,
+ * not the layout: the layout has no address to wait for, so it is
+ * prerendered at build, where there is no database (docs/agents/nextjs.md §
+ * Store pages).
  */
-export function StorePageFooter({
+export async function StorePageFooter({
   locale,
   store,
 }: {
@@ -22,12 +24,15 @@ export function StorePageFooter({
   store: PublicStore;
 }) {
   const text = pickTranslation(store.translations, locale);
+  const categories = await readCategories(store, locale);
 
   return (
     <StoreFooter
+      categories={categories}
       // At the bottom of a short page too: the content region is a column.
       className="mt-auto"
       copy={getDictionary(locale).storefront.shell}
+      locale={locale}
       store={store}
       tagline={text ? { lang: text.locale, text: text.tagline } : null}
     />

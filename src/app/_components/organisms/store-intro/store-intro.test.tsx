@@ -14,9 +14,12 @@ const ENGLISH = {
   tagline: "Jewelry at the fair",
 } as const;
 
+const BROWSE = { href: "/products", label: "Ver el catálogo" };
+
 function setup(props: Partial<StoreIntroProps> = {}) {
   render(
     <StoreIntro
+      browse={BROWSE}
       data-testid="intro"
       name="Sample Store"
       text={SPANISH}
@@ -28,7 +31,7 @@ function setup(props: Partial<StoreIntroProps> = {}) {
 }
 
 describe("StoreIntro", () => {
-  test("names the store in the single h1, on the contrast block", () => {
+  test("names the store in the single h1, on the white page", () => {
     setup();
 
     expect(
@@ -38,49 +41,65 @@ describe("StoreIntro", () => {
       /^Sample Store$/
     );
     expect(screen.getByTestId("store-intro-header")).toHaveClass(
-      "bg-store-contrast"
+      "bg-store-background",
+      "text-store-foreground"
     );
     expect(screen.getByTestId("store-intro-header")).toContainElement(
       screen.getByRole("heading", { level: 1 })
     );
   });
 
-  test("sets the name in the accent color, which only reads on the contrast block", () => {
+  test("sets the name in the foreground, never the accent, which does not read on white", () => {
     setup();
 
-    expect(screen.getByText("Sample Store")).toHaveClass("text-store-accent");
+    expect(screen.getByText("Sample Store")).not.toHaveClass(
+      "text-store-accent"
+    );
+  });
+
+  test("sets the name in the hero size of the wide display face", () => {
+    setup();
+
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveAttribute("data-size", "hero");
+    expect(heading).toHaveClass("font-display", "font-extrabold", "uppercase");
   });
 
   test.each([
     ["Spanish", SPANISH],
     ["English", ENGLISH],
   ])(
-    "shows the %s tagline above the name and the description on a surface, each marked with its language",
+    "shows the %s tagline above the name and the description under it, each marked with its language",
     (_language, text) => {
       setup({ text });
 
       const tagline = screen.getByText(text.tagline);
       expect(tagline).toHaveAttribute("lang", text.locale);
-      expect(screen.getByTestId("store-intro-header")).toContainElement(
-        tagline
+      expect(tagline.compareDocumentPosition(screen.getByRole("heading"))).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING
       );
-      expect(screen.getByTestId("store-description")).toHaveTextContent(
-        text.description
-      );
-      expect(screen.getByTestId("store-description")).toHaveAttribute(
-        "lang",
-        text.locale
-      );
-      expect(screen.getByTestId("store-description")).toHaveClass(
-        "bg-store-surface"
-      );
+      const description = screen.getByTestId("store-description");
+      expect(description).toHaveTextContent(text.description);
+      expect(description).toHaveAttribute("lang", text.locale);
+      expect(
+        screen.getByRole("heading").compareDocumentPosition(description)
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     }
   );
 
-  test("a store that has written nothing shows its name and no empty block", () => {
+  test("leads into the catalog with a lime pill", () => {
+    setup();
+
+    const browse = screen.getByRole("link", { name: "Ver el catálogo" });
+    expect(browse).toHaveAttribute("href", "/products");
+    expect(browse).toHaveAttribute("data-slot", "store-button");
+    expect(browse).toHaveAttribute("data-variant", "primary");
+  });
+
+  test("a store that has written nothing shows its name, the way in, and no empty block", () => {
     const { intro } = setup({ text: null });
 
-    expect(intro).toHaveTextContent(/^Sample Store$/);
+    expect(intro).toHaveTextContent(/^Sample StoreVer el catálogo$/);
     expect(screen.queryByTestId("store-description")).not.toBeInTheDocument();
   });
 

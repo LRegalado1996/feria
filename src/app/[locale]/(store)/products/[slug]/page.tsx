@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { JsonLd } from "@/app/_components/atoms/json-ld";
 import { StoreArticle } from "@/app/_components/organisms/store-article";
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { getDictionary } from "@/content";
 import type { BRAND_LOGO_FILES } from "@/lib/brand/logo-svg";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -24,6 +25,7 @@ import {
 import { readStore } from "@/server/cache/store";
 
 import { StorePageFooter } from "../../store-page-footer";
+import { shellOf } from "../../store-shell";
 import { couldBeArticle } from "./article-address";
 
 interface ArticlePageProps {
@@ -146,7 +148,11 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     : null;
 
   return (
-    <>
+    <StoreFrame
+      copy={storefront.shell}
+      locale={locale}
+      {...shellOf(store, locale)}
+    >
       <main>
         <JsonLd
           data={[
@@ -193,6 +199,6 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         />
       </main>
       <StorePageFooter locale={locale} store={store} />
-    </>
+    </StoreFrame>
   );
 }

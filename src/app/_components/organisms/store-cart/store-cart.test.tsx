@@ -172,6 +172,24 @@ describe("StoreCart", () => {
     });
   });
 
+  test("titles the page in the display face and sets the total's figure in the body face", async () => {
+    const { shown } = setup();
+
+    await shown();
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "store-display-page"
+    );
+    const [label, amount] = [
+      ...screen.getByTestId("store-cart-total").children,
+    ];
+    expect(label).toHaveClass("font-display", "uppercase");
+    expect(amount).toHaveClass("tabular-nums", "text-xl");
+    expect(amount).not.toHaveClass("font-display");
+  });
+
   test("says when an article's price changed since it was added, and still takes the order", async () => {
     const { lines, shown, submit, total } = setup({
       products: [makeProduct(4, { priceAmount: 50_000 }), makeProduct(9)],
@@ -302,7 +320,10 @@ describe("StoreCart", () => {
     );
     server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
     cartProducts.mockResolvedValue([makeProduct(4), makeProduct(9)]);
-    await user.click(screen.getByRole("button", { name: "Try again" }));
+    const retry = screen.getByRole("button", { name: "Try again" });
+    // A second action beside the checkout's: the outlined pill.
+    expect(retry).toHaveAttribute("data-variant", "outline");
+    await user.click(retry);
 
     await shown();
     expect(lines()).toEqual([
@@ -326,10 +347,11 @@ describe("StoreCart", () => {
       const empty = await screen.findByTestId("store-cart-empty");
 
       expect(empty).toHaveTextContent(text);
-      expect(within(empty).getByRole("link", { name: link })).toHaveAttribute(
-        "href",
-        href
-      );
+      const back = within(empty).getByRole("link", { name: link });
+      expect(back).toHaveAttribute("href", href);
+      // The empty cart's one way on: the primary pill.
+      expect(back).toHaveAttribute("data-slot", "store-button");
+      expect(back).toHaveAttribute("data-variant", "primary");
       expect(cartProducts).not.toHaveBeenCalled();
     }
   );

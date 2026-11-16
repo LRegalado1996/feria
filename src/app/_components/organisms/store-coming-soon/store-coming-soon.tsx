@@ -19,8 +19,8 @@ export interface StoreComingSoonProps {
 
 /**
  * The whole coming-soon screen: what every storefront address leads to until
- * the store opens. One composition for a phone and a wide screen: the
- * headline scales, nothing is rearranged.
+ * the store opens, on the store's moss with its full logo. One composition
+ * for a phone and a wide screen: the headline scales, nothing is rearranged.
  */
 function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
   return (
@@ -31,11 +31,15 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
     >
       <header className="flex items-center justify-between gap-4 p-4 md:px-8">
         <StoreBubbles label={comingSoon.bubbles}>
-          <StoreLogo className="h-12" variant="mark" />
+          {/* The full logo, the brand on every storefront page (FER-039). */}
+          <StoreLogo className="h-14 md:h-16" variant="full" />
         </StoreBubbles>
-        {/* The toggle is built on the app's tokens, which follow the theme;
-            the storefront has one palette, so its colors are set here. */}
-        <LocaleToggle className="relative z-10 min-h-11 text-store-background hover:bg-store-background hover:text-store-foreground dark:hover:bg-store-background" />
+        {/* A plain link styled here: the app's button would follow the
+            app's theme, and the storefront has one palette. */}
+        <LocaleToggle
+          className="relative z-10 inline-flex min-h-11 items-center rounded-full px-4 font-display text-xs font-extrabold text-store-accent uppercase hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+          tone="bare"
+        />
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">

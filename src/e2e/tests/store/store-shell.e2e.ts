@@ -8,26 +8,27 @@ import { StorePage } from "../../page-objects/store.page";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("Storefront shell", () => {
-  test("the header leads home and to the catalog, and the skip link to the content", async ({
+  test("the bar shows the store's tagline, the full logo leads home, the links lead to the catalog, and the skip link to the content", async ({
     page,
   }) => {
     const storePage = new StorePage(page);
     await storePage.goto();
 
+    await expect(storePage.getAnnouncementBar()).toHaveText(
+      STORE_TEXTS.es.tagline
+    );
     const header = storePage.getSiteHeader();
+    const home = header.getByRole("link", { name: "LR Market, ir al inicio" });
+    await expect(home).toHaveAttribute("href", "/");
+    await expect(home.locator('[data-slot="store-logo"]')).toHaveAttribute(
+      "data-variant",
+      "full"
+    );
     const nav = header.getByRole("navigation", {
       name: "Secciones de la tienda",
     });
-    await expect(nav.getByRole("link", { name: "Inicio" })).toHaveAttribute(
-      "href",
-      "/"
-    );
     await expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
       "href",
-      "/products"
-    );
-    await expect(header.getByTestId("store-search-form")).toHaveAttribute(
-      "action",
       "/products"
     );
 

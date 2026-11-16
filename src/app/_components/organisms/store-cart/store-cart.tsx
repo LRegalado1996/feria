@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import {
   type CartLineFlag,
   StoreCartLine,
@@ -88,14 +89,14 @@ function StoreCart({ className }: StoreCartProps) {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 text-store-foreground md:py-12",
+        "flex w-full flex-col gap-8 px-4 py-8 text-store-foreground md:px-7 md:py-14",
         className
       )}
       data-slot="store-cart"
       ref={root}
     >
       <h1
-        className="font-display store-display-section leading-display tracking-display uppercase outline-none"
+        className="font-display store-display-page leading-display font-extrabold uppercase outline-none"
         ref={heading}
         tabIndex={-1}
       >
@@ -173,12 +174,10 @@ function CartBody({
       >
         <ShoppingBag aria-hidden="true" className="size-10 text-store-muted" />
         <p className="text-lg font-semibold">{copy.empty}</p>
-        <Link
-          className="inline-flex min-h-12 items-center bg-store-contrast px-6 font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
-          href={catalogHref}
-        >
-          {copy.continueShopping}
-        </Link>
+        {/* The empty cart's one way on: the primary pill. */}
+        <StoreButton asChild size="lg">
+          <Link href={catalogHref}>{copy.continueShopping}</Link>
+        </StoreButton>
       </div>
     );
   }
@@ -248,30 +247,30 @@ function CartBody({
         </h2>
         {products.isError ? (
           <div
-            className="mb-4 flex flex-wrap items-center gap-3 border-2 border-store-contrast p-3"
+            className="mb-4 flex flex-wrap items-center gap-3 border-2 border-store-foreground p-3"
             role="alert"
           >
             <p className="flex items-center gap-2 font-semibold">
               <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
               {copy.errors.refresh}
             </p>
-            <button
-              className="inline-flex min-h-11 items-center border-2 border-store-contrast px-4 font-semibold hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+            <StoreButton
               onClick={() => {
                 void products.refetch();
               }}
               type="button"
+              variant="outline"
             >
               {copy.errors.retry}
-            </button>
+            </StoreButton>
           </div>
         ) : null}
         {loadingLines ? (
-          <output className="block border-t-2 border-store-line py-4 text-store-muted">
+          <output className="block border-t border-store-line py-4 text-store-muted">
             {copy.loading}
           </output>
         ) : (
-          <ul className="border-t-2 border-store-line">
+          <ul className="border-t border-store-line">
             {lines.map(({ flag, item, product }, index) => (
               <StoreCartLine
                 flag={flag}
@@ -292,11 +291,15 @@ function CartBody({
         )}
         {first ? (
           <p
-            className="flex items-baseline justify-between gap-4 py-4 font-display text-3xl leading-none tracking-display uppercase tabular-nums"
+            className="flex items-baseline justify-between gap-4 py-5"
             data-testid="store-cart-total"
           >
-            <span>{copy.subtotal}</span>
-            <span>{formatPrice(total, first.currencyCode, locale)}</span>
+            <span className="font-display text-sm leading-tight font-extrabold uppercase">
+              {copy.subtotal}
+            </span>
+            <span className="text-xl font-semibold tabular-nums">
+              {formatPrice(total, first.currencyCode, locale)}
+            </span>
           </p>
         ) : null}
       </section>

@@ -3,6 +3,8 @@ import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreCatalogProps } from "@/app/_components/organisms/store-catalog";
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
+import { getDictionary } from "@/content";
 import type { RawSearchParams } from "@/lib/catalog/query";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
@@ -10,15 +12,33 @@ import { renderWithI18n } from "@/test/i18n";
 
 import CatalogPage, { generateMetadata, instant } from "./page";
 
-const { catalogProps, categories, filters, products, readStore } = vi.hoisted(
-  () => ({
+const {
+  catalogProps,
+  categories,
+  filters,
+  products,
+  readStore,
+  SHELL,
+  streamedShell,
+} = vi.hoisted(() => {
+  const shell = {
+    announcement: Promise.resolve(null),
+    categories: Promise.resolve([]),
+  };
+
+  return {
     catalogProps: vi.fn<(props: StoreCatalogProps) => void>(),
     categories: vi.fn(async (_input: unknown): Promise<unknown> => []),
     filters: vi.fn(async (_input: unknown): Promise<unknown> => []),
     products: vi.fn(async (_input: unknown): Promise<unknown> => null),
     readStore: vi.fn<() => Promise<PublicStore | null>>(),
-  })
-);
+    SHELL: shell,
+    streamedShell: vi.fn(() => shell),
+  };
+});
+
+// The frame's streamed parts have their own tests (`store-shell.test.ts`).
+vi.mock("../store-shell", () => ({ streamedShell }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
@@ -128,7 +148,9 @@ type Boundary = ReactElement<{
   fallback: ReactElement;
 }>;
 
-function setup({
+type Frame = ReactElement<Record<string, unknown> & { children: Boundary }>;
+
+async function setup({
   locale = "es",
   search = {},
   store = makeStore(),
@@ -141,14 +163,16 @@ function setup({
   categories.mockResolvedValue(CATEGORIES);
   filters.mockResolvedValue(FILTERS);
   products.mockResolvedValue(FIRST_PAGE);
-  const page: Boundary = CatalogPage({
+  const frame = (await CatalogPage({
     params: makeParams(locale),
     searchParams: makeSearch(search),
-  });
+  })) as Frame;
+  const page = frame.props.children;
   const inner = page.props.children;
 
   return {
     fallback: page.props.fallback,
+    frame,
     metadata: async (searchParams = makeSearch(search)) =>
       await generateMetadata({ params: makeParams(locale), searchParams }),
     resolve: async (searchParams?: Promise<RawSearchParams>) =>
@@ -166,20 +190,29 @@ describe("CatalogPage", () => {
     expect(instant).toBe(false);
   });
 
-  test("waits behind the catalog's skeleton", () => {
-    const { fallback } = setup();
+  test("waits behind the catalog's skeleton, in the frame, the catalog marked current", async () => {
+    const { fallback, frame } = await setup({ locale: "en" });
 
-    renderWithI18n(fallback, { locale: "es" });
+    renderWithI18n(fallback, { locale: "en" });
 
     expect(screen.getByTestId("store-catalog-skeleton")).toHaveAttribute(
       "aria-busy",
       "true"
     );
     expect(readStore).not.toHaveBeenCalled();
+    expect(frame.type).toBe(StoreFrame);
+    expect(frame.props).toMatchObject({
+      announcement: SHELL.announcement,
+      categories: SHELL.categories,
+      copy: getDictionary("en").storefront.shell,
+      current: "catalog",
+      locale: "en",
+    });
+    expect(streamedShell).toHaveBeenCalledExactlyOnceWith("en");
   });
 
   test("reads the store only once the query string is there, so the build needs no database", async () => {
-    const { resolve } = setup();
+    const { resolve } = await setup();
     const search = heldSearch();
 
     const pending = resolve(search.promise);
@@ -192,7 +225,7 @@ describe("CatalogPage", () => {
   });
 
   test("answers the not-found page when the store's row is missing, asking nothing", async () => {
-    const { resolve } = setup({ store: null });
+    const { resolve } = await setup({ store: null });
 
     await expect(resolve()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
@@ -202,7 +235,7 @@ describe("CatalogPage", () => {
   });
 
   test("renders the first page of the selection the address asks for, then the store's footer", async () => {
-    const { show } = setup({
+    const { show } = await setup({
       locale: "en",
       search: {
         category: "collares",
@@ -225,6 +258,7 @@ describe("CatalogPage", () => {
     });
     expect(catalogProps).toHaveBeenCalledExactlyOnceWith({
       categories: CATEGORIES,
+      description: "Collares · Dorado · “perla”, at LR Market.",
       filters: FILTERS,
       firstPage: FIRST_PAGE,
       heading: "Collares · Dorado · “perla”",
@@ -244,7 +278,7 @@ describe("CatalogPage", () => {
   });
 
   test("drops choices the store does not have before asking for articles", async () => {
-    const { show } = setup({
+    const { show } = await setup({
       search: { category: "anillos", color: "verde,dorado", talle: "m" },
     });
 
@@ -271,29 +305,35 @@ describe("CatalogPage", () => {
   });
 
   test.each([
-    ["es", "Catálogo"],
-    ["en", "Catalog"],
-  ] as const)("in %s, heads the whole catalog %j", async (locale, heading) => {
-    const { show } = setup({ locale });
+    ["es", "Catálogo", "Todos los artículos de LR Market."],
+    ["en", "Catalog", "Every article of LR Market."],
+  ] as const)(
+    "in %s, heads the whole catalog %j, described as %j",
+    async (locale, heading, description) => {
+      const { show } = await setup({ locale });
 
-    await show();
+      await show();
 
-    expect(screen.getByTestId("store-catalog")).toHaveTextContent(
-      new RegExp(`^${heading}$`, "u")
-    );
-  });
+      expect(screen.getByTestId("store-catalog")).toHaveTextContent(
+        new RegExp(`^${heading}$`, "u")
+      );
+      expect(catalogProps).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ description })
+      );
+    }
+  );
 });
 
 describe("generateMetadata", () => {
   test("adds nothing when the store's row is missing", async () => {
-    const { metadata } = setup({ store: null });
+    const { metadata } = await setup({ store: null });
 
     await expect(metadata()).resolves.toEqual({});
     expect(categories).not.toHaveBeenCalled();
   });
 
   test("reads the store only once the query string is there", async () => {
-    const { metadata } = setup();
+    const { metadata } = await setup();
     const search = heldSearch();
 
     const pending = metadata(search.promise);
@@ -323,7 +363,7 @@ describe("generateMetadata", () => {
   ] as const)(
     "in %s, titles the whole catalog %j",
     async (locale, title, shared, description, canonical) => {
-      const { metadata } = setup({ locale });
+      const { metadata } = await setup({ locale });
 
       await expect(metadata()).resolves.toEqual({
         alternates: {
@@ -342,7 +382,7 @@ describe("generateMetadata", () => {
   );
 
   test("titles a selection by its name, and keeps it but not the search or the sort in its addresses", async () => {
-    const { metadata } = setup({
+    const { metadata } = await setup({
       search: {
         category: "collares",
         color: "dorado,verde",
@@ -370,7 +410,7 @@ describe("generateMetadata", () => {
   });
 
   test("names the search in the title only: the share card leaves it out, and search engines skip the page", async () => {
-    const { metadata } = setup({
+    const { metadata } = await setup({
       search: { category: "collares", q: "perla" },
     });
 
@@ -412,7 +452,7 @@ describe("generateMetadata", () => {
   ] as const)(
     "in %s, a search alone titles the page %j, and the share card is the plain catalog's",
     async (locale, title, description, sharedTitle, sharedDescription) => {
-      const { metadata } = setup({ locale, search: { q: "perla" } });
+      const { metadata } = await setup({ locale, search: { q: "perla" } });
 
       await expect(metadata()).resolves.toMatchObject({
         description,

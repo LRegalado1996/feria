@@ -97,6 +97,20 @@ afterEach(() => {
 });
 
 describe("StoreShareButton", () => {
+  test("is an outlined pill, never the page's main action", () => {
+    setup({ share: "ok" });
+
+    const button = screen.getByRole("button", { name: "Compartir" });
+    expect(button).toHaveAttribute("data-slot", "store-button");
+    expect(button).toHaveAttribute("data-variant", "outline");
+    expect(button).toHaveAttribute("type", "button");
+    expect(button.parentElement).toHaveAttribute(
+      "data-slot",
+      "store-share-button"
+    );
+    expect(button.parentElement).toHaveClass("custom");
+  });
+
   test("opens the share sheet with the title and the link it is given", async () => {
     const { click, said, shareSheet, writeText } = setup({ share: "ok" });
 

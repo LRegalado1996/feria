@@ -13,8 +13,11 @@ import {
   StreamedStoreFooterResolver,
 } from "./store-page-footer";
 
-const { connection, readStore } = vi.hoisted(() => ({
+const { connection, readCategories, readStore } = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
+  readCategories: vi.fn(async (_store: { id: number }, locale: string) => [
+    { lang: locale, name: `anillos-${locale}`, slug: "anillos" },
+  ]),
   readStore: vi.fn<() => Promise<PublicStore | null>>(),
 }));
 
@@ -25,11 +28,26 @@ vi.mock("next/server", () => ({ connection }));
 
 vi.mock("@/server/cache/store", () => ({ readStore }));
 
+vi.mock("@/server/cache/catalog", () => ({ readCategories }));
+
 // The footer has its own tests; here it shows what the page handed it.
 vi.mock("@/app/_components/organisms/store-footer", () => ({
-  StoreFooter: ({ className, copy, store, tagline }: StoreFooterProps) => (
+  StoreFooter: ({
+    categories,
+    className,
+    copy,
+    locale,
+    store,
+    tagline,
+  }: StoreFooterProps) => (
     <footer className={className} data-testid="footer">
-      {`${store.name} | ${copy.footer} | ${tagline ? `${tagline.lang}: ${tagline.text}` : "no tagline"}`}
+      {[
+        store.name,
+        copy.footer,
+        tagline ? `${tagline.lang}: ${tagline.text}` : "no tagline",
+        locale,
+        categories.map((category) => category.name).join(","),
+      ].join(" | ")}
     </footer>
   ),
 }));
@@ -63,22 +81,25 @@ describe("StorePageFooter", () => {
     ["es", "Pie de la tienda", "es: Joyas en la feria"],
     ["en", "Store footer", "en: Jewelry at the fair"],
   ] as const)(
-    "in %s, hands the footer the store, the page's words and its tagline in that language",
-    (locale, footer, tagline) => {
-      render(<StorePageFooter locale={locale} store={makeStore()} />);
+    "in %s, hands the footer the store, the page's words, its tagline and its categories in that language",
+    async (locale, footer, tagline) => {
+      const store = makeStore();
+
+      render(await StorePageFooter({ locale, store }));
 
       expect(screen.getByTestId("footer")).toHaveTextContent(
-        `LR Market | ${footer} | ${tagline}`
+        `LR Market | ${footer} | ${tagline} | ${locale} | anillos-${locale}`
       );
+      expect(readCategories).toHaveBeenLastCalledWith(store, locale);
     }
   );
 
-  test("hands the Spanish tagline, marked as Spanish, to an English page of a store written only in Spanish", () => {
+  test("hands the Spanish tagline, marked as Spanish, to an English page of a store written only in Spanish", async () => {
     render(
-      <StorePageFooter
-        locale="en"
-        store={makeStore({ translations: [SPANISH] })}
-      />
+      await StorePageFooter({
+        locale: "en",
+        store: makeStore({ translations: [SPANISH] }),
+      })
     );
 
     expect(screen.getByTestId("footer")).toHaveTextContent(
@@ -86,16 +107,19 @@ describe("StorePageFooter", () => {
     );
   });
 
-  test("hands no tagline when the store has no texts", () => {
+  test("hands no tagline when the store has no texts", async () => {
     render(
-      <StorePageFooter locale="es" store={makeStore({ translations: [] })} />
+      await StorePageFooter({
+        locale: "es",
+        store: makeStore({ translations: [] }),
+      })
     );
 
     expect(screen.getByTestId("footer")).toHaveTextContent("no tagline");
   });
 
-  test("sits at the bottom of a short page", () => {
-    render(<StorePageFooter locale="es" store={makeStore()} />);
+  test("sits at the bottom of a short page", async () => {
+    render(await StorePageFooter({ locale: "es", store: makeStore() }));
 
     expect(screen.getByTestId("footer")).toHaveClass("mt-auto");
   });
@@ -120,17 +144,21 @@ describe("StreamedStoreFooterResolver", () => {
     readStore.mockResolvedValue(makeStore());
     const request = holdRequest(connection);
 
-    const footer = StreamedStoreFooterResolver({ locale: "es" });
+    const pending = StreamedStoreFooterResolver({ locale: "es" });
     await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
 
     request.arrive();
-    render(await footer);
+    const footer = (await pending) as ReactElement<{
+      locale: Locale;
+      store: PublicStore;
+    }>;
 
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
-    expect(screen.getByTestId("footer")).toHaveTextContent("LR Market");
+    expect(footer.type).toBe(StorePageFooter);
+    expect(footer.props).toEqual({ locale: "es", store: makeStore() });
   });
 
   test("renders nothing when the store's row is missing", async () => {

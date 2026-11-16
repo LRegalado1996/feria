@@ -35,24 +35,30 @@ test.describe("Store pages", () => {
     await storePage.goto();
 
     await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
+    // The white page, the lime bar and the moss header (FER-039).
     await expect(storePage.getTheme()).toHaveCSS(
       "background-color",
       rgb(STORE_THEME.background)
     );
-    await expect(storePage.getHeader()).toHaveCSS(
+    await expect(storePage.getAnnouncementBar()).toHaveCSS(
+      "background-color",
+      rgb(STORE_THEME.accent)
+    );
+    await expect(storePage.getSiteHeader()).toHaveCSS(
       "background-color",
       rgb(STORE_THEME.contrast)
     );
+    // The store's name in ink on the page, never the accent on white.
+    await expect(storePage.getHeader()).toHaveCSS(
+      "background-color",
+      rgb(STORE_THEME.background)
+    );
     await expect(
       storePage.getHeading(1).getByText(STORE_SETTINGS.name)
-    ).toHaveCSS("color", rgb(STORE_THEME.accent));
+    ).toHaveCSS("color", rgb(STORE_THEME.foreground));
     await expect(storePage.getDescription()).toHaveCSS(
       "color",
       rgb(STORE_THEME.foreground)
-    );
-    await expect(storePage.getDescription()).toHaveCSS(
-      "background-color",
-      rgb(STORE_THEME.surface)
     );
   });
 

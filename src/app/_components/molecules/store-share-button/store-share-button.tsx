@@ -3,6 +3,7 @@
 import { Share2 } from "lucide-react";
 import { useState } from "react";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { cn } from "@/lib/utils";
@@ -79,19 +80,22 @@ function StoreShareButton({ className, path, title }: StoreShareButtonProps) {
   };
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <button
-        className="inline-flex min-h-11 items-center gap-2 border-2 border-store-contrast px-4 text-sm font-semibold text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+    <div
+      className={cn("flex items-center gap-2", className)}
+      data-slot="store-share-button"
+    >
+      {/* A second action, never the page's main one: the outlined pill. */}
+      <StoreButton
         aria-disabled={pending}
-        data-slot="store-share-button"
         onClick={() => {
           void shareOnce();
         }}
         type="button"
+        variant="outline"
       >
-        <Share2 aria-hidden="true" className="size-4" />
+        <Share2 aria-hidden="true" />
         {copy.share}
-      </button>
+      </StoreButton>
       <output aria-live="polite" className="text-sm text-store-muted">
         {status.text}
         {/* An invisible mark that alternates, so a repeated message is new. */}

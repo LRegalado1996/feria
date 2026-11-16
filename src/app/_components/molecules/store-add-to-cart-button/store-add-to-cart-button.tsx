@@ -3,6 +3,7 @@
 import { ShoppingBag } from "lucide-react";
 import { useState } from "react";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
 import { useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
@@ -20,10 +21,11 @@ export interface StoreAddToCartButtonProps {
 }
 
 /**
- * Adds one of an article to the store's cart (FER-023), and says so in a
- * polite live region beside it: added, or why not (the article already at
- * its cap, the cart at its cap of articles). The header's count follows by
- * itself.
+ * Adds one of an article to the store's cart (FER-023), from its card: an
+ * outlined pill, so the card's name and price stay what is read first. It
+ * says in a polite live region beside it what adding did: added, or why not
+ * (the article already at its cap, the cart at its cap of articles). The
+ * header's count follows by itself.
  */
 function StoreAddToCartButton({
   className,
@@ -41,25 +43,28 @@ function StoreAddToCartButton({
   const hydrated = useHydrated();
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <button
+    <div
+      className={cn("flex flex-col gap-1", className)}
+      data-slot="store-add-to-cart-button"
+    >
+      <StoreButton
         aria-label={interpolate(copy.addToCart, { name })}
-        className="inline-flex min-h-11 w-full items-center justify-center gap-2 bg-store-contrast px-4 text-sm font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        data-slot="store-add-to-cart-button"
+        className="w-full"
         disabled={!hydrated}
         onClick={() => {
           const text = addOutcomeMessage(add(productId, 1, priceAmount), copy);
           setStatus((previous) => ({ count: previous.count + 1, text }));
         }}
         type="button"
+        variant="outline"
       >
-        <ShoppingBag aria-hidden="true" className="size-4" />
+        <ShoppingBag aria-hidden="true" />
         {copy.addToCartShort}
-      </button>
+      </StoreButton>
       <output aria-live="polite" className="text-xs text-store-muted">
         {status.text}
         {/* An invisible mark that alternates, so a repeated message is new. */}
-        {status.count % 2 === 1 ? "\u2060" : null}
+        {status.count % 2 === 1 ? "⁠" : null}
       </output>
     </div>
   );

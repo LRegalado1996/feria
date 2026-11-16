@@ -4,20 +4,23 @@ import { Menu, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ReactNode, useState } from "react";
 
-import { cn } from "@/lib/utils";
+import { StoreButton } from "@/app/_components/atoms/store-button";
 
 export interface StoreMobileMenuProps {
-  /** The menu's content, rendered by the server: links, search, toggle. */
+  /** The menu's content, rendered by the server: the links and the language. */
   children: ReactNode;
+  /** Placed on the button that opens the menu. */
   className?: string;
   closeLabel: string;
   label: string;
 }
 
 /**
- * The header's menu on a phone: a full-screen panel in the store's colors.
- * It renders in place, not in a portal, so it stays inside the element that
- * carries the store's palette. Following a link inside closes it.
+ * The header's menu where its links do not fit (FER-039): a moss panel that
+ * covers a phone's screen, or slides in from the left on a tablet, over a
+ * scrim. A modal dialog: focus stays inside, Escape or the close button
+ * closes it, focus returns to the menu button, and following a link inside
+ * closes it too. Rendered in place, in the header.
  */
 function StoreMobileMenu({
   children,
@@ -29,24 +32,25 @@ function StoreMobileMenu({
 
   return (
     <DialogPrimitive.Root onOpenChange={setOpen} open={open}>
-      <DialogPrimitive.Trigger
-        className={cn(
-          "inline-flex size-11 items-center justify-center text-store-foreground hover:bg-store-surface focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground",
-          className
-        )}
-        data-slot="store-mobile-menu-trigger"
-      >
-        <Menu aria-hidden="true" className="size-6" />
-        <span className="sr-only">{label}</span>
+      <DialogPrimitive.Trigger asChild>
+        <StoreButton
+          aria-label={label}
+          className={className}
+          data-slot="store-mobile-menu-trigger"
+          size="icon"
+          variant="contrast"
+        >
+          <Menu aria-hidden="true" />
+        </StoreButton>
       </DialogPrimitive.Trigger>
       <DialogPrimitive.Overlay
-        className="fixed inset-0 z-50 bg-store-background"
+        className="fixed inset-0 z-50 bg-store-foreground/50"
         data-slot="dialog-overlay"
         data-testid="dialog-overlay"
       />
       <DialogPrimitive.Content
         aria-describedby={undefined}
-        className="fixed inset-0 z-50 flex flex-col gap-8 overflow-y-auto bg-store-background p-4 text-store-foreground outline-none"
+        className="fixed inset-y-0 left-0 z-50 flex w-full flex-col overflow-y-auto bg-store-contrast text-store-background outline-none sm:max-w-sm"
         data-slot="dialog-content"
         data-testid="store-mobile-menu"
         onClickCapture={(event) => {
@@ -55,16 +59,17 @@ function StoreMobileMenu({
           }
         }}
       >
-        <div className="flex items-center justify-between">
-          <DialogPrimitive.Title className="font-display text-2xl leading-none tracking-display uppercase">
+        <div className="flex min-h-15.5 items-center justify-between border-b border-store-background/15 py-2 pr-1.5 pl-4">
+          <DialogPrimitive.Title className="font-display text-sm font-extrabold text-store-accent uppercase">
             {label}
           </DialogPrimitive.Title>
-          <DialogPrimitive.Close className="inline-flex size-11 items-center justify-center hover:bg-store-surface focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground">
-            <X aria-hidden="true" className="size-6" />
-            <span className="sr-only">{closeLabel}</span>
+          <DialogPrimitive.Close asChild>
+            <StoreButton aria-label={closeLabel} size="icon" variant="contrast">
+              <X aria-hidden="true" />
+            </StoreButton>
           </DialogPrimitive.Close>
         </div>
-        {children}
+        <div className="flex flex-1 flex-col gap-8 px-4 py-6">{children}</div>
       </DialogPrimitive.Content>
     </DialogPrimitive.Root>
   );

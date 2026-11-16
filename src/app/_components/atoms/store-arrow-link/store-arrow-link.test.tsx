@@ -1,12 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
-import { StoreArrowLink, type StoreArrowLinkProps } from "./store-arrow-link";
+import {
+  StoreArrowLink,
+  type StoreArrowLinkProps,
+  storeArrowLinkVariants,
+} from "./store-arrow-link";
 
 function setup(props: Partial<StoreArrowLinkProps> = {}) {
   render(
-    <StoreArrowLink href="/en/articles" {...props}>
-      See every article
+    <StoreArrowLink href="/en/products" {...props}>
+      Shop now
     </StoreArrowLink>
   );
   const link = screen.getByRole("link");
@@ -21,56 +25,73 @@ describe("StoreArrowLink", () => {
   test("is a link to its href, named by its text alone", () => {
     const { arrow, link } = setup();
 
-    expect(link).toHaveAttribute("href", "/en/articles");
-    expect(link).toHaveAccessibleName("See every article");
+    expect(link).toHaveAttribute("href", "/en/products");
+    expect(link).toHaveAccessibleName("Shop now");
     expect(link).toHaveAttribute("data-slot", "store-arrow-link");
+    expect(arrow?.tagName.toLowerCase()).toBe("svg");
     expect(arrow).toHaveAttribute("aria-hidden", "true");
-    expect(arrow?.querySelector("svg")).not.toBeNull();
   });
 
-  test("is tall enough for a thumb and underlined, so it reads as a link without color", () => {
+  test("is set in the display face, tall enough for a thumb, underlined on hover", () => {
     const { link } = setup();
 
-    expect(link).toHaveClass("min-h-11", "underline");
-  });
-
-  test("on the background, the arrow sits on a contrast box that takes the accent on hover", () => {
-    const { arrow, link } = setup();
-
-    expect(link).toHaveAttribute("data-tone", "default");
-    expect(link).toHaveClass("text-store-foreground");
-    expect(arrow).toHaveClass(
-      "bg-store-contrast",
-      "group-hover:bg-store-accent"
+    expect(link).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "uppercase",
+      "min-h-11",
+      "hover:underline"
     );
   });
 
-  test("on a contrast block, the text inverts and the box starts on the accent", () => {
-    const { arrow, link } = setup({ tone: "contrast" });
+  test("on the page it is the foreground, with a ring in the foreground", () => {
+    const { link } = setup();
+
+    expect(link).toHaveAttribute("data-tone", "default");
+    expect(link).toHaveClass(
+      "text-store-foreground",
+      "focus-visible:outline-store-foreground"
+    );
+    expect(link).not.toHaveClass("text-store-accent");
+  });
+
+  test("on a contrast block it is the accent, with a ring in the accent", () => {
+    const { link } = setup({ tone: "contrast" });
 
     expect(link).toHaveAttribute("data-tone", "contrast");
-    expect(link).toHaveClass("text-store-background");
+    expect(link).toHaveClass(
+      "text-store-accent",
+      "focus-visible:outline-store-accent"
+    );
     expect(link).not.toHaveClass("text-store-foreground");
-    expect(arrow).toHaveClass("bg-store-accent");
-    expect(arrow).not.toHaveClass("bg-store-contrast");
   });
 
   test("the arrow's nudge is dropped under reduced motion", () => {
     const { arrow } = setup();
 
-    const icon = arrow?.querySelector("svg");
-
-    expect(icon).toHaveClass(
+    expect(arrow).toHaveClass(
       "motion-safe:group-hover:translate-x-1",
       "motion-safe:transition-transform"
     );
     // Ungated, it would still jump under reduced motion.
-    expect(icon).not.toHaveClass("group-hover:translate-x-1");
+    expect(arrow).not.toHaveClass("group-hover:translate-x-1");
   });
 
-  test("keeps a caller's class", () => {
-    const { link } = setup({ className: "mt-4" });
+  test("keeps a caller's class and passes the link's own attributes", () => {
+    const { link } = setup({
+      className: "mt-4",
+      rel: "noopener noreferrer",
+      target: "_blank",
+    });
 
-    expect(link).toHaveClass("mt-4", "underline");
+    expect(link).toHaveClass("mt-4", "font-display");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  test("exposes its tones", () => {
+    expect(storeArrowLinkVariants({ tone: "contrast" })).toContain(
+      "text-store-accent"
+    );
   });
 });

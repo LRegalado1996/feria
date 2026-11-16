@@ -67,6 +67,20 @@ describe("StoreAddToCartButton", () => {
     expect(button).toHaveAttribute("type", "button");
   });
 
+  test("is an outlined pill as wide as its card, so the name and price are read first", () => {
+    setup();
+
+    const button = screen.getByRole("button");
+    expect(button).toHaveAttribute("data-slot", "store-button");
+    expect(button).toHaveAttribute("data-variant", "outline");
+    expect(button).toHaveClass("w-full", "rounded-full", "min-h-11");
+    expect(button.parentElement).toHaveAttribute(
+      "data-slot",
+      "store-add-to-cart-button"
+    );
+    expect(button.parentElement).toHaveClass("custom");
+  });
+
   test("starts with nothing said", () => {
     const { status } = setup();
 

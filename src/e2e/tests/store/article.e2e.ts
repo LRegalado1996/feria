@@ -37,29 +37,35 @@ async function setup(
 }
 
 test.describe("Article page", () => {
-  test("the gallery steps, jumps to a thumbnail and opens a photo full screen", async ({
+  test("the gallery's round arrow steps through the photos and back, and the one in view opens full screen", async ({
     db,
     page,
   }) => {
     const { article } = await setup({ db });
     await page.goto(`/products/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
-    await expect(gallery.getByText("Foto 1 de 3")).toBeVisible();
+    // Said to a screen reader, out of sight.
+    const position = gallery.locator("output");
+    await expect(position).toHaveText("Foto 1 de 3");
 
     await clickUntilVisible(
       gallery.getByRole("button", { name: "Foto siguiente" }),
       gallery.getByText("Foto 2 de 3")
     );
-    const track = gallery.getByTestId("store-gallery-track");
-    // The photo in view, by its place on the track.
-    const inView = async () =>
-      await track.evaluate((element) =>
-        Math.round(element.scrollLeft / element.clientWidth)
-      );
-    await expect.poll(inView).toBe(1);
-    await gallery.getByRole("button", { name: "Ver la foto 3" }).click();
-    await expect(gallery.getByText("Foto 3 de 3")).toBeVisible();
-    await expect.poll(inView).toBe(2);
+    // Every slide is named by its place; the photo in view sits at the left
+    // edge of the gallery (the slide's own box holds the gap before it).
+    const slide = (place: number) =>
+      gallery.getByRole("group", { name: `${place} de 3` });
+    const leftEdge = async (place: number) => {
+      const [box, frame] = await Promise.all([
+        slide(place).getByRole("img").boundingBox(),
+        gallery.boundingBox(),
+      ]);
+      return Math.round((box?.x ?? -1) - (frame?.x ?? 0));
+    };
+    await expect.poll(async () => await leftEdge(2)).toBe(0);
+    await gallery.getByRole("button", { name: "Foto siguiente" }).click();
+    await expect(position).toHaveText("Foto 3 de 3");
 
     // Every photo shares the article's alt text: the zoom is told apart by
     // its source, which next/image passes on as `url=`.
@@ -69,7 +75,7 @@ test.describe("Article page", () => {
         ? null
         : new URL(src, page.url()).searchParams.get("url");
     };
-    const third = await source(track.getByRole("img").nth(2));
+    const third = await source(slide(3).getByRole("img"));
     expect(third).toBe("/seed/ring-3.jpg");
     const zoom = page.getByTestId("store-gallery-zoom");
     await gallery.getByRole("button", { name: "Ampliar la foto" }).click();
@@ -79,6 +85,12 @@ test.describe("Article page", () => {
       .toBe(third);
     await zoom.getByRole("button", { name: "Cerrar la foto ampliada" }).click();
     await expectDialogRemoved(page, zoom);
+
+    // At the last photo the arrow leads back to the first.
+    await gallery
+      .getByRole("button", { name: "Volver a la primera foto" })
+      .click();
+    await expect(position).toHaveText("Foto 1 de 3");
   });
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {
