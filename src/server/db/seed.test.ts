@@ -32,6 +32,12 @@ const { createAccount } = vi.hoisted(() => ({
 
 vi.mock("@/server/better-auth/accounts", () => ({ createAccount }));
 
+const { seedCatalog } = vi.hoisted(() => ({
+  seedCatalog: vi.fn(async (_tx: unknown, _storeId: number) => 11),
+}));
+
+vi.mock("./seed-catalog", () => ({ seedCatalog }));
+
 const BOTH_STORES = ["lr-market", "tienda-demo"];
 const ALL_EMAILS = [
   "test@example.com",
@@ -125,6 +131,7 @@ describe("seed", () => {
 
       await expect(run(nodeEnv)).resolves.toEqual({
         createdAccounts: ALL_EMAILS,
+        createdArticles: 11,
         createdPost: true,
         createdStores: [],
       });
@@ -199,6 +206,7 @@ describe("seed", () => {
 
     await expect(run("test")).resolves.toEqual({
       createdAccounts: [],
+      createdArticles: 11,
       createdPost: false,
       createdStores: [],
     });
@@ -238,6 +246,7 @@ describe("seed", () => {
 
     await expect(run("development")).resolves.toEqual({
       createdAccounts: [],
+      createdArticles: 11,
       createdPost: false,
       createdStores: ["lr-market", "tienda-demo"],
     });
@@ -245,6 +254,30 @@ describe("seed", () => {
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalledWith(post);
     expect(memberships()).toEqual([]);
+  });
+
+  test("loads the sample catalog into Lucas's store, inside a transaction", async () => {
+    const { db, run } = setup();
+    // The transaction's own handle: the catalog must be written through it.
+    const tx = createMockDatabase();
+    db.$.transaction.mockImplementation(
+      async (callback: unknown) =>
+        await (callback as (handle: unknown) => Promise<unknown>)(tx)
+    );
+
+    await run("development");
+
+    expect(seedCatalog).toHaveBeenCalledExactlyOnceWith(tx, 11);
+  });
+
+  test("skips the catalog when Lucas's store is not there", async () => {
+    const { db, run } = setup();
+    db.query.store.findMany.mockImplementation(async () => []);
+
+    await expect(run("development")).resolves.toMatchObject({
+      createdArticles: 0,
+    });
+    expect(seedCatalog).not.toHaveBeenCalled();
   });
 
   test("every seed login has a store to land in, except the superadmin who needs none", () => {

@@ -90,6 +90,7 @@ describe("storeSlugSchema", () => {
       "en",
       "es",
       "monitoring",
+      "seed",
     ]);
   });
 

@@ -22,6 +22,34 @@
       "when": 1794712130258,
       "tag": "0002_common_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794714357614,
+      "tag": "0003_soft_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794714639164,
+      "tag": "0004_brief_vermin",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794715359867,
+      "tag": "0005_enable_unaccent",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794716249394,
+      "tag": "0006_volatile_iron_monger",
+      "breakpoints": true
     }
   ]
 }

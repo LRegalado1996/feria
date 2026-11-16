@@ -114,6 +114,6 @@ export const config = {
   // (`/api/docs/spec.json`); a test holds this list to `public/` and to the
   // languages, so a new file or language fails until it is added.
   matcher: [
-    "/((?!_next/|_vercel/|monitoring(?:/|$)|brand/|(?:icon|apple-icon)$|(?:es|en)/opengraph-image$).*)",
+    "/((?!_next/|_vercel/|monitoring(?:/|$)|brand/|seed/|(?:icon|apple-icon)$|(?:es|en)/opengraph-image$).*)",
   ],
 };
