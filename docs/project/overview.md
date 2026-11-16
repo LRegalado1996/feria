@@ -41,11 +41,11 @@ A bilingual mini e-commerce for one store, Lucas Regalado's own: bubble guns and
 
 ## Public views
 
-| View    | Route (Spanish / English) | Contents                                                                                                    |
-| ------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Home    | `/` · `/en`               | Announcement bar, a cover banner, then rows of articles (categories, best sellers, featured) and banners.   |
-| Catalog | `/products`               | Grid with a filter panel (category, color and other filters), sort and search, all in the URL, and a share. |
-| Article | `/products/{slug}`        | Gallery, price, description, add to cart, related articles.                                                 |
+| View    | Route (Spanish / English) | Contents                                                                                                                            |
+| ------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Home    | `/` · `/en`               | Announcement bar, a cover of banners that moves on its own, then rows of articles (categories, best sellers, featured) and banners. |
+| Catalog | `/products`               | Grid with a filter panel (category, color and other filters), sort and search, all in the URL, and a share.                         |
+| Article | `/products/{slug}`        | Gallery, price, description, add to cart, related articles.                                                                         |
 
 Supporting flow, not counted as views: cart, checkout form, and the order confirmation page `/orders/{token}` (which also hosts the code form when verification is on).
 

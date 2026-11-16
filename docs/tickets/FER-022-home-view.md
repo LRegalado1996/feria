@@ -16,9 +16,9 @@ Rewritten on 2026-11-16 to the structure of the reference store, with the compon
 At `/`, top to bottom:
 
 1. The announcement bar (in the shell) with the active announcement.
-2. The cover: the first banner as a full-width photo, its title and "Comprar ahora →" on the bottom-left corner.
+2. The cover: the cover carousel from FER-039 with the cover's banners, moving on its own; each is a full-width photo with its title and "Comprar ahora →" on the bottom-left corner. A single banner shows still.
 3. A row of articles: heading, "Ver todo", cards that scroll sideways.
-4. The next banner, full width.
+4. A banner placed between rows, full width.
 5. The next row, and so on: rows and banners alternate in the order set in FER-020 (categories, best sellers, featured).
 6. The footer's social block: Instagram, TikTok and a WhatsApp call to action.
 
@@ -27,7 +27,7 @@ Each section hides itself when it has no content, so a new store never shows an 
 ## Acceptance criteria
 
 - Server-rendered, cached, and invalidated when curation or articles change.
-- The cover photo is the page's priority image; everything below loads lazily with reserved space.
+- The cover's first photo is the page's priority image; its other photos and everything below load lazily with reserved space.
 - One `h1`, ordered headings, real text in the HTML for every section.
 - Smooth on a mid-range Android phone; rows work by touch, mouse, and keyboard.
 - E2E in both languages with seeded content, and with an empty store.
