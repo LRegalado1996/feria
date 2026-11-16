@@ -219,10 +219,12 @@ function CartBody({
   // now, so the order waits for one that is.
   if (products.isError) {
     blockedReason = copy.errors.refresh;
-  } else if (products.isFetching) {
+  } else if (products.isFetching || loadingLines) {
     // A refresh on its way (back to the tab, an article that changed under
     // the order, a line added and still pending): the lines stay on screen,
-    // but the order waits for the shop's word on them.
+    // but the order waits for the shop's word on them. So does a read that
+    // has not started: offline, the query waits without fetching, and the
+    // shop has said nothing about this list yet.
     blockedReason = copy.loading;
   } else if (
     lines.some((line) => line.flag === "gone" || line.flag === "unavailable")

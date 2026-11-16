@@ -1,4 +1,8 @@
-import { focusManager, QueryClientProvider } from "@tanstack/react-query";
+import {
+  focusManager,
+  onlineManager,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -141,6 +145,7 @@ afterEach(() => {
   localStorage.clear();
   // Back to the browser's own word on whether the window has focus.
   focusManager.setFocused(undefined);
+  onlineManager.setOnline(true);
 });
 
 describe("StoreCart", () => {
@@ -660,6 +665,42 @@ describe("StoreCart", () => {
       [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
       [{ ids: [9], locale: "en", storeSlug: "lr-market" }],
     ]);
+  });
+
+  test("offline after a failed first read, a shorter list that cannot be read yet holds the order", async () => {
+    const { cartProducts, submit, user } = setup({ products: "fail" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not fetch the current prices."
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Your name" }),
+      "Ana Pérez"
+    );
+    server.use(createOrpcHandler("catalog.cartProducts", cartProducts));
+    // No connection: the read for the shorter list waits without starting.
+    act(() => {
+      onlineManager.setOnline(false);
+    });
+    const [first] = screen.getAllByRole("button", {
+      name: "Remove Fetching the current prices…",
+    });
+    if (!first) {
+      throw new Error("No line to remove");
+    }
+
+    await user.click(first);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    expect(cartProducts).not.toHaveBeenCalled();
+    expect(submit()).toBeDisabled();
+    expect(submit()).toHaveAccessibleDescription(
+      "Fetching the current prices…"
+    );
+    expect(screen.getByRole("textbox", { name: "Your name" })).toHaveValue(
+      "Ana Pérez"
+    );
   });
 
   test("a line taken out after a failed first read keeps the form and what was typed while the shorter list loads", async () => {
