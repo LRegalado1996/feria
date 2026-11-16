@@ -10,6 +10,7 @@ import {
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { placeOrder } from "../../fixtures/place-order";
 import { AdminOrdersPage } from "../../page-objects/admin-orders.page";
+import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
 import { AdminPage } from "../../page-objects/admin.page";
 
 // FER-040. The admin at a phone's width, one hand on the phone: the
@@ -257,5 +258,21 @@ test.describe("Admin on a phone", () => {
     }).toPass();
 
     await expect(field).toBeInViewport();
+  });
+
+  test.describe("signed out", () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test("the sign-in is all 44 px targets too, and nothing scrolls sideways", async ({
+      page,
+    }) => {
+      const signIn = new AdminSignInPage(page);
+
+      await signIn.goto();
+      await signIn.waitForForm();
+
+      await expectNoSmallTargets(page);
+      await signIn.expectNoHorizontalScroll();
+    });
   });
 });

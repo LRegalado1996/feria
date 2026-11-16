@@ -12,7 +12,7 @@ function readPngSize(body: Buffer) {
 }
 
 test.describe("Brand identity, signed in", () => {
-  test("the admin's header shows the LR Market mark", async ({
+  test("the admin's sidebar shows the full LR Market logo at its smallest size", async ({
     authenticatedPage: page,
   }) => {
     await new AdminPage(page).goto();
@@ -21,10 +21,12 @@ test.describe("Brand identity, signed in", () => {
       .getByRole("banner")
       .getByRole("img", { name: "LR Market" });
     await expect(logo).toBeVisible();
-    // The mark keeps the drawing's 116:84 proportions at its 32 px height.
+    // The tag with LR and MARKET (FER-040), never under 96 px tall, keeping
+    // the drawing's 116:84 proportions (docs/brand/brand.md).
+    await expect(logo).toHaveAttribute("data-variant", "full");
     const box = await logo.boundingBox();
-    expect(box?.height).toBe(32);
-    expect(Math.round(box?.width ?? 0)).toBe(44);
+    expect(box?.height).toBe(96);
+    expect(Math.round(box?.width ?? 0)).toBe(133);
   });
 });
 
