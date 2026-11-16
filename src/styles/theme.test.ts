@@ -137,13 +137,15 @@ describe("STORE_THEME", () => {
 });
 
 describe("storeThemeStyle", () => {
+  // The theme file's own values, not copies of them: another company edits
+  // the palette there alone, and the contrast rules above judge it.
   test("writes each color into its --store-* variable", () => {
     expect(storeThemeStyle()).toEqual({
-      "--store-accent": "#c8f31d",
-      "--store-background": "#f2f3f0",
-      "--store-contrast": "#111312",
-      "--store-foreground": "#111312",
-      "--store-surface": "#ffffff",
+      "--store-accent": STORE_THEME.accent,
+      "--store-background": STORE_THEME.background,
+      "--store-contrast": STORE_THEME.contrast,
+      "--store-foreground": STORE_THEME.foreground,
+      "--store-surface": STORE_THEME.surface,
     });
   });
 });
