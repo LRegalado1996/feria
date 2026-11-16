@@ -47,7 +47,6 @@ test("leaves three logins with their roles, credentials and memberships, and a s
     expect(second).toEqual({
       createdAccounts: [],
       createdArticles: 0,
-      createdPost: false,
       createdStores: [],
     });
     expect(

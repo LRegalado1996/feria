@@ -1,7 +1,7 @@
 import { daysUntilFair } from "../../../lib/brand/fair";
 import { expect, test } from "../../fixtures";
 import { ComingSoonPage } from "../../page-objects/coming-soon.page";
-import { HomePage } from "../../page-objects/home.page";
+import { StorePage } from "../../page-objects/store.page";
 
 // The server Playwright starts lets this header set the launch switch for one
 // request (src/lib/env/launch.ts), so both positions run against one build.
@@ -191,20 +191,54 @@ test.describe("Launch switch off: the store is closed", () => {
 });
 
 test.describe("Launch switch on: the store is open", () => {
-  test.use({
-    extraHTTPHeaders: OPEN,
-    storageState: { cookies: [], origins: [] },
-  });
+  test.use({ extraHTTPHeaders: OPEN });
 
-  test("the storefront renders at /", async ({ page }) => {
-    const homePage = new HomePage(page);
+  // Signed in as the worker's superadmin: marking a store as the default is
+  // a store edit, and the edit is what drops the cached answer.
+  test("/ opens the default store, in the language of the address", async ({
+    db,
+    superadminPage: page,
+  }) => {
+    const store = await db.seed.createStore({ name: "Default Store" });
+    const edit = async (isDefault: boolean) =>
+      await page.request.post("/api/orpc/store/update", {
+        data: {
+          json: {
+            colorAccent: store.colorAccent,
+            colorBackground: store.colorBackground,
+            colorContrast: store.colorContrast,
+            colorForeground: store.colorForeground,
+            colorSurface: store.colorSurface,
+            currencyCode: store.currencyCode,
+            id: store.id,
+            instagramUrl: null,
+            isActive: true,
+            isDefault,
+            logoUrl: null,
+            name: store.name,
+            slug: store.slug,
+            tiktokUrl: null,
+            translations: [],
+            whatsappNumber: null,
+          },
+        },
+      });
+    expect((await edit(true)).status()).toBe(200);
+    const storePage = new StorePage(page, store.slug);
 
-    await homePage.goto();
+    await page.goto("/");
 
-    await expect(page).toHaveURL("/");
-    await expect(
-      page.getByRole("heading", { name: "Hola de nuevo" })
-    ).toBeVisible();
+    await storePage.waitForLoad();
+    await expect(page).toHaveURL(`/${store.slug}`);
+    await expect(storePage.getHeading(1)).toHaveText("Default Store");
+
+    await page.goto("/en");
+
+    await expect(page).toHaveURL(`/en/${store.slug}`);
+    await storePage.expectDocumentLanguage("en");
+
+    // The mark is given back, so `/` never leads to a store that is gone.
+    expect((await edit(false)).status()).toBe(200);
   });
 
   for (const [path, target] of [

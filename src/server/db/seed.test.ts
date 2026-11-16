@@ -1,13 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { createStoreSchema } from "@/lib/schemas/store";
-import {
-  post,
-  store,
-  storeMember,
-  storeTranslation,
-  user,
-} from "@/server/db/schema";
+import { store, storeMember, storeTranslation, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -56,13 +50,11 @@ const LOCAL_URL = "postgresql://feria:secret@localhost:5432/feria";
 function setup({
   databaseUrl = LOCAL_URL,
   existingEmails = [],
-  postCount = 0,
   takenSlugs = BOTH_STORES,
 }: {
   databaseUrl?: string;
   /** The seed logins already in the database, by email. */
   existingEmails?: string[];
-  postCount?: number;
   /** The seed stores already in the database: both, unless a test is about them. */
   takenSlugs?: string[];
 } = {}) {
@@ -73,7 +65,6 @@ function setup({
     return existingEmails.includes(email) ? { id: `old:${email}` } : undefined;
   });
   db.$["update.returning"].mockResolvedValue([{ id: "updated" }]);
-  db.$["select.from"].mockResolvedValue([{ total: postCount }]);
   // Two reads of the seed stores: which exist (slugs), then their ids.
   db.query.store.findMany.mockImplementation(async (config: unknown) =>
     (config as { columns: Record<string, boolean> }).columns.id
@@ -132,7 +123,6 @@ describe("seed", () => {
       await expect(run(nodeEnv)).resolves.toEqual({
         createdAccounts: ALL_EMAILS,
         createdArticles: 11,
-        createdPost: true,
         createdStores: [],
       });
     }
@@ -189,25 +179,12 @@ describe("seed", () => {
     ]);
   });
 
-  test("posts as the superadmin on an empty feed", async () => {
-    const { db, run } = setup();
-
-    await run("development");
-
-    expect(db.$.insert).toHaveBeenCalledWith(post);
-    expect(db.$["insert.values"]).toHaveBeenCalledWith({
-      name: "Welcome to the feed!",
-      createdById: "id:test@example.com",
-    });
-  });
-
   test("gives existing logins their seed role instead of creating them again", async () => {
-    const { db, run } = setup({ existingEmails: ALL_EMAILS, postCount: 1 });
+    const { db, run } = setup({ existingEmails: ALL_EMAILS });
 
     await expect(run("test")).resolves.toEqual({
       createdAccounts: [],
       createdArticles: 11,
-      createdPost: false,
       createdStores: [],
     });
     expect(createAccount).not.toHaveBeenCalled();
@@ -229,15 +206,7 @@ describe("seed", () => {
     ]);
   });
 
-  test("leaves the feed alone when it has a post", async () => {
-    const { db, run } = setup({ existingEmails: ALL_EMAILS, postCount: 1 });
-
-    await run("test");
-
-    expect(db.$.insert).not.toHaveBeenCalledWith(post);
-  });
-
-  test("on a remote database (qa) creates the stores but no login, post or membership", async () => {
+  test("on a remote database (qa) creates the stores but no login or membership", async () => {
     const { db, memberships, run } = setup({
       databaseUrl:
         "postgresql://app:secret@ep-qa-123.us-east-2.aws.neon.tech/feria",
@@ -247,12 +216,10 @@ describe("seed", () => {
     await expect(run("development")).resolves.toEqual({
       createdAccounts: [],
       createdArticles: 11,
-      createdPost: false,
       createdStores: ["lr-market", "tienda-demo"],
     });
     expect(createAccount).not.toHaveBeenCalled();
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
-    expect(db.$.insert).not.toHaveBeenCalledWith(post);
     expect(memberships()).toEqual([]);
   });
 
@@ -293,7 +260,6 @@ describe("seed", () => {
   test("creates both stores, with their texts, on a database that has neither", async () => {
     const { db, run } = setup({
       existingEmails: ALL_EMAILS,
-      postCount: 1,
       takenSlugs: [],
     });
 
@@ -349,7 +315,6 @@ describe("seed", () => {
   test("creates only the store that is missing", async () => {
     const { db, run } = setup({
       existingEmails: ALL_EMAILS,
-      postCount: 1,
       takenSlugs: ["lr-market"],
     });
 

@@ -22,8 +22,4 @@ export const auth = {
     emailInvalid: "Ingresá un email válido",
     passwordTooShort: "La contraseña debe tener al menos 8 caracteres",
   },
-  welcome: {
-    subtitle: "Iniciá sesión en tu cuenta para continuar",
-    title: "Hola de nuevo",
-  },
 };

@@ -16,5 +16,4 @@ export const common = {
   },
   showPassword: "Mostrar contraseña",
   tryAgain: "Reintentar",
-  userFallbackName: "Usuario",
 };

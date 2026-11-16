@@ -163,6 +163,19 @@ export async function getActiveStoreBySlug(
   return found;
 }
 
+/**
+ * The address of the store the site opens on, or `null`: no store holds the
+ * default mark. A default store is always active (a database check).
+ */
+export async function findDefaultStore(db: DatabaseClient) {
+  const found = await db.query.store.findFirst({
+    columns: { id: true, slug: true },
+    where: eq(store.isDefault, true),
+  });
+
+  return found ?? null;
+}
+
 /** The slugs among `slugs` that a store, active or not, already holds. */
 export async function listTakenStoreSlugs(
   db: DatabaseClient,

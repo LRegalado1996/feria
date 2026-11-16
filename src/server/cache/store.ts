@@ -2,7 +2,10 @@ import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import { storeSlugSchema } from "@/lib/schemas/store";
 import { db } from "@/server/db";
-import { findActiveStoreBySlug } from "@/server/services/store";
+import {
+  findActiveStoreBySlug,
+  findDefaultStore,
+} from "@/server/services/store";
 
 /** Every cached read of one store, whatever slug it was read under. */
 function storeTag(id: number): string {
@@ -16,6 +19,26 @@ function storeTag(id: number): string {
  */
 function storeSlugTag(slug: string): string {
   return `store-slug:${slug}`;
+}
+
+/**
+ * The cached answer to "which store does the site open on", "none" included.
+ * Any store's edit can move the mark, so every edit drops it.
+ */
+const DEFAULT_STORE_TAG = "store-default";
+
+/**
+ * The store `/` opens, or `null` when none is the default: its id and its
+ * address only. Cached like a store's own read, and dropped by any store's
+ * edit, since an edit is what moves the mark.
+ */
+export async function getDefaultStore() {
+  "use cache";
+  // A safety net only: an edit invalidates the entry at once (below).
+  cacheLife("hours");
+  cacheTag(DEFAULT_STORE_TAG);
+
+  return await findDefaultStore(db);
 }
 
 /**
@@ -52,10 +75,11 @@ export async function getStoreForPath(segment: string) {
 }
 
 /**
- * Drops what is cached about a store after it was created or edited. Both
- * tags: the id reaches the entry under a slug the store just left, the slug
- * reaches a cached "no such store" at the address it now holds. `expire: 0`
- * serves nothing stale: the next visit reads the database.
+ * Drops what is cached about a store after it was created or edited: the id
+ * reaches the entry under a slug the store just left, the slug reaches a
+ * cached "no such store" at the address it now holds, and the default's tag
+ * goes because the write may have moved the mark. `expire: 0` serves nothing
+ * stale: the next visit reads the database.
  */
 export function invalidateStoreCache({
   id,
@@ -66,4 +90,5 @@ export function invalidateStoreCache({
 }): void {
   revalidateTag(storeTag(id), { expire: 0 });
   revalidateTag(storeSlugTag(slug), { expire: 0 });
+  revalidateTag(DEFAULT_STORE_TAG, { expire: 0 });
 }

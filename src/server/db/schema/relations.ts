@@ -15,14 +15,12 @@ import {
   productTranslation,
 } from "./catalog";
 import { customerOrder, orderItem, orderStatusEvent } from "./order";
-import { post } from "./post";
 import { store, storeTranslation } from "./store";
 import { storeMember } from "./store-member";
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
-  posts: many(post),
   storeMemberships: many(storeMember),
 }));
 
@@ -36,13 +34,6 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, {
     fields: [account.userId],
-    references: [user.id],
-  }),
-}));
-
-export const postRelations = relations(post, ({ one }) => ({
-  createdBy: one(user, {
-    fields: [post.createdById],
     references: [user.id],
   }),
 }));

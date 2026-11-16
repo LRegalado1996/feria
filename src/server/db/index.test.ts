@@ -88,7 +88,6 @@ describe("database client", () => {
         "customerOrder",
         "orderItem",
         "orderStatusEvent",
-        "post",
         "product",
         "productAttributeValue",
         "productImage",

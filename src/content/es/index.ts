@@ -7,7 +7,6 @@ import { environment } from "./environment";
 import { errors } from "./errors";
 import { locale } from "./locale";
 import { metadata } from "./metadata";
-import { post } from "./post";
 import { seo } from "./seo";
 import { storefront } from "./storefront";
 import { theme } from "./theme";
@@ -28,7 +27,6 @@ export const es = {
   errors,
   locale,
   metadata,
-  post,
   seo,
   storefront,
   theme,

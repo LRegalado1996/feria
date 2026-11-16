@@ -18,5 +18,4 @@ export const common: Dictionary["common"] = {
   },
   showPassword: "Show password",
   tryAgain: "Try again",
-  userFallbackName: "User",
 };
