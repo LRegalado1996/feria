@@ -30,6 +30,19 @@ vi.mock("@/env", () => ({
 // id after each test, the articles before their categories.
 const created = { categoryIds: [] as number[], productIds: [] as number[] };
 
+const ROLLED_BACK = "Rolled back on purpose: this test keeps nothing";
+
+const SPANISH = {
+  description: "Anillos y cadenas.",
+  locale: "es",
+  tagline: "Joyas en la feria",
+} as const;
+const ENGLISH = {
+  description: "Rings and chains.",
+  locale: "en",
+  tagline: "Jewelry at the fair",
+} as const;
+
 afterEach(async () => {
   await db
     .delete(product)
@@ -133,36 +146,39 @@ async function setup() {
 }
 
 describe("what search engines and assistants are told about", () => {
+  // The store's texts are every file's: a migrated database has none, so
+  // the test writes its own, inside a transaction it then rolls back.
   test("reads the store's own row with its texts, the columns the sitemap and llms.txt use", async () => {
-    const storeId = await theStoreId(db);
-    const [row] = await db
-      .select({
-        currencyCode: store.currencyCode,
-        id: store.id,
-        name: store.name,
-        updatedAt: store.updatedAt,
-      })
-      .from(store)
-      .where(eq(store.id, storeId));
-    const texts = await db
-      .select({
-        description: storeTranslation.description,
-        locale: storeTranslation.locale,
-        tagline: storeTranslation.tagline,
-      })
-      .from(storeTranslation)
-      .where(eq(storeTranslation.storeId, storeId));
+    const run = db.transaction(async (tx) => {
+      const storeId = await theStoreId(tx);
+      await tx
+        .delete(storeTranslation)
+        .where(eq(storeTranslation.storeId, storeId));
+      await tx.insert(storeTranslation).values([
+        { ...SPANISH, storeId },
+        { ...ENGLISH, storeId },
+      ]);
+      const [row] = await tx
+        .select({
+          currencyCode: store.currencyCode,
+          id: store.id,
+          name: store.name,
+          updatedAt: store.updatedAt,
+        })
+        .from(store)
+        .where(eq(store.id, storeId));
 
-    const found = await findIndexableStore(db);
+      const found = await findIndexableStore(tx);
 
-    expect(found).toEqual({
-      ...row,
-      // Whatever order the read gave them: the texts, all and only them.
-      translations: expect.any(Array),
+      expect(found).toEqual({ ...row, translations: expect.any(Array) });
+      // Whatever order the read gave them: both texts, and only them.
+      expect(new Set(found?.translations)).toEqual(new Set([SPANISH, ENGLISH]));
+
+      throw new Error(ROLLED_BACK);
     });
-    // One text per language, so a set of them loses nothing.
-    expect(new Set(found?.translations)).toEqual(new Set(texts));
-    expect(found?.translations.length).toBe(texts.length);
+
+    // A failed expectation above rejects with its own message instead.
+    await expect(run).rejects.toThrow(ROLLED_BACK);
   });
 
   test("lists the store's published articles only, never a draft", async () => {
