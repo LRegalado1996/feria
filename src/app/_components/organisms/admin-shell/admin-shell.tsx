@@ -102,10 +102,9 @@ function AdminShell({
 
 /**
  * What the sidebar and the phone's panel both show: the logo, the sections,
- * then the login and its controls, kept at the foot while the sections
- * scroll on a short screen. On a screen too short even for the logo and the
- * login (a phone turned sideways), the whole column scrolls, so sign-out
- * stays reachable.
+ * then the login and its controls at the foot. On a screen too short for all
+ * of it (a phone turned sideways) the whole column scrolls as one, so every
+ * section and sign-out stay reachable.
  */
 function AdminSidebar({
   dictionary,
@@ -123,8 +122,11 @@ function AdminSidebar({
       <div className="shrink-0 p-6">
         <StoreLogo className="h-24" variant="full" />
       </div>
+      {/* Grows to put the login at the foot, and never shrinks below its
+          links: a scroll box of its own would be squeezed to its padding on
+          a short screen, the links clipped inside it. */}
       <AdminNav
-        className="min-h-0 flex-1 overflow-y-auto p-3"
+        className="flex-1 p-3"
         items={ADMIN_SECTIONS.map((section) => ({
           // The orders still to pack, wherever in the admin the staff is:
           // the orders screen is where a new one is announced.
