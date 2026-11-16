@@ -148,10 +148,14 @@ test.describe("Languages, signed out", () => {
       browser,
     }) => {
       const origin = requireBaseURL(baseURL);
-      // A hand-made context gets none of the config's `use` options.
+      // A hand-made context gets none of the config's `use` options. Scripts
+      // off, as this crawler reads: under `next dev` (`pnpm e2e`) the page's
+      // script moves metadata streamed into <body> up to <head>, which would
+      // pass this test with the HTML holding none there.
       const context = await browser.newContext({
         baseURL: origin,
         ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+        javaScriptEnabled: false,
         userAgent: BINGBOT,
       });
 
