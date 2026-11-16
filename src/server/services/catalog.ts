@@ -284,7 +284,7 @@ export async function listPublishedProducts(
     storeId,
     valueGroups = [],
   }: StoreScope &
-    Omit<ListProductsValues, "filters" | "sort" | "storeSlug"> & {
+    Omit<ListProductsValues, "filters" | "sort"> & {
       currencyCode: Currency;
       sort?: ProductSort;
       /** The filters' value ids, one group per filter (`resolveCatalogFilters`). */
@@ -650,10 +650,7 @@ function toTranslationRows(
 /** A new draft article of the store, its slug from the Spanish title. */
 export async function createProduct(
   tx: DatabaseClient,
-  {
-    storeId,
-    values,
-  }: StoreScope & { values: Omit<CreateProductValues, "storeSlug"> }
+  { storeId, values }: StoreScope & { values: CreateProductValues }
 ) {
   await assertStoreCategory(tx, { categoryId: values.categoryId, storeId });
   const slug = await allocateSlug(tx, {
@@ -726,10 +723,7 @@ async function countImages(tx: DatabaseClient, productId: number) {
  */
 export async function updateProduct(
   tx: DatabaseClient,
-  {
-    storeId,
-    values,
-  }: StoreScope & { values: Omit<UpdateProductValues, "storeSlug"> }
+  { storeId, values }: StoreScope & { values: UpdateProductValues }
 ) {
   // The category before the article, the order a category's deletion takes
   // them in: the other way round, an edit and that deletion could each hold

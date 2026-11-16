@@ -1,7 +1,5 @@
 import { sql } from "drizzle-orm";
 import {
-  boolean,
-  check,
   integer,
   pgEnum,
   pgTable,
@@ -11,53 +9,33 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-import {
-  RESERVED_STORE_SLUGS,
-  STORE_COLOR_PATTERN,
-  STORE_CURRENCIES,
-  STORE_SLUG_MAX_LENGTH,
-  STORE_SLUG_MIN_LENGTH,
-  STORE_SLUG_PATTERN,
-} from "@/lib/schemas/store";
+import { STORE_CURRENCIES } from "@/lib/schemas/store";
 
 import { localeEnum } from "./locale";
 
 export const currencyCodeEnum = pgEnum("currency_code", STORE_CURRENCIES);
 
-// A CHECK takes no bound parameters, so these constants are written into the
-// SQL as literals. They come from the same module the zod schemas read
-// (`src/lib/schemas/store`), never from input, and hold no quote.
-const slugPattern = sql.raw(`'${STORE_SLUG_PATTERN.source}'`);
-const colorPattern = sql.raw(`'${STORE_COLOR_PATTERN.source}'`);
-const reservedSlugs = sql.raw(
-  RESERVED_STORE_SLUGS.map((slug) => `'${slug}'`).join(", ")
-);
-const slugMinLength = sql.raw(String(STORE_SLUG_MIN_LENGTH));
-const slugMaxLength = sql.raw(String(STORE_SLUG_MAX_LENGTH));
-
+/**
+ * The company the site sells for (FER-038): one deployment is one store, so
+ * this table holds exactly one row. Its colors and its logo are code (the
+ * theme file and the brand files); the row keeps what a person sets in the
+ * admin: the name, the contacts, the socials and the currency. Every catalog,
+ * order and metrics table keeps its `storeId`, pointing here.
+ *
+ * Until FER-041 the database also keeps the columns the multi-store model
+ * read (`slug`, `isActive`, `isDefault`, `logoUrl` and the five colors),
+ * nullable and unread: the build a deploy replaces still reads them while
+ * the migration runs (docs/agents/database.md § Migrations).
+ */
 export const store = pgTable(
   "store",
   {
     id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    // The first segment of every public URL of the store. Lowercase by its
-    // check, so the unique constraint needs no case folding.
-    slug: text().notNull().unique(),
     name: text().notNull(),
     whatsappNumber: text(),
     instagramUrl: text(),
     tiktokUrl: text(),
     currencyCode: currencyCodeEnum().notNull(),
-    logoUrl: text(),
-    isActive: boolean().notNull(),
-    // The store the site opens on. At most one, by the partial unique index
-    // below, and never an inactive one.
-    isDefault: boolean().notNull().default(false),
-    // The store's palette, the five storefront tokens (design.md § Storefront).
-    colorBackground: text().notNull(),
-    colorSurface: text().notNull(),
-    colorForeground: text().notNull(),
-    colorContrast: text().notNull(),
-    colorAccent: text().notNull(),
     createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
@@ -66,44 +44,10 @@ export const store = pgTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    // Only rows with `isDefault` are indexed, and all of them hold the same
-    // value, so a second default store is a unique violation.
-    uniqueIndex("store_single_default")
-      .on(table.isDefault)
-      .where(sql`${table.isDefault}`),
-    check(
-      "store_default_is_active",
-      sql`NOT ${table.isDefault} OR ${table.isActive}`
-    ),
-    check(
-      "store_slug_format",
-      sql`${table.slug} ~ ${slugPattern} AND char_length(${table.slug}) BETWEEN ${slugMinLength} AND ${slugMaxLength}`
-    ),
-    check(
-      "store_slug_not_reserved",
-      sql`${table.slug} NOT IN (${reservedSlugs})`
-    ),
-    check(
-      "store_color_background_hex",
-      sql`${table.colorBackground} ~ ${colorPattern}`
-    ),
-    check(
-      "store_color_surface_hex",
-      sql`${table.colorSurface} ~ ${colorPattern}`
-    ),
-    check(
-      "store_color_foreground_hex",
-      sql`${table.colorForeground} ~ ${colorPattern}`
-    ),
-    check(
-      "store_color_contrast_hex",
-      sql`${table.colorContrast} ~ ${colorPattern}`
-    ),
-    check(
-      "store_color_accent_hex",
-      sql`${table.colorAccent} ~ ${colorPattern}`
-    ),
+  () => [
+    // Every row indexes the same constant, so a second row is a unique
+    // violation: the database refuses it, whatever writes it.
+    uniqueIndex("store_single_row").on(sql`(true)`),
   ]
 );
 

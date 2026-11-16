@@ -1,197 +1,75 @@
 import { ORPCError } from "@orpc/server";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import type { UserRole } from "@/lib/schemas/access";
 import type { DatabaseClient } from "@/server/db";
-import { store, storeMember, user } from "@/server/db/schema";
+import { store, user } from "@/server/db/schema";
 
 /**
- * The role a user holds now, read from the database rather than the session:
- * the session's copy is cached in a cookie for minutes, so a demoted
- * superadmin would keep their access until it expires. `null` when the user
- * no longer exists.
+ * Whether `userId` is still a login. The session can outlive its user for a
+ * few minutes (Better Auth caches it in a cookie), so access is re-read from
+ * the database, never trusted from the session.
  */
-export async function getUserRole(
-  db: DatabaseClient,
-  userId: string
-): Promise<UserRole | null> {
-  const found = await db.query.user.findFirst({
-    columns: { role: true },
-    where: eq(user.id, userId),
-  });
-
-  return found?.role ?? null;
-}
-
-/**
- * Whether `userId` is a superadmin, or a member of the store the outer query
- * is on: conditions of that one query, not reads of their own.
- */
-function mayWorkOnStore(userId: string) {
-  return or(
-    sql`exists (select 1 from ${user} where ${and(eq(user.id, userId), eq(user.role, "superadmin"))})`,
-    sql`exists (select 1 from ${storeMember} where ${and(eq(storeMember.storeId, store.id), eq(storeMember.userId, userId))})`
-  );
-}
-
-/**
- * The store at `slug`, if `userId` may work on it: a superadmin may work on
- * every store, a member on the stores they belong to, inactive ones included
- * (the admin is where a store is reactivated). A store that does not exist
- * and one the user may not see are the same `null`, so the answer never
- * confirms that another store exists.
- */
-export async function findAccessibleStore(
-  db: DatabaseClient,
-  { slug, userId }: { slug: string; userId: string }
-) {
-  // The query builder, not `db.query`: a relational read renames every
-  // column in its `where` to the root table's alias, subqueries' included.
-  const [found] = await db
-    .select()
-    .from(store)
-    .where(and(eq(store.slug, slug), mayWorkOnStore(userId)))
-    .limit(1);
-
-  return found ?? null;
-}
-
-/** Whether any superadmin exists: the first-run script runs only once. */
-export async function hasSuperadmin(db: DatabaseClient): Promise<boolean> {
+async function isLogin(db: DatabaseClient, userId: string): Promise<boolean> {
   const found = await db.query.user.findFirst({
     columns: { id: true },
-    where: eq(user.role, "superadmin"),
+    where: eq(user.id, userId),
   });
 
   return found !== undefined;
 }
 
 /**
- * Makes `userId` a member of `storeId`. Adding a member twice is a no-op, so a
- * seed or a retried request converges.
+ * The store an admin works on, if `userId` is still a login, else `null`.
+ * Every login is an admin and reaches the whole admin (FER-038), and the
+ * store is the table's one row: its id is the scope of every query the
+ * admin's procedures make. No row is NOT_FOUND, a database whose migrations
+ * have not run.
  */
-export async function addStoreMember(
-  db: DatabaseClient,
-  { storeId, userId }: { storeId: number; userId: string }
-) {
-  await db
-    .insert(storeMember)
-    .values({ storeId, userId })
-    .onConflictDoNothing({
-      target: [storeMember.storeId, storeMember.userId],
-    });
-}
-
-/** Gives `userId` a role. A user that does not exist is NOT_FOUND. */
-export async function setUserRole(
-  db: DatabaseClient,
-  { role, userId }: { role: UserRole; userId: string }
-) {
-  const [updated] = await db
-    .update(user)
-    .set({ role })
-    .where(eq(user.id, userId))
-    .returning({ id: user.id });
-
-  if (!updated) {
-    throw new ORPCError("NOT_FOUND", { message: "User not found" });
-  }
-}
-
-/** The ids of the stores at these slugs, by slug; missing ones are absent. */
-export async function listStoreIdsBySlug(
-  db: DatabaseClient,
-  slugs: string[]
-): Promise<Map<string, number>> {
-  if (slugs.length === 0) {
-    return new Map();
+export async function findAdminStore(db: DatabaseClient, userId: string) {
+  if (!(await isLogin(db, userId))) {
+    return null;
   }
 
-  const rows = await db.query.store.findMany({
-    columns: { id: true, slug: true },
-    where: inArray(store.slug, slugs),
-  });
+  const [found] = await db.select({ id: store.id }).from(store).limit(1);
 
-  return new Map(rows.map((row) => [row.slug, row.id]));
+  if (!found) {
+    throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+  }
+
+  return found;
+}
+
+/** Whether any login exists: the first-run script runs only once. */
+export async function hasLogin(db: DatabaseClient): Promise<boolean> {
+  const found = await db.query.user.findFirst({ columns: { id: true } });
+
+  return found !== undefined;
 }
 
 /**
- * Runs `write` in a transaction that first re-derives the caller's access
- * under a row lock (resolve, lock, commit in `docs/agents/database.md`):
- * `FOR SHARE` on the superadmin's user row, or on the membership, so a
- * demotion or a removal that commits first is seen and one that comes later
- * waits for this write. The procedure's own check is a snapshot taken before
- * the transaction; this is the one that holds while the row is written.
+ * Runs `write` in a transaction that first re-reads the caller's login under
+ * a row lock (resolve, lock, commit in `docs/agents/database.md`): `FOR
+ * SHARE` on its user row, so a login removed before the write refuses it
+ * and one removed later waits for it to commit. The procedure's own check
+ * is a snapshot taken before the transaction; this is the one that holds
+ * while the row is written.
  */
-export async function withStoreAccess<T>(
+export async function withAdmin<T>(
   db: DatabaseClient,
-  { storeId, userId }: { storeId: number | null; userId: string },
+  userId: string,
   write: (tx: DatabaseClient) => Promise<T>
 ): Promise<T> {
   return await db.transaction(async (tx) => {
-    const [superadmin] = await tx
+    const [login] = await tx
       .select({ id: user.id })
       .from(user)
-      .where(and(eq(user.id, userId), eq(user.role, "superadmin")))
+      .where(eq(user.id, userId))
       .for("share");
 
-    if (!superadmin) {
-      // `null` asks for a superadmin: a platform write, no store to belong to.
-      if (storeId === null) {
-        throw new ORPCError("FORBIDDEN");
-      }
-
-      const [membership] = await tx
-        .select({ id: storeMember.id })
-        .from(storeMember)
-        .where(
-          and(eq(storeMember.storeId, storeId), eq(storeMember.userId, userId))
-        )
-        .for("share");
-
-      if (!membership) {
-        throw new ORPCError("NOT_FOUND", { message: "Store not found" });
-      }
+    if (!login) {
+      throw new ORPCError("UNAUTHORIZED");
     }
 
     return await write(tx);
   });
-}
-
-/**
- * The stores `userId` may work on, by name: every store for a superadmin,
- * the member's own otherwise (inactive ones included, as in
- * `findAccessibleStore`). What the admin's landing and store switcher show.
- */
-export async function listAccessibleStores(db: DatabaseClient, userId: string) {
-  return await db
-    .select({
-      id: store.id,
-      isActive: store.isActive,
-      name: store.name,
-      slug: store.slug,
-    })
-    .from(store)
-    .where(mayWorkOnStore(userId))
-    .orderBy(asc(store.name), asc(store.id));
-}
-
-/**
- * What the admin's pages decide with: the role the database holds for the
- * login and the stores it may work on, read together; `null` when the user
- * no longer exists (a session that outlived it).
- */
-export async function getAdminProfile(db: DatabaseClient, userId: string) {
-  // One read-only snapshot: a promotion between the two reads would
-  // otherwise pair the old role with the new store list.
-  const [role, stores] = await db.transaction(
-    async (tx) =>
-      await Promise.all([
-        getUserRole(tx, userId),
-        listAccessibleStores(tx, userId),
-      ]),
-    { accessMode: "read only", isolationLevel: "repeatable read" }
-  );
-
-  return role === null ? null : { role, stores };
 }

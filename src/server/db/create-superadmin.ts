@@ -8,7 +8,7 @@ import {
   createAccount,
 } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
-import { hasSuperadmin } from "@/server/services/access";
+import { hasLogin } from "@/server/services/access";
 
 /**
  * What the script reads from the environment. The password is never printed
@@ -34,7 +34,7 @@ const superadminEnvSchema = z.object({
     ),
 });
 
-// What `pg_advisory_xact_lock` is keyed on while the first superadmin is made.
+// What `pg_advisory_xact_lock` is keyed on while the first login is made.
 const BOOTSTRAP_LOCK = "user.first-superadmin";
 
 interface CreateSuperadminOptions {
@@ -44,11 +44,12 @@ interface CreateSuperadminOptions {
 }
 
 /**
- * The first login of a fresh database (FER-009): sign-up is closed, so the
- * first superadmin cannot be created any other way. Refused once any
- * superadmin exists, so running it again, or against the wrong database,
- * never adds a second one or touches the first. Every later login is created
- * by a superadmin or a store member.
+ * The first login of a fresh database (FER-009): sign-up is closed, so it
+ * cannot be created any other way. Refused once any login exists, so running
+ * it again, or against the wrong database, never adds a second one or
+ * touches the first. Every later login is created by an admin (FER-015).
+ * The script and its variables keep the name of the role it gave before
+ * FER-038; every login is an admin now.
  */
 export async function createSuperadmin({
   auth,
@@ -64,15 +65,15 @@ export async function createSuperadmin({
   }
 
   // One run at a time: two runs with different emails would both see no
-  // superadmin and both create one. The lock is released at commit.
+  // login and both create one. The lock is released at commit.
   return await db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${BOOTSTRAP_LOCK}))`
     );
 
-    if (await hasSuperadmin(tx)) {
+    if (await hasLogin(tx)) {
       throw new Error(
-        "A superadmin already exists: this script only creates the first one"
+        "A login already exists: this script only creates the first one"
       );
     }
 
@@ -80,7 +81,6 @@ export async function createSuperadmin({
       email: parsed.data.SUPERADMIN_EMAIL,
       name: parsed.data.SUPERADMIN_NAME,
       password: parsed.data.SUPERADMIN_PASSWORD,
-      role: "superadmin",
     });
   });
 }

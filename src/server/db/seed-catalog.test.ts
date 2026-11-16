@@ -265,7 +265,6 @@ describe("seedCatalog", () => {
           categoryId: 1,
           isAvailable: article.isAvailable,
           priceAmount: article.priceAmount,
-          storeSlug: "lr-market",
           translations: (["es", "en"] as const).map((locale) => ({
             description: article.description[locale],
             locale,

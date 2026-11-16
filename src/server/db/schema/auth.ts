@@ -22,10 +22,11 @@ export const user = pgTable("user", {
   email: text().notNull().unique(),
   emailVerified: boolean().notNull().default(false),
   image: text(),
-  // FER-009. Declared to Better Auth as an additional field it never takes
-  // from a request (`input: false`), so nobody signs themselves up as a
-  // superadmin. The safe default: a login reaches nothing until it is a
-  // member of a store.
+  // Nothing reads it since FER-038: every login is an admin and reaches the
+  // whole admin. It stays as the home of later roles; FER-041 turns its type
+  // into the single value `admin` once no deployed build reads the two the
+  // multi-store model had. Declared to Better Auth as an additional field it
+  // never takes from a request (`input: false`).
   role: userRoleEnum().notNull().default("member"),
   createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
     .notNull()

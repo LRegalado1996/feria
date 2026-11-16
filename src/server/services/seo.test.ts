@@ -5,25 +5,22 @@ import {
   categoryTranslation,
   product,
   productTranslation,
-  store,
 } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 
 import {
+  findIndexableStore,
   listIndexableArticles,
   listIndexableCategories,
-  listIndexableStores,
 } from "./seo";
 
 const STORE_ID = 3;
 const UPDATED_AT = new Date("2026-11-14T12:00:00.000Z");
 
-/** The `columns`, `where`, `orderBy` and `with` a relational read was given. */
+/** What a relational read was given. */
 interface ReadConfig {
   columns: Record<string, boolean>;
-  orderBy: unknown;
-  where: unknown;
   with: unknown;
 }
 
@@ -31,47 +28,40 @@ function setup() {
   const db = createMockDatabase();
 
   return {
-    configOf: (fn: (typeof db.query)["store"]["findMany"]) =>
+    configOf: (fn: (typeof db.query)["store"]["findFirst"]) =>
       fn.mock.calls[0]?.[0] as ReadConfig,
     db,
   };
 }
 
-describe("listIndexableStores", () => {
-  test("reads only active stores, oldest first, with their texts", async () => {
+describe("findIndexableStore", () => {
+  test("reads the table's one row with what the sitemap and llms.txt say, and its texts", async () => {
     const { configOf, db } = setup();
-    const rows = [
-      {
-        currencyCode: "UYU",
-        id: 1,
-        name: "LR Market",
-        slug: "lr-market",
-        translations: [],
-        updatedAt: UPDATED_AT,
-      },
-    ];
-    db.query.store.findMany.mockResolvedValue(rows);
+    const found = {
+      currencyCode: "UYU",
+      id: 1,
+      name: "LR Market",
+      translations: [],
+      updatedAt: UPDATED_AT,
+    };
+    db.query.store.findFirst.mockResolvedValue(found);
 
-    await expect(listIndexableStores(db as never)).resolves.toBe(rows);
+    await expect(findIndexableStore(db as never)).resolves.toBe(found);
 
-    const config = configOf(db.query.store.findMany);
-    expect(renderQuery(config.where)).toEqual({
-      params: [true],
-      sql: '"store"."isActive" = $1',
-    });
-    expect(renderOrderBy(config.orderBy)).toBe('"store"."id" asc');
-    expect(config.columns).toEqual({
-      currencyCode: true,
-      id: true,
-      name: true,
-      slug: true,
-      updatedAt: true,
-    });
-    expect(config.with).toEqual({
-      translations: {
-        columns: { description: true, locale: true, tagline: true },
+    expect(configOf(db.query.store.findFirst)).toEqual({
+      columns: { currencyCode: true, id: true, name: true, updatedAt: true },
+      with: {
+        translations: {
+          columns: { description: true, locale: true, tagline: true },
+        },
       },
     });
+  });
+
+  test("answers null, never undefined, before the row exists", async () => {
+    const { db } = setup();
+
+    await expect(findIndexableStore(db as never)).resolves.toBeNull();
   });
 });
 
@@ -85,7 +75,7 @@ function answerTexts(db: ReturnType<typeof setup>["db"], rows: unknown[]) {
 }
 
 describe("listIndexableArticles", () => {
-  test("reads the store's published articles of an active store, newest first", async () => {
+  test("reads the store's published articles, newest first", async () => {
     const { db } = setup();
     db.$["select.orderBy"].mockResolvedValue([
       {
@@ -145,7 +135,6 @@ describe("listIndexableArticles", () => {
         renderQuery(on),
       ])
     ).toEqual([
-      [store, { params: [], sql: '"store"."id" = "product"."storeId"' }],
       [
         product,
         {
@@ -154,14 +143,14 @@ describe("listIndexableArticles", () => {
         },
       ],
     ]);
-    // A draft never, and nothing of an inactive store even by its id; the
-    // titles of an article unpublished since the first read neither.
+    // A draft never; the titles of an article unpublished since the first
+    // read neither.
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
       {
-        params: [STORE_ID, "published", true],
-        sql: '("product"."storeId" = $1 and "product"."status" = $2 and "store"."isActive" = $3)',
+        params: [STORE_ID, "published"],
+        sql: '("product"."storeId" = $1 and "product"."status" = $2)',
       },
       {
         params: [9, 8, "published"],
@@ -219,21 +208,15 @@ describe("listIndexableCategories", () => {
       [category],
       [categoryTranslation],
     ]);
-    const [joined, on] = db.$["select.innerJoin"].mock.calls[0] ?? [];
-    expect(joined).toBe(store);
-    expect(renderQuery(on)).toEqual({
-      params: [],
-      sql: '"store"."id" = "category"."storeId"',
-    });
-    // Nothing of an inactive store, even when its id is asked for.
+    expect(db.$["select.innerJoin"]).not.toHaveBeenCalled();
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
       {
-        params: [STORE_ID, true, "published"],
+        params: [STORE_ID, "published"],
         sql:
-          '("category"."storeId" = $1 and "store"."isActive" = $2 and exists (select 1 from "product" where ' +
-          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $3)))',
+          '("category"."storeId" = $1 and exists (select 1 from "product" where ' +
+          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $2)))',
       },
       {
         params: [1, 2, 3],

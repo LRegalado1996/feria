@@ -1,17 +1,19 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";
-import { db } from "@/server/db";
+import { type DatabaseClient, db } from "@/server/db";
 import {
+  attribute,
   category,
+  product,
   store,
-  storeMember,
   storeTranslation,
   user,
 } from "@/server/db/schema";
+import { theStoreId } from "@/server/test/one-store";
 
-import { SEED_MEMBERS, SEED_STORES, SEED_USER, seed } from "./seed";
+import { SEED_USER, seed } from "./seed";
 
 vi.mock("@/env", () => ({
   env: {
@@ -20,72 +22,57 @@ vi.mock("@/env", () => ({
   },
 }));
 
-const SEED_EMAILS = [SEED_USER, ...SEED_MEMBERS].map(({ email }) => email);
-
-const SEED_SLUGS = SEED_STORES.map((seedStore) => seedStore.slug);
-
 const ROLLED_BACK = "Rolled back on purpose: this test keeps nothing";
+
+/** The seed run as `pnpm db:seed` runs it, on `tx`, against a local database. */
+async function runSeed(tx: DatabaseClient) {
+  return await seed({
+    auth,
+    databaseUrl: process.env.DATABASE_URL,
+    db: tx,
+    nodeEnv: "test",
+  });
+}
+
+/**
+ * The store as a fresh database has it: no texts and no catalog. Articles
+ * first, since a category that still has one cannot be deleted.
+ */
+async function emptyStore(tx: DatabaseClient, storeId: number) {
+  await tx.delete(product).where(eq(product.storeId, storeId));
+  await tx.delete(attribute).where(eq(attribute.storeId, storeId));
+  await tx.delete(category).where(eq(category.storeId, storeId));
+  await tx
+    .delete(storeTranslation)
+    .where(eq(storeTranslation.storeId, storeId));
+}
 
 // Runs the seed against the migrated schema, so a constraint or column the
 // seed no longer satisfies fails here instead of in the next fresh worktree.
-// Inside a transaction that is rolled back: the test needs a database
-// without the seed logins, and the clone's own are put back untouched.
-test("leaves three logins with their roles, credentials and memberships, and a second run changes nothing", async () => {
+// Inside a transaction that is rolled back: the test needs a database without
+// the seed's rows, and the clone's own are put back untouched.
+test("leaves one login with its credential, and a second run creates nothing", async () => {
   const run = db.transaction(async (tx) => {
-    await tx.delete(user).where(inArray(user.email, SEED_EMAILS));
-    const options = {
-      auth,
-      databaseUrl: process.env.DATABASE_URL,
-      db: tx,
-      nodeEnv: "test",
-    };
+    await tx.delete(user).where(eq(user.email, SEED_USER.email));
+    await emptyStore(tx, await theStoreId(tx));
 
-    const first = await seed(options);
-    const second = await seed(options);
+    const first = await runSeed(tx);
+    const second = await runSeed(tx);
 
-    expect(first.createdAccounts).toEqual(SEED_EMAILS);
+    expect(first.createdAccounts).toEqual([SEED_USER.email]);
     expect(second).toEqual({
       createdAccounts: [],
       createdArticles: 0,
-      createdStores: [],
+      createdStoreTexts: [],
     });
     expect(
       await tx.query.user.findMany({
-        columns: { email: true, role: true },
-        orderBy: user.email,
-        where: inArray(user.email, SEED_EMAILS),
-        with: {
-          accounts: { columns: { providerId: true } },
-          storeMemberships: {
-            columns: {},
-            // The seed creates lr-market first, so its id is the lower one.
-            orderBy: storeMember.storeId,
-            with: { store: { columns: { slug: true } } },
-          },
-        },
+        columns: { email: true },
+        where: eq(user.email, SEED_USER.email),
+        with: { accounts: { columns: { providerId: true } } },
       })
     ).toEqual([
-      {
-        accounts: [{ providerId: "credential" }],
-        email: "member@example.com",
-        role: "member",
-        storeMemberships: [{ store: { slug: "lr-market" } }],
-      },
-      {
-        accounts: [{ providerId: "credential" }],
-        email: "multi@example.com",
-        role: "member",
-        storeMemberships: [
-          { store: { slug: "lr-market" } },
-          { store: { slug: "tienda-demo" } },
-        ],
-      },
-      {
-        accounts: [{ providerId: "credential" }],
-        email: "test@example.com",
-        role: "superadmin",
-        storeMemberships: [],
-      },
+      { accounts: [{ providerId: "credential" }], email: SEED_USER.email },
     ]);
 
     throw new Error(ROLLED_BACK);
@@ -95,85 +82,53 @@ test("leaves three logins with their roles, credentials and memberships, and a s
   await expect(run).rejects.toThrow(ROLLED_BACK);
 });
 
-test("leaves two active stores with different palettes and texts in both languages, once", async () => {
-  // Inside a transaction that is rolled back: the test needs a database
-  // without the seed stores, and the clone's own are put back untouched.
+test("gives the one store its texts in both languages and its sample catalog, once, and leaves its name alone", async () => {
   const run = db.transaction(async (tx) => {
-    await tx.delete(store).where(inArray(store.slug, SEED_SLUGS));
+    const storeId = await theStoreId(tx);
+    const [before] = await tx
+      .select({ name: store.name })
+      .from(store)
+      .where(eq(store.id, storeId));
+    await emptyStore(tx, storeId);
 
-    const first = await seed({
-      auth,
-      databaseUrl: process.env.DATABASE_URL,
-      db: tx,
-      nodeEnv: "test",
-    });
-    const second = await seed({
-      auth,
-      databaseUrl: process.env.DATABASE_URL,
-      db: tx,
-      nodeEnv: "test",
-    });
+    const first = await runSeed(tx);
+    const second = await runSeed(tx);
 
-    expect(first.createdStores).toEqual(["lr-market", "tienda-demo"]);
-    expect(second.createdStores).toEqual([]);
+    expect([first.createdStoreTexts, second.createdStoreTexts]).toEqual([
+      ["es", "en"],
+      [],
+    ]);
     expect([first.createdArticles, second.createdArticles]).toEqual([11, 0]);
-    const lrMarket = await tx.query.store.findFirst({
-      where: eq(store.slug, "lr-market"),
+    const seeded = await tx.query.store.findFirst({
+      columns: { name: true },
+      where: eq(store.id, storeId),
       with: {
         categories: { columns: { slug: true }, orderBy: category.position },
         products: { columns: { status: true } },
-      },
-    });
-    expect(lrMarket?.categories.map(({ slug }) => slug)).toEqual([
-      "burbujeros",
-      "cadenas",
-      "anillos",
-      "aros",
-      "pulseras",
-    ]);
-    expect(lrMarket?.products.map(({ status }) => status)).toEqual(
-      Array.from({ length: 11 }, () => "published")
-    );
-
-    const stores = await tx.query.store.findMany({
-      columns: {
-        colorAccent: true,
-        isActive: true,
-        isDefault: true,
-        name: true,
-        slug: true,
-      },
-      orderBy: store.slug,
-      where: inArray(store.slug, SEED_SLUGS),
-      with: {
         translations: {
           columns: { locale: true },
           orderBy: storeTranslation.locale,
         },
       },
     });
-    expect(
-      stores.map(({ translations, ...columns }) => ({
-        ...columns,
-        locales: translations.map(({ locale }) => locale),
-      }))
-    ).toEqual([
-      {
-        colorAccent: "#c8f31d",
-        isActive: true,
-        isDefault: true,
-        locales: ["es", "en"],
-        name: "LR Market",
-        slug: "lr-market",
-      },
-      {
-        colorAccent: "#ff8a3d",
-        isActive: true,
-        isDefault: false,
-        locales: ["es", "en"],
-        name: "Tienda Demo",
-        slug: "tienda-demo",
-      },
+    expect(seeded?.name).toBe(before?.name);
+    expect(seeded?.categories.map(({ slug }) => slug)).toEqual([
+      "burbujeros",
+      "cadenas",
+      "anillos",
+      "aros",
+      "pulseras",
+    ]);
+    expect(seeded?.products.map(({ status }) => status)).toEqual(
+      Array.from({ length: 11 }, () => "published")
+    );
+    expect(seeded?.translations.map(({ locale }) => locale)).toEqual([
+      "es",
+      "en",
+    ]);
+    // Still one store: the seed adds to it, never beside it.
+    expect(await tx.select({ id: store.id }).from(store)).toEqual([
+      { id: storeId },
     ]);
 
     throw new Error(ROLLED_BACK);

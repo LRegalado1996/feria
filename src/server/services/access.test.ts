@@ -1,298 +1,130 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { store, storeMember, user } from "@/server/db/schema";
+import { store, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
-import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
+import { renderQuery } from "@/server/test/render-sql";
 
-import {
-  addStoreMember,
-  findAccessibleStore,
-  getAdminProfile,
-  getUserRole,
-  hasSuperadmin,
-  listAccessibleStores,
-  listStoreIdsBySlug,
-  setUserRole,
-  withStoreAccess,
-} from "./access";
+import { findAdminStore, hasLogin, withAdmin } from "./access";
 
 function setup() {
   const db = createMockDatabase();
 
   return {
     db,
-    /** The `where` the service handed a relational read, as SQL. */
-    whereOf: (model: "user") => {
-      const [config] = db.query[model].findFirst.mock.calls[0] ?? [];
-      return renderQuery((config as { where: unknown }).where);
+    /** What the service handed the relational read of `user`. */
+    userRead: () => {
+      const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+      return config as { columns: unknown; where?: unknown };
     },
   };
 }
 
-describe("getUserRole", () => {
-  test.each(["superadmin", "member"] as const)(
-    "answers the %s role the database holds for that user",
-    async (role) => {
-      const { db, whereOf } = setup();
-      db.query.user.findFirst.mockResolvedValue({ role });
+describe("findAdminStore", () => {
+  test("re-reads the login by its id, then answers the store's one row", async () => {
+    const { db, userRead } = setup();
+    db.query.user.findFirst.mockResolvedValue({ id: "user-1" });
+    db.$["select.limit"].mockResolvedValue([{ id: 3 }]);
 
-      await expect(getUserRole(db as never, "user-1")).resolves.toBe(role);
-      expect(whereOf("user")).toEqual({
-        params: ["user-1"],
-        sql: '"user"."id" = $1',
-      });
-    }
-  );
-
-  test("answers null for a user that no longer exists", async () => {
-    const { db } = setup();
-
-    await expect(getUserRole(db as never, "gone")).resolves.toBeNull();
-  });
-});
-
-describe("findAccessibleStore", () => {
-  test("filters by the slug and by the caller's access in the same query", async () => {
-    const { db } = setup();
-    const found = { id: 3, slug: "lr-market" };
-    db.$["select.limit"].mockResolvedValue([found]);
-
-    await expect(
-      findAccessibleStore(db as never, { slug: "lr-market", userId: "user-1" })
-    ).resolves.toBe(found);
-    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
-    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["lr-market", "user-1", "superadmin", "user-1"],
-      sql:
-        '("store"."slug" = $1 and (exists (select 1 from "user" where ("user"."id" = $2 and "user"."role" = $3)) or ' +
-        'exists (select 1 from "store_member" where ("store_member"."storeId" = "store"."id" and "store_member"."userId" = $4))))',
+    await expect(findAdminStore(db as never, "user-1")).resolves.toEqual({
+      id: 3,
     });
-  });
 
-  test("answers null when no store matches, whether missing or not the caller's", async () => {
-    const { db } = setup();
-
-    await expect(
-      findAccessibleStore(db as never, { slug: "tienda-demo", userId: "u" })
-    ).resolves.toBeNull();
-  });
-});
-
-describe("hasSuperadmin", () => {
-  test.each([
-    [true, { id: "admin-1" }],
-    [false, undefined],
-  ])(
-    "is %s when the query for a superadmin finds %j",
-    async (expected, row) => {
-      const { db, whereOf } = setup();
-      db.query.user.findFirst.mockResolvedValue(row);
-
-      await expect(hasSuperadmin(db as never)).resolves.toBe(expected);
-      expect(whereOf("user")).toEqual({
-        params: ["superadmin"],
-        sql: '"user"."role" = $1',
-      });
-    }
-  );
-});
-
-describe("addStoreMember", () => {
-  test("inserts the pair and leaves an existing membership alone", async () => {
-    const { db } = setup();
-
-    await addStoreMember(db as never, { storeId: 3, userId: "user-1" });
-
-    expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(storeMember);
-    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
-      storeId: 3,
-      userId: "user-1",
-    });
-    expect(db.$["insert.onConflictDoNothing"]).toHaveBeenCalledExactlyOnceWith({
-      target: [storeMember.storeId, storeMember.userId],
-    });
-  });
-});
-
-describe("setUserRole", () => {
-  test("sets the role on that user only", async () => {
-    const { db } = setup();
-    db.$["update.returning"].mockResolvedValue([{ id: "user-1" }]);
-
-    await setUserRole(db as never, { role: "superadmin", userId: "user-1" });
-
-    expect(db.$.update).toHaveBeenCalledExactlyOnceWith(user);
-    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      role: "superadmin",
-    });
-    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+    expect(userRead().columns).toEqual({ id: true });
+    expect(renderQuery(userRead().where)).toEqual({
       params: ["user-1"],
       sql: '"user"."id" = $1',
     });
+    expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: store.id });
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
   });
 
-  test("answers NOT_FOUND when no user has that id", async () => {
+  test("answers null for a login the database no longer has, without reading the store", async () => {
     const { db } = setup();
-    db.$["update.returning"].mockResolvedValue([]);
 
-    await expect(
-      setUserRole(db as never, { role: "member", userId: "gone" })
-    ).rejects.toMatchObject({ code: "NOT_FOUND", message: "User not found" });
+    await expect(findAdminStore(db as never, "gone")).resolves.toBeNull();
+    expect(db.$.select).not.toHaveBeenCalled();
   });
-});
 
-describe("listStoreIdsBySlug", () => {
-  test("maps each slug found to its id, in one query", async () => {
+  test("answers NOT_FOUND when the store's row does not exist", async () => {
     const { db } = setup();
-    db.query.store.findMany.mockResolvedValue([{ id: 11, slug: "lr-market" }]);
+    db.query.user.findFirst.mockResolvedValue({ id: "user-1" });
 
-    const ids = await listStoreIdsBySlug(db as never, ["lr-market", "gone"]);
-
-    expect([...ids]).toEqual([["lr-market", 11]]);
-    const [config] = db.query.store.findMany.mock.calls[0] ?? [];
-    expect(renderQuery((config as { where: unknown }).where)).toEqual({
-      params: ["lr-market", "gone"],
-      sql: '"store"."slug" in ($1, $2)',
+    await expect(findAdminStore(db as never, "user-1")).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
     });
   });
+});
 
-  test("asks nothing for no slugs", async () => {
-    const { db } = setup();
+describe("hasLogin", () => {
+  test.each([
+    [true, { id: "first-login" }],
+    [false, undefined],
+  ])("is %s when the read of any login finds %j", async (expected, row) => {
+    const { db, userRead } = setup();
+    db.query.user.findFirst.mockResolvedValue(row);
 
-    await expect(listStoreIdsBySlug(db as never, [])).resolves.toEqual(
-      new Map()
-    );
-    expect(db.query.store.findMany).not.toHaveBeenCalled();
+    await expect(hasLogin(db as never)).resolves.toBe(expected);
+    // Any login at all: no condition on who it is.
+    expect(userRead()).toEqual({ columns: { id: true } });
   });
 });
 
-describe("withStoreAccess", () => {
-  /** The double's answers to the two locked reads, in the order they run. */
-  function setupLocked({
-    member = false,
-    superadmin = false,
-  }: {
-    member?: boolean;
-    superadmin?: boolean;
-  }) {
+describe("withAdmin", () => {
+  /** A database whose transaction hands its callback a handle of its own. */
+  function setupLocked({ isLogin }: { isLogin: boolean }) {
     const { db } = setup();
-    db.$["select.for"]
-      .mockResolvedValueOnce(superadmin ? [{ id: "user-1" }] : [])
-      .mockResolvedValueOnce(member ? [{ id: 9 }] : []);
+    const tx = createMockDatabase();
+    db.$.transaction.mockImplementation(
+      async (callback: unknown) =>
+        await (callback as (handle: unknown) => Promise<unknown>)(tx)
+    );
+    tx.$["select.for"].mockResolvedValue(isLogin ? [{ id: "user-1" }] : []);
     const write = vi.fn(async (_tx: unknown) => "written");
 
     return {
       db,
+      tx,
       write,
-      run: async (storeId: number | null) =>
-        await withStoreAccess(
-          db as never,
-          { storeId, userId: "user-1" },
-          write
-        ),
+      run: async () => await withAdmin(db as never, "user-1", write),
     };
   }
 
-  test("writes for a superadmin after locking their row, on any store or none", async () => {
-    const { db, run, write } = setupLocked({ superadmin: true });
+  test("writes after locking the caller's own user row FOR SHARE, all in one transaction", async () => {
+    const { db, run, tx, write } = setupLocked({ isLogin: true });
 
-    await expect(run(null)).resolves.toBe("written");
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["user-1", "superadmin"],
-      sql: '("user"."id" = $1 and "user"."role" = $2)',
-    });
-    expect(write).toHaveBeenCalledExactlyOnceWith(db);
-  });
-
-  test("writes for a member of the store after locking the membership", async () => {
-    const { db, run, write } = setupLocked({ member: true });
-
-    await expect(run(3)).resolves.toBe("written");
-    expect(db.$["select.for"].mock.calls).toEqual([["share"], ["share"]]);
-    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
-      params: [3, "user-1"],
-      sql: '("store_member"."storeId" = $1 and "store_member"."userId" = $2)',
-    });
-    expect(write).toHaveBeenCalledExactlyOnceWith(db);
-  });
-
-  test("answers NOT_FOUND to a login that is no member of the store, writing nothing", async () => {
-    const { run, write } = setupLocked({});
-
-    await expect(run(3)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      message: "Store not found",
-    });
-    expect(write).not.toHaveBeenCalled();
-  });
-
-  test("answers FORBIDDEN to a non-superadmin for a platform write, writing nothing", async () => {
-    const { db, run, write } = setupLocked({ member: true });
-
-    await expect(run(null)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
-    expect(write).not.toHaveBeenCalled();
-  });
-});
-
-describe("listAccessibleStores", () => {
-  test("lists the stores the caller may work on, by name then id, in one query", async () => {
-    const { db } = setup();
-    const rows = [
-      { id: 3, isActive: true, name: "LR Market", slug: "lr-market" },
-    ];
-    db.$["select.orderBy"].mockResolvedValue(rows);
-
-    await expect(listAccessibleStores(db as never, "user-1")).resolves.toBe(
-      rows
-    );
-    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["user-1", "superadmin", "user-1"],
-      sql:
-        '(exists (select 1 from "user" where ("user"."id" = $1 and "user"."role" = $2)) or ' +
-        'exists (select 1 from "store_member" where ("store_member"."storeId" = "store"."id" and "store_member"."userId" = $3)))',
-    });
-    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
-      '"store"."name" asc, "store"."id" asc'
-    );
-  });
-});
-
-describe("getAdminProfile", () => {
-  test("reads both in one read-only, repeatable-read transaction", async () => {
-    const { db } = setup();
-    db.query.user.findFirst.mockResolvedValue({ role: "member" });
-    db.$["select.orderBy"].mockResolvedValue([]);
-
-    await getAdminProfile(db as never, "user-1");
+    await expect(run()).resolves.toBe("written");
 
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
-      expect.any(Function),
-      { accessMode: "read only", isolationLevel: "repeatable read" }
+      expect.any(Function)
+    );
+    expect(tx.$["select.from"]).toHaveBeenCalledExactlyOnceWith(user);
+    expect(renderQuery(tx.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: ["user-1"],
+      sql: '"user"."id" = $1',
+    });
+    expect(tx.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(write).toHaveBeenCalledExactlyOnceWith(tx);
+    expect(tx.$["select.for"].mock.invocationCallOrder[0]).toBeLessThan(
+      write.mock.invocationCallOrder[0] ?? 0
     );
   });
 
-  test("answers the role and the stores together", async () => {
-    const { db } = setup();
-    const stores = [
-      { id: 3, isActive: true, name: "LR Market", slug: "lr-market" },
-    ];
-    db.query.user.findFirst.mockResolvedValue({ role: "member" });
-    db.$["select.orderBy"].mockResolvedValue(stores);
+  test("answers UNAUTHORIZED to a login that no longer exists, writing nothing", async () => {
+    const { run, write } = setupLocked({ isLogin: false });
 
-    await expect(getAdminProfile(db as never, "user-1")).resolves.toEqual({
-      role: "member",
-      stores,
+    await expect(run()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
     });
+    expect(write).not.toHaveBeenCalled();
   });
 
-  test("answers null for a user that no longer exists", async () => {
-    const { db } = setup();
-    db.$["select.orderBy"].mockResolvedValue([]);
+  test("lets a failed write reject the call", async () => {
+    const { run, write } = setupLocked({ isLogin: true });
+    write.mockRejectedValueOnce(new Error("Category not found"));
 
-    await expect(getAdminProfile(db as never, "gone")).resolves.toBeNull();
+    await expect(run()).rejects.toThrow("Category not found");
   });
 });

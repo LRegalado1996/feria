@@ -30,13 +30,11 @@ export {
   productTranslationRelations,
   productAttributeValueRelations,
   sessionRelations,
-  storeMemberRelations,
   storeRelations,
   storeTranslationRelations,
   userRelations,
 } from "./relations";
 export { currencyCodeEnum, store, storeTranslation } from "./store";
-export { storeMember } from "./store-member";
 export {
   attribute,
   attributeTranslation,
