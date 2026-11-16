@@ -225,16 +225,22 @@ describe("recordOrderList", () => {
 
   test("an arrival that comes packed is said but not new, nor new once moved back to received", () => {
     recordOrderList(STORE, {}, [[]], AT);
-    const listener = vi.fn<() => void>();
-    const unsubscribe = subscribeArrivals(listener);
+    // The screen reads the arrival inside its listener, so what counts is
+    // what the store holds at the moment it is told, not afterwards.
+    const seen: { arrival: ReturnType<typeof lastArrival>; fresh: number }[] =
+      [];
+    const unsubscribe = subscribeArrivals(() => {
+      seen.push({
+        arrival: lastArrival(STORE),
+        fresh: freshArrivals(STORE).size,
+      });
+    });
 
     expect(recordOrderList(STORE, {}, [[makeOrder(1, "packed")]], AT)).toEqual([
       makeOrder(1, "packed"),
     ]);
     // Said to the screen, which announces and beeps it, though nothing is new.
-    expect(listener).toHaveBeenCalledOnce();
-    expect(lastArrival(STORE)).toEqual({ codes: ["C1"], seq: 1 });
-    expect(freshArrivals(STORE).size).toBe(0);
+    expect(seen).toEqual([{ arrival: { codes: ["C1"], seq: 1 }, fresh: 0 }]);
 
     recordOrderList(STORE, {}, [[makeOrder(1)]], AT + 60_000);
     unsubscribe();
