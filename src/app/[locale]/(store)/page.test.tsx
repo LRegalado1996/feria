@@ -70,7 +70,9 @@ function holdRequest() {
       resolve(undefined);
     };
   });
-  connection.mockImplementationOnce(async () => await arrived);
+  connection.mockImplementationOnce(async () => {
+    await arrived;
+  });
 
   return { arrive };
 }
