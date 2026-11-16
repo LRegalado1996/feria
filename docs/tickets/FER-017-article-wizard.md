@@ -26,7 +26,7 @@ Loading an article is the product's showpiece: photos in, a published article ou
 - Leaving mid-way and returning restores the draft exactly.
 - Field errors appear next to the field in the active language; publishing is blocked until the FER-010 minimum is met, and the wizard says what is missing.
 - Fully usable by keyboard and screen reader, including photo reordering.
-- E2E covers create, resume a draft, edit and publish.
+- E2E covers create, resume a draft, edit and publish, and the price field reads `12,50` and `12.50` as twelve and a half on `/` and on `/en` (carried over from [FER-035](FER-035-number-input-decimal-separators.md), whose e2e needs this first price form).
 
 ## Notes
 
