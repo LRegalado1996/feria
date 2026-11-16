@@ -102,13 +102,16 @@ describe("updateStoreSchema", () => {
     ["a port", "https://instagram.com:8443/sample"],
     ["a tab a browser would drop", "https:\t//instagram.com/sample"],
     ["backslashes for slashes", "https:\\\\instagram.com\\sample"],
-    ["a user name and password", "https://user:secret@instagram.com/sample"],
+    [
+      "a user name and password",
+      "https://user:synthetic-secret@instagram.com/sample",
+    ],
     ["only a user name", "https://user@instagram.com/sample"],
-    ["only a password", "https://:secret@instagram.com/sample"],
+    ["only a password", "https://:synthetic-secret@instagram.com/sample"],
     // A browser drops the tab and then reads the user name.
     [
       "a user name hidden behind a tab",
-      "https:\t//user:secret@instagram.com/sample",
+      "https:\t//user:synthetic-secret@instagram.com/sample",
     ],
     ["a line break inside", "https://instagram.com/sam\nple"],
     ["a space inside", "https://instagram.com/my sample"],
