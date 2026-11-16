@@ -12,10 +12,10 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 /** The admin's sections in the navigation's order, with each one's heading. */
 const SECTIONS = [
+  ["orders", "Pedidos"],
   ["products", "Artículos"],
   ["categories", "Categorías"],
   ["filters", "Filtros"],
-  ["orders", "Pedidos"],
   ["home", "Inicio"],
   ["settings", "Ajustes"],
   ["users", "Usuarios"],
@@ -195,25 +195,25 @@ test.describe("Admin addresses of the multi-store site", () => {
 test.describe("Admin on a phone", () => {
   test.use({ viewport: { height: 812, width: 375 } });
 
-  test("the shell fits 375 px: sections reachable, nothing scrolls sideways", async ({
+  test("the shell fits 375 px: sections reachable from the menu, nothing scrolls sideways", async ({
     db,
     page,
   }) => {
     const admin = await signIn(page, await db.seed.createLogin());
+    // The sidebar is behind the menu button on a phone.
+    await expect(admin.navigation()).toHaveCount(0);
 
+    await admin.openMenu();
+    await expect(
+      admin.menu().getByRole("img", { name: "LR Market" })
+    ).toBeVisible();
+    await expect(
+      admin.menu().getByRole("button", { name: "Cerrar sesión" })
+    ).toBeVisible();
     await admin.sectionLink("Categorías").click();
 
     await expect(admin.heading()).toHaveText("Categorías");
-    await expect(
-      page.getByRole("button", { name: "Cerrar sesión" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("banner").getByRole("img", { name: "LR Market" })
-    ).toBeVisible();
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth
-      )
-    ).toBe(true);
+    await expect(admin.menu()).toHaveCount(0);
+    await admin.expectNoHorizontalScroll();
   });
 });

@@ -247,13 +247,16 @@ test.describe("Languages, signed in", () => {
     { path: "/admin", signOut: "Cerrar sesión" },
     { path: "/en/admin", signOut: "Sign out" },
   ]) {
-    test(`the header of ${path} fits a phone: nothing is cut off and the page does not scroll sideways`, async ({
+    test(`the menu of ${path} fits a phone: nothing is cut off and the page does not scroll sideways`, async ({
       authenticatedPage: page,
     }) => {
       await page.setViewportSize({ width: 375, height: 720 });
       const admin = new AdminPage(page);
 
       await admin.goto(path);
+      // On a phone the language and sign-out are in the menu (FER-040).
+      await admin.expectNoHorizontalScroll();
+      await admin.openMenu();
 
       await expect(admin.getButton(signOut)).toBeInViewport({ ratio: 1 });
       await expect(admin.localeToggle()).toBeInViewport({ ratio: 1 });
