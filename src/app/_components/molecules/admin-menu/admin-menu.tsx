@@ -55,15 +55,19 @@ function AdminMenu({ children, panel }: AdminMenuProps) {
     <InsideMenu value>
       <DialogPrimitive.Root onOpenChange={setOpen} open={open}>
         {children}
+        {/* It slides in and leaves at once. Choosing a section hides the
+            page behind it straight away (Next keeps it mounted, hidden), and
+            an exit animation that never ends there would keep the closed
+            panel mounted: Radix removes it when its animation ends. */}
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay
-            className="fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 md:hidden"
+            className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0 md:hidden"
             data-slot="dialog-overlay"
             data-testid="dialog-overlay"
           />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-lg outline-none data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:animate-in data-[state=open]:slide-in-from-left md:hidden"
+            className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-lg outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-left md:hidden"
             data-slot="dialog-content"
             data-testid="admin-menu"
             onClickCapture={(event) => {
