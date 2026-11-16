@@ -8,7 +8,9 @@ import {
   getOrderSchema,
   listOrdersSchema,
   ORDER_MOVES,
+  ORDER_SEARCH_MAX_LENGTH,
   ORDER_STATUSES,
+  orderCountsSchema,
 } from ".";
 
 const REQUEST_KEY = "11111111-1111-4111-8111-111111111111";
@@ -256,6 +258,41 @@ describe("listOrdersSchema", () => {
       listOrdersSchema.safeParse({ storeSlug: "lr-market", ...overrides })
         .success
     ).toBe(accepted);
+  });
+
+  test.each([
+    ["  JOSÉ  ", "JOSÉ"],
+    ["099 123", "099 123"],
+    ["", undefined],
+    ["   ", undefined],
+  ])("reads the search %j as %j", (q, expected) => {
+    expect(listOrdersSchema.parse({ q, storeSlug: "lr-market" })).toEqual({
+      q: expected,
+      storeSlug: "lr-market",
+    });
+  });
+
+  test("takes a search of 80 characters, trimmed first, and refuses 81", () => {
+    expect(ORDER_SEARCH_MAX_LENGTH).toBe(80);
+    expect(
+      listOrdersSchema.parse({
+        q: ` ${"a".repeat(80)} `,
+        storeSlug: "lr-market",
+      }).q
+    ).toBe("a".repeat(80));
+    expect(
+      listOrdersSchema.safeParse({ q: "a".repeat(81), storeSlug: "lr-market" })
+        .success
+    ).toBe(false);
+  });
+});
+
+describe("orderCountsSchema", () => {
+  test("takes the store and nothing else", () => {
+    expect(
+      orderCountsSchema.parse({ status: "packed", storeSlug: "lr-market" })
+    ).toEqual({ storeSlug: "lr-market" });
+    expect(orderCountsSchema.safeParse({}).success).toBe(false);
   });
 });
 

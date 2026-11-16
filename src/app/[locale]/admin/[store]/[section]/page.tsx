@@ -19,9 +19,10 @@ interface StoreSectionProps {
 
 /**
  * A section of a store's admin. Until its own page lands (articles FER-019,
- * orders FER-027, home FER-020, settings FER-014, users FER-015) it says it
- * is coming, behind the same checks the real page will have: a session, and
- * a store the login may work on (another store's is a 404).
+ * home FER-020, settings FER-014, users FER-015) it says it is coming,
+ * behind the same checks the real page will have: a session, and a store
+ * the login may work on (another store's is a 404). Categories, filters and
+ * orders have their own pages, which a static segment serves first.
  */
 export default function StoreSection({ params }: StoreSectionProps) {
   // The store and the section are only known per request: the params are

@@ -77,7 +77,7 @@ async function makeParams(locale: string, section: string, store: string) {
  */
 function setup({
   locale = "en",
-  section = "orders",
+  section = "products",
   store = "lr-market",
 }: { locale?: string; section?: string; store?: string } = {}) {
   const me = makeMe();
@@ -160,8 +160,8 @@ describe("StoreSection", () => {
   });
 
   test.each([
-    ["en", "/en/admin/lr-market/orders"],
-    ["es", "/admin/lr-market/orders"],
+    ["en", "/en/admin/lr-market/products"],
+    ["es", "/admin/lr-market/products"],
   ] as const)(
     "in %s, checks the segment, the session coming back to this page, then the store among the login's",
     async (locale, returnTo) => {
@@ -201,7 +201,7 @@ describe("StoreSection", () => {
   test.each([
     ["en", "products", "Articles", "Coming soon"],
     ["en", "users", "Users", "Coming soon"],
-    ["es", "orders", "Pedidos", "Próximamente"],
+    ["es", "home", "Inicio", "Próximamente"],
     ["es", "settings", "Ajustes", "Próximamente"],
   ] as const satisfies [Locale, string, string, string][])(
     "in %s, shows the %s section by name inside the shell, still to come",

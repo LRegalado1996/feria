@@ -142,6 +142,9 @@ export const getOrderByTokenSchema = z.object({
   token: z.string().regex(ORDER_TOKEN_PATTERN),
 });
 
+/** The longest search the orders screen sends: a name, a code or a phone. */
+export const ORDER_SEARCH_MAX_LENGTH = 80;
+
 /** The store's orders, newest first, one status or all, a page at a time. */
 export const listOrdersSchema = storeScopeSchema.extend({
   cursor: z
@@ -150,8 +153,20 @@ export const listOrdersSchema = storeScopeSchema.extend({
       id: idSchema,
     })
     .optional(),
+  // By code, name or phone (FER-027); blank is no search.
+  q: z
+    .string()
+    .trim()
+    .max(ORDER_SEARCH_MAX_LENGTH)
+    .transform((value) => (value === "" ? undefined : value))
+    .optional(),
   status: z.enum(ORDER_STATUSES).optional(),
 });
+
+export type ListOrdersValues = z.infer<typeof listOrdersSchema>;
+
+/** How many of the store's orders are in each status (FER-027). */
+export { storeScopeSchema as orderCountsSchema } from "@/lib/schemas/access";
 
 export const getOrderSchema = storeScopeSchema.extend({ id: idSchema });
 

@@ -423,6 +423,69 @@ export async function getOrderByToken(
   };
 }
 
+/** `%`, `_` and the escape itself, taken literally inside a LIKE. */
+function likeEscaped(text: string): string {
+  return text.replaceAll(/[\\%_]/gu, (char) => `\\${char}`);
+}
+
+/** A whole order code, as staff type it from what the shopper reads out. */
+const ORDER_CODE_SEARCH = new RegExp(
+  `^[${ORDER_CODE_ALPHABET}]{${ORDER_CODE_LENGTH}}$`,
+  "iu"
+);
+
+/** The fewest digits that make a phone search: fewer match everyone. */
+const PHONE_SEARCH_MIN_DIGITS = 3;
+
+/**
+ * An order whose code starts with `q` (codes are read aloud in capitals),
+ * whose customer's name holds it (blind to case and accents: "jose" finds
+ * "José"), or whose phone holds its digits ("099 123" finds +59899123456;
+ * the leading 0 of a local number is dropped like the stored number drops it).
+ */
+function matchesOrderSearch(q: string) {
+  // A number typed locally (099…) or in its 00 international form drops
+  // those zeros, as the stored +598… number has none.
+  const digits = q.replaceAll(/\D/gu, "").replace(/^00?/u, "");
+  // A code read aloud (K7P2M) has digits too: it is not a phone.
+  const isCode = ORDER_CODE_SEARCH.test(q);
+
+  return or(
+    sql`${customerOrder.code} like ${`${likeEscaped(q.toUpperCase())}%`}`,
+    sql`unaccent(${customerOrder.customerName}) ilike unaccent(${`%${likeEscaped(q)}%`})`,
+    !isCode && digits.length >= PHONE_SEARCH_MIN_DIGITS
+      ? sql`${customerOrder.customerPhone} like ${`%${digits}%`}`
+      : undefined
+  );
+}
+
+/**
+ * How many of the store's orders are in each status (FER-027), every status
+ * named, so a tab with none says 0.
+ */
+export async function countOrders(
+  db: DatabaseClient,
+  { storeId }: StoreScope
+): Promise<Record<OrderStatus, number>> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int`, status: customerOrder.status })
+    .from(customerOrder)
+    .where(eq(customerOrder.storeId, storeId))
+    .groupBy(customerOrder.status);
+  const counts: Record<OrderStatus, number> = {
+    delivered: 0,
+    packed: 0,
+    received: 0,
+    undeliverable: 0,
+  };
+
+  for (const row of rows) {
+    counts[row.status] = row.count;
+  }
+
+  return counts;
+}
+
 /**
  * The store's orders, newest first, one status or all, a page at a time:
  * the cursor is the last row's whole sort key, so a page never repeats or
@@ -433,11 +496,14 @@ export async function listOrders(
   {
     cursor,
     limit = ORDERS_PAGE_SIZE,
+    q,
     status,
     storeId,
   }: StoreScope & {
     cursor?: { createdAt: Date; id: number };
     limit?: number;
+    /** A code, a name or a phone, as the staff types it (FER-027). */
+    q?: string;
     status?: OrderStatus;
   }
 ) {
@@ -457,6 +523,7 @@ export async function listOrders(
       and(
         eq(customerOrder.storeId, storeId),
         status ? eq(customerOrder.status, status) : undefined,
+        q ? matchesOrderSearch(q) : undefined,
         cursor
           ? or(
               lt(customerOrder.createdAt, cursor.createdAt),

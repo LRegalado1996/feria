@@ -77,6 +77,16 @@ function createOrpcProxy(segments: string[] = []): unknown {
           });
         }
 
+        // The prefix every key of the procedure starts with, its queries
+        // and its infinite queries alike, for an invalidation that reaches
+        // both.
+        if (prop === "key") {
+          return ({ input }: { input?: unknown } = {}) => [
+            ...segments,
+            { input },
+          ];
+        }
+
         if (prop === "queryKey") {
           return ({ input }: { input?: unknown } = {}) => [
             ...segments,

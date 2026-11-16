@@ -10,6 +10,7 @@ import {
   getOrderByTokenSchema,
   getOrderSchema,
   listOrdersSchema,
+  orderCountsSchema,
 } from "@/lib/schemas/order";
 import { publicProcedure, storeProcedure } from "@/server/api/orpc";
 import { isBotRequest } from "@/server/api/utils/bot-check";
@@ -18,6 +19,7 @@ import { safeRequestLogger } from "@/server/api/utils/logger";
 import { writeToStore } from "@/server/api/utils/write-to-store";
 import {
   changeOrderStatus,
+  countOrders,
   createOrder,
   getOrder,
   getOrderByToken,
@@ -94,6 +96,7 @@ export const orderRouter = {
       async ({ context, input }) =>
         await listOrders(context.db, {
           cursor: input.cursor,
+          q: input.q,
           status: input.status,
           storeId: context.store.id,
         })
@@ -102,6 +105,18 @@ export const orderRouter = {
       method: "GET",
       path: "/stores/{storeSlug}/admin/orders",
       summary: "A store's orders, newest first",
+      tags: ["orders"],
+    }),
+
+  counts: storeProcedure(orderCountsSchema)
+    .handler(
+      async ({ context }) =>
+        await countOrders(context.db, { storeId: context.store.id })
+    )
+    .route({
+      method: "GET",
+      path: "/stores/{storeSlug}/admin/order-counts",
+      summary: "How many of the store's orders are in each status",
       tags: ["orders"],
     }),
 
