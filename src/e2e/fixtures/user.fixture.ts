@@ -237,6 +237,16 @@ function captureCreatedRows(context: BrowserContext, rows: CreatedRows): void {
   });
 }
 
+/**
+ * Waits for the created rows' ids still being read off their responses, so
+ * a context closes only after them: closing it first cuts a read short, and
+ * that row leaks (`unreadable`). Every fixture that closes a context it
+ * captures from calls this first; the db fixture's teardown runs later.
+ */
+async function finishReadingCreatedRows(rows: CreatedRows): Promise<void> {
+  await Promise.all(rows.pending);
+}
+
 export const test = base.extend<UserFixtures, WorkerFixtures>({
   workerUser: [
     async (
@@ -283,6 +293,8 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
   context: async ({ context, createdRows }, use) => {
     captureCreatedRows(context, createdRows);
     await use(context);
+    // Playwright's own `context` fixture closes it after this returns.
+    await finishReadingCreatedRows(createdRows);
   },
 
   authenticatedPage: async (
@@ -298,6 +310,7 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     const page = await context.newPage();
 
     await use(page);
+    await finishReadingCreatedRows(createdRows);
     await context.close();
   },
 
@@ -315,6 +328,7 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     ).toBeVisible();
 
     await use(page);
+    await finishReadingCreatedRows(createdRows);
     await context.close();
   },
 });
