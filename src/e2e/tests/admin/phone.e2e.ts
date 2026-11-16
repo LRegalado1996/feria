@@ -275,4 +275,23 @@ test.describe("Admin on a phone", () => {
       await signIn.expectNoHorizontalScroll();
     });
   });
+
+  test.describe("on a short screen, such as a phone turned sideways", () => {
+    test.use({ viewport: { height: 280, width: 667 } });
+
+    test("the menu still reaches sign-out: the whole panel scrolls when the sections cannot shrink enough", async ({
+      page,
+    }) => {
+      const admin = new AdminPage(page);
+      await admin.goto("/admin/orders");
+      await admin.openMenu();
+
+      const signOut = admin
+        .menu()
+        .getByRole("button", { name: "Cerrar sesión" });
+      await signOut.scrollIntoViewIfNeeded();
+
+      await expect(signOut).toBeInViewport();
+    });
+  });
 });

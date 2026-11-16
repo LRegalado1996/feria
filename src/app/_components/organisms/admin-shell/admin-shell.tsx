@@ -103,7 +103,9 @@ function AdminShell({
 /**
  * What the sidebar and the phone's panel both show: the logo, the sections,
  * then the login and its controls, kept at the foot while the sections
- * scroll on a short screen.
+ * scroll on a short screen. On a screen too short even for the logo and the
+ * login (a phone turned sideways), the whole column scrolls, so sign-out
+ * stays reachable.
  */
 function AdminSidebar({
   dictionary,
@@ -112,7 +114,10 @@ function AdminSidebar({
   section: current,
 }: Omit<AdminShellProps, "children">) {
   return (
-    <div className="flex h-full min-h-0 flex-col" data-slot="admin-sidebar">
+    <div
+      className="flex h-full min-h-0 flex-col overflow-y-auto"
+      data-slot="admin-sidebar"
+    >
       {/* The full logo at its minimum size, with a quarter of its height
           clear on every side (docs/brand/brand.md). */}
       <div className="shrink-0 p-6">
