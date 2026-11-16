@@ -238,12 +238,10 @@ describe("public catalog", () => {
       category: { name: `Anillos ${tag}`, slug: rings.slug },
       title: `Anillo plata ${tag}`,
     });
-    await expect(get(draft.slug)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
-    await expect(get(deleted.slug)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    const notFound = { code: "NOT_FOUND", message: "Article not found" };
+
+    await expect(get(draft.slug)).rejects.toMatchObject(notFound);
+    await expect(get(deleted.slug)).rejects.toMatchObject(notFound);
   });
 
   test("filters by category slug, and an unknown category lists nothing", async () => {
