@@ -13,7 +13,12 @@ import {
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { SEED_ARTICLES, SEED_CATEGORIES, seedCatalog } from "./seed-catalog";
+import {
+  SEED_ARTICLES,
+  SEED_CATEGORIES,
+  SEED_COLORS,
+  seedCatalog,
+} from "./seed-catalog";
 
 const { createProduct, publishProduct } = vi.hoisted(() => ({
   createProduct: vi.fn(),
@@ -26,6 +31,33 @@ const { createProduct, publishProduct } = vi.hoisted(() => ({
 
 vi.mock("@/server/services/catalog", () => ({ createProduct, publishProduct }));
 
+// The filter's own queries are `src/server/services/attribute.test.ts`'s:
+// here the seed only has to call them with the right values, in order.
+const { createAttribute, createAttributeValue, setProductAttributeValues } =
+  vi.hoisted(() => ({
+    createAttribute: vi.fn(async () => ({
+      id: 50,
+      position: 0,
+      slug: "color",
+    })),
+    createAttributeValue: vi.fn(),
+    setProductAttributeValues: vi.fn(
+      async (
+        _tx: unknown,
+        input: { productId: number; valueIds: number[] }
+      ) => ({
+        id: input.productId,
+        valueIds: input.valueIds,
+      })
+    ),
+  }));
+
+vi.mock("@/server/services/attribute", () => ({
+  createAttribute,
+  createAttributeValue,
+  setProductAttributeValues,
+}));
+
 function setup({ hasCategories = false } = {}) {
   const db = createMockDatabase();
   // Article ids count up from 101 in each test.
@@ -33,6 +65,12 @@ function setup({ hasCategories = false } = {}) {
   createProduct.mockImplementation(async () => {
     articleId += 1;
     return { id: articleId, slug: `article-${articleId}`, status: "draft" };
+  });
+  // Color value ids count up from 201 in each test, in SEED_COLORS' order.
+  let valueId = 200;
+  createAttributeValue.mockImplementation(async () => {
+    valueId += 1;
+    return { id: valueId, position: valueId - 201, slug: `value-${valueId}` };
   });
   db.query.category.findFirst.mockResolvedValue(
     hasCategories ? { id: 1 } : undefined
@@ -58,6 +96,85 @@ describe("seedCatalog", () => {
     });
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(createProduct).not.toHaveBeenCalled();
+    expect(createAttribute).not.toHaveBeenCalled();
+  });
+
+  test("creates the Color filter, then its nine values in order with their swatches", async () => {
+    const { db, run } = setup();
+
+    await run();
+
+    expect(createAttribute).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+      values: { nameEn: "Color", nameEs: "Color" },
+    });
+    expect(createAttributeValue.mock.calls).toEqual(
+      [
+        ["Dorado", "Gold", "#d4af37"],
+        ["Plateado", "Silver", "#c0c0c0"],
+        ["Oro rosa", "Rose gold", "#b76e79"],
+        ["Negro", "Black", "#111111"],
+        ["Blanco", "White", "#ffffff"],
+        ["Violeta", "Purple", "#8e44ad"],
+        ["Rojo", "Red", "#c0392b"],
+        ["Verde", "Green", "#27ae60"],
+        ["Azul", "Blue", "#2980b9"],
+      ].map(([nameEs, nameEn, swatchColor]) => [
+        db,
+        {
+          attributeId: 50,
+          storeId: 7,
+          swatchColor,
+          values: { nameEn, nameEs },
+        },
+      ])
+    );
+    // The filter exists before its first value.
+    expect(createAttribute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      createAttributeValue.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("gives each published article the ids of its colors", async () => {
+    const { db, run } = setup();
+
+    await run();
+
+    // Values 201… are SEED_COLORS' order: dorado 201, plateado 202,
+    // oro-rosa 203, blanco 205, azul 209.
+    expect(setProductAttributeValues.mock.calls).toEqual(
+      (
+        [
+          [101, [209]],
+          [102, [202]],
+          [103, [202]],
+          [104, [201]],
+          [105, [201]],
+          [106, [201]],
+          [107, [201, 203]],
+          [108, [201]],
+          [109, [202, 205]],
+          [110, [201]],
+          [111, [201]],
+        ] as const
+      ).map(([productId, valueIds]) => [
+        db,
+        { productId, storeId: 7, valueIds },
+      ])
+    );
+    // An article is published before its colors are set.
+    expect(publishProduct.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      setProductAttributeValues.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("every sample article's colors are seeded colors", () => {
+    const colors = new Set(SEED_COLORS.map((color) => color.slug));
+
+    for (const article of SEED_ARTICLES) {
+      expect(article.colors.length).toBeGreaterThan(0);
+      expect(article.colors.filter((slug) => !colors.has(slug))).toEqual([]);
+    }
   });
 
   test("creates the five launch categories in order, named in both languages", async () => {

@@ -10,6 +10,10 @@ export { localeEnum } from "./locale";
 export { post } from "./post";
 export {
   accountRelations,
+  attributeRelations,
+  attributeTranslationRelations,
+  attributeValueRelations,
+  attributeValueTranslationRelations,
   categoryRelations,
   categoryTranslationRelations,
   productImageRelations,
@@ -17,6 +21,7 @@ export {
   productRelations,
   productTranslationRelations,
   postRelations,
+  productAttributeValueRelations,
   sessionRelations,
   storeMemberRelations,
   storeRelations,
@@ -26,10 +31,15 @@ export {
 export { currencyCodeEnum, store, storeTranslation } from "./store";
 export { storeMember } from "./store-member";
 export {
+  attribute,
+  attributeTranslation,
+  attributeValue,
+  attributeValueTranslation,
   category,
   categoryTranslation,
   product,
   productImage,
+  productAttributeValue,
   productImageTranslation,
   productStatusEnum,
   productTranslation,

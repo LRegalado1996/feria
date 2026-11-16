@@ -12,9 +12,16 @@ const services = vi.hoisted(() => ({
   getActiveStoreBySlug: vi.fn(),
   getPublishedProduct: vi.fn(),
   getPublishedProductRef: vi.fn(),
+  listCatalogFilters: vi.fn(),
   listCategories: vi.fn(),
   listPublishedProducts: vi.fn(),
   listRelatedProducts: vi.fn(),
+  resolveCatalogFilters: vi.fn(),
+}));
+
+vi.mock("@/server/services/attribute", () => ({
+  listCatalogFilters: services.listCatalogFilters,
+  resolveCatalogFilters: services.resolveCatalogFilters,
 }));
 
 vi.mock("@/server/services/catalog", () => ({
@@ -51,12 +58,19 @@ function setup({ storeActive = true } = {}) {
       throw new ORPCError("NOT_FOUND", { message: "Store not found" });
     }
   );
+  // The URL's filters resolve to value ids only for the resolved store.
+  services.resolveCatalogFilters.mockImplementation(
+    async (_db: unknown, { storeId }: { storeId: number }) =>
+      await Promise.resolve(storeId === STORE.id ? [[21, 22], [31]] : [])
+  );
   const options = { context: mockCtx as never };
 
   return {
     db: mockCtx.db,
     categories: async (input: unknown) =>
       await call(catalogRouter.categories, input as never, options),
+    filters: async (input: unknown) =>
+      await call(catalogRouter.filters, input as never, options),
     product: async (input: unknown) =>
       await call(catalogRouter.product, input as never, options),
     products: async (input: unknown) =>
@@ -64,6 +78,17 @@ function setup({ storeActive = true } = {}) {
     related: async (input: unknown) =>
       await call(catalogRouter.related, input as never, options),
   };
+}
+
+/** `count` filters of `values` value slugs each, all of them valid. */
+function makeFilters(count: number, values: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    attribute: `filtro-${String(index)}`,
+    values: Array.from(
+      { length: values },
+      (_value, valueIndex) => `valor-${String(valueIndex)}`
+    ),
+  }));
 }
 
 const STORE_NOT_FOUND = { code: "NOT_FOUND", message: "Store not found" };
@@ -85,17 +110,29 @@ describe("catalog router", () => {
   test("lists articles with the filters, the store's id and its currency, never the input's", async () => {
     const { db, products } = setup();
     services.listPublishedProducts.mockResolvedValue({
-      items: [],
+      items: [{ id: 3 }],
       nextCursor: null,
     });
+    const filters = [
+      { attribute: "color", values: ["dorado", "plateado"] },
+      { attribute: "talle", values: ["m"] },
+    ];
 
-    await products({
-      category: "cadenas",
-      locale: "es",
-      q: " oro ",
-      storeSlug: "tienda-demo",
+    await expect(
+      products({
+        category: "cadenas",
+        filters,
+        locale: "es",
+        q: " oro ",
+        storeSlug: "tienda-demo",
+      })
+    ).resolves.toEqual({ items: [{ id: 3 }], nextCursor: null });
+
+    expect(services.resolveCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      filters,
+      storeId: 7,
     });
-
+    // The URL's slugs never reach the listing: only the resolved value ids.
     expect(services.listPublishedProducts).toHaveBeenCalledExactlyOnceWith(db, {
       category: "cadenas",
       currencyCode: "USD",
@@ -103,7 +140,119 @@ describe("catalog router", () => {
       locale: "es",
       q: "oro",
       storeId: 7,
+      valueGroups: [[21, 22], [31]],
     });
+  });
+
+  test("resolves no filters when the URL asks for none", async () => {
+    const { db, products } = setup();
+    services.resolveCatalogFilters.mockResolvedValue([]);
+    services.listPublishedProducts.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+    });
+
+    await products({ locale: "en", storeSlug: "tienda-demo" });
+
+    expect(services.resolveCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      filters: [],
+      storeId: 7,
+    });
+    expect(services.listPublishedProducts).toHaveBeenCalledExactlyOnceWith(db, {
+      currencyCode: "USD",
+      limit: 24,
+      locale: "en",
+      storeId: 7,
+      valueGroups: [],
+    });
+  });
+
+  test.each([
+    ["10 filters", 10, 1],
+    ["a filter with 20 values", 1, 20],
+  ])("lists articles with %s", async (_case, filterCount, valueCount) => {
+    const { db, products } = setup();
+    services.listPublishedProducts.mockResolvedValue({
+      items: [],
+      nextCursor: null,
+    });
+    const filters = makeFilters(filterCount, valueCount);
+
+    await expect(
+      products({ filters, locale: "es", storeSlug: "tienda-demo" })
+    ).resolves.toEqual({ items: [], nextCursor: null });
+    expect(services.resolveCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      filters,
+      storeId: 7,
+    });
+  });
+
+  test.each([
+    ["more than 10 filters", 11, 1],
+    ["a filter with more than 20 values", 1, 21],
+  ])(
+    "refuses %s before resolving the store",
+    async (_case, filterCount, valueCount) => {
+      const { products } = setup();
+
+      await expect(
+        products({
+          filters: makeFilters(filterCount, valueCount),
+          locale: "es",
+          storeSlug: "tienda-demo",
+        })
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Input validation failed",
+      });
+      expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+      expect(services.resolveCatalogFilters).not.toHaveBeenCalled();
+    }
+  );
+
+  test("lists the store's filters in the visitor's language, scoped by the resolved store", async () => {
+    const { db, filters } = setup();
+    const answer = [
+      {
+        lang: "en",
+        name: "Color",
+        slug: "color",
+        values: [
+          {
+            count: 2,
+            lang: "en",
+            name: "Gold",
+            slug: "dorado",
+            swatchColor: "#d4af37",
+          },
+        ],
+      },
+    ];
+    services.listCatalogFilters.mockResolvedValue(answer);
+
+    await expect(
+      filters({ locale: "en", storeSlug: "tienda-demo" })
+    ).resolves.toEqual(answer);
+    expect(services.getActiveStoreBySlug).toHaveBeenCalledExactlyOnceWith(db, {
+      slug: "tienda-demo",
+    });
+    expect(services.listCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      storeId: 7,
+    });
+  });
+
+  test("refuses filters in an unknown language before resolving the store", async () => {
+    const { filters } = setup();
+
+    await expect(
+      filters({ locale: "fr", storeSlug: "tienda-demo" })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
+    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.listCatalogFilters).not.toHaveBeenCalled();
   });
 
   test("gets one published article by its slug in the store", async () => {
@@ -147,7 +296,13 @@ describe("catalog router", () => {
     expect(services.getPublishedProduct).not.toHaveBeenCalled();
   });
 
-  test.each(["categories", "products", "product", "related"] as const)(
+  test.each([
+    "categories",
+    "filters",
+    "products",
+    "product",
+    "related",
+  ] as const)(
     "%s answers NOT_FOUND for an inactive or unknown store, before any catalog read",
     async (procedure) => {
       const routes = setup({ storeActive: false });
@@ -160,6 +315,8 @@ describe("catalog router", () => {
         })
       ).rejects.toMatchObject(STORE_NOT_FOUND);
       expect(services.listCategories).not.toHaveBeenCalled();
+      expect(services.listCatalogFilters).not.toHaveBeenCalled();
+      expect(services.resolveCatalogFilters).not.toHaveBeenCalled();
       expect(services.listPublishedProducts).not.toHaveBeenCalled();
       expect(services.getPublishedProduct).not.toHaveBeenCalled();
       expect(services.getPublishedProductRef).not.toHaveBeenCalled();

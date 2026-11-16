@@ -5,6 +5,7 @@ import { localizePath, splitLocale } from "@/lib/i18n/paths";
 export const STORE_SECTIONS = [
   "products",
   "categories",
+  "filters",
   "orders",
   "home",
   "settings",

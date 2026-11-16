@@ -18,6 +18,8 @@ export const PRODUCT_SEO_DESCRIPTION_MAX_LENGTH = 160;
 export const PRODUCT_PRICE_MAX = 99_999_999;
 export const SEARCH_MAX_LENGTH = 100;
 export const PRODUCTS_PAGE_SIZE = 24;
+export const CATALOG_FILTERS_MAX = 10;
+export const CATALOG_FILTER_VALUES_MAX = 20;
 export const PRODUCTS_PAGE_SIZE_MAX = 48;
 export const RELATED_PRODUCTS_DEFAULT = 4;
 export const RELATED_PRODUCTS_MAX = 12;
@@ -64,8 +66,27 @@ export const productCursorSchema = z.object({
     }),
 });
 
+/**
+ * The catalog's filters as the page read them from the URL: each filter's
+ * slug with the slugs of the values asked for. Unknown ones are ignored by
+ * the service, so an old link never breaks; this only bounds the input.
+ */
+export const catalogFiltersSchema = z
+  .array(
+    z.object({
+      attribute: catalogSlugSchema,
+      values: z.array(catalogSlugSchema).min(1).max(CATALOG_FILTER_VALUES_MAX),
+    })
+  )
+  .max(CATALOG_FILTERS_MAX);
+
+export type CatalogFilters = z.infer<typeof catalogFiltersSchema>;
+
 export const listProductsSchema = publicCatalogSchema.extend({
   category: catalogSlugSchema.optional(),
+  // The store's own filters (FER-033): values of one filter are
+  // alternatives, different filters narrow each other.
+  filters: catalogFiltersSchema.optional(),
   cursor: productCursorSchema.optional(),
   limit: z.coerce
     .number()
@@ -237,3 +258,112 @@ export function createCategoryFormSchema(messages: CategoryFormMessages) {
 export type CategoryFormValues = z.infer<
   ReturnType<typeof createCategoryFormSchema>
 >;
+
+/**
+ * Query-string names the catalog already uses: a filter's slug is its URL
+ * parameter, so it can never be one of these (FER-033).
+ */
+export const RESERVED_ATTRIBUTE_SLUGS = [
+  "category",
+  "cursor",
+  "q",
+  "sort",
+] as const;
+
+/** A swatch is `#` and six lowercase hex digits, like a store's colors. */
+export const SWATCH_COLOR_PATTERN = /^#[0-9a-f]{6}$/;
+
+export const ATTRIBUTE_NAME_MAX_LENGTH = 60;
+export const PRODUCT_ATTRIBUTE_VALUES_MAX = 50;
+
+export const listCatalogFiltersSchema = publicCatalogSchema.extend({});
+
+/** A filter's or a value's names: the Spanish one required, English optional. */
+const attributeNamesSchema = z.object({
+  nameEn: z
+    .string()
+    .trim()
+    .max(ATTRIBUTE_NAME_MAX_LENGTH)
+    .transform((value) => (value === "" ? null : value))
+    .nullable(),
+  nameEs: z.string().trim().min(1).max(ATTRIBUTE_NAME_MAX_LENGTH),
+});
+
+export type AttributeNames = z.infer<typeof attributeNamesSchema>;
+
+/**
+ * The admin's form for a filter or a value (FER-033): the names as typed,
+ * and the swatch as the color input gives it, `""` when there is none.
+ */
+export function createAttributeFormSchema(messages: CategoryFormMessages) {
+  return createCategoryFormSchema(messages).extend({
+    swatchColor: z.union([
+      z.literal(""),
+      z.string().regex(SWATCH_COLOR_PATTERN),
+    ]),
+  });
+}
+
+export type AttributeFormValues = z.infer<
+  ReturnType<typeof createAttributeFormSchema>
+>;
+
+const swatchColorSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(SWATCH_COLOR_PATTERN)
+  .nullable();
+
+export const listStoreAttributesSchema = storeScopeSchema.extend({});
+
+export const createAttributeSchema = storeScopeSchema.extend(
+  attributeNamesSchema.shape
+);
+
+export const renameAttributeSchema = storeScopeSchema
+  .extend({ id: idSchema })
+  .extend(attributeNamesSchema.shape);
+
+export const reorderAttributesSchema = storeScopeSchema.extend({
+  ids: z
+    .array(bodyIdSchema)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each filter at most once",
+    }),
+});
+
+export const deleteAttributeSchema = storeScopeSchema.extend({ id: idSchema });
+
+export const createAttributeValueSchema = storeScopeSchema
+  .extend({ attributeId: bodyIdSchema, swatchColor: swatchColorSchema })
+  .extend(attributeNamesSchema.shape);
+
+export const updateAttributeValueSchema = storeScopeSchema
+  .extend({ id: idSchema, swatchColor: swatchColorSchema })
+  .extend(attributeNamesSchema.shape);
+
+export const reorderAttributeValuesSchema = storeScopeSchema.extend({
+  attributeId: bodyIdSchema,
+  ids: z
+    .array(bodyIdSchema)
+    .min(1)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each value at most once",
+    }),
+});
+
+export const deleteAttributeValueSchema = storeScopeSchema.extend({
+  id: idSchema,
+});
+
+/** Every value the article carries, replacing what it had. */
+export const setProductAttributeValuesSchema = productIdSchema.extend({
+  valueIds: z
+    .array(bodyIdSchema)
+    .max(PRODUCT_ATTRIBUTE_VALUES_MAX)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each value at most once",
+    }),
+});

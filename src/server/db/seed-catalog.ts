@@ -7,6 +7,11 @@ import {
   productImage,
   productImageTranslation,
 } from "@/server/db/schema";
+import {
+  createAttribute,
+  createAttributeValue,
+  setProductAttributeValues,
+} from "@/server/services/attribute";
 import { createProduct, publishProduct } from "@/server/services/catalog";
 
 interface SeedCategory {
@@ -18,6 +23,8 @@ interface SeedCategory {
 interface SeedArticle {
   /** The category's slug. */
   category: string;
+  /** The slugs of the colors it carries (FER-033). */
+  colors: string[];
   description: { en: string; es: string };
   image: {
     alt: { en: string; es: string };
@@ -30,6 +37,22 @@ interface SeedArticle {
   priceAmount: number;
   title: { en: string; es: string };
 }
+
+/**
+ * The Color filter of Lucas's store (FER-033), the colors Lucas chose on
+ * 2026-11-14, each with the swatch shown beside its name.
+ */
+export const SEED_COLORS = [
+  { en: "Gold", es: "Dorado", slug: "dorado", swatch: "#d4af37" },
+  { en: "Silver", es: "Plateado", slug: "plateado", swatch: "#c0c0c0" },
+  { en: "Rose gold", es: "Oro rosa", slug: "oro-rosa", swatch: "#b76e79" },
+  { en: "Black", es: "Negro", slug: "negro", swatch: "#111111" },
+  { en: "White", es: "Blanco", slug: "blanco", swatch: "#ffffff" },
+  { en: "Purple", es: "Violeta", slug: "violeta", swatch: "#8e44ad" },
+  { en: "Red", es: "Rojo", slug: "rojo", swatch: "#c0392b" },
+  { en: "Green", es: "Verde", slug: "verde", swatch: "#27ae60" },
+  { en: "Blue", es: "Azul", slug: "azul", swatch: "#2980b9" },
+];
 
 /** The launch categories of Lucas's store, in their order (FER-010). */
 export const SEED_CATEGORIES: SeedCategory[] = [
@@ -47,6 +70,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
  */
 export const SEED_ARTICLES: SeedArticle[] = [
   {
+    colors: ["azul"],
     category: "burbujeros",
     description: {
       en: "Shoots a stream of bubbles at the press of a trigger. Runs on batteries; bubble liquid included.",
@@ -66,6 +90,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Crystal bubble gun", es: "Burbujero cristal" },
   },
   {
+    colors: ["plateado"],
     category: "cadenas",
     description: {
       en: "Fine silver chain with small heart charms. Adjustable length.",
@@ -85,6 +110,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Hearts chain", es: "Cadena corazones" },
   },
   {
+    colors: ["plateado"],
     category: "cadenas",
     description: {
       en: "Silver box chain with a bright pendant. Comes in a gift box.",
@@ -104,6 +130,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Shine pendant", es: "Dije brillo" },
   },
   {
+    colors: ["dorado"],
     category: "cadenas",
     description: {
       en: "Gold-plated rope chain with a crown pendant.",
@@ -123,6 +150,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Crown chain", es: "Cadena corona" },
   },
   {
+    colors: ["dorado"],
     category: "anillos",
     description: {
       en: "Gold-plated ring with an emerald-cut stone.",
@@ -142,6 +170,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Solitaire ring", es: "Anillo solitario" },
   },
   {
+    colors: ["dorado"],
     category: "anillos",
     description: {
       en: "Gold-plated signet ring with a medallion.",
@@ -158,6 +187,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Signet ring", es: "Anillo sello" },
   },
   {
+    colors: ["dorado", "oro-rosa"],
     category: "anillos",
     description: {
       en: "Gold-plated cluster ring with pink stones.",
@@ -177,6 +207,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Pink flower ring", es: "Anillo flor rosa" },
   },
   {
+    colors: ["dorado"],
     category: "aros",
     description: {
       en: "Small gold-plated studs, for every day.",
@@ -193,6 +224,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Gold studs", es: "Aros abotonados" },
   },
   {
+    colors: ["plateado", "blanco"],
     category: "aros",
     description: {
       en: "Crystal wreath earrings for a night out.",
@@ -209,6 +241,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "Crystal wreath earrings", es: "Aros corona de cristal" },
   },
   {
+    colors: ["dorado"],
     category: "pulseras",
     description: {
       en: "Fine gold-plated bracelet with an ID tag to engrave.",
@@ -228,6 +261,7 @@ export const SEED_ARTICLES: SeedArticle[] = [
     title: { en: "ID bracelet", es: "Pulsera chapita" },
   },
   {
+    colors: ["dorado"],
     category: "pulseras",
     description: {
       en: "A pair of gold-plated bangles.",
@@ -265,6 +299,21 @@ export async function seedCatalog(
   }
 
   const categoryIds = new Map<string, number>();
+  const color = await createAttribute(tx, {
+    storeId,
+    values: { nameEn: "Color", nameEs: "Color" },
+  });
+  const colorIds = new Map<string, number>();
+
+  for (const seedColor of SEED_COLORS) {
+    const created = await createAttributeValue(tx, {
+      attributeId: color.id,
+      storeId,
+      swatchColor: seedColor.swatch,
+      values: { nameEn: seedColor.en, nameEs: seedColor.es },
+    });
+    colorIds.set(seedColor.slug, created.id);
+  }
 
   for (const [position, seedCategory] of SEED_CATEGORIES.entries()) {
     const [row] = await tx
@@ -319,6 +368,14 @@ export async function seedCatalog(
       { altText: article.image.alt.en, locale: "en", productImageId: image.id },
     ]);
     await publishProduct(tx, { id: created.id, storeId });
+    await setProductAttributeValues(tx, {
+      productId: created.id,
+      storeId,
+      valueIds: article.colors.flatMap((slug) => {
+        const id = colorIds.get(slug);
+        return id === undefined ? [] : [id];
+      }),
+    });
   }
 
   return SEED_ARTICLES.length;

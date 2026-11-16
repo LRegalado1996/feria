@@ -1,10 +1,15 @@
 import {
   getProductSchema,
+  listCatalogFiltersSchema,
   listCategoriesSchema,
   listProductsSchema,
   listRelatedProductsSchema,
 } from "@/lib/schemas/catalog";
 import { publicProcedure } from "@/server/api/orpc";
+import {
+  listCatalogFilters,
+  resolveCatalogFilters,
+} from "@/server/services/attribute";
 import {
   getPublishedProduct,
   getPublishedProductRef,
@@ -35,18 +40,42 @@ export const catalogRouter = {
       tags: ["catalog"],
     }),
 
+  filters: publicProcedure
+    .input(listCatalogFiltersSchema)
+    .handler(async ({ context, input }) => {
+      const store = await getActiveStoreBySlug(context.db, {
+        slug: input.storeSlug,
+      });
+
+      return await listCatalogFilters(context.db, {
+        locale: input.locale,
+        storeId: store.id,
+      });
+    })
+    .route({
+      method: "GET",
+      path: "/stores/{storeSlug}/filters",
+      summary: "List a store's filters with the values its articles carry",
+      tags: ["catalog"],
+    }),
+
   products: publicProcedure
     .input(listProductsSchema)
     .handler(async ({ context, input }) => {
-      const { storeSlug, ...filters } = input;
+      const { filters = [], storeSlug, ...query } = input;
       const store = await getActiveStoreBySlug(context.db, {
         slug: storeSlug,
       });
+      const valueGroups = await resolveCatalogFilters(context.db, {
+        filters,
+        storeId: store.id,
+      });
 
       return await listPublishedProducts(context.db, {
-        ...filters,
+        ...query,
         currencyCode: store.currencyCode,
         storeId: store.id,
+        valueGroups,
       });
     })
     .route({

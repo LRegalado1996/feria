@@ -2,10 +2,15 @@ import { relations } from "drizzle-orm";
 
 import { account, session, user } from "./auth";
 import {
+  attribute,
+  attributeTranslation,
+  attributeValue,
+  attributeValueTranslation,
   category,
   categoryTranslation,
   product,
   productImage,
+  productAttributeValue,
   productImageTranslation,
   productTranslation,
 } from "./catalog";
@@ -42,6 +47,7 @@ export const postRelations = relations(post, ({ one }) => ({
 }));
 
 export const storeRelations = relations(store, ({ many }) => ({
+  attributes: many(attribute),
   categories: many(category),
   members: many(storeMember),
   products: many(product),
@@ -86,6 +92,7 @@ export const categoryTranslationRelations = relations(
 );
 
 export const productRelations = relations(product, ({ many, one }) => ({
+  attributeValues: many(productAttributeValue),
   category: one(category, {
     fields: [product.categoryId],
     references: [category.id],
@@ -122,6 +129,58 @@ export const productImageTranslationRelations = relations(
     image: one(productImage, {
       fields: [productImageTranslation.productImageId],
       references: [productImage.id],
+    }),
+  })
+);
+
+export const attributeRelations = relations(attribute, ({ many, one }) => ({
+  store: one(store, { fields: [attribute.storeId], references: [store.id] }),
+  translations: many(attributeTranslation),
+  values: many(attributeValue),
+}));
+
+export const attributeTranslationRelations = relations(
+  attributeTranslation,
+  ({ one }) => ({
+    attribute: one(attribute, {
+      fields: [attributeTranslation.attributeId],
+      references: [attribute.id],
+    }),
+  })
+);
+
+export const attributeValueRelations = relations(
+  attributeValue,
+  ({ many, one }) => ({
+    attribute: one(attribute, {
+      fields: [attributeValue.attributeId],
+      references: [attribute.id],
+    }),
+    products: many(productAttributeValue),
+    translations: many(attributeValueTranslation),
+  })
+);
+
+export const attributeValueTranslationRelations = relations(
+  attributeValueTranslation,
+  ({ one }) => ({
+    value: one(attributeValue, {
+      fields: [attributeValueTranslation.attributeValueId],
+      references: [attributeValue.id],
+    }),
+  })
+);
+
+export const productAttributeValueRelations = relations(
+  productAttributeValue,
+  ({ one }) => ({
+    product: one(product, {
+      fields: [productAttributeValue.productId],
+      references: [product.id],
+    }),
+    value: one(attributeValue, {
+      fields: [productAttributeValue.attributeValueId],
+      references: [attributeValue.id],
     }),
   })
 );

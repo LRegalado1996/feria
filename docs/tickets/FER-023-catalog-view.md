@@ -13,6 +13,7 @@ A shopper finds an article by browsing a category or typing a few letters.
 
 - `/{store}/products` with a grid of article cards: cover, title, price, an "unavailable" mark when it applies.
 - Category chips, the store's filters (FER-033: color dots, material and so on) and a search box, all stored in the URL (`?category=collares&color=dorado&q=`). On mobile the filters open in a sheet; active ones show as removable chips with "clear all".
+- The page builds `catalog.products`' `filters` from the query string itself: every parameter that is not `category`, `q`, `sort` or `cursor` and whose name and values are well-formed slugs, at most 10 filters of 20 values (FER-033). Anything else (`fbclid`, `utm_source`, a stray capital) is dropped, never sent: the API refuses a malformed filter, and a shared link must never break the page.
 - A share button on any filtered view: the native share sheet on phones, copy link elsewhere.
 - A filtered view has its own heading, page title and share card ("Gold necklaces"), so the link looks right when pasted into WhatsApp.
 - Sort: newest first by default, price ascending and descending.

@@ -2,7 +2,7 @@
 
 - **Milestone:** M2 Core domain
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-010
 
 ## Goal
@@ -36,6 +36,15 @@ Price ranges and numeric filters. Variants with their own price or stock.
 ## Notes
 
 The storefront UI and the share button are in FER-023, the picker in the wizard in FER-017, the AI suggestion in FER-018, and the "copy link" for the owner in FER-019.
+
+## Outcome
+
+- Tables `attribute`, `attribute_translation`, `attribute_value` (an optional `#rrggbb` swatch), `attribute_value_translation` and `product_attribute_value` (migration `0008`). A filter's slug is its URL parameter, so a database check refuses `category`, `cursor`, `q` and `sort`, and the service skips them (`Category` becomes `category-2`). Slugs come from the Spanish name and never change on a rename, so a shared link keeps working.
+- Public: `catalog.filters` lists a store's filters with only the values a published article carries, and how many; `catalog.products` takes `filters: [{ attribute, values }]`. Values of one filter are alternatives, filters and the category narrow each other; an unknown filter or value is ignored, and a filter whose values are all unknown does not narrow at all. A filter named twice is one filter. The storefront turns `?color=dorado,violeta` into that input in FER-023; the input is strict (slug format, at most 10 filters of 20 values), so the page drops any parameter that is not a well-formed filter, such as `fbclid` or `utm_source`, before calling.
+- Store-scoped: the `attribute` router (`list`, `create`, `rename`, `reorder`, `delete`, `createValue`, `updateValue`, `reorderValues`, `deleteValue`) and `product.setAttributeValues`, all through `storeProcedure` with the access re-check inside the write's transaction. Filter and value writes take a per-store advisory lock; setting an article's values locks the article and shares a lock on each value instead, so a value deleted meanwhile is never attached. A value or filter of another store answers NOT_FOUND; a name already used beside it, ignoring case and accents, CONFLICT.
+- `/admin/{store}/filters` (`organisms/filter-manager`, "Filtros" in the navigation after "Categorías"): one card per filter with its values, add values inline with an optional swatch from the browser's color picker, rename, reorder with the up and down buttons, delete. Each value shows how many articles carry it, drafts included; deleting a value in use says how many articles lose it.
+- Seed: Lucas's store gets a Color filter with dorado, plateado, oro rosa, negro, blanco, violeta, rojo, verde and azul, each with its swatch, on the sample articles.
+- Tests: integration over a real database for every combination rule on both sides and the store isolation (`src/server/services/attribute.integration.test.ts`); e2e in `src/e2e/tests/admin/filters.e2e.ts` (add a filter and a value with its swatch, delete a value in use, reorder kept after a reload, another store's page not found).
 
 ## Reporting
 

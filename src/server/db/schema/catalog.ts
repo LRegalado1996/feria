@@ -12,7 +12,12 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 
-import { CATALOG_SLUG_PATTERN, PRODUCT_STATUSES } from "@/lib/schemas/catalog";
+import {
+  CATALOG_SLUG_PATTERN,
+  PRODUCT_STATUSES,
+  RESERVED_ATTRIBUTE_SLUGS,
+  SWATCH_COLOR_PATTERN,
+} from "@/lib/schemas/catalog";
 
 import { localeEnum } from "./locale";
 import { store } from "./store";
@@ -189,4 +194,114 @@ export const productImageTranslation = pgTable(
     ...timestamps,
   },
   (table) => [unique().on(table.productImageId, table.locale)]
+);
+
+const reservedAttributeSlugs = sql.raw(
+  RESERVED_ATTRIBUTE_SLUGS.map((slug) => `'${slug}'`).join(", ")
+);
+const swatchPattern = sql.raw(`'${SWATCH_COLOR_PATTERN.source}'`);
+
+/**
+ * A store's own filter (FER-033), such as Color or Material. Its slug is the
+ * catalog's query-string parameter (`?color=dorado`), unique in the store and
+ * never one the catalog already uses.
+ */
+export const attribute = pgTable(
+  "attribute",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    storeId: integer()
+      .notNull()
+      .references(() => store.id, { onDelete: "cascade" }),
+    slug: text().notNull(),
+    position: integer().notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    unique().on(table.storeId, table.slug),
+    check("attribute_slug_format", sql`${table.slug} ~ ${slugPattern}`),
+    check(
+      "attribute_slug_not_reserved",
+      sql`${table.slug} NOT IN (${reservedAttributeSlugs})`
+    ),
+  ]
+);
+
+export const attributeTranslation = pgTable(
+  "attribute_translation",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    attributeId: integer()
+      .notNull()
+      .references(() => attribute.id, { onDelete: "cascade" }),
+    locale: localeEnum().notNull(),
+    name: text().notNull(),
+    ...timestamps,
+  },
+  (table) => [unique().on(table.attributeId, table.locale)]
+);
+
+/**
+ * One value of a filter (gold, silver, purple), its slug the value in the
+ * URL, unique within its filter. A color can carry the swatch shown beside
+ * its name.
+ */
+export const attributeValue = pgTable(
+  "attribute_value",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    attributeId: integer()
+      .notNull()
+      .references(() => attribute.id, { onDelete: "cascade" }),
+    slug: text().notNull(),
+    swatchColor: text(),
+    position: integer().notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    unique().on(table.attributeId, table.slug),
+    check("attribute_value_slug_format", sql`${table.slug} ~ ${slugPattern}`),
+    check(
+      "attribute_value_swatch_hex",
+      sql`${table.swatchColor} IS NULL OR ${table.swatchColor} ~ ${swatchPattern}`
+    ),
+  ]
+);
+
+export const attributeValueTranslation = pgTable(
+  "attribute_value_translation",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    attributeValueId: integer()
+      .notNull()
+      .references(() => attributeValue.id, { onDelete: "cascade" }),
+    locale: localeEnum().notNull(),
+    name: text().notNull(),
+    ...timestamps,
+  },
+  (table) => [unique().on(table.attributeValueId, table.locale)]
+);
+
+/**
+ * The values an article carries; several of one filter are allowed (a gold
+ * and purple bracelet). Deleting either side removes the pair.
+ */
+export const productAttributeValue = pgTable(
+  "product_attribute_value",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    productId: integer()
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    attributeValueId: integer()
+      .notNull()
+      .references(() => attributeValue.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  // The pair's unique index leads with `productId`, so it serves that key;
+  // `attributeValueId` gets its own for the catalog's filter.
+  (table) => [
+    unique().on(table.productId, table.attributeValueId),
+    index().on(table.attributeValueId),
+  ]
 );

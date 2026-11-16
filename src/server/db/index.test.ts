@@ -79,10 +79,15 @@ describe("database client", () => {
     expect(new Set(Object.keys(db.query))).toEqual(
       new Set([
         "account",
+        "attribute",
+        "attributeTranslation",
+        "attributeValue",
+        "attributeValueTranslation",
         "category",
         "categoryTranslation",
         "post",
         "product",
+        "productAttributeValue",
         "productImage",
         "productImageTranslation",
         "productTranslation",

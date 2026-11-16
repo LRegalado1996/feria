@@ -67,6 +67,79 @@ export const admin: Dictionary["admin"] = {
     body: "This section is still being built. It will show up here in a coming version.",
     title: "Coming soon",
   },
+  filters: {
+    add: {
+      pending: "Adding…",
+      submit: "Add filter",
+      title: "New filter",
+    },
+    addValue: {
+      pending: "Adding…",
+      submit: "Add value",
+      title: "New value of “{name}”",
+    },
+    count: "{count} articles",
+    countOne: "1 article",
+    delete: {
+      action: "Delete filter: {name}",
+      confirm: "Delete filter",
+      description:
+        "“{name}” will be deleted with all its values, and they will be taken off the articles that carry them. This cannot be undone.",
+      title: "Delete the filter?",
+    },
+    deleteValue: {
+      action: "Delete value: {name}",
+      confirm: "Delete value",
+      inUse:
+        "“{name}” is on {count}. It will be taken off those articles. This cannot be undone.",
+      unused: "“{name}” will be deleted. This cannot be undone.",
+      title: "Delete the value?",
+    },
+    description:
+      "Filters help your customers find what they want, by color for example. Each filter has its own link: /your-store/products?color=dorado.",
+    edit: {
+      action: "Rename filter: {name}",
+      cancel: "Cancel",
+      pending: "Saving…",
+      submit: "Save",
+      valueAction: "Edit value: {name}",
+    },
+    empty: "No filters yet. Add the first one above, Color for example.",
+    emptyValues: "This filter has no values yet.",
+    errors: {
+      duplicate: "There is already one with that name here.",
+      generic: "We could not save the change. Try again.",
+      load: "We could not load the filters.",
+      nameRequired: "Write the name in Spanish.",
+      nameTooLong: "Use up to 60 characters.",
+    },
+    fields: {
+      nameEn: "Name in English (optional)",
+      nameEnHint: "Left empty, the Spanish name shows in English.",
+      nameEs: "Name in Spanish",
+      swatch: "Swatch color",
+      swatchAdd: "Add a swatch color",
+      swatchHint: "A dot of this color shows beside the name.",
+      swatchRemove: "Remove color",
+    },
+    list: "The store's filters",
+    move: {
+      down: "Move down: {name}",
+      moved: "“{name}” is now in place {position} of {total}.",
+      up: "Move up: {name}",
+    },
+    title: "Filters",
+    toasts: {
+      created: "Filter added.",
+      deleted: "Filter deleted.",
+      renamed: "Filter renamed.",
+      valueCreated: "Value added.",
+      valueDeleted: "Value deleted.",
+      valueDeletedFrom: "Value deleted: taken off {count}.",
+      valueUpdated: "Value saved.",
+    },
+    values: "Values of “{name}”",
+  },
   landing: {
     inactive: "Inactive",
     noStoresBody:
@@ -98,6 +171,7 @@ export const admin: Dictionary["admin"] = {
   },
   storeSections: {
     categories: "Categories",
+    filters: "Filters",
     home: "Home",
     orders: "Orders",
     products: "Articles",

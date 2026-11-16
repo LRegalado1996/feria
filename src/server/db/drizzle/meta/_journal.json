@@ -57,6 +57,13 @@
       "when": 1794716749705,
       "tag": "0007_pale_imperial_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794722928386,
+      "tag": "0008_flippant_kat_farrell",
+      "breakpoints": true
     }
   ]
 }

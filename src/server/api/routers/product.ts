@@ -2,11 +2,13 @@ import {
   createProductSchema,
   productIdSchema,
   reorderProductImagesSchema,
+  setProductAttributeValuesSchema,
   setProductAvailabilitySchema,
   updateProductSchema,
 } from "@/lib/schemas/catalog";
 import { storeProcedure } from "@/server/api/orpc";
 import { writeToStore } from "@/server/api/utils/write-to-store";
+import { setProductAttributeValues } from "@/server/services/attribute";
 import {
   createProduct,
   deleteProduct,
@@ -144,6 +146,26 @@ export const productRouter = {
       method: "PUT",
       path: "/stores/{storeSlug}/admin/products/{id}/images/order",
       summary: "Put an article's images in a new order",
+      tags: ["products"],
+    }),
+
+  setAttributeValues: storeProcedure(setProductAttributeValuesSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToStore(
+          context,
+          async (tx, storeId) =>
+            await setProductAttributeValues(tx, {
+              productId: input.id,
+              storeId,
+              valueIds: input.valueIds,
+            })
+        )
+    )
+    .route({
+      method: "PUT",
+      path: "/stores/{storeSlug}/admin/products/{id}/filter-values",
+      summary: "Replace the filter values an article carries",
       tags: ["products"],
     }),
 };

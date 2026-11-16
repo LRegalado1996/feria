@@ -67,7 +67,14 @@ describe("API docs route", () => {
       ])
     ).toEqual([
       ["/admin/me", ["get"]],
+      ["/stores/{storeSlug}/admin/filters", ["get", "post"]],
+      ["/stores/{storeSlug}/admin/filters/{id}", ["put", "delete"]],
+      ["/stores/{storeSlug}/admin/filters/order", ["put"]],
+      ["/stores/{storeSlug}/admin/filter-values", ["post"]],
+      ["/stores/{storeSlug}/admin/filter-values/{id}", ["put", "delete"]],
+      ["/stores/{storeSlug}/admin/filter-values/order", ["put"]],
       ["/stores/{storeSlug}/categories", ["get"]],
+      ["/stores/{storeSlug}/filters", ["get"]],
       ["/stores/{storeSlug}/products", ["get"]],
       ["/stores/{storeSlug}/products/{slug}", ["get"]],
       ["/stores/{storeSlug}/products/{slug}/related", ["get"]],
@@ -82,6 +89,7 @@ describe("API docs route", () => {
       ["/stores/{storeSlug}/admin/products/{id}/unpublish", ["post"]],
       ["/stores/{storeSlug}/admin/products/{id}/availability", ["put"]],
       ["/stores/{storeSlug}/admin/products/{id}/images/order", ["put"]],
+      ["/stores/{storeSlug}/admin/products/{id}/filter-values", ["put"]],
       ["/stores/{slug}", ["get"]],
       ["/stores", ["post"]],
       ["/stores/{id}", ["put"]],
