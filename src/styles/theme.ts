@@ -7,18 +7,20 @@ import type { CSSProperties } from "react";
  * `storeThemeStyle()`, and what CSS cannot reach (the share card, the app
  * icons, the logo files in `public/brand/`). `theme.test.ts` holds every pair
  * the storefront sets text in to WCAG AA, so a palette that cannot be read
- * fails before it ships.
+ * fails before it ships. LR Market's (FER-039, chosen by Lucas on
+ * 2026-11-16): a white page, articles on a light grey tile, a moss header and
+ * footer, and its lime.
  */
 export const STORE_THEME = {
-  /** The page behind everything. */
-  background: "#f2f3f0",
-  /** Cards and fields, on the background. */
-  surface: "#ffffff",
-  /** Text, on the background, the surface and the accent. */
-  foreground: "#111312",
-  /** The dark blocks (the header, the footer); the background is text on it. */
-  contrast: "#111312",
-  /** The brand's own color: buttons, prices and headings on the contrast. */
+  /** The page behind everything: white. */
+  background: "#ffffff",
+  /** The tile behind an article's photo, and other quiet fills on the page. */
+  surface: "#f3f3f2",
+  /** Text: the ink, on the page, the tile and the accent. */
+  foreground: "#15160f",
+  /** The dark blocks (the header, the footer, the search panel): moss. */
+  contrast: "#262a1d",
+  /** The brand's own color: the announcement bar, buttons, and links on the contrast. */
   accent: "#c8f31d",
 } as const;
 

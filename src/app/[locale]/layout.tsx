@@ -1,6 +1,6 @@
 import "@/styles/globals.css";
 import type { Metadata, Viewport } from "next";
-import { Anton, Geist } from "next/font/google";
+import { Anybody, Geist } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
@@ -68,11 +68,12 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-// The storefront's display face (design.md § Storefront). It has one weight.
-const anton = Anton({
+// The storefront's wide face (design.md § Storefront): variable, with its
+// width axis, which the theme sets to 135% (`src/styles/globals.css`).
+const anybody = Anybody({
+  axes: ["wdth"],
   subsets: ["latin"],
-  variable: "--font-anton",
-  weight: "400",
+  variable: "--font-anybody",
 });
 
 export default async function RootLayout({
@@ -87,7 +88,7 @@ export default async function RootLayout({
     // next-themes sets the theme class on <html> before React hydrates, so
     // the server's markup cannot know it.
     <html
-      className={`${geist.variable} ${anton.variable}`}
+      className={`${geist.variable} ${anybody.variable}`}
       lang={locale}
       suppressHydrationWarning
     >

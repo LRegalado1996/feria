@@ -15,7 +15,7 @@ export const contentType = "image/png";
 export default function OpenGraphImage() {
   return renderLogoImage({
     ...size,
-    background: STORE_THEME.foreground,
+    background: STORE_THEME.contrast,
     colorway: "accent",
     logoWidth: 580,
     variant: "full",

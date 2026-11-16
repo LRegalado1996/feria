@@ -15,7 +15,7 @@ vi.mock("server-only", () => ({}));
 
 // `next/font` is compiled by Next's build; outside it there is nothing to load.
 vi.mock("next/font/google", () => ({
-  Anton: () => ({ variable: "font-anton-test" }),
+  Anybody: () => ({ variable: "font-anybody-test" }),
   Geist: () => ({ variable: "font-geist-test" }),
 }));
 
@@ -66,10 +66,10 @@ const SHELL_END = "</body></html>";
 // The store's colors from the theme file, on <body>, where CSS derives the
 // muted ones from them.
 const THEMED_BODY =
-  '<body data-store-palette="" style="--store-accent:#c8f31d;--store-background:#f2f3f0;--store-contrast:#111312;--store-foreground:#111312;--store-surface:#ffffff">';
+  '<body data-store-palette="" style="--store-accent:#c8f31d;--store-background:#ffffff;--store-contrast:#262a1d;--store-foreground:#15160f;--store-surface:#f3f3f2">';
 
 function shellStart(locale: "en" | "es") {
-  return `<html class="font-geist-test font-anton-test" lang="${locale}"><head></head>${THEMED_BODY}<div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
+  return `<html class="font-geist-test font-anybody-test" lang="${locale}"><head></head>${THEMED_BODY}<div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
 }
 
 async function makeParams(locale: string) {
