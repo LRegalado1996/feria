@@ -1,5 +1,12 @@
 export const common = {
   cancel: "Cancelar",
+  // What a screen reader calls a carousel and each of its slides
+  // (`aria-roledescription`), and how it names a slide.
+  carousel: {
+    roleDescription: "carrusel",
+    slide: "{current} de {total}",
+    slideRoleDescription: "diapositiva",
+  },
   closeDialog: "Cerrar diálogo",
   delete: "Eliminar",
   deleteRow: "Eliminar: {row}",
