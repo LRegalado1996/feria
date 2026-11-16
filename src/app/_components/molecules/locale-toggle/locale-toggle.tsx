@@ -18,6 +18,11 @@ const OTHER_LOCALE = { es: "en", en: "es" } as const satisfies Record<
 
 export interface LocaleToggleProps {
   className?: string;
+  /**
+   * `bare` is a plain link styled only by `className`, for a surface that
+   * brings its own tokens (the storefront's `store-locale-toggle`).
+   */
+  tone?: "app" | "bare";
 }
 
 /**
@@ -30,23 +35,26 @@ export interface LocaleToggleProps {
  * boundary swaps in the full one once React reads the URL. Until then the
  * link still leads to the same page in the other language.
  */
-function LocaleToggle({ className }: LocaleToggleProps) {
+function LocaleToggle({ className, tone = "app" }: LocaleToggleProps) {
   return (
-    <Suspense fallback={<LocaleLink className={className} search="" />}>
-      <LocaleLinkWithSearch className={className} />
+    <Suspense
+      fallback={<LocaleLink className={className} search="" tone={tone} />}
+    >
+      <LocaleLinkWithSearch className={className} tone={tone} />
     </Suspense>
   );
 }
 
-function LocaleLinkWithSearch({ className }: LocaleToggleProps) {
+function LocaleLinkWithSearch({ className, tone }: LocaleToggleProps) {
   const search = useSearchParams().toString();
 
-  return <LocaleLink className={className} search={search} />;
+  return <LocaleLink className={className} search={search} tone={tone} />;
 }
 
 function LocaleLink({
   className,
   search,
+  tone,
 }: LocaleToggleProps & { search: string }) {
   const copy = useDictionary().locale;
   const target = OTHER_LOCALE[useLocale()];
@@ -54,22 +62,33 @@ function LocaleLink({
   // the bare one; `localizePath` drops either prefix, so both renders agree.
   const pathname = localizePath(usePathname(), target);
 
+  const link = (
+    <Link
+      className={tone === "bare" ? className : undefined}
+      data-slot="locale-toggle"
+      data-testid="locale-toggle"
+      href={search ? `${pathname}?${search}` : pathname}
+      hrefLang={target}
+      // The label is written in the language it leads to, so a screen
+      // reader pronounces it in that language.
+      lang={target}
+    >
+      {tone === "bare" ? null : (
+        // Decoration, so it gives way first: a phone-width navbar has room
+        // for the language's name or the icon, not both.
+        <Languages aria-hidden="true" className="hidden size-4 sm:block" />
+      )}
+      {copy.switchTo}
+    </Link>
+  );
+
+  if (tone === "bare") {
+    return link;
+  }
+
   return (
     <Button asChild className={className} size="sm" variant="ghost">
-      <Link
-        data-slot="locale-toggle"
-        data-testid="locale-toggle"
-        href={search ? `${pathname}?${search}` : pathname}
-        hrefLang={target}
-        // The label is written in the language it leads to, so a screen
-        // reader pronounces it in that language.
-        lang={target}
-      >
-        {/* Decoration, so it gives way first: a phone-width navbar has room
-            for the language's name or the icon, not both. */}
-        <Languages aria-hidden="true" className="hidden size-4 sm:block" />
-        {copy.switchTo}
-      </Link>
+      {link}
     </Button>
   );
 }

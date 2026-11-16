@@ -17,7 +17,12 @@ const { notFound } = vi.hoisted(() => ({
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-vi.mock("next/navigation", () => ({ notFound }));
+// The gallery's header holds the language link, which reads the URL.
+vi.mock("next/navigation", () => ({
+  notFound,
+  usePathname: () => "/design",
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 // Intl separates a currency from its amount with a no-break space.
 const NBSP = "\u00A0";
@@ -103,6 +108,7 @@ describe("DesignPage", () => {
         "Marquee band",
         "Bubbles",
         "Reveal on scroll",
+        "Every store's header and footer",
       ],
     ],
     [
@@ -119,6 +125,7 @@ describe("DesignPage", () => {
         "Banda en movimiento",
         "Burbujas",
         "Aparición al bajar",
+        "Encabezado y pie de cada tienda",
       ],
     ],
   ] as const)(
@@ -361,7 +368,27 @@ describe("DesignPage", () => {
     ).toBeInTheDocument();
   });
 
-  test("ends with a block that reveals on scroll", async () => {
+  test("shows every store's header and footer, not sticky, with every footer link", async () => {
+    const { page } = await setup({ locale: "es" });
+    const shell = within(page).getByTestId("design-shell");
+
+    expect(within(shell).getByTestId("store-header")).toHaveClass("static");
+    // Its skip link leads to the gallery's own content.
+    expect(page).toHaveAttribute("id", "store-main");
+    expect(page).toHaveAttribute("tabindex", "-1");
+    expect(
+      within(within(shell).getByTestId("store-footer"))
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href"))
+    ).toEqual([
+      "https://www.instagram.com/lrmarket",
+      "https://www.tiktok.com/@lrmarket",
+      "https://wa.me/59899000000",
+      "https://lucasregalado.com",
+    ]);
+  });
+
+  test("shows a block that reveals on scroll", async () => {
     await setup();
     const reveal = screen
       .getByTestId("design-reveal")

@@ -33,7 +33,7 @@ function StoreIntro({ className, name, text, ...props }: StoreIntroProps) {
       <header
         className="bg-store-contrast py-12 md:py-20"
         data-slot="store-intro-header"
-        data-testid="store-header"
+        data-testid="store-intro-header"
       >
         <div className={CONTAINER_CLASS}>
           {text ? (

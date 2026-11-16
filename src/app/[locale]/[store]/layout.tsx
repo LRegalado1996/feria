@@ -1,7 +1,16 @@
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { StoreFooter } from "@/app/_components/organisms/store-footer";
+import {
+  STORE_MAIN_ID,
+  StoreHeader,
+} from "@/app/_components/organisms/store-header";
 import { StoreTheme } from "@/app/_components/organisms/store-theme";
+import { getDictionary } from "@/content";
+import { pickTranslation } from "@/lib/i18n/pick-translation";
+import { readLocale } from "@/lib/i18n/read-locale";
 import { getStoreForPath } from "@/server/cache/store";
 
 interface StoreLayoutProps {
@@ -27,7 +36,43 @@ export function generateStaticParams() {
 }
 
 /**
- * Every public page of a store, wearing that store's colors. Chrome only: it
+ * A store's defaults for every page below: titles end in the store's name,
+ * the description is its tagline, and the share card names it.
+ */
+export async function generateMetadata({
+  params,
+}: Omit<StoreLayoutProps, "children">): Promise<Metadata> {
+  const locale = await readLocale(params);
+  const { store: segment } = await params;
+  const store = await getStoreForPath(segment);
+
+  if (!store) {
+    return {};
+  }
+
+  const tagline = pickTranslation(store.translations, locale)?.tagline;
+
+  return {
+    description: tagline,
+    // The whole object replaces the root layout's: its type comes along.
+    openGraph: { description: tagline, siteName: store.name, type: "website" },
+    title: { default: store.name, template: `%s · ${store.name}` },
+  };
+}
+
+/** The browser's bar takes the store's background, as on its pages. */
+export async function generateViewport({
+  params,
+}: Omit<StoreLayoutProps, "children">): Promise<Viewport> {
+  const { store: segment } = await params;
+  const store = await getStoreForPath(segment);
+
+  return store ? { themeColor: store.colorBackground } : {};
+}
+
+/**
+ * Every public page of a store, wearing that store's colors, between its
+ * header and its footer (FER-021). Chrome only: it
  * decides nothing about who may see what (the storefront has no session). An
  * address that is not an active store answers 404 here, for every page below.
  */
@@ -35,12 +80,16 @@ export default async function StoreLayout({
   children,
   params,
 }: StoreLayoutProps) {
+  const locale = await readLocale(params);
   const { store: segment } = await params;
   const store = await getStoreForPath(segment);
 
   if (!store) {
     notFound();
   }
+
+  const copy = getDictionary(locale).storefront.shell;
+  const text = pickTranslation(store.translations, locale);
 
   return (
     <StoreTheme
@@ -52,8 +101,23 @@ export default async function StoreLayout({
         foreground: store.colorForeground,
         surface: store.colorSurface,
       }}
+      className="flex min-h-dvh flex-col"
     >
-      {children}
+      <StoreHeader copy={copy} locale={locale} store={store} />
+      {/* Its top clears the sticky header when the skip link scrolls to it. */}
+      <div
+        className="flex-1 scroll-mt-16"
+        data-testid="store-main"
+        id={STORE_MAIN_ID}
+        tabIndex={-1}
+      >
+        {children}
+      </div>
+      <StoreFooter
+        copy={copy}
+        store={store}
+        tagline={text ? { lang: text.locale, text: text.tagline } : null}
+      />
     </StoreTheme>
   );
 }

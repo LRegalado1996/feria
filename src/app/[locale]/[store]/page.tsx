@@ -37,7 +37,8 @@ export async function generateMetadata({
   return {
     alternates: buildAlternates(`/${store.slug}`, locale),
     description: pickTranslation(store.translations, locale)?.description,
-    title: store.name,
+    // The home is the store itself: no "· Store" after its own name.
+    title: { absolute: store.name },
   };
 }
 

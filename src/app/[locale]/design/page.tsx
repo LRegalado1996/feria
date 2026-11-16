@@ -14,6 +14,11 @@ import { StoreArticleCard } from "@/app/_components/molecules/store-article-card
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import { StoreSlider } from "@/app/_components/molecules/store-slider";
+import { StoreFooter } from "@/app/_components/organisms/store-footer";
+import {
+  STORE_MAIN_ID,
+  StoreHeader,
+} from "@/app/_components/organisms/store-header";
 import { type Dictionary, getDictionary } from "@/content";
 import { detectStableEnvironment, isProductionDeploy } from "@/lib/env/deploy";
 import { buildAlternates } from "@/lib/i18n/metadata";
@@ -57,6 +62,16 @@ function buildSampleArticles(
 const SAMPLE_COUNT = 128;
 
 const SECTION_CLASS = "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4";
+
+/** A store with every link set, so the footer shows each one. */
+const SAMPLE_STORE = {
+  instagramUrl: "https://www.instagram.com/lrmarket",
+  logoUrl: null,
+  name: "LR Market",
+  slug: "lr-market",
+  tiktokUrl: "https://www.tiktok.com/@lrmarket",
+  whatsappNumber: "+59899000000",
+};
 const SECTION_TITLE_CLASS = "store-eyebrow text-store-muted";
 
 export async function generateMetadata({
@@ -108,6 +123,9 @@ export default async function DesignPage({ params }: DesignPageProps) {
       className="flex min-h-screen flex-col gap-16 bg-store-background pb-24 text-store-foreground"
       data-slot="design-page"
       data-testid="design-page"
+      // The target of the sample header's skip link.
+      id={STORE_MAIN_ID}
+      tabIndex={-1}
     >
       <header className="bg-store-contrast py-12 md:py-20">
         <div className={SECTION_CLASS}>
@@ -296,6 +314,24 @@ export default async function DesignPage({ params }: DesignPageProps) {
           <StoreHeading as="h3" lines={sectionLines} size="section" />
           <p className="max-w-prose text-base">{sample.revealBody}</p>
         </StoreReveal>
+      </section>
+
+      <section className="flex flex-col gap-6" data-testid="design-shell">
+        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+          {sections.shell}
+        </h2>
+        {/* Not sticky here: it would stay over the rest of the gallery. */}
+        <StoreHeader
+          className="static"
+          copy={storefront.shell}
+          locale={locale}
+          store={SAMPLE_STORE}
+        />
+        <StoreFooter
+          copy={storefront.shell}
+          store={SAMPLE_STORE}
+          tagline={{ lang: locale, text: comingSoon.eyebrow }}
+        />
       </section>
     </main>
   );

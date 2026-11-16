@@ -37,8 +37,10 @@ describe("StoreIntro", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       /^Sample Store$/
     );
-    expect(screen.getByTestId("store-header")).toHaveClass("bg-store-contrast");
-    expect(screen.getByTestId("store-header")).toContainElement(
+    expect(screen.getByTestId("store-intro-header")).toHaveClass(
+      "bg-store-contrast"
+    );
+    expect(screen.getByTestId("store-intro-header")).toContainElement(
       screen.getByRole("heading", { level: 1 })
     );
   });
@@ -59,7 +61,9 @@ describe("StoreIntro", () => {
 
       const tagline = screen.getByText(text.tagline);
       expect(tagline).toHaveAttribute("lang", text.locale);
-      expect(screen.getByTestId("store-header")).toContainElement(tagline);
+      expect(screen.getByTestId("store-intro-header")).toContainElement(
+        tagline
+      );
       expect(screen.getByTestId("store-description")).toHaveTextContent(
         text.description
       );
