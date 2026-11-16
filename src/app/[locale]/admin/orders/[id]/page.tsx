@@ -53,7 +53,7 @@ async function OrderResolver({ params, searchParams }: OrderPageProps) {
   // Checked as the list checks it: anyone can edit an address.
   const from = readOrdersQuery(await searchParams);
   const { admin } = getDictionary(locale);
-  await requireAdmin(orderPath(id, locale, from), locale);
+  const login = await requireAdmin(orderPath(id, locale, from), locale);
   const queryClient = getQueryClient();
   // An order the store does not have is NOT_FOUND. Any other failure is not
   // a 404: the screen fetches again and shows its own error state.
@@ -70,7 +70,12 @@ async function OrderResolver({ params, searchParams }: OrderPageProps) {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AdminShell dictionary={admin} locale={locale} section="orders">
+      <AdminShell
+        dictionary={admin}
+        locale={locale}
+        login={login}
+        section="orders"
+      >
         <OrderDetail from={from} id={id} renderedAt={renderedAt} />
       </AdminShell>
     </HydrationBoundary>

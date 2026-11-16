@@ -23,19 +23,28 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ORPCError } from "@orpc/client";
-import { ArrowDown, ArrowUp, GripVertical, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
+import { AdminPage } from "@/app/_components/molecules/admin-page";
 import {
   CategoryForm,
   type CategoryFormResult,
 } from "@/app/_components/molecules/category-form";
 import { DeleteCategoryDialog } from "@/app/_components/molecules/delete-category-dialog";
 import { EmptyState } from "@/app/_components/molecules/empty-state";
+import { focusFirstField } from "@/lib/admin/focus-first-field";
 import { reportError } from "@/lib/errors/client";
 import {
   useCreateCategory,
@@ -74,6 +83,7 @@ function CategoryManager() {
   const reorder = useReorderCategories();
   const [announcement, setAnnouncement] = useState("");
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const addForm = useRef<HTMLDivElement>(null);
 
   const countLabel = (count: number) =>
     count === 1
@@ -112,77 +122,90 @@ function CategoryManager() {
   };
 
   return (
-    <section
-      className="space-y-6"
-      data-slot="category-manager"
-      data-testid="category-manager"
-    >
-      <div className="space-y-1">
-        <h1
-          className="text-2xl font-bold focus-visible:outline-none"
-          ref={titleRef}
-          tabIndex={-1}
-        >
-          {copy.title}
-        </h1>
-        <p className="text-sm text-muted-foreground">{copy.description}</p>
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold">{copy.add.title}</h2>
-        <CategoryForm
-          onSave={async (names) => {
-            try {
-              await create.mutateAsync(names);
-              toast.success(copy.toasts.created);
-              return "saved";
-            } catch (error) {
-              return toFormResult(error, "Category.create");
-            }
-          }}
-          pendingLabel={copy.add.pending}
-          submitLabel={copy.add.submit}
-        />
-      </div>
-      <output aria-live="polite" className="sr-only">
-        {announcement}
-      </output>
-      {categories.isPending ? (
-        <div
-          aria-busy="true"
-          className="space-y-2"
-          data-testid="category-list-skeleton"
-        >
-          <span className="sr-only">{common.loading}</span>
-          {["first", "second", "third"].map((row) => (
-            <Skeleton className="h-14 w-full" key={row} />
-          ))}
-        </div>
-      ) : null}
-      {categories.isError ? (
-        <div className="space-y-2" role="alert">
-          <p className="text-sm">{copy.errors.load}</p>
+    <section data-slot="category-manager" data-testid="category-manager">
+      <AdminPage
+        primaryAction={
           <Button
+            className="w-full md:w-auto"
             onClick={() => {
-              void categories.refetch();
+              focusFirstField(addForm.current);
             }}
-            size="sm"
-            variant="outline"
+            type="button"
           >
-            {common.tryAgain}
+            <Plus aria-hidden="true" />
+            {copy.add.title}
           </Button>
+        }
+        title={copy.title}
+        titleRef={titleRef}
+      >
+        <p className="text-sm text-muted-foreground">{copy.description}</p>
+        <div
+          className="scroll-mt-24 space-y-3 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+          ref={addForm}
+        >
+          <h2 className="text-sm font-semibold">{copy.add.title}</h2>
+          <CategoryForm
+            onSave={async (names) => {
+              try {
+                await create.mutateAsync(names);
+                toast.success(copy.toasts.created);
+                return "saved";
+              } catch (error) {
+                return toFormResult(error, "Category.create");
+              }
+            }}
+            pendingLabel={copy.add.pending}
+            submitLabel={copy.add.submit}
+          />
         </div>
-      ) : null}
-      {categories.data?.length === 0 ? (
-        <EmptyState message={copy.empty} />
-      ) : null}
-      {categories.data && categories.data.length > 0 ? (
-        <CategoryList
-          countLabel={countLabel}
-          move={move}
-          rows={categories.data}
-          titleRef={titleRef}
-        />
-      ) : null}
+        <output aria-live="polite" className="sr-only">
+          {announcement}
+        </output>
+        {categories.isPending ? (
+          <div
+            aria-busy="true"
+            className="space-y-2"
+            data-testid="category-list-skeleton"
+          >
+            <span className="sr-only">{common.loading}</span>
+            {["first", "second", "third"].map((row) => (
+              <Skeleton className="h-16 w-full rounded-lg" key={row} />
+            ))}
+          </div>
+        ) : null}
+        {categories.isError ? (
+          <div
+            className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
+            role="alert"
+          >
+            <p className="text-sm">{copy.errors.load}</p>
+            <Button
+              onClick={() => {
+                void categories.refetch();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {common.tryAgain}
+            </Button>
+          </div>
+        ) : null}
+        {categories.data?.length === 0 ? (
+          <EmptyState
+            className="rounded-lg border bg-card px-6"
+            message={copy.empty}
+          />
+        ) : null}
+        {categories.data && categories.data.length > 0 ? (
+          <CategoryList
+            countLabel={countLabel}
+            move={move}
+            rows={categories.data}
+            titleRef={titleRef}
+          />
+        ) : null}
+      </AdminPage>
     </section>
   );
 }
@@ -264,9 +287,10 @@ function CategoryList({
         items={rows.map((row) => row.id)}
         strategy={verticalListSortingStrategy}
       >
+        {/* A card per category on a phone; one card of rows from `md` up. */}
         <ul
           aria-label={admin.categories.list}
-          className="divide-y rounded-lg border"
+          className="space-y-2 md:space-y-0 md:divide-y md:rounded-lg md:border"
           data-testid="category-list"
         >
           {rows.map((row, index) => (
@@ -328,7 +352,7 @@ function CategoryRow({
   return (
     <li
       className={cn(
-        "flex flex-wrap items-center gap-2 bg-background p-3",
+        "flex flex-wrap items-center gap-2 rounded-lg border bg-card p-3 text-card-foreground md:rounded-none md:border-0 md:first:rounded-t-lg md:last:rounded-b-lg",
         isDragging && "relative z-10 shadow-sm"
       )}
       data-testid={`category-row-${row.slug}`}
@@ -367,9 +391,11 @@ function CategoryRow({
         />
       ) : (
         <>
-          <div className="min-w-0 flex-1">
+          {/* The rest of the first line on a phone, so the buttons take
+              the next one; beside them from `md` up. */}
+          <div className="min-w-0 flex-1 basis-[calc(100%-3.25rem)] md:basis-0">
             <p
-              className="truncate text-sm font-semibold"
+              className="truncate text-base font-semibold md:text-sm"
               data-testid="category-name"
             >
               {row.nameEs}
@@ -379,7 +405,7 @@ function CategoryRow({
               <span data-testid="category-count">{countLabel}</span>
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               aria-label={interpolate(copy.move.up, { name: row.nameEs })}
               disabled={first}

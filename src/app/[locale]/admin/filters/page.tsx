@@ -31,7 +31,7 @@ export default function FiltersPage({ params }: FiltersPageProps) {
 async function FiltersResolver({ params }: FiltersPageProps) {
   const locale = await readLocale(params);
   const { admin } = getDictionary(locale);
-  await requireAdmin(adminSectionPath("filters", locale), locale);
+  const login = await requireAdmin(adminSectionPath("filters", locale), locale);
   const queryClient = getQueryClient();
 
   // A failed prefetch is not fatal: the screen fetches again and shows its
@@ -39,7 +39,12 @@ async function FiltersResolver({ params }: FiltersPageProps) {
   await queryClient.query(orpc.attribute.list.queryOptions()).catch(noop);
 
   return (
-    <AdminShell dictionary={admin} locale={locale} section="filters">
+    <AdminShell
+      dictionary={admin}
+      locale={locale}
+      login={login}
+      section="filters"
+    >
       <HydrationBoundary state={dehydrate(queryClient)}>
         <FilterManager />
       </HydrationBoundary>

@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -58,6 +59,7 @@ function SignOutButton({ className, redirectTo }: SignOutButtonProps) {
       size="sm"
       variant="outline"
     >
+      <LogOut aria-hidden="true" />
       {isSigningOut ? auth.signOut.pending : auth.signOut.submit}
     </Button>
   );

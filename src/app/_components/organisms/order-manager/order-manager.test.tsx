@@ -764,6 +764,57 @@ describe("OrderManager", () => {
     expect(beeps).toEqual([]);
   });
 
+  test("heads the screen with its title and the sound in the top bar, the sound's words for the ear only on a phone", async () => {
+    const { user } = setup({ audio: "suspended", sound: "on" });
+
+    const topBar = screen.getByTestId("admin-top-bar");
+    expect(within(topBar).getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Orders$/u
+    );
+    const toggle = within(topBar).getByRole("button", {
+      name: "Sound when an order arrives",
+    });
+    // An icon-sized square on a phone, the words beside the icon from md up.
+    expect(toggle).toHaveClass("w-11", "md:w-auto");
+    expect(within(toggle).getByText("Sound when an order arrives")).toHaveClass(
+      "sr-only",
+      "md:not-sr-only"
+    );
+    // The hint is a line of the top bar, under the switch it explains.
+    expect(
+      within(topBar).getByTestId("order-sound-hint").parentElement
+    ).toHaveAttribute("data-slot", "admin-top-bar-notice");
+
+    await user.keyboard("{Shift}");
+
+    await waitFor(() => {
+      expect(
+        topBar.querySelector('[data-slot="admin-top-bar-notice"]')
+      ).toBeNull();
+    });
+  });
+
+  test("names the columns above the rows for the eye only, in the rows' order", async () => {
+    setup();
+    await screen.findByTestId("order-list");
+
+    const columns = screen.getByTestId("order-list-columns");
+    expect(columns).toHaveAttribute("aria-hidden", "true");
+    expect([...columns.children].map((column) => column.textContent)).toEqual([
+      "Order",
+      "Customer",
+      "When",
+      "Status",
+      "Total",
+    ]);
+    // Shown from lg up, where the rows are lines of columns; below it each
+    // row is a card of its own.
+    expect(columns).toHaveClass("hidden", "lg:grid");
+    expect(
+      within(screen.getByTestId("order-row-AB3CD")).getByRole("link")
+    ).toHaveClass("rounded-lg", "border", "bg-card", "lg:border-0");
+  });
+
   test("the sound is a toggle, off at first, remembered once turned on", async () => {
     const { beeps, user } = setup();
     const toggle = screen.getByRole("button", {

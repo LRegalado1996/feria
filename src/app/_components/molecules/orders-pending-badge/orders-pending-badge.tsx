@@ -38,7 +38,7 @@ function OrdersPendingBadge({ className, label }: OrdersPendingBadgeProps) {
       {received > 0 ? (
         <span
           aria-hidden="true"
-          className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums"
+          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums"
           data-testid="orders-pending-badge"
         >
           {figure}

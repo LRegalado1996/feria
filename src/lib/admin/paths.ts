@@ -3,13 +3,14 @@ import { localizePath, splitLocale } from "@/lib/i18n/paths";
 
 /**
  * The admin's sections (FER-038: one store, so one list), in the order the
- * navigation lists them. `/admin` opens the orders.
+ * navigation lists them: the orders first, where `/admin` opens and where
+ * the staff spends the fair (FER-040).
  */
 export const ADMIN_SECTIONS = [
+  "orders",
   "products",
   "categories",
   "filters",
-  "orders",
   "home",
   "settings",
   "users",

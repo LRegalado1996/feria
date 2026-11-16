@@ -112,7 +112,7 @@ function OrderSearch({ className, query }: OrderSearchProps) {
         />
         <Input
           autoComplete="off"
-          className="h-11 pl-9 md:h-9"
+          className="bg-card pl-9"
           enterKeyHint="search"
           id="order-search"
           maxLength={ORDER_SEARCH_MAX_LENGTH}

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
+import { ShoppingBag } from "lucide-react";
 import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
@@ -71,6 +72,7 @@ function setup({
           badge: <OrdersPendingBadge className="custom" label={label} />,
           current: false,
           href: "/admin/orders",
+          icon: ShoppingBag,
           label,
         },
       ]}

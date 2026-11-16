@@ -156,6 +156,13 @@ export const admin = {
     },
     arrived: "Llegó el pedido {code}",
     arrivedMany: "Llegaron {count} pedidos: {codes}",
+    columns: {
+      code: "Pedido",
+      customer: "Cliente",
+      placed: "Cuándo",
+      status: "Estado",
+      total: "Total",
+    },
     detail: {
       back: "Volver a pedidos",
       contact: "Contacto",
@@ -228,7 +235,10 @@ export const admin = {
     },
   },
   shell: {
+    closeMenu: "Cerrar el menú",
+    menu: "Menú",
     navigation: "Secciones del panel",
+    signedInAs: "Sesión iniciada como",
     skipToContent: "Saltar al contenido",
   },
   signIn: {

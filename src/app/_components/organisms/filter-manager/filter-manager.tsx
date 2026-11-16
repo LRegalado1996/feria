@@ -1,19 +1,21 @@
 "use client";
 
 import { ORPCError } from "@orpc/client";
-import { ArrowDown, ArrowUp, Pencil, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { type RefObject, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
+import { AdminPage } from "@/app/_components/molecules/admin-page";
 import {
   AttributeForm,
   type AttributeFormResult,
 } from "@/app/_components/molecules/attribute-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
 import { EmptyState } from "@/app/_components/molecules/empty-state";
+import { focusFirstField } from "@/lib/admin/focus-first-field";
 import { reportError } from "@/lib/errors/client";
 import {
   useCreateAttribute,
@@ -108,6 +110,7 @@ function FilterManager() {
   const reorderValues = useReorderAttributeValues();
   const [announcement, setAnnouncement] = useState("");
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const addForm = useRef<HTMLDivElement>(null);
 
   const countLabel = (count: number) =>
     count === 1
@@ -140,122 +143,140 @@ function FilterManager() {
   const rows = attributes.data;
 
   return (
-    <section
-      className="space-y-6"
-      data-slot="filter-manager"
-      data-testid="filter-manager"
-    >
-      <div className="space-y-1">
-        <h1
-          className="text-2xl font-bold focus-visible:outline-none"
-          ref={titleRef}
-          tabIndex={-1}
-        >
-          {copy.title}
-        </h1>
-        <p className="text-sm text-muted-foreground">{copy.description}</p>
-      </div>
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold">{copy.add.title}</h2>
-        <AttributeForm
-          onSave={async ({ nameEn, nameEs }) => {
-            try {
-              await create.mutateAsync({ nameEn, nameEs });
-              toast.success(copy.toasts.created);
-              return "saved";
-            } catch (error) {
-              return toFormResult(error, "Attribute.create");
-            }
-          }}
-          pendingLabel={copy.add.pending}
-          submitLabel={copy.add.submit}
-        />
-      </div>
-      <output aria-live="polite" className="sr-only">
-        {announcement}
-      </output>
-      {attributes.isPending ? (
-        <div
-          aria-busy="true"
-          className="space-y-2"
-          data-testid="filter-list-skeleton"
-        >
-          <span className="sr-only">{common.loading}</span>
-          {["first", "second"].map((row) => (
-            <Skeleton className="h-40 w-full" key={row} />
-          ))}
-        </div>
-      ) : null}
-      {attributes.isError ? (
-        <div className="space-y-2" role="alert">
-          <p className="text-sm">{copy.errors.load}</p>
+    <section data-slot="filter-manager" data-testid="filter-manager">
+      <AdminPage
+        primaryAction={
           <Button
+            className="w-full md:w-auto"
             onClick={() => {
-              void attributes.refetch();
+              focusFirstField(addForm.current);
             }}
-            size="sm"
-            variant="outline"
+            type="button"
           >
-            {common.tryAgain}
+            <Plus aria-hidden="true" />
+            {copy.add.title}
           </Button>
-        </div>
-      ) : null}
-      {rows?.length === 0 ? <EmptyState message={copy.empty} /> : null}
-      {rows && rows.length > 0 ? (
-        <ul
-          aria-label={copy.list}
-          className="space-y-4"
-          data-testid="filter-list"
+        }
+        title={copy.title}
+        titleRef={titleRef}
+      >
+        <p className="text-sm text-muted-foreground">{copy.description}</p>
+        <div
+          className="scroll-mt-24 space-y-3 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+          ref={addForm}
         >
-          {rows.map((row, index) => (
-            <FilterCard
-              countLabel={countLabel}
-              first={index === 0}
-              key={row.id}
-              last={index === rows.length - 1}
-              onMove={(offset) => {
-                const ids = moved(
-                  rows.map((other) => other.id),
-                  index,
-                  index + offset
-                );
-
-                if (ids) {
-                  announceMove(async () => await reorder.mutateAsync({ ids }), {
-                    name: row.nameEs,
-                    position: index + offset,
-                    total: rows.length,
-                  });
-                }
+          <h2 className="text-sm font-semibold">{copy.add.title}</h2>
+          <AttributeForm
+            onSave={async ({ nameEn, nameEs }) => {
+              try {
+                await create.mutateAsync({ nameEn, nameEs });
+                toast.success(copy.toasts.created);
+                return "saved";
+              } catch (error) {
+                return toFormResult(error, "Attribute.create");
+              }
+            }}
+            pendingLabel={copy.add.pending}
+            submitLabel={copy.add.submit}
+          />
+        </div>
+        <output aria-live="polite" className="sr-only">
+          {announcement}
+        </output>
+        {attributes.isPending ? (
+          <div
+            aria-busy="true"
+            className="space-y-2"
+            data-testid="filter-list-skeleton"
+          >
+            <span className="sr-only">{common.loading}</span>
+            {["first", "second"].map((row) => (
+              <Skeleton className="h-40 w-full rounded-lg" key={row} />
+            ))}
+          </div>
+        ) : null}
+        {attributes.isError ? (
+          <div
+            className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
+            role="alert"
+          >
+            <p className="text-sm">{copy.errors.load}</p>
+            <Button
+              onClick={() => {
+                void attributes.refetch();
               }}
-              onMoveValue={(value, from, to) => {
-                const ids = moved(
-                  row.values.map((other) => other.id),
-                  from,
-                  to
-                );
-
-                if (ids) {
-                  announceMove(
-                    async () =>
-                      await reorderValues.mutateAsync({
-                        attributeId: row.id,
-                        ids,
-                      }),
-                    {
-                      name: value.nameEs,
-                      position: to,
-                      total: row.values.length,
-                    }
+              size="sm"
+              variant="outline"
+            >
+              {common.tryAgain}
+            </Button>
+          </div>
+        ) : null}
+        {rows?.length === 0 ? (
+          <EmptyState
+            className="rounded-lg border bg-card px-6"
+            message={copy.empty}
+          />
+        ) : null}
+        {rows && rows.length > 0 ? (
+          <ul
+            aria-label={copy.list}
+            className="space-y-4"
+            data-testid="filter-list"
+          >
+            {rows.map((row, index) => (
+              <FilterCard
+                countLabel={countLabel}
+                first={index === 0}
+                key={row.id}
+                last={index === rows.length - 1}
+                onMove={(offset) => {
+                  const ids = moved(
+                    rows.map((other) => other.id),
+                    index,
+                    index + offset
                   );
-                }
-              }}
-              row={row}
-              titleRef={titleRef}
-            />
-          ))}
-        </ul>
-      ) : null}
+
+                  if (ids) {
+                    announceMove(
+                      async () => await reorder.mutateAsync({ ids }),
+                      {
+                        name: row.nameEs,
+                        position: index + offset,
+                        total: rows.length,
+                      }
+                    );
+                  }
+                }}
+                onMoveValue={(value, from, to) => {
+                  const ids = moved(
+                    row.values.map((other) => other.id),
+                    from,
+                    to
+                  );
+
+                  if (ids) {
+                    announceMove(
+                      async () =>
+                        await reorderValues.mutateAsync({
+                          attributeId: row.id,
+                          ids,
+                        }),
+                      {
+                        name: value.nameEs,
+                        position: to,
+                        total: row.values.length,
+                      }
+                    );
+                  }
+                }}
+                row={row}
+                titleRef={titleRef}
+              />
+            ))}
+          </ul>
+        ) : null}
+      </AdminPage>
     </section>
   );
 }
@@ -295,7 +316,7 @@ function FilterCard({
 
   return (
     <li
-      className="space-y-4 rounded-lg border p-3 sm:p-4"
+      className="space-y-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
       data-testid={`filter-card-${row.slug}`}
     >
       {editing ? (
@@ -324,7 +345,8 @@ function FilterCard({
         />
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1">
+          {/* Its own line on a phone, the buttons on the next one. */}
+          <div className="min-w-0 flex-1 basis-full md:basis-0">
             <h2
               className="truncate text-lg font-semibold focus-visible:outline-none"
               data-testid="filter-name"
@@ -338,7 +360,7 @@ function FilterCard({
               <code>?{row.slug}=</code>
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               aria-label={interpolate(copy.move.up, { name: row.nameEs })}
               disabled={first}
@@ -391,7 +413,7 @@ function FilterCard({
       ) : (
         <ul
           aria-label={interpolate(copy.values, { name: row.nameEs })}
-          className="divide-y rounded-md border"
+          className="divide-y border-y"
         >
           {row.values.map((value, index) => (
             <ValueRow
@@ -496,7 +518,7 @@ function ValueRow({
 
   return (
     <li
-      className="flex flex-wrap items-center gap-2 p-2 sm:p-3"
+      className="flex flex-wrap items-center gap-2 py-3"
       data-testid={`filter-value-${value.slug}`}
     >
       {editing ? (
@@ -537,7 +559,9 @@ function ValueRow({
                 : { visibility: "hidden" }
             }
           />
-          <div className="min-w-0 flex-1">
+          {/* The rest of the first line on a phone, so the buttons take
+              the next one; beside them from `md` up. */}
+          <div className="min-w-0 flex-1 basis-[calc(100%-1.5rem)] md:basis-0">
             <p className="truncate text-sm">
               <span className="font-semibold" data-testid="filter-value-name">
                 {value.nameEs}
@@ -558,7 +582,7 @@ function ValueRow({
               {countLabel(value.productCount)}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               aria-label={interpolate(copy.move.up, { name: value.nameEs })}
               disabled={first}
