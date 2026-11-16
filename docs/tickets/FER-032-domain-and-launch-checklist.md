@@ -16,7 +16,7 @@ The store is live on its own domain and has been checked the way a stranger with
 - Submit the sitemap in Google Search Console.
 - Checklist, each item ticked in the PR:
   - Full purchase on an iPhone and an Android phone, on mobile data, in both languages.
-  - Admin on a phone: load an article with AI, change an order's status.
+  - Admin on a phone: load an article with AI, change an order's status, change the announcement bar.
   - Lighthouse on mobile for home, catalog and article.
   - Keyboard and screen reader pass on the purchase flow.
   - Sentry receiving production errors; health check monitored.

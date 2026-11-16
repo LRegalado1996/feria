@@ -11,17 +11,17 @@ The production store is full and looks alive on opening day.
 
 ## Scope
 
-- Create Lucas's store in production with its real WhatsApp number, Instagram and TikTok links, logo and palette.
+- Fill in the store's settings in production (FER-014): its real WhatsApp number, Instagram and TikTok links.
 - Categories: bubble guns, chains, rings, earrings, bracelets.
 - Load every article through the wizard with real photos. This is also the first real test of FER-017 and FER-018; write down every rough edge as a ticket.
-- Home curation: two or three banners, including "find us at the fair, December 5 to January 5" with the stall's location, set to expire on January 5; a best sellers ranking; featured articles.
+- Home curation (FER-020): the announcement bar ("Encontranos en la feria, del 5/12 al 5/1"), two or three banners, including "find us at the fair, December 5 to January 5" with the stall's location, set to expire on January 5; a best sellers ranking; featured articles.
 - Review every AI-written text in Spanish, and skim the English.
 - Place one real order end to end and take it to delivered.
 
 ## Acceptance criteria
 
 - No placeholder text or sample article remains in production.
-- Every article has at least two photos, a price and a category.
+- Every article has at least two photos, a price and a category, and its main photo is a cut-out that sits cleanly on the grey tile.
 - Lucas has walked through the store on his own phone in both languages.
 
 ## Notes

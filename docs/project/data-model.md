@@ -2,6 +2,8 @@
 
 First draft. Each table is finalized in the ticket that creates it. Template rules apply: no JSON columns, 3NF, singular snake_case tables, camelCase columns, integer identity ids, timestamps with time zone, every foreign key states `onDelete` and has an index, and a row reached from an unauthenticated URL carries a random `token`.
 
+**Changing with [FER-038](../tickets/FER-038-single-store.md) (decided 2026-11-16):** one store. `store` keeps exactly one row and loses `slug`, `isDefault`, `isActive`, `logoUrl` and the five colors; `store_member` goes; `user.role` holds one value, `admin`. Every other table keeps its `storeId`. [FER-020](../tickets/FER-020-home-curation.md) adds `announcement` and `announcement_translation` (text, optional link, active switch, dates) and a position for each banner among the home's rows. The tables below describe what the code holds until those tickets land.
+
 `locale` is an enum: `es`, `en`. Every table has `createdAt` and `updatedAt` unless noted.
 
 ## Stores and access

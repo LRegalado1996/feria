@@ -46,6 +46,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-011](FER-011-image-uploads.md)            | Image upload pipeline                              | P0       | todo   |
 | [FER-012](FER-012-remove-post-demo.md)         | Remove the posts demo                              | P1       | todo   |
 | [FER-033](FER-033-article-filters.md)          | Article filters: color and other attributes        | P0       | done   |
+| [FER-038](FER-038-single-store.md)             | One store, one admin role                          | P0       | todo   |
 
 ### M3 Admin
 
@@ -53,13 +54,14 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | ----------------------------------------------------- | -------------------------------------------------- | -------- | ----------- |
 | [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | in progress |
 | [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | in progress |
-| [FER-014](FER-014-store-management.md)                | Store management and company settings              | P0       | todo        |
+| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | todo        |
 | [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo        |
 | [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done        |
 | [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | todo        |
 | [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
 | [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo        |
-| [FER-020](FER-020-home-curation.md)                   | Home curation: banners, ranking, featured          | P0       | todo        |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo        |
+| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | todo        |
 
 ### M4 Storefront and orders
 
@@ -73,13 +75,14 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-026](FER-026-cart-and-checkout.md)           | Cart and checkout                   | P0       | in progress |
 | [FER-027](FER-027-order-management.md)            | Order management in the admin       | P0       | done        |
 | [FER-028](FER-028-whatsapp-phone-verification.md) | Phone verification by WhatsApp code | P2       | todo        |
+| [FER-039](FER-039-storefront-redesign.md)         | Storefront redesign                 | P0       | todo        |
 
 ### M5 Metrics
 
-| ID                                      | Title                        | Priority | Status |
-| --------------------------------------- | ---------------------------- | -------- | ------ |
-| [FER-029](FER-029-view-tracking.md)     | View and visit tracking      | P1       | todo   |
-| [FER-030](FER-030-metrics-dashboard.md) | Superadmin metrics dashboard | P1       | todo   |
+| ID                                      | Title                   | Priority | Status |
+| --------------------------------------- | ----------------------- | -------- | ------ |
+| [FER-029](FER-029-view-tracking.md)     | View and visit tracking | P1       | todo   |
+| [FER-030](FER-030-metrics-dashboard.md) | Metrics dashboard       | P1       | todo   |
 
 ### M6 Launch
 
@@ -94,13 +97,15 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 001 → 002 → 003 → 036
 001 → 004 → 005 → 006 → 007
 002, 005 → 034
-002 → 008 → 009 → 013 → 014, 015, 037
+002 → 008 → 009 → 013 → 037
 008 → 010 → 011 → 017 → 018
-010 → 016, 019, 020
-010 → 033 → 017, 023
+010 → 016, 033 → 017, 023
 004 → 035 → 017
-005, 008 → 021 → 022, 023, 024
+005, 008 → 021 → 023, 024
 010 → 025 → 026 → 027 → 028
+012, 027 → 038 → 039 → 040
+040 → 014, 015, 017, 019, 020, 030
+039, 020 → 022
 024 → 029 → 030
 everything P0 → 031 → 032
 ```
