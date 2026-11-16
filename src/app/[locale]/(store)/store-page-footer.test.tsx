@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { StoreFooterProps } from "@/app/_components/organisms/store-footer";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
+import { holdRequest, settle } from "@/test/connection";
 
 import {
   StorePageFooter,
@@ -117,14 +118,19 @@ describe("StreamedStoreFooter", () => {
 describe("StreamedStoreFooterResolver", () => {
   test("reads the store once a request is there, and renders its footer", async () => {
     readStore.mockResolvedValue(makeStore());
+    const request = holdRequest(connection);
 
-    render(await StreamedStoreFooterResolver({ locale: "es" }));
+    const footer = StreamedStoreFooterResolver({ locale: "es" });
+    await settle();
 
-    expect(screen.getByTestId("footer")).toHaveTextContent("LR Market");
     expect(connection).toHaveBeenCalledExactlyOnceWith();
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      readStore.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(readStore).not.toHaveBeenCalled();
+
+    request.arrive();
+    render(await footer);
+
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
+    expect(screen.getByTestId("footer")).toHaveTextContent("LR Market");
   });
 
   test("renders nothing when the store's row is missing", async () => {

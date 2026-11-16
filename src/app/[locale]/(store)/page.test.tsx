@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
+import { holdRequest, settle } from "@/test/connection";
 
 import StoreHome, { generateMetadata, StoreHomeContent } from "./page";
 
@@ -57,31 +58,6 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
 
 async function makeParams(locale: string) {
   return await Promise.resolve({ locale });
-}
-
-/**
- * The request has not arrived yet: the next `connection()` stays pending
- * until `arrive()` lets it through.
- */
-function holdRequest() {
-  let arrive: () => void = () => undefined;
-  const arrived = new Promise<undefined>((resolve) => {
-    arrive = () => {
-      resolve(undefined);
-    };
-  });
-  connection.mockImplementationOnce(async () => {
-    await arrived;
-  });
-
-  return { arrive };
-}
-
-/** Lets every callback already queued run: a timer fires after them all. */
-async function settle() {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
 }
 
 async function setup({
@@ -178,7 +154,7 @@ describe("StoreHomeContent", () => {
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
     readStore.mockResolvedValue(makeStore());
-    const request = holdRequest();
+    const request = holdRequest(connection);
 
     const content = StoreHomeContent({ locale: "es" });
     await settle();
@@ -233,7 +209,7 @@ describe("generateMetadata", () => {
 
   test("reads the store only once a request is there", async () => {
     readStore.mockResolvedValue(makeStore());
-    const request = holdRequest();
+    const request = holdRequest(connection);
 
     const metadata = generateMetadata({ params: makeParams("es") });
     await settle();

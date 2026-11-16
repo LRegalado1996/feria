@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { StoreCartProps } from "@/app/_components/organisms/store-cart";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
+import { holdRequest, settle } from "@/test/connection";
 
 import * as cartModule from "./page";
 
@@ -131,14 +132,20 @@ describe("generateMetadata", () => {
 
   test("reads the store only once a request is there, so the build needs no database", async () => {
     const { metadata } = setup();
+    const request = holdRequest(connection);
 
-    await metadata();
+    const pending = metadata();
+    await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).not.toHaveBeenCalled();
+
+    request.arrive();
+
+    await expect(pending).resolves.toMatchObject({
+      title: { absolute: "Tu carrito · Sample Store" },
+    });
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      readStore.mock.invocationCallOrder[0] ?? 0
-    );
   });
 
   test("keeps the cart's own title when the store's row is missing", async () => {

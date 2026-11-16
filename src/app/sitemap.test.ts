@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { db } from "@/server/db";
+import { holdRequest, settle } from "@/test/connection";
 
 import sitemap from "./sitemap";
 
@@ -90,12 +91,18 @@ describe("sitemap", () => {
 
   test("reads only once a request is there, so the build needs no database", async () => {
     setup();
+    const request = holdRequest(mocks.connection);
 
-    await sitemap();
+    const entries = sitemap();
+    await settle();
 
-    expect(mocks.connection.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.findIndexableStore.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(mocks.connection).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.findIndexableStore).not.toHaveBeenCalled();
+
+    request.arrive();
+    await entries;
+
+    expect(mocks.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);
   });
 
   test("lists nothing while the storefront is closed, reading no store", async () => {

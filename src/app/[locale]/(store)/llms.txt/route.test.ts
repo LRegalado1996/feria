@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { db } from "@/server/db";
+import { holdRequest, settle } from "@/test/connection";
 
 import { GET } from "./route";
 
@@ -107,13 +108,18 @@ describe("GET /[locale]/llms.txt", () => {
 
   test("reads the store only once a request is there, so the build needs no database", async () => {
     const { get } = setup();
+    const request = holdRequest(services.connection);
 
-    await get("es");
+    const response = get("es");
+    await settle();
 
     expect(services.connection).toHaveBeenCalledExactlyOnceWith();
-    expect(services.connection.mock.invocationCallOrder[0]).toBeLessThan(
-      services.findIndexableStore.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(services.findIndexableStore).not.toHaveBeenCalled();
+
+    request.arrive();
+
+    expect((await response).status).toBe(200);
+    expect(services.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);
   });
 
   test("answers 404 when the store's row is missing, listing nothing", async () => {
