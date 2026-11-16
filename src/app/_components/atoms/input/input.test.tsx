@@ -87,6 +87,12 @@ describe("Input (text)", () => {
     expect(input).toHaveClass("custom", "min-w-0", "focus-visible:ring-[3px]");
   });
 
+  test("is a 44 px target on a phone and the compact height from md up", () => {
+    const { input } = setupText();
+
+    expect(input).toHaveClass("h-11", "md:h-9");
+  });
+
   test("shows its invalid state through aria-invalid", () => {
     const { input } = setupText({ "aria-invalid": true });
 

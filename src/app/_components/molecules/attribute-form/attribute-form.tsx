@@ -245,7 +245,7 @@ function SwatchField({
               ? "flex items-center gap-2 text-sm font-medium"
               : cn(
                   buttonVariants({ variant: "outline" }),
-                  "h-11 cursor-pointer has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 md:h-9"
+                  "cursor-pointer has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50"
                 )
           }
         >
@@ -274,7 +274,6 @@ function SwatchField({
         </label>
         {hasColor ? (
           <Button
-            className="h-11 md:h-9"
             onClick={() => {
               onChange("");
               inputRef.current?.focus();

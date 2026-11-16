@@ -62,6 +62,18 @@ describe("DropdownMenu", () => {
     ).toEqual(["Edit", "Delete"]);
   });
 
+  test("makes every item a 44 px row on a phone, compact from md up", async () => {
+    const { open } = setup();
+    await open();
+
+    for (const item of [
+      ...screen.getAllByRole("menuitem"),
+      ...screen.getAllByRole("menuitemradio"),
+    ]) {
+      expect(item).toHaveClass("min-h-11", "md:min-h-0");
+    }
+  });
+
   test("marks a destructive item and runs its action", async () => {
     const { onDelete, open, user } = setup();
     await open();

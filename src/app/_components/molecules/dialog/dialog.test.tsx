@@ -51,6 +51,18 @@ describe("Dialog", () => {
     );
   });
 
+  test("its close button is a 44 px target on a phone, and the title keeps clear of it", () => {
+    setup();
+
+    expect(screen.getByRole("button", { name: "Close dialog" })).toHaveClass(
+      "size-11",
+      "md:size-8"
+    );
+    expect(
+      screen.getByRole("dialog").querySelector('[data-slot="dialog-header"]')
+    ).toHaveClass("px-8", "sm:pr-10");
+  });
+
   test("lays out its header and footer slots", () => {
     const { dialog } = setup();
 
