@@ -8,6 +8,7 @@ import { db } from "@/server/db";
 
 import {
   invalidateCatalogCache,
+  readCategories,
   readPublishedArticle,
   readRelatedArticles,
 } from "./catalog";
@@ -20,10 +21,13 @@ const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
 
 // The queries are `src/server/services/catalog.test.ts`'s: here only what the
 // cache layer adds around them.
-const { getPublishedProduct, listRelatedProducts } = vi.hoisted(() => ({
-  getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  listRelatedProducts: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-}));
+const { getPublishedProduct, listCategories, listRelatedProducts } = vi.hoisted(
+  () => ({
+    getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+    listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+    listRelatedProducts: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  })
+);
 
 // Next's cache only exists inside a Next render. Outside it `"use cache"` is
 // a plain string, so the function under test runs on every call.
@@ -31,6 +35,7 @@ vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
 
 vi.mock("@/server/services/catalog", () => ({
   getPublishedProduct,
+  listCategories,
   listRelatedProducts,
 }));
 
@@ -165,6 +170,22 @@ describe("readRelatedArticles", () => {
   });
 });
 
+describe("readCategories", () => {
+  test("lists the store's categories in that language", async () => {
+    const categories = [
+      { id: 3, lang: "en", name: "Rings", position: 0, slug: "anillos" },
+    ];
+    listCategories.mockResolvedValue(categories);
+
+    await expect(readCategories({ id: 7 }, "en")).resolves.toBe(categories);
+
+    expect(listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
 describe("cached reads", () => {
   test.each([
     [
@@ -176,6 +197,7 @@ describe("cached reads", () => {
       async ({ readRelated }: ReturnType<typeof setup>) =>
         await readRelated({ categoryId: null, id: 11 }),
     ],
+    ["the categories", async () => await readCategories({ id: 7 }, "es")],
   ])(
     "tag %s with the store's catalog and keep it for hours",
     async (_case, read) => {

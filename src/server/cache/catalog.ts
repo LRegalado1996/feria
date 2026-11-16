@@ -10,6 +10,7 @@ import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
   getPublishedProduct,
+  listCategories,
   listRelatedProducts,
 } from "@/server/services/catalog";
 
@@ -89,10 +90,24 @@ export async function readRelatedArticles(
 }
 
 /**
+ * The store's categories in their order, named in `locale`, cached with its
+ * catalog (FER-039): the header and the footer of every store page list
+ * them, an article's static page included, so adding, renaming, reordering
+ * or deleting one drops the tag.
+ */
+export async function readCategories(store: { id: number }, locale: Locale) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await listCategories(db, { locale, storeId: store.id });
+}
+
+/**
  * Drops what is cached about a store's articles after a write that changes
  * what a visitor sees: an article's texts, price, photos, availability or
- * publication, a category's name, the store's currency. `expire: 0` serves
- * nothing stale.
+ * publication, a category (its name, its place, a new or a deleted one), the
+ * store's currency. `expire: 0` serves nothing stale.
  */
 export function invalidateCatalogCache(storeId: number): void {
   revalidateTag(catalogTag(storeId), { expire: 0 });
