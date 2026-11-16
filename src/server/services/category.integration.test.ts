@@ -348,17 +348,17 @@ async function overlappingCreations(storeId: number, names: [string, string]) {
     await waitUntilBlocked();
   } finally {
     held.resolve(undefined);
-  }
 
-  const results = await Promise.allSettled([first, second]);
-
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      created.categoryIds.push(result.value.id);
+    // On every path, before a failed wait is thrown: a second writer that
+    // never waited still runs, and both may commit a category to clean up.
+    for (const result of await Promise.allSettled([first, second])) {
+      if (result.status === "fulfilled") {
+        created.categoryIds.push(result.value.id);
+      }
     }
   }
 
-  return results;
+  return await Promise.allSettled([first, second]);
 }
 
 describe("category writes under two writers", () => {
