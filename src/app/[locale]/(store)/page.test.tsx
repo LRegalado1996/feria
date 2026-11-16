@@ -2,30 +2,36 @@ import { render, screen } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
-import { StoreFrame } from "@/app/_components/organisms/store-frame";
-import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
+import { DICTIONARIES } from "@/test/i18n";
 
-import StoreHome, { generateMetadata, StoreHomeContent } from "./page";
+import StoreHome, { generateMetadata, instant } from "./page";
+import { StorePageFooter } from "./store-page-footer";
 
-const { connection, readStore, SHELL, streamedShell } = vi.hoisted(() => {
-  const shell = {
-    announcement: Promise.resolve(null),
-    categories: Promise.resolve([]),
-  };
+const { connection, frameProps, readStore, shellOf } = vi.hoisted(() => ({
+  connection: vi.fn(async () => undefined),
+  frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+  shellOf: vi.fn((store: { name: string }, locale: string) => ({
+    shellOf: `${store.name} ${locale}`,
+  })),
+}));
 
-  return {
-    connection: vi.fn(async () => undefined),
-    readStore: vi.fn<() => Promise<PublicStore | null>>(),
-    SHELL: shell,
-    streamedShell: vi.fn(() => shell),
-  };
-});
+// The frame's parts have their own tests (`store-shell.test.ts`).
+vi.mock("./store-shell", () => ({ shellOf }));
 
-// The frame's streamed parts have their own tests (`store-shell.test.ts`).
-vi.mock("./store-shell", () => ({ streamedShell }));
+// The frame has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-frame", () => ({
+  StoreFrame: ({
+    children,
+    ...props
+  }: Record<string, unknown> & { children: ReactNode }) => {
+    frameProps(props);
+    return <div data-testid="store-frame">{children}</div>;
+  },
+}));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
@@ -80,67 +86,13 @@ async function setup({
 }: { locale?: Locale; store?: PublicStore | null } = {}) {
   readStore.mockResolvedValue(store);
 
-  render(await StoreHomeContent({ locale }));
+  const page = await StoreHome({ params: makeParams(locale) });
+  render(page);
 
-  return { page: screen.getByTestId("store-home") };
+  return { home: screen.getByTestId("store-home"), page };
 }
 
 describe("StoreHome", () => {
-  test.each([
-    ["es", "Cargando"],
-    ["en", "Loading"],
-  ] as const)(
-    "in %s, streams the home behind an empty, busy main, reading nothing yet",
-    async (locale, loading) => {
-      const page = (await StoreHome({
-        params: makeParams(locale),
-      })) as ReactElement<{
-        children: ReactElement<{
-          children: ReactElement<{ locale: Locale }>;
-          fallback: ReactNode;
-        }>;
-      }>;
-      const boundary = page.props.children;
-
-      render(boundary.props.fallback);
-
-      expect(screen.getByTestId("store-home-skeleton")).toHaveAttribute(
-        "aria-busy",
-        "true"
-      );
-      expect(screen.getByRole("status")).toHaveTextContent(loading);
-      expect(boundary.props.children.props).toEqual({ locale });
-      expect(readStore).not.toHaveBeenCalled();
-    }
-  );
-
-  test.each(["es", "en"] as const)(
-    "in %s, sits in the store's frame, with the shell's words and what streams of the store",
-    async (locale) => {
-      const page = (await StoreHome({
-        params: makeParams(locale),
-      })) as ReactElement<Record<string, unknown>>;
-
-      expect(page.type).toBe(StoreFrame);
-      expect(page.props).toMatchObject({
-        announcement: SHELL.announcement,
-        categories: SHELL.categories,
-        copy: getDictionary(locale).storefront.shell,
-        locale,
-      });
-      expect(streamedShell).toHaveBeenLastCalledWith(locale);
-    }
-  );
-
-  test("answers 404 for a language the product does not speak, before any read", async () => {
-    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
-      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
-    );
-    expect(readStore).not.toHaveBeenCalled();
-  });
-});
-
-describe("StoreHomeContent", () => {
   test.each([
     ["es", "Ver el catálogo", "/products"],
     ["en", "See the catalog", "/en/products"],
@@ -157,17 +109,46 @@ describe("StoreHomeContent", () => {
   );
 
   test("introduces the store by name in the page's h1, inside its main landmark, then its footer", async () => {
-    const { page } = await setup();
+    const { home } = await setup();
 
-    expect(page.tagName).toBe("MAIN");
-    expect(page).toContainElement(screen.getByRole("heading", { level: 1 }));
+    expect(home.tagName).toBe("MAIN");
+    expect(home).toContainElement(screen.getByRole("heading", { level: 1 }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       /^Sample Store$/u
     );
     expect(screen.getByTestId("footer")).toHaveTextContent("Sample Store es");
-    expect(page.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
+    expect(home.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );
+  });
+
+  test.each(["es", "en"] as const)(
+    "in %s, sits in the store's frame, made from the store it read, in the page's language",
+    async (locale) => {
+      await setup({ locale });
+
+      expect(screen.getByTestId("store-frame")).toContainElement(
+        screen.getByTestId("store-home")
+      );
+      expect(frameProps).toHaveBeenCalledExactlyOnceWith({
+        copy: DICTIONARIES[locale].storefront.shell,
+        locale,
+        shellOf: `Sample Store ${locale}`,
+      });
+    }
+  );
+
+  test("puts the home and its footer in the page itself, behind no boundary, so a crawler that runs no script reads them in the HTML", async () => {
+    const { page } = await setup();
+    const { children } = (page as ReactElement<{ children: ReactElement[] }>)
+      .props;
+
+    // Behind a boundary of its own, either would reach such a crawler as the
+    // boundary's fallback (docs/agents/nextjs.md § Store pages).
+    expect(children.map((part) => part.type)).toEqual([
+      "main",
+      StorePageFooter,
+    ]);
   });
 
   test.each([
@@ -199,23 +180,23 @@ describe("StoreHomeContent", () => {
   });
 
   test("a store with no texts yet shows its name, the way into the catalog, and nothing empty", async () => {
-    const { page } = await setup({ store: makeStore({ translations: [] }) });
+    const { home } = await setup({ store: makeStore({ translations: [] }) });
 
-    expect(page).toHaveTextContent(/^Sample StoreVer el catálogo$/u);
+    expect(home).toHaveTextContent(/^Sample StoreVer el catálogo$/u);
   });
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
     readStore.mockResolvedValue(makeStore());
     const request = holdRequest(connection);
 
-    const content = StoreHomeContent({ locale: "es" });
+    const page = StoreHome({ params: makeParams("es") });
     await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
 
     request.arrive();
-    render(await content);
+    render(await page);
 
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -223,12 +204,25 @@ describe("StoreHomeContent", () => {
     );
   });
 
-  test("answers the not-found page when the store's row is missing", async () => {
+  test("answers the not-found page, in no frame of its own, when the store's row is missing", async () => {
     readStore.mockResolvedValue(null);
 
-    await expect(StoreHomeContent({ locale: "es" })).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
+    await expect(StoreHome({ params: makeParams("es") })).rejects.toMatchObject(
+      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    );
+    expect(shellOf).not.toHaveBeenCalled();
+  });
+
+  test("answers 404 for a language the product does not speak, before any read", async () => {
+    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
+      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    );
+    expect(connection).not.toHaveBeenCalled();
+    expect(readStore).not.toHaveBeenCalled();
+  });
+
+  test("opts out of the instant-navigation check: it waits for the store by design", () => {
+    expect(instant).toBe(false);
   });
 });
 

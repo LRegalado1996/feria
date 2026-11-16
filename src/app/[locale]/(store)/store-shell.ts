@@ -56,10 +56,10 @@ async function categoriesAtRequest(
 }
 
 /**
- * The frame of a page read per request (the home, the catalog, the cart):
- * promises, which the frame resolves behind boundaries of its own, so the
- * header stays in the page's static shell and the bar and the categories
- * stream in after it. One read of the store feeds both.
+ * The frame of a page read per request (the catalog, the cart): promises,
+ * which the frame resolves behind boundaries of its own, so the header stays
+ * in the page's static shell and the bar and the categories stream in after
+ * it. One read of the store feeds both.
  */
 export function streamedShell(locale: Locale): StoreShell {
   const read = readStoreAtRequest();
@@ -72,7 +72,8 @@ export function streamedShell(locale: Locale): StoreShell {
 
 /**
  * The frame of a page that already read the store: an article, whose static
- * page reads only cached data, and an order, which waits for its read.
+ * page reads only cached data, and the home and an order, which wait for
+ * their reads before anything is sent.
  */
 export function shellOf(store: PublicStore, locale: Locale): StoreShell {
   return {

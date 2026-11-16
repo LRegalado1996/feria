@@ -1,8 +1,18 @@
 import type { Page } from "@playwright/test";
 
 import { STORE_THEME } from "../../../styles/theme";
-import { expect, STORE_SETTINGS, STORE_TEXTS, test } from "../../fixtures";
+import {
+  expect,
+  IGNORE_HTTPS_ERRORS,
+  requireBaseURL,
+  STORE_SETTINGS,
+  STORE_TEXTS,
+  test,
+} from "../../fixtures";
 import { StorePage } from "../../page-objects/store.page";
+
+const BINGBOT =
+  "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)";
 
 // The store's home (FER-038: the site is one store, at `/`), with the run's
 // settings (`STORE_SETTINGS`). Specs that change them are
@@ -92,5 +102,40 @@ test.describe("Store pages", () => {
       "href",
       /^https?:\/\/[^/]+\/en$/u
     );
+  });
+
+  // A crawler that reads only the HTML, such as Bingbot, sees only what the
+  // server wrote in place: a boundary's content that a script would reveal
+  // never shows to it, so the home and its footer must sit behind none
+  // (docs/agents/nextjs.md § Store pages).
+  test("a crawler that runs no script finds the whole home in the HTML: the store's intro and its footer", async ({
+    baseURL,
+    browser,
+  }) => {
+    // A hand-made context gets none of the config's `use` options.
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      userAgent: BINGBOT,
+    });
+
+    try {
+      const page = await context.newPage();
+      const storePage = new StorePage(page);
+      await storePage.goto();
+
+      await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
+      await expect(
+        introOf(page).getByText(STORE_TEXTS.es.tagline)
+      ).toBeVisible();
+      await expect(
+        storePage.getFooter().getByRole("link", {
+          name: `Instagram de ${STORE_SETTINGS.name}`,
+        })
+      ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);
+    } finally {
+      await context.close();
+    }
   });
 });
