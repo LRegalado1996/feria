@@ -1,6 +1,68 @@
 import type { Dictionary } from "@/content/es";
 
 export const admin: Dictionary["admin"] = {
+  categories: {
+    add: {
+      pending: "Adding…",
+      submit: "Add",
+      title: "New category",
+    },
+    count: "{count} articles",
+    countOne: "1 article",
+    delete: {
+      action: "Delete: {name}",
+      confirm: "Delete category",
+      description: "“{name}” will be deleted. This cannot be undone.",
+      moveLabel: "Move its articles to",
+      movePlaceholder: "Choose a category",
+      moveRequired: "Choose which category its articles move to.",
+      onlyOne:
+        "It is the only category and it has articles. Add another one to move them to before deleting it.",
+      title: "Delete the category?",
+      withArticles:
+        "“{name}” has {count}. Choose where they move before deleting it.",
+    },
+    description:
+      "The order of this list is the order of the home's sliders and the catalog's filter.",
+    edit: {
+      action: "Rename: {name}",
+      cancel: "Cancel",
+      pending: "Saving…",
+      submit: "Save",
+    },
+    empty: "No categories yet. Add the first one above.",
+    errors: {
+      duplicate: "This store already has a category with that name.",
+      generic: "We could not save the change. Try again.",
+      load: "We could not load the categories.",
+      nameRequired: "Write the name in Spanish.",
+      nameTooLong: "Use up to 60 characters.",
+    },
+    fields: {
+      nameEn: "Name in English (optional)",
+      nameEnHint: "Left empty, the Spanish name shows in English.",
+      nameEs: "Name in Spanish",
+    },
+    list: "The store's categories",
+    move: {
+      cancelled: "Move cancelled: “{name}” stayed where it was.",
+      down: "Move down: {name}",
+      drag: "Drag to reorder: {name}",
+      instructions:
+        "To reorder with the keyboard, press space on the handle, move it with the arrow keys and press space again to drop it, or Escape to cancel.",
+      moved: "“{name}” is now in place {position} of {total}.",
+      over: "“{name}” is over “{over}”.",
+      picked: "Picked up “{name}”.",
+      stayed: "“{name}” stayed where it was.",
+      up: "Move up: {name}",
+    },
+    title: "Categories",
+    toasts: {
+      created: "Category added.",
+      deleted: "Category deleted.",
+      renamed: "Category renamed.",
+    },
+  },
   comingSoon: {
     body: "This section is still being built. It will show up here in a coming version.",
     title: "Coming soon",

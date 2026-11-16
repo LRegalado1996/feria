@@ -1,9 +1,14 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  createCategoryFormSchema,
+  createCategorySchema,
   createProductSchema,
+  deleteCategorySchema,
   listProductsSchema,
   listRelatedProductsSchema,
+  renameCategorySchema,
+  reorderCategoriesSchema,
   reorderProductImagesSchema,
 } from ".";
 
@@ -206,5 +211,167 @@ describe("reorderProductImagesSchema", () => {
         storeSlug: "lr-market",
       }).success
     ).toBe(accepted);
+  });
+});
+
+function makeCategoryNames(overrides: Record<string, unknown> = {}) {
+  return {
+    nameEn: "Necklaces",
+    nameEs: "Collares",
+    storeSlug: "lr-market",
+    ...overrides,
+  };
+}
+
+describe("createCategorySchema", () => {
+  test("trims both names and keeps the English one", () => {
+    expect(
+      createCategorySchema.parse(
+        makeCategoryNames({ nameEn: "  Necklaces ", nameEs: "  Collares  " })
+      )
+    ).toEqual({
+      nameEn: "Necklaces",
+      nameEs: "Collares",
+      storeSlug: "lr-market",
+    });
+  });
+
+  test.each([
+    ["blank", "   "],
+    ["empty", ""],
+    ["missing", null],
+  ])("reads a %s English name as none", (_case, nameEn) => {
+    expect(
+      createCategorySchema.parse(makeCategoryNames({ nameEn })).nameEn
+    ).toBeNull();
+  });
+
+  test.each([
+    ["a Spanish name of 60 characters", { nameEs: "x".repeat(60) }, true],
+    ["a Spanish name of 61 characters", { nameEs: "x".repeat(61) }, false],
+    [
+      "a Spanish name of 60 between spaces",
+      { nameEs: ` ${"x".repeat(60)} ` },
+      true,
+    ],
+    ["a blank Spanish name", { nameEs: "   " }, false],
+    ["no Spanish name", { nameEs: undefined }, false],
+    ["an English name of 60 characters", { nameEn: "x".repeat(60) }, true],
+    ["an English name of 61 characters", { nameEn: "x".repeat(61) }, false],
+    ["no English field at all", { nameEn: undefined }, false],
+  ])("%s is accepted: %s", (_case, overrides, accepted) => {
+    expect(
+      createCategorySchema.safeParse(makeCategoryNames(overrides)).success
+    ).toBe(accepted);
+  });
+});
+
+describe("renameCategorySchema", () => {
+  test("reads the id from the path as a number", () => {
+    expect(
+      renameCategorySchema.parse(makeCategoryNames({ id: "5", nameEn: "" }))
+    ).toEqual({
+      id: 5,
+      nameEn: null,
+      nameEs: "Collares",
+      storeSlug: "lr-market",
+    });
+  });
+
+  test.each([
+    ["", false],
+    ["0", false],
+    ["2147483647", true],
+    ["2147483648", false],
+  ])("an id of %j is accepted: %s", (id, accepted) => {
+    expect(
+      renameCategorySchema.safeParse(makeCategoryNames({ id })).success
+    ).toBe(accepted);
+  });
+});
+
+describe("reorderCategoriesSchema", () => {
+  test.each([
+    [[3, 1, 2], true],
+    [[1], true],
+    [[1, 1], false],
+    [[], false],
+    [["1"], false],
+    [[true], false],
+    [[0], false],
+  ])("ids %j are accepted: %s", (ids, accepted) => {
+    expect(
+      reorderCategoriesSchema.safeParse({ ids, storeSlug: "lr-market" }).success
+    ).toBe(accepted);
+  });
+
+  test("names a repeated id in its message", () => {
+    const parsed = reorderCategoriesSchema.safeParse({
+      ids: [2, 2],
+      storeSlug: "lr-market",
+    });
+
+    expect(parsed.error?.issues.map((issue) => issue.message)).toEqual([
+      "Each category at most once",
+    ]);
+  });
+});
+
+describe("deleteCategorySchema", () => {
+  test.each([
+    [
+      { id: "5", moveToId: null },
+      { id: 5, moveToId: null },
+    ],
+    [
+      { id: 5, moveToId: 6 },
+      { id: 5, moveToId: 6 },
+    ],
+  ])("reads %j as %j", (input, expected) => {
+    expect(
+      deleteCategorySchema.parse({ ...input, storeSlug: "lr-market" })
+    ).toEqual({ ...expected, storeSlug: "lr-market" });
+  });
+
+  test.each([
+    ["sent as text", { moveToId: "6" }],
+    ["sent as true", { moveToId: true }],
+    ["missing", { moveToId: undefined }],
+    ["0", { moveToId: 0 }],
+  ])("refuses a destination %s", (_case, overrides) => {
+    expect(
+      deleteCategorySchema.safeParse({
+        id: 5,
+        storeSlug: "lr-market",
+        ...overrides,
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("createCategoryFormSchema", () => {
+  const schema = createCategoryFormSchema({
+    nameRequired: "Write the name",
+    nameTooLong: "Too long",
+  });
+  const messagesOf = (input: unknown) =>
+    schema
+      .safeParse(input)
+      .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
+
+  test.each([
+    [{ nameEn: "", nameEs: "  " }, [["nameEs", "Write the name"]]],
+    [{ nameEn: "", nameEs: "x".repeat(61) }, [["nameEs", "Too long"]]],
+    [{ nameEn: "x".repeat(61), nameEs: "Collares" }, [["nameEn", "Too long"]]],
+    [{ nameEn: "x".repeat(60), nameEs: "x".repeat(60) }, undefined],
+  ])("%j shows %j", (input, expected) => {
+    expect(messagesOf(input)).toEqual(expected);
+  });
+
+  test("keeps a blank English name as text: the form sends it as none", () => {
+    expect(schema.parse({ nameEn: "  ", nameEs: " Collares " })).toEqual({
+      nameEn: "",
+      nameEs: "Collares",
+    });
   });
 });

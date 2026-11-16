@@ -51,6 +51,25 @@ function setup() {
       call = 0
     ): ReadConfig => fn.mock.calls[call]?.[0] as ReadConfig,
     /**
+     * Answers the row-locking reads (`.for(...)`) by the `where` they lock:
+     * the store's category (found unless `category` is false, under a share
+     * lock) or the article locked to be written (`locked`).
+     */
+    answerLocks: (
+      locked: unknown[] = [],
+      { category: found = true }: { category?: boolean } = {}
+    ) => {
+      db.$["select.for"].mockImplementation(async () => {
+        const text = renderSql(db.$["select.where"].mock.calls.at(-1)?.[0]);
+
+        if (text.startsWith('("category"."id" = $1')) {
+          return await Promise.resolve(found ? [{ id: 9 }] : []);
+        }
+
+        return await Promise.resolve(locked);
+      });
+    },
+    /**
      * Answers plain selects that end in `.where` by the table they filter:
      * the image count, the article's images, or the taken slugs.
      */
@@ -606,23 +625,27 @@ describe("createProduct", () => {
   }
 
   test("refuses a category of another store before inserting anything", async () => {
-    const { configOf, db } = setup();
+    const { answerLocks, db } = setup();
+    answerLocks([], { category: false });
 
     await expect(create(db)).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "Category not found",
     });
-    expect(renderQuery(configOf(db.query.category.findFirst).where)).toEqual({
+    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(category);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
       params: [9, STORE_ID],
       sql: '("category"."id" = $1 and "category"."storeId" = $2)',
     });
+    // Shared: the category cannot be deleted under the new article.
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
     expect(db.$.execute).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalled();
   });
 
   test("inserts a draft under the store's slug lock, its slug past the taken ones, then its texts", async () => {
-    const { answerWhere, db } = setup();
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks();
     answerWhere({ takenSlugs: ["collar-dorado", "collar-dorado-2"] });
     const created = { id: 7, slug: "collar-dorado-3", status: "draft" };
     db.$["insert.returning"].mockResolvedValue([created]);
@@ -641,7 +664,7 @@ describe("createProduct", () => {
       params: [`product.slug:${STORE_ID}`],
       sql: "select pg_advisory_xact_lock(hashtext($1))",
     });
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
       params: [STORE_ID, "collar-dorado%"],
       sql: '("product"."storeId" = $1 and "product"."slug" like $2)',
     });
@@ -702,8 +725,8 @@ describe("createProduct", () => {
   });
 
   test("fails loudly when the insert returns no row, inserting no texts", async () => {
-    const { db } = setup();
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    const { answerLocks, db } = setup();
+    answerLocks();
 
     await expect(create(db)).rejects.toThrow(
       "Inserting an article returned no row"
@@ -724,26 +747,40 @@ describe("updateProduct", () => {
   }
 
   test("answers NOT_FOUND when the store has no such article, writing nothing", async () => {
-    const { db } = setup();
+    const { answerLocks, db } = setup();
+    answerLocks();
 
     await expect(update(db)).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Article not found",
     });
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+    // The category under a share lock first, then the article: the order a
+    // category's deletion takes them in, so the two never deadlock.
+    expect(db.$["select.for"].mock.calls).toEqual([["share"], ["update"]]);
+    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
       params: [7, STORE_ID],
       sql: '("product"."id" = $1 and "product"."storeId" = $2)',
     });
     expect(db.$.update).not.toHaveBeenCalled();
   });
 
+  test("refuses a category the store does not have before it locks the article", async () => {
+    const { answerLocks, db } = setup();
+    answerLocks([lockedRow()], { category: false });
+
+    await expect(update(db)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Category not found",
+    });
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
   test("refuses to take the price off a published article", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([
       lockedRow({ publishedAt: PUBLISHED_AT, status: "published" }),
     ]);
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
     answerWhere({ imageTotal: 2 });
 
     await expect(
@@ -752,7 +789,7 @@ describe("updateProduct", () => {
       code: "BAD_REQUEST",
       message: "The article cannot be published yet. Missing: price",
     });
-    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
+    expect(renderQuery(db.$["select.where"].mock.calls[2]?.[0])).toEqual({
       params: [7],
       sql: '"product_image"."productId" = $1',
     });
@@ -761,9 +798,8 @@ describe("updateProduct", () => {
   });
 
   test("re-allocates the slug of a never-published draft from its new title, past its own", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     answerWhere({ takenSlugs: ["aros-de-plata"] });
     const updated = { id: 7, slug: "aros-de-plata-2", status: "draft" };
     db.$["update.returning"].mockResolvedValue([updated]);
@@ -776,7 +812,7 @@ describe("updateProduct", () => {
         })
       )
     ).resolves.toBe(updated);
-    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0])).toEqual({
+    expect(renderQuery(db.$["select.where"].mock.calls[2]?.[0])).toEqual({
       params: [STORE_ID, "aros-de-plata%", 7],
       sql: '("product"."storeId" = $1 and "product"."slug" like $2 and "product"."id" <> $3)',
     });
@@ -791,14 +827,11 @@ describe("updateProduct", () => {
   test.each(["draft", "published"] as const)(
     "keeps the slug of a %s article once it was published, replacing its texts",
     async (status) => {
-      const { answerWhere, db } = setup();
-      db.$["select.for"].mockResolvedValue([
-        lockedRow({ publishedAt: PUBLISHED_AT, status }),
-      ]);
+      const { answerLocks, answerWhere, db } = setup();
+      answerLocks([lockedRow({ publishedAt: PUBLISHED_AT, status })]);
       db.$["update.returning"].mockResolvedValue([
         { id: 7, slug: "collar-viejo", status },
       ]);
-      db.query.category.findFirst.mockResolvedValue({ id: 9 });
       answerWhere({ imageTotal: 1 });
 
       await expect(
@@ -848,9 +881,8 @@ describe("updateProduct", () => {
 
 describe("updateProduct when its update matches nothing", () => {
   test("fails loudly instead of answering a made-up row", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     answerWhere({});
     db.$["update.returning"].mockResolvedValue([]);
 
@@ -893,9 +925,9 @@ describe("getPublishedProductRef", () => {
 
 describe("createProduct with a long title", () => {
   test("looks for taken slugs by the prefix a suffixed one keeps, not the whole base", async () => {
-    const { answerWhere, db } = setup();
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks();
     const base = "a".repeat(80);
-    db.query.category.findFirst.mockResolvedValue({ id: 9 });
     answerWhere({ takenSlugs: [base, `${"a".repeat(78)}-2`] });
     db.$["insert.returning"].mockResolvedValue([
       { id: 7, slug: `${"a".repeat(78)}-3`, status: "draft" },
@@ -908,7 +940,7 @@ describe("createProduct with a long title", () => {
       }),
     });
 
-    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0]).params).toEqual(
+    expect(renderQuery(db.$["select.where"].mock.calls[1]?.[0]).params).toEqual(
       [STORE_ID, `${"a".repeat(74)}%`]
     );
     expect(db.$["insert.values"].mock.calls[0]?.[0]).toMatchObject({
@@ -919,10 +951,8 @@ describe("createProduct with a long title", () => {
 
 describe("publishProduct", () => {
   test("refuses an article missing what publishing needs, changing nothing", async () => {
-    const { answerWhere, configOf, db } = setup();
-    db.$["select.for"].mockResolvedValue([
-      lockedRow({ categoryId: null, priceAmount: null }),
-    ]);
+    const { answerLocks, answerWhere, configOf, db } = setup();
+    answerLocks([lockedRow({ categoryId: null, priceAmount: null })]);
     answerWhere({ imageTotal: 0 });
 
     await expect(
@@ -942,8 +972,8 @@ describe("publishProduct", () => {
   });
 
   test("publishes a ready article, keeping a first publication date", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     db.query.productTranslation.findMany.mockResolvedValue([
       { locale: "es", title: "Collar" },
     ]);
@@ -968,8 +998,8 @@ describe("publishProduct", () => {
   });
 
   test("fails loudly when the update of the locked row returns none", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     db.query.productTranslation.findMany.mockResolvedValue([
       { locale: "es", title: "Collar" },
     ]);
@@ -1087,8 +1117,8 @@ describe("reorderProductImages", () => {
     ["an extra image", [1, 2, 3]],
     ["an image given twice instead of each once", [1, 1]],
   ])("refuses %s, changing nothing", async (_name, imageIds) => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     answerWhere({ images: [{ id: 1 }, { id: 2 }] });
 
     await expect(reorder(db, imageIds)).rejects.toMatchObject({
@@ -1099,8 +1129,8 @@ describe("reorderProductImages", () => {
   });
 
   test("puts every image in the given order with one UPDATE", async () => {
-    const { answerWhere, db } = setup();
-    db.$["select.for"].mockResolvedValue([lockedRow()]);
+    const { answerLocks, answerWhere, db } = setup();
+    answerLocks([lockedRow()]);
     answerWhere({ images: [{ id: 1 }, { id: 2 }] });
 
     await expect(reorder(db, [2, 1])).resolves.toEqual({

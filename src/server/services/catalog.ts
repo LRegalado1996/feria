@@ -455,7 +455,12 @@ function notFound() {
   return new ORPCError("NOT_FOUND", { message: "Article not found" });
 }
 
-/** The category, if it is the store's: an id from input is not trusted. */
+/**
+ * The category, if it is the store's: an id from input is not trusted. Its
+ * row is locked `share` to the end of the transaction, so a category being
+ * deleted at the same time is either gone (refused here) or waits for this
+ * write (FER-016).
+ */
 async function assertStoreCategory(
   tx: DatabaseClient,
   { categoryId, storeId }: StoreScope & { categoryId: number | null }
@@ -464,10 +469,11 @@ async function assertStoreCategory(
     return;
   }
 
-  const found = await tx.query.category.findFirst({
-    columns: { id: true },
-    where: and(eq(category.id, categoryId), eq(category.storeId, storeId)),
-  });
+  const [found] = await tx
+    .select({ id: category.id })
+    .from(category)
+    .where(and(eq(category.id, categoryId), eq(category.storeId, storeId)))
+    .for("share");
 
   if (!found) {
     throw new ORPCError("BAD_REQUEST", { message: "Category not found" });
@@ -614,8 +620,11 @@ export async function updateProduct(
     values,
   }: StoreScope & { values: Omit<UpdateProductValues, "storeSlug"> }
 ) {
-  const current = await lockStoreProduct(tx, { id: values.id, storeId });
+  // The category before the article, the order a category's deletion takes
+  // them in: the other way round, an edit and that deletion could each hold
+  // the lock the other waits for.
   await assertStoreCategory(tx, { categoryId: values.categoryId, storeId });
+  const current = await lockStoreProduct(tx, { id: values.id, storeId });
 
   if (current.status === "published") {
     const gaps = resolvePublishGaps({

@@ -1,5 +1,6 @@
 import { adminRouter } from "@/server/api/routers/admin";
 import { catalogRouter } from "@/server/api/routers/catalog";
+import { categoryRouter } from "@/server/api/routers/category";
 import { postRouter } from "@/server/api/routers/post";
 import { productRouter } from "@/server/api/routers/product";
 import { storeRouter } from "@/server/api/routers/store";
@@ -7,6 +8,7 @@ import { storeRouter } from "@/server/api/routers/store";
 export const appRouter = {
   admin: adminRouter,
   catalog: catalogRouter,
+  category: categoryRouter,
   post: postRouter,
   product: productRouter,
   store: storeRouter,
