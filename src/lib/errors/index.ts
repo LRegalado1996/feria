@@ -28,7 +28,7 @@ export const appErrorDataSchema = z.object({
   eventId: z.string().optional(),
   /** The `x-request-id` of the failed request, to find its log line. */
   requestId: z.string().optional(),
-  /** The oRPC procedure that failed (`post.create`). */
+  /** The oRPC procedure that failed (`category.create`). */
   procedure: z.string().optional(),
 });
 

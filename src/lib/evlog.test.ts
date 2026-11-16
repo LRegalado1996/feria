@@ -49,7 +49,7 @@ async function requestThatLogsSecrets(nodeEnv: string): Promise<string> {
     return await Promise.resolve(new Response("ok"));
   });
 
-  await handler(new Request("http://localhost/api/orpc/post/create"));
+  await handler(new Request("http://localhost/api/orpc/category/create"));
   return output();
 }
 
@@ -57,7 +57,7 @@ describe("evlog", () => {
   test("withholds secrets before the event reaches the console", async () => {
     const output = await requestThatLogsSecrets("test");
 
-    expect(output).toContain("post/create");
+    expect(output).toContain("category/create");
     expect(output).toContain(REDACTED);
     expect(output).not.toContain(SYNTHETIC_SESSION_TOKEN);
   });
@@ -67,7 +67,7 @@ describe("evlog", () => {
     const event: unknown = JSON.parse(output);
 
     expect(event).toMatchObject({
-      path: "/api/orpc/post/create",
+      path: "/api/orpc/category/create",
       user: { id: "u1", token: REDACTED },
     });
     expect(output).not.toContain(SYNTHETIC_SESSION_TOKEN);

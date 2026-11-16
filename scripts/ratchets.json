@@ -93,9 +93,9 @@
     {
       "id": "report-error-action-format",
       "title": "A reportError action outside the Domain.snake_action convention",
-      "rationale": "The action is the primary tag on every browser event and the key alert rules filter on, so one spelling has to win: `Post.createFailed` and `Post.create_failed` are two tag values nobody thinks to search together. Matches a capitalised domain with an uppercase letter in the suffix only, so unrelated dotted strings are not flagged. Held at zero from the day the ratchet was added.",
+      "rationale": "The action is the primary tag on every browser event and the key alert rules filter on, so one spelling has to win: `Category.createFailed` and `Category.create_failed` are two tag values nobody thinks to search together. Matches a capitalised domain with an uppercase letter in the suffix only, so unrelated dotted strings are not flagged. Held at zero from the day the ratchet was added.",
       "guardrail": "AGENTS.md § Error reporting: actions are `Domain.snake_action`",
-      "fix": "Spell the suffix in snake_case (`Post.create_failed`, not `Post.createFailed`) and rename every occurrence, the test that asserts it included.",
+      "fix": "Spell the suffix in snake_case (`Category.create_failed`, not `Category.createFailed`) and rename every occurrence, the test that asserts it included.",
       "pattern": "action:\\s*\"[A-Z][A-Za-z0-9]*\\.[a-z0-9_]*[A-Z][A-Za-z0-9_]*\"",
       "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
       "include": ["src/**/*.ts", "src/**/*.tsx"],

@@ -32,7 +32,7 @@ describe("sensitive keys", () => {
     });
   });
 
-  test.each(["searchParams", "paramsCount", "postId", "procedure"])(
+  test.each(["searchParams", "paramsCount", "orderId", "procedure"])(
     "keeps the value under %s, since only a whole `params` key holds bound values",
     (key) => {
       expect(sanitizeForLog({ [key]: "kept" })).toEqual({ [key]: "kept" });
@@ -321,12 +321,12 @@ describe("sanitizeForLog", () => {
 
   test("redacts credential keys and scrubs strings inside arrays", () => {
     const sanitized = sanitizeForLog([
-      { sessionToken: SYNTHETIC_SESSION_TOKEN, postId: 12 },
+      { sessionToken: SYNTHETIC_SESSION_TOKEN, orderId: 12 },
       `Failed query: ${SESSION_QUERY}\nparams: ${SYNTHETIC_SESSION_TOKEN}`,
     ]);
 
     expect(sanitized).toEqual([
-      { sessionToken: REDACTED, postId: 12 },
+      { sessionToken: REDACTED, orderId: 12 },
       `Failed query: ${SESSION_QUERY}\nparams: ${REDACTED}`,
     ]);
   });
@@ -376,7 +376,7 @@ describe("sanitizeForLog", () => {
   });
 
   test("withholds a field whose getter throws and keeps its siblings", () => {
-    const record = { postId: 7 };
+    const record = { orderId: 7 };
     Object.defineProperty(record, "broken", {
       enumerable: true,
       get() {
@@ -385,7 +385,7 @@ describe("sanitizeForLog", () => {
     });
 
     expect(sanitizeForLog(record)).toEqual({
-      postId: 7,
+      orderId: 7,
       broken: `${REDACTED} (unreadable: Error)`,
     });
   });

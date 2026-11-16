@@ -32,7 +32,7 @@ describe("proxy: /api requests", () => {
     vi.setSystemTime(new Date("2024-06-15T12:00:00.000Z"));
 
     const response = await proxy(
-      new NextRequest(`${ORIGIN}/api/orpc/post/create`)
+      new NextRequest(`${ORIGIN}/api/orpc/category/create`)
     );
     const requestId = response.headers.get("x-request-id");
 
@@ -61,7 +61,7 @@ describe("proxy: /api requests", () => {
   test.each([
     "/api",
     "/api/health",
-    "/api/orpc/post/create",
+    "/api/orpc/category/create",
     "/api/docs/spec.json",
   ])(
     "never gives %s a language: it is stamped and passed through as it is",
@@ -198,7 +198,7 @@ describe("proxy: the launch switch", () => {
     }
   );
 
-  test.each(["/api/health", "/api/orpc/post/create", "/api/auth/sign-in"])(
+  test.each(["/api/health", "/api/orpc/category/create", "/api/auth/sign-in"])(
     "closed, never touches %s",
     async (path) => {
       close();

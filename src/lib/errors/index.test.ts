@@ -22,7 +22,7 @@ describe("appErrorDataSchema", () => {
     });
     expect(
       appErrorDataSchema
-        .safeParse({ why: 'relation "post" does not exist' })
+        .safeParse({ why: 'relation "category" does not exist' })
         .error?.issues.map((issue) => issue.path)
     ).toEqual([["why"]]);
   });
@@ -128,7 +128,7 @@ describe("getErrorData", () => {
     const error = new ORPCError("INTERNAL_SERVER_ERROR", {
       data: {
         eventId: "evt",
-        procedure: "post.create",
+        procedure: "category.create",
         requestId: "req",
         why: ERROR_WHYS.DATABASE,
       },
@@ -136,7 +136,7 @@ describe("getErrorData", () => {
 
     expect(getErrorData(error)).toEqual({
       eventId: "evt",
-      procedure: "post.create",
+      procedure: "category.create",
       requestId: "req",
     });
   });

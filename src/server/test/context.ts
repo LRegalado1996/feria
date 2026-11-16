@@ -69,7 +69,7 @@ interface MockChain {
 /**
  * The Drizzle client as tests drive it: configure and inspect through `query`
  * and `$`. Code under test receives the same object and calls the real API
- * (`db.insert(post).values(...)`, `db.transaction(...)`), which records into
+ * (`db.insert(category).values(...)`, `db.transaction(...)`), which records into
  * those spies. A model added to the schema shows up in `query` on its own.
  */
 export interface MockDatabase {
@@ -196,7 +196,7 @@ export function createMockDatabase(): MockDatabase {
  * const { mockCtx, ctx } = createMockContext();
  *
  * // A relational query
- * mockCtx.db.query.post.findMany.mockResolvedValue([...]);
+ * mockCtx.db.query.category.findMany.mockResolvedValue([...]);
  *
  * // What an insert chain resolves to, and what it was given
  * mockCtx.db.$["insert.returning"].mockResolvedValue([{ id: "1" }]);

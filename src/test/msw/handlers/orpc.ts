@@ -6,9 +6,9 @@ import { HttpResponse, http, type RequestHandler } from "msw";
  * is sent in oRPC's `{ json, meta }` envelope. A `vi.fn()` resolver doubles as
  * the spy on what the client sent.
  *
- *   const createPost = vi.fn(() => ({ id: "1", name: "Hello" }));
- *   server.use(createOrpcHandler("post.create", createPost));
- *   expect(createPost).toHaveBeenCalledWith({ name: "Hello" });
+ *   const createCategory = vi.fn(() => ({ id: "1", name: "Hello" }));
+ *   server.use(createOrpcHandler("category.create", createCategory));
+ *   expect(createCategory).toHaveBeenCalledWith({ name: "Hello" });
  */
 export function createOrpcHandler(
   procedurePath: string,

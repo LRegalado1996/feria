@@ -25,7 +25,7 @@ vi.mock("../sentry.server.config", () => {
 const request = { path: "/", method: "GET", headers: {} };
 const context = {
   routerKind: "App Router",
-  routePath: "/posts/[id]",
+  routePath: "/products/[slug]",
   routeType: "render",
   revalidateReason: undefined,
 } as const;
@@ -67,7 +67,7 @@ describe("onRequestError", () => {
 
     expect(sentry.scope.setTags).toHaveBeenCalledExactlyOnceWith({
       digest: "123",
-      route_path: "/posts/[id]",
+      route_path: "/products/[slug]",
       route_type: "render",
     });
     expect(sentry.captureRequestError).toHaveBeenCalledExactlyOnceWith(
@@ -85,7 +85,7 @@ describe("onRequestError", () => {
 
     expect(sentry.scope.setTags).toHaveBeenCalledExactlyOnceWith({
       digest: undefined,
-      route_path: "/posts/[id]",
+      route_path: "/products/[slug]",
       route_type: "render",
     });
     expect(sentry.captureRequestError).toHaveBeenCalledExactlyOnceWith(

@@ -65,7 +65,7 @@ describe("health route", () => {
   test("serves nothing but the health router", async () => {
     const { execute, get } = setup();
 
-    const response = await get("/posts");
+    const response = await get("/orders");
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not found");
