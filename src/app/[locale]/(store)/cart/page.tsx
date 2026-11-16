@@ -1,55 +1,53 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { connection } from "next/server";
 
 import { StoreCart } from "@/app/_components/organisms/store-cart";
 import { getDictionary } from "@/content";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { readLocale } from "@/lib/i18n/read-locale";
-import { getStoreForPath } from "@/server/cache/store";
+import { storeTitle } from "@/lib/seo/store-metadata";
+import { readStore } from "@/server/cache/store";
+
+import { StreamedStoreFooter } from "../store-page-footer";
 
 interface CartPageProps {
-  params: Promise<{ locale: string; store: string }>;
+  params: Promise<{ locale: string }>;
 }
 
-// Static output made on an address's first visit, like the store's home: the
-// cart itself lives in the browser, so the server only checks the store and
-// an unknown one is a real 404 (docs/agents/nextjs.md § Store pages).
-export const ensureStatic = "navigation";
-
-// The page waits on its store before anything is sent, by design.
-export const instant = false;
-
-/** A cart is one shopper's: never indexed. */
+/**
+ * A cart is one shopper's: never indexed. Its title ends in the store's
+ * name, read at request time: the build has no database.
+ */
 export async function generateMetadata({
   params,
 }: CartPageProps): Promise<Metadata> {
   const locale = await readLocale(params);
-  const { store: segment } = await params;
-  const store = await getStoreForPath(segment);
-
-  if (!store) {
-    return {};
-  }
+  await connection();
+  const store = await readStore();
+  const title = getDictionary(locale).storefront.cart.title;
 
   return {
-    alternates: buildAlternates(`/${store.slug}/cart`, locale),
+    alternates: buildAlternates("/cart", locale),
     robots: { follow: true, index: false },
-    title: getDictionary(locale).storefront.cart.title,
+    title: { absolute: store ? storeTitle(title, store.name) : title },
   };
 }
 
-/** A store's cart and checkout (FER-026). */
+/**
+ * The cart and the checkout (FER-026). Both live in the browser (one cart
+ * per browser, FER-038), so the page's own output is the same for every
+ * visitor and prerendered with the build; only the footer, which carries the
+ * store's details, is read per request.
+ */
 export default async function CartPage({ params }: CartPageProps) {
-  const { store: segment } = await params;
-  const store = await getStoreForPath(segment);
-
-  if (!store) {
-    notFound();
-  }
+  const locale = await readLocale(params);
 
   return (
-    <main data-testid="store-cart-page">
-      <StoreCart storeSlug={store.slug} />
-    </main>
+    <>
+      <main data-testid="store-cart-page">
+        <StoreCart />
+      </main>
+      <StreamedStoreFooter locale={locale} />
+    </>
   );
 }

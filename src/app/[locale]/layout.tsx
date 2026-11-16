@@ -11,6 +11,7 @@ import { BRAND_NAME } from "@/lib/brand/logo";
 import { DEFAULT_LOCALE, isLocale, LOCALES } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
+import { storeThemeStyle } from "@/styles/theme";
 
 interface LocaleParams {
   params: Promise<{ locale: string }>;
@@ -90,7 +91,9 @@ export default async function RootLayout({
       lang={locale}
       suppressHydrationWarning
     >
-      <body>
+      {/* The store's colors, from the theme file, for everything below; the
+          attribute makes CSS derive the muted ones from them here. */}
+      <body data-store-palette="" style={storeThemeStyle()}>
         {/* First in <body>: chrome rendered later at the same z-index paints
             over the line, never the other way round. */}
         <EnvironmentMarker locale={locale} />

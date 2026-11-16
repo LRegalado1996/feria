@@ -87,10 +87,12 @@ describe("robots", () => {
 
   test.each([
     "/",
-    "/lr-market",
-    "/lr-market/products/par-de-esclavas",
-    "/en/lr-market",
-    // A store whose address starts like a closed path stays open.
+    "/products",
+    "/products/par-de-esclavas",
+    "/en",
+    "/en/products/par-de-esclavas",
+    "/llms.txt",
+    // An address that only starts like a closed path stays open.
     "/apio",
     "/administracion/products",
     "/en/admin-shop",
@@ -104,9 +106,9 @@ describe("robots", () => {
 
   test.each([
     "/admin",
-    "/admin/lr-market/products",
+    "/admin/products",
     "/en/admin",
-    "/en/admin/lr-market",
+    "/en/admin/orders",
     "/api/orpc/catalog.products",
     "/coming-soon",
     "/en/coming-soon",

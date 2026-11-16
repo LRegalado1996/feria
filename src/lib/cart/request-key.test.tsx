@@ -9,8 +9,7 @@ vi.mock("@/lib/errors/client", () => ({ reportError }));
 const UUID_V4 =
   /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/u;
 
-const STORE_SLUG = "lr-market";
-const STORAGE_KEY = `feria:checkout:${STORE_SLUG}`;
+const STORAGE_KEY = "feria:checkout";
 const SEEDED_KEY = "55555555-5555-4555-8555-555555555555";
 
 function makeRecord(key = SEEDED_KEY, signature = "cart-a") {
@@ -94,12 +93,9 @@ async function setup({ persisted = null }: SetupOptions = {}) {
   return {
     allow,
     forget: () => {
-      requestKey.forgetCheckoutRequest(STORE_SLUG);
+      requestKey.forgetCheckoutRequest();
     },
-    key: (signature = "cart-a") =>
-      requestKey.checkoutRequestKey(STORE_SLUG, signature),
-    keyFor: (storeSlug: string, signature = "cart-a") =>
-      requestKey.checkoutRequestKey(storeSlug, signature),
+    key: (signature = "cart-a") => requestKey.checkoutRequestKey(signature),
     refuse,
     /** A page load: a new module over the same session storage. */
     reload: async () => {
@@ -148,16 +144,6 @@ describe("checkoutRequestKey", () => {
     expect(second).toMatch(UUID_V4);
     expect(second).not.toBe(SEEDED_KEY);
     expect(stored()).toEqual({ key: second, signature: "cart-b" });
-  });
-
-  test("keeps each store's request apart", async () => {
-    const { key, keyFor } = await setup({ persisted: makeRecord() });
-
-    const other = keyFor("otra-tienda");
-
-    expect(other).toMatch(UUID_V4);
-    expect(other).not.toBe(SEEDED_KEY);
-    expect(key()).toBe(SEEDED_KEY);
   });
 
   test("forgets the request once the order is taken", async () => {

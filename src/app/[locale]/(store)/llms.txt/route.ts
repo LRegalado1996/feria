@@ -1,16 +1,18 @@
+import { connection } from "next/server";
+
 import { getDictionary } from "@/content";
 import { isLocale } from "@/lib/i18n/config";
 import { buildStoreLlms } from "@/lib/seo/llms";
 import { siteOrigin } from "@/lib/seo/origin";
-import { getStoreForPath } from "@/server/cache/store";
 import { db } from "@/server/db";
 import {
+  findIndexableStore,
   listIndexableArticles,
   listIndexableCategories,
 } from "@/server/services/seo";
 
 interface LlmsContext {
-  params: Promise<{ locale: string; store: string }>;
+  params: Promise<{ locale: string }>;
 }
 
 function notFound() {
@@ -21,16 +23,23 @@ function notFound() {
 }
 
 /**
- * A store's `llms.txt` (FER-024), at `/{store}/llms.txt` and
- * `/en/{store}/llms.txt`: its name, tagline, categories and published
- * articles as Markdown for AI assistants. An unknown or inactive store is
- * a 404, never an empty file.
+ * The store's `llms.txt` (FER-024), at `/llms.txt` and `/en/llms.txt`: its
+ * name, tagline, categories and published articles as Markdown for AI
+ * assistants. Read at request time, so a new article is listed at once and
+ * the build needs no database. A language the site does not speak is a 404.
  */
 export async function GET(_request: Request, { params }: LlmsContext) {
-  const { locale, store: segment } = await params;
-  const store = isLocale(locale) ? await getStoreForPath(segment) : null;
+  const { locale } = await params;
 
-  if (!(isLocale(locale) && store)) {
+  if (!isLocale(locale)) {
+    return notFound();
+  }
+
+  await connection();
+  const store = await findIndexableStore(db);
+
+  // Only a database whose migrations have not run has no store.
+  if (!store) {
     return notFound();
   }
 

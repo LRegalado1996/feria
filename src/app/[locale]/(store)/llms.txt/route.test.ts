@@ -7,38 +7,40 @@ import { GET } from "./route";
 vi.mock("server-only", () => ({}));
 
 const services = vi.hoisted(() => ({
-  getStoreForPath: vi.fn(),
+  connection: vi.fn(async () => undefined),
+  findIndexableStore: vi.fn(),
   listIndexableArticles: vi.fn(),
   listIndexableCategories: vi.fn(),
 }));
 
-vi.mock("@/server/cache/store", () => ({
-  getStoreForPath: services.getStoreForPath,
-}));
+vi.mock("next/server", () => ({ connection: services.connection }));
 
 vi.mock("@/server/services/seo", () => ({
+  findIndexableStore: services.findIndexableStore,
   listIndexableArticles: services.listIndexableArticles,
   listIndexableCategories: services.listIndexableCategories,
 }));
 
 const ORIGIN = "https://lrmarket.example";
-const STORE = {
-  currencyCode: "UYU",
-  id: 7,
-  name: "LR Market",
-  slug: "lr-market",
-  translations: [
-    { description: "Bijou en Montevideo.", locale: "es", tagline: "Bijou" },
-  ],
-};
 
-/** A request for `/{locale}/{store}/llms.txt`; `lr-market` is the active store. */
-function setup() {
+function makeStore() {
+  return {
+    currencyCode: "UYU",
+    id: 7,
+    name: "LR Market",
+    translations: [
+      { description: "Bijou en Montevideo.", locale: "es", tagline: "Bijou" },
+    ],
+    updatedAt: new Date("2026-11-10T12:00:00.000Z"),
+  };
+}
+
+/** A request for `/{locale}/llms.txt`; `store: null` is a missing row. */
+function setup({
+  store = makeStore(),
+}: { store?: ReturnType<typeof makeStore> | null } = {}) {
   vi.stubEnv("BETTER_AUTH_URL", ORIGIN);
-  services.getStoreForPath.mockImplementation(
-    async (segment: string) =>
-      await Promise.resolve(segment === STORE.slug ? STORE : null)
-  );
+  services.findIndexableStore.mockResolvedValue(store);
   services.listIndexableArticles.mockResolvedValue([
     {
       priceAmount: 69_000,
@@ -51,23 +53,35 @@ function setup() {
   ]);
 
   return {
-    get: async (locale: string, store: string) =>
-      await GET(new Request(`${ORIGIN}/${locale}/${store}/llms.txt`), {
-        params: Promise.resolve({ locale, store }),
+    get: async (locale: string) =>
+      await GET(new Request(`${ORIGIN}/${locale}/llms.txt`), {
+        params: Promise.resolve({ locale }),
       }),
   };
 }
 
-describe("GET /[locale]/[store]/llms.txt", () => {
+describe("GET /[locale]/llms.txt", () => {
   test.each([
-    ["es", "## Categorías", `${ORIGIN}/lr-market/products/anillo-sello`],
-    ["en", "## Categories", `${ORIGIN}/en/lr-market/products/anillo-sello`],
+    [
+      "es",
+      "## Categorías",
+      `${ORIGIN}/products?category=anillos`,
+      `${ORIGIN}/products/anillo-sello`,
+      `${ORIGIN}/en/llms.txt`,
+    ],
+    [
+      "en",
+      "## Categories",
+      `${ORIGIN}/en/products?category=anillos`,
+      `${ORIGIN}/en/products/anillo-sello`,
+      `${ORIGIN}/llms.txt`,
+    ],
   ])(
-    "serves the active store's file in %s as Markdown",
-    async (locale, heading, articleUrl) => {
+    "serves the store's file in %s as Markdown, every link without a store in it",
+    async (locale, heading, categoryUrl, articleUrl, otherLanguageUrl) => {
       const { get } = setup();
 
-      const response = await get(locale, "lr-market");
+      const response = await get(locale);
       const body = await response.text();
 
       expect(response.status).toBe(200);
@@ -76,7 +90,10 @@ describe("GET /[locale]/[store]/llms.txt", () => {
       );
       expect(body.startsWith("# LR Market\n\n> Bijou\n")).toBe(true);
       expect(body).toContain(`${heading}\n`);
+      expect(body).toContain(`(${categoryUrl})`);
       expect(body).toContain(`(${articleUrl})`);
+      expect(body).toContain(`(${otherLanguageUrl})`);
+      expect(services.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);
       expect(services.listIndexableArticles).toHaveBeenCalledExactlyOnceWith(
         db,
         { storeId: 7 }
@@ -88,25 +105,36 @@ describe("GET /[locale]/[store]/llms.txt", () => {
     }
   );
 
-  test("answers 404 for an unknown or inactive store, listing nothing", async () => {
+  test("reads the store only once a request is there, so the build needs no database", async () => {
     const { get } = setup();
 
-    const response = await get("es", "tienda-cerrada");
+    await get("es");
+
+    expect(services.connection).toHaveBeenCalledExactlyOnceWith();
+    expect(services.connection.mock.invocationCallOrder[0]).toBeLessThan(
+      services.findIndexableStore.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("answers 404 when the store's row is missing, listing nothing", async () => {
+    const { get } = setup({ store: null });
+
+    const response = await get("es");
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not found");
-    expect(services.getStoreForPath).toHaveBeenCalledExactlyOnceWith(
-      "tienda-cerrada"
-    );
     expect(services.listIndexableArticles).not.toHaveBeenCalled();
+    expect(services.listIndexableCategories).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for a language the product does not speak, before any lookup", async () => {
+  test("answers 404 for a language the product does not speak, before any read", async () => {
     const { get } = setup();
 
-    const response = await get("fr", "lr-market");
+    const response = await get("fr");
 
     expect(response.status).toBe(404);
-    expect(services.getStoreForPath).not.toHaveBeenCalled();
+    expect(await response.text()).toBe("Not found");
+    expect(services.connection).not.toHaveBeenCalled();
+    expect(services.findIndexableStore).not.toHaveBeenCalled();
   });
 });

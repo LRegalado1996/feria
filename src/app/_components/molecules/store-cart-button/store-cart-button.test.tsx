@@ -17,13 +17,9 @@ function makeCart(quantities: number[]) {
 function setup({
   cart = [],
   locale = "en",
-  storeSlug = "lr-market",
-}: { cart?: number[]; locale?: Locale; storeSlug?: string } = {}) {
-  localStorage.setItem(
-    `feria:cart:${storeSlug}`,
-    JSON.stringify(makeCart(cart))
-  );
-  renderWithI18n(<StoreCartButton className="custom" storeSlug={storeSlug} />, {
+}: { cart?: number[]; locale?: Locale } = {}) {
+  localStorage.setItem("feria:cart", JSON.stringify(makeCart(cart)));
+  renderWithI18n(<StoreCartButton className="custom" />, {
     locale,
   });
 
@@ -76,36 +72,13 @@ describe("StoreCartButton", () => {
   );
 
   test.each([
-    ["es", "lr-market", "/lr-market/cart"],
-    ["en", "lr-market", "/en/lr-market/cart"],
-    ["en", "tienda-demo", "/en/tienda-demo/cart"],
-  ] as const)("in %s, leads to %s's cart at %s", (locale, storeSlug, href) => {
-    const { link } = setup({ locale, storeSlug });
+    ["es", "/cart"],
+    ["en", "/en/cart"],
+  ] as const)("in %s, leads to the cart at %s", (locale, href) => {
+    const { link } = setup({ locale });
 
     expect(link).toHaveAttribute("href", href);
     expect(link).toHaveAttribute("data-slot", "store-cart-button");
     expect(link).toHaveClass("custom");
-  });
-
-  test("counts only its own store's cart", () => {
-    localStorage.setItem(
-      "feria:cart:tienda-demo",
-      JSON.stringify(makeCart([5]))
-    );
-    const { badge, link } = setup({ storeSlug: "lr-market" });
-
-    expect(link).toHaveAccessibleName("Cart, empty");
-    expect(badge()).toBeNull();
-  });
-
-  test("counts the cart of the store it is given, beside another store's", () => {
-    localStorage.setItem(
-      "feria:cart:lr-market",
-      JSON.stringify(makeCart([4, 4]))
-    );
-    const { badge, link } = setup({ cart: [2, 1], storeSlug: "tienda-demo" });
-
-    expect(link).toHaveAccessibleName("Cart, 3 items");
-    expect(badge()).toHaveTextContent(/^3$/u);
   });
 });

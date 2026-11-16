@@ -1,15 +1,15 @@
 import { describe, expect, test } from "vitest";
 
-import UnknownStorePage, {
+import UnknownPage, {
   ensureStatic,
   generateStaticParams,
   instant,
 } from "./page";
 
-describe("UnknownStorePage", () => {
+describe("UnknownPage", () => {
   test("answers 404, which renders the store's own not-found page", () => {
     expect(() => {
-      UnknownStorePage();
+      UnknownPage();
     }).toThrow(
       expect.objectContaining({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" })
     );
@@ -17,7 +17,7 @@ describe("UnknownStorePage", () => {
 
   test("is static output made on first visit, so the 404 is the response's status", () => {
     expect(ensureStatic).toBe("navigation");
-    // A sample no store page can be: an underscore never makes a slug.
+    // A sample no page can be: no address of the site has an underscore.
     expect(generateStaticParams()).toEqual([{ rest: ["__sample__"] }]);
   });
 

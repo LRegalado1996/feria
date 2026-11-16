@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 export interface StoreCartButtonProps {
   className?: string;
-  storeSlug: string;
 }
 
 /**
@@ -20,10 +19,10 @@ export interface StoreCartButtonProps {
  * the count arrives once the page hydrates; its name says the count, for a
  * screen reader that cannot see the badge.
  */
-function StoreCartButton({ className, storeSlug }: StoreCartButtonProps) {
+function StoreCartButton({ className }: StoreCartButtonProps) {
   const copy = useDictionary().storefront.shell;
   const locale = useLocale();
-  const { count } = useCart(storeSlug);
+  const { count } = useCart();
   let label = copy.cartEmpty;
 
   if (count === 1) {
@@ -41,7 +40,7 @@ function StoreCartButton({ className, storeSlug }: StoreCartButtonProps) {
       )}
       data-slot="store-cart-button"
       data-testid="store-cart-button"
-      href={localizePath(`/${storeSlug}/cart`, locale)}
+      href={localizePath("/cart", locale)}
     >
       <ShoppingBag aria-hidden="true" className="size-5" />
       {count > 0 ? (

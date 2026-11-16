@@ -19,29 +19,27 @@ const EMPTY: Cart = [];
  */
 export type AddOutcome = "added" | "at_max" | "cart_full" | "refused";
 
-/** Where a store's cart lives in the browser: one per store. */
-export function cartStorageKey(storeSlug: string) {
-  return `feria:cart:${storeSlug}`;
-}
+/** Where the cart lives in the browser: one per browser (FER-038). */
+export const CART_STORAGE_KEY = "feria:cart";
 
 // `undefined` until first asked; `null` once the browser refused it.
 let storage: Storage | null | undefined;
 
-// Where a cart lives when storage refused it or could not hold it: in this
+// The cart's text when storage refused it or could not hold it: kept in this
 // page only, gone when the page is left, but a cart all the same.
-const memory = new Map<string, string>();
+let memory: string | undefined;
 
-// Tabs of the same store share the cart: a write here is announced to this
-// tab's subscribers, and the browser's `storage` event tells the others.
+// Tabs share the cart: a write here is announced to this tab's subscribers,
+// and the browser's `storage` event tells the others.
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
-  // Another tab wrote this cart to storage: a copy this page kept after a
+  // Another tab wrote the cart to storage: a copy this page kept after a
   // failed write is older than it, and would bring cleared articles back.
   const onStorage = (event: StorageEvent) => {
     // Without a readable storage the page's copy is the only one there is.
-    if (event.key !== null && storage) {
-      memory.delete(event.key);
+    if (event.key === CART_STORAGE_KEY && storage) {
+      memory = undefined;
     }
 
     listener();
@@ -58,14 +56,14 @@ function subscribe(listener: () => void) {
 
 /**
  * The browser's storage, opened once. A browser that blocks site data
- * throws on the first touch: that is reported once, and carts then live in
- * the page's memory.
+ * throws on the first touch: that is reported once, and the cart then lives
+ * in the page's memory.
  */
 function cartStorage(): Storage | null {
   if (storage === undefined) {
     try {
       storage = window.localStorage;
-      storage.getItem(cartStorageKey(""));
+      storage.getItem(CART_STORAGE_KEY);
     } catch (error) {
       reportError(error, { action: "Cart.open_storage" });
       storage = null;
@@ -75,16 +73,14 @@ function cartStorage(): Storage | null {
   return storage;
 }
 
-// The last text each key read from storage, kept for the moment a later
-// read throws: the page carries on with it instead of an empty cart.
-const lastRead = new Map<string, string>();
+// The last text read from storage, kept for the moment a later read throws:
+// the page carries on with it instead of an empty cart.
+let lastRead: string | undefined;
 
 /** The raw stored text, the snapshot React compares between renders. */
-function readRaw(key: string): string | null {
-  const kept = memory.get(key);
-
-  if (kept !== undefined) {
-    return kept;
+function readRaw(): string | null {
+  if (memory !== undefined) {
+    return memory;
   }
 
   const browserStorage = cartStorage();
@@ -94,31 +90,19 @@ function readRaw(key: string): string | null {
   }
 
   try {
-    const raw = browserStorage.getItem(key);
-
-    if (raw === null) {
-      lastRead.delete(key);
-    } else {
-      lastRead.set(key, raw);
-    }
+    const raw = browserStorage.getItem(CART_STORAGE_KEY);
+    lastRead = raw ?? undefined;
 
     return raw;
   } catch (error) {
     // Storage opened, but a later read threw (Firefox does once site data
-    // goes away mid-visit): reported once, and from then on every cart
-    // lives in the page, starting from what it last read.
+    // goes away mid-visit): reported once, and from then on the cart lives
+    // in the page, starting from what it last read.
     reportError(error, { action: "Cart.read_storage" });
     storage = null;
+    memory = lastRead;
 
-    // A copy the page already keeps (a write storage refused) is newer than
-    // what was last read for that key.
-    for (const [storedKey, raw] of lastRead) {
-      if (!memory.has(storedKey)) {
-        memory.set(storedKey, raw);
-      }
-    }
-
-    return memory.get(key) ?? null;
+    return memory ?? null;
   }
 }
 
@@ -143,7 +127,7 @@ export function parseCart(raw: string | null): Cart {
  * would otherwise empty the whole cart on the next read). Answers whether
  * it was saved.
  */
-function write(key: string, cart: Cart): boolean {
+function write(cart: Cart): boolean {
   if (!cartSchema.safeParse(cart).success) {
     return false;
   }
@@ -153,16 +137,16 @@ function write(key: string, cart: Cart): boolean {
 
   if (browserStorage) {
     try {
-      browserStorage.setItem(key, text);
-      memory.delete(key);
-      lastRead.set(key, text);
+      browserStorage.setItem(CART_STORAGE_KEY, text);
+      memory = undefined;
+      lastRead = text;
     } catch (error) {
       // Full or refused: the cart lives in the page until it is left.
       reportError(error, { action: "Cart.write_storage" });
-      memory.set(key, text);
+      memory = text;
     }
   } else {
-    memory.set(key, text);
+    memory = text;
   }
 
   for (const listener of listeners) {
@@ -173,18 +157,13 @@ function write(key: string, cart: Cart): boolean {
 }
 
 /**
- * A store's cart in this browser (FER-021): the articles and their
- * quantities, how many units in all, and the changes FER-024 and FER-026
- * make. Empty before hydration; where storage is refused, it lives in the
- * page until the page is left.
+ * The cart in this browser (FER-021): the articles and their quantities, how
+ * many units in all, and the changes FER-024 and FER-026 make. Empty before
+ * hydration; where storage is refused, it lives in the page until the page
+ * is left.
  */
-export function useCart(storeSlug: string) {
-  const key = cartStorageKey(storeSlug);
-  const raw = useSyncExternalStore(
-    subscribe,
-    () => readRaw(key),
-    () => null
-  );
+export function useCart() {
+  const raw = useSyncExternalStore(subscribe, readRaw, () => null);
   const items = useMemo(() => parseCart(raw), [raw]);
 
   /**
@@ -196,7 +175,7 @@ export function useCart(storeSlug: string) {
   const add = useCallback(
     (productId: number, quantity = 1, seenPriceAmount?: number): AddOutcome => {
       const seen = seenPriceAmount === undefined ? {} : { seenPriceAmount };
-      const current = parseCart(readRaw(key));
+      const current = parseCart(readRaw());
       const line = current.find((item) => item.productId === productId);
 
       // Checked before the cap: capped first, 10.5 or Infinity would become
@@ -215,7 +194,6 @@ export function useCart(storeSlug: string) {
       }
 
       const saved = write(
-        key,
         line
           ? current.map((item) =>
               item.productId === productId
@@ -241,7 +219,7 @@ export function useCart(storeSlug: string) {
 
       return saved ? "added" : "refused";
     },
-    [key]
+    []
   );
 
   /**
@@ -254,10 +232,9 @@ export function useCart(storeSlug: string) {
         return false;
       }
 
-      const current = parseCart(readRaw(key));
+      const current = parseCart(readRaw());
 
       return write(
-        key,
         quantity <= 0
           ? current.filter((item) => item.productId !== productId)
           : current.map((item) =>
@@ -267,12 +244,12 @@ export function useCart(storeSlug: string) {
             )
       );
     },
-    [key]
+    []
   );
 
   const clear = useCallback(() => {
-    write(key, EMPTY);
-  }, [key]);
+    write(EMPTY);
+  }, []);
 
   /**
    * After an order (FER-026): takes out what it ordered, and keeps what was
@@ -285,15 +262,14 @@ export function useCart(storeSlug: string) {
       );
 
       write(
-        key,
-        parseCart(readRaw(key)).flatMap((item) => {
+        parseCart(readRaw()).flatMap((item) => {
           const left = item.quantity - (taken.get(item.productId) ?? 0);
 
           return left > 0 ? [{ ...item, quantity: left }] : [];
         })
       );
     },
-    [key]
+    []
   );
 
   return {

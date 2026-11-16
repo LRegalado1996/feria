@@ -1,6 +1,6 @@
 export {
   type AddOutcome,
-  cartStorageKey,
+  CART_STORAGE_KEY,
   parseCart,
   useCart,
 } from "./use-cart";

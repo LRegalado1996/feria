@@ -42,11 +42,11 @@ describe("StoreStatusPage", () => {
   });
 
   test("shows the action it is given", () => {
-    setup({ action: <Link href="/lr-market">Back home</Link> });
+    setup({ action: <Link href="/">Back home</Link> });
 
     expect(screen.getByRole("link", { name: "Back home" })).toHaveAttribute(
       "href",
-      "/lr-market"
+      "/"
     );
   });
 

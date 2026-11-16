@@ -48,7 +48,6 @@ export interface StoreCheckoutFormProps {
   ) => void;
   /** An article changed under the cart: read the articles again. */
   onStale: () => void;
-  storeSlug: string;
 }
 
 const FIELD_CLASS =
@@ -105,7 +104,6 @@ function StoreCheckoutForm({
   items,
   onPlaced,
   onStale,
-  storeSlug,
 }: StoreCheckoutFormProps) {
   const { storefront } = useDictionary();
   const copy = storefront.cart;
@@ -151,8 +149,7 @@ function StoreCheckoutForm({
         items: ordered,
         locale,
         note: values.note,
-        requestKey: checkoutRequestKey(storeSlug, signature),
-        storeSlug,
+        requestKey: checkoutRequestKey(signature),
       });
     } catch (error) {
       const kind = checkoutFailure(error);
@@ -181,7 +178,7 @@ function StoreCheckoutForm({
       return;
     }
 
-    forgetCheckoutRequest(storeSlug);
+    forgetCheckoutRequest();
   };
 
   return (

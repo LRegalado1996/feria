@@ -1,23 +1,19 @@
 "use client";
 
-import { useParams } from "next/navigation";
-
 import { StoreArrowLink } from "@/app/_components/atoms/store-arrow-link";
 import { StoreStatusPage } from "@/app/_components/organisms/store-status-page";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { localizePath } from "@/lib/i18n/paths";
 
 /**
- * A page of a store that does not exist (an article gone, an old link),
- * inside the store's header and footer, with the way back to its home. A
- * client component: `not-found` receives no params, and the store is the
- * URL's segment. An address that is not a store at all never gets here: the
- * store's layout answers that one with the app's own not-found page.
+ * An address the site does not answer (an article gone, an old link, a
+ * typo), under the store's header, with the way back to its home. A client
+ * component: `not-found` receives no params, and the language comes from the
+ * provider the root layout mounted around it.
  */
 export default function StoreNotFound() {
   const copy = useDictionary().storefront.shell.notFound;
   const locale = useLocale();
-  const { store } = useParams<{ store: string }>();
 
   return (
     <>
@@ -26,7 +22,7 @@ export default function StoreNotFound() {
         action={
           <StoreArrowLink
             data-testid="store-not-found-home"
-            href={localizePath(`/${store}`, locale)}
+            href={localizePath("/", locale)}
           >
             {copy.back}
           </StoreArrowLink>

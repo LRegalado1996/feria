@@ -10,53 +10,57 @@ import ArticleOpenGraphImage, {
   generateImageMetadata,
 } from "./opengraph-image";
 
-const { getStoreForPath, ImageResponse, readPublishedArticle } = vi.hoisted(
-  () => ({
-    getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
-    // Records what it was asked to draw; the drawing itself is next/og's.
-    ImageResponse: vi.fn(
-      class FakeImageResponse {
-        element: ReactElement;
-        options: unknown;
+const { ImageResponse, readPublishedArticle, readStore } = vi.hoisted(() => ({
+  // Records what it was asked to draw; the drawing itself is next/og's.
+  ImageResponse: vi.fn(
+    class FakeImageResponse {
+      element: ReactElement;
+      options: unknown;
 
-        constructor(element: ReactElement, options: unknown) {
-          this.element = element;
-          this.options = options;
-        }
+      constructor(element: ReactElement, options: unknown) {
+        this.element = element;
+        this.options = options;
       }
-    ),
-    readPublishedArticle:
-      vi.fn<
-        (
-          store: PublicStore,
-          slug: string,
-          locale: Locale
-        ) => Promise<PublishedProduct | null>
-      >(),
-  })
-);
+    }
+  ),
+  readPublishedArticle:
+    vi.fn<
+      (
+        store: PublicStore,
+        slug: string,
+        locale: Locale
+      ) => Promise<PublishedProduct | null>
+    >(),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+}));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+vi.mock("@/server/cache/store", () => ({ readStore }));
 vi.mock("@/server/cache/catalog", () => ({ readPublishedArticle }));
 vi.mock("next/og", () => ({ ImageResponse }));
 
+// Five distinct colors, so each part of the card shows which one it took.
+// The real file pairs the foreground and the contrast on one color.
+vi.mock("@/styles/theme", () => ({
+  STORE_THEME: {
+    accent: "#aa0001",
+    background: "#bb0002",
+    contrast: "#cc0003",
+    foreground: "#dd0004",
+    surface: "#ee0005",
+  },
+}));
+
 /** The space a formatted price keeps between the currency and the amount. */
-const NBSP = " ";
+const NBSP = "\u00A0";
+const NOT_FOUND = { digest: "NEXT_HTTP_ERROR_FALLBACK;404" };
 
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#fffaf5",
     currencyCode: "USD",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "Sample Store",
-    slug: "sample-store",
     tiktokUrl: null,
     translations: [],
     whatsappNumber: null,
@@ -109,19 +113,10 @@ function htmlElement(node: Element | null | undefined) {
   return node;
 }
 
-/** The reads answer for `store` and its `article` only. */
-function answer(store: PublicStore, article: PublishedProduct) {
-  getStoreForPath.mockImplementation(
-    async (asked) => await Promise.resolve(asked === store.slug ? store : null)
-  );
-  readPublishedArticle.mockImplementation(
-    async (asked, slug) =>
-      await Promise.resolve(
-        asked === store && slug === article.slug ? article : null
-      )
-  );
-}
-
+/**
+ * The store's reads answer `store` (`null`: its row is missing) and its
+ * `article` only.
+ */
 function setup({
   article = makeArticle(),
   locale = "es",
@@ -131,10 +126,16 @@ function setup({
   article?: PublishedProduct;
   locale?: string;
   slug?: string;
-  store?: PublicStore;
+  store?: PublicStore | null;
 } = {}) {
-  answer(store, article);
-  const params = { locale, slug, store: "sample-store" };
+  readStore.mockResolvedValue(store);
+  readPublishedArticle.mockImplementation(
+    async (asked, askedSlug) =>
+      await Promise.resolve(
+        asked === store && askedSlug === article.slug ? article : null
+      )
+  );
+  const params = { locale, slug };
 
   return {
     draw: async () => {
@@ -222,44 +223,50 @@ describe("ArticleOpenGraphImage", () => {
       const { photo } = await draw();
 
       expect(photo.style.backgroundImage).toBe("");
-      expect(photo.style.backgroundColor).toBe("#3d1f47");
+      expect(photo.style.backgroundColor).toBe("#cc0003");
     }
   );
 
-  test("paints the photo block in the store's contrast color when the article has no photo", async () => {
+  test("paints the photo block in the contrast color when the article has no photo", async () => {
     const { draw } = setup({ article: makeArticle({ images: [] }) });
 
     const { photo } = await draw();
 
     expect(photo.style.backgroundImage).toBe("");
-    expect(photo.style.backgroundColor).toBe("#3d1f47");
+    expect(photo.style.backgroundColor).toBe("#cc0003");
   });
 
-  test("paints the store's background, foreground and contrast", async () => {
-    const { draw } = setup({
-      article: makeArticle({ images: [] }),
-      store: makeStore({
-        colorBackground: "#101010",
-        colorContrast: "#c8f31d",
-        colorForeground: "#fafafa",
-      }),
-    });
+  test("paints the theme's background, foreground and contrast, never the store's data", async () => {
+    const { draw } = setup({ article: makeArticle({ images: [] }) });
 
     const { card, photo, price } = await draw();
 
-    expect(card.style.background).toBe("#101010");
-    expect(card.style.color).toBe("#fafafa");
-    expect(photo.style.backgroundColor).toBe("#c8f31d");
-    expect(price.style.background).toBe("#c8f31d");
-    expect(price.style.color).toBe("#101010");
+    expect(card.style.background).toBe("#bb0002");
+    expect(card.style.color).toBe("#dd0004");
+    expect(photo.style.backgroundColor).toBe("#cc0003");
+    expect(price.style.background).toBe("#cc0003");
+    expect(price.style.color).toBe("#bb0002");
   });
 
-  test("answers 404 for an address that is not a store, asking for no article", async () => {
-    const { request } = setup({ store: makeStore({ slug: "elsewhere" }) });
+  test.each([
+    ["the build's sample", "__sample__"],
+    ["an address with spaces", " anillo "],
+  ])(
+    "answers 404 for %s before the store is read, drawing nothing",
+    async (_case, slug) => {
+      const { request } = setup({ slug });
 
-    await expect(request()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
+      await expect(request()).rejects.toMatchObject(NOT_FOUND);
+      expect(readStore).not.toHaveBeenCalled();
+      expect(readPublishedArticle).not.toHaveBeenCalled();
+      expect(ImageResponse).not.toHaveBeenCalled();
+    }
+  );
+
+  test("answers 404 when the store's row is missing, asking for no article", async () => {
+    const { request } = setup({ store: null });
+
+    await expect(request()).rejects.toMatchObject(NOT_FOUND);
     expect(readPublishedArticle).not.toHaveBeenCalled();
     expect(ImageResponse).not.toHaveBeenCalled();
   });
@@ -267,9 +274,7 @@ describe("ArticleOpenGraphImage", () => {
   test("answers 404 for an article the store does not publish, drawing nothing", async () => {
     const { request, store } = setup({ slug: "borrador" });
 
-    await expect(request()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
+    await expect(request()).rejects.toMatchObject(NOT_FOUND);
     expect(readPublishedArticle).toHaveBeenCalledExactlyOnceWith(
       store,
       "borrador",
@@ -282,8 +287,9 @@ describe("ArticleOpenGraphImage", () => {
 describe("generateImageMetadata", () => {
   test.each([
     ["the article", "Anillo de plata", {}],
-    ["a missing store", "", { store: makeStore({ slug: "elsewhere" }) }],
+    ["a missing store row", "", { store: null }],
     ["a missing article", "", { slug: "borrador" }],
+    ["the build's sample", "", { slug: "__sample__" }],
     ["a language the product does not speak", "", { locale: "fr" }],
   ] as const)(
     "for %s, describes one 1200×630 PNG card whose alt text is %j",
@@ -301,12 +307,12 @@ describe("generateImageMetadata", () => {
     }
   );
 
-  test("asks for the article in the page's language, in that store", async () => {
+  test("asks for the article in the page's language, in the store", async () => {
     const { metadata, store } = setup({ locale: "en" });
 
     await metadata();
 
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("sample-store");
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(readPublishedArticle).toHaveBeenCalledExactlyOnceWith(
       store,
       "anillo-de-plata",
@@ -314,11 +320,15 @@ describe("generateImageMetadata", () => {
     );
   });
 
-  test("asks for no article in a language the product does not speak", async () => {
-    const { metadata } = setup({ locale: "fr" });
+  test.each([
+    ["a language the product does not speak", { locale: "fr" }],
+    ["the build's sample", { slug: "__sample__" }],
+  ] as const)("reads nothing for %s", async (_case, options) => {
+    const { metadata } = setup(options);
 
     await metadata();
 
+    expect(readStore).not.toHaveBeenCalled();
     expect(readPublishedArticle).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,7 @@ import { renderWithI18n } from "@/test/i18n";
 import { StoreLocaleToggle } from "./store-locale-toggle";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/lr-market/products",
+  usePathname: () => "/products",
   useSearchParams: () => new URLSearchParams("q=aros"),
 }));
 
@@ -22,7 +22,7 @@ describe("StoreLocaleToggle", () => {
     const { link } = setup();
 
     expect(link).toHaveAccessibleName("English");
-    expect(link).toHaveAttribute("href", "/en/lr-market/products?q=aros");
+    expect(link).toHaveAttribute("href", "/en/products?q=aros");
     expect(link).toHaveClass(
       "text-store-foreground",
       "focus-visible:outline-store-foreground",

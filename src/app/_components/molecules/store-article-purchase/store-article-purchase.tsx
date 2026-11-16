@@ -16,7 +16,6 @@ export interface StoreArticlePurchaseProps {
   /** The price the page shows, so the cart can say if it changes. */
   priceAmount: number;
   productId: number;
-  storeSlug: string;
 }
 
 const STEP_CLASS =
@@ -31,11 +30,10 @@ function StoreArticlePurchase({
   className,
   priceAmount,
   productId,
-  storeSlug,
 }: StoreArticlePurchaseProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
-  const { add, items } = useCart(storeSlug);
+  const { add, items } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState({ count: 0, text: "" });
   // Disabled until React owns it: a press on the server's HTML would add

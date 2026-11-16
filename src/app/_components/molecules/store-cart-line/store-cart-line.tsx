@@ -28,7 +28,6 @@ export interface StoreCartLineProps {
   quantity: number;
   /** What the shopper saw when adding it, for a price that changed. */
   seenPriceAmount: number | undefined;
-  storeSlug: string;
 }
 
 const STEP_CLASS =
@@ -46,7 +45,6 @@ function StoreCartLine({
   product,
   quantity,
   seenPriceAmount,
-  storeSlug,
 }: StoreCartLineProps) {
   const { storefront } = useDictionary();
   const copy = storefront.cart;
@@ -100,10 +98,7 @@ function StoreCartLine({
         {product ? (
           <Link
             className="font-semibold text-store-foreground underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
-            href={localizePath(
-              `/${storeSlug}/products/${product.slug}`,
-              locale
-            )}
+            href={localizePath(`/products/${product.slug}`, locale)}
             lang={product.lang}
           >
             {product.title}

@@ -4,10 +4,10 @@ import { absoluteUrl } from "@/lib/seo/origin";
 
 /**
  * Never worth crawling: the admin, the API and the coming-soon page, in
- * every language they answer in. A rule is a prefix, and a store's address
- * may start like one of these (`/apio`, `/administracion`), so each root is
+ * every language they answer in. A rule is a prefix, so each root is
  * anchored with `$`, its query (`/admin?next=…`) matched by its `?`, and
- * only the paths under it by its slash.
+ * only the paths under it by its slash: an address that only starts alike
+ * (`/apio`) stays crawlable.
  */
 const DISALLOWED = [
   "/admin$",

@@ -14,10 +14,9 @@ import ArticlePage, {
   instant,
 } from "./page";
 
-const { articleProps, getStoreForPath, readPublishedArticle, readRelated } =
+const { articleProps, readPublishedArticle, readRelated, readStore } =
   vi.hoisted(() => ({
     articleProps: vi.fn<(props: StoreArticleProps) => void>(),
-    getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
     readPublishedArticle:
       vi.fn<
         (
@@ -34,13 +33,14 @@ const { articleProps, getStoreForPath, readPublishedArticle, readRelated } =
           locale: Locale
         ) => Promise<ProductCard[]>
       >(),
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
   }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
 // The cached reads have their own tests; here they answer by what they got.
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+vi.mock("@/server/cache/store", () => ({ readStore }));
 vi.mock("@/server/cache/catalog", () => ({
   readPublishedArticle,
   readRelatedArticles: readRelated,
@@ -52,6 +52,17 @@ vi.mock("@/app/_components/organisms/store-article", () => ({
     articleProps(props);
     return <div data-testid="store-article">{props.article.title}</div>;
   },
+}));
+
+// The footer has its own tests; here it only shows whose it is.
+vi.mock("../../store-page-footer", () => ({
+  StorePageFooter: ({
+    locale,
+    store,
+  }: {
+    locale: Locale;
+    store: PublicStore;
+  }) => <footer data-testid="footer">{`${store.name} ${locale}`}</footer>,
 }));
 
 const SPANISH = {
@@ -66,20 +77,15 @@ const ENGLISH = {
 } as const;
 
 const ORIGIN = "http://localhost:3000";
+const LOGO = `${ORIGIN}/brand/lr-market-logo.svg`;
+const NOT_FOUND = { digest: "NEXT_HTTP_ERROR_FALLBACK;404" };
 
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#ffffff",
     currencyCode: "USD",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "Sample Store",
-    slug: "sample-store",
     tiktokUrl: null,
     translations: [SPANISH, ENGLISH],
     whatsappNumber: null,
@@ -140,17 +146,14 @@ function makeCard(): ProductCard {
   };
 }
 
-async function makeParams(
-  locale: string,
-  slug = "anillo-de-plata",
-  store = "sample-store"
-) {
-  return await Promise.resolve({ locale, slug, store });
+async function makeParams(locale: string, slug = "anillo-de-plata") {
+  return await Promise.resolve({ locale, slug });
 }
 
 /**
- * The reads answer for `store` and its `article` only, in each language the
- * article as `english` overrides it there (the same article unless given).
+ * The store's reads answer `store` (`null`: its row is missing) and its
+ * `article` only, in each language the article as `english` overrides it
+ * there (the same article unless given).
  */
 function setup({
   article = makeArticle(),
@@ -165,15 +168,13 @@ function setup({
   locale?: string;
   related?: ProductCard[];
   slug?: string;
-  store?: PublicStore;
+  store?: PublicStore | null;
 } = {}) {
   const translated: Record<Locale, PublishedProduct> = {
     en: english,
     es: article,
   };
-  getStoreForPath.mockImplementation(
-    async (asked) => await Promise.resolve(asked === store.slug ? store : null)
-  );
+  readStore.mockResolvedValue(store);
   readPublishedArticle.mockImplementation(
     async (asked, askedSlug, askedLocale) =>
       await Promise.resolve(
@@ -220,22 +221,32 @@ describe("ArticlePage", () => {
     expect(generateStaticParams()).toEqual([{ slug: "__sample__" }]);
   });
 
-  test("answers 404 for an address that is not a store, asking for no article", async () => {
-    const { resolve } = setup({ store: makeStore({ slug: "elsewhere" }) });
+  test.each([
+    ["the build's sample", "__sample__"],
+    ["an address with spaces", " anillo "],
+  ])(
+    "answers 404 for %s before the store is read, so the build needs no database",
+    async (_case, slug) => {
+      const { resolve } = setup({ slug });
 
-    await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("sample-store");
+      await expect(resolve()).rejects.toMatchObject(NOT_FOUND);
+      expect(readStore).not.toHaveBeenCalled();
+      expect(readPublishedArticle).not.toHaveBeenCalled();
+    }
+  );
+
+  test("answers 404 when the store's row is missing, asking for no article", async () => {
+    const { resolve } = setup({ store: null });
+
+    await expect(resolve()).rejects.toMatchObject(NOT_FOUND);
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(readPublishedArticle).not.toHaveBeenCalled();
   });
 
   test("answers 404 for an article the store does not publish, asking for nothing beside it", async () => {
     const { resolve, store } = setup({ slug: "borrador" });
 
-    await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
+    await expect(resolve()).rejects.toMatchObject(NOT_FOUND);
     expect(readPublishedArticle).toHaveBeenCalledExactlyOnceWith(
       store,
       "borrador",
@@ -247,10 +258,8 @@ describe("ArticlePage", () => {
   test("answers 404 for a language the product does not speak, before any lookup", async () => {
     const { resolve } = setup({ locale: "fr" });
 
-    await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
-    expect(getStoreForPath).not.toHaveBeenCalled();
+    await expect(resolve()).rejects.toMatchObject(NOT_FOUND);
+    expect(readStore).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -281,7 +290,6 @@ describe("ArticlePage", () => {
         copy: DICTIONARIES[locale].storefront,
         locale,
         related,
-        store,
         whatsappHref: null,
       });
       expect(screen.getByTestId("store-article").parentElement?.tagName).toBe(
@@ -290,14 +298,28 @@ describe("ArticlePage", () => {
     }
   );
 
+  test("ends with the store's footer, after the article, in the page's language", async () => {
+    const { show } = setup({ locale: "en" });
+
+    await show();
+
+    const main = screen.getByTestId("store-article").parentElement;
+    expect(screen.getByTestId("footer")).toHaveTextContent(
+      /^Sample Store en$/u
+    );
+    expect(main?.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
   test.each([
     [
       "es",
-      "¡Hola! Te escribo por «Aros & cadenas»: http://localhost:3000/sample-store/products/aros-y-cadenas",
+      "¡Hola! Te escribo por «Aros & cadenas»: http://localhost:3000/products/aros-y-cadenas",
     ],
     [
       "en",
-      "Hi! I'm writing about “Aros & cadenas”: http://localhost:3000/en/sample-store/products/aros-y-cadenas",
+      "Hi! I'm writing about “Aros & cadenas”: http://localhost:3000/en/products/aros-y-cadenas",
     ],
   ] as const)(
     "in %s, opens the store's WhatsApp at its digits with the article's name and address written",
@@ -320,7 +342,7 @@ describe("ArticlePage", () => {
     }
   );
 
-  test("describes the article, its trail and its store as structured data", async () => {
+  test("describes the article, its trail and the store, with the brand's logo, as structured data", async () => {
     const { show } = setup({
       article: makeArticle({
         category: { name: "Anillos", slug: "anillos" },
@@ -345,13 +367,12 @@ describe("ArticlePage", () => {
       }),
       store: makeStore({
         instagramUrl: "https://instagram.com/sample",
-        logoUrl: "https://cdn.example.test/logo.png",
         tiktokUrl: "https://tiktok.com/@sample",
       }),
     });
 
     const { jsonLd } = await show();
-    const url = `${ORIGIN}/sample-store/products/anillo-de-plata`;
+    const url = `${ORIGIN}/products/anillo-de-plata`;
 
     expect(jsonLd()).toEqual([
       {
@@ -382,19 +403,19 @@ describe("ArticlePage", () => {
         itemListElement: [
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/sample-store`,
+            item: `${ORIGIN}/`,
             name: "Sample Store",
             position: 1,
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/sample-store/products`,
+            item: `${ORIGIN}/products`,
             name: "Catálogo",
             position: 2,
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/sample-store/products?category=anillos`,
+            item: `${ORIGIN}/products?category=anillos`,
             name: "Anillos",
             position: 3,
           },
@@ -409,10 +430,10 @@ describe("ArticlePage", () => {
       {
         "@context": "https://schema.org",
         "@type": "Organization",
-        logo: "https://cdn.example.test/logo.png",
+        logo: LOGO,
         name: "Sample Store",
         sameAs: ["https://instagram.com/sample", "https://tiktok.com/@sample"],
-        url: `${ORIGIN}/sample-store`,
+        url: `${ORIGIN}/`,
       },
     ]);
   });
@@ -421,7 +442,7 @@ describe("ArticlePage", () => {
     const { show } = setup({ locale: "en" });
 
     const { jsonLd } = await show();
-    const url = `${ORIGIN}/en/sample-store/products/anillo-de-plata`;
+    const url = `${ORIGIN}/en/products/anillo-de-plata`;
 
     expect(jsonLd()).toEqual([
       {
@@ -448,13 +469,13 @@ describe("ArticlePage", () => {
         itemListElement: [
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/en/sample-store`,
+            item: `${ORIGIN}/en`,
             name: "Sample Store",
             position: 1,
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/en/sample-store/products`,
+            item: `${ORIGIN}/en/products`,
             name: "Catalog",
             position: 2,
           },
@@ -469,8 +490,9 @@ describe("ArticlePage", () => {
       {
         "@context": "https://schema.org",
         "@type": "Organization",
+        logo: LOGO,
         name: "Sample Store",
-        url: `${ORIGIN}/en/sample-store`,
+        url: `${ORIGIN}/en`,
       },
     ]);
   });
@@ -478,27 +500,31 @@ describe("ArticlePage", () => {
 
 describe("generateMetadata", () => {
   test.each([
-    ["store", { store: makeStore({ slug: "elsewhere" }) }],
-    ["article", { slug: "borrador" }],
-  ] as const)(
-    "adds nothing when the %s is missing",
-    async (_missing, options) => {
-      const { metadata } = setup(options);
+    ["the store's row", { store: null }],
+    ["the article", { slug: "borrador" }],
+  ] as const)("adds nothing when %s is missing", async (_missing, options) => {
+    const { metadata } = setup(options);
 
-      await expect(metadata()).resolves.toEqual({});
-    }
-  );
+    await expect(metadata()).resolves.toEqual({});
+  });
+
+  test("adds nothing for the build's sample, before the store is read", async () => {
+    const { metadata } = setup({ slug: "__sample__" });
+
+    await expect(metadata()).resolves.toEqual({});
+    expect(readStore).not.toHaveBeenCalled();
+  });
 
   test.each([
-    ["es", "/sample-store/products/anillo-de-plata"],
-    ["en", "/en/sample-store/products/anillo-de-plata"],
+    ["es", "/products/anillo-de-plata"],
+    ["en", "/en/products/anillo-de-plata"],
   ] as const)(
-    "in %s, prefers the article's own search title and description, with both addresses",
+    "in %s, prefers the article's own search title and description, with both addresses, after which the store's name",
     async (locale, canonical) => {
       const { metadata } = setup({
         article: makeArticle({
           seoDescription: "El anillo de plata que buscabas.",
-          seoTitle: "Anillo de plata 925 | Sample Store",
+          seoTitle: "Anillo de plata 925",
         }),
         locale,
       });
@@ -507,20 +533,20 @@ describe("generateMetadata", () => {
         alternates: {
           canonical,
           languages: {
-            en: "/en/sample-store/products/anillo-de-plata",
-            es: "/sample-store/products/anillo-de-plata",
-            "x-default": "/sample-store/products/anillo-de-plata",
+            en: "/en/products/anillo-de-plata",
+            es: "/products/anillo-de-plata",
+            "x-default": "/products/anillo-de-plata",
           },
         },
         description: "El anillo de plata que buscabas.",
         openGraph: {
           description: "El anillo de plata que buscabas.",
           siteName: "Sample Store",
-          title: "Anillo de plata 925 | Sample Store",
+          title: "Anillo de plata 925",
           type: "website",
           url: canonical,
         },
-        title: "Anillo de plata 925 | Sample Store",
+        title: { absolute: "Anillo de plata 925 · Sample Store" },
       });
     }
   );
@@ -551,7 +577,7 @@ describe("generateMetadata", () => {
       await expect(metadata()).resolves.toMatchObject({
         description,
         openGraph: { description, title: "Anillo de plata", type: "website" },
-        title: "Anillo de plata",
+        title: { absolute: "Anillo de plata · Sample Store" },
       });
     }
   );
@@ -582,11 +608,11 @@ describe("generateMetadata", () => {
 
     await expect(metadata()).resolves.toStrictEqual({
       alternates: {
-        canonical: "/sample-store/products/anillo-de-plata",
+        canonical: "/products/anillo-de-plata",
         languages: {
-          en: "/en/sample-store/products/anillo-de-plata",
-          es: "/sample-store/products/anillo-de-plata",
-          "x-default": "/sample-store/products/anillo-de-plata",
+          en: "/en/products/anillo-de-plata",
+          es: "/products/anillo-de-plata",
+          "x-default": "/products/anillo-de-plata",
         },
       },
       description: undefined,
@@ -595,9 +621,9 @@ describe("generateMetadata", () => {
         siteName: "Sample Store",
         title: "Anillo de plata",
         type: "website",
-        url: "/sample-store/products/anillo-de-plata",
+        url: "/products/anillo-de-plata",
       },
-      title: "Anillo de plata",
+      title: { absolute: "Anillo de plata · Sample Store" },
     });
   });
 });

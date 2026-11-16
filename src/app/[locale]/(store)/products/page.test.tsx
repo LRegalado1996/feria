@@ -4,25 +4,27 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { StoreCatalogProps } from "@/app/_components/organisms/store-catalog";
 import type { RawSearchParams } from "@/lib/catalog/query";
+import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { renderWithI18n } from "@/test/i18n";
 
 import CatalogPage, { generateMetadata, instant } from "./page";
 
-const { catalogProps, categories, filters, getStoreForPath, products } =
-  vi.hoisted(() => ({
+const { catalogProps, categories, filters, products, readStore } = vi.hoisted(
+  () => ({
     catalogProps: vi.fn<(props: StoreCatalogProps) => void>(),
     categories: vi.fn(async (_input: unknown): Promise<unknown> => []),
     filters: vi.fn(async (_input: unknown): Promise<unknown> => []),
-    getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
     products: vi.fn(async (_input: unknown): Promise<unknown> => null),
-  }));
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
+  })
+);
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The cached read has its own tests; here it answers by the segment it got.
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+// The cached read has its own tests; here it answers what the test says.
+vi.mock("@/server/cache/store", () => ({ readStore }));
 
 // The procedures have their own tests; here they answer and are spied on
 // for what the page asked.
@@ -38,19 +40,23 @@ vi.mock("@/app/_components/organisms/store-catalog", () => ({
   },
 }));
 
+// The footer has its own tests; here it only shows whose it is.
+vi.mock("../store-page-footer", () => ({
+  StorePageFooter: ({
+    locale,
+    store,
+  }: {
+    locale: Locale;
+    store: PublicStore;
+  }) => <footer data-testid="footer">{`${store.name} ${locale}`}</footer>,
+}));
+
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#fffaf5",
     currencyCode: "UYU",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "LR Market",
-    slug: "lr-market",
     tiktokUrl: null,
     translations: [],
     whatsappNumber: null,
@@ -82,12 +88,36 @@ const FILTERS = [
 
 const FIRST_PAGE = { items: [], nextCursor: null };
 
-async function makeParams(locale: string, store = "lr-market") {
-  return await Promise.resolve({ locale, store });
+async function makeParams(locale: string) {
+  return await Promise.resolve({ locale });
 }
 
 async function makeSearch(search: RawSearchParams) {
   return await Promise.resolve(search);
+}
+
+/** A query string that arrives when the test says so. */
+function heldSearch() {
+  const held: { release: (search: RawSearchParams) => void } = {
+    release: () => undefined,
+  };
+  const promise = new Promise<RawSearchParams>((resolve) => {
+    held.release = resolve;
+  });
+
+  return {
+    promise,
+    release: (search: RawSearchParams) => {
+      held.release(search);
+    },
+  };
+}
+
+/** Every microtask the page has queued so far has run. */
+async function settle() {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }
 
 type Boundary = ReactElement<{
@@ -98,37 +128,33 @@ type Boundary = ReactElement<{
   fallback: ReactElement;
 }>;
 
-/** The store's reads answer for `lr-market` only. */
-function answer() {
-  getStoreForPath.mockImplementation(
-    async (segment) =>
-      await Promise.resolve(segment === "lr-market" ? makeStore() : null)
-  );
-  categories.mockResolvedValue(CATEGORIES);
-  filters.mockResolvedValue(FILTERS);
-  products.mockResolvedValue(FIRST_PAGE);
-}
-
 function setup({
   locale = "es",
   search = {},
-  store = "lr-market",
-}: { locale?: string; search?: RawSearchParams; store?: string } = {}) {
-  answer();
+  store = makeStore(),
+}: {
+  locale?: string;
+  search?: RawSearchParams;
+  store?: PublicStore | null;
+} = {}) {
+  readStore.mockResolvedValue(store);
+  categories.mockResolvedValue(CATEGORIES);
+  filters.mockResolvedValue(FILTERS);
+  products.mockResolvedValue(FIRST_PAGE);
   const page: Boundary = CatalogPage({
-    params: makeParams(locale, store),
+    params: makeParams(locale),
     searchParams: makeSearch(search),
   });
   const inner = page.props.children;
 
   return {
     fallback: page.props.fallback,
-    metadata: async () =>
-      await generateMetadata({
-        params: makeParams(locale, store),
-        searchParams: makeSearch(search),
-      }),
-    resolve: async () => await inner.type(inner.props),
+    metadata: async (searchParams = makeSearch(search)) =>
+      await generateMetadata({ params: makeParams(locale), searchParams }),
+    resolve: async (searchParams?: Promise<RawSearchParams>) =>
+      await inner.type(
+        searchParams ? { ...inner.props, searchParams } : inner.props
+      ),
     show: async () => {
       render(await inner.type(inner.props));
     },
@@ -149,20 +175,33 @@ describe("CatalogPage", () => {
       "aria-busy",
       "true"
     );
-    expect(getStoreForPath).not.toHaveBeenCalled();
+    expect(readStore).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for an address that is not a store, asking nothing", async () => {
-    const { resolve } = setup({ store: "nobody" });
+  test("reads the store only once the query string is there, so the build needs no database", async () => {
+    const { resolve } = setup();
+    const search = heldSearch();
+
+    const pending = resolve(search.promise);
+    await settle();
+
+    expect(readStore).not.toHaveBeenCalled();
+    search.release({});
+    render(await pending);
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  test("answers the not-found page when the store's row is missing, asking nothing", async () => {
+    const { resolve } = setup({ store: null });
 
     await expect(resolve()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("nobody");
+    expect(categories).not.toHaveBeenCalled();
     expect(products).not.toHaveBeenCalled();
   });
 
-  test("renders the first page of the selection the address asks for", async () => {
+  test("renders the first page of the selection the address asks for, then the store's footer", async () => {
     const { show } = setup({
       locale: "en",
       search: {
@@ -175,21 +214,14 @@ describe("CatalogPage", () => {
 
     await show();
 
-    expect(categories).toHaveBeenCalledExactlyOnceWith({
-      locale: "en",
-      storeSlug: "lr-market",
-    });
-    expect(filters).toHaveBeenCalledExactlyOnceWith({
-      locale: "en",
-      storeSlug: "lr-market",
-    });
+    expect(categories).toHaveBeenCalledExactlyOnceWith({ locale: "en" });
+    expect(filters).toHaveBeenCalledExactlyOnceWith({ locale: "en" });
     expect(products).toHaveBeenCalledExactlyOnceWith({
       category: "collares",
       filters: [{ attribute: "color", values: ["dorado"] }],
       locale: "en",
       q: "perla",
       sort: "price_desc",
-      storeSlug: "lr-market",
     });
     expect(catalogProps).toHaveBeenCalledExactlyOnceWith({
       categories: CATEGORIES,
@@ -202,10 +234,12 @@ describe("CatalogPage", () => {
         q: "perla",
         sort: "price_desc",
       },
-      storeSlug: "lr-market",
     });
-    expect(screen.getByTestId("store-catalog").parentElement?.tagName).toBe(
-      "MAIN"
+    const main = screen.getByTestId("store-catalog").parentElement;
+    expect(main?.tagName).toBe("MAIN");
+    expect(screen.getByTestId("footer")).toHaveTextContent(/^LR Market en$/u);
+    expect(main?.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     );
   });
 
@@ -222,7 +256,6 @@ describe("CatalogPage", () => {
       locale: "es",
       q: undefined,
       sort: "newest",
-      storeSlug: "lr-market",
     });
     expect(catalogProps).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -252,38 +285,58 @@ describe("CatalogPage", () => {
 });
 
 describe("generateMetadata", () => {
-  test("adds nothing for an address that is not a store", async () => {
-    const { metadata } = setup({ store: "nobody" });
+  test("adds nothing when the store's row is missing", async () => {
+    const { metadata } = setup({ store: null });
 
     await expect(metadata()).resolves.toEqual({});
     expect(categories).not.toHaveBeenCalled();
   });
 
+  test("reads the store only once the query string is there", async () => {
+    const { metadata } = setup();
+    const search = heldSearch();
+
+    const pending = metadata(search.promise);
+    await settle();
+
+    expect(readStore).not.toHaveBeenCalled();
+    search.release({});
+    await pending;
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
+  });
+
   test.each([
     [
       "es",
+      "Catálogo · LR Market",
       "Catálogo",
       "Todos los artículos de LR Market.",
-      "/lr-market/products",
+      "/products",
     ],
-    ["en", "Catalog", "Every article of LR Market.", "/en/lr-market/products"],
+    [
+      "en",
+      "Catalog · LR Market",
+      "Catalog",
+      "Every article of LR Market.",
+      "/en/products",
+    ],
   ] as const)(
     "in %s, titles the whole catalog %j",
-    async (locale, title, description, canonical) => {
+    async (locale, title, shared, description, canonical) => {
       const { metadata } = setup({ locale });
 
       await expect(metadata()).resolves.toEqual({
         alternates: {
           canonical,
           languages: {
-            en: "/en/lr-market/products",
-            es: "/lr-market/products",
-            "x-default": "/lr-market/products",
+            en: "/en/products",
+            es: "/products",
+            "x-default": "/products",
           },
         },
         description,
-        openGraph: { description, title, type: "website" },
-        title,
+        openGraph: { description, title: shared, type: "website" },
+        title: { absolute: title },
       });
     }
   );
@@ -299,11 +352,11 @@ describe("generateMetadata", () => {
 
     await expect(metadata()).resolves.toEqual({
       alternates: {
-        canonical: "/lr-market/products?category=collares&color=dorado",
+        canonical: "/products?category=collares&color=dorado",
         languages: {
-          en: "/en/lr-market/products?category=collares&color=dorado",
-          es: "/lr-market/products?category=collares&color=dorado",
-          "x-default": "/lr-market/products?category=collares&color=dorado",
+          en: "/en/products?category=collares&color=dorado",
+          es: "/products?category=collares&color=dorado",
+          "x-default": "/products?category=collares&color=dorado",
         },
       },
       description: "Collares · Dorado, en LR Market.",
@@ -312,7 +365,7 @@ describe("generateMetadata", () => {
         title: "Collares · Dorado",
         type: "website",
       },
-      title: "Collares · Dorado",
+      title: { absolute: "Collares · Dorado · LR Market" },
     });
   });
 
@@ -323,11 +376,11 @@ describe("generateMetadata", () => {
 
     await expect(metadata()).resolves.toEqual({
       alternates: {
-        canonical: "/lr-market/products?category=collares",
+        canonical: "/products?category=collares",
         languages: {
-          en: "/en/lr-market/products?category=collares",
-          es: "/lr-market/products?category=collares",
-          "x-default": "/lr-market/products?category=collares",
+          en: "/en/products?category=collares",
+          es: "/products?category=collares",
+          "x-default": "/products?category=collares",
         },
       },
       description: "Collares · «perla», en LR Market.",
@@ -337,21 +390,21 @@ describe("generateMetadata", () => {
         type: "website",
       },
       robots: { follow: true, index: false },
-      title: "Collares · «perla»",
+      title: { absolute: "Collares · «perla» · LR Market" },
     });
   });
 
   test.each([
     [
       "es",
-      "«perla»",
+      "«perla» · LR Market",
       "«perla», en LR Market.",
       "Catálogo",
       "Todos los artículos de LR Market.",
     ],
     [
       "en",
-      "“perla”",
+      "“perla” · LR Market",
       "“perla”, at LR Market.",
       "Catalog",
       "Every article of LR Market.",
@@ -369,7 +422,7 @@ describe("generateMetadata", () => {
           type: "website",
         },
         robots: { follow: true, index: false },
-        title,
+        title: { absolute: title },
       });
     }
   );

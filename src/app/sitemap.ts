@@ -7,8 +7,8 @@ import { localizePath } from "@/lib/i18n/paths";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/origin";
 import { db } from "@/server/db";
 import {
+  findIndexableStore,
   listIndexableArticles,
-  listIndexableStores,
 } from "@/server/services/seo";
 
 /** One page in every language, each naming the others (`hreflang`). */
@@ -35,10 +35,10 @@ function latest(dates: Date[]) {
 }
 
 /**
- * `sitemap.xml` (FER-024): each active store's home, its catalog and every
- * published article, in Spanish and English. Read at request time, so a new
- * article is listed at once and the build needs no database. Empty while
- * the storefront is closed: every page leads to the coming-soon page then.
+ * `sitemap.xml` (FER-024): the store's home, its catalog and every published
+ * article, in Spanish and English. Read at request time, so a new article
+ * is listed at once and the build needs no database. Empty while the
+ * storefront is closed: every page leads to the coming-soon page then.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await connection();
@@ -48,25 +48,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   const origin = siteOrigin();
-  const stores = await listIndexableStores(db);
-  const perStore = await Promise.all(
-    stores.map(async (store) => {
-      const articles = await listIndexableArticles(db, { storeId: store.id });
-      const home = `/${store.slug}`;
+  const store = await findIndexableStore(db);
 
-      return [
-        ...entries(origin, home, store.updatedAt),
-        ...entries(
-          origin,
-          `${home}/products`,
-          latest([store.updatedAt, ...articles.map((row) => row.updatedAt)])
-        ),
-        ...articles.flatMap((article) =>
-          entries(origin, `${home}/products/${article.slug}`, article.updatedAt)
-        ),
-      ];
-    })
-  );
+  // Only a database whose migrations have not run has no store.
+  if (!store) {
+    return [];
+  }
 
-  return perStore.flat();
+  const articles = await listIndexableArticles(db, { storeId: store.id });
+
+  return [
+    ...entries(origin, "/", store.updatedAt),
+    ...entries(
+      origin,
+      "/products",
+      latest([store.updatedAt, ...articles.map((row) => row.updatedAt)])
+    ),
+    ...articles.flatMap((article) =>
+      entries(origin, `/products/${article.slug}`, article.updatedAt)
+    ),
+  ];
 }

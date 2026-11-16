@@ -1,5 +1,1 @@
-export {
-  StoreTheme,
-  type StoreThemePalette,
-  type StoreThemeProps,
-} from "./store-theme";
+export { StoreTheme, type StoreThemeProps } from "./store-theme";

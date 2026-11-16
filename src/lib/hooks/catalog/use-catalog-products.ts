@@ -18,12 +18,10 @@ export function useCatalogProducts({
   firstPage,
   locale,
   query,
-  storeSlug,
 }: {
   firstPage: CatalogPage;
   locale: Locale;
   query: CatalogQuery;
-  storeSlug: string;
 }) {
   const result = useInfiniteQuery({
     ...orpc.catalog.products.infiniteOptions({
@@ -36,7 +34,6 @@ export function useCatalogProducts({
         locale,
         q: query.q ?? undefined,
         sort: query.sort,
-        storeSlug,
       }),
     }),
     initialData: { pageParams: [undefined], pages: [firstPage] },

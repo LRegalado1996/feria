@@ -7,8 +7,8 @@ import { reportError } from "@/lib/errors/client";
 import { useDictionary } from "@/lib/hooks/i18n";
 
 /**
- * A page of a store that threw while rendering, inside its header and
- * footer: reported once, with a retry.
+ * A page of the store that threw while rendering, under the store's header:
+ * reported once, with a retry.
  */
 export default function StoreError({
   error,

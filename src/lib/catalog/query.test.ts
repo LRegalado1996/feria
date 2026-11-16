@@ -169,15 +169,12 @@ describe("readCatalogQuery", () => {
 
 describe("catalogHref", () => {
   test("leaves every default out", () => {
-    expect(catalogHref("lr-market", "es", makeQuery())).toBe(
-      "/lr-market/products"
-    );
+    expect(catalogHref("es", makeQuery())).toBe("/products");
   });
 
   test("writes category, filters as given, search, then sort, commas readable", () => {
     expect(
       catalogHref(
-        "lr-market",
         "es",
         makeQuery({
           category: "anillos",
@@ -190,13 +187,13 @@ describe("catalogHref", () => {
         })
       )
     ).toBe(
-      "/lr-market/products?category=anillos&talle=m&color=dorado,plateado&q=oro+rosa&sort=price_desc"
+      "/products?category=anillos&talle=m&color=dorado,plateado&q=oro+rosa&sort=price_desc"
     );
   });
 
   test("keeps the English prefix and escapes what is not a comma", () => {
-    expect(catalogHref("lr-market", "en", makeQuery({ q: "50% & más" }))).toBe(
-      "/en/lr-market/products?q=50%25+%26+m%C3%A1s"
+    expect(catalogHref("en", makeQuery({ q: "50% & más" }))).toBe(
+      "/en/products?q=50%25+%26+m%C3%A1s"
     );
   });
 
@@ -207,7 +204,7 @@ describe("catalogHref", () => {
       q: "corona",
       sort: "price_asc",
     });
-    const href = catalogHref("lr-market", "es", query);
+    const href = catalogHref("es", query);
     const search = new URLSearchParams(href.split("?")[1]);
 
     expect(readCatalogQuery(Object.fromEntries(search))).toEqual(query);
@@ -348,17 +345,13 @@ describe("knownOnly", () => {
       { slug: "talle", values: [{ slug: "m" }] },
     ];
     const link = (raw: Record<string, string>) =>
-      catalogHref(
-        "lr-market",
-        "es",
-        knownOnly(readCatalogQuery(raw), CATEGORIES, filters)
-      );
+      catalogHref("es", knownOnly(readCatalogQuery(raw), CATEGORIES, filters));
 
     expect(link({ color: "rojo,dorado", talle: "m" })).toBe(
       link({ talle: "m", color: "dorado,rojo" })
     );
     expect(link({ talle: "m", color: "rojo,dorado" })).toBe(
-      "/lr-market/products?color=dorado,rojo&talle=m"
+      "/products?color=dorado,rojo&talle=m"
     );
   });
 

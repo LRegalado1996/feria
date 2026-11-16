@@ -39,9 +39,7 @@ function setup({
   const { storefront } = DICTIONARIES[locale];
   render(
     <StoreOrder
-      catalogHref={
-        locale === "en" ? "/en/lr-market/products" : "/lr-market/products"
-      }
+      catalogHref={locale === "en" ? "/en/products" : "/products"}
       className="custom"
       labels={storefront.order}
       locale={locale}
@@ -186,8 +184,8 @@ describe("StoreOrder", () => {
   });
 
   test.each([
-    ["en", "Keep browsing the store", "/en/lr-market/products"],
-    ["es", "Seguir mirando la tienda", "/lr-market/products"],
+    ["en", "Keep browsing the store", "/en/products"],
+    ["es", "Seguir mirando la tienda", "/products"],
   ] as const)("in %s, %j goes back to the catalog", (locale, name, href) => {
     setup({ locale });
 

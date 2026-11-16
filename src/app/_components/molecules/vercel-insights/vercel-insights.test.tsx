@@ -42,12 +42,12 @@ describe("withoutOrderToken", () => {
     expect(
       withoutOrderToken({
         type: "pageview",
-        url: `https://feria.test/en/lr-market/orders/${TOKEN}?ref=cart`,
+        url: `https://feria.test/en/orders/${TOKEN}?ref=cart`,
         value: 3,
       })
     ).toEqual({
       type: "pageview",
-      url: "https://feria.test/en/lr-market/orders/[token]?ref=cart",
+      url: "https://feria.test/en/orders/[token]?ref=cart",
       value: 3,
     });
   });
@@ -55,7 +55,7 @@ describe("withoutOrderToken", () => {
   test("leaves a url without an order's token as it is", () => {
     const event = {
       type: "pageview",
-      url: "https://feria.test/lr-market/products/collar-de-perlas",
+      url: "https://feria.test/products/collar-de-perlas",
     };
 
     expect(withoutOrderToken(event)).toEqual(event);

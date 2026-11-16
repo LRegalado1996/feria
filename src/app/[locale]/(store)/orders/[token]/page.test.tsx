@@ -4,28 +4,24 @@ import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreOrderProps } from "@/app/_components/organisms/store-order";
+import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { DICTIONARIES } from "@/test/i18n";
 
 import OrderPage, { generateMetadata, instant } from "./page";
 
-const { getByToken, getStoreForPath, orderProps } = vi.hoisted(() => ({
+const { getByToken, orderProps, readStore } = vi.hoisted(() => ({
   getByToken:
-    vi.fn<
-      (input: {
-        storeSlug: string;
-        token: string;
-      }) => Promise<StoreOrderProps["order"]>
-    >(),
-  getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
+    vi.fn<(input: { token: string }) => Promise<StoreOrderProps["order"]>>(),
   orderProps: vi.fn<(props: StoreOrderProps) => void>(),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
 }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The cached read has its own tests; here it answers by the segment it got.
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+// The cached read has its own tests; here it answers what the test says.
+vi.mock("@/server/cache/store", () => ({ readStore }));
 
 // The procedure has its own tests; here it answers and is spied on for what
 // the page asked.
@@ -41,21 +37,25 @@ vi.mock("@/app/_components/organisms/store-order", () => ({
   },
 }));
 
+// The footer has its own tests; here it only shows whose it is.
+vi.mock("../../store-page-footer", () => ({
+  StorePageFooter: ({
+    locale,
+    store,
+  }: {
+    locale: Locale;
+    store: PublicStore;
+  }) => <footer data-testid="footer">{`${store.name} ${locale}`}</footer>,
+}));
+
 const TOKEN = "T".repeat(43);
 
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#ffffff",
     currencyCode: "UYU",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "LR Market",
-    slug: "lr-market",
     tiktokUrl: null,
     translations: [],
     whatsappNumber: null,
@@ -87,38 +87,33 @@ type Boundary = ReactElement<{
 }>;
 
 /**
- * `lr-market` is the only store; its order is found by `TOKEN` only, unless
- * `failure` says how the read fails.
+ * The order is found by `TOKEN` only, unless `failure` says how the read
+ * fails; `store: null` is a database whose store row is missing.
  */
 function setup({
   failure,
   locale = "es",
-  segment = "lr-market",
   store = makeStore(),
   token = TOKEN,
 }: {
   failure?: Error;
   locale?: string;
-  segment?: string;
-  store?: PublicStore;
+  store?: PublicStore | null;
   token?: string;
 } = {}) {
-  getStoreForPath.mockImplementation(
-    async (asked) => await Promise.resolve(asked === store.slug ? store : null)
-  );
+  readStore.mockResolvedValue(store);
   getByToken.mockImplementation(async (input) => {
     if (failure) {
       throw failure;
     }
 
-    if (input.storeSlug === store.slug && input.token === TOKEN) {
+    if (input.token === TOKEN) {
       return await Promise.resolve(makeOrder());
     }
 
     throw new ORPCError("NOT_FOUND", { message: "Order not found" });
   });
-  const params = async () =>
-    await Promise.resolve({ locale, store: segment, token });
+  const params = async () => await Promise.resolve({ locale, token });
   const page: Boundary = OrderPage({ params: params() });
   const inner = page.props.children;
 
@@ -139,8 +134,8 @@ describe("OrderPage", () => {
   });
 
   test.each([
-    ["es", "/lr-market/products", "(se abre en otra pestaña)"],
-    ["en", "/en/lr-market/products", "(opens in a new tab)"],
+    ["es", "/products", "(se abre en otra pestaña)"],
+    ["en", "/en/products", "(opens in a new tab)"],
   ] as const)(
     "hands the order its %s words, catalog link and the order read by its token",
     async (locale, catalogHref, newTabLabel) => {
@@ -150,7 +145,7 @@ describe("OrderPage", () => {
 
       expect(screen.getByTestId("store-order-page").tagName).toBe("MAIN");
       expect(screen.getByTestId("store-order-page")).toHaveTextContent(
-        /^K7P2Q$/
+        /^K7P2Q$/u
       );
       expect(orderProps).toHaveBeenCalledExactlyOnceWith({
         catalogHref,
@@ -160,12 +155,22 @@ describe("OrderPage", () => {
         order: makeOrder(),
         whatsappHref: null,
       });
-      expect(getByToken).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: "lr-market",
-        token: TOKEN,
-      });
+      expect(getByToken).toHaveBeenCalledExactlyOnceWith({ token: TOKEN });
     }
   );
+
+  test("ends with the store's footer, after the order, in the page's language", async () => {
+    const { resolve } = setup({ locale: "en" });
+
+    render(await resolve());
+
+    expect(screen.getByTestId("footer")).toHaveTextContent(/^LR Market en$/u);
+    expect(
+      screen
+        .getByTestId("store-order-page")
+        .compareDocumentPosition(screen.getByTestId("footer"))
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
 
   test.each([
     [
@@ -189,13 +194,18 @@ describe("OrderPage", () => {
     }
   );
 
-  test.each([
-    ["an unknown store", { segment: "nobody" }],
-    ["a token of another order", { token: "U".repeat(43) }],
-  ])("answers 404 for %s", async (_case, options) => {
-    const { resolve } = setup(options);
+  test("answers 404 for a token of another order", async () => {
+    const { resolve } = setup({ token: "U".repeat(43) });
 
     await expect(resolve()).rejects.toMatchObject(NOT_FOUND_DIGEST);
+    expect(orderProps).not.toHaveBeenCalled();
+  });
+
+  test("answers 404 when the store's row is missing, without asking for the order", async () => {
+    const { resolve } = setup({ store: null });
+
+    await expect(resolve()).rejects.toMatchObject(NOT_FOUND_DIGEST);
+    expect(getByToken).not.toHaveBeenCalled();
     expect(orderProps).not.toHaveBeenCalled();
   });
 
@@ -204,11 +214,12 @@ describe("OrderPage", () => {
     ["one character long", "T".repeat(44)],
     ["a character a token never has", `${"T".repeat(42)}.`],
   ])(
-    "answers 404 for a token %s without reading any order",
+    "answers 404 for a token %s without reading the store or any order",
     async (_case, token) => {
       const { resolve } = setup({ token });
 
       await expect(resolve()).rejects.toMatchObject(NOT_FOUND_DIGEST);
+      expect(readStore).not.toHaveBeenCalled();
       expect(getByToken).not.toHaveBeenCalled();
     }
   );
@@ -227,25 +238,25 @@ describe("OrderPage", () => {
 
 describe("generateMetadata", () => {
   test.each([
-    ["es", "Pedido K7P2Q"],
-    ["en", "Order K7P2Q"],
+    ["es", "Pedido K7P2Q · LR Market"],
+    ["en", "Order K7P2Q · LR Market"],
   ] as const)(
-    "titles the %s page after the order's code, never indexed nor followed, and sends no referrer",
+    "titles the %s page after the order's code and the store, never indexed nor followed, and sends no referrer",
     async (locale, title) => {
       const { metadata } = setup({ locale });
 
       await expect(metadata()).resolves.toEqual({
         referrer: "no-referrer",
         robots: { follow: false, index: false },
-        title,
+        title: { absolute: title },
       });
     }
   );
 
   test.each([
-    ["an unknown store", { segment: "nobody" }],
     ["an order that is not there", { token: "U".repeat(43) }],
     ["a malformed token", { token: "short" }],
+    ["a missing store row", { store: null }],
   ])(
     "for %s is still never indexed nor a referrer, and leaves the title to the 404 page",
     async (_case, options) => {

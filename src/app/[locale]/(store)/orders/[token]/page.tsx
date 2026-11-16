@@ -11,31 +11,36 @@ import { readLocale } from "@/lib/i18n/read-locale";
 import { catchNotFound } from "@/lib/orpc/catch-not-found";
 import { caller } from "@/lib/orpc/server";
 import { ORDER_TOKEN_PATTERN } from "@/lib/schemas/order";
-import { getStoreForPath } from "@/server/cache/store";
+import { storeTitle } from "@/lib/seo/store-metadata";
+import { readStore } from "@/server/cache/store";
+
+import { StorePageFooter } from "../../store-page-footer";
 
 // The order's status changes after it is placed, so the page is read per
 // request; it waits on the order before anything is sent, by design.
 export const instant = false;
 
 interface OrderPageProps {
-  params: Promise<{ locale: string; store: string; token: string }>;
+  params: Promise<{ locale: string; token: string }>;
 }
 
 /**
- * The store and its order, or `null` when either is missing. A token that
+ * The store and the order, or `null` when the order is missing. A token that
  * cannot be one costs no query; the read is shared by the metadata and the
  * page within one request.
  */
-const loadOrder = cache(async (segment: string, token: string) => {
-  const store = await getStoreForPath(segment);
-
-  if (!(store && ORDER_TOKEN_PATTERN.test(token))) {
+const loadOrder = cache(async (token: string) => {
+  if (!ORDER_TOKEN_PATTERN.test(token)) {
     return null;
   }
 
-  const order = await catchNotFound(
-    caller.order.getByToken({ storeSlug: store.slug, token })
-  );
+  const store = await readStore();
+
+  if (!store) {
+    return null;
+  }
+
+  const order = await catchNotFound(caller.order.getByToken({ token }));
 
   return order ? { order, store } : null;
 });
@@ -49,17 +54,22 @@ export async function generateMetadata({
   params,
 }: OrderPageProps): Promise<Metadata> {
   const locale = await readLocale(params);
-  const { store: segment, token } = await params;
-  const found = await loadOrder(segment, token);
+  const { token } = await params;
+  const found = await loadOrder(token);
 
   return {
     referrer: "no-referrer",
     robots: { follow: false, index: false },
     ...(found
       ? {
-          title: interpolate(getDictionary(locale).storefront.order.title, {
-            code: found.order.code,
-          }),
+          title: {
+            absolute: storeTitle(
+              interpolate(getDictionary(locale).storefront.order.title, {
+                code: found.order.code,
+              }),
+              found.store.name
+            ),
+          },
         }
       : {}),
   };
@@ -96,8 +106,8 @@ function whatsappHref(
 
 async function OrderResolver({ params }: OrderPageProps) {
   const locale = await readLocale(params);
-  const { store: segment, token } = await params;
-  const found = await loadOrder(segment, token);
+  const { token } = await params;
+  const found = await loadOrder(token);
 
   if (!found) {
     notFound();
@@ -107,15 +117,18 @@ async function OrderResolver({ params }: OrderPageProps) {
   const { storefront } = getDictionary(locale);
 
   return (
-    <main data-testid="store-order-page">
-      <StoreOrder
-        catalogHref={localizePath(`/${store.slug}/products`, locale)}
-        labels={storefront.order}
-        locale={locale}
-        newTabLabel={storefront.shell.newTab}
-        order={order}
-        whatsappHref={whatsappHref(store.whatsappNumber, order.code, locale)}
-      />
-    </main>
+    <>
+      <main data-testid="store-order-page">
+        <StoreOrder
+          catalogHref={localizePath("/products", locale)}
+          labels={storefront.order}
+          locale={locale}
+          newTabLabel={storefront.shell.newTab}
+          order={order}
+          whatsappHref={whatsappHref(store.whatsappNumber, order.code, locale)}
+        />
+      </main>
+      <StorePageFooter locale={locale} store={store} />
+    </>
   );
 }

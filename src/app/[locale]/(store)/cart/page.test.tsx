@@ -2,42 +2,48 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreCartProps } from "@/app/_components/organisms/store-cart";
+import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 
-import CartPage, { ensureStatic, generateMetadata, instant } from "./page";
+import * as cartModule from "./page";
 
-const { cartProps, getStoreForPath } = vi.hoisted(() => ({
+const { cartProps, connection, readStore } = vi.hoisted(() => ({
   cartProps: vi.fn<(props: StoreCartProps) => void>(),
-  getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
+  connection: vi.fn(async () => undefined),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
 }));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The cached read has its own tests; here it answers by the segment it got.
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+vi.mock("next/server", () => ({ connection }));
+
+// The cached read has its own tests; here it answers what the test says.
+vi.mock("@/server/cache/store", () => ({ readStore }));
 
 // The cart has its own tests; here it records what the page handed it.
 vi.mock("@/app/_components/organisms/store-cart", () => ({
   StoreCart: (props: StoreCartProps) => {
     cartProps(props);
-    return <div data-testid="store-cart">{props.storeSlug}</div>;
+    return <div data-testid="store-cart" />;
   },
 }));
 
+// The footer has its own tests; here it only shows in which language.
+vi.mock("../store-page-footer", () => ({
+  StreamedStoreFooter: ({ locale }: { locale: Locale }) => (
+    <footer data-testid="footer">{locale}</footer>
+  ),
+}));
+
+const { default: CartPage, generateMetadata } = cartModule;
+
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#ffffff",
     currencyCode: "UYU",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "Sample Store",
-    slug: "sample-store",
     tiktokUrl: null,
     translations: [],
     whatsappNumber: null,
@@ -45,98 +51,110 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   };
 }
 
-async function makeParams(locale: string, store = "sample-store") {
-  return await Promise.resolve({ locale, store });
+async function makeParams(locale: string) {
+  return await Promise.resolve({ locale });
 }
 
-/** The cached read answers for `sample-store` only. */
 function setup({
   locale = "es",
-  segment = "sample-store",
-}: { locale?: string; segment?: string } = {}) {
-  const store = makeStore();
-  getStoreForPath.mockImplementation(
-    async (asked) => await Promise.resolve(asked === store.slug ? store : null)
-  );
+  store = makeStore(),
+}: { locale?: string; store?: PublicStore | null } = {}) {
+  readStore.mockResolvedValue(store);
 
   return {
     metadata: async () =>
-      await generateMetadata({ params: makeParams(locale, segment) }),
-    page: async () => await CartPage({ params: makeParams(locale, segment) }),
+      await generateMetadata({ params: makeParams(locale) }),
+    page: async () => await CartPage({ params: makeParams(locale) }),
   };
 }
 
 describe("CartPage", () => {
-  test("shows the store's cart inside the page's main landmark, handing it the store's slug", async () => {
+  test("shows the cart inside the page's main landmark, then the footer streamed in the page's language", async () => {
+    const { page } = setup({ locale: "en" });
+
+    render(await page());
+
+    const main = screen.getByTestId("store-cart-page");
+    expect(main.tagName).toBe("MAIN");
+    expect(main).toContainElement(screen.getByTestId("store-cart"));
+    expect(cartProps).toHaveBeenCalledExactlyOnceWith({});
+    expect(screen.getByTestId("footer")).toHaveTextContent(/^en$/u);
+    expect(main.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  test("reads nothing of the store itself: the cart lives in the browser and the page is prerendered", async () => {
     const { page } = setup();
 
     render(await page());
 
-    expect(screen.getByTestId("store-cart-page").tagName).toBe("MAIN");
-    expect(screen.getByTestId("store-cart-page")).toContainElement(
-      screen.getByTestId("store-cart")
-    );
-    expect(cartProps).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: "sample-store",
-    });
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("sample-store");
+    expect(readStore).not.toHaveBeenCalled();
+    expect(connection).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for an address that is not an active store, showing no cart", async () => {
-    const { page } = setup({ segment: "nobody" });
+  test("answers 404 for a language the product does not speak, showing no cart", async () => {
+    const { page } = setup({ locale: "fr" });
 
     await expect(page()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("nobody");
     expect(cartProps).not.toHaveBeenCalled();
   });
 
-  test("is complete static output, so the store lookup runs before the status is sent", () => {
-    expect(ensureStatic).toBe("navigation");
-  });
-
-  test("says it blocks on purpose, so the development check does not flag every visit", () => {
-    expect(instant).toBe(false);
+  test("blocks on nothing: no static-output or instant-navigation exemption", () => {
+    expect(new Set(Object.keys(cartModule))).toEqual(
+      new Set(["default", "generateMetadata"])
+    );
   });
 });
 
 describe("generateMetadata", () => {
   test.each([
-    ["es", "/sample-store/cart", "Tu carrito"],
-    ["en", "/en/sample-store/cart", "Your cart"],
+    ["es", "/cart", "Tu carrito · Sample Store"],
+    ["en", "/en/cart", "Your cart · Sample Store"],
   ] as const)(
-    "titles the %s cart in its language, never indexed, with both addresses",
+    "titles the %s cart in its language after the store, never indexed, with both addresses",
     async (locale, canonical, title) => {
       const { metadata } = setup({ locale });
 
       await expect(metadata()).resolves.toEqual({
         alternates: {
           canonical,
-          languages: {
-            en: "/en/sample-store/cart",
-            es: "/sample-store/cart",
-            "x-default": "/sample-store/cart",
-          },
+          languages: { en: "/en/cart", es: "/cart", "x-default": "/cart" },
         },
         robots: { follow: true, index: false },
-        title,
+        title: { absolute: title },
       });
     }
   );
 
-  test("adds nothing for an address that is not a store: the 404 page titles itself", async () => {
-    const { metadata } = setup({ segment: "nobody" });
+  test("reads the store only once a request is there, so the build needs no database", async () => {
+    const { metadata } = setup();
 
-    await expect(metadata()).resolves.toEqual({});
+    await metadata();
+
+    expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
+    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
+      readStore.mock.invocationCallOrder[0] ?? 0
+    );
   });
 
-  test("answers 404 for a language the product does not speak, before any lookup", async () => {
+  test("keeps the cart's own title when the store's row is missing", async () => {
+    const { metadata } = setup({ store: null });
+
+    await expect(metadata()).resolves.toMatchObject({
+      title: { absolute: "Tu carrito" },
+    });
+  });
+
+  test("answers 404 for a language the product does not speak, before any read", async () => {
     const { metadata } = setup({ locale: "fr" });
 
     await expect(metadata()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(getStoreForPath).not.toHaveBeenCalled();
+    expect(readStore).not.toHaveBeenCalled();
   });
 });

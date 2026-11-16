@@ -37,14 +37,13 @@ export interface StoreCatalogProps {
   /** The page's heading: the selection's name, or "Catálogo". */
   heading: string;
   query: CatalogQuery;
-  storeSlug: string;
 }
 
 const CONTROL_CLASS =
   "h-11 border-2 border-store-contrast bg-store-background px-3 text-sm font-semibold text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground";
 
 /**
- * A store's catalog (FER-023): the heading and the share button, the search,
+ * The store's catalog (FER-023): the heading and the share button, the search,
  * the sort, the store's choices (a sidebar on a computer, a sheet on a
  * phone), the chosen ones as removable chips, and the grid, which loads the
  * next page as it scrolls (or with its button). Everything chosen lives in
@@ -56,7 +55,6 @@ function StoreCatalog({
   firstPage,
   heading,
   query,
-  storeSlug,
 }: StoreCatalogProps) {
   const { storefront } = useDictionary();
   const copy = storefront.catalog;
@@ -79,9 +77,8 @@ function StoreCatalog({
     firstPage,
     locale,
     query,
-    storeSlug,
   });
-  const href = (next: CatalogQuery) => catalogHref(storeSlug, locale, next);
+  const href = (next: CatalogQuery) => catalogHref(locale, next);
   const selection = href(query);
 
   // Moving focus to a page that just arrived, or to the retry when it
@@ -105,7 +102,7 @@ function StoreCatalog({
     }
   }, [products.isFetchNextPageError, products.items.length, selection]);
   const chosen = chosenChips(query, categories, filters);
-  const filterProps = { categories, copy, filters, locale, query, storeSlug };
+  const filterProps = { categories, copy, filters, locale, query };
 
   return (
     <div
@@ -145,7 +142,6 @@ function StoreCatalog({
           // dropping a search that was still waiting to be sent.
           key={href({ ...query, q: null })}
           query={query}
-          storeSlug={storeSlug}
         />
         <DialogPrimitive.Root onOpenChange={setSheetOpen} open={sheetOpen}>
           <DialogPrimitive.Trigger
@@ -257,17 +253,13 @@ function StoreCatalog({
                           name={item.title}
                           priceAmount={item.priceAmount}
                           productId={item.id}
-                          storeSlug={storeSlug}
                         />
                       ) : undefined
                     }
                     amount={item.priceAmount}
                     currency={item.currencyCode}
                     headingLevel="h2"
-                    href={localizePath(
-                      `/${storeSlug}/products/${item.slug}`,
-                      locale
-                    )}
+                    href={localizePath(`/products/${item.slug}`, locale)}
                     labels={cardLabels}
                     image={
                       item.cover

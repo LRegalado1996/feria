@@ -1,54 +1,71 @@
 import { notFound } from "next/navigation";
 import { ImageResponse } from "next/og";
 
-import { isLocale } from "@/lib/i18n/config";
+import { isLocale, type Locale } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { ownUrl } from "@/lib/seo/origin";
 import { formatPrice } from "@/lib/utils/format";
 import { readPublishedArticle } from "@/server/cache/catalog";
-import { getStoreForPath } from "@/server/cache/store";
+import { readStore } from "@/server/cache/store";
+import { STORE_THEME } from "@/styles/theme";
+
+import { couldBeArticle } from "./article-address";
 
 const size = { height: 630, width: 1200 };
 const contentType = "image/png";
 
 interface ArticleImageProps {
-  params: Promise<{ locale: string; slug: string; store: string }>;
+  params: Promise<{ locale: string; slug: string }>;
+}
+
+/**
+ * The store and the article at `slug`, or `null`. An address no article can
+ * have (the build's sample) stops before the store is read: the build has no
+ * database.
+ */
+async function load(locale: Locale, slug: string) {
+  if (!couldBeArticle(slug)) {
+    return null;
+  }
+
+  const store = await readStore();
+  const article = store
+    ? await readPublishedArticle(store, slug, locale)
+    : null;
+
+  return store && article ? { article, store } : null;
 }
 
 /** The card's alternative text: the article's name. */
 export async function generateImageMetadata({
   params,
 }: {
-  params: { locale: string; slug: string; store: string };
+  params: { locale: string; slug: string };
 }) {
-  const store = await getStoreForPath(params.store);
-  const article =
-    store && isLocale(params.locale)
-      ? await readPublishedArticle(store, params.slug, params.locale)
-      : null;
+  const found = isLocale(params.locale)
+    ? await load(params.locale, params.slug)
+    : null;
 
-  return [{ alt: article?.title ?? "", contentType, id: "card", size }];
+  return [{ alt: found?.article.title ?? "", contentType, id: "card", size }];
 }
 
 /**
  * An article's share card (FER-024): its first photo beside its name and
- * price, in the store's colors, so a link pasted into WhatsApp shows what
- * is for sale and for how much. The colors are the store's columns,
- * checked as hex colors when they were saved.
+ * price, in the store's colors (the theme file, FER-038), so a link pasted
+ * into WhatsApp shows what is for sale and for how much.
  */
 export default async function ArticleOpenGraphImage({
   params,
 }: ArticleImageProps) {
   const locale = await readLocale(params);
-  const { slug, store: segment } = await params;
-  const store = await getStoreForPath(segment);
-  const article = store
-    ? await readPublishedArticle(store, slug, locale)
-    : null;
+  const { slug } = await params;
+  const found = await load(locale, slug);
 
-  if (!(store && article)) {
+  if (!found) {
     notFound();
   }
+
+  const { article, store } = found;
 
   const [photo] = article.images;
   // Only a photo on this site: the renderer fetches it from the server.
@@ -57,8 +74,8 @@ export default async function ArticleOpenGraphImage({
   return new ImageResponse(
     <div
       style={{
-        background: store.colorBackground,
-        color: store.colorForeground,
+        background: STORE_THEME.background,
+        color: STORE_THEME.foreground,
         display: "flex",
         height: "100%",
         width: "100%",
@@ -68,7 +85,7 @@ export default async function ArticleOpenGraphImage({
           by address and covers the block with it. */}
       <div
         style={{
-          background: store.colorContrast,
+          background: STORE_THEME.contrast,
           backgroundImage: photoUrl ? `url("${photoUrl}")` : undefined,
           backgroundPosition: "center",
           backgroundSize: "cover",
@@ -102,8 +119,8 @@ export default async function ArticleOpenGraphImage({
         <div
           style={{
             alignSelf: "flex-start",
-            background: store.colorContrast,
-            color: store.colorBackground,
+            background: STORE_THEME.contrast,
+            color: STORE_THEME.background,
             display: "flex",
             fontSize: 48,
             fontWeight: 700,

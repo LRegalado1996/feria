@@ -29,7 +29,7 @@ vi.mock("@/lib/orpc/client", async () => {
 // The app's client reports a failed query; that has its own tests.
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
-const KEY = "feria:cart:lr-market";
+const KEY = "feria:cart";
 const TOKEN = "c".repeat(43);
 
 function makeProduct(
@@ -98,7 +98,7 @@ function setup({
   );
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
-  renderWithI18n(<StoreCart className="custom" storeSlug="lr-market" />, {
+  renderWithI18n(<StoreCart className="custom" />, {
     locale,
     wrapper,
   });
@@ -169,7 +169,6 @@ describe("StoreCart", () => {
     expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
       ids: [4, 9],
       locale: "en",
-      storeSlug: "lr-market",
     });
   });
 
@@ -313,13 +312,12 @@ describe("StoreCart", () => {
     expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
       ids: [4, 9],
       locale: "en",
-      storeSlug: "lr-market",
     });
   });
 
   test.each([
-    ["en", "Your cart is empty.", "Keep browsing", "/en/lr-market/products"],
-    ["es", "Tu carrito está vacío.", "Seguir mirando", "/lr-market/products"],
+    ["en", "Your cart is empty.", "Keep browsing", "/en/products"],
+    ["es", "Tu carrito está vacío.", "Seguir mirando", "/products"],
   ] as const)(
     "in %s, an empty cart says %j and links to the catalog",
     async (locale, text, link, href) => {
@@ -337,8 +335,8 @@ describe("StoreCart", () => {
   );
 
   test.each([
-    ["en", "/en/lr-market/orders/"],
-    ["es", "/lr-market/orders/"],
+    ["en", "/en/orders/"],
+    ["es", "/orders/"],
   ] as const)(
     "in %s, a placed order opens its page at %s and takes its articles out of the cart",
     async (locale, path) => {
@@ -360,7 +358,6 @@ describe("StoreCart", () => {
             { productId: 9, quantity: 1 },
           ],
           locale,
-          storeSlug: "lr-market",
         })
       );
       expect(storedCart()).toEqual([]);
@@ -407,9 +404,7 @@ describe("StoreCart", () => {
     answer.release();
 
     await waitFor(() => {
-      expect(push).toHaveBeenCalledExactlyOnceWith(
-        `/en/lr-market/orders/${TOKEN}`
-      );
+      expect(push).toHaveBeenCalledExactlyOnceWith(`/en/orders/${TOKEN}`);
     });
     expect(storedCart()).toEqual([makeLine(4, 1, 40_000), makeLine(11, 1)]);
   });
@@ -453,8 +448,8 @@ describe("StoreCart", () => {
     // The first answer and the retry; the failed read went to the error
     // handler in between.
     expect(cartProducts.mock.calls).toEqual([
-      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
-      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
+      [{ ids: [4, 9], locale: "en" }],
+      [{ ids: [4, 9], locale: "en" }],
     ]);
   });
 
@@ -515,7 +510,6 @@ describe("StoreCart", () => {
       expect(cartProducts).toHaveBeenLastCalledWith({
         ids: [4, 9],
         locale: "en",
-        storeSlug: "lr-market",
       });
 
       await act(async () => {
@@ -567,7 +561,6 @@ describe("StoreCart", () => {
     expect(cartProducts).toHaveBeenLastCalledWith({
       ids: [4, 11],
       locale: "en",
-      storeSlug: "lr-market",
     });
     expect(submit()).toBeDisabled();
     expect(submit()).toHaveAccessibleDescription(
@@ -649,9 +642,7 @@ describe("StoreCart", () => {
     await user.click(submit());
 
     await waitFor(() => {
-      expect(push).toHaveBeenCalledExactlyOnceWith(
-        `/en/lr-market/orders/${TOKEN}`
-      );
+      expect(push).toHaveBeenCalledExactlyOnceWith(`/en/orders/${TOKEN}`);
     });
     expect(create).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -662,8 +653,8 @@ describe("StoreCart", () => {
       })
     );
     expect(cartProducts.mock.calls).toEqual([
-      [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
-      [{ ids: [9], locale: "en", storeSlug: "lr-market" }],
+      [{ ids: [4, 9], locale: "en" }],
+      [{ ids: [9], locale: "en" }],
     ]);
   });
 
@@ -738,7 +729,6 @@ describe("StoreCart", () => {
       expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
         ids: [9],
         locale: "en",
-        storeSlug: "lr-market",
       });
     });
     // The lines' place says the prices are on their way.
@@ -850,8 +840,8 @@ describe("StoreCart", () => {
 
     await waitFor(() => {
       expect(cartProducts.mock.calls).toEqual([
-        [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
-        [{ ids: [4, 9], locale: "en", storeSlug: "lr-market" }],
+        [{ ids: [4, 9], locale: "en" }],
+        [{ ids: [4, 9], locale: "en" }],
       ]);
     });
     expect(push).not.toHaveBeenCalled();
@@ -874,7 +864,7 @@ describe("StoreCart before hydration", () => {
 
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
       <Providers>
-        <StoreCart storeSlug="lr-market" />
+        <StoreCart />
       </Providers>,
       { clientNowMs: 1000, serverNowMs: 0 }
     );

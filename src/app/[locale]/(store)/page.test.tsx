@@ -1,16 +1,35 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 
-import StoreHome, { ensureStatic, generateMetadata, instant } from "./page";
+import StoreHome, { generateMetadata, StoreHomeContent } from "./page";
 
-const { getStoreForPath } = vi.hoisted(() => ({
-  getStoreForPath: vi.fn<(segment: string) => Promise<PublicStore | null>>(),
+const { connection, readStore } = vi.hoisted(() => ({
+  connection: vi.fn(async () => undefined),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
 }));
 
-// The cached read has its own tests; here it answers by the segment it got.
-vi.mock("@/server/cache/store", () => ({ getStoreForPath }));
+// `server-only` throws on import outside a React Server Components build.
+vi.mock("server-only", () => ({}));
+
+vi.mock("next/server", () => ({ connection }));
+
+// The cached read has its own tests; here it answers what the test says.
+vi.mock("@/server/cache/store", () => ({ readStore }));
+
+// The footer has its own tests; here it only shows whose it is.
+vi.mock("./store-page-footer", () => ({
+  StorePageFooter: ({
+    locale,
+    store,
+  }: {
+    locale: Locale;
+    store: PublicStore;
+  }) => <footer data-testid="footer">{`${store.name} ${locale}`}</footer>,
+}));
 
 const SPANISH = {
   description: "Anillos y cadenas hechos a mano.",
@@ -25,17 +44,10 @@ const ENGLISH = {
 
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
-    colorAccent: "#ff8a3d",
-    colorBackground: "#fff4e6",
-    colorContrast: "#3d1f47",
-    colorForeground: "#2b1a12",
-    colorSurface: "#ffffff",
     currencyCode: "USD",
     id: 7,
     instagramUrl: null,
-    logoUrl: null,
     name: "Sample Store",
-    slug: "sample-store",
     tiktokUrl: null,
     translations: [SPANISH, ENGLISH],
     whatsappNumber: null,
@@ -43,36 +55,65 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   };
 }
 
-async function makeParams(locale: string, store = "sample-store") {
-  return await Promise.resolve({ locale, store });
-}
-
-function answerWith(store: PublicStore | null) {
-  getStoreForPath.mockImplementation(
-    async (asked) =>
-      await Promise.resolve(store && asked === store.slug ? store : null)
-  );
+async function makeParams(locale: string) {
+  return await Promise.resolve({ locale });
 }
 
 async function setup({
   locale = "es",
   store = makeStore(),
-}: { locale?: string; store?: PublicStore } = {}) {
-  answerWith(store);
+}: { locale?: Locale; store?: PublicStore | null } = {}) {
+  readStore.mockResolvedValue(store);
 
-  render(await StoreHome({ params: makeParams(locale) }));
+  render(await StoreHomeContent({ locale }));
 
   return { page: screen.getByTestId("store-home") };
 }
 
 describe("StoreHome", () => {
-  test("introduces the store by name in the page's h1, inside its main landmark", async () => {
+  test.each([
+    ["es", "Cargando"],
+    ["en", "Loading"],
+  ] as const)(
+    "in %s, streams the home behind an empty, busy main, reading nothing yet",
+    async (locale, loading) => {
+      const page: ReactElement<{
+        children: ReactElement<{ locale: Locale }>;
+        fallback: ReactNode;
+      }> = await StoreHome({ params: makeParams(locale) });
+
+      render(page.props.fallback);
+
+      expect(screen.getByTestId("store-home-skeleton")).toHaveAttribute(
+        "aria-busy",
+        "true"
+      );
+      expect(screen.getByRole("status")).toHaveTextContent(loading);
+      expect(page.props.children.props).toEqual({ locale });
+      expect(readStore).not.toHaveBeenCalled();
+    }
+  );
+
+  test("answers 404 for a language the product does not speak, before any read", async () => {
+    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
+      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    );
+    expect(readStore).not.toHaveBeenCalled();
+  });
+});
+
+describe("StoreHomeContent", () => {
+  test("introduces the store by name in the page's h1, inside its main landmark, then its footer", async () => {
     const { page } = await setup();
 
     expect(page.tagName).toBe("MAIN");
     expect(page).toContainElement(screen.getByRole("heading", { level: 1 }));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Sample Store$/
+      /^Sample Store$/u
+    );
+    expect(screen.getByTestId("footer")).toHaveTextContent("Sample Store es");
+    expect(page.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
     );
   });
 
@@ -107,64 +148,67 @@ describe("StoreHome", () => {
   test("a store with no texts yet shows its name and nothing empty", async () => {
     const { page } = await setup({ store: makeStore({ translations: [] }) });
 
-    expect(page).toHaveTextContent(/^Sample Store$/);
+    expect(page).toHaveTextContent(/^Sample Store$/u);
   });
 
-  test("answers 404 for an address that is not an active store", async () => {
-    answerWith(null);
+  test("waits for a request before reading the store, so the build needs no database", async () => {
+    await setup();
 
-    await expect(
-      StoreHome({ params: makeParams("es", "nobody") })
-    ).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
-    expect(getStoreForPath).toHaveBeenCalledExactlyOnceWith("nobody");
-  });
-
-  test("answers 404 for a language the product does not speak, before any lookup", async () => {
-    answerWith(makeStore());
-
-    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
-      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
+    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
+      readStore.mock.invocationCallOrder[0] ?? 0
     );
-    expect(getStoreForPath).not.toHaveBeenCalled();
   });
 
-  test("is complete static output, so the lookup runs before the status is sent", () => {
-    expect(ensureStatic).toBe("navigation");
-  });
+  test("answers the not-found page when the store's row is missing", async () => {
+    readStore.mockResolvedValue(null);
 
-  test("says it blocks on purpose, so the development check does not flag every visit", () => {
-    expect(instant).toBe(false);
+    await expect(StoreHomeContent({ locale: "es" })).rejects.toMatchObject({
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
   });
 });
 
 describe("generateMetadata", () => {
   test.each([
-    ["es", "/sample-store", SPANISH.description],
-    ["en", "/en/sample-store", ENGLISH.description],
+    ["es", "/", SPANISH],
+    ["en", "/en", ENGLISH],
   ] as const)(
-    "titles the %s page after the store, with its description and both addresses",
-    async (locale, canonical, description) => {
-      answerWith(makeStore());
+    "titles the %s home after the store, with its description, its share card and both addresses",
+    async (locale, canonical, text) => {
+      readStore.mockResolvedValue(makeStore());
 
       await expect(
         generateMetadata({ params: makeParams(locale) })
       ).resolves.toEqual({
         alternates: {
           canonical,
-          languages: {
-            en: "/en/sample-store",
-            es: "/sample-store",
-            "x-default": "/sample-store",
-          },
+          languages: { en: "/en", es: "/", "x-default": "/" },
         },
-        description,
+        description: text.description,
+        openGraph: {
+          description: text.tagline,
+          siteName: "Sample Store",
+          type: "website",
+        },
         title: { absolute: "Sample Store" },
       });
     }
   );
 
+  test("reads the store only once a request is there", async () => {
+    readStore.mockResolvedValue(makeStore());
+
+    await generateMetadata({ params: makeParams("es") });
+
+    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
+      readStore.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
   test("leaves the description out for a store with no texts", async () => {
-    answerWith(makeStore({ translations: [] }));
+    readStore.mockResolvedValue(makeStore({ translations: [] }));
 
     const metadata = await generateMetadata({ params: makeParams("es") });
 
@@ -172,11 +216,11 @@ describe("generateMetadata", () => {
     expect(metadata.description).toBeUndefined();
   });
 
-  test("adds nothing for an address that is not a store: the 404 page titles itself", async () => {
-    answerWith(null);
+  test("adds nothing when the store's row is missing: the 404 page titles itself", async () => {
+    readStore.mockResolvedValue(null);
 
     await expect(
-      generateMetadata({ params: makeParams("es", "nobody") })
+      generateMetadata({ params: makeParams("es") })
     ).resolves.toEqual({});
   });
 });

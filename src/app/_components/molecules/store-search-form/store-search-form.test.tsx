@@ -16,7 +16,6 @@ function setup({
       copy={DICTIONARIES[locale].storefront.shell}
       id={id}
       locale={locale}
-      storeSlug="lr-market"
     />
   );
 
@@ -38,8 +37,8 @@ function setup({
 
 describe("StoreSearchForm", () => {
   test.each([
-    ["en", "/en/lr-market/products", "Search the store", "Search", "Search…"],
-    ["es", "/lr-market/products", "Buscar en la tienda", "Buscar", "Buscar…"],
+    ["en", "/en/products", "Search the store", "Search", "Search…"],
+    ["es", "/products", "Buscar en la tienda", "Buscar", "Buscar…"],
   ] as const)(
     "in %s, sends a GET to %s with the text as q",
     (locale, action, label, submit, placeholder) => {

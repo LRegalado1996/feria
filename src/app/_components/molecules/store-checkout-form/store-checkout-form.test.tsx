@@ -111,7 +111,6 @@ function setup({
       items={current}
       onPlaced={onPlaced}
       onStale={onStale}
-      storeSlug="lr-market"
     />
   );
   const { rerender } = renderWithI18n(form(items), { locale, wrapper });
@@ -246,7 +245,6 @@ describe("StoreCheckoutForm", () => {
           locale: "en",
           note: "Sin bolsa",
           requestKey,
-          storeSlug: "lr-market",
         },
       ]);
       expect(screen.queryByTestId("store-checkout-error")).toBeNull();
@@ -361,9 +359,7 @@ describe("StoreCheckoutForm", () => {
     const [first, second] = requestKeys();
     expect(first).toMatch(UUID_V4);
     expect(second).toBe(first);
-    expect(
-      window.sessionStorage.getItem("feria:checkout:lr-market")
-    ).toBeNull();
+    expect(window.sessionStorage.getItem("feria:checkout")).toBeNull();
   });
 
   test("a key that cannot be drawn is a failure that frees the button, sending nothing", async () => {
@@ -680,7 +676,6 @@ describe("StoreCheckoutForm before hydration", () => {
           items={makeItems()}
           onPlaced={() => undefined}
           onStale={() => undefined}
-          storeSlug="lr-market"
         />
       </Providers>,
       { clientNowMs: 1000, serverNowMs: 0 }
