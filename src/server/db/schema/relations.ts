@@ -14,6 +14,7 @@ import {
   productImageTranslation,
   productTranslation,
 } from "./catalog";
+import { customerOrder, orderItem, orderStatusEvent } from "./order";
 import { post } from "./post";
 import { store, storeTranslation } from "./store";
 import { storeMember } from "./store-member";
@@ -181,6 +182,39 @@ export const productAttributeValueRelations = relations(
     value: one(attributeValue, {
       fields: [productAttributeValue.attributeValueId],
       references: [attributeValue.id],
+    }),
+  })
+);
+
+export const customerOrderRelations = relations(
+  customerOrder,
+  ({ many, one }) => ({
+    items: many(orderItem),
+    statusEvents: many(orderStatusEvent),
+    store: one(store, {
+      fields: [customerOrder.storeId],
+      references: [store.id],
+    }),
+  })
+);
+
+export const orderItemRelations = relations(orderItem, ({ one }) => ({
+  order: one(customerOrder, {
+    fields: [orderItem.orderId],
+    references: [customerOrder.id],
+  }),
+}));
+
+export const orderStatusEventRelations = relations(
+  orderStatusEvent,
+  ({ one }) => ({
+    changedBy: one(user, {
+      fields: [orderStatusEvent.changedById],
+      references: [user.id],
+    }),
+    order: one(customerOrder, {
+      fields: [orderStatusEvent.orderId],
+      references: [customerOrder.id],
     }),
   })
 );

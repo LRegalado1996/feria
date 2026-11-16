@@ -19,6 +19,7 @@ test("mounts each domain router at its own key, and nothing else", () => {
     "attribute",
     "catalog",
     "category",
+    "order",
     "post",
     "product",
     "store",
