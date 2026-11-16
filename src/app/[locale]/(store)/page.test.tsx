@@ -59,6 +59,29 @@ async function makeParams(locale: string) {
   return await Promise.resolve({ locale });
 }
 
+/**
+ * The request has not arrived yet: the next `connection()` stays pending
+ * until `arrive()` lets it through.
+ */
+function holdRequest() {
+  let arrive: () => void = () => undefined;
+  const arrived = new Promise<undefined>((resolve) => {
+    arrive = () => {
+      resolve(undefined);
+    };
+  });
+  connection.mockImplementationOnce(async () => await arrived);
+
+  return { arrive };
+}
+
+/** Lets every callback already queued run: a timer fires after them all. */
+async function settle() {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 async function setup({
   locale = "es",
   store = makeStore(),
@@ -152,12 +175,21 @@ describe("StoreHomeContent", () => {
   });
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
-    await setup();
+    readStore.mockResolvedValue(makeStore());
+    const request = holdRequest();
+
+    const content = StoreHomeContent({ locale: "es" });
+    await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).not.toHaveBeenCalled();
+
+    request.arrive();
+    render(await content);
+
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      readStore.mock.invocationCallOrder[0] ?? 0
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Sample Store$/u
     );
   });
 
@@ -199,12 +231,20 @@ describe("generateMetadata", () => {
 
   test("reads the store only once a request is there", async () => {
     readStore.mockResolvedValue(makeStore());
+    const request = holdRequest();
 
-    await generateMetadata({ params: makeParams("es") });
+    const metadata = generateMetadata({ params: makeParams("es") });
+    await settle();
 
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      readStore.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).not.toHaveBeenCalled();
+
+    request.arrive();
+
+    await expect(metadata).resolves.toMatchObject({
+      title: { absolute: "Sample Store" },
+    });
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("leaves the description out for a store with no texts", async () => {
