@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import type { UserRole } from "@/lib/schemas/access";
+import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
 import { account, session, user } from "@/server/db/schema";
@@ -33,14 +35,24 @@ function uniqueEmail() {
   return `auth-${randomUUID()}@example.test`;
 }
 
-/** Signs up a new user through Better Auth and registers it for cleanup. */
-async function signUp({ email = uniqueEmail(), name = "Auth Test User" } = {}) {
-  const result = await auth.api.signUpEmail({
-    body: { email, name, password: PASSWORD },
+/**
+ * Creates a login the way the app does now that sign-up is closed (FER-009),
+ * and registers it for cleanup.
+ */
+async function createLogin({
+  email = uniqueEmail(),
+  name = "Auth Test User",
+  role = "member",
+}: { email?: string; name?: string; role?: UserRole } = {}) {
+  const created = await createAccount(auth, db, {
+    email,
+    name,
+    password: PASSWORD,
+    role,
   });
-  createdUserIds.push(result.user.id);
+  createdUserIds.push(created.id);
 
-  return { ...result, email };
+  return created;
 }
 
 async function signIn(email: string, password = PASSWORD) {
@@ -61,70 +73,116 @@ async function credentialOf(userId: string) {
 }
 
 describe("sign-up", () => {
-  test("stores the user as given and returns it", async () => {
-    const { email, user: created } = await signUp({ name: "Ada" });
+  test("is closed: Better Auth refuses it even from the server, creating nobody", async () => {
+    const email = uniqueEmail();
 
-    expect(created).toMatchObject({ email, name: "Ada" });
+    await expect(
+      auth.api.signUpEmail({
+        body: { email, name: "Visitor", password: PASSWORD },
+      })
+    ).rejects.toMatchObject({
+      body: {
+        code: "EMAIL_PASSWORD_SIGN_UP_DISABLED",
+        message: "Email and password sign up is not enabled",
+      },
+      statusCode: 400,
+    });
+    expect(
+      await db.query.user.findFirst({ where: eq(user.email, email) })
+    ).toBeUndefined();
+  });
+});
+
+describe("createAccount", () => {
+  test("stores the user as given, with its role, and returns it", async () => {
+    const created = await createLogin({ name: "Ada", role: "superadmin" });
+
     expect(
       await db.query.user.findFirst({ where: eq(user.id, created.id) })
-    ).toMatchObject({ id: created.id, email, name: "Ada" });
+    ).toMatchObject({
+      email: created.email,
+      id: created.id,
+      name: "Ada",
+      role: "superadmin",
+    });
+  });
+
+  test("a user stored without a role is a member, by the database's default", async () => {
+    const id = `role-default-${randomUUID()}`;
+    await db
+      .insert(user)
+      .values({ email: uniqueEmail(), id, name: "No Role Given" });
+    createdUserIds.push(id);
+
+    expect(
+      await db.query.user.findFirst({
+        columns: { role: true },
+        where: eq(user.id, id),
+      })
+    ).toEqual({ role: "member" });
   });
 
   test("stores a credential account whose password is a salted hash", async () => {
-    const first = await signUp();
-    const second = await signUp();
+    const first = await createLogin();
+    const second = await createLogin();
 
-    const firstCredential = await credentialOf(first.user.id);
-    const secondCredential = await credentialOf(second.user.id);
+    const firstCredential = await credentialOf(first.id);
+    const secondCredential = await credentialOf(second.id);
 
     expect(firstCredential).toMatchObject({
       providerId: "credential",
-      accountId: first.user.id,
+      accountId: first.id,
     });
     expect(firstCredential?.password).not.toContain(PASSWORD);
     // The same password, hashed twice: a salt makes the hashes differ.
     expect(firstCredential?.password).not.toBe(secondCredential?.password);
   });
 
-  test("signs the new user in with a session that lasts the default lifetime", async () => {
-    vi.setSystemTime(NOW);
-    const { token, user: created } = await signUp();
+  test("opens no session: the person signs in themselves", async () => {
+    const created = await createLogin();
 
+    expect(await sessionTokensOf(created.id)).toEqual(new Set());
+  });
+
+  test("refuses an email that already has a login", async () => {
+    const { email } = await createLogin();
+
+    await expect(createLogin({ email })).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "An account with that email already exists",
+    });
+  });
+});
+
+describe("sign-in", () => {
+  test("signs a created login in with a session that lasts the default lifetime", async () => {
+    vi.setSystemTime(NOW);
+    const { email, id } = await createLogin();
+
+    const signedIn = await signIn(email);
+
+    expect(signedIn.user.id).toBe(id);
     expect(
-      await db.query.session.findMany({ where: eq(session.userId, created.id) })
+      await db.query.session.findMany({ where: eq(session.userId, id) })
     ).toEqual([
       expect.objectContaining({
-        token,
+        token: signedIn.token,
         createdAt: NOW,
         expiresAt: new Date(NOW.getTime() + SESSION_LIFETIME_MS),
       }),
     ]);
   });
 
-  test("refuses an email that is already registered", async () => {
-    const { email } = await signUp();
-
-    await expect(signUp({ email, name: "Someone Else" })).rejects.toThrow(
-      "User already exists. Use another email."
-    );
-  });
-});
-
-describe("sign-in", () => {
-  test("signs in the same user with a session of its own", async () => {
-    const { email, token: signUpToken, user: created } = await signUp();
+  test("puts the role on the session, where pages route by it", async () => {
+    const { email } = await createLogin({ role: "superadmin" });
 
     const signedIn = await signIn(email);
 
-    expect(signedIn.user.id).toBe(created.id);
-    expect(signedIn.token).not.toBe(signUpToken);
-    expect(await sessionTokensOf(created.id)).toEqual(
-      new Set([signUpToken, signedIn.token])
-    );
+    expect(signedIn.user).toMatchObject({ role: "superadmin" });
   });
 
   test("refuses a wrong password", async () => {
-    const { email } = await signUp();
+    const { email } = await createLogin();
 
     await expect(signIn(email, "wrong-password-456")).rejects.toThrow(
       "Invalid email or password"

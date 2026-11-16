@@ -13,10 +13,29 @@ describe("auth config", () => {
     expect(auth.options.rateLimit?.storage).toBe("database");
   });
 
-  test("allows 10 sign-in and 10 sign-up attempts per 10 seconds", () => {
+  test("allows 10 sign-in attempts a minute, and has no sign-up to limit", () => {
     expect(auth.options.rateLimit?.customRules).toEqual({
-      "/sign-in/email": { window: 10, max: 10 },
-      "/sign-up/email": { window: 10, max: 10 },
+      "/sign-in/email": { window: 60, max: 10 },
+    });
+  });
+
+  test("takes the sign-up path out of Better Auth's router", () => {
+    expect(auth.options.disabledPaths).toEqual(["/sign-up/email"]);
+  });
+
+  test("closes sign-up: logins are created on the server only", () => {
+    expect(auth.options.emailAndPassword).toEqual({
+      enabled: true,
+      disableSignUp: true,
+    });
+  });
+
+  test("declares the role as a field Better Auth never takes from a request", () => {
+    expect(auth.options.user?.additionalFields?.role).toEqual({
+      type: ["superadmin", "member"],
+      required: true,
+      defaultValue: "member",
+      input: false,
     });
   });
 

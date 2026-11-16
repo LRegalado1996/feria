@@ -110,6 +110,9 @@ export default defineConfig({
         // `pnpm db:seed`'s entry: it only wires the app's db and auth into
         // `seed.ts`, which is tested, and closes the pool.
         "src/server/db/run-seed.ts",
+        // `pnpm db:create-superadmin`'s entry, the same kind of wiring over
+        // the tested `create-superadmin.ts`.
+        "src/server/db/run-create-superadmin.ts",
       ],
       // Unconditional: the suite runs unsharded, so every `--coverage` run
       // reports on the whole project and the gate always means the same thing.

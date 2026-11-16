@@ -3,13 +3,18 @@ import {
   boolean,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
 
+import { USER_ROLES } from "@/lib/schemas/access";
+
 // Better Auth's tables. Their `text` ids are set by Better Auth; every other
 // convention (timestamptz, `onDelete`, indexed foreign keys) is the house one.
+
+export const userRoleEnum = pgEnum("user_role", USER_ROLES);
 
 export const user = pgTable("user", {
   id: text().primaryKey(),
@@ -17,6 +22,11 @@ export const user = pgTable("user", {
   email: text().notNull().unique(),
   emailVerified: boolean().notNull().default(false),
   image: text(),
+  // FER-009. Declared to Better Auth as an additional field it never takes
+  // from a request (`input: false`), so nobody signs themselves up as a
+  // superadmin. The safe default: a login reaches nothing until it is a
+  // member of a store.
+  role: userRoleEnum().notNull().default("member"),
   createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
     .notNull()
     .defaultNow(),

@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
+import { USER_ROLES } from "@/lib/schemas/access";
 import { db } from "@/server/db";
 import * as schema from "@/server/db/schema";
 
@@ -31,12 +32,31 @@ export const auth = betterAuth({
   trustedOrigins: getTrustedOrigins(baseURL),
   // Better Auth's default logger prints raw errors, session tokens included.
   logger: betterAuthLogger,
+  // Closed sign-up (FER-009): also out of Better Auth's own router and the
+  // OpenAPI reference. The route answers 404 for every other spelling.
+  disabledPaths: ["/sign-up/email"],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
   }),
   emailAndPassword: {
     enabled: true,
+    // Closed sign-up (FER-009): logins are created by a superadmin or a store
+    // member through `createAccount`, never by a visitor. The HTTP route is
+    // also answered 404 (`src/app/api/auth/[...all]/route.ts`).
+    disableSignUp: true,
+  },
+  user: {
+    additionalFields: {
+      // Read onto the session so pages can route by it; never taken from a
+      // request. Procedures re-read it from the database before trusting it.
+      role: {
+        type: [...USER_ROLES],
+        required: true,
+        defaultValue: "member",
+        input: false,
+      },
+    },
   },
   session: {
     // Every oRPC request resolves the session (`createORPCContext`); the
@@ -57,12 +77,10 @@ export const auth = betterAuth({
     // instance, so each one would grant its own quota.
     storage: "database",
     customRules: {
+      // Ten tries a minute per IP: the fair's staff can share one Wi-Fi and
+      // mistype on a phone, and it is still far too few to guess a password.
       "/sign-in/email": {
-        window: 10,
-        max: 10,
-      },
-      "/sign-up/email": {
-        window: 10,
+        window: 60,
         max: 10,
       },
     },

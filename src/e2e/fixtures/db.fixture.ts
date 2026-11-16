@@ -164,9 +164,6 @@ export const test = userTest.extend<DbFixture>({
         await db.delete(store).where(inArray(store.id, seededStoreIds));
         // Cascades to the users' sessions, accounts and posts.
         await db.delete(user).where(inArray(user.id, seededUserIds));
-        await db
-          .delete(user)
-          .where(inArray(user.email, createdRows.userEmails));
         await pool.end();
       }
 
