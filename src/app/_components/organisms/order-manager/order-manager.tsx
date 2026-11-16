@@ -46,17 +46,21 @@ import {
 
 type OrderRow = OrdersPage["items"][number];
 
-/** A row's columns, shared by the column names above the rows from `lg` up. */
+/**
+ * A row's columns, shared by the column names above the rows from `xl` up.
+ * The fixed ones take 36rem: beside the 16rem sidebar, a narrower window
+ * left the customer's column 14 px at 1024 px.
+ */
 const ORDER_ROW_COLUMNS =
-  "grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[8rem_minmax(0,1fr)_9rem_11rem_7rem_1rem]";
+  "grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[8rem_minmax(0,1fr)_9rem_11rem_7rem_1rem]";
 
 /**
- * Where a row's parts sit: a card below `lg` (the code and the total, the
+ * Where a row's parts sit: a card below `xl` (the code and the total, the
  * customer and their phone, the status and the age), one line of columns
- * from `lg` up. The parts keep the order a screen reader says them in.
+ * from `xl` up. The parts keep the order a screen reader says them in.
  */
 const ORDER_ROW_AREAS =
-  "[grid-template-areas:'code_total'_'who_who'_'phone_phone'_'status_time'] lg:[grid-template-areas:'code_who_time_status_total_chevron'_'code_phone_time_status_total_chevron']";
+  "[grid-template-areas:'code_total'_'who_who'_'phone_phone'_'status_time'] xl:[grid-template-areas:'code_who_time_status_total_chevron'_'code_phone_time_status_total_chevron']";
 
 export interface OrderManagerProps {
   /** The status and search in the address, already read and checked. */
@@ -265,7 +269,7 @@ function OrderManager({ query, renderedAt }: OrderManagerProps) {
           >
             <span className="sr-only">{common.loading}</span>
             {["first", "second", "third"].map((row) => (
-              <Skeleton className="h-28 w-full rounded-lg lg:h-14" key={row} />
+              <Skeleton className="h-28 w-full rounded-lg xl:h-14" key={row} />
             ))}
           </div>
         ) : null}
@@ -274,13 +278,13 @@ function OrderManager({ query, renderedAt }: OrderManagerProps) {
           <OrderListEmpty query={query} />
         ) : null}
         {items && items.length > 0 ? (
-          // From `lg` up one card of rows under their column names; below
+          // From `xl` up one card of rows under their column names; below
           // it every row is a card of its own.
-          <div className="lg:overflow-hidden lg:rounded-lg lg:border lg:bg-card">
+          <div className="xl:overflow-hidden xl:rounded-lg xl:border xl:bg-card">
             <div
               aria-hidden="true"
               className={cn(
-                "hidden h-10 items-center gap-x-4 border-b bg-muted/50 px-4 text-xs text-muted-foreground lg:grid",
+                "hidden h-10 items-center gap-x-4 border-b bg-muted/50 px-4 text-xs text-muted-foreground xl:grid",
                 ORDER_ROW_COLUMNS
               )}
               data-testid="order-list-columns"
@@ -293,7 +297,7 @@ function OrderManager({ query, renderedAt }: OrderManagerProps) {
             </div>
             <ul
               aria-label={copy.list}
-              className="space-y-2 lg:space-y-0 lg:divide-y"
+              className="space-y-2 xl:space-y-0 xl:divide-y"
               data-testid="order-list"
               ref={list}
             >
@@ -465,13 +469,13 @@ function OrderListRow({
     <li data-testid={`order-row-${order.code}`}>
       <Link
         className={cn(
-          "grid gap-x-4 gap-y-1 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset lg:rounded-none lg:border-0 lg:bg-transparent lg:px-4 lg:py-3",
+          "grid gap-x-4 gap-y-1 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset xl:rounded-none xl:border-0 xl:bg-transparent xl:px-4 xl:py-3",
           ORDER_ROW_COLUMNS,
           ORDER_ROW_AREAS
         )}
         href={orderPath(order.id, locale, from)}
       >
-        <span className="flex min-w-0 flex-wrap items-center gap-2 [grid-area:code] lg:self-center">
+        <span className="flex min-w-0 flex-wrap items-center gap-2 [grid-area:code] xl:self-center">
           <span className="font-mono text-sm font-semibold">{order.code}</span>
           {isNew ? (
             <span
@@ -484,28 +488,28 @@ function OrderListRow({
           ) : null}
         </span>
         <OrderStatusBadge
-          className="mt-2 self-center justify-self-start [grid-area:status] lg:mt-0"
+          className="mt-2 self-center justify-self-start [grid-area:status] xl:mt-0"
           status={order.status}
         />
-        <span className="mt-1 min-w-0 truncate text-base font-medium [grid-area:who] lg:mt-0 lg:self-end lg:text-sm">
+        <span className="mt-1 min-w-0 truncate text-base font-medium [grid-area:who] xl:mt-0 xl:self-end xl:text-sm">
           {order.customerName}
         </span>
-        <span className="self-center text-right text-base font-semibold tabular-nums [grid-area:total] lg:text-sm">
+        <span className="self-center text-right text-base font-semibold tabular-nums [grid-area:total] xl:text-sm">
           {formatPrice(order.totalAmount, order.currencyCode, locale)}
         </span>
         <time
-          className="mt-2 self-center text-right text-xs text-muted-foreground [grid-area:time] lg:mt-0 lg:text-left"
+          className="mt-2 self-center text-right text-xs text-muted-foreground [grid-area:time] xl:mt-0 xl:text-left"
           dateTime={createdAt.toISOString()}
         >
           {formatRelativeTime(createdAt, now, locale)}
         </time>
         <OrderPhoneVerified
-          className="text-xs text-muted-foreground [grid-area:phone] lg:self-start"
+          className="text-xs text-muted-foreground [grid-area:phone] xl:self-start"
           verified={order.phoneVerified}
         />
         <ChevronRight
           aria-hidden="true"
-          className="hidden size-4 self-center text-muted-foreground [grid-area:chevron] lg:block"
+          className="hidden size-4 self-center text-muted-foreground [grid-area:chevron] xl:block"
         />
       </Link>
     </li>

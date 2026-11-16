@@ -807,12 +807,12 @@ describe("OrderManager", () => {
       "Status",
       "Total",
     ]);
-    // Shown from lg up, where the rows are lines of columns; below it each
+    // Shown from xl up, where the rows are lines of columns; below it each
     // row is a card of its own.
-    expect(columns).toHaveClass("hidden", "lg:grid");
+    expect(columns).toHaveClass("hidden", "xl:grid");
     expect(
       within(screen.getByTestId("order-row-AB3CD")).getByRole("link")
-    ).toHaveClass("rounded-lg", "border", "bg-card", "lg:border-0");
+    ).toHaveClass("rounded-lg", "border", "bg-card", "xl:border-0");
   });
 
   test("the sound is a toggle, off at first, remembered once turned on", async () => {
