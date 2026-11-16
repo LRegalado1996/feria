@@ -76,7 +76,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-026](FER-026-cart-and-checkout.md)           | Cart and checkout                   | P0       | in progress |
 | [FER-027](FER-027-order-management.md)            | Order management in the admin       | P0       | done        |
 | [FER-028](FER-028-whatsapp-phone-verification.md) | Phone verification by WhatsApp code | P2       | todo        |
-| [FER-039](FER-039-storefront-redesign.md)         | Storefront redesign                 | P0       | todo        |
+| [FER-039](FER-039-storefront-redesign.md)         | Storefront redesign                 | P0       | done        |
 
 ### M5 Metrics
 

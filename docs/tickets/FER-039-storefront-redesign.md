@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-038, FER-040 (stacked after it)
 
 ## Goal
@@ -40,6 +40,22 @@ The home's sections and their content (FER-020, FER-022). Cutting the background
 - Storefront rules that already hold keep holding: server-rendered shell, 44 px touch targets, visible focus, reduced motion, one `h1`.
 - Existing storefront e2e specs pass against the new markup; new ones cover the search panel and the filter panel, by keyboard too.
 - The PR carries one image composing every changed screen, phone and desktop.
+
+## Outcome
+
+- **Palette** (`src/styles/theme.ts`): the page white, the article tile `#f3f3f2` (`store-surface`), ink `#15160f`, moss `#262a1d` (`store-contrast`: the header, the footer, the search panel, the phone menu, the order's banner) and the lime. Its test holds eight pairs at 4.5:1; the lime on the moss is now held as small text (11.4:1), since the header's links use it. The logo files, the share card and the home-screen icon follow: the share card and the icon now sit on the moss.
+- **Type**: Anybody through `next/font`, variable with its width axis, which the theme sets to 135% on `font-display`; always `font-display font-extrabold uppercase`. Anton is gone, and so are `tracking-display`, `store-display-title` and the `store-eyebrow` utility. New fluid sizes for a page's title, an article's name, a banner's title and the search field.
+- **Frame**: every store page renders `organisms/store-frame` (the bar, the sticky moss header, the page) and its footer. The group's layout is only the canvas now: the bar's words (the store's tagline until FER-020) and the header's categories come from the database, which the prerendered layout, an article's static page included, must not read. A page read per request hands the frame promises (`streamedShell`: the header stays in the static shell, an empty bar holds its place, the categories fill in); an article and an order hand it what they read (`shellOf`, the categories through the cached `readCategories`). Adding and reordering a category now drop the cached catalog too (`writeToCatalog`), as every store page lists them. The skip link focuses the content of its own frame, since a page left behind stays in the document.
+- **Header**: from 1280 px "Catálogo" and up to five categories while they fit, the full logo in the middle, the language, the search and the cart; below, a menu button that opens a moss panel (full screen on a phone, from the left on a tablet) with home, the catalog, every category and the language. The search icon opens `molecules/store-search-panel`, a modal panel under the header with one field, a plain GET form to `/products?q=`; before the script runs, the icon opens the browser's own popover around the same form (`popovertarget`), so the search works from the first paint.
+- **Logo**: the full logo in the header (40 px on a phone, 50 px on a computer), the footer and the coming-soon page; the mark only in the tab and home-screen icons. `docs/brand/brand.md` says so. The admin and its sign-in are FER-040's.
+- **Carousels**: shadcn's Carousel, added with `pnpm dlx shadcn@latest add carousel` and moved to `molecules/carousel` (localized `aria-roledescription`, slides named "2 de 6", the arrow keys, a sideways trackpad swipe as one step, Tab following focus, a jump instead of a glide under reduced motion), on `embla-carousel-react` 8.6.0 and `embla-carousel-autoplay` 8.6.0, pinned exact. `molecules/store-article-row` (heading, "Ver todo", one round lime arrow that pages, then leads back to the start), `molecules/store-gallery` (the article's photos, rebuilt on it), `molecules/store-banner` and `molecules/store-cover-carousel` (a banner every six seconds; dots and a pause button; held while hovered, focused or dragged; still under reduced motion; one banner still, without controls; shown on `/design`). `molecules/store-slider` is deleted.
+- **Card**: the photo cropped square on the tile, the white "Nuevo" label, the name in the wide face, the price in regular type; sold out, the name dims and the price line says "Agotado"; a reduced price after the one it had, struck through.
+- **Catalog**: a centered title and one line, "Filtrar" opening a modal panel (a drawer from the left on a computer, a sheet from the bottom on a phone) that stays open while choices are made, "Ordenar por" opening a menu of links, the chosen choices as chips, a grid of four columns (two on a phone). The catalog's own search field is gone: the header's panel is the store's one search.
+- **Article page**: the name, price, description and purchase in a column on the left and the photos on the right on a computer, the photos first on a phone; the related articles in a row whose "Ver todo" leads to the article's category.
+- **Cart, checkout, order, 404, error, coming-soon**: the new palette, type and pill buttons (`atoms/store-button`). The home keeps its content (the store's name, tagline and description), now on the white page under the moss header, with a lime "Ver el catálogo"; its sections are FER-022's.
+- **Footer**: moss with lime headings: the full logo and the tagline, the shop's links (the catalog and every category), help (how to order, WhatsApp), Instagram and TikTok (Lucide has no brand icons: a camera and a note, each with its name), "© store" and the credit.
+- **E2E**: `search-panel.e2e.ts` (by mouse and by keyboard, Escape handing focus back, the phone, without the script) and `catalog-filters.e2e.ts` (by keyboard, the drawer, the phone's sheet); the shell, home, catalog, article and design specs follow the new markup. The catalog spec's search test left with the catalog's search field; its search-and-back-button flow is the search panel's now.
+- **Docs**: `design.md` § Storefront, `docs/brand/brand.md`, `docs/agents/nextjs.md` § Store pages, `docs/agents/testing.md`, `docs/project/overview.md`.
 
 ## Reporting
 
