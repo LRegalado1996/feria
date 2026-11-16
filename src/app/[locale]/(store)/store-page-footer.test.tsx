@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { type ReactElement, Suspense } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreFooterProps } from "@/app/_components/organisms/store-footer";
@@ -107,7 +107,9 @@ describe("StreamedStoreFooter", () => {
       fallback: unknown;
     }>;
 
+    expect(boundary.type).toBe(Suspense);
     expect(boundary.props.fallback).toBeNull();
+    expect(boundary.props.children.type).toBe(StreamedStoreFooterResolver);
     expect(boundary.props.children.props).toEqual({ locale: "en" });
   });
 });
