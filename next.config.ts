@@ -1,4 +1,5 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 import "./src/env.js";
@@ -52,7 +53,9 @@ const config: NextConfig = {
 // Inert without a DSN at runtime. Source maps upload only with
 // SENTRY_AUTH_TOKEN (plus SENTRY_ORG and SENTRY_PROJECT), so a local build
 // needs no Sentry credentials.
-export default withSentryConfig(config, {
+// BotID (FER-026) adds the rewrites its browser script and checks travel
+// through; they are inert off Vercel, where the script is never loaded.
+export default withSentryConfig(withBotId(config), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,

@@ -12,6 +12,7 @@ const services = vi.hoisted(() => ({
   getActiveStoreBySlug: vi.fn(),
   getPublishedProduct: vi.fn(),
   getPublishedProductRef: vi.fn(),
+  listCartProducts: vi.fn(),
   listCatalogFilters: vi.fn(),
   listCategories: vi.fn(),
   listPublishedProducts: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@/server/services/attribute", () => ({
 vi.mock("@/server/services/catalog", () => ({
   getPublishedProduct: services.getPublishedProduct,
   getPublishedProductRef: services.getPublishedProductRef,
+  listCartProducts: services.listCartProducts,
   listCategories: services.listCategories,
   listPublishedProducts: services.listPublishedProducts,
   listRelatedProducts: services.listRelatedProducts,
@@ -67,6 +69,8 @@ function setup({ storeActive = true } = {}) {
 
   return {
     db: mockCtx.db,
+    cartProducts: async (input: unknown) =>
+      await call(catalogRouter.cartProducts, input as never, options),
     categories: async (input: unknown) =>
       await call(catalogRouter.categories, input as never, options),
     filters: async (input: unknown) =>
@@ -92,6 +96,16 @@ function makeFilters(count: number, values: number) {
 }
 
 const STORE_NOT_FOUND = { code: "NOT_FOUND", message: "Store not found" };
+
+const INPUT_INVALID = {
+  code: "BAD_REQUEST",
+  message: "Input validation failed",
+};
+
+/** The ids 1 to `count`, each once. */
+function makeIds(count: number) {
+  return Array.from({ length: count }, (_, index) => index + 1);
+}
 
 describe("catalog router", () => {
   test("lists a store's categories in the visitor's language, scoped by the resolved store", async () => {
@@ -333,6 +347,93 @@ describe("catalog router", () => {
     await expect(
       products({ limit: 49, locale: "es", storeSlug: "tienda-demo" })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+  });
+});
+
+describe("catalog.cartProducts", () => {
+  test("reads the cart's articles in the store's currency, scoped by the resolved store, in the order asked", async () => {
+    const { cartProducts, db } = setup();
+    services.listCartProducts.mockResolvedValue([{ id: 9 }, { id: 3 }]);
+
+    await expect(
+      cartProducts({ ids: [9, 3], locale: "en", storeSlug: "tienda-demo" })
+    ).resolves.toEqual([{ id: 9 }, { id: 3 }]);
+    expect(services.getActiveStoreBySlug).toHaveBeenCalledExactlyOnceWith(db, {
+      slug: "tienda-demo",
+    });
+    expect(services.listCartProducts).toHaveBeenCalledExactlyOnceWith(db, {
+      currencyCode: "USD",
+      ids: [9, 3],
+      locale: "en",
+      storeId: 7,
+    });
+  });
+
+  test("reads ids sent as text, as the REST surface's query string sends them", async () => {
+    const { cartProducts, db } = setup();
+    services.listCartProducts.mockResolvedValue([]);
+
+    await cartProducts({
+      ids: ["4", "12"],
+      locale: "es",
+      storeSlug: "tienda-demo",
+    });
+
+    expect(services.listCartProducts).toHaveBeenCalledExactlyOnceWith(db, {
+      currencyCode: "USD",
+      ids: [4, 12],
+      locale: "es",
+      storeId: 7,
+    });
+  });
+
+  test("answers NOT_FOUND for an inactive or unknown store, before any catalog read", async () => {
+    const { cartProducts } = setup({ storeActive: false });
+
+    await expect(
+      cartProducts({ ids: [3], locale: "es", storeSlug: "tienda-demo" })
+    ).rejects.toMatchObject(STORE_NOT_FOUND);
+    expect(services.listCartProducts).not.toHaveBeenCalled();
+  });
+
+  test("accepts a full cart of 20 articles", async () => {
+    const { cartProducts, db } = setup();
+    services.listCartProducts.mockResolvedValue([]);
+
+    await expect(
+      cartProducts({ ids: makeIds(20), locale: "es", storeSlug: "tienda-demo" })
+    ).resolves.toEqual([]);
+    expect(services.listCartProducts).toHaveBeenCalledExactlyOnceWith(db, {
+      currencyCode: "USD",
+      ids: makeIds(20),
+      locale: "es",
+      storeId: 7,
+    });
+  });
+
+  test.each([
+    ["no ids", []],
+    ["21 ids, one past a full cart", makeIds(21)],
+    ["the same id twice", [3, 4, 3]],
+    ["an empty id, which Number() reads as 0", [""]],
+    ["a negative id", [-1]],
+  ])("refuses %s before resolving the store", async (_case, ids: unknown[]) => {
+    const { cartProducts } = setup();
+
+    await expect(
+      cartProducts({ ids, locale: "es", storeSlug: "tienda-demo" })
+    ).rejects.toMatchObject(INPUT_INVALID);
+    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.listCartProducts).not.toHaveBeenCalled();
+  });
+
+  test("refuses an unknown language before resolving the store", async () => {
+    const { cartProducts } = setup();
+
+    await expect(
+      cartProducts({ ids: [3], locale: "fr", storeSlug: "tienda-demo" })
+    ).rejects.toMatchObject(INPUT_INVALID);
     expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
   });
 });

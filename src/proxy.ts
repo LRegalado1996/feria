@@ -105,8 +105,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except what never has a language: Next's own assets, Vercel's
-  // endpoints, the Sentry tunnel, the generated brand images and the files in
-  // `public/`, by name or by folder. The share card is generated per language
+  // endpoints, BotID's script and checks (FER-026: `withBotId` rewrites them
+  // after the proxy, which would otherwise send them to `/es/...` and a 404),
+  // the Sentry tunnel, the generated brand images and the files in `public/`,
+  // by name or by folder. The share card is generated per language
   // (`app/[locale]/opengraph-image.tsx`) and is an image, not a page: its
   // Spanish URL keeps the `/es` a page would be redirected away from, so a
   // crawler gets it in one request. `robots.txt` and `sitemap.xml` are
@@ -117,6 +119,6 @@ export const config = {
   // (`/api/docs/spec.json`); a test holds this list to `public/` and to the
   // languages, so a new file or language fails until it is added.
   matcher: [
-    "/((?!_next/|_vercel/|monitoring(?:/|$)|brand/|seed/|(?:icon|apple-icon)$|(?:robots\\.txt|sitemap\\.xml)$|(?:es|en)/opengraph-image$).*)",
+    "/((?!_next/|_vercel/|149e9513-01fa-4fb0-aad4-566afd725d1b/|monitoring(?:/|$)|brand/|seed/|(?:icon|apple-icon)$|(?:robots\\.txt|sitemap\\.xml)$|(?:es|en)/opengraph-image$).*)",
   ],
 };

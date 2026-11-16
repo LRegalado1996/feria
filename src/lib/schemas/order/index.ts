@@ -105,6 +105,38 @@ export const createOrderSchema = z.strictObject({
 
 export type CreateOrderValues = z.infer<typeof createOrderSchema>;
 
+/** What the checkout form says when a field is wrong, in the page's words. */
+export interface CheckoutMessages {
+  nameRequired: string;
+  nameTooLong: string;
+  noteTooLong: string;
+  phoneInvalid: string;
+}
+
+/**
+ * The checkout form's fields (FER-026): the shopper's name, a phone the
+ * store can reach, typed any way (`099 123 456`, `+598 99 123 456`), and an
+ * optional note. The same rules the server applies to the order, with
+ * messages a shopper can act on.
+ */
+export function createCheckoutSchema(messages: CheckoutMessages) {
+  return z.object({
+    customerName: z
+      .string()
+      .trim()
+      .min(1, messages.nameRequired)
+      .max(ORDER_CUSTOMER_NAME_MAX_LENGTH, messages.nameTooLong),
+    customerPhone: z
+      .string()
+      .trim()
+      .max(ORDER_PHONE_MAX_LENGTH, messages.phoneInvalid)
+      .refine((typed) => normalizePhone(typed) !== null, messages.phoneInvalid),
+    note: z.string().trim().max(ORDER_NOTE_MAX_LENGTH, messages.noteTooLong),
+  });
+}
+
+export type CheckoutValues = z.infer<ReturnType<typeof createCheckoutSchema>>;
+
 export const getOrderByTokenSchema = z.object({
   storeSlug: storeSlugSchema,
   token: z.string().regex(ORDER_TOKEN_PATTERN),

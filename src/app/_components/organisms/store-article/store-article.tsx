@@ -135,6 +135,7 @@ function StoreArticle({
           </div>
           {article.isAvailable ? (
             <StoreArticlePurchase
+              priceAmount={article.priceAmount}
               productId={article.id}
               storeSlug={store.slug}
             />
@@ -183,6 +184,7 @@ function StoreArticle({
                     item.isAvailable ? (
                       <StoreAddToCartButton
                         name={item.title}
+                        priceAmount={item.priceAmount}
                         productId={item.id}
                         storeSlug={store.slug}
                       />

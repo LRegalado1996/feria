@@ -19,6 +19,8 @@ function makeCart(count: number) {
 }
 
 const MARK = "\u2060";
+// The price the card shows, kept on the cart line it adds.
+const PRICE = 125_000;
 
 function setup({
   cart = [],
@@ -34,6 +36,7 @@ function setup({
     <StoreAddToCartButton
       className="custom"
       name="Collar de perlas"
+      priceAmount={PRICE}
       productId={productId}
       storeSlug="lr-market"
     />,
@@ -79,7 +82,7 @@ describe("StoreAddToCartButton", () => {
 
     expect(storedCart()).toEqual([
       ...makeCart(2),
-      { productId: 42, quantity: 1 },
+      { productId: 42, quantity: 1, seenPriceAmount: PRICE },
     ]);
     expect(said()).toBe("Agregado al carrito.");
   });
@@ -91,7 +94,9 @@ describe("StoreAddToCartButton", () => {
     const first = status().textContent;
     await user.click(screen.getByRole("button"));
 
-    expect(storedCart()).toEqual([{ productId: 42, quantity: 2 }]);
+    expect(storedCart()).toEqual([
+      { productId: 42, quantity: 2, seenPriceAmount: PRICE },
+    ]);
     // The same words with the mark flipped: a screen reader hears it again.
     expect([first, status().textContent]).toEqual([
       `Agregado al carrito.${MARK}`,
@@ -166,6 +171,7 @@ describe("StoreAddToCartButton before hydration", () => {
       <I18n>
         <StoreAddToCartButton
           name="Collar de perlas"
+          priceAmount={PRICE}
           productId={42}
           storeSlug="lr-market"
         />

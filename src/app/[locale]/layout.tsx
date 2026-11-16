@@ -1,11 +1,10 @@
 import "@/styles/globals.css";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Anton, Geist } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
+import { VercelInsights } from "@/app/_components/molecules/vercel-insights";
 import { AppProviders } from "@/app/_components/organisms/app-providers";
 import { getDictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
@@ -100,12 +99,7 @@ export default async function RootLayout({
         </AppProviders>
         {/* Vercel serves their scripts once Analytics and Speed Insights are
             enabled in the project; anywhere else the scripts 404. */}
-        {process.env.VERCEL === "1" ? (
-          <>
-            <Analytics />
-            <SpeedInsights />
-          </>
-        ) : null}
+        {process.env.VERCEL === "1" ? <VercelInsights /> : null}
       </body>
     </html>
   );

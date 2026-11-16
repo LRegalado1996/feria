@@ -23,6 +23,51 @@ export const storefront = {
     zoom: "Ampliar la foto",
     zoomClose: "Cerrar la foto ampliada",
   },
+  cart: {
+    checkout: {
+      name: "Tu nombre",
+      nameRequired: "Escribí tu nombre.",
+      nameTooLong: "El nombre puede tener hasta 80 letras.",
+      note: "Nota para la tienda (opcional)",
+      notePlaceholder: "Por ejemplo, a qué hora te queda bien.",
+      noteTooLong: "La nota puede tener hasta 500 letras.",
+      phone: "Tu celular",
+      phoneHint: "Te escriben por WhatsApp para coordinar la entrega.",
+      phoneInvalid: "Escribí un celular, por ejemplo 099 123 456.",
+      submit: "Hacer el pedido",
+      submitting: "Enviando el pedido…",
+      title: "Tus datos",
+    },
+    continueShopping: "Seguir mirando",
+    decrease: "Una unidad menos de {title}",
+    empty: "Tu carrito está vacío.",
+    errors: {
+      blocked:
+        "Quitá los artículos que ya no se pueden comprar para hacer el pedido.",
+      changed:
+        "Algo cambió en tu carrito mientras lo mirabas. Revisalo y volvé a enviar.",
+      failed: "No pudimos enviar el pedido. Probá de nuevo.",
+      refresh: "No pudimos traer los precios de ahora.",
+      refused:
+        "No pudimos aceptar este pedido. Si sigue pasando, escribile a la tienda.",
+      retry: "Probar de nuevo",
+      tooMany:
+        "Ya hiciste varios pedidos en poco tiempo. Probá de nuevo en {minutes} min.",
+    },
+    flags: {
+      goneTitle: "Artículo que ya no está a la venta",
+      priceChanged: "El precio cambió: antes {before}.",
+      unavailable: "Agotado por ahora.",
+    },
+    increase: "Una unidad más de {title}",
+    loading: "Trayendo los precios de ahora…",
+    quantity: "Cantidad de {title}",
+    remove: "Quitar {title}",
+    removed: "Quitaste {title} del carrito.",
+    subtotal: "Total",
+    title: "Tu carrito",
+    unitPrice: "{price} c/u",
+  },
   catalog: {
     addToCart: "Agregar al carrito: {name}",
     addToCartShort: "Agregar",
@@ -75,6 +120,25 @@ export const storefront = {
   },
   marquee: {
     pause: "Pausar la banda en movimiento",
+  },
+  order: {
+    code: "Tu código de pedido",
+    contactStore: "Escribirle a la tienda",
+    contactStoreText: "¡Hola! Hice el pedido {code}.",
+    items: "Lo que pediste",
+    keepShopping: "Seguir mirando la tienda",
+    next: "La tienda te va a escribir al {phone} para coordinar el pago y la entrega. Guardá este enlace: acá ves cómo va tu pedido.",
+    note: "Tu nota",
+    received: "¡Recibimos tu pedido!",
+    status: "Estado",
+    statuses: {
+      delivered: "Entregado",
+      packed: "Preparado: listo para entregar",
+      received: "Recibido: la tienda lo va a preparar",
+      undeliverable: "No se pudo entregar: la tienda te va a escribir",
+    },
+    title: "Pedido {code}",
+    total: "Total",
   },
   price: {
     previous: "Antes {price}",

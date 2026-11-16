@@ -190,9 +190,12 @@ export function useCart(storeSlug: string) {
   /**
    * Adds `quantity` of an article, up to the per-article cap, and answers
    * what it did (`AddOutcome`); anything but `added` changed nothing.
+   * `seenPriceAmount` is the price the page showed, kept so the cart can
+   * say when it changed since.
    */
   const add = useCallback(
-    (productId: number, quantity = 1): AddOutcome => {
+    (productId: number, quantity = 1, seenPriceAmount?: number): AddOutcome => {
+      const seen = seenPriceAmount === undefined ? {} : { seenPriceAmount };
       const current = parseCart(readRaw(key));
       const line = current.find((item) => item.productId === productId);
 
@@ -218,6 +221,7 @@ export function useCart(storeSlug: string) {
               item.productId === productId
                 ? {
                     ...item,
+                    ...seen,
                     quantity: Math.min(
                       item.quantity + quantity,
                       CART_QUANTITY_MAX
@@ -227,7 +231,11 @@ export function useCart(storeSlug: string) {
             )
           : [
               ...current,
-              { productId, quantity: Math.min(quantity, CART_QUANTITY_MAX) },
+              {
+                productId,
+                quantity: Math.min(quantity, CART_QUANTITY_MAX),
+                ...seen,
+              },
             ]
       );
 
@@ -266,11 +274,34 @@ export function useCart(storeSlug: string) {
     write(key, EMPTY);
   }, [key]);
 
+  /**
+   * After an order (FER-026): takes out what it ordered, and keeps what was
+   * added meanwhile, in this tab or another, while it was being sent.
+   */
+  const removeOrdered = useCallback(
+    (ordered: { productId: number; quantity: number }[]) => {
+      const taken = new Map(
+        ordered.map((item) => [item.productId, item.quantity])
+      );
+
+      write(
+        key,
+        parseCart(readRaw(key)).flatMap((item) => {
+          const left = item.quantity - (taken.get(item.productId) ?? 0);
+
+          return left > 0 ? [{ ...item, quantity: left }] : [];
+        })
+      );
+    },
+    [key]
+  );
+
   return {
     add,
     clear,
     count: items.reduce((sum, item) => sum + item.quantity, 0),
     items,
+    removeOrdered,
     setQuantity,
   };
 }

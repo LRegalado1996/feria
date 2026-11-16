@@ -255,6 +255,7 @@ function StoreCatalog({
                       item.isAvailable ? (
                         <StoreAddToCartButton
                           name={item.title}
+                          priceAmount={item.priceAmount}
                           productId={item.id}
                           storeSlug={storeSlug}
                         />

@@ -10,6 +10,8 @@ import { StoreArticlePurchase } from "./store-article-purchase";
 
 const KEY = "feria:cart:lr-market";
 const MARK = "\u2060";
+// The price the page shows, kept on the cart line it adds.
+const PRICE = 125_000;
 
 /** `count` distinct articles, one unit each. */
 function makeCart(count: number) {
@@ -34,6 +36,7 @@ function setup({
   renderWithI18n(
     <StoreArticlePurchase
       className="custom"
+      priceAmount={PRICE}
       productId={productId}
       storeSlug="lr-market"
     />,
@@ -121,7 +124,7 @@ describe("StoreArticlePurchase", () => {
 
     expect(storedCart()).toEqual([
       ...makeCart(1),
-      { productId: 42, quantity: 3 },
+      { productId: 42, quantity: 3, seenPriceAmount: PRICE },
     ]);
     expect(said()).toBe("Agregado al carrito.");
   });
@@ -141,7 +144,9 @@ describe("StoreArticlePurchase", () => {
       }
       await add();
 
-      expect(storedCart()).toEqual([{ productId: 42, quantity: 10 }]);
+      expect(storedCart()).toEqual([
+        { productId: 42, quantity: 10, seenPriceAmount: PRICE },
+      ]);
       expect(said()).toBe(text);
     }
   );
@@ -155,7 +160,9 @@ describe("StoreArticlePurchase", () => {
     await user.click(increase());
     await add();
 
-    expect(storedCart()).toEqual([{ productId: 42, quantity: 10 }]);
+    expect(storedCart()).toEqual([
+      { productId: 42, quantity: 10, seenPriceAmount: PRICE },
+    ]);
     expect(said()).toBe("Agregado al carrito.");
   });
 
@@ -166,7 +173,9 @@ describe("StoreArticlePurchase", () => {
     const first = region()?.textContent;
     await add();
 
-    expect(storedCart()).toEqual([{ productId: 42, quantity: 2 }]);
+    expect(storedCart()).toEqual([
+      { productId: 42, quantity: 2, seenPriceAmount: PRICE },
+    ]);
     expect([first, region()?.textContent]).toEqual([
       `Agregado al carrito.${MARK}`,
       "Agregado al carrito.",
@@ -229,7 +238,11 @@ describe("StoreArticlePurchase before hydration", () => {
     const I18n = createI18nWrapper("es");
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
       <I18n>
-        <StoreArticlePurchase productId={42} storeSlug="lr-market" />
+        <StoreArticlePurchase
+          priceAmount={PRICE}
+          productId={42}
+          storeSlug="lr-market"
+        />
       </I18n>,
       { clientNowMs: 1000, serverNowMs: 0 }
     );

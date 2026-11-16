@@ -6,7 +6,12 @@ import {
   SYNTHETIC_SESSION_TOKEN,
 } from "@/test/session-query-error";
 
-import { REDACTED, sanitizeForLog, sanitizeRecordInPlace } from "./redaction";
+import {
+  REDACTED,
+  redactOrderTokens,
+  sanitizeForLog,
+  sanitizeRecordInPlace,
+} from "./redaction";
 
 function serialized(value: unknown): string {
   return JSON.stringify(value);
@@ -106,7 +111,75 @@ describe("sensitive text", () => {
   });
 });
 
+/** An order token's alphabet, `length` characters of it. */
+function makeToken(length: number) {
+  return "aZ0_-".repeat(9).slice(0, length);
+}
+
+describe("redactOrderTokens", () => {
+  test.each([
+    [
+      "a token of 43 characters in a page path",
+      `/lr-market/orders/${makeToken(43)}`,
+      "/lr-market/orders/[token]",
+    ],
+    [
+      "a token of 43 characters in an English URL with a query",
+      `https://feria.test/en/lr-market/orders/${makeToken(43)}?from=cart`,
+      "https://feria.test/en/lr-market/orders/[token]?from=cart",
+    ],
+    [
+      "two tokens in one line",
+      `GET /a/orders/${makeToken(43)} then /b/orders/${makeToken(43)}/`,
+      "GET /a/orders/[token] then /b/orders/[token]/",
+    ],
+    [
+      "a token with a percent-encoded character, which opens the same order",
+      `/lr-market/orders/%61${makeToken(42)}`,
+      "/lr-market/orders/[token]",
+    ],
+    [
+      "a token of 42 characters, one of them percent-encoded, which is no order's",
+      `/lr-market/orders/%61${makeToken(41)}`,
+      `/lr-market/orders/%61${makeToken(41)}`,
+    ],
+    [
+      "a token of 42 characters, which is no order's",
+      `/lr-market/orders/${makeToken(42)}`,
+      `/lr-market/orders/${makeToken(42)}`,
+    ],
+    [
+      "a token of 44 characters, which is no order's",
+      `/lr-market/orders/${makeToken(44)}`,
+      `/lr-market/orders/${makeToken(44)}`,
+    ],
+    [
+      "43 characters outside an order's path",
+      `/lr-market/products/${makeToken(43)}`,
+      `/lr-market/products/${makeToken(43)}`,
+    ],
+  ])("given %s", (_case, text, expected) => {
+    expect(redactOrderTokens(text)).toBe(expected);
+  });
+});
+
 describe("sanitizeForLog", () => {
+  test("takes an order's token out of a string nested in the logged value", () => {
+    expect(
+      sanitizeForLog({
+        request: { path: `/lr-market/orders/${makeToken(43)}`, status: 200 },
+      })
+    ).toEqual({ request: { path: "/lr-market/orders/[token]", status: 200 } });
+  });
+
+  test("takes an order's token out of an error's message", () => {
+    const error = new Error(`Not found: /lr-market/orders/${makeToken(43)}`);
+
+    expect(sanitizeForLog(error)).toMatchObject({
+      message: "Not found: /lr-market/orders/[token]",
+    });
+  });
+
   test("reduces a Drizzle error to its diagnosis and drops its bound values", () => {
     const sanitized = sanitizeForLog(makeSessionQueryError());
 

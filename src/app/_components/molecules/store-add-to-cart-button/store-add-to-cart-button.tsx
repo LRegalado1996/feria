@@ -14,6 +14,8 @@ export interface StoreAddToCartButtonProps {
   className?: string;
   /** The article's name, for the button's accessible name. */
   name: string;
+  /** The price the card shows, so the cart can say if it changes. */
+  priceAmount: number;
   productId: number;
   storeSlug: string;
 }
@@ -27,6 +29,7 @@ export interface StoreAddToCartButtonProps {
 function StoreAddToCartButton({
   className,
   name,
+  priceAmount,
   productId,
   storeSlug,
 }: StoreAddToCartButtonProps) {
@@ -47,7 +50,7 @@ function StoreAddToCartButton({
         data-slot="store-add-to-cart-button"
         disabled={!hydrated}
         onClick={() => {
-          const text = addOutcomeMessage(add(productId), copy);
+          const text = addOutcomeMessage(add(productId, 1, priceAmount), copy);
           setStatus((previous) => ({ count: previous.count + 1, text }));
         }}
         type="button"
