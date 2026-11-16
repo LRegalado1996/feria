@@ -18,6 +18,7 @@ import type {
   CreateProductValues,
   ListProductsValues,
   ProductCursor,
+  ProductSort,
   UpdateProductValues,
 } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
@@ -116,9 +117,40 @@ function carriesOneOf(valueIds: number[]): SQL {
   )})`;
 }
 
-/** Rows strictly after the cursor in the newest-first order. */
-function afterCursor(cursor: ProductCursor): SQL {
-  return sql`(${product.publishedAt}, ${product.id}) < (${cursor.publishedAt}::timestamptz, ${cursor.id}::int)`;
+/**
+ * The rows after `cursor` in `sort`'s order. A cursor carries the sort that
+ * made it and that sort's key; one from another sort is refused, not
+ * misread (both price orders share a key, read the other way round).
+ */
+function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
+  if (cursor.sort === sort) {
+    if (sort === "newest" && cursor.publishedAt !== undefined) {
+      return sql`(${product.publishedAt}, ${product.id}) < (${cursor.publishedAt}::timestamptz, ${cursor.id}::int)`;
+    }
+
+    if (sort !== "newest" && cursor.priceAmount !== undefined) {
+      return sort === "price_asc"
+        ? sql`(${product.priceAmount}, ${product.id}) > (${cursor.priceAmount}::int, ${cursor.id}::int)`
+        : sql`(${product.priceAmount}, ${product.id}) < (${cursor.priceAmount}::int, ${cursor.id}::int)`;
+    }
+  }
+
+  throw new ORPCError("BAD_REQUEST", {
+    message: "That cursor belongs to another sort",
+  });
+}
+
+/** `sort`'s order, ending in the id so a page never repeats or skips a row. */
+function orderOf(sort: ProductSort) {
+  if (sort === "price_asc") {
+    return [asc(product.priceAmount), asc(product.id)];
+  }
+
+  if (sort === "price_desc") {
+    return [desc(product.priceAmount), desc(product.id)];
+  }
+
+  return [desc(product.publishedAt), desc(product.id)];
 }
 
 /**
@@ -200,9 +232,10 @@ async function loadCards(
 export type ProductCard = Awaited<ReturnType<typeof loadCards>>[number];
 
 /**
- * One page of a store's published articles, newest first, narrowed by
- * category and search. Keyset pagination on (`publishedAt`, `id`): a row
- * inserted while the visitor scrolls never shifts the next page.
+ * One page of a store's published articles, newest first or by price,
+ * narrowed by category, search and filters. Keyset pagination on the sort's
+ * key and the id: a row inserted while the visitor scrolls never shifts the
+ * next page.
  */
 export async function listPublishedProducts(
   db: DatabaseClient,
@@ -213,17 +246,23 @@ export async function listPublishedProducts(
     limit,
     locale,
     q,
+    sort = "newest",
     storeId,
     valueGroups = [],
   }: StoreScope &
-    Omit<ListProductsValues, "filters" | "storeSlug"> & {
+    Omit<ListProductsValues, "filters" | "sort" | "storeSlug"> & {
       currencyCode: Currency;
+      sort?: ProductSort;
       /** The filters' value ids, one group per filter (`resolveCatalogFilters`). */
       valueGroups?: number[][];
     }
 ) {
   const page = await db
-    .select({ id: product.id, publishedAt: product.publishedAt })
+    .select({
+      id: product.id,
+      priceAmount: product.priceAmount,
+      publishedAt: product.publishedAt,
+    })
     .from(product)
     .leftJoin(
       category,
@@ -238,10 +277,10 @@ export async function listPublishedProducts(
           : eq(category.slug, categorySlug),
         q === undefined ? undefined : matchesSearch(q, locale),
         ...valueGroups.map((group) => carriesOneOf(group)),
-        cursor === undefined ? undefined : afterCursor(cursor)
+        cursor === undefined ? undefined : afterCursor(cursor, sort)
       )
     )
-    .orderBy(desc(product.publishedAt), desc(product.id))
+    .orderBy(...orderOf(sort))
     // One row past the page tells whether another page follows.
     .limit(limit + 1);
 
@@ -255,11 +294,31 @@ export async function listPublishedProducts(
 
   return {
     items,
-    nextCursor:
-      page.length > limit && last?.publishedAt
-        ? { id: last.id, publishedAt: last.publishedAt.toISOString() }
-        : null,
+    nextCursor: page.length > limit ? cursorAt(last, sort) : null,
   };
+}
+
+/** The cursor after `row` in `sort`'s order, carrying that sort and its key. */
+function cursorAt(
+  row:
+    | { id: number; priceAmount: number | null; publishedAt: Date | null }
+    | undefined,
+  sort: ProductSort
+): ProductCursor | null {
+  if (!row) {
+    return null;
+  }
+
+  if (sort === "newest") {
+    return row.publishedAt
+      ? { id: row.id, publishedAt: row.publishedAt.toISOString(), sort }
+      : null;
+  }
+
+  // A published article always has a price (the database's check).
+  return row.priceAmount === null
+    ? null
+    : { id: row.id, priceAmount: row.priceAmount, sort };
 }
 
 /**

@@ -216,13 +216,20 @@ export default async function DesignPage({ params }: DesignPageProps) {
           <StorePriceTag
             amount={129_000}
             currency="UYU"
+            labels={storefront.price}
             locale={locale}
             size="lg"
           />
-          <StorePriceTag amount={1250} currency="USD" locale={locale} />
+          <StorePriceTag
+            amount={1250}
+            currency="USD"
+            labels={storefront.price}
+            locale={locale}
+          />
           <StorePriceTag
             amount={89_000}
             currency="UYU"
+            labels={storefront.price}
             locale={locale}
             previousAmount={129_000}
           />
@@ -277,6 +284,10 @@ export default async function DesignPage({ params }: DesignPageProps) {
                 href="#cards"
                 image={null}
                 isNew={article.isNew}
+                labels={{
+                  card: storefront.articleCard,
+                  price: storefront.price,
+                }}
                 locale={locale}
                 name={article.name}
                 previousAmount={article.previousAmount}

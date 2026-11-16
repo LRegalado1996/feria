@@ -339,6 +339,98 @@ describe("public catalog", () => {
     expect(pageThree.nextCursor).toBeNull();
   });
 
+  test.each([
+    ["price_asc", ["Barato", "Medio A", "Medio B", "Caro"]],
+    ["price_desc", ["Caro", "Medio B", "Medio A", "Barato"]],
+  ] as const)(
+    "sorts by %s across pages, a tie in price broken by id, never repeating a row",
+    async (sort, titles) => {
+      const shop = await makeStore();
+      const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+      const slugOf = new Map<string, string>();
+      const idOf = new Map<string, number>();
+
+      for (const [title, priceAmount] of [
+        ["Medio A", 500],
+        ["Caro", 900],
+        ["Barato", 100],
+        ["Medio B", 500],
+      ] as const) {
+        const created = await makeArticle(shop.id, {
+          categoryId: chains.id,
+          priceAmount,
+          title,
+        });
+        slugOf.set(title, created.slug);
+        idOf.set(title, created.id);
+      }
+
+      const pageOne = await list(shop.id, { limit: 2, sort });
+      const pageTwo = await list(shop.id, {
+        cursor: pageOne.nextCursor ?? undefined,
+        limit: 2,
+        sort,
+      });
+
+      expect(
+        [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
+      ).toEqual(titles.map((title) => slugOf.get(title)));
+      // Page one ends on the second title, priced 500 in either order.
+      expect(pageOne.nextCursor).toEqual({
+        id: idOf.get(titles[1]),
+        priceAmount: 500,
+        sort,
+      });
+      expect(pageTwo.nextCursor).toBeNull();
+    }
+  );
+
+  test("a cursor from another sort is refused, never read as this one's", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    await makeArticle(shop.id, { categoryId: chains.id, title: "Uno" });
+    await makeArticle(shop.id, { categoryId: chains.id, title: "Dos" });
+    const newest = await list(shop.id, { limit: 1 });
+
+    await expect(
+      list(shop.id, {
+        cursor: newest.nextCursor ?? undefined,
+        limit: 1,
+        sort: "price_asc",
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "That cursor belongs to another sort",
+    });
+  });
+
+  test("a price_asc cursor is refused by price_desc, though both carry a price", async () => {
+    const shop = await makeStore();
+    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    await makeArticle(shop.id, {
+      categoryId: chains.id,
+      priceAmount: 100,
+      title: "Barato",
+    });
+    await makeArticle(shop.id, {
+      categoryId: chains.id,
+      priceAmount: 900,
+      title: "Caro",
+    });
+    const ascending = await list(shop.id, { limit: 1, sort: "price_asc" });
+
+    await expect(
+      list(shop.id, {
+        cursor: ascending.nextCursor ?? undefined,
+        limit: 1,
+        sort: "price_desc",
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "That cursor belongs to another sort",
+    });
+  });
+
   test("categories come in their order, named in the visitor's language or Spanish", async () => {
     const shop = await makeStore();
     await makeCategory(shop.id, "anillos", { es: "Anillos" }, 1);

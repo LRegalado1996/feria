@@ -124,6 +124,7 @@ describe("catalog router", () => {
         filters,
         locale: "es",
         q: " oro ",
+        sort: "price_desc",
         storeSlug: "tienda-demo",
       })
     ).resolves.toEqual({ items: [{ id: 3 }], nextCursor: null });
@@ -139,6 +140,7 @@ describe("catalog router", () => {
       limit: 24,
       locale: "es",
       q: "oro",
+      sort: "price_desc",
       storeId: 7,
       valueGroups: [[21, 22], [31]],
     });
@@ -162,6 +164,8 @@ describe("catalog router", () => {
       currencyCode: "USD",
       limit: 24,
       locale: "en",
+      // No sort asked: the newest first.
+      sort: "newest",
       storeId: 7,
       valueGroups: [],
     });

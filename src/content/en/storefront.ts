@@ -1,10 +1,56 @@
 import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
+  catalog: {
+    addToCart: "Add to cart: {name}",
+    addToCartShort: "Add",
+    addFailed: "We could not add it. Try again.",
+    added: "Added to cart.",
+    atMax: "You already have {max} of this article, the most an order takes.",
+    cartFull:
+      "The cart already holds {max} different articles, the most it takes.",
+    categories: "Categories",
+    allCategories: "All",
+    clearAll: "Clear all",
+    closeFilters: "Close the filters",
+    description: "Every article of {store}.",
+    empty: {
+      body: "Come back soon: the store is loading its catalog.",
+      title: "No articles yet",
+    },
+    filteredDescription: "{selection}, at {store}.",
+    filters: "Filters",
+    loadFailed: "We could not load more articles.",
+    loadMore: "Load more",
+    loading: "Loading…",
+    noResults: {
+      body: "Try another search or remove a filter.",
+      clear: "See the whole catalog",
+      title: "Nothing found",
+    },
+    remove: "Remove: {name}",
+    retry: "Try again",
+    search: "Search articles",
+    searchPlaceholder: "Search…",
+    searchResult: "“{q}”",
+    selected: "Chosen filters",
+    share: "Share",
+    shareCopied: "Link copied.",
+    shareFailed: "We could not copy the link.",
+    showResults: "See results",
+    sort: {
+      label: "Sort",
+      newest: "Newest",
+      price_asc: "Price: low to high",
+      price_desc: "Price: high to low",
+    },
+    title: "Catalog",
+  },
   articleCard: {
     badgeNew: "New",
     badgeSale: "Price drop",
     noImage: "No photo",
+    unavailable: "Sold out",
   },
   marquee: {
     pause: "Pause the moving band",

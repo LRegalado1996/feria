@@ -12,6 +12,13 @@ import {
 
 const EMPTY: Cart = [];
 
+/**
+ * What adding did: `added`, or why nothing was: the article is already at
+ * its cap of units, the cart at its cap of articles, or the id or quantity
+ * is not a positive whole number.
+ */
+export type AddOutcome = "added" | "at_max" | "cart_full" | "refused";
+
 /** Where a store's cart lives in the browser: one per store. */
 export function cartStorageKey(storeSlug: string) {
   return `feria:cart:${storeSlug}`;
@@ -181,26 +188,30 @@ export function useCart(storeSlug: string) {
   const items = useMemo(() => parseCart(raw), [raw]);
 
   /**
-   * Adds `quantity` of an article, up to the per-article cap. Answers
-   * `false`, changing nothing, for a new article past the cart's cap of
-   * articles or an id or quantity that is not a positive whole number.
+   * Adds `quantity` of an article, up to the per-article cap, and answers
+   * what it did (`AddOutcome`); anything but `added` changed nothing.
    */
   const add = useCallback(
-    (productId: number, quantity = 1): boolean => {
+    (productId: number, quantity = 1): AddOutcome => {
       const current = parseCart(readRaw(key));
       const line = current.find((item) => item.productId === productId);
 
       // Checked before the cap: capped first, 10.5 or Infinity would become
       // a valid 10.
-      if (
-        !Number.isInteger(quantity) ||
-        quantity < 1 ||
-        (!line && current.length >= CART_ITEMS_MAX)
-      ) {
-        return false;
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return "refused";
       }
 
-      return write(
+      // Never clamped in silence: an article already at its cap is said so.
+      if (line && line.quantity >= CART_QUANTITY_MAX) {
+        return "at_max";
+      }
+
+      if (!line && current.length >= CART_ITEMS_MAX) {
+        return "cart_full";
+      }
+
+      const saved = write(
         key,
         line
           ? current.map((item) =>
@@ -219,6 +230,8 @@ export function useCart(storeSlug: string) {
               { productId, quantity: Math.min(quantity, CART_QUANTITY_MAX) },
             ]
       );
+
+      return saved ? "added" : "refused";
     },
     [key]
   );

@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-021, FER-010, FER-033
 
 ## Goal
@@ -27,6 +27,19 @@ A shopper finds an article by browsing a category or typing a few letters.
 - Search is debounced, does not lose focus while results update, and the back button restores the previous filter and scroll position.
 - Opening a shared link such as `?category=collares&color=dorado` shows exactly that selection on first load, in either language.
 - E2E: filter by category and color, share the link, open it fresh, search, paginate, add to cart from the grid.
+
+## Outcome
+
+- `/{store}/products` (`organisms/store-catalog`): a grid of cards (cover, title, price, "Agotado" when the article cannot be bought, and "Agregar" for one that can), the category chips, the store's filters with their swatches and counts, and a search, all in the address (`?category=collares&color=dorado,violeta&q=`). On a computer the choices sit in a sidebar; on a phone they open in a full-screen sheet. The chosen ones show as removable chips with "Limpiar todo".
+- The address is read with `readCatalogQuery()` (`src/lib/catalog/query.ts`): every parameter other than `category`, `q`, `sort` and `cursor` whose name and comma-separated values are slugs is a filter, at most 10 of 20 values; anything else (`fbclid`, `utm_source`, a capital) is dropped, and a category or value the store does not have is ignored (`knownOnly`), so an old link still lists. `catalogHref()` writes a selection back as one stable link.
+- The first page of every selection is rendered on the server, with its own heading, title and description ("Collares · Dorado", "Collares · Dorado, en LR Market."), and alternates that keep the selection without the search and the sort. The page reads the query string, so it renders per request (`docs/agents/nextjs.md` § Store pages).
+- Sort: newest first, price low to high, price high to low. The API gained `sort`; its keyset cursor carries the sort's own key (`publishedAt` or `priceAmount`, then the id) and a cursor from another sort is refused.
+- The next page loads as the grid's end scrolls into view, with "Cargar más" as the fallback and a retry when a page fails.
+- Search: the address follows the typing after 300 ms, replacing the history entry, and the field keeps focus; before the page's script loads it is a plain form that keeps the rest of the selection. Category and filter choices are links, so the back button restores the previous selection.
+- Share: the phone's share sheet when the browser has one, else the link copied and said.
+- Empty and no-results states: "Todavía no hay artículos", or "No encontramos nada" with a link to the whole catalog.
+- The card (`molecules/store-article-card`) and the price (`atoms/store-price-tag`) take their words as props, so they render in the browser too, as the grid's later pages need.
+- E2E (`src/e2e/tests/store/catalog.e2e.ts`): filter by category and color and open the link fresh in English, a link with stray parameters, search with focus and the back button, sort and paginate, add to cart from the grid, share by copying.
 
 ## Reporting
 

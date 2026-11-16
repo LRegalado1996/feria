@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import type { useCart as UseCart } from "./use-cart";
+import type { AddOutcome, useCart as UseCart } from "./use-cart";
 
 const { reportError } = vi.hoisted(() => ({ reportError: vi.fn() }));
 
@@ -136,12 +136,12 @@ describe("useCart", () => {
       stored: JSON.stringify([makeItem(4, 2)]),
     });
 
-    let added = false;
+    let outcome: AddOutcome | null = null;
     act(() => {
-      added = result.current.add(9);
+      outcome = result.current.add(9);
     });
 
-    expect(added).toBe(true);
+    expect(outcome).toBe("added");
     expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
     expect(storedCart()).toEqual([makeItem(4, 2), makeItem(9, 1)]);
   });
@@ -162,6 +162,55 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(4, expected)]);
   });
 
+  test.each([
+    ["adding one", 1],
+    ["adding several", 3],
+  ])(
+    "says an article already at 10 is at its maximum when %s, changing nothing",
+    async (_case, quantity) => {
+      const { result, storage, storedCart } = await setup({
+        stored: JSON.stringify([makeItem(4, 10)]),
+      });
+      storage.setItem.mockClear();
+
+      let outcome: AddOutcome | null = null;
+      act(() => {
+        outcome = result.current.add(4, quantity);
+      });
+
+      expect(outcome).toBe("at_max");
+      expect(storedCart()).toEqual([makeItem(4, 10)]);
+      expect(storage.setItem).not.toHaveBeenCalled();
+    }
+  );
+
+  test("an article at 9 still takes one more, to 10", async () => {
+    const { result } = await setup({
+      stored: JSON.stringify([makeItem(4, 9)]),
+    });
+
+    let outcome: AddOutcome | null = null;
+    act(() => {
+      outcome = result.current.add(4, 5);
+    });
+
+    expect(outcome).toBe("added");
+    expect(result.current.items).toEqual([makeItem(4, 10)]);
+  });
+
+  test("an article at its maximum in a full cart is at its maximum, not a full cart", async () => {
+    const { result } = await setup({
+      stored: JSON.stringify([...makeCart(19), makeItem(99, 10)]),
+    });
+
+    let outcome: AddOutcome | null = null;
+    act(() => {
+      outcome = result.current.add(99);
+    });
+
+    expect(outcome).toBe("at_max");
+  });
+
   test("caps a new line at 10 units", async () => {
     const { result } = await setup();
 
@@ -172,41 +221,41 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(4, 10)]);
   });
 
-  test("refuses a 21st article, answering false and storing nothing new", async () => {
+  test("refuses a 21st article as a full cart, storing nothing new", async () => {
     const { result, storedCart } = await setup({
       stored: JSON.stringify(makeCart(20)),
     });
 
-    let added = true;
+    let outcome: AddOutcome | null = null;
     act(() => {
-      added = result.current.add(99);
+      outcome = result.current.add(99);
     });
 
-    expect(added).toBe(false);
+    expect(outcome).toBe("cart_full");
     expect(storedCart()).toEqual(makeCart(20));
   });
 
   test("still adds units to an article already in a full cart", async () => {
     const { result } = await setup({ stored: JSON.stringify(makeCart(20)) });
 
-    let added = false;
+    let outcome: AddOutcome | null = null;
     act(() => {
-      added = result.current.add(20, 2);
+      outcome = result.current.add(20, 2);
     });
 
-    expect(added).toBe(true);
+    expect(outcome).toBe("added");
     expect(result.current.items.at(-1)).toEqual(makeItem(20, 3));
   });
 
   test("adds the 20th article", async () => {
     const { result } = await setup({ stored: JSON.stringify(makeCart(19)) });
 
-    let added = false;
+    let outcome: AddOutcome | null = null;
     act(() => {
-      added = result.current.add(99);
+      outcome = result.current.add(99);
     });
 
-    expect(added).toBe(true);
+    expect(outcome).toBe("added");
     expect(result.current.items).toEqual([...makeCart(19), makeItem(99, 1)]);
   });
 
@@ -272,15 +321,15 @@ describe("useCart", () => {
     async (refused) => {
       const { cart, result, storage } = await setup({ refused });
 
-      let added = false;
+      let outcome: AddOutcome | null = null;
       act(() => {
-        added = result.current.add(4);
+        outcome = result.current.add(4);
       });
       act(() => {
         result.current.setQuantity(4, 3);
       });
 
-      expect(added).toBe(true);
+      expect(outcome).toBe("added");
       expect(result.current.items).toEqual([makeItem(4, 3)]);
       expect(result.current.count).toBe(3);
       // Another cart of the store on the page sees the same one.
@@ -298,12 +347,12 @@ describe("useCart", () => {
   test("reports a write the storage refuses, and keeps the cart in the page", async () => {
     const { result } = await setup({ full: true });
 
-    let added = false;
+    let outcome: AddOutcome | null = null;
     act(() => {
-      added = result.current.add(4, 2);
+      outcome = result.current.add(4, 2);
     });
 
-    expect(added).toBe(true);
+    expect(outcome).toBe("added");
     expect(reportError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ name: "QuotaExceededError" }),
       { action: "Cart.write_storage" }
@@ -500,24 +549,42 @@ describe("useCart", () => {
   });
 
   test.each([
-    ["add 0 units", (cart: CartApi) => cart.add(4, 0)],
-    ["add -1 units", (cart: CartApi) => cart.add(4, -1)],
-    ["add 1.5 units", (cart: CartApi) => cart.add(4, 1.5)],
-    ["add NaN units", (cart: CartApi) => cart.add(4, Number.NaN)],
+    ["0 units", (cart: CartApi) => cart.add(4, 0)],
+    ["-1 units", (cart: CartApi) => cart.add(4, -1)],
+    ["1.5 units", (cart: CartApi) => cart.add(4, 1.5)],
+    ["NaN units", (cart: CartApi) => cart.add(4, Number.NaN)],
     // Above the cap: capping first would turn these into a valid 10.
-    ["add 10.5 units", (cart: CartApi) => cart.add(4, 10.5)],
+    ["10.5 units", (cart: CartApi) => cart.add(4, 10.5)],
     [
-      "add infinite units",
+      "infinite units",
       (cart: CartApi) => cart.add(4, Number.POSITIVE_INFINITY),
     ],
-    ["set 1.5 units", (cart: CartApi) => cart.setQuantity(4, 1.5)],
-    ["set NaN units", (cart: CartApi) => cart.setQuantity(4, Number.NaN)],
     // The write itself refuses a cart that would not parse back.
-    ["add article 0", (cart: CartApi) => cart.add(0)],
-    ["add article 1.5", (cart: CartApi) => cart.add(1.5)],
+    ["article 0", (cart: CartApi) => cart.add(0)],
+    ["article 1.5", (cart: CartApi) => cart.add(1.5)],
+  ])("refuses to add %s, changing nothing", async (_case, change) => {
+    const { result, storage, storedCart } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+    storage.setItem.mockClear();
+
+    let outcome: AddOutcome | null = null;
+    act(() => {
+      outcome = change(result.current);
+    });
+
+    expect(outcome).toBe("refused");
+    expect(result.current.items).toEqual([makeItem(4, 2)]);
+    expect(storedCart()).toEqual([makeItem(4, 2)]);
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["1.5 units", 1.5],
+    ["NaN units", Number.NaN],
   ])(
-    "refuses to %s, answering false and changing nothing",
-    async (_case, change) => {
+    "refuses to set %s, answering false and changing nothing",
+    async (_case, quantity) => {
       const { result, storage, storedCart } = await setup({
         stored: JSON.stringify([makeItem(4, 2)]),
       });
@@ -525,7 +592,7 @@ describe("useCart", () => {
 
       let answer = true;
       act(() => {
-        answer = change(result.current);
+        answer = result.current.setQuantity(4, quantity);
       });
 
       expect(answer).toBe(false);
@@ -536,20 +603,21 @@ describe("useCart", () => {
   );
 
   test.each([
-    ["adding", (cart: CartApi) => cart.add(9)],
-    ["setting a quantity", (cart: CartApi) => cart.setQuantity(4, 3)],
-    ["taking an article out", (cart: CartApi) => cart.setQuantity(4, 0)],
-  ])("answers true after %s", async (_case, change) => {
-    const { result } = await setup({
-      stored: JSON.stringify([makeItem(4, 2)]),
+    ["setting a quantity", 3, [makeItem(4, 3), makeItem(9, 1)]],
+    ["taking an article out", 0, [makeItem(9, 1)]],
+  ])("answers true after %s", async (_case, quantity, expected) => {
+    const { result, storedCart } = await setup({
+      stored: JSON.stringify([makeItem(4, 2), makeItem(9, 1)]),
     });
 
     let answer = false;
     act(() => {
-      answer = change(result.current);
+      answer = result.current.setQuantity(4, quantity);
     });
 
     expect(answer).toBe(true);
+    expect(result.current.items).toEqual(expected);
+    expect(storedCart()).toEqual(expected);
   });
 
   test("shows a change another tab made, announced by the storage event", async () => {

@@ -15,6 +15,7 @@ import {
   post,
   product,
   productAttributeValue,
+  productImage,
   productTranslation,
   store,
   storeMember,
@@ -24,6 +25,16 @@ import {
 import { test as userTest } from "./user.fixture";
 
 type PostInput = typeof post.$inferInsert;
+
+/**
+ * A published article: with a price it is published (with one photo), at
+ * `publishedAt` (now unless given); without one it stays a draft.
+ */
+interface ArticleOptions {
+  isAvailable?: boolean;
+  priceAmount?: number;
+  publishedAt?: Date;
+}
 
 type CreatedPost = typeof post.$inferSelect;
 
@@ -88,8 +99,9 @@ export interface DbFixture {
       createArticle: (
         storeId: number,
         categoryId: number,
-        title: string
-      ) => Promise<{ id: number }>;
+        title: string,
+        options?: ArticleOptions
+      ) => Promise<{ id: number; slug: string }>;
       /**
        * A filter of the store (FER-033) named in Spanish, with these values
        * in order, each carried by the articles listed. Deleted with its
@@ -239,16 +251,22 @@ export const test = userTest.extend<DbFixture>({
         createArticle: async (
           storeId: number,
           categoryId: number,
-          title: string
-        ): Promise<{ id: number }> => {
+          title: string,
+          { isAvailable = true, priceAmount, publishedAt }: ArticleOptions = {}
+        ): Promise<{ id: number; slug: string }> => {
+          const published = priceAmount !== undefined;
           const [created] = await db
             .insert(product)
             .values({
               categoryId,
+              isAvailable,
+              priceAmount: priceAmount ?? null,
+              publishedAt: published ? (publishedAt ?? new Date()) : null,
               slug: `e2e-${crypto.randomUUID()}`,
+              status: published ? "published" : "draft",
               storeId,
             })
-            .returning({ id: product.id });
+            .returning({ id: product.id, slug: product.slug });
 
           if (!created) {
             throw new Error("Inserting an article returned no row");
@@ -260,6 +278,16 @@ export const test = userTest.extend<DbFixture>({
             productId: created.id,
             title,
           });
+
+          if (published) {
+            await db.insert(productImage).values({
+              height: 1000,
+              position: 0,
+              productId: created.id,
+              url: "/seed/ring-1.jpg",
+              width: 800,
+            });
+          }
 
           return created;
         },

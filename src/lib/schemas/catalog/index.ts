@@ -10,6 +10,11 @@ export const CATALOG_SLUG_MAX_LENGTH = 80;
 
 export const PRODUCT_STATUSES = ["draft", "published"] as const;
 
+/** The catalog's orders (FER-023): newest first, or by price either way. */
+export const PRODUCT_SORTS = ["newest", "price_asc", "price_desc"] as const;
+
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
 export const PRODUCT_TITLE_MAX_LENGTH = 120;
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 4000;
 export const PRODUCT_SEO_TITLE_MAX_LENGTH = 70;
@@ -52,19 +57,38 @@ const publicCatalogSchema = z.object({
 export const listCategoriesSchema = publicCatalogSchema;
 
 /**
- * The keyset cursor of the public list: the last row's sort key, whole
- * (`publishedAt`, then `id` to break ties), so a page never repeats or skips
- * a row while others are inserted.
+ * The keyset cursor of the public list: the sort that made it and the last
+ * row's key in that sort, whole (`publishedAt` or `priceAmount`, then `id` to
+ * break ties), so a page never repeats or skips a row while others are
+ * inserted. Both price orders share a key, so the sort itself is what tells
+ * a cursor from one apart from the other.
  */
-export const productCursorSchema = z.object({
-  id: idSchema,
-  // Postgres has no year 0, so a cursor from it would fail in the database.
-  publishedAt: z.iso
-    .datetime({ offset: true })
-    .refine((value) => !value.startsWith("0000"), {
-      message: "Not a date a row can have",
-    }),
-});
+export const productCursorSchema = z
+  .object({
+    id: idSchema,
+    sort: z.enum(PRODUCT_SORTS),
+    // The key of that sort: `publishedAt` for the newest first,
+    // `priceAmount` for a price order. Only that one.
+    // Empty text is refused before coercion: `Number("")` is a price of 0.
+    priceAmount: z
+      .union([z.number(), z.string().trim().min(1).transform(Number)])
+      .pipe(z.number().int().min(0).max(INT4_MAX))
+      .optional(),
+    // Postgres has no year 0, so a cursor from it would fail in the database.
+    publishedAt: z.iso
+      .datetime({ offset: true })
+      .refine((value) => !value.startsWith("0000"), {
+        message: "Not a date a row can have",
+      })
+      .optional(),
+  })
+  .refine(
+    (cursor) =>
+      cursor.sort === "newest"
+        ? cursor.publishedAt !== undefined && cursor.priceAmount === undefined
+        : cursor.priceAmount !== undefined && cursor.publishedAt === undefined,
+    "A cursor carries its sort's key, and only it"
+  );
 
 /**
  * The catalog's filters as the page read them from the URL: each filter's
@@ -88,6 +112,7 @@ export const listProductsSchema = publicCatalogSchema.extend({
   // alternatives, different filters narrow each other.
   filters: catalogFiltersSchema.optional(),
   cursor: productCursorSchema.optional(),
+  sort: z.enum(PRODUCT_SORTS).default("newest"),
   limit: z.coerce
     .number()
     .int()
