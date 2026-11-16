@@ -26,6 +26,7 @@ const services = vi.hoisted(() => ({
   })),
   deleteCategory: vi.fn(async () => ({ id: 12, movedArticles: 3 })),
   findAccessibleStore: vi.fn(),
+  invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   listStoreCategories: vi.fn(async () => [
     {
       id: 1,
@@ -59,6 +60,12 @@ vi.mock("@/server/services/access", () => ({
   findAccessibleStore: services.findAccessibleStore,
   getUserRole: vi.fn(),
   withStoreAccess: services.withStoreAccess,
+}));
+
+// Next's cache only exists inside a Next render: the catalog's invalidation is
+// spied on, its cached reads are `src/server/cache/catalog.test.ts`'s.
+vi.mock("@/server/cache/catalog", () => ({
+  invalidateCatalogCache: services.invalidateCatalogCache,
 }));
 
 vi.mock("@/env", () => ({
@@ -145,9 +152,11 @@ describe("category router", () => {
       storeId: 7,
       values: { nameEn: null, nameEs: "Collares" },
     });
+    // A new category holds no article yet: no article page names it.
+    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
-  test("renames by id within the resolved store", async () => {
+  test("renames by id within the resolved store, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
     await expect(
@@ -169,6 +178,7 @@ describe("category router", () => {
       storeId: 7,
       values: { nameEn: "Necklaces", nameEs: "Collares" },
     });
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test("reorders within the resolved store", async () => {
@@ -187,9 +197,11 @@ describe("category router", () => {
       ids: [3, 1, 2],
       storeId: 7,
     });
+    // The order of categories is not on an article page.
+    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
-  test("deletes by id within the resolved store, with where its articles move", async () => {
+  test("deletes by id within the resolved store, with where its articles move, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
     await expect(
@@ -206,6 +218,7 @@ describe("category router", () => {
       moveToId: 6,
       storeId: 7,
     });
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test.each([
@@ -226,6 +239,7 @@ describe("category router", () => {
       });
       expect(services.withStoreAccess).not.toHaveBeenCalled();
       expect(service).not.toHaveBeenCalled();
+      expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
     }
   );
 

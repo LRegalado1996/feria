@@ -1,4 +1,28 @@
 export const storefront = {
+  article: {
+    addedCapped:
+      "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
+    addToCart: "Agregar al carrito",
+    askWhatsapp: "Consultar por WhatsApp",
+    askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
+    breadcrumb: "Ruta",
+    catalog: "Catálogo",
+    decrease: "Una unidad menos",
+    gallery: "Fotos de {title}",
+    galleryNext: "Foto siguiente",
+    galleryPosition: "Foto {current} de {total}",
+    galleryPrevious: "Foto anterior",
+    galleryShow: "Ver la foto {current}",
+    home: "Inicio",
+    increase: "Una unidad más",
+    quantity: "Cantidad",
+    related: "También te puede gustar",
+    unavailable: "Agotado por ahora",
+    unavailableBody:
+      "No lo podés agregar al carrito ahora. Escribinos y te avisamos cuando vuelva.",
+    zoom: "Ampliar la foto",
+    zoomClose: "Cerrar la foto ampliada",
+  },
   catalog: {
     addToCart: "Agregar al carrito: {name}",
     addToCartShort: "Agregar",

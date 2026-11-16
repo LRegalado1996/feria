@@ -4,6 +4,7 @@ import {
   updateStoreSchema,
 } from "@/lib/schemas/store";
 import { publicProcedure, superadminProcedure } from "@/server/api/orpc";
+import { invalidateCatalogCache } from "@/server/cache/catalog";
 import { invalidateStoreCache } from "@/server/cache/store";
 import { withStoreAccess } from "@/server/services/access";
 import {
@@ -57,6 +58,8 @@ export const storeRouter = {
         async (tx) => await updateStore(tx, input)
       );
       invalidateStoreCache(updated);
+      // Its articles show its currency.
+      invalidateCatalogCache(updated.id);
 
       return updated;
     })

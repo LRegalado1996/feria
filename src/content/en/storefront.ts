@@ -1,6 +1,30 @@
 import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
+  article: {
+    addedCapped:
+      "Added {added}: with them you have {max}, the most an order takes.",
+    addToCart: "Add to cart",
+    askWhatsapp: "Ask on WhatsApp",
+    askWhatsappText: "Hi! I'm writing about “{title}”: {url}",
+    breadcrumb: "Breadcrumb",
+    catalog: "Catalog",
+    decrease: "One unit less",
+    gallery: "Photos of {title}",
+    galleryNext: "Next photo",
+    galleryPosition: "Photo {current} of {total}",
+    galleryPrevious: "Previous photo",
+    galleryShow: "Show photo {current}",
+    home: "Home",
+    increase: "One unit more",
+    quantity: "Quantity",
+    related: "You may also like",
+    unavailable: "Sold out for now",
+    unavailableBody:
+      "You cannot add it to the cart now. Write to us and we will tell you when it is back.",
+    zoom: "Enlarge the photo",
+    zoomClose: "Close the enlarged photo",
+  },
   catalog: {
     addToCart: "Add to cart: {name}",
     addToCartShort: "Add",

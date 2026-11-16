@@ -260,7 +260,15 @@ describe("proxy matcher", () => {
     // A dot does not make a path a file.
     "/products/pulsera-2.5mm",
     "/api/docs/spec.json",
-    "/robots.txt",
+    // A store's own llms.txt is a page-like route: it gets its language.
+    "/lr-market/llms.txt",
+    "/en/lr-market/llms.txt",
+    // Only the root files are metadata routes, not a path that ends alike.
+    "/lr-market/robots.txt",
+    "/en/sitemap.xml",
+    // A dot in the name is a dot, not any character.
+    "/robots-txt",
+    "/sitemap-xml",
     // Only the tunnel itself is skipped, not a page that starts like it.
     "/monitoring-pedidos",
     // Only the generated images and the brand folder, not pages named alike.
@@ -289,6 +297,8 @@ describe("proxy matcher", () => {
     "/apple-icon",
     "/brand/lr-market-logo.svg",
     "/seed/ring-1.jpg",
+    "/robots.txt",
+    "/sitemap.xml",
   ])("stays off %s, which has no language", (pathname) => {
     expect(matches(pathname)).toBe(false);
   });

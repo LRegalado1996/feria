@@ -15,7 +15,8 @@ import { storeRouter } from "./store";
 // wiring; the queries are `src/server/services/store.test.ts`'s and the
 // rules of each field `src/lib/schemas/store/store.test.ts`'s.
 
-const { invalidateStoreCache } = vi.hoisted(() => ({
+const { invalidateCatalogCache, invalidateStoreCache } = vi.hoisted(() => ({
+  invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   invalidateStoreCache: vi.fn<(store: { id: number; slug: string }) => void>(),
 }));
 
@@ -36,6 +37,7 @@ vi.mock("@/server/better-auth", () => ({
 
 // Next's tag cache only exists inside a Next request.
 vi.mock("@/server/cache/store", () => ({ invalidateStoreCache }));
+vi.mock("@/server/cache/catalog", () => ({ invalidateCatalogCache }));
 
 const STORED_AT = new Date("2026-11-13T12:00:00.000Z");
 
@@ -157,6 +159,8 @@ describe("store.create", () => {
     expect(invalidateStoreCache).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: 7, slug: "sample-store" })
     );
+    // A new store has no articles to drop.
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -196,7 +200,7 @@ describe("store.create", () => {
 });
 
 describe("store.update", () => {
-  test("replaces the store by the id in the path, then drops what was cached about it", async () => {
+  test("replaces the store by the id in the path, then drops what was cached about it and its articles", async () => {
     const { db, update } = setup({ role: "superadmin" });
     db.$["update.returning"].mockResolvedValue([
       makeRow({ slug: "renamed-store" }),
@@ -216,6 +220,8 @@ describe("store.update", () => {
     expect(invalidateStoreCache).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: 7, slug: "renamed-store" })
     );
+    // Its articles show its currency.
+    expect(invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test("answers NOT_FOUND for an id that matches nothing, leaving the cache alone", async () => {
@@ -226,6 +232,7 @@ describe("store.update", () => {
       message: "Store not found",
     });
     expect(invalidateStoreCache).not.toHaveBeenCalled();
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -249,6 +256,7 @@ describe("store.update", () => {
     );
     expect(db.$.update).not.toHaveBeenCalled();
     expect(invalidateStoreCache).not.toHaveBeenCalled();
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 });
 
@@ -298,6 +306,7 @@ describe("store writes", () => {
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(db.$.update).not.toHaveBeenCalled();
     expect(invalidateStoreCache).not.toHaveBeenCalled();
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
   test("check the role the database holds for the caller, not the session's copy", async () => {

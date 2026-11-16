@@ -3,11 +3,11 @@
 import { ShoppingBag } from "lucide-react";
 import { useState } from "react";
 
-import { type AddOutcome, useCart } from "@/lib/hooks/cart";
+import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
+import { useCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { interpolate } from "@/lib/i18n/interpolate";
-import { CART_ITEMS_MAX, CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
 
 export interface StoreAddToCartButtonProps {
@@ -38,12 +38,6 @@ function StoreAddToCartButton({
   // Disabled until React owns it: a press on the server's HTML would add
   // nothing and say nothing.
   const hydrated = useHydrated();
-  const messages: Record<AddOutcome, string> = {
-    added: copy.added,
-    at_max: interpolate(copy.atMax, { max: CART_QUANTITY_MAX }),
-    cart_full: interpolate(copy.cartFull, { max: CART_ITEMS_MAX }),
-    refused: copy.addFailed,
-  };
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -53,7 +47,7 @@ function StoreAddToCartButton({
         data-slot="store-add-to-cart-button"
         disabled={!hydrated}
         onClick={() => {
-          const text = messages[add(productId)];
+          const text = addOutcomeMessage(add(productId), copy);
           setStatus((previous) => ({ count: previous.count + 1, text }));
         }}
         type="button"

@@ -6,7 +6,10 @@ import {
   reorderCategoriesSchema,
 } from "@/lib/schemas/catalog";
 import { storeProcedure } from "@/server/api/orpc";
-import { writeToStore } from "@/server/api/utils/write-to-store";
+import {
+  writeToCatalog,
+  writeToStore,
+} from "@/server/api/utils/write-to-store";
 import {
   createCategory,
   deleteCategory,
@@ -55,7 +58,7 @@ export const categoryRouter = {
   rename: storeProcedure(renameCategorySchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await renameCategory(tx, {
@@ -91,7 +94,7 @@ export const categoryRouter = {
   delete: storeProcedure(deleteCategorySchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await deleteCategory(tx, {

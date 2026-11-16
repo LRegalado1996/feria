@@ -26,6 +26,7 @@ const services = vi.hoisted(() => ({
   })),
   deleteProduct: vi.fn(async () => ({ id: 12 })),
   findAccessibleStore: vi.fn(),
+  invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   publishProduct: vi.fn(async () => ({
     id: 13,
     slug: "cadena",
@@ -74,6 +75,12 @@ vi.mock("@/server/services/access", () => ({
   findAccessibleStore: services.findAccessibleStore,
   getUserRole: vi.fn(),
   withStoreAccess: services.withStoreAccess,
+}));
+
+// Next's cache only exists inside a Next render: the catalog's invalidation is
+// spied on, its cached reads are `src/server/cache/catalog.test.ts`'s.
+vi.mock("@/server/cache/catalog", () => ({
+  invalidateCatalogCache: services.invalidateCatalogCache,
 }));
 
 vi.mock("@/env", () => ({
@@ -157,9 +164,11 @@ describe("product router", () => {
       storeId: 7,
       values: makeFields(),
     });
+    // A new article is a draft: no shopper's page shows it yet.
+    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
-  test("updates by id within the resolved store", async () => {
+  test("updates by id within the resolved store, then drops its cached catalog", async () => {
     const { run } = setup();
 
     await expect(
@@ -170,6 +179,7 @@ describe("product router", () => {
       storeId: 7,
       values: { ...makeFields(), id: 5 },
     });
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test.each([
@@ -185,7 +195,7 @@ describe("product router", () => {
     ],
     ["delete", services.deleteProduct, { id: 12 }],
   ] as const)(
-    "%s acts on the article by id within the resolved store",
+    "%s acts on the article by id within the resolved store, then drops its cached catalog",
     async (name, service, answer) => {
       const { db, run } = setup();
 
@@ -202,10 +212,13 @@ describe("product router", () => {
         id: 5,
         storeId: 7,
       });
+      expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(
+        7
+      );
     }
   );
 
-  test("sets availability within the resolved store", async () => {
+  test("sets availability within the resolved store, then drops its cached catalog", async () => {
     const { run } = setup();
 
     await expect(
@@ -224,9 +237,10 @@ describe("product router", () => {
         storeId: 7,
       }
     );
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
-  test("reorders images within the resolved store", async () => {
+  test("reorders images within the resolved store, then drops its cached catalog", async () => {
     const { run } = setup();
 
     await expect(
@@ -242,6 +256,7 @@ describe("product router", () => {
       imageIds: [3, 1, 2],
       storeId: 7,
     });
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test("replaces the article's filter values within the resolved store", async () => {
@@ -265,6 +280,8 @@ describe("product router", () => {
       TX,
       { productId: 5, storeId: 7, valueIds: [21, 22] }
     );
+    // The article page shows no filter values, so its cache stays.
+    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
   test("takes every value off with an empty list", async () => {
@@ -333,6 +350,7 @@ describe("product router", () => {
     });
     expect(services.withStoreAccess).not.toHaveBeenCalled();
     expect(services.publishProduct).not.toHaveBeenCalled();
+    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
   test("a signed-out caller is UNAUTHORIZED, before the store is resolved", async () => {
