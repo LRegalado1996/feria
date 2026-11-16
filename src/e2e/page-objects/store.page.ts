@@ -1,23 +1,19 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 
 import { BasePage } from "./base.page";
 
-/** A store's public home, in that store's colors. */
+/**
+ * The store's home (`/`, English at `/en`), in the theme's colors: the site
+ * is one store (FER-038). Its header and footer are on every store page.
+ */
 export class StorePage extends BasePage {
-  private readonly slug: string;
-
-  constructor(page: Page, slug: string) {
-    super(page);
-    this.slug = slug;
-  }
-
   async goto(): Promise<void> {
-    await this.page.goto(`/${this.slug}`);
+    await this.page.goto("/");
     await this.waitForLoad();
   }
 
   async gotoEnglish(): Promise<void> {
-    await this.page.goto(`/en/${this.slug}`);
+    await this.page.goto("/en");
     await this.waitForLoad();
   }
 
@@ -25,12 +21,12 @@ export class StorePage extends BasePage {
     return this.getByTestId("store-home").filter({ visible: true }).first();
   }
 
-  /** The element that carries the store's palette, painted in its background. */
+  /** The canvas every store page is painted on, in the theme's background. */
   getTheme(): Locator {
     return this.getByTestId("store-theme");
   }
 
-  /** The block the store's name sits on, in its contrast color. */
+  /** The block the store's name sits on, in the theme's contrast color. */
   getHeader(): Locator {
     return this.getByTestId("store-intro-header").filter({ visible: true });
   }
@@ -59,6 +55,17 @@ export class StorePage extends BasePage {
   }
 
   getDescription(): Locator {
-    return this.getByTestId("store-description");
+    return this.getByTestId("store-description").filter({ visible: true });
+  }
+
+  /**
+   * The store's not-found page (`(store)/not-found.tsx`), under the store's
+   * header: every address no page answers, an old one included.
+   */
+  getNotFoundHeading(): Locator {
+    return this.page.getByRole("heading", {
+      level: 1,
+      name: "No encontramos esta página",
+    });
   }
 }

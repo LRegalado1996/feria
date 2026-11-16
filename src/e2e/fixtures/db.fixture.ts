@@ -1,5 +1,5 @@
 import { hashPassword } from "better-auth/crypto";
-import { inArray } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
@@ -12,39 +12,45 @@ import {
   attributeValueTranslation,
   category,
   categoryTranslation,
+  customerOrder,
+  orderItem,
   product,
   productAttributeValue,
   productImage,
   productTranslation,
   store,
-  storeMember,
-  storeTranslation,
   user,
 } from "../../server/db/schema";
 import { test as userTest } from "./user.fixture";
 
 /**
- * A published article: with a price it is published (with one photo), at
- * `publishedAt` (now unless given); without one it stays a draft.
+ * An article of the store in a category. With a price it is published (with
+ * one photo), at `publishedAt` (now unless given); without one it stays a
+ * draft.
  */
 interface ArticleOptions {
+  categoryId: number;
+  /** Searched like the title: a test's own word scopes the catalog to it. */
+  description?: string;
   /** How many photos a published article gets (one by default). */
   images?: number;
   isAvailable?: boolean;
   priceAmount?: number;
   publishedAt?: Date;
+  title: string;
 }
 
-type CreatedUser = typeof user.$inferSelect;
-
-type StoreInput = typeof store.$inferInsert;
-
-type StoreTextInput = Pick<
-  typeof storeTranslation.$inferInsert,
-  "description" | "locale" | "tagline"
->;
-
-type CreatedStore = typeof store.$inferSelect;
+interface FilterOptions {
+  nameEs: string;
+  slug: string;
+  /** In this order, each carried by the articles listed. */
+  values: {
+    articleIds?: number[];
+    nameEs: string;
+    slug: string;
+    swatchColor?: string;
+  }[];
+}
 
 /** A seeded login and the password it signs in with. */
 export interface SeededLogin {
@@ -56,81 +62,58 @@ export interface SeededLogin {
 
 const LOGIN_PASSWORD = "synthetic-e2e-login-password-123";
 
+const PHOTOS = ["/seed/ring-1.jpg", "/seed/ring-2.jpg", "/seed/ring-3.jpg"];
+
 export interface DbFixture {
   db: {
     drizzle: ReturnType<typeof drizzle<typeof schema>>;
     seed: {
       /**
-       * A store at an address of its own, active and in the default palette
-       * unless `overrides` says otherwise, with the texts given.
+       * A draft or published article of the store (`ArticleOptions`), at an
+       * address no other test has.
        */
-      createStore: (
-        overrides?: Partial<Omit<StoreInput, "id" | "slug">>,
-        texts?: StoreTextInput[]
-      ) => Promise<CreatedStore>;
-      /** Another user, for "someone else's" cases. */
-      createUser: (name: string) => Promise<CreatedUser>;
+      createArticle: (options: ArticleOptions) => Promise<{
+        id: number;
+        slug: string;
+      }>;
       /**
-       * A category of the store at `position`, named in Spanish (and English
-       * when given). Deleted with its store.
+       * A category of the store at the end of its list, named in Spanish
+       * (and English when given). The name and slug carry the test's own tag.
        */
-      createCategory: (
-        storeId: number,
-        names: {
-          nameEn?: string;
-          nameEs: string;
-          position: number;
-          slug: string;
-        }
-      ) => Promise<{ id: number; slug: string }>;
-      /** A draft article of the store in a category. Deleted with its store. */
-      createArticle: (
-        storeId: number,
-        categoryId: number,
-        title: string,
-        options?: ArticleOptions
-      ) => Promise<{ id: number; slug: string }>;
+      createCategory: (names: {
+        nameEn?: string;
+        nameEs: string;
+        slug: string;
+      }) => Promise<{ id: number; slug: string }>;
       /**
-       * A filter of the store (FER-033) named in Spanish, with these values
-       * in order, each carried by the articles listed. Deleted with its
-       * store.
+       * A filter of the store (FER-033) at the end of its list, named in
+       * Spanish, with its values in order.
        */
       createFilter: (
-        storeId: number,
-        filter: {
-          nameEs: string;
-          slug: string;
-          values: {
-            articleIds?: number[];
-            nameEs: string;
-            slug: string;
-            swatchColor?: string;
-          }[];
-        }
+        filter: FilterOptions
       ) => Promise<{ id: number; valueIds: number[] }>;
       /**
-       * A login that can sign in through the form (FER-009): its role, a
-       * password, and a membership in each store given. Unique per call.
+       * A login that can sign in through the form (FER-009). Every login is
+       * an admin and reaches the whole admin (FER-038). Unique per call.
        */
-      createLogin: (options: {
-        role: "member" | "superadmin";
-        storeIds?: number[];
-      }) => Promise<SeededLogin>;
+      createLogin: () => Promise<SeededLogin>;
     };
+    /** The id of the store, the table's one row, which every spec shares. */
+    storeId: number;
   };
 }
 
 /**
- * Seeds rows for a test and deletes, at teardown, exactly the rows it seeded,
- * captured as each insert returns. Never by name prefix or `LIKE`: those
- * reach a parallel worker's rows. What a page creates through the UI belongs
- * to a store the spec seeded, and goes with it. Automatic, so a spec that
- * only clicks still cleans up.
+ * Seeds rows for a test in the one store every spec shares (FER-038) and
+ * deletes, at teardown, exactly the rows the test created: the ones seeded
+ * here, captured as each insert returns, and the ones its pages created
+ * through the UI (`createdRows`). Never by name prefix or `LIKE`, which
+ * reach a parallel worker's rows, and never the store. Automatic, so a spec
+ * that only clicks still cleans up.
  */
 export const test = userTest.extend<DbFixture>({
   db: [
-    // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
-    async ({}, use) => {
+    async ({ createdRows }, use) => {
       const connectionString = process.env.DATABASE_URL;
 
       if (!connectionString) {
@@ -139,273 +122,284 @@ export const test = userTest.extend<DbFixture>({
 
       const pool = new Pool({ connectionString, max: 2 });
       const db = drizzle(pool, { schema });
-      const seededUserIds: string[] = [];
-      const seededStoreIds: number[] = [];
+      const seeded: {
+        articleIds: number[];
+        categoryIds: number[];
+        filterIds: number[];
+        userIds: string[];
+      } = { articleIds: [], categoryIds: [], filterIds: [], userIds: [] };
 
-      const seed = {
-        createStore: async (
-          overrides: Partial<Omit<StoreInput, "id" | "slug">> = {},
-          texts: StoreTextInput[] = []
-        ): Promise<CreatedStore> => {
-          const [created] = await db
-            .insert(store)
-            .values({
-              colorAccent: "#c8f31d",
-              colorBackground: "#f2f3f0",
-              colorContrast: "#111312",
-              colorForeground: "#111312",
-              colorSurface: "#ffffff",
-              currencyCode: "UYU",
-              isActive: true,
-              name: "E2E Store",
-              ...overrides,
-              // Never seen before, so no cached page or cached 404 exists for
-              // it: 40 characters, the longest a slug may be.
-              slug: `e2e-${crypto.randomUUID()}`,
-            })
-            .returning();
+      try {
+        const [theStore] = await db
+          .select({ id: store.id })
+          .from(store)
+          .limit(1);
 
-          if (!created) {
-            throw new Error("Inserting a store returned no row");
-          }
+        if (!theStore) {
+          throw new Error(
+            "The e2e database has no store: run its migrations (0012 creates it)"
+          );
+        }
 
-          seededStoreIds.push(created.id);
+        const storeId = theStore.id;
 
-          if (texts.length > 0) {
-            await db
-              .insert(storeTranslation)
-              .values(texts.map((text) => ({ ...text, storeId: created.id })));
-          }
+        const seed: DbFixture["db"]["seed"] = {
+          createCategory: async ({ nameEn, nameEs, slug }) => {
+            const [created] = await db
+              .insert(category)
+              .values({
+                // After every category of the store, as the admin adds one.
+                position: sql`(select coalesce(max(${category.position}), -1) + 1 from ${category} where ${category.storeId} = ${storeId})`,
+                slug,
+                storeId,
+              })
+              .returning({ id: category.id, slug: category.slug });
 
-          return created;
-        },
+            if (!created) {
+              throw new Error("Inserting a category returned no row");
+            }
 
-        createCategory: async (
-          storeId: number,
-          {
-            nameEn,
-            nameEs,
-            position,
-            slug,
-          }: { nameEn?: string; nameEs: string; position: number; slug: string }
-        ): Promise<{ id: number; slug: string }> => {
-          const [created] = await db
-            .insert(category)
-            .values({ position, slug, storeId })
-            .returning({ id: category.id, slug: category.slug });
+            seeded.categoryIds.push(created.id);
+            await db.insert(categoryTranslation).values([
+              { categoryId: created.id, locale: "es", name: nameEs },
+              ...(nameEn
+                ? [
+                    {
+                      categoryId: created.id,
+                      locale: "en" as const,
+                      name: nameEn,
+                    },
+                  ]
+                : []),
+            ]);
 
-          if (!created) {
-            throw new Error("Inserting a category returned no row");
-          }
+            return created;
+          },
 
-          await db.insert(categoryTranslation).values([
-            { categoryId: created.id, locale: "es", name: nameEs },
-            ...(nameEn
-              ? [
-                  {
-                    categoryId: created.id,
-                    locale: "en" as const,
-                    name: nameEn,
-                  },
-                ]
-              : []),
-          ]);
-
-          return created;
-        },
-
-        createArticle: async (
-          storeId: number,
-          categoryId: number,
-          title: string,
-          {
+          createArticle: async ({
+            categoryId,
+            description = "",
             images = 1,
             isAvailable = true,
             priceAmount,
             publishedAt,
-          }: ArticleOptions = {}
-        ): Promise<{ id: number; slug: string }> => {
-          const published = priceAmount !== undefined;
-          const [created] = await db
-            .insert(product)
-            .values({
-              categoryId,
-              isAvailable,
-              priceAmount: priceAmount ?? null,
-              publishedAt: published ? (publishedAt ?? new Date()) : null,
-              slug: `e2e-${crypto.randomUUID()}`,
-              status: published ? "published" : "draft",
-              storeId,
-            })
-            .returning({ id: product.id, slug: product.slug });
-
-          if (!created) {
-            throw new Error("Inserting an article returned no row");
-          }
-
-          await db.insert(productTranslation).values({
-            description: "",
-            locale: "es",
-            productId: created.id,
             title,
-          });
-
-          if (published && images > 0) {
-            const photos = [
-              "/seed/ring-1.jpg",
-              "/seed/ring-2.jpg",
-              "/seed/ring-3.jpg",
-            ];
-            await db.insert(productImage).values(
-              Array.from({ length: images }, (_, position) => ({
-                height: 1000,
-                position,
-                productId: created.id,
-                url: photos[position % photos.length] ?? "/seed/ring-1.jpg",
-                width: 800,
-              }))
-            );
-          }
-
-          return created;
-        },
-
-        createFilter: async (
-          storeId: number,
-          {
-            nameEs,
-            slug,
-            values,
-          }: {
-            nameEs: string;
-            slug: string;
-            values: {
-              articleIds?: number[];
-              nameEs: string;
-              slug: string;
-              swatchColor?: string;
-            }[];
-          }
-        ): Promise<{ id: number; valueIds: number[] }> => {
-          const [created] = await db
-            .insert(attribute)
-            .values({ position: 0, slug, storeId })
-            .returning({ id: attribute.id });
-
-          if (!created) {
-            throw new Error("Inserting a filter returned no row");
-          }
-
-          await db
-            .insert(attributeTranslation)
-            .values({ attributeId: created.id, locale: "es", name: nameEs });
-          const valueIds: number[] = [];
-
-          for (const [position, value] of values.entries()) {
-            const [row] = await db
-              .insert(attributeValue)
+          }) => {
+            const published = priceAmount !== undefined;
+            const [created] = await db
+              .insert(product)
               .values({
-                attributeId: created.id,
-                position,
-                slug: value.slug,
-                swatchColor: value.swatchColor ?? null,
+                categoryId,
+                isAvailable,
+                priceAmount: priceAmount ?? null,
+                publishedAt: published ? (publishedAt ?? new Date()) : null,
+                // Never seen before, so no cached page or cached 404 exists
+                // for it.
+                slug: `e2e-${crypto.randomUUID()}`,
+                status: published ? "published" : "draft",
+                storeId,
               })
-              .returning({ id: attributeValue.id });
+              .returning({ id: product.id, slug: product.slug });
 
-            if (!row) {
-              throw new Error("Inserting a filter value returned no row");
+            if (!created) {
+              throw new Error("Inserting an article returned no row");
             }
 
-            await db.insert(attributeValueTranslation).values({
-              attributeValueId: row.id,
+            seeded.articleIds.push(created.id);
+            await db.insert(productTranslation).values({
+              description,
               locale: "es",
-              name: value.nameEs,
+              productId: created.id,
+              title,
             });
 
-            if (value.articleIds && value.articleIds.length > 0) {
-              await db.insert(productAttributeValue).values(
-                value.articleIds.map((productId) => ({
-                  attributeValueId: row.id,
-                  productId,
+            if (published && images > 0) {
+              await db.insert(productImage).values(
+                Array.from({ length: images }, (_, position) => ({
+                  height: 1000,
+                  position,
+                  productId: created.id,
+                  url: PHOTOS[position % PHOTOS.length] ?? "/seed/ring-1.jpg",
+                  width: 800,
                 }))
               );
             }
 
-            valueIds.push(row.id);
-          }
+            return created;
+          },
 
-          return { id: created.id, valueIds };
-        },
+          createFilter: async ({ nameEs, slug, values }) => {
+            const [created] = await db
+              .insert(attribute)
+              .values({
+                position: sql`(select coalesce(max(${attribute.position}), -1) + 1 from ${attribute} where ${attribute.storeId} = ${storeId})`,
+                slug,
+                storeId,
+              })
+              .returning({ id: attribute.id });
 
-        createLogin: async ({
-          role,
-          storeIds = [],
-        }: {
-          role: "member" | "superadmin";
-          storeIds?: number[];
-        }): Promise<SeededLogin> => {
-          const id = crypto.randomUUID();
-          const login = {
-            email: `e2e-login-${id}@example.com`,
-            id,
-            name: `E2E ${role} ${id.slice(0, 8)}`,
-            password: LOGIN_PASSWORD,
-          };
-          // Better Auth's own hasher, so the sign-in form accepts it.
-          const hash = await hashPassword(login.password);
+            if (!created) {
+              throw new Error("Inserting a filter returned no row");
+            }
 
-          await db.insert(user).values({
-            email: login.email,
-            id,
-            name: login.name,
-            role,
-          });
-          seededUserIds.push(id);
-          await db.insert(account).values({
-            accountId: id,
-            id: crypto.randomUUID(),
-            password: hash,
-            providerId: "credential",
-            userId: id,
-          });
-
-          if (storeIds.length > 0) {
+            seeded.filterIds.push(created.id);
             await db
-              .insert(storeMember)
-              .values(storeIds.map((storeId) => ({ storeId, userId: id })));
-          }
+              .insert(attributeTranslation)
+              .values({ attributeId: created.id, locale: "es", name: nameEs });
+            const valueIds: number[] = [];
 
-          return login;
-        },
+            for (const [position, value] of values.entries()) {
+              const [row] = await db
+                .insert(attributeValue)
+                .values({
+                  attributeId: created.id,
+                  position,
+                  slug: value.slug,
+                  swatchColor: value.swatchColor ?? null,
+                })
+                .returning({ id: attributeValue.id });
 
-        createUser: async (name: string): Promise<CreatedUser> => {
-          const id = crypto.randomUUID();
-          const [created] = await db
-            .insert(user)
-            .values({ id, name, email: `e2e-${id}@example.com` })
-            .returning();
+              if (!row) {
+                throw new Error("Inserting a filter value returned no row");
+              }
 
-          if (!created) {
-            throw new Error("Inserting a user returned no row");
-          }
+              await db.insert(attributeValueTranslation).values({
+                attributeValueId: row.id,
+                locale: "es",
+                name: value.nameEs,
+              });
 
-          seededUserIds.push(created.id);
-          return created;
-        },
-      };
+              if (value.articleIds && value.articleIds.length > 0) {
+                await db.insert(productAttributeValue).values(
+                  value.articleIds.map((productId) => ({
+                    attributeValueId: row.id,
+                    productId,
+                  }))
+                );
+              }
 
-      try {
-        await use({ drizzle: db, seed });
+              valueIds.push(row.id);
+            }
+
+            return { id: created.id, valueIds };
+          },
+
+          createLogin: async () => {
+            const id = crypto.randomUUID();
+            const login = {
+              email: `e2e-login-${id}@example.com`,
+              id,
+              name: `E2E Admin ${id}`,
+              password: LOGIN_PASSWORD,
+            };
+            // Better Auth's own hasher, so the sign-in form accepts it.
+            const hash = await hashPassword(login.password);
+
+            await db
+              .insert(user)
+              .values({ email: login.email, id, name: login.name });
+            seeded.userIds.push(id);
+            await db.insert(account).values({
+              accountId: id,
+              id: crypto.randomUUID(),
+              password: hash,
+              providerId: "credential",
+              userId: id,
+            });
+
+            return login;
+          },
+        };
+
+        await use({ drizzle: db, seed, storeId });
       } finally {
-        // Cascades to the stores' texts.
-        await db.delete(store).where(inArray(store.id, seededStoreIds));
-        // Cascades to the users' sessions, accounts and memberships.
-        await db.delete(user).where(inArray(user.id, seededUserIds));
-        await pool.end();
+        try {
+          // A response still being read when the test ended still counts.
+          await Promise.all(createdRows.pending);
+          await deleteCreated(db, {
+            ...seeded,
+            categoryIds: [...seeded.categoryIds, ...createdRows.categoryIds],
+            filterIds: [...seeded.filterIds, ...createdRows.filterIds],
+            filterValueIds: createdRows.filterValueIds,
+            orderTokens: createdRows.orderTokens,
+          });
+        } finally {
+          await pool.end();
+        }
+      }
+
+      // After the cleanup, so what could be deleted was.
+      if (createdRows.unreadable.length > 0) {
+        throw new Error(
+          `Rows created through the UI leaked, their ids unreadable: ${createdRows.unreadable.join("; ")}`
+        );
       }
     },
     { auto: true },
   ],
 });
+
+/**
+ * Deletes a test's rows, in the order their references allow. The orders
+ * first: an order line's article is set to null when the article goes, and
+ * nothing would lead to the order after that. Then the articles, which hold
+ * their category (`product_store_category_fk` refuses a category with
+ * articles), the filters with their values, the categories, and the logins
+ * with their sessions and accounts. An order's lines and status history go
+ * with it, an article's texts, photos and filter values with it.
+ */
+async function deleteCreated(
+  db: ReturnType<typeof drizzle<typeof schema>>,
+  rows: {
+    articleIds: number[];
+    categoryIds: number[];
+    filterIds: number[];
+    filterValueIds: number[];
+    orderTokens: string[];
+    userIds: string[];
+  }
+): Promise<void> {
+  const orderIds =
+    rows.articleIds.length === 0
+      ? []
+      : await db
+          .selectDistinct({ id: orderItem.orderId })
+          .from(orderItem)
+          .where(inArray(orderItem.productId, rows.articleIds));
+
+  await db.delete(customerOrder).where(
+    or(
+      inArray(
+        customerOrder.id,
+        orderIds.map((order) => order.id)
+      ),
+      inArray(customerOrder.token, rows.orderTokens)
+    )
+  );
+  await db.delete(product).where(inArray(product.id, rows.articleIds));
+  await db
+    .delete(attributeValue)
+    .where(inArray(attributeValue.id, rows.filterValueIds));
+  await db.delete(attribute).where(inArray(attribute.id, rows.filterIds));
+  await db.delete(category).where(inArray(category.id, rows.categoryIds));
+  await db.delete(user).where(inArray(user.id, rows.userIds));
+}
+
+/** The test's orders: the ones holding one of `articleIds`, newest last. */
+export async function ordersHolding(
+  db: ReturnType<typeof drizzle<typeof schema>>,
+  articleIds: number[]
+) {
+  return await db
+    .selectDistinct({
+      code: customerOrder.code,
+      id: customerOrder.id,
+      token: customerOrder.token,
+    })
+    .from(customerOrder)
+    .innerJoin(orderItem, eq(orderItem.orderId, customerOrder.id))
+    .where(inArray(orderItem.productId, articleIds))
+    .orderBy(customerOrder.id);
+}
 
 export { expect } from "@playwright/test";

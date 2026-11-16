@@ -1,170 +1,195 @@
-import { expect, test } from "../../fixtures";
+import type { Page } from "@playwright/test";
+
+import { type SeededLogin, expect, test } from "../../fixtures";
+import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
 import { AdminPage } from "../../page-objects/admin.page";
+import { StorePage } from "../../page-objects/store.page";
 
-// FER-013. Each test starts signed out and signs in as a login it seeds.
+// FER-013, FER-038. Each test starts signed out and signs in as a login it
+// seeds: every login is an admin and reaches every section.
 test.use({ storageState: { cookies: [], origins: [] } });
 
+/** The admin's sections in the navigation's order, with each one's heading. */
+const SECTIONS = [
+  ["products", "Artículos"],
+  ["categories", "Categorías"],
+  ["filters", "Filtros"],
+  ["orders", "Pedidos"],
+  ["home", "Inicio"],
+  ["settings", "Ajustes"],
+  ["users", "Usuarios"],
+  ["metrics", "Métricas"],
+] as const;
+
+/** Signs `login` in through the form, landing in the admin. */
+async function signIn(page: Page, login: SeededLogin) {
+  const signInPage = new AdminSignInPage(page);
+  await signInPage.goto();
+  await signInPage.signIn(login.email, login.password);
+  const admin = new AdminPage(page);
+  await admin.waitForLoad();
+
+  return admin;
+}
+
 test.describe("Admin sign-in and landing", () => {
-  test("an anonymous visit ends at sign-in and comes back to the page asked for", async ({
+  for (const [section, heading] of SECTIONS) {
+    test(`an anonymous visit to /admin/${section} ends at sign-in and comes back to it`, async ({
+      db,
+      page,
+    }) => {
+      const login = await db.seed.createLogin();
+      const signInPage = new AdminSignInPage(page);
+
+      await page.goto(`/admin/${section}`);
+      await signInPage.waitForLoad();
+      expect(new URL(page.url()).searchParams.get("next")).toBe(
+        `/admin/${section}`
+      );
+
+      await signInPage.signIn(login.email, login.password);
+
+      const admin = new AdminPage(page);
+      await admin.waitForLoad();
+      await expect(admin.heading()).toHaveText(heading);
+      expect(new URL(page.url()).pathname).toBe(`/admin/${section}`);
+    });
+  }
+
+  test("an anonymous visit to an English admin page ends at the English sign-in and comes back to it", async ({
     db,
     page,
   }) => {
-    const store = await db.seed.createStore({ name: "Tienda Pedidos" });
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    const signIn = new AdminSignInPage(page);
+    const login = await db.seed.createLogin();
+    const signInPage = new AdminSignInPage(page);
 
-    await page.goto(`/admin/${store.slug}/orders`);
-    await signIn.waitForLoad();
-    expect(new URL(page.url()).searchParams.get("next")).toBe(
-      `/admin/${store.slug}/orders`
+    await page.goto("/en/admin/filters");
+    await signInPage.waitForLoad();
+    const url = new URL(page.url());
+    expect(url.pathname).toBe("/en/admin/sign-in");
+    expect(url.searchParams.get("next")).toBe("/en/admin/filters");
+    await signInPage.expectDocumentLanguage("en");
+    // The submit button is enabled only once React owns the form.
+    await expect(signInPage.getButton("Sign In")).toBeEnabled();
+    await signInPage.fillField("Email", login.email);
+    await signInPage.fillField("Password", login.password);
+
+    await completeRpcAction(
+      page,
+      "/api/auth/sign-in/email",
+      async () => {
+        await signInPage.getButton("Sign In").click();
+      },
+      { input: { email: login.email } }
     );
-
-    await signIn.signIn(login.email, login.password);
 
     const admin = new AdminPage(page);
     await admin.waitForLoad();
+    await expect(admin.heading()).toHaveText("Filters");
+    expect(new URL(page.url()).pathname).toBe("/en/admin/filters");
+  });
+
+  test("/admin opens the orders, in the language of the address", async ({
+    db,
+    page,
+  }) => {
+    const admin = await signIn(page, await db.seed.createLogin());
+
+    await admin.goto("/admin");
+
     await expect(admin.heading()).toHaveText("Pedidos");
-    expect(new URL(page.url()).pathname).toBe(`/admin/${store.slug}/orders`);
-  });
-
-  test("a superadmin lands in the platform area, with both navigations", async ({
-    db,
-    page,
-  }) => {
-    const login = await db.seed.createLogin({ role: "superadmin" });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-
-    await signIn.signIn(login.email, login.password);
-
-    const admin = new AdminPage(page);
-    await admin.waitForLoad();
-    await expect(admin.heading()).toHaveText("Tiendas");
-    await expect(admin.platformNavigation()).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe("/admin/platform/stores");
-  });
-
-  test("a member of one store goes straight to it, and never sees the platform", async ({
-    db,
-    page,
-  }) => {
-    const store = await db.seed.createStore({ name: "Tienda Única" });
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-
-    await signIn.signIn(login.email, login.password);
-
-    const admin = new AdminPage(page);
-    await admin.waitForLoad();
-    await expect(admin.heading()).toHaveText("Artículos");
-    expect(new URL(page.url()).pathname).toBe(`/admin/${store.slug}/products`);
-    await expect(admin.storeNavigation()).toBeVisible();
-    await expect(admin.platformNavigation()).toHaveCount(0);
-  });
-
-  test("a member of several stores picks one", async ({ db, page }) => {
-    const first = await db.seed.createStore({ name: "Primera Tienda" });
-    const second = await db.seed.createStore({ name: "Segunda Tienda" });
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [first.id, second.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-
-    await signIn.signIn(login.email, login.password);
-
-    const admin = new AdminPage(page);
-    await admin.waitForLoad();
-    await expect(admin.heading()).toHaveText("Elegí una tienda");
-    const choice = page
-      .getByTestId("admin-store-picker")
-      .getByRole("link", { name: "Segunda Tienda" });
-    await expect(choice).toHaveAttribute(
-      "href",
-      `/admin/${second.slug}/products`
+    expect(new URL(page.url()).pathname).toBe("/admin/orders");
+    await expect(admin.sectionLink("Pedidos")).toHaveAttribute(
+      "aria-current",
+      "page"
     );
 
-    await choice.click();
+    await admin.goto("/en/admin");
 
-    await expect(admin.heading()).toHaveText("Artículos");
-    expect(new URL(page.url()).pathname).toBe(`/admin/${second.slug}/products`);
+    await expect(admin.heading()).toHaveText("Orders");
+    expect(new URL(page.url()).pathname).toBe("/en/admin/orders");
+  });
+
+  test("any login reaches every section, from one navigation that marks the one on screen", async ({
+    db,
+    page,
+  }) => {
+    const admin = await signIn(page, await db.seed.createLogin());
+    const links = admin.navigation().getByRole("link");
+
+    // The eight sections, in order, for every login.
+    await expect(links).toHaveCount(SECTIONS.length);
+
+    for (const [index, [section]] of SECTIONS.entries()) {
+      await expect(links.nth(index)).toHaveAttribute(
+        "href",
+        `/admin/${section}`
+      );
+    }
+
+    for (const [section, heading] of SECTIONS) {
+      await test.step(section, async () => {
+        await admin.goto(`/admin/${section}`);
+
+        await expect(admin.heading()).toHaveText(heading);
+        await expect(admin.sectionLink(heading)).toHaveAttribute(
+          "aria-current",
+          "page"
+        );
+        // One list of sections: no store switcher, no platform area. The
+        // orders add their own tabs.
+        const navigations = page.getByRole("navigation").filter({
+          visible: true,
+        });
+        const names =
+          section === "orders"
+            ? ["Secciones del panel", "Filtrar por estado"]
+            : ["Secciones del panel"];
+        await expect(navigations).toHaveCount(names.length);
+
+        for (const [index, name] of names.entries()) {
+          await expect(navigations.nth(index)).toHaveAccessibleName(name);
+        }
+      });
+    }
   });
 
   test("signing out ends the session: the admin asks to sign in again", async ({
     db,
     page,
   }) => {
-    const store = await db.seed.createStore();
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-    await signIn.signIn(login.email, login.password);
-    const admin = new AdminPage(page);
-    await admin.waitForLoad();
+    const admin = await signIn(page, await db.seed.createLogin());
 
     await admin.signOut();
 
-    await page.goto(`/admin/${store.slug}/products`);
-    await signIn.waitForLoad();
+    await page.goto("/admin/products");
+    await new AdminSignInPage(page).waitForLoad();
+    expect(new URL(page.url()).searchParams.get("next")).toBe(
+      "/admin/products"
+    );
   });
 });
 
-test.describe("Admin authorization", () => {
-  test("a member typing a platform address gets the not-found page", async ({
-    db,
-    page,
-  }) => {
-    const store = await db.seed.createStore();
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
+test.describe("Admin addresses of the multi-store site", () => {
+  for (const path of [
+    "/admin/lr-market",
+    "/admin/lr-market/orders",
+    "/admin/platform",
+    "/admin/platform/stores",
+  ]) {
+    test(`a signed-in login opening ${path} gets the store's not-found page, not the admin`, async ({
+      authenticatedPage: page,
+    }) => {
+      const store = new StorePage(page);
+
+      const response = await page.goto(path);
+
+      expect(response?.status()).toBe(404);
+      await expect(store.getNotFoundHeading()).toBeVisible();
+      await expect(page.getByTestId("admin-shell")).toHaveCount(0);
     });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-    await signIn.signIn(login.email, login.password);
-    await new AdminPage(page).waitForLoad();
-
-    await page.goto("/admin/platform/stores");
-
-    await expect(
-      page.getByRole("heading", { name: "Página no encontrada" })
-    ).toBeVisible();
-    await expect(page.getByTestId("admin-shell")).toHaveCount(0);
-  });
-
-  test("a member typing another store's admin gets the not-found page", async ({
-    db,
-    page,
-  }) => {
-    const own = await db.seed.createStore();
-    const other = await db.seed.createStore();
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [own.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-    await signIn.signIn(login.email, login.password);
-    await new AdminPage(page).waitForLoad();
-
-    await page.goto(`/admin/${other.slug}/products`);
-
-    await expect(
-      page.getByRole("heading", { name: "Página no encontrada" })
-    ).toBeVisible();
-  });
+  }
 });
 
 test.describe("Admin on a phone", () => {
@@ -174,28 +199,16 @@ test.describe("Admin on a phone", () => {
     db,
     page,
   }) => {
-    const store = await db.seed.createStore({ name: "Tienda del Puesto" });
-    const login = await db.seed.createLogin({
-      role: "member",
-      storeIds: [store.id],
-    });
-    const signIn = new AdminSignInPage(page);
-    await signIn.goto();
-    await signIn.signIn(login.email, login.password);
-    const admin = new AdminPage(page);
-    await admin.waitForLoad();
+    const admin = await signIn(page, await db.seed.createLogin());
 
-    await admin
-      .storeNavigation()
-      .getByRole("link", { name: "Pedidos" })
-      .click();
+    await admin.sectionLink("Categorías").click();
 
-    await expect(admin.heading()).toHaveText("Pedidos");
+    await expect(admin.heading()).toHaveText("Categorías");
     await expect(
       page.getByRole("button", { name: "Cerrar sesión" })
     ).toBeVisible();
     await expect(
-      page.getByRole("banner").getByText("Tienda del Puesto")
+      page.getByRole("banner").getByRole("img", { name: "LR Market" })
     ).toBeVisible();
     expect(
       await page.evaluate(

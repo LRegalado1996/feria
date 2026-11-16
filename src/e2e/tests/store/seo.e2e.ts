@@ -1,54 +1,35 @@
-import { type DbFixture, expect, test } from "../../fixtures";
+import {
+  type DbFixture,
+  expect,
+  STORE_SETTINGS,
+  STORE_TEXTS,
+  test,
+  uniqueTag,
+} from "../../fixtures";
 
 // FER-024: what search engines and AI assistants read. Each test seeds its
-// own stores; other workers' stores are in the database too, so every
-// assertion is about this test's own addresses.
+// own articles; other tests' articles are in the one store too (FER-038), so
+// every assertion about an article is about this test's own addresses.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const TEXTS = [
-  { description: "Joyas.", locale: "es" as const, tagline: "Joyas" },
-  { description: "Jewelry.", locale: "en" as const, tagline: "Jewelry" },
-];
-
-/**
- * An active store with a published ring and a draft one, and an inactive
- * store with a published article of its own.
- */
+/** A published ring and a draft one, in a category of the test's own. */
 async function setup({ db }: { db: DbFixture["db"] }) {
-  const shop = await db.seed.createStore({ name: "SEO Store" }, TEXTS);
-  const rings = await db.seed.createCategory(shop.id, {
-    nameEs: "Anillos",
-    position: 0,
-    slug: "anillos",
+  const tag = uniqueTag();
+  const rings = await db.seed.createCategory({
+    nameEs: `Anillos ${tag}`,
+    slug: `anillos-${tag}`,
   });
-  const published = await db.seed.createArticle(
-    shop.id,
-    rings.id,
-    "Anillo sello",
-    { priceAmount: 69_000 }
-  );
-  const draft = await db.seed.createArticle(
-    shop.id,
-    rings.id,
-    "Anillo borrador"
-  );
-  const closed = await db.seed.createStore(
-    { isActive: false, name: "Closed Store" },
-    TEXTS
-  );
-  const closedRings = await db.seed.createCategory(closed.id, {
-    nameEs: "Anillos",
-    position: 0,
-    slug: "anillos",
+  const published = await db.seed.createArticle({
+    categoryId: rings.id,
+    priceAmount: 69_000,
+    title: "Anillo sello",
   });
-  const hidden = await db.seed.createArticle(
-    closed.id,
-    closedRings.id,
-    "Anillo oculto",
-    { priceAmount: 50_000 }
-  );
+  const draft = await db.seed.createArticle({
+    categoryId: rings.id,
+    title: `Anillo borrador ${tag}`,
+  });
 
-  return { closed, draft, hidden, published, shop };
+  return { draft, published, tag };
 }
 
 /** The paths of every `<loc>` in a sitemap, and of every `hreflang` link. */
@@ -105,71 +86,64 @@ test.describe("robots.txt", () => {
 });
 
 test.describe("sitemap.xml", () => {
-  test("lists the store's home, catalog and published article in both languages, never a draft or an inactive store", async ({
+  test("lists the store's home, catalog and published article in both languages, never a draft", async ({
     db,
     request,
   }) => {
-    const { closed, draft, hidden, published, shop } = await setup({ db });
+    const { draft, published } = await setup({ db });
 
     const response = await request.get("/sitemap.xml");
     const { alternates, locs } = sitemapPaths(await response.text());
 
     expect(response.status()).toBe(200);
-    const own = (path: string) =>
-      path.startsWith(`/${shop.slug}`) || path.startsWith(`/en/${shop.slug}`);
-    expect(locs.filter(own)).toEqual([
-      `/${shop.slug}`,
-      `/en/${shop.slug}`,
-      `/${shop.slug}/products`,
-      `/en/${shop.slug}/products`,
-      `/${shop.slug}/products/${published.slug}`,
-      `/en/${shop.slug}/products/${published.slug}`,
-    ]);
-    expect(alternates).toContain(`/en/${shop.slug}/products/${published.slug}`);
+    // The store's own pages first, then its articles, this test's among them.
+    const pages = ["/", "/en", "/products", "/en/products"];
+    const article = [
+      `/products/${published.slug}`,
+      `/en/products/${published.slug}`,
+    ];
+    expect(locs.slice(0, pages.length)).toEqual(pages);
+    expect(locs.filter((path) => article.includes(path))).toEqual(article);
+    expect(alternates).toContain(`/en/products/${published.slug}`);
 
     const everything = [...locs, ...alternates];
     expect(everything.filter((path) => path.endsWith(draft.slug))).toEqual([]);
-    expect(everything.filter((path) => path.includes(closed.slug))).toEqual([]);
-    expect(everything.filter((path) => path.endsWith(hidden.slug))).toEqual([]);
   });
 });
 
 test.describe("llms.txt", () => {
-  for (const [language, prefix, heading] of [
-    ["Spanish", "", "## Artículos"],
-    ["English", "/en", "## Articles"],
+  for (const [locale, language, prefix, heading] of [
+    ["es", "Spanish", "", "## Artículos"],
+    ["en", "English", "/en", "## Articles"],
   ] as const) {
     test(`describes the store in ${language} with its published article, never the draft`, async ({
       db,
       request,
     }) => {
-      const { draft, published, shop } = await setup({ db });
+      const { draft, published, tag } = await setup({ db });
+      const texts = STORE_TEXTS[locale];
 
-      const response = await request.get(`${prefix}/${shop.slug}/llms.txt`);
+      const response = await request.get(`${prefix}/llms.txt`);
       const body = await response.text();
 
       expect(response.status()).toBe(200);
       expect(response.headers()["content-type"]).toBe(
         "text/markdown; charset=utf-8"
       );
-      expect(body.startsWith("# SEO Store\n")).toBe(true);
+      expect(
+        body.startsWith(
+          `# ${STORE_SETTINGS.name}\n\n> ${texts.tagline}\n\n${texts.description}\n`
+        )
+      ).toBe(true);
       expect(body).toContain(`${heading}\n`);
       expect(body).toMatch(
         new RegExp(
-          String.raw`^- \[Anillo sello\]\(https?://[^/)]+${prefix}/${shop.slug}/products/${published.slug}\): `,
+          String.raw`^- \[Anillo sello\]\(https?://[^/)]+${prefix}/products/${published.slug}\): `,
           "mu"
         )
       );
       expect(body).not.toContain(draft.slug);
-      expect(body).not.toContain("Anillo borrador");
+      expect(body).not.toContain(`Anillo borrador ${tag}`);
     });
   }
-
-  test("answers 404 for an inactive store", async ({ db, request }) => {
-    const { closed } = await setup({ db });
-
-    const response = await request.get(`/${closed.slug}/llms.txt`);
-
-    expect(response.status()).toBe(404);
-  });
 });

@@ -4,6 +4,7 @@ import {
   type BrowserContext,
   expect,
   type Page,
+  type Response,
   type WorkerInfo,
 } from "@playwright/test";
 import { betterAuth } from "better-auth";
@@ -34,19 +35,34 @@ export interface Identity {
   password: string;
 }
 
+/**
+ * Rows the test's pages created through the UI, read off the responses that
+ * created them, for the db fixture to delete at teardown.
+ */
+export interface CreatedRows {
+  categoryIds: number[];
+  filterIds: number[];
+  filterValueIds: number[];
+  /** An order's public token: what `order.create` answers, unique per order. */
+  orderTokens: string[];
+  /** Response bodies still being read when the test ended. */
+  pending: Promise<void>[];
+  /** Why a created row's id could not be read: that row leaks. */
+  unreadable: string[];
+}
+
 export interface UserFixtures {
   /** A page signed in as the worker's user, in its own context. */
   authenticatedPage: Page;
+  /** Rows the test's pages created through the UI (`CreatedRows`). */
+  createdRows: CreatedRows;
   /** A page with a session of its own, from a real sign-in: sign-out tests. */
   freshAuthenticatedPage: Page;
   /** Who the worker's user is. */
   identity: Identity;
-  /** A page signed in as the worker's superadmin, in its own context. */
-  superadminPage: Page;
 }
 
 interface WorkerFixtures {
-  workerSuperadmin: Identity & { storageState: StorageState };
   workerUser: Identity & { storageState: StorageState };
 }
 
@@ -58,9 +74,11 @@ export function requireBaseURL(baseURL: string | undefined): string {
   return baseURL;
 }
 
-// A worker fixture cannot read Playwright's test-scoped `baseURL`, so it
-// resolves the URL the way the config does.
-function workerBaseURL(): string {
+/**
+ * The base URL for a worker fixture, which cannot read Playwright's
+ * test-scoped `baseURL`: resolved the way the config resolves it.
+ */
+export function workerBaseURL(): string {
   // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- an empty E2E_BASE_URL means unset
   return process.env.E2E_BASE_URL || "http://localhost:3000";
 }
@@ -70,12 +88,12 @@ function workerBaseURL(): string {
  * instance: the password is hashed Better Auth's way, and no HTTP sign-up
  * counts against the app's rate limit. The email carries the worker index,
  * the one value unique among the workers running at once, so a restarted
- * worker finds the user it made before.
+ * worker finds the user it made before. Every login is an admin (FER-038),
+ * so this one reaches the whole admin.
  */
 async function provisionUser(
   index: number,
-  baseURL: string,
-  role: "member" | "superadmin" = "member"
+  baseURL: string
 ): Promise<Identity> {
   const connectionString = process.env.DATABASE_URL;
 
@@ -83,12 +101,9 @@ async function provisionUser(
     throw new Error("DATABASE_URL is required for e2e tests");
   }
 
-  // One login per worker and role (FER-009): a member with no store, and a
-  // superadmin for the specs that call platform procedures.
-  const prefix = role === "superadmin" ? "e2e-admin" : "e2e";
   const identity = {
-    email: `${prefix}-w${index}@example.com`,
-    name: `E2E ${role === "superadmin" ? "Superadmin" : "User"} w${index}`,
+    email: `e2e-w${index}@example.com`,
+    name: `E2E User w${index}`,
     password: PASSWORD,
   };
   const pool = new Pool({ connectionString, max: 1 });
@@ -101,27 +116,16 @@ async function provisionUser(
     });
 
     if (existing) {
-      // A run that died between creating the user and setting its role
-      // leaves a member where a superadmin is wanted: set it every time.
-      await db
-        .update(schema.user)
-        .set({ role })
-        .where(eq(schema.user.id, existing.id));
       return { ...identity, id: existing.id };
     }
 
-    // The app closes sign-up (FER-009); this fixture-local instance does not,
-    // and the role is set after, as `input: false` keeps it out of sign-up.
+    // The app closes sign-up (FER-009); this fixture-local instance does not.
     const auth = betterAuth({
       baseURL,
       database: drizzleAdapter(db, { provider: "pg", schema }),
       emailAndPassword: { enabled: true },
     });
     const { user } = await auth.api.signUpEmail({ body: identity });
-    await db
-      .update(schema.user)
-      .set({ role })
-      .where(eq(schema.user.id, user.id));
 
     return { ...identity, id: user.id };
   } finally {
@@ -157,6 +161,82 @@ async function signIn(
   return context;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The created row's `field`, from an oRPC answer: `{ json: { … } }`. */
+function readCreated(body: unknown, field: "id" | "token"): unknown {
+  return isRecord(body) && isRecord(body.json) ? body.json[field] : undefined;
+}
+
+/** The procedures that create a row, and where its key goes. */
+const CREATING = {
+  "/api/orpc/attribute/create": "filterIds",
+  "/api/orpc/attribute/createValue": "filterValueIds",
+  "/api/orpc/category/create": "categoryIds",
+  "/api/orpc/order/create": "orderTokens",
+} as const;
+
+function isCreating(pathname: string): pathname is keyof typeof CREATING {
+  return Object.hasOwn(CREATING, pathname);
+}
+
+/** Records the key of the row one creating response made. */
+async function recordCreated(
+  response: Response,
+  path: keyof typeof CREATING,
+  rows: CreatedRows
+): Promise<void> {
+  try {
+    const target = CREATING[path];
+    const body: unknown = await response.json();
+
+    if (target === "orderTokens") {
+      const token = readCreated(body, "token");
+
+      if (typeof token !== "string") {
+        throw new TypeError("no token in the answer");
+      }
+
+      rows.orderTokens.push(token);
+      return;
+    }
+
+    const id = readCreated(body, "id");
+
+    if (typeof id !== "number") {
+      throw new TypeError("no id in the answer");
+    }
+
+    rows[target].push(id);
+  } catch (error) {
+    // The page went away before the body was read, or the answer changed.
+    rows.unreadable.push(`${path}: ${String(error)}`);
+  }
+}
+
+/**
+ * Records the rows any page of `context` creates through the UI (a category,
+ * a filter or a value from the admin's forms, an order from the checkout)
+ * from the responses that created them, so teardown deletes exactly those.
+ * A request sent with `page.request` is not a page's and is not seen here:
+ * the orders it places hold the test's own articles, which teardown follows.
+ */
+function captureCreatedRows(context: BrowserContext, rows: CreatedRows): void {
+  context.on("response", (response) => {
+    if (response.request().method() !== "POST" || !response.ok()) {
+      return;
+    }
+
+    const { pathname } = new URL(response.url());
+
+    if (isCreating(pathname)) {
+      rows.pending.push(recordCreated(response, pathname, rows));
+    }
+  });
+}
+
 export const test = base.extend<UserFixtures, WorkerFixtures>({
   workerUser: [
     async (
@@ -166,27 +246,6 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     ) => {
       const baseURL = workerBaseURL();
       const identity = await provisionUser(workerInfo.parallelIndex, baseURL);
-      const context = await signIn(browser, baseURL, identity);
-      const storageState = await context.storageState();
-      await context.close();
-
-      await use({ ...identity, storageState });
-    },
-    { scope: "worker" },
-  ],
-
-  workerSuperadmin: [
-    async (
-      { browser }: { browser: Browser },
-      use: (user: WorkerFixtures["workerSuperadmin"]) => Promise<void>,
-      workerInfo: WorkerInfo
-    ) => {
-      const baseURL = workerBaseURL();
-      const identity = await provisionUser(
-        workerInfo.parallelIndex,
-        baseURL,
-        "superadmin"
-      );
       const context = await signIn(browser, baseURL, identity);
       const storageState = await context.storageState();
       await context.close();
@@ -209,32 +268,45 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     await use(workerUser.storageState);
   },
 
-  authenticatedPage: async ({ baseURL, browser, workerUser }, use) => {
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
+  createdRows: async ({}, use) => {
+    await use({
+      categoryIds: [],
+      filterIds: [],
+      filterValueIds: [],
+      orderTokens: [],
+      pending: [],
+      unreadable: [],
+    });
+  },
+
+  context: async ({ context, createdRows }, use) => {
+    captureCreatedRows(context, createdRows);
+    await use(context);
+  },
+
+  authenticatedPage: async (
+    { baseURL, browser, createdRows, workerUser },
+    use
+  ) => {
     const context = await browser.newContext({
       baseURL: requireBaseURL(baseURL),
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerUser.storageState,
     });
+    captureCreatedRows(context, createdRows);
     const page = await context.newPage();
 
     await use(page);
     await context.close();
   },
 
-  superadminPage: async ({ baseURL, browser, workerSuperadmin }, use) => {
-    const context = await browser.newContext({
-      baseURL: requireBaseURL(baseURL),
-      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
-      storageState: workerSuperadmin.storageState,
-    });
-    const page = await context.newPage();
-
-    await use(page);
-    await context.close();
-  },
-
-  freshAuthenticatedPage: async ({ baseURL, browser, identity }, use) => {
+  freshAuthenticatedPage: async (
+    { baseURL, browser, createdRows, identity },
+    use
+  ) => {
     const context = await signIn(browser, requireBaseURL(baseURL), identity);
+    captureCreatedRows(context, createdRows);
     const page = await context.newPage();
     await page.goto("/admin");
     // The admin's shell renders for a signed-in visitor only.

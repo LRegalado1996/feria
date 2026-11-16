@@ -1,71 +1,73 @@
 import type { Page, Request } from "@playwright/test";
-import { eq } from "drizzle-orm";
 
-import { customerOrder } from "../../../server/db/schema";
-import { type DbFixture, expect, test } from "../../fixtures";
+import {
+  type DbFixture,
+  expect,
+  ordersHolding,
+  STORE_SETTINGS,
+  test,
+  uniquePhone,
+  uniqueTag,
+} from "../../fixtures";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { StorePage } from "../../page-objects/store.page";
 
-// FER-026. Each test seeds its own store and articles; the orders its pages
-// place are deleted with the store (`customer_order.storeId` cascades, and
-// from it the order's items and status history).
+// FER-026. Each test seeds articles of its own, in a category of its own,
+// and orders from a phone of its own: the hourly limit counts a phone across
+// the store every spec shares (FER-038). The db fixture deletes the orders
+// holding the test's articles, and the ones its pages placed.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const ORDER_CREATE = "/api/orpc/order/create";
 const CART_PRODUCTS = "**/api/orpc/catalog/cartProducts";
+const CART_KEY = "feria:cart";
 
-/** A store with a necklace and a bracelet, the bracelet sold out if asked. */
+/** A necklace and a bracelet in a category of the test's own. */
 async function setup(
   { db }: { db: DbFixture["db"] },
   { braceletSoldOut = false }: { braceletSoldOut?: boolean } = {}
 ) {
-  const store = await db.seed.createStore({ name: "Checkout Store" });
-  const jewels = await db.seed.createCategory(store.id, {
-    nameEs: "Joyas",
-    position: 0,
-    slug: "joyas",
+  const tag = uniqueTag();
+  const jewels = await db.seed.createCategory({
+    nameEs: `Joyas ${tag}`,
+    slug: `joyas-${tag}`,
   });
-  const necklace = await db.seed.createArticle(
-    store.id,
-    jewels.id,
-    "Collar dorado",
-    { priceAmount: 120_000 }
-  );
-  const bracelet = await db.seed.createArticle(
-    store.id,
-    jewels.id,
-    "Pulsera violeta",
-    { isAvailable: !braceletSoldOut, priceAmount: 54_000 }
-  );
+  const necklace = await db.seed.createArticle({
+    categoryId: jewels.id,
+    priceAmount: 120_000,
+    title: "Collar dorado",
+  });
+  const bracelet = await db.seed.createArticle({
+    categoryId: jewels.id,
+    isAvailable: !braceletSoldOut,
+    priceAmount: 54_000,
+    title: "Pulsera violeta",
+  });
 
   return {
     bracelet,
+    jewels,
     necklace,
-    store,
-    storePage: (page: Page) => new StorePage(page, store.slug),
-    /** The store's orders, straight from the database. */
+    /** The test's orders, straight from the database. */
     orders: async () =>
-      await db.drizzle
-        .select({ code: customerOrder.code, token: customerOrder.token })
-        .from(customerOrder)
-        .where(eq(customerOrder.storeId, store.id)),
+      await ordersHolding(db.drizzle, [necklace.id, bracelet.id]),
+    phone: uniquePhone(),
   };
 }
 
-/** Puts a cart in the browser, as adding would have, then opens it. */
+/** Puts a cart in the browser, as adding would have, then opens `path`. */
 async function openCartWith(
   page: Page,
   path: string,
-  storeSlug: string,
   items: { productId: number; quantity: number }[]
 ) {
   // On the store's origin first: storage belongs to it.
-  await page.goto(`/${storeSlug}/products`);
+  await new StorePage(page).goto();
   await page.evaluate(
     ([key, value]) => {
       window.localStorage.setItem(key, value);
     },
-    [`feria:cart:${storeSlug}`, JSON.stringify(items)] as const
+    [CART_KEY, JSON.stringify(items)] as const
   );
   await page.goto(path);
 }
@@ -75,13 +77,16 @@ function cartLine(page: Page, title: string) {
   return page.getByTestId("store-cart-line").filter({ hasText: title });
 }
 
-/** Adds the necklace from the catalog and the bracelet from its own page. */
+/**
+ * Adds the necklace from its category in the catalog and the bracelet from
+ * its own page.
+ */
 async function addBothArticles(
   page: Page,
-  { braceletSlug, storeSlug }: { braceletSlug: string; storeSlug: string }
+  { braceletSlug, category }: { braceletSlug: string; category: string }
 ) {
-  const storePage = new StorePage(page, storeSlug);
-  await page.goto(`/${storeSlug}/products`);
+  const storePage = new StorePage(page);
+  await page.goto(`/products?category=${category}`);
   const addNecklace = page.getByRole("button", {
     name: "Agregar al carrito: Collar dorado",
   });
@@ -92,7 +97,7 @@ async function addBothArticles(
     "Carrito, 1 unidad"
   );
 
-  await page.goto(`/${storeSlug}/products/${braceletSlug}`);
+  await page.goto(`/products/${braceletSlug}`);
   const addBracelet = page.getByRole("button", {
     exact: true,
     name: "Agregar al carrito",
@@ -105,11 +110,11 @@ async function addBothArticles(
 }
 
 /** Fills the checkout once React owns the form. */
-async function fillCheckout(page: Page) {
+async function fillCheckout(page: Page, phone: string) {
   // Enabled only once React owns the form: a value typed before is lost.
   await expect(page.getByTestId("store-checkout-submit")).toBeEnabled();
   await page.getByLabel("Tu nombre").fill("Ana Prueba");
-  await page.getByLabel("Tu celular").fill("099 123 456");
+  await page.getByLabel("Tu celular").fill(phone);
   await page
     .getByLabel("Nota para la tienda (opcional)")
     .fill("Paso a la tarde.");
@@ -120,14 +125,15 @@ test.describe("Cart and checkout", () => {
     db,
     page,
   }) => {
-    const { bracelet, store, storePage } = await setup({ db });
+    const { bracelet, jewels, orders, phone } = await setup({ db });
+    const storePage = new StorePage(page);
     await addBothArticles(page, {
       braceletSlug: bracelet.slug,
-      storeSlug: store.slug,
+      category: jewels.slug,
     });
 
-    await storePage(page).getCartButton().click();
-    await expect(page).toHaveURL(`/${store.slug}/cart`);
+    await storePage.getCartButton().click();
+    await expect(page).toHaveURL("/cart");
     const necklaceLine = cartLine(page, "Collar dorado");
     await expect(necklaceLine.getByTestId("store-cart-quantity")).toHaveText(
       "1"
@@ -144,7 +150,7 @@ test.describe("Cart and checkout", () => {
     await expect(page.getByTestId("store-cart-total")).toHaveText(
       "Total$ 2.940"
     );
-    await fillCheckout(page);
+    await fillCheckout(page, phone.local);
 
     await completeRpcAction(
       page,
@@ -155,19 +161,20 @@ test.describe("Cart and checkout", () => {
       {
         input: {
           customerName: "Ana Prueba",
-          customerPhone: "099 123 456",
+          customerPhone: phone.local,
           note: "Paso a la tarde.",
-          storeSlug: store.slug,
         },
       }
     );
 
-    await expect(page).toHaveURL(
-      new RegExp(`/${store.slug}/orders/[A-Za-z0-9_-]{43}$`, "u")
-    );
+    const [placed] = await orders();
+    await expect(page).toHaveURL(`/orders/${placed?.token ?? ""}`);
     const order = page.getByTestId("store-order-page");
     await expect(order.getByTestId("store-order-banner")).toContainText(
       "¡Recibimos tu pedido!"
+    );
+    await expect(order.getByTestId("store-order-code")).toHaveText(
+      placed?.code ?? ""
     );
     await expect(order.getByTestId("store-order-code")).toHaveText(
       /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{5}$/u
@@ -182,13 +189,13 @@ test.describe("Cart and checkout", () => {
       "Total$ 2.940"
     );
     // The phone shows only its country code and its last three digits.
-    await expect(order).toContainText("+598•••••456");
-    await expect(order).not.toContainText("99123456");
+    await expect(order).toContainText(`+598•••••${phone.national.slice(-3)}`);
+    await expect(order).not.toContainText(phone.national);
     await expect(order.getByTestId("store-order-status")).toHaveText(
       "Recibido: la tienda lo va a preparar"
     );
     await expect(order).toContainText("Paso a la tarde.");
-    await expect(storePage(page).getCartButton()).toHaveAccessibleName(
+    await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, vacío"
     );
     // The address is the order's key: no link followed from it sends it on.
@@ -208,11 +215,11 @@ test.describe("Cart and checkout", () => {
     db,
     page,
   }) => {
-    const { necklace, orders, store } = await setup({ db });
-    await openCartWith(page, `/${store.slug}/cart`, store.slug, [
+    const { necklace, orders, phone } = await setup({ db });
+    await openCartWith(page, "/cart", [
       { productId: necklace.id, quantity: 1 },
     ]);
-    await fillCheckout(page);
+    await fillCheckout(page, phone.local);
     // Every order request this page sends, caught as it starts so one still
     // waiting for its answer is counted too.
     const sent: Request[] = [];
@@ -231,7 +238,7 @@ test.describe("Cart and checkout", () => {
       async () => {
         await page.getByTestId("store-checkout-submit").dblclick();
       },
-      { input: { customerName: "Ana Prueba", storeSlug: store.slug } }
+      { input: { customerName: "Ana Prueba", customerPhone: phone.local } }
     );
     await expect(page.getByTestId("store-order-code")).toBeVisible();
     // Each one answered in full, so a second order would be in the table.
@@ -247,12 +254,10 @@ test.describe("Cart and checkout", () => {
     await expect(page.getByTestId("store-order-code")).toHaveText(
       placed[0]?.code ?? ""
     );
-    await expect(page).toHaveURL(
-      `/${store.slug}/orders/${placed[0]?.token ?? ""}`
-    );
+    await expect(page).toHaveURL(`/orders/${placed[0]?.token ?? ""}`);
 
     await page.goBack();
-    await expect(page).toHaveURL(`/${store.slug}/cart`);
+    await expect(page).toHaveURL("/cart");
     await expect(page.getByTestId("store-cart-empty")).toContainText(
       "Tu carrito está vacío."
     );
@@ -263,11 +268,11 @@ test.describe("Cart and checkout", () => {
     db,
     page,
   }) => {
-    const { bracelet, necklace, store } = await setup(
+    const { bracelet, necklace } = await setup(
       { db },
       { braceletSoldOut: true }
     );
-    await openCartWith(page, `/${store.slug}/cart`, store.slug, [
+    await openCartWith(page, "/cart", [
       { productId: necklace.id, quantity: 1 },
       { productId: bracelet.id, quantity: 2 },
     ]);
@@ -304,12 +309,12 @@ test.describe("Cart and checkout", () => {
     db,
     page,
   }) => {
-    const { bracelet, necklace, store } = await setup({ db });
-    await openCartWith(page, `/${store.slug}/cart`, store.slug, [
+    const { bracelet, necklace, phone } = await setup({ db });
+    await openCartWith(page, "/cart", [
       { productId: necklace.id, quantity: 1 },
       { productId: bracelet.id, quantity: 1 },
     ]);
-    await fillCheckout(page);
+    await fillCheckout(page, phone.local);
     const submit = page.getByTestId("store-checkout-submit");
     await page.route(CART_PRODUCTS, async (route) => {
       await route.abort("failed");
@@ -323,7 +328,7 @@ test.describe("Cart and checkout", () => {
       page.getByTestId("store-cart").getByRole("alert")
     ).toContainText("No pudimos traer los precios de ahora.");
     await expect(page.getByLabel("Tu nombre")).toHaveValue("Ana Prueba");
-    await expect(page.getByLabel("Tu celular")).toHaveValue("099 123 456");
+    await expect(page.getByLabel("Tu celular")).toHaveValue(phone.local);
     await expect(page.getByLabel("Nota para la tienda (opcional)")).toHaveValue(
       "Paso a la tarde."
     );
@@ -345,9 +350,8 @@ test.describe("Cart and checkout", () => {
       {
         input: {
           customerName: "Ana Prueba",
-          customerPhone: "099 123 456",
+          customerPhone: phone.local,
           note: "Paso a la tarde.",
-          storeSlug: store.slug,
         },
       }
     );
@@ -358,9 +362,12 @@ test.describe("Cart and checkout", () => {
     await expect(order).toContainText("Paso a la tarde.");
   });
 
-  test("in English, the cart speaks English", async ({ db, page }) => {
-    const { necklace, store } = await setup({ db });
-    await openCartWith(page, `/en/${store.slug}/cart`, store.slug, [
+  test("in English, the cart speaks English, from the same cart as the Spanish pages", async ({
+    db,
+    page,
+  }) => {
+    const { necklace } = await setup({ db });
+    await openCartWith(page, "/en/cart", [
       { productId: necklace.id, quantity: 2 },
     ]);
     const line = cartLine(page, "Collar dorado");
@@ -382,6 +389,6 @@ test.describe("Cart and checkout", () => {
     await expect(page.getByTestId("store-checkout-submit")).toHaveText(
       "Place order"
     );
-    await expect(page).toHaveTitle(/^Your cart/u);
+    await expect(page).toHaveTitle(`Your cart · ${STORE_SETTINGS.name}`);
   });
 });
