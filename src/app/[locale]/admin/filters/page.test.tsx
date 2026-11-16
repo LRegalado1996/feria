@@ -4,48 +4,32 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { AdminShellProps } from "@/app/_components/organisms/admin-shell";
-import type {
-  AdminProfile,
-  requireAdmin as RequireAdmin,
-  requireAdminStore as RequireAdminStore,
-  requireStoreSegment as RequireStoreSegment,
-} from "@/lib/admin/access";
+import type { requireAdmin as RequireAdmin } from "@/lib/admin/access";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import FiltersPage from "./page";
 
-type AdminStore = ReturnType<typeof RequireAdminStore>;
-
-interface FiltersParams {
-  params: Promise<{ locale: string; store: string }>;
+interface FiltersPageParams {
+  params: Promise<{ locale: string }>;
 }
 
 const LIST_KEY = ["attribute", "list"] as const;
 
-const {
-  list,
-  queryOptions,
-  requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
-  shellProps,
-} = vi.hoisted(() => {
-  const listMock = vi.fn(async (_input: unknown): Promise<unknown> => []);
+const { list, queryOptions, requireAdmin, shellProps } = vi.hoisted(() => {
+  const listMock = vi.fn(async (): Promise<unknown> => []);
 
   return {
     list: listMock,
-    queryOptions: vi.fn(({ input }: { input: unknown }) => ({
-      queryFn: async () => await listMock(input),
-      queryKey: ["attribute", "list", { input }],
+    queryOptions: vi.fn(() => ({
+      queryFn: async () => await listMock(),
+      queryKey: ["attribute", "list"],
     })),
     requireAdmin: vi.fn<typeof RequireAdmin>(),
-    requireAdminStore: vi.fn<typeof RequireAdminStore>(),
-    requireStoreSegment: vi.fn<typeof RequireStoreSegment>(),
     shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
   };
 });
@@ -53,13 +37,9 @@ const {
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The checks have their own tests; here they answer with the login and the
-// store, and are spied on for what the page asked.
-vi.mock("@/lib/admin/access", () => ({
-  requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
-}));
+// The session check has its own tests; here it answers with the login, or
+// sends the visitor to the sign-in page the way the real one does.
+vi.mock("@/lib/admin/access", () => ({ requireAdmin }));
 
 vi.mock("@/lib/orpc/server", async () => {
   const { QueryClient: Client } = await import("@tanstack/react-query");
@@ -77,16 +57,13 @@ vi.mock("@/app/_components/organisms/admin-shell", () => ({
   },
 }));
 
-// The manager has its own tests; here it shows the store it was given and
-// the list it found in the cache the page hydrated.
+// The manager has its own tests; here it shows the list it found in the
+// cache the page hydrated.
 vi.mock("@/app/_components/organisms/filter-manager", () => ({
-  FilterManager: ({ storeSlug }: { storeSlug: string }) => {
-    const cached = useQueryClient().getQueryData([
-      ...LIST_KEY,
-      { input: { storeSlug } },
-    ]);
+  FilterManager: () => {
+    const cached = useQueryClient().getQueryData([...LIST_KEY]);
     return (
-      <div data-testid="filter-manager">{`${storeSlug} ${JSON.stringify(cached ?? null)}`}</div>
+      <div data-testid="filter-manager">{JSON.stringify(cached ?? null)}</div>
     );
   },
 }));
@@ -96,48 +73,25 @@ type Boundary<P> = ReactElement<{
   fallback: ReactNode;
 }>;
 
-function makeStore(): AdminStore {
-  return { id: 1, isActive: true, name: "LR Market", slug: "lr-market" };
-}
-
-function makeMe(): AdminProfile {
-  return {
-    name: "Ada Admin",
-    role: "member",
-    stores: [makeStore()],
-  };
-}
-
-async function makeParams(locale: string, store: string) {
-  return await Promise.resolve({ locale, store });
+async function makeParams(locale: string) {
+  return await Promise.resolve({ locale });
 }
 
 /**
- * The page's boundary for `/admin/<store>/filters`: its fallback, and what
- * it streams once resolved. The segment check passes any segment but
- * "Bad Segment"; the store check answers 404 for any store but the login's.
+ * The page's boundary for `/admin/filters`: its fallback, and what it
+ * streams once resolved, with a session or without one.
  */
 function setup({
   locale = "en",
   prefetchFails = false,
-  store = "lr-market",
-}: { locale?: string; prefetchFails?: boolean; store?: string } = {}) {
-  const me = makeMe();
-  const found = makeStore();
-  requireAdmin.mockResolvedValue(me);
-  requireStoreSegment.mockImplementation((segment) => {
-    if (segment === "Bad Segment") {
-      notFound();
+  signedIn = true,
+}: { locale?: string; prefetchFails?: boolean; signedIn?: boolean } = {}) {
+  requireAdmin.mockImplementation(async (returnTo) => {
+    if (!signedIn) {
+      redirect(`/admin/sign-in?next=${encodeURIComponent(returnTo)}`);
     }
 
-    return segment;
-  });
-  requireAdminStore.mockImplementation((_profile, slug) => {
-    if (slug !== found.slug) {
-      notFound();
-    }
-
-    return found;
+    return await Promise.resolve({ name: "Ada Admin" });
   });
   list.mockImplementation(async () => {
     if (prefetchFails) {
@@ -146,15 +100,13 @@ function setup({
 
     return await Promise.resolve([{ id: 7, nameEs: "Color", values: [] }]);
   });
-  const page: Boundary<FiltersParams> = FiltersPage({
-    params: makeParams(locale, store),
+  const page: Boundary<FiltersPageParams> = FiltersPage({
+    params: makeParams(locale),
   });
   const inner = page.props.children;
 
   return {
     fallback: page.props.fallback,
-    found,
-    me,
     resolve: async () => await inner.type(inner.props),
     show: async () => {
       render(await inner.type(inner.props), {
@@ -181,60 +133,40 @@ describe("FiltersPage", () => {
     expect(requireAdmin).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for a segment that is not a store address, before any session check", async () => {
-    const { resolve } = setup({ store: "Bad Segment" });
-
-    await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
-    expect(requireStoreSegment).toHaveBeenCalledExactlyOnceWith("Bad Segment");
-    expect(requireAdmin).not.toHaveBeenCalled();
-    expect(list).not.toHaveBeenCalled();
-  });
-
   test("answers 404 for a language the product does not speak, before any check", async () => {
     const { resolve } = setup({ locale: "fr" });
 
     await expect(resolve()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(requireStoreSegment).not.toHaveBeenCalled();
     expect(requireAdmin).not.toHaveBeenCalled();
+    expect(list).not.toHaveBeenCalled();
   });
 
   test.each([
-    ["en", "/en/admin/lr-market/filters"],
-    ["es", "/admin/lr-market/filters"],
+    ["en", "/en/admin/filters"],
+    ["es", "/admin/filters"],
   ] as const)(
-    "in %s, checks the session coming back to this page, then the store among the login's",
+    "in %s, checks the session coming back to this page, before fetching anything",
     async (locale, returnTo) => {
-      const { me, show } = setup({ locale });
+      const { show } = setup({ locale });
 
       await show();
 
       expect(requireAdmin).toHaveBeenCalledExactlyOnceWith(returnTo, locale);
-      expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith(
-        me,
-        "lr-market"
+      expect(requireAdmin.mock.invocationCallOrder[0]).toBeLessThan(
+        list.mock.invocationCallOrder[0] ?? 0
       );
-      const [sessionAt = 0, storeAt = 0] = [
-        requireAdmin,
-        requireAdminStore,
-      ].map((check) => check.mock.invocationCallOrder[0]);
-      expect(sessionAt).toBeLessThan(storeAt);
     }
   );
 
-  test("answers 404 for a store the login may not work on, fetching nothing", async () => {
-    const { me, resolve } = setup({ store: "sample-store" });
+  test("sends a visitor without a session to the sign-in, fetching nothing", async () => {
+    const { resolve } = setup({ locale: "es", signedIn: false });
 
     await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+      digest:
+        "NEXT_REDIRECT;replace;/admin/sign-in?next=%2Fadmin%2Ffilters;307;",
     });
-    expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith(
-      me,
-      "sample-store"
-    );
     expect(list).not.toHaveBeenCalled();
     expect(shellProps).not.toHaveBeenCalled();
   });
@@ -242,21 +174,21 @@ describe("FiltersPage", () => {
   test.each(["en", "es"] as const)(
     "in %s, opens the filters section in the shell with the store's list already fetched",
     async (locale) => {
-      const { found, me, show } = setup({ locale });
+      const { show } = setup({ locale });
 
       await show();
 
       expect(shellProps).toHaveBeenCalledExactlyOnceWith({
         dictionary: DICTIONARIES[locale].admin,
         locale,
-        location: { kind: "store", section: "filters", store: found },
-        role: "member",
-        stores: me.stores,
+        section: "filters",
       });
-      expect(list).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
+      // No input: the store is the one the procedure takes from the session.
+      expect(queryOptions).toHaveBeenCalledExactlyOnceWith();
+      expect(list).toHaveBeenCalledExactlyOnceWith();
       expect(
         within(screen.getByTestId("admin-shell")).getByTestId("filter-manager")
-      ).toHaveTextContent('lr-market [{"id":7,"nameEs":"Color","values":[]}]');
+      ).toHaveTextContent('[{"id":7,"nameEs":"Color","values":[]}]');
     }
   );
 
@@ -265,9 +197,7 @@ describe("FiltersPage", () => {
 
     await show();
 
-    expect(list).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
-    expect(screen.getByTestId("filter-manager")).toHaveTextContent(
-      /^lr-market null$/u
-    );
+    expect(list).toHaveBeenCalledExactlyOnceWith();
+    expect(screen.getByTestId("filter-manager")).toHaveTextContent(/^null$/u);
   });
 });

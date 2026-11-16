@@ -33,18 +33,18 @@ function inOrder(current: StoreCategories | undefined, ids: number[]) {
  * Puts the categories in a new order at once on screen, then on the server;
  * a refused or failed save puts the previous order back.
  */
-export function useReorderCategories(storeSlug: string) {
+export function useReorderCategories() {
   const queryClient = useQueryClient();
-  const queryKey = storeCategoriesKey(storeSlug);
+  const queryKey = storeCategoriesKey();
   // The order of the last move made, which every save that went through
   // shows again.
   const latest = useRef<number[] | null>(null);
 
   return useMutation({
     ...orpc.category.reorder.mutationOptions(),
-    // One move at a time per store: two quick moves in flight could reach
-    // the server in the other order, and a rollback would undo the second.
-    scope: { id: `category-reorder:${storeSlug}` },
+    // One move at a time: two quick moves in flight could reach the server
+    // in the other order, and a rollback would undo the second.
+    scope: { id: "category-reorder" },
     // The screen reports a failure itself, once.
     meta: { suppressGlobalErrorReport: true },
     onMutate: async ({ ids }) => {

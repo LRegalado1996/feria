@@ -12,7 +12,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const INPUT = { id: 5, moveToId: 6, storeSlug: "lr-market" };
+const INPUT = { id: 5, moveToId: 6 };
 
 function setup({ fails = false }: { fails?: boolean } = {}) {
   const remove = vi.fn((_input: unknown) => ({ id: 5, movedArticles: 3 }));
@@ -27,7 +27,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useDeleteCategory("lr-market"), {
+  const { result } = renderHook(() => useDeleteCategory(), {
     wrapper,
   });
   const metas = () =>
@@ -50,7 +50,7 @@ describe("useDeleteCategory", () => {
 
     expect(remove).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeCategoriesKey("lr-market"),
+      queryKey: storeCategoriesKey(),
     });
   });
 
@@ -64,7 +64,7 @@ describe("useDeleteCategory", () => {
 
     // The category may have gained articles since the list was read.
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeCategoriesKey("lr-market"),
+      queryKey: storeCategoriesKey(),
     });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });

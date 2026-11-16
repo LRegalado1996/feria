@@ -33,7 +33,6 @@ export interface OrderDetailProps {
   id: number;
   /** When the server rendered the page, the clock its times start from. */
   renderedAt: number;
-  storeSlug: string;
 }
 
 /** How the last move ended, when it did not go through. */
@@ -44,19 +43,19 @@ type MoveOutcome = "conflict" | "failed" | null;
  * allows, what was ordered, the customer's note, how to reach them, and who
  * moved it when.
  */
-function OrderDetail({ from, id, renderedAt, storeSlug }: OrderDetailProps) {
+function OrderDetail({ from, id, renderedAt }: OrderDetailProps) {
   const { admin, common, storefront } = useDictionary();
   const copy = admin.orders;
   const locale = useLocale();
-  const order = useOrder(storeSlug, id);
-  const change = useChangeOrderStatus(storeSlug);
+  const order = useOrder(id);
+  const change = useChangeOrderStatus();
   const now = useNow(renderedAt);
   const [outcome, setOutcome] = useState<MoveOutcome>(null);
 
   // Opened: the list no longer marks it "New".
   useEffect(() => {
-    markOrderSeen(storeSlug, id);
-  }, [id, storeSlug]);
+    markOrderSeen(id);
+  }, [id]);
 
   const when = (date: Date | string) => {
     const instant = new Date(date);
@@ -73,7 +72,7 @@ function OrderDetail({ from, id, renderedAt, storeSlug }: OrderDetailProps) {
   const back = (
     <Link
       className="inline-flex h-11 items-center gap-2 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:h-9"
-      href={ordersPath(storeSlug, locale, from)}
+      href={ordersPath(locale, from)}
     >
       <ArrowLeft aria-hidden="true" className="size-4" />
       {copy.detail.back}
@@ -130,7 +129,7 @@ function OrderDetail({ from, id, renderedAt, storeSlug }: OrderDetailProps) {
   const onMove = (to: OrderStatus) => {
     setOutcome(null);
     change.mutate(
-      { id: found.id, status: to, storeSlug },
+      { id: found.id, status: to },
       {
         onError: (error) => {
           // The hook reports what needs reporting and reads the order again.

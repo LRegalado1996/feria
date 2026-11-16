@@ -17,7 +17,7 @@ function setup({
 }: { locale?: Locale; query?: OrdersQuery } = {}) {
   vi.useFakeTimers();
   const view = renderWithI18n(
-    <OrderSearch className="custom" query={query} storeSlug="lr-market" />,
+    <OrderSearch className="custom" query={query} />,
     { locale }
   );
   const field = () =>
@@ -42,9 +42,7 @@ function setup({
       return form;
     },
     rerender: (next: OrdersQuery) => {
-      view.rerender(
-        <OrderSearch className="custom" query={next} storeSlug="lr-market" />
-      );
+      view.rerender(<OrderSearch className="custom" query={next} />);
     },
     /** Types into the field as the browser reports it: one change event. */
     type: (text: string) => {
@@ -70,7 +68,7 @@ describe("OrderSearch", () => {
     advance(1);
 
     expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?status=received&q=K7P2Q",
+      "/admin/orders?status=received&q=K7P2Q",
       { scroll: false }
     );
   });
@@ -94,10 +92,9 @@ describe("OrderSearch", () => {
     type(" ana ");
     advance(ORDER_SEARCH_DEBOUNCE_MS);
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/en/admin/lr-market/orders?q=ana",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/en/admin/orders?q=ana", {
+      scroll: false,
+    });
   });
 
   test("a search cleared to blank takes q out of the address", () => {
@@ -109,7 +106,7 @@ describe("OrderSearch", () => {
     advance(ORDER_SEARCH_DEBOUNCE_MS);
 
     expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?status=packed",
+      "/admin/orders?status=packed",
       { scroll: false }
     );
   });
@@ -120,17 +117,15 @@ describe("OrderSearch", () => {
     type("099 123");
     fireEvent.submit(form());
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?q=099+123",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/admin/orders?q=099+123", {
+      scroll: false,
+    });
 
     advance(ORDER_SEARCH_DEBOUNCE_MS);
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?q=099+123",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/admin/orders?q=099+123", {
+      scroll: false,
+    });
   });
 
   test("submitting with nothing pending searches what the field holds", () => {
@@ -138,10 +133,9 @@ describe("OrderSearch", () => {
 
     fireEvent.submit(form());
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?q=ana",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/admin/orders?q=ana", {
+      scroll: false,
+    });
   });
 
   test("keeps focus and what was typed when the address catches up with it", () => {
@@ -206,7 +200,7 @@ describe("OrderSearch", () => {
     advance(1);
 
     expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/admin/lr-market/orders?status=packed&q=ana",
+      "/admin/orders?status=packed&q=ana",
       { scroll: false }
     );
   });
@@ -214,7 +208,7 @@ describe("OrderSearch", () => {
   test("before the script runs, the form itself carries the status", () => {
     const { field, form } = setup();
 
-    expect(form()).toHaveAttribute("action", "/admin/lr-market/orders");
+    expect(form()).toHaveAttribute("action", "/admin/orders");
     expect(
       [...form().querySelectorAll('input[type="hidden"]')].map((input) => [
         input.getAttribute("name"),
@@ -231,7 +225,7 @@ describe("OrderSearch", () => {
   test("carries no status for all of them", () => {
     const { field, form } = setup({ locale: "en", query: {} });
 
-    expect(form()).toHaveAttribute("action", "/en/admin/lr-market/orders");
+    expect(form()).toHaveAttribute("action", "/en/admin/orders");
     expect(form().querySelectorAll('input[type="hidden"]')).toHaveLength(0);
     expect(field()).toHaveAttribute("placeholder", "Code, name or phone");
   });

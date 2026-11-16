@@ -4,7 +4,7 @@ import type { OrderStatus } from "@/lib/schemas/order";
 /** How long an arrival stays marked "New" on the orders screen. */
 export const ARRIVAL_FRESH_MS = 10 * 60_000;
 
-/** What the store needs of an order in a list. */
+/** What this needs of an order in a list. */
 interface ListedOrder {
   code: string;
   /** The database's stamp, which the list is sorted by, newest first. */
@@ -26,7 +26,7 @@ export interface Arrival {
   seq: number;
 }
 
-interface StoreArrivals {
+interface TabArrivals {
   /**
    * The lists (status and search) this tab has read at least once, each
    * with the newest place it has shown (`null` while it has shown none).
@@ -34,46 +34,37 @@ interface StoreArrivals {
   baselines: Map<string, ListPlace | null>;
   /** Each order still marked "New", with the instant this tab saw it come. */
   fresh: ReadonlyMap<number, number>;
-  /** Every order this tab has seen in the store's lists or opened. */
+  /** Every order this tab has seen in the lists or opened. */
   known: Set<number>;
   last: Arrival | null;
 }
 
-/**
- * Which orders this tab has seen, per store (FER-027). Module state, so it
- * lives as long as the tab's JavaScript: moving from the list to an order and
- * back keeps it, and an order placed meanwhile is new on return. A reload
- * starts it empty, so the first list after one announces nothing; that is
- * accepted, as the staff sees the whole list then anyway. It is written
- * only from effects and event handlers, never on the server, where one
- * module serves every request.
- */
-const stores = new Map<string, StoreArrivals>();
-const listeners = new Set<() => void>();
-let arrivalCount = 0;
-
-/** The arrivals of a store this tab has not read yet: none. */
+/** No order marked "New": what a tab that has read nothing yet holds. */
 export const NO_ARRIVALS: ReadonlyMap<number, number> = new Map();
 
-function storeArrivals(storeSlug: string): StoreArrivals {
-  const existing = stores.get(storeSlug);
-
-  if (existing) {
-    return existing;
-  }
-
-  const created: StoreArrivals = {
+function noArrivals(): TabArrivals {
+  return {
     baselines: new Map(),
     fresh: NO_ARRIVALS,
     known: new Set(),
     last: null,
   };
-  stores.set(storeSlug, created);
-
-  return created;
 }
 
-function publish(arrivals: StoreArrivals, fresh: Map<number, number>) {
+/**
+ * Which orders this tab has seen (FER-027). Module state, so it lives as long
+ * as the tab's JavaScript: moving from the list to an order and back keeps
+ * it, and an order placed meanwhile is new on return. A reload starts it
+ * empty, so the first list after one announces nothing; that is accepted, as
+ * the staff sees the whole list then anyway. It is written only from effects
+ * and event handlers, never on the server, where one module serves every
+ * request.
+ */
+let arrivals = noArrivals();
+const listeners = new Set<() => void>();
+let arrivalCount = 0;
+
+function publish(fresh: Map<number, number>) {
   // A new map, so `useSyncExternalStore` sees the change.
   arrivals.fresh = fresh;
 
@@ -100,24 +91,22 @@ function isNewer(place: ListPlace, than: ListPlace | null) {
 }
 
 /**
- * Records what a list of the store brought and returns its arrivals: the
+ * Records what a list brought and returns its arrivals: the
  * orders on its first page this tab had never seen, placed after the newest
  * the list had shown. The first read of each list (a status, a search) only
  * learns what is there: a tab or search the staff had not opened holds older
  * orders, not arrivals. Later pages ("Load more") are older orders too,
  * learned silently, and so is an older order the first page brings up when
  * one above it leaves the list (packed, say): it was only below the page's
- * end. The stamps compared are all the database's, and a store's orders are
- * stamped one at a time after its lock (`createOrder`), so a later stamp is
- * a later commit: no order that arrives can carry an older one.
+ * end. The stamps compared are all the database's, and the store's orders
+ * are stamped one at a time after its lock (`createOrder`), so a later stamp
+ * is a later commit: no order that arrives can carry an older one.
  */
 export function recordOrderList<T extends ListedOrder>(
-  storeSlug: string,
   query: OrdersQuery,
   pages: readonly (readonly T[])[],
   now: number
 ): T[] {
-  const arrivals = storeArrivals(storeSlug);
   const key = listKey(query);
   const firstRead = !arrivals.baselines.has(key);
   const boundary = arrivals.baselines.get(key) ?? null;
@@ -168,35 +157,34 @@ export function recordOrderList<T extends ListedOrder>(
   // An arrival is said (and beeped) even when it marks nothing new, as a
   // packed one does: subscribers hear of every arrival.
   if (changed || arrived.length > 0) {
-    publish(arrivals, fresh);
+    publish(fresh);
   }
 
   return arrived;
 }
 
 /** An order the staff opened: known, and no longer new. */
-export function markOrderSeen(storeSlug: string, id: number) {
-  const arrivals = storeArrivals(storeSlug);
+export function markOrderSeen(id: number) {
   arrivals.known.add(id);
 
   if (arrivals.fresh.has(id)) {
     const fresh = new Map(arrivals.fresh);
     fresh.delete(id);
-    publish(arrivals, fresh);
+    publish(fresh);
   }
 }
 
-/** The store's orders marked "New", by id, with when each arrived. */
-export function freshArrivals(storeSlug: string): ReadonlyMap<number, number> {
-  return stores.get(storeSlug)?.fresh ?? NO_ARRIVALS;
+/** The orders marked "New", by id, with when each arrived. */
+export function freshArrivals(): ReadonlyMap<number, number> {
+  return arrivals.fresh;
 }
 
-/** The store's last arrivals, or `null` before this tab saw any. */
-export function lastArrival(storeSlug: string): Arrival | null {
-  return stores.get(storeSlug)?.last ?? null;
+/** The last arrivals, or `null` before this tab saw any. */
+export function lastArrival(): Arrival | null {
+  return arrivals.last;
 }
 
-/** Calls `listener` whenever any store's arrivals or "New" marks change. */
+/** Calls `listener` whenever the arrivals or the "New" marks change. */
 export function subscribeArrivals(listener: () => void) {
   listeners.add(listener);
 
@@ -224,8 +212,8 @@ export function isFreshArrival(
   );
 }
 
-/** Forgets every store, as a reload does: for tests, between them. */
+/** Forgets every order seen, as a reload does: for tests, between them. */
 export function forgetOrderArrivals() {
-  stores.clear();
+  arrivals = noArrivals();
   arrivalCount = 0;
 }

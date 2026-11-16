@@ -184,7 +184,7 @@ describe("AuthForm submission", () => {
 
   test("lands where the page says once signed in", async () => {
     const { assign, fill, submit } = setup(
-      { redirectTo: "/en/admin/lr-market/orders" },
+      { redirectTo: "/en/admin/orders" },
       http.post(SIGN_IN, () =>
         HttpResponse.json({ token: "t", user: { id: "1" } })
       )
@@ -194,9 +194,7 @@ describe("AuthForm submission", () => {
     await submit();
 
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledExactlyOnceWith(
-        "/en/admin/lr-market/orders"
-      );
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/en/admin/orders");
     });
   });
 

@@ -19,7 +19,6 @@ afterEach(() => {
 });
 
 const AT = Date.parse("2026-11-14T22:00:00.000Z");
-const STORE = "lr-market";
 
 /**
  * An order as a list holds it: ids and stamps rise together, as the store's
@@ -38,7 +37,6 @@ function setup() {
   const listener = vi.fn<() => void>();
   const unsubscribe = subscribeArrivals(listener);
   const first = recordOrderList(
-    STORE,
     { status: "received" },
     [[makeOrder(2), makeOrder(1)]],
     AT
@@ -48,7 +46,7 @@ function setup() {
     first,
     listener,
     poll: (pages: ReturnType<typeof makeOrder>[][], now = AT + 1000) =>
-      recordOrderList(STORE, { status: "received" }, pages, now),
+      recordOrderList({ status: "received" }, pages, now),
     unsubscribe,
   };
 }
@@ -58,7 +56,7 @@ describe("recordOrderList", () => {
     const { first, listener } = setup();
 
     expect(first).toEqual([]);
-    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(freshArrivals()).toBe(NO_ARRIVALS);
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -68,7 +66,7 @@ describe("recordOrderList", () => {
     expect(poll([[makeOrder(3), makeOrder(2), makeOrder(1)]])).toEqual([
       makeOrder(3),
     ]);
-    expect([...freshArrivals(STORE)]).toEqual([[3, AT + 1000]]);
+    expect([...freshArrivals()]).toEqual([[3, AT + 1000]]);
     expect(listener).toHaveBeenCalledExactlyOnceWith();
   });
 
@@ -77,7 +75,7 @@ describe("recordOrderList", () => {
     poll([[makeOrder(3), makeOrder(2)]]);
 
     expect(poll([[makeOrder(3), makeOrder(2)]], AT + 2000)).toEqual([]);
-    expect([...freshArrivals(STORE)]).toEqual([[3, AT + 1000]]);
+    expect([...freshArrivals()]).toEqual([[3, AT + 1000]]);
     expect(listener).toHaveBeenCalledExactlyOnceWith();
   });
 
@@ -85,7 +83,7 @@ describe("recordOrderList", () => {
     const { poll } = setup();
 
     expect(poll([[makeOrder(2), makeOrder(1)], [makeOrder(0)]])).toEqual([]);
-    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(freshArrivals()).toBe(NO_ARRIVALS);
     // Learned: on the first page later, it is no arrival either.
     expect(poll([[makeOrder(0)]])).toEqual([]);
   });
@@ -94,39 +92,19 @@ describe("recordOrderList", () => {
     setup();
 
     expect(
-      recordOrderList(
-        STORE,
-        { status: "packed" },
-        [[makeOrder(9, "packed")]],
-        AT
-      )
+      recordOrderList({ status: "packed" }, [[makeOrder(9, "packed")]], AT)
     ).toEqual([]);
-    expect(recordOrderList(STORE, { q: "ana" }, [[makeOrder(8)]], AT)).toEqual(
-      []
-    );
+    expect(recordOrderList({ q: "ana" }, [[makeOrder(8)]], AT)).toEqual([]);
     expect(
-      recordOrderList(STORE, { q: "ana" }, [[makeOrder(10), makeOrder(8)]], AT)
+      recordOrderList({ q: "ana" }, [[makeOrder(10), makeOrder(8)]], AT)
     ).toEqual([makeOrder(10)]);
   });
 
   test("an order known from one list is no arrival in another", () => {
     setup();
-    recordOrderList(STORE, {}, [[makeOrder(1)]], AT);
+    recordOrderList({}, [[makeOrder(1)]], AT);
 
-    expect(
-      recordOrderList(STORE, {}, [[makeOrder(2), makeOrder(1)]], AT)
-    ).toEqual([]);
-  });
-
-  test("keeps each store apart", () => {
-    const { poll } = setup();
-    recordOrderList("tienda-demo", {}, [[makeOrder(40)]], AT);
-
-    expect(recordOrderList("tienda-demo", {}, [[makeOrder(41)]], AT)).toEqual([
-      makeOrder(41),
-    ]);
-    expect(poll([[makeOrder(40), makeOrder(2)]])).toEqual([makeOrder(40)]);
-    expect([...freshArrivals("tienda-demo")]).toEqual([[41, AT]]);
+    expect(recordOrderList({}, [[makeOrder(2), makeOrder(1)]], AT)).toEqual([]);
   });
 
   test("an arrival no longer received stops being new", () => {
@@ -136,7 +114,7 @@ describe("recordOrderList", () => {
 
     poll([[makeOrder(3, "packed"), makeOrder(2, "packed")]]);
 
-    expect(freshArrivals(STORE)).toEqual(new Map());
+    expect(freshArrivals()).toEqual(new Map());
     expect(listener).toHaveBeenCalledExactlyOnceWith();
   });
 
@@ -163,7 +141,7 @@ describe("recordOrderList", () => {
     // Order 2 was packed: order 0, only past the page's end until now,
     // comes up into it.
     expect(poll([[makeOrder(1), makeOrder(0)]])).toEqual([]);
-    expect(freshArrivals(STORE)).toBe(NO_ARRIVALS);
+    expect(freshArrivals()).toBe(NO_ARRIVALS);
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -197,16 +175,10 @@ describe("recordOrderList", () => {
   ] as const)(
     "against the newest order shown, one with %s is an arrival: %j",
     (_case, order, expected) => {
-      recordOrderList(
-        STORE,
-        {},
-        [[makeOrder(5, "received", new Date(AT))]],
-        AT
-      );
+      recordOrderList({}, [[makeOrder(5, "received", new Date(AT))]], AT);
 
       expect(
         recordOrderList(
-          STORE,
           {},
           [[order, makeOrder(5, "received", new Date(AT))]],
           AT
@@ -216,45 +188,43 @@ describe("recordOrderList", () => {
   );
 
   test("after an empty first read, any order the list brings is an arrival", () => {
-    recordOrderList(STORE, {}, [[]], AT);
+    recordOrderList({}, [[]], AT);
 
-    expect(recordOrderList(STORE, {}, [[makeOrder(1)]], AT)).toEqual([
-      makeOrder(1),
-    ]);
+    expect(recordOrderList({}, [[makeOrder(1)]], AT)).toEqual([makeOrder(1)]);
   });
 
   test("an arrival that comes packed is said but not new, nor new once moved back to received", () => {
-    recordOrderList(STORE, {}, [[]], AT);
+    recordOrderList({}, [[]], AT);
     // The screen reads the arrival inside its listener, so what counts is
     // what the store holds at the moment it is told, not afterwards.
     const seen: { arrival: ReturnType<typeof lastArrival>; fresh: number }[] =
       [];
     const unsubscribe = subscribeArrivals(() => {
       seen.push({
-        arrival: lastArrival(STORE),
-        fresh: freshArrivals(STORE).size,
+        arrival: lastArrival(),
+        fresh: freshArrivals().size,
       });
     });
 
-    expect(recordOrderList(STORE, {}, [[makeOrder(1, "packed")]], AT)).toEqual([
+    expect(recordOrderList({}, [[makeOrder(1, "packed")]], AT)).toEqual([
       makeOrder(1, "packed"),
     ]);
     // Said to the screen, which announces and beeps it, though nothing is new.
     expect(seen).toEqual([{ arrival: { codes: ["C1"], seq: 1 }, fresh: 0 }]);
 
-    recordOrderList(STORE, {}, [[makeOrder(1)]], AT + 60_000);
+    recordOrderList({}, [[makeOrder(1)]], AT + 60_000);
     unsubscribe();
 
-    expect(freshArrivals(STORE).size).toBe(0);
-    expect(
-      isFreshArrival(freshArrivals(STORE), makeOrder(1), AT + 60_000)
-    ).toBe(false);
+    expect(freshArrivals().size).toBe(0);
+    expect(isFreshArrival(freshArrivals(), makeOrder(1), AT + 60_000)).toBe(
+      false
+    );
   });
 
   test("an empty read records nothing and announces nothing", () => {
     setup();
 
-    expect(recordOrderList(STORE, { status: "received" }, [], AT)).toEqual([]);
+    expect(recordOrderList({ status: "received" }, [], AT)).toEqual([]);
   });
 });
 
@@ -264,25 +234,23 @@ describe("markOrderSeen", () => {
     poll([[makeOrder(4), makeOrder(3), makeOrder(2)]]);
     listener.mockClear();
 
-    markOrderSeen(STORE, 3);
+    markOrderSeen(3);
 
-    expect([...freshArrivals(STORE)]).toEqual([[4, AT + 1000]]);
+    expect([...freshArrivals()]).toEqual([[4, AT + 1000]]);
     expect(listener).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("an order opened before any list read is known: never an arrival", () => {
-    markOrderSeen(STORE, 5);
-    recordOrderList(STORE, {}, [[makeOrder(1)]], AT);
+    markOrderSeen(5);
+    recordOrderList({}, [[makeOrder(1)]], AT);
 
-    expect(
-      recordOrderList(STORE, {}, [[makeOrder(5), makeOrder(1)]], AT)
-    ).toEqual([]);
+    expect(recordOrderList({}, [[makeOrder(5), makeOrder(1)]], AT)).toEqual([]);
   });
 
   test("opening an order that was not new tells no one", () => {
     const { listener } = setup();
 
-    markOrderSeen(STORE, 1);
+    markOrderSeen(1);
 
     expect(listener).not.toHaveBeenCalled();
   });

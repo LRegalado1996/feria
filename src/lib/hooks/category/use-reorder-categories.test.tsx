@@ -13,7 +13,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const KEY = storeCategoriesKey("lr-market");
+const KEY = storeCategoriesKey();
 
 function makeRow(id: number, position: number) {
   return {
@@ -57,7 +57,7 @@ function setup({ answer = "save", list = LIST }: SetupOptions = {}) {
   }
 
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useReorderCategories("lr-market"), {
+  const { result } = renderHook(() => useReorderCategories(), {
     wrapper,
   });
   const listNow = () => wrapper.queryClient.getQueryData(KEY);
@@ -120,7 +120,7 @@ describe("useReorderCategories", () => {
   test("puts the new order on screen before the server answers, positions rewritten", async () => {
     const { listNow, reorder, result } = setup({ answer: "hang" });
 
-    void result.current.mutateAsync({ ids: [3, 1, 2], storeSlug: "lr-market" });
+    void result.current.mutateAsync({ ids: [3, 1, 2] });
 
     await waitFor(() => {
       expect(listNow()).toEqual([makeRow(3, 0), makeRow(1, 1), makeRow(2, 2)]);
@@ -129,7 +129,6 @@ describe("useReorderCategories", () => {
     await waitFor(() => {
       expect(reorder).toHaveBeenCalledExactlyOnceWith({
         ids: [3, 1, 2],
-        storeSlug: "lr-market",
       });
     });
   });
@@ -139,7 +138,6 @@ describe("useReorderCategories", () => {
 
     void result.current.mutateAsync({
       ids: [2, 9, 1, 3],
-      storeSlug: "lr-market",
     });
 
     await waitFor(() => {
@@ -151,7 +149,7 @@ describe("useReorderCategories", () => {
     const { invalidateQueries, listNow, result } = setup();
 
     await expect(
-      result.current.mutateAsync({ ids: [2, 1, 3], storeSlug: "lr-market" })
+      result.current.mutateAsync({ ids: [2, 1, 3] })
     ).resolves.toEqual({ ids: [2, 1, 3] });
 
     expect(listNow()).toEqual([makeRow(2, 0), makeRow(1, 1), makeRow(3, 2)]);
@@ -162,7 +160,7 @@ describe("useReorderCategories", () => {
     const { invalidateQueries, listNow, result } = setup({ answer: "fail" });
 
     await expect(
-      result.current.mutateAsync({ ids: [3, 2, 1], storeSlug: "lr-market" })
+      result.current.mutateAsync({ ids: [3, 2, 1] })
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "Give every category of the store, once each",
@@ -178,7 +176,7 @@ describe("useReorderCategories", () => {
     const { metas, result } = setup({ answer: "fail" });
 
     await expect(
-      result.current.mutateAsync({ ids: [3, 2, 1], storeSlug: "lr-market" })
+      result.current.mutateAsync({ ids: [3, 2, 1] })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
@@ -200,29 +198,24 @@ describe("useReorderCategories", () => {
 
     const first = result.current.mutateAsync({
       ids: [2, 1, 3],
-      storeSlug: "lr-market",
     });
     const second = result.current.mutateAsync({
       ids: [2, 3, 1],
-      storeSlug: "lr-market",
     });
 
     await waitFor(() => {
-      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }]);
     });
     // Time for a second request to arrive, were it sent in parallel.
     await new Promise((resolve) => {
       setTimeout(resolve, 50);
     });
-    expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+    expect(received).toEqual([{ ids: [2, 1, 3] }]);
 
     releases[0]?.();
     await expect(first).resolves.toEqual({ ids: [2, 1, 3] });
     await waitFor(() => {
-      expect(received).toEqual([
-        { ids: [2, 1, 3], storeSlug: "lr-market" },
-        { ids: [2, 3, 1], storeSlug: "lr-market" },
-      ]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }, { ids: [2, 3, 1] }]);
     });
     releases[1]?.();
     await expect(second).resolves.toEqual({ ids: [2, 3, 1] });
@@ -231,11 +224,10 @@ describe("useReorderCategories", () => {
   test("creates no list when none is cached yet", async () => {
     const { listNow, reorder, result } = setup({ list: null });
 
-    await result.current.mutateAsync({ ids: [1, 2], storeSlug: "lr-market" });
+    await result.current.mutateAsync({ ids: [1, 2] });
 
     expect(reorder).toHaveBeenCalledExactlyOnceWith({
       ids: [1, 2],
-      storeSlug: "lr-market",
     });
     expect(listNow()).toBeUndefined();
   });
@@ -246,10 +238,9 @@ describe("useReorderCategories", () => {
 
     const move = result.current.mutateAsync({
       ids: [3, 1, 2],
-      storeSlug: "lr-market",
     });
     await waitFor(() => {
-      expect(received).toEqual([{ ids: [3, 1, 2], storeSlug: "lr-market" }]);
+      expect(received).toEqual([{ ids: [3, 1, 2] }]);
     });
     // A list read from before the save answers with the old order.
     setList(LIST);
@@ -268,7 +259,6 @@ describe("useReorderCategories", () => {
 
     const move = result.current.mutateAsync({
       ids: [3, 1, 2],
-      storeSlug: "lr-market",
     });
     await waitFor(() => {
       expect(received).toHaveLength(1);
@@ -293,11 +283,9 @@ describe("useReorderCategories", () => {
 
     const first = result.current.mutateAsync({
       ids: [2, 1, 3],
-      storeSlug: "lr-market",
     });
     const second = result.current.mutateAsync({
       ids: [2, 3, 1],
-      storeSlug: "lr-market",
     });
     // Caught where it starts: the refusal lands before it is asserted.
     const refused = first.then(
@@ -305,7 +293,7 @@ describe("useReorderCategories", () => {
       (error: unknown) => error
     );
     await waitFor(() => {
-      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }]);
     });
 
     answer(0, "fail");
@@ -314,10 +302,7 @@ describe("useReorderCategories", () => {
       message: "Give every category of the store, once each",
     });
     await waitFor(() => {
-      expect(received).toEqual([
-        { ids: [2, 1, 3], storeSlug: "lr-market" },
-        { ids: [2, 3, 1], storeSlug: "lr-market" },
-      ]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }, { ids: [2, 3, 1] }]);
     });
     answer(1, "save");
     await expect(second).resolves.toEqual({ ids: [2, 3, 1] });
@@ -331,14 +316,12 @@ describe("useReorderCategories", () => {
 
     const first = result.current.mutateAsync({
       ids: [2, 1, 3],
-      storeSlug: "lr-market",
     });
     const second = result.current.mutateAsync({
       ids: [2, 3, 1],
-      storeSlug: "lr-market",
     });
     await waitFor(() => {
-      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: "lr-market" }]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }]);
     });
     await waitFor(() => {
       expect(listNow()).toEqual([makeRow(2, 0), makeRow(3, 1), makeRow(1, 2)]);
@@ -350,10 +333,7 @@ describe("useReorderCategories", () => {
     // The first save must not flash its own, older order back.
     expect(listNow()).toEqual([makeRow(2, 0), makeRow(3, 1), makeRow(1, 2)]);
     await waitFor(() => {
-      expect(received).toEqual([
-        { ids: [2, 1, 3], storeSlug: "lr-market" },
-        { ids: [2, 3, 1], storeSlug: "lr-market" },
-      ]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }, { ids: [2, 3, 1] }]);
     });
     answer(1, "save");
     await expect(second).resolves.toEqual({ ids: [2, 3, 1] });

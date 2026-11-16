@@ -14,7 +14,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const KEY = storeAttributesKey("lr-market");
+const KEY = storeAttributesKey();
 
 const REFUSAL = "Give every filter of the store, once each";
 
@@ -51,7 +51,7 @@ function listOf(ids: number[]) {
 }
 
 function move(ids: number[]) {
-  return { ids, storeSlug: "lr-market" };
+  return { ids };
 }
 
 interface SetupOptions {
@@ -84,8 +84,8 @@ function setup({ answer = "save", list = LIST }: SetupOptions = {}) {
   const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
   const { result } = renderHook(
     () => ({
-      reorder: useReorderAttributes("lr-market"),
-      values: useReorderAttributeValues("lr-market"),
+      reorder: useReorderAttributes(),
+      values: useReorderAttributeValues(),
     }),
     { wrapper }
   );
@@ -248,7 +248,6 @@ describe("useReorderAttributes", () => {
     const valuesMove = {
       attributeId: 7,
       ids: [71, 70],
-      storeSlug: "lr-market",
     };
 
     const values = result.current.values.mutateAsync(valuesMove);

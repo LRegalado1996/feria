@@ -21,7 +21,7 @@ vi.mock("@/lib/orpc/client", async () => {
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
-const INPUT = { id: 42, status: "packed", storeSlug: "lr-market" } as const;
+const INPUT = { id: 42, status: "packed" } as const;
 
 const FAILURES = {
   conflict: {
@@ -45,7 +45,7 @@ function setup({ fails }: { fails?: keyof typeof FAILURES } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useChangeOrderStatus("lr-market"), {
+  const { result } = renderHook(() => useChangeOrderStatus(), {
     wrapper,
   });
   const metas = () =>
@@ -59,11 +59,7 @@ function setup({ fails }: { fails?: keyof typeof FAILURES } = {}) {
   return { change, invalidated, metas, result };
 }
 
-const EVERY_READ = [
-  storeOrderKeys("lr-market"),
-  ordersKey("lr-market"),
-  orderCountsKey("lr-market"),
-];
+const EVERY_READ = [storeOrderKeys(), ordersKey(), orderCountsKey()];
 
 describe("useChangeOrderStatus", () => {
   test("sends the order and its new status, then reads the order, the lists and the counts again", async () => {

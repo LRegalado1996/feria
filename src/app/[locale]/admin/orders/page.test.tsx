@@ -4,28 +4,21 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { AdminShellProps } from "@/app/_components/organisms/admin-shell";
 import type { OrderManagerProps } from "@/app/_components/organisms/order-manager";
-import type {
-  AdminProfile,
-  requireAdmin as RequireAdmin,
-  requireAdminStore as RequireAdminStore,
-  requireStoreSegment as RequireStoreSegment,
-} from "@/lib/admin/access";
+import type { requireAdmin as RequireAdmin } from "@/lib/admin/access";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import OrdersPage from "./page";
 
-type AdminStore = ReturnType<typeof RequireAdminStore>;
-
 type SearchParams = Record<string, string | string[] | undefined>;
 
 interface OrdersParams {
-  params: Promise<{ locale: string; store: string }>;
+  params: Promise<{ locale: string }>;
   searchParams: Promise<SearchParams>;
 }
 
@@ -45,21 +38,19 @@ const {
   list,
   managerProps,
   requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
   shellProps,
 } = vi.hoisted(() => {
   const listMock = vi.fn(async (_input: unknown): Promise<unknown> => null);
-  const countsMock = vi.fn(async (_input: unknown): Promise<unknown> => null);
+  const countsMock = vi.fn(async (): Promise<unknown> => null);
 
   return {
     connection: vi.fn(async () => {
       await Promise.resolve();
     }),
     counts: countsMock,
-    countsOptions: vi.fn(({ input }: { input: unknown }) => ({
-      queryFn: async () => await countsMock(input),
-      queryKey: ["order", "counts", { input }],
+    countsOptions: vi.fn(() => ({
+      queryFn: async () => await countsMock(),
+      queryKey: ["order", "counts"],
     })),
     infiniteOptions: vi.fn(
       ({
@@ -83,8 +74,6 @@ const {
     list: listMock,
     managerProps: vi.fn<(props: OrderManagerProps) => void>(),
     requireAdmin: vi.fn<typeof RequireAdmin>(),
-    requireAdminStore: vi.fn<typeof RequireAdminStore>(),
-    requireStoreSegment: vi.fn<typeof RequireStoreSegment>(),
     shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
   };
 });
@@ -95,13 +84,9 @@ vi.mock("next/server", () => ({ connection }));
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The checks have their own tests; here they answer with the login and the
-// store, and are spied on for what the page asked.
-vi.mock("@/lib/admin/access", () => ({
-  requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
-}));
+// The session check has its own tests; here it answers with the login, or
+// sends the visitor to the sign-in page the way the real one does.
+vi.mock("@/lib/admin/access", () => ({ requireAdmin }));
 
 vi.mock("@/lib/orpc/server", async () => {
   const { QueryClient: Client } = await import("@tanstack/react-query");
@@ -121,11 +106,7 @@ vi.mock("@/lib/orpc/server", async () => {
 vi.mock("@/app/_components/organisms/admin-shell", () => ({
   AdminShell: ({ children, ...props }: AdminShellProps) => {
     shellProps(props);
-    const cached = useQueryClient().getQueryData([
-      "order",
-      "counts",
-      { input: { storeSlug: "lr-market" } },
-    ]);
+    const cached = useQueryClient().getQueryData(["order", "counts"]);
     return (
       <div data-testid="admin-shell">
         <p data-testid="shell-counts">{JSON.stringify(cached ?? null)}</p>
@@ -153,47 +134,33 @@ type Boundary<P> = ReactElement<{
   fallback: ReactNode;
 }>;
 
-function makeStore(): AdminStore {
-  return { id: 1, isActive: true, name: "LR Market", slug: "lr-market" };
-}
-
-function makeMe(): AdminProfile {
-  return { name: "Ada Admin", role: "member", stores: [makeStore()] };
+/** The list's input as the page sends it: no store, the session's is used. */
+function makeListInput(overrides: { q?: string; status?: string } = {}) {
+  return { cursor: undefined, q: undefined, status: undefined, ...overrides };
 }
 
 /**
- * The page's boundary for `/admin/<store>/orders`: its fallback, and what it
- * streams once resolved. The segment check passes any segment but
- * "Bad Segment"; the store check answers 404 for any store but the login's.
+ * The page's boundary for `/admin/orders`: its fallback, and what it streams
+ * once resolved, with a session or without one.
  */
 function setup({
   locale = "en",
   prefetchFails = false,
   searchParams = {},
-  store = "lr-market",
+  signedIn = true,
 }: {
   locale?: string;
   prefetchFails?: boolean;
   searchParams?: SearchParams;
-  store?: string;
+  signedIn?: boolean;
 } = {}) {
   vi.setSystemTime(RENDERED_AT);
-  const me = makeMe();
-  const found = makeStore();
-  requireAdmin.mockResolvedValue(me);
-  requireStoreSegment.mockImplementation((segment) => {
-    if (segment === "Bad Segment") {
-      notFound();
+  requireAdmin.mockImplementation(async (returnTo) => {
+    if (!signedIn) {
+      redirect(`/admin/sign-in?next=${encodeURIComponent(returnTo)}`);
     }
 
-    return segment;
-  });
-  requireAdminStore.mockImplementation((_profile, slug) => {
-    if (slug !== found.slug) {
-      notFound();
-    }
-
-    return found;
+    return await Promise.resolve({ name: "Ada Admin" });
   });
   list.mockImplementation(async () => {
     if (prefetchFails) {
@@ -210,15 +177,13 @@ function setup({
     return await Promise.resolve(COUNTS);
   });
   const page: Boundary<OrdersParams> = OrdersPage({
-    params: Promise.resolve({ locale, store }),
+    params: Promise.resolve({ locale }),
     searchParams: Promise.resolve(searchParams),
   });
   const inner = page.props.children;
 
   return {
     fallback: page.props.fallback,
-    found,
-    me,
     resolve: async () => await inner.type(inner.props),
     show: async () => {
       render(await inner.type(inner.props), {
@@ -245,8 +210,8 @@ describe("OrdersPage", () => {
     expect(requireAdmin).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for a segment that is not a store address, before any session check", async () => {
-    const { resolve } = setup({ store: "Bad Segment" });
+  test("answers 404 for a language the product does not speak, before any check", async () => {
+    const { resolve } = setup({ locale: "fr" });
 
     await expect(resolve()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
@@ -255,49 +220,34 @@ describe("OrdersPage", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for a language the product does not speak, before any check", async () => {
-    const { resolve } = setup({ locale: "fr" });
-
-    await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
-    expect(requireStoreSegment).not.toHaveBeenCalled();
-    expect(requireAdmin).not.toHaveBeenCalled();
-  });
-
   test.each([
-    ["en", {}, "/en/admin/lr-market/orders"],
-    ["es", {}, "/admin/lr-market/orders"],
-    [
-      "es",
-      { q: "ana", status: "packed" },
-      "/admin/lr-market/orders?status=packed&q=ana",
-    ],
+    ["en", {}, "/en/admin/orders"],
+    ["es", {}, "/admin/orders"],
+    ["es", { q: "ana", status: "packed" }, "/admin/orders?status=packed&q=ana"],
   ] as const)(
-    "in %s with %j, checks the session coming back to this selection, then the store",
+    "in %s with %j, checks the session coming back to this selection, before fetching anything",
     async (locale, searchParams, returnTo) => {
-      const { me, show } = setup({ locale, searchParams });
+      const { show } = setup({ locale, searchParams });
 
       await show();
 
       expect(requireAdmin).toHaveBeenCalledExactlyOnceWith(returnTo, locale);
-      expect(requireAdminStore).toHaveBeenCalledExactlyOnceWith(
-        me,
-        "lr-market"
-      );
-      const [sessionAt = 0, storeAt = 0] = [
-        requireAdmin,
-        requireAdminStore,
-      ].map((check) => check.mock.invocationCallOrder[0]);
-      expect(sessionAt).toBeLessThan(storeAt);
+      const sessionAt = requireAdmin.mock.invocationCallOrder[0] ?? 0;
+      expect(sessionAt).toBeLessThan(list.mock.invocationCallOrder[0] ?? 0);
+      expect(sessionAt).toBeLessThan(counts.mock.invocationCallOrder[0] ?? 0);
     }
   );
 
-  test("answers 404 for a store the login may not work on, fetching nothing", async () => {
-    const { resolve } = setup({ store: "sample-store" });
+  test("sends a visitor without a session to the sign-in, fetching nothing", async () => {
+    const { resolve } = setup({
+      locale: "es",
+      searchParams: { status: "received" },
+      signedIn: false,
+    });
 
     await expect(resolve()).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+      digest:
+        "NEXT_REDIRECT;replace;/admin/sign-in?next=%2Fadmin%2Forders%3Fstatus%3Dreceived;307;",
     });
     expect(list).not.toHaveBeenCalled();
     expect(counts).not.toHaveBeenCalled();
@@ -307,32 +257,24 @@ describe("OrdersPage", () => {
   test.each(["en", "es"] as const)(
     "in %s, opens the orders section with the first page and the counts already fetched, above the shell",
     async (locale) => {
-      const { found, me, show } = setup({ locale });
+      const { show } = setup({ locale });
 
       await show();
 
       expect(shellProps).toHaveBeenCalledExactlyOnceWith({
         dictionary: DICTIONARIES[locale].admin,
         locale,
-        location: { kind: "store", section: "orders", store: found },
-        role: "member",
-        stores: me.stores,
+        section: "orders",
       });
       expect(connection).toHaveBeenCalledExactlyOnceWith();
       expect(managerProps).toHaveBeenCalledExactlyOnceWith({
         query: {},
         renderedAt: RENDERED_AT,
-        storeSlug: "lr-market",
       });
-      expect(list).toHaveBeenCalledExactlyOnceWith({
-        cursor: undefined,
-        q: undefined,
-        status: undefined,
-        storeSlug: "lr-market",
-      });
-      expect(counts).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: "lr-market",
-      });
+      expect(list).toHaveBeenCalledExactlyOnceWith(makeListInput());
+      // No input: the store is the one the procedure takes from the session.
+      expect(countsOptions).toHaveBeenCalledExactlyOnceWith();
+      expect(counts).toHaveBeenCalledExactlyOnceWith();
       expect(screen.getByTestId("shell-counts")).toHaveTextContent(
         JSON.stringify(COUNTS)
       );
@@ -355,14 +297,8 @@ describe("OrdersPage", () => {
     expect(managerProps).toHaveBeenCalledExactlyOnceWith({
       query: { q: "ana" },
       renderedAt: RENDERED_AT,
-      storeSlug: "lr-market",
     });
-    expect(list).toHaveBeenCalledExactlyOnceWith({
-      cursor: undefined,
-      q: "ana",
-      status: undefined,
-      storeSlug: "lr-market",
-    });
+    expect(list).toHaveBeenCalledExactlyOnceWith(makeListInput({ q: "ana" }));
   });
 
   test("hands a known status to the list and the screen", async () => {
@@ -373,14 +309,10 @@ describe("OrdersPage", () => {
     expect(managerProps).toHaveBeenCalledExactlyOnceWith({
       query: { status: "received" },
       renderedAt: RENDERED_AT,
-      storeSlug: "lr-market",
     });
-    expect(list).toHaveBeenCalledExactlyOnceWith({
-      cursor: undefined,
-      q: undefined,
-      status: "received",
-      storeSlug: "lr-market",
-    });
+    expect(list).toHaveBeenCalledExactlyOnceWith(
+      makeListInput({ status: "received" })
+    );
   });
 
   test("pages from the last page's cursor, and stops at the end", async () => {
@@ -400,12 +332,7 @@ describe("OrdersPage", () => {
 
     await show();
 
-    expect(list).toHaveBeenCalledExactlyOnceWith({
-      cursor: undefined,
-      q: undefined,
-      status: undefined,
-      storeSlug: "lr-market",
-    });
+    expect(list).toHaveBeenCalledExactlyOnceWith(makeListInput());
     expect(screen.getByTestId("shell-counts")).toHaveTextContent(/^null$/u);
     expect(screen.getByTestId("order-manager")).toHaveTextContent(/^\[\]$/u);
   });

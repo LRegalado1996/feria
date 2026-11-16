@@ -6,7 +6,7 @@ import { AdminNav, type AdminNavItem, type AdminNavProps } from "./admin-nav";
 function makeItem(overrides: Partial<AdminNavItem> = {}): AdminNavItem {
   return {
     current: false,
-    href: "/en/admin/lr-market/products",
+    href: "/en/admin/products",
     label: "Articles",
     ...overrides,
   };
@@ -19,10 +19,10 @@ function setup(props: Partial<AdminNavProps> = {}) {
         makeItem(),
         makeItem({
           current: true,
-          href: "/en/admin/lr-market/orders",
+          href: "/en/admin/orders",
           label: "Orders",
         }),
-        makeItem({ href: "/en/admin/lr-market/users", label: "Users" }),
+        makeItem({ href: "/en/admin/users", label: "Users" }),
       ]}
       label="Admin sections"
       {...props}
@@ -48,9 +48,9 @@ describe("AdminNav", () => {
     expect(
       links.map((link) => [link.textContent, link.getAttribute("href")])
     ).toEqual([
-      ["Articles", "/en/admin/lr-market/products"],
-      ["Orders", "/en/admin/lr-market/orders"],
-      ["Users", "/en/admin/lr-market/users"],
+      ["Articles", "/en/admin/products"],
+      ["Orders", "/en/admin/orders"],
+      ["Users", "/en/admin/users"],
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("AdminNav", () => {
         makeItem(),
         makeItem({
           badge: <span data-testid="badge">Orders, 3 waiting</span>,
-          href: "/en/admin/lr-market/orders",
+          href: "/en/admin/orders",
           label: "Orders",
         }),
       ],

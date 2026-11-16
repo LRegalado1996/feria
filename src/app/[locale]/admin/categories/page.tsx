@@ -5,26 +5,21 @@ import { AdminShellSkeleton } from "@/app/_components/molecules/admin-shell-skel
 import { AdminShell } from "@/app/_components/organisms/admin-shell";
 import { CategoryManager } from "@/app/_components/organisms/category-manager";
 import { getDictionary } from "@/content";
-import {
-  requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
-} from "@/lib/admin/access";
-import { storeSectionPath } from "@/lib/admin/paths";
+import { requireAdmin } from "@/lib/admin/access";
+import { adminSectionPath } from "@/lib/admin/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { getQueryClient, orpc } from "@/lib/orpc/server";
 
 interface CategoriesPageProps {
-  params: Promise<{ locale: string; store: string }>;
+  params: Promise<{ locale: string }>;
 }
 
 /**
- * A store's categories (FER-016), behind the admin's per-page checks: a
- * session, and a store the login may work on. The list is fetched on the
- * server so the screen opens with it.
+ * The store's categories (FER-016), behind the admin's per-page check: a
+ * session. The list is fetched on the server so the screen opens with it.
  */
 export default function CategoriesPage({ params }: CategoriesPageProps) {
-  // The store is only known per request: the params are read inside the
+  // The session is a request-time read: the params are read inside the
   // boundary, never above it.
   return (
     <Suspense fallback={<AdminShellSkeleton />}>
@@ -35,32 +30,18 @@ export default function CategoriesPage({ params }: CategoriesPageProps) {
 
 async function CategoriesResolver({ params }: CategoriesPageProps) {
   const locale = await readLocale(params);
-  const { store: segment } = await params;
-  const slug = requireStoreSegment(segment);
   const { admin } = getDictionary(locale);
-  const me = await requireAdmin(
-    storeSectionPath(slug, "categories", locale),
-    locale
-  );
-  const store = requireAdminStore(me, slug);
+  await requireAdmin(adminSectionPath("categories", locale), locale);
   const queryClient = getQueryClient();
 
   // A failed prefetch is not fatal: the screen fetches again and shows its
   // own error state.
-  await queryClient
-    .query(orpc.category.list.queryOptions({ input: { storeSlug: slug } }))
-    .catch(noop);
+  await queryClient.query(orpc.category.list.queryOptions()).catch(noop);
 
   return (
-    <AdminShell
-      dictionary={admin}
-      locale={locale}
-      location={{ kind: "store", section: "categories", store }}
-      role={me.role}
-      stores={me.stores}
-    >
+    <AdminShell dictionary={admin} locale={locale} section="categories">
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <CategoryManager storeSlug={slug} />
+        <CategoryManager />
       </HydrationBoundary>
     </AdminShell>
   );

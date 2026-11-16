@@ -230,13 +230,7 @@ function setup({
   }
 
   const user = userEvent.setup();
-  const screenUi = (
-    <OrderManager
-      query={query}
-      renderedAt={RENDERED_AT}
-      storeSlug="lr-market"
-    />
-  );
+  const screenUi = <OrderManager query={query} renderedAt={RENDERED_AT} />;
   const rendered = renderWithI18n(screenUi, { locale, wrapper: Providers });
 
   const row = (code: string) => screen.getByTestId(`order-row-${code}`);
@@ -271,13 +265,7 @@ function setup({
     resumed,
     /** The address changes its status or search, as a tab or a search does. */
     rerender: (next: OrdersQuery) => {
-      rendered.rerender(
-        <OrderManager
-          query={next}
-          renderedAt={RENDERED_AT}
-          storeSlug="lr-market"
-        />
-      );
+      rendered.rerender(<OrderManager query={next} renderedAt={RENDERED_AT} />);
     },
     refresh: async () => {
       await act(async () => {
@@ -308,7 +296,7 @@ describe("OrderManager", () => {
 
     const first = await screen.findByTestId("order-row-K7P2Q");
     const link = within(first).getByRole("link");
-    expect(link).toHaveAttribute("href", "/en/admin/lr-market/orders/2");
+    expect(link).toHaveAttribute("href", "/en/admin/orders/2");
     expect(link).toHaveTextContent(
       /^K7P2QPackedAna PérezUYU 12.502 minutes agoPhone confirmed: Yes$/u
     );
@@ -319,7 +307,8 @@ describe("OrderManager", () => {
       "datetime",
       "2026-11-14T21:58:00.000Z"
     );
-    expect(list).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
+    // The first page of every order: no cursor, status or search to send.
+    expect(list).toHaveBeenCalledExactlyOnceWith({});
   });
 
   test("speaks Spanish in its rows, tabs and search", async () => {
@@ -353,32 +342,18 @@ describe("OrderManager", () => {
 
     await waitFor(() => {
       expect(tabs()).toEqual([
-        ["All (13)", "/en/admin/lr-market/orders?q=ana", null],
-        [
-          "Received (3)",
-          "/en/admin/lr-market/orders?status=received&q=ana",
-          null,
-        ],
-        [
-          "Packed (2)",
-          "/en/admin/lr-market/orders?status=packed&q=ana",
-          "page",
-        ],
-        [
-          "Delivered (7)",
-          "/en/admin/lr-market/orders?status=delivered&q=ana",
-          null,
-        ],
+        ["All (13)", "/en/admin/orders?q=ana", null],
+        ["Received (3)", "/en/admin/orders?status=received&q=ana", null],
+        ["Packed (2)", "/en/admin/orders?status=packed&q=ana", "page"],
+        ["Delivered (7)", "/en/admin/orders?status=delivered&q=ana", null],
         [
           "Couldn't deliver (1)",
-          "/en/admin/lr-market/orders?status=undeliverable&q=ana",
+          "/en/admin/orders?status=undeliverable&q=ana",
           null,
         ],
       ]);
     });
-    expect(countsSpy).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: "lr-market",
-    });
+    expect(countsSpy).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(
       screen.getByRole("searchbox", { name: "Search orders" })
     ).toHaveValue("ana");
@@ -390,15 +365,11 @@ describe("OrderManager", () => {
     await screen.findByTestId("order-row-AB3CD");
 
     expect(tabs()).toEqual([
-      ["All", "/en/admin/lr-market/orders", "page"],
-      ["Received", "/en/admin/lr-market/orders?status=received", null],
-      ["Packed", "/en/admin/lr-market/orders?status=packed", null],
-      ["Delivered", "/en/admin/lr-market/orders?status=delivered", null],
-      [
-        "Couldn't deliver",
-        "/en/admin/lr-market/orders?status=undeliverable",
-        null,
-      ],
+      ["All", "/en/admin/orders", "page"],
+      ["Received", "/en/admin/orders?status=received", null],
+      ["Packed", "/en/admin/orders?status=packed", null],
+      ["Delivered", "/en/admin/orders?status=delivered", null],
+      ["Couldn't deliver", "/en/admin/orders?status=undeliverable", null],
     ]);
   });
 
@@ -410,13 +381,12 @@ describe("OrderManager", () => {
     // The row carries them to the order, whose way back returns here.
     expect(within(row("AB3CD")).getByRole("link")).toHaveAttribute(
       "href",
-      "/en/admin/lr-market/orders/1?status=received&q=ana"
+      "/en/admin/orders/1?status=received&q=ana"
     );
 
     expect(list).toHaveBeenCalledExactlyOnceWith({
       q: "ana",
       status: "received",
-      storeSlug: "lr-market",
     });
   });
 
@@ -479,8 +449,8 @@ describe("OrderManager", () => {
     expect(await screen.findByTestId("order-row-AB3CD")).toBeInTheDocument();
     // The retry reads the same list again: the store, status and search.
     expect(list.mock.calls).toEqual([
-      [{ q: "ana", status: "received", storeSlug: "lr-market" }],
-      [{ q: "ana", status: "received", storeSlug: "lr-market" }],
+      [{ q: "ana", status: "received" }],
+      [{ q: "ana", status: "received" }],
     ]);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -504,9 +474,9 @@ describe("OrderManager", () => {
     expect(await screen.findByTestId("order-row-AB3CD")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(list.mock.calls).toEqual([
-      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
-      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
-      [{ q: "ana", status: "packed", storeSlug: "lr-market" }],
+      [{ q: "ana", status: "packed" }],
+      [{ q: "ana", status: "packed" }],
+      [{ q: "ana", status: "packed" }],
     ]);
   });
 
@@ -651,7 +621,7 @@ describe("OrderManager", () => {
 
     // A change that is no arrival (the order opened elsewhere) says nothing.
     act(() => {
-      markOrderSeen("lr-market", 9);
+      markOrderSeen(9);
     });
 
     expect(within(row("K7P2Q")).queryByTestId("order-new")).toBeNull();
@@ -678,7 +648,7 @@ describe("OrderManager", () => {
     await screen.findByTestId("order-row-K7P2Q");
 
     act(() => {
-      markOrderSeen("lr-market", 9);
+      markOrderSeen(9);
     });
 
     expect(within(row("K7P2Q")).queryByTestId("order-new")).toBeNull();
@@ -909,7 +879,6 @@ describe("OrderManager", () => {
     });
     expect(list).toHaveBeenLastCalledWith({
       cursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
-      storeSlug: "lr-market",
     });
     await waitFor(() => {
       expect(
@@ -942,7 +911,6 @@ describe("OrderManager", () => {
       [
         {
           cursor: { createdAt: "2026-11-14T21:59:00.000Z", id: 1 },
-          storeSlug: "lr-market",
         },
       ],
     ]);
@@ -1014,7 +982,7 @@ describe("OrderManager's focus after Load more", () => {
     await user.click(screen.getByRole("button", { name: "Load more" }));
     await waitFor(() => {
       expect(list.mock.calls.filter(([input]) => hasCursor(input))).toEqual([
-        [{ cursor, storeSlug: "lr-market" }],
+        [{ cursor }],
       ]);
     });
     await screen.findByRole("button", { name: "Load more" });
@@ -1117,8 +1085,8 @@ describe("OrderManager before hydration", () => {
       ...order,
       createdAt: new Date(order.createdAt),
     }));
-    recordOrderList("lr-market", {}, [[]], RENDERED_AT);
-    recordOrderList("lr-market", {}, [decoded], RENDERED_AT);
+    recordOrderList({}, [[]], RENDERED_AT);
+    recordOrderList({}, [decoded], RENDERED_AT);
     server.use(
       listHandler(() => page),
       createOrpcHandler("order.counts", () => COUNTS)
@@ -1131,7 +1099,7 @@ describe("OrderManager before hydration", () => {
       orpc.order.list.infiniteOptions({
         getNextPageParam: () => undefined,
         initialPageParam: firstCursor,
-        input: (cursor) => ({ cursor, storeSlug: "lr-market" }),
+        input: (cursor) => ({ cursor }),
       }).queryKey,
       {
         pageParams: [firstCursor],
@@ -1143,11 +1111,7 @@ describe("OrderManager before hydration", () => {
     return collectHydrationErrors(
       <QueryClientProvider client={queryClient}>
         <I18n>
-          <OrderManager
-            query={{}}
-            renderedAt={RENDERED_AT}
-            storeSlug="lr-market"
-          />
+          <OrderManager query={{}} renderedAt={RENDERED_AT} />
         </I18n>
       </QueryClientProvider>,
       { clientNowMs: RENDERED_AT + 5000, serverNowMs: RENDERED_AT }

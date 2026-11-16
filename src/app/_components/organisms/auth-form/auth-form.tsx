@@ -50,8 +50,8 @@ function reloadSignedIn(home: string) {
 }
 
 /**
- * Email and password sign-in. There is no sign-up: logins are created by a
- * superadmin or a store member (FER-009).
+ * Email and password sign-in. There is no sign-up: logins are created by an
+ * admin (FER-009; every login is one since FER-038).
  */
 export function AuthForm({ onSuccess, redirectTo }: AuthFormProps) {
   const { auth } = useDictionary();

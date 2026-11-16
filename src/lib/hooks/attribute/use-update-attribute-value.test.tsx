@@ -16,7 +16,6 @@ const INPUT = {
   id: 21,
   nameEn: null,
   nameEs: "Plateado",
-  storeSlug: "lr-market",
   swatchColor: null,
 };
 
@@ -35,7 +34,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useUpdateAttributeValue("lr-market"), {
+  const { result } = renderHook(() => useUpdateAttributeValue(), {
     wrapper,
   });
   const metas = () =>
@@ -55,7 +54,7 @@ describe("useUpdateAttributeValue", () => {
 
     expect(procedure).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
   });
 
@@ -68,7 +67,7 @@ describe("useUpdateAttributeValue", () => {
     });
 
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });

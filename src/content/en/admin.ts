@@ -140,15 +140,6 @@ export const admin: Dictionary["admin"] = {
     },
     values: "Values of “{name}”",
   },
-  landing: {
-    inactive: "Inactive",
-    noStoresBody:
-      "Your account is not in any store yet. Ask whoever gave you access to add you to one.",
-    noStoresTitle: "You don't have a store yet",
-    pickBody:
-      "You can work on more than one store. Which one do you want to open?",
-    pickTitle: "Choose a store",
-  },
   metadata: {
     title: "Admin",
   },
@@ -233,18 +224,9 @@ export const admin: Dictionary["admin"] = {
       title: "Couldn't deliver the order?",
     },
   },
-  platformSections: {
-    metrics: "Metrics",
-    stores: "Stores",
-    users: "Users",
-  },
   shell: {
     navigation: "Admin sections",
-    platform: "Platform",
-    platformNavigation: "Platform sections",
     skipToContent: "Skip to content",
-    storeSwitcher: "Switch store: {store}",
-    stores: "Stores",
   },
   signIn: {
     subtitle: "Sign in with the email and password you were given.",
@@ -254,6 +236,7 @@ export const admin: Dictionary["admin"] = {
     categories: "Categories",
     filters: "Filters",
     home: "Home",
+    metrics: "Metrics",
     orders: "Orders",
     products: "Articles",
     settings: "Settings",

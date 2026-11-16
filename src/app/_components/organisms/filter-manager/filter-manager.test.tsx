@@ -20,8 +20,6 @@ vi.mock("@/lib/orpc/client", async () => {
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
-const STORE_SLUG = "lr-market";
-
 const GENERIC = "We could not save the change. Try again.";
 
 function makeValue(
@@ -179,7 +177,7 @@ function setup({
   }
 
   const user = userEvent.setup();
-  renderWithI18n(<FilterManager storeSlug={STORE_SLUG} />, {
+  renderWithI18n(<FilterManager />, {
     locale,
     wrapper: Providers,
   });
@@ -252,9 +250,7 @@ describe("FilterManager", () => {
     expect(skeleton).toHaveTextContent(/^Loading$/u);
     expect(screen.queryByTestId("filter-list")).toBeNull();
     await waitFor(() => {
-      expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: STORE_SLUG,
-      });
+      expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
     });
   });
 
@@ -271,9 +267,7 @@ describe("FilterManager", () => {
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     await shown();
-    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: STORE_SLUG,
-    });
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByTestId("filter-list-skeleton")).toBeNull();
   });
@@ -391,13 +385,9 @@ describe("FilterManager", () => {
     expect(spies.create).toHaveBeenCalledExactlyOnceWith({
       nameEn: null,
       nameEs: "Largo",
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
-      expect(spies.list.mock.calls).toEqual([
-        [{ storeSlug: STORE_SLUG }],
-        [{ storeSlug: STORE_SLUG }],
-      ]);
+      expect(spies.list.mock.calls).toEqual([[undefined], [undefined]]);
     });
     expect(form.getByLabelText(/^Name in Spanish/u)).toHaveValue("");
   });
@@ -467,7 +457,6 @@ describe("FilterManager", () => {
       id: 7,
       nameEn: "Colour",
       nameEs: "Colores",
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(
@@ -536,7 +525,6 @@ describe("FilterManager", () => {
       attributeId: 7,
       nameEn: "Pink",
       nameEs: "Rosa",
-      storeSlug: STORE_SLUG,
       swatchColor: "#ff00aa",
     });
     await waitFor(() => {
@@ -557,7 +545,6 @@ describe("FilterManager", () => {
         attributeId: 8,
         nameEn: null,
         nameEs: "Plata",
-        storeSlug: STORE_SLUG,
         swatchColor: null,
       });
     });
@@ -621,7 +608,6 @@ describe("FilterManager", () => {
       id: 21,
       nameEn: "Gold",
       nameEs: "Dorado",
-      storeSlug: STORE_SLUG,
       swatchColor: null,
     });
     await waitFor(() => {
@@ -709,7 +695,6 @@ describe("FilterManager", () => {
       await waitFor(() => {
         expect(spies.reorder).toHaveBeenCalledExactlyOnceWith({
           ids,
-          storeSlug: STORE_SLUG,
         });
       });
       expect(spies.reorderValues).not.toHaveBeenCalled();
@@ -742,7 +727,6 @@ describe("FilterManager", () => {
         expect(spies.reorderValues).toHaveBeenCalledExactlyOnceWith({
           attributeId: 7,
           ids,
-          storeSlug: STORE_SLUG,
         });
       });
       expect(spies.reorder).not.toHaveBeenCalled();
@@ -761,16 +745,14 @@ describe("FilterManager", () => {
 
     await waitFor(() => {
       expect(spies.reorder.mock.calls).toEqual([
-        [{ ids: [8, 7, 9], storeSlug: STORE_SLUG }],
-        [{ ids: [8, 9, 7], storeSlug: STORE_SLUG }],
+        [{ ids: [8, 7, 9] }],
+        [{ ids: [8, 9, 7] }],
       ]);
     });
     expect(filterOrder()).toEqual(["Material", "Talle", "Color"]);
     expect(announcer()).toHaveTextContent("“Color” is now in place 3 of 3.");
     // Saved moves read nothing again.
-    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: STORE_SLUG,
-    });
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   test("a second quick move of a value starts from the first move's order", async () => {
@@ -785,8 +767,8 @@ describe("FilterManager", () => {
 
     await waitFor(() => {
       expect(spies.reorderValues.mock.calls).toEqual([
-        [{ attributeId: 7, ids: [22, 21, 23], storeSlug: STORE_SLUG }],
-        [{ attributeId: 7, ids: [22, 23, 21], storeSlug: STORE_SLUG }],
+        [{ attributeId: 7, ids: [22, 21, 23] }],
+        [{ attributeId: 7, ids: [22, 23, 21] }],
       ]);
     });
     expect(valueOrder("color")).toEqual(["Plateado", "Negro", "Dorado"]);
@@ -848,7 +830,6 @@ describe("FilterManager", () => {
     expect(await screen.findByText("Filter deleted.")).toBeVisible();
     expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
       id: 7,
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
@@ -874,7 +855,6 @@ describe("FilterManager", () => {
     ).toBeDisabled();
     expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
       id: 8,
-      storeSlug: STORE_SLUG,
     });
     expect(screen.queryByText("Filter deleted.")).toBeNull();
   });
@@ -975,7 +955,6 @@ describe("FilterManager", () => {
     });
     expect(spies.deleteValue).toHaveBeenCalledExactlyOnceWith({
       id: 23,
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveFocus();
@@ -1001,7 +980,6 @@ describe("FilterManager", () => {
     expect(await screen.findByText("Value deleted.")).toBeVisible();
     expect(spies.deleteValue).toHaveBeenCalledExactlyOnceWith({
       id: 22,
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();

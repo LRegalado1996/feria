@@ -23,17 +23,17 @@ function withValuesInOrder(
  * Puts a filter's values in a new order at once on screen, then on the
  * server; a refused or failed save puts the previous order back.
  */
-export function useReorderAttributeValues(storeSlug: string) {
+export function useReorderAttributeValues() {
   const queryClient = useQueryClient();
-  const queryKey = storeAttributesKey(storeSlug);
+  const queryKey = storeAttributesKey();
   // The last move made for each filter, which every save that went through
   // shows again.
   const latest = useRef(new Map<number, number[]>());
 
   return useMutation({
     ...orpc.attribute.reorderValues.mutationOptions(),
-    // One move at a time per store, shared with the filters' moves.
-    scope: { id: `attribute-reorder:${storeSlug}` },
+    // One move at a time, shared with the filters' moves.
+    scope: { id: "attribute-reorder" },
     // The screen reports a failure itself, once.
     meta: { suppressGlobalErrorReport: true },
     onMutate: async ({ attributeId, ids }) => {

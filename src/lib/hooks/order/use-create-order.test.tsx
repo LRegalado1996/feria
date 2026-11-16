@@ -18,7 +18,6 @@ const INPUT = {
   locale: "es" as const,
   note: "",
   requestKey: "11111111-1111-4111-8111-111111111111",
-  storeSlug: "lr-market",
 };
 
 function setup({ answer = "ok" }: { answer?: "fail" | "ok" } = {}) {

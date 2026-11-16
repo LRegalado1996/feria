@@ -1,8 +1,11 @@
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath, splitLocale } from "@/lib/i18n/paths";
 
-/** A store's sections in the admin, in the order the navigation lists them. */
-export const STORE_SECTIONS = [
+/**
+ * The admin's sections (FER-038: one store, so one list), in the order the
+ * navigation lists them. `/admin` opens the orders.
+ */
+export const ADMIN_SECTIONS = [
   "products",
   "categories",
   "filters",
@@ -10,39 +13,26 @@ export const STORE_SECTIONS = [
   "home",
   "settings",
   "users",
+  "metrics",
 ] as const;
 
-export type StoreSection = (typeof STORE_SECTIONS)[number];
+export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
-/** The platform's sections, a superadmin's only. */
-export const PLATFORM_SECTIONS = ["stores", "users", "metrics"] as const;
-
-export type PlatformSection = (typeof PLATFORM_SECTIONS)[number];
-
-export function isStoreSection(value: string): value is StoreSection {
-  return (STORE_SECTIONS as readonly string[]).includes(value);
-}
-
-export function isPlatformSection(value: string): value is PlatformSection {
-  return (PLATFORM_SECTIONS as readonly string[]).includes(value);
+export function isAdminSection(value: string): value is AdminSection {
+  return (ADMIN_SECTIONS as readonly string[]).includes(value);
 }
 
 export const ADMIN_HOME = "/admin";
 export const ADMIN_SIGN_IN = "/admin/sign-in";
 
-export function storeSectionPath(
-  storeSlug: string,
-  section: StoreSection,
-  locale: Locale
-): string {
-  return localizePath(`/admin/${storeSlug}/${section}`, locale);
-}
+/** The section `/admin` opens on, as Lucas chose (FER-038). */
+export const ADMIN_LANDING_SECTION: AdminSection = "orders";
 
-export function platformSectionPath(
-  section: PlatformSection,
+export function adminSectionPath(
+  section: AdminSection,
   locale: Locale
 ): string {
-  return localizePath(`/admin/platform/${section}`, locale);
+  return localizePath(`/admin/${section}`, locale);
 }
 
 /** The sign-in page in `locale`, coming back to `returnTo` afterwards. */

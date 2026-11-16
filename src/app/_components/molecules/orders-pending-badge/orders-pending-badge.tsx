@@ -9,7 +9,6 @@ export interface OrdersPendingBadgeProps {
   className?: string;
   /** The link's label ("Pedidos"), which the navigation hides: this says it. */
   label: string;
-  storeSlug: string;
 }
 
 /**
@@ -20,14 +19,10 @@ export interface OrdersPendingBadgeProps {
  * count is not known yet. One span, because Chromium puts a space before a
  * positioned box when it joins it to the text in front.
  */
-function OrdersPendingBadge({
-  className,
-  label,
-  storeSlug,
-}: OrdersPendingBadgeProps) {
+function OrdersPendingBadge({ className, label }: OrdersPendingBadgeProps) {
   const { admin } = useDictionary();
   const locale = useLocale();
-  const counts = useOrderCounts(storeSlug);
+  const counts = useOrderCounts();
   const received = counts.data?.received ?? 0;
   const figure = formatInteger(received, locale);
   let name = label;

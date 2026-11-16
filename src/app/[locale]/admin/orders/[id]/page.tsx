@@ -7,11 +7,7 @@ import { AdminShellSkeleton } from "@/app/_components/molecules/admin-shell-skel
 import { AdminShell } from "@/app/_components/organisms/admin-shell";
 import { OrderDetail } from "@/app/_components/organisms/order-detail";
 import { getDictionary } from "@/content";
-import {
-  requireAdmin,
-  requireAdminStore,
-  requireStoreSegment,
-} from "@/lib/admin/access";
+import { requireAdmin } from "@/lib/admin/access";
 import { orderPath, readOrderId, readOrdersQuery } from "@/lib/admin/orders";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { catchNotFound } from "@/lib/orpc/catch-not-found";
@@ -24,19 +20,19 @@ async function readRenderInstant() {
 }
 
 interface OrderPageProps {
-  params: Promise<{ id: string; locale: string; store: string }>;
+  params: Promise<{ id: string; locale: string }>;
   /** The list's tab and search it was opened from, for the way back. */
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
- * One of a store's orders (FER-027), behind the admin's per-page checks. An
- * address no order can have, or an order this store does not have, is the
+ * One of the store's orders (FER-027), behind the admin's per-page check. An
+ * address no order can have, or an order the store does not have, is the
  * not-found page.
  */
 export default function OrderPage({ params, searchParams }: OrderPageProps) {
-  // The store, the order and the list it came from are only known per
-  // request: read inside the boundary, never above it.
+  // The order and the list it came from are only known per request: read
+  // inside the boundary, never above it.
   return (
     <Suspense fallback={<AdminShellSkeleton />}>
       <OrderResolver params={params} searchParams={searchParams} />
@@ -46,8 +42,7 @@ export default function OrderPage({ params, searchParams }: OrderPageProps) {
 
 async function OrderResolver({ params, searchParams }: OrderPageProps) {
   const locale = await readLocale(params);
-  const { id: idSegment, store: segment } = await params;
-  const slug = requireStoreSegment(segment);
+  const { id: idSegment } = await params;
   // Not an id at all: no session check, no query.
   const id = readOrderId(idSegment);
 
@@ -58,15 +53,12 @@ async function OrderResolver({ params, searchParams }: OrderPageProps) {
   // Checked as the list checks it: anyone can edit an address.
   const from = readOrdersQuery(await searchParams);
   const { admin } = getDictionary(locale);
-  const me = await requireAdmin(orderPath(slug, id, locale, from), locale);
-  const store = requireAdminStore(me, slug);
+  await requireAdmin(orderPath(id, locale, from), locale);
   const queryClient = getQueryClient();
-  // Another store's order is NOT_FOUND too. Any other failure is not a 404:
-  // the screen fetches again and shows its own error state.
+  // An order the store does not have is NOT_FOUND. Any other failure is not
+  // a 404: the screen fetches again and shows its own error state.
   const found = await catchNotFound(
-    queryClient.query(
-      orpc.order.get.queryOptions({ input: { id, storeSlug: slug } })
-    )
+    queryClient.query(orpc.order.get.queryOptions({ input: { id } }))
   ).catch(noop);
 
   if (found === null) {
@@ -78,19 +70,8 @@ async function OrderResolver({ params, searchParams }: OrderPageProps) {
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AdminShell
-        dictionary={admin}
-        locale={locale}
-        location={{ kind: "store", section: "orders", store }}
-        role={me.role}
-        stores={me.stores}
-      >
-        <OrderDetail
-          from={from}
-          id={id}
-          renderedAt={renderedAt}
-          storeSlug={slug}
-        />
+      <AdminShell dictionary={admin} locale={locale} section="orders">
+        <OrderDetail from={from} id={id} renderedAt={renderedAt} />
       </AdminShell>
     </HydrationBoundary>
   );
