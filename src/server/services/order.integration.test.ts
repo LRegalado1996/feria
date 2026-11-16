@@ -761,8 +761,12 @@ describe("searching and counting the orders", () => {
     const shop = await makeShop();
     await makeOrder(shop, { customerName: "Ana" });
 
+    // Letters only: three digits or more also search the phones, and a
+    // random tag's digits can spell part of this order's (+59894000000).
+    const nothing = `zzz-${uniqueTag().replaceAll(/\d/gu, "x")}`;
+
     await expect(
-      listOrders(db, { q: `zzz-${uniqueTag()}`, storeId: shop.id })
+      listOrders(db, { q: nothing, storeId: shop.id })
     ).resolves.toEqual({ items: [], nextCursor: null });
     expect(await searched(shop, "%")).toEqual([]);
   });
