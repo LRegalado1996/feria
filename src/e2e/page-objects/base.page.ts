@@ -80,8 +80,8 @@ export abstract class BasePage {
   }
 
   getButton(name: string | RegExp): Locator {
-    // A string names the button exactly: "Post" must not match a row menu
-    // named after a post.
+    // A string names the button exactly: "Borrar" must not match a row's
+    // "Borrar Anillos".
     return this.page.getByRole("button", {
       exact: typeof name === "string",
       name,
