@@ -95,7 +95,7 @@ export const admin = {
       title: "¿Eliminar el valor?",
     },
     description:
-      "Con los filtros tus clientes encuentran lo que buscan, por ejemplo por color. Cada filtro tiene su propio enlace: /tu-tienda/products?color=dorado.",
+      "Con los filtros tus clientes encuentran lo que buscan, por ejemplo por color. Cada filtro tiene su propio enlace: /products?color=dorado.",
     edit: {
       action: "Renombrar filtro: {name}",
       cancel: "Cancelar",
