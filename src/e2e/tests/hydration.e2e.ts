@@ -58,15 +58,20 @@ test.describe("Hydration", () => {
     });
     // Seconds old when the list renders: its relative time ("hace unos
     // segundos") is the text that differed between the server and the
-    // browser. A phone of its own, since the hourly limit counts by phone.
+    // browser. A phone of its own, since the hourly limit counts by phone,
+    // and the list searched by it: other specs' orders can fill its first
+    // page.
+    const phone = uniquePhone();
     const order = await placeOrder(page.request, {
       customerName: "Ana",
-      customerPhone: uniquePhone().international,
+      customerPhone: phone.international,
       productId: ring.id,
     });
     const errors = collectHydrationErrors(page);
 
-    await page.goto("/admin/orders", { waitUntil: "domcontentloaded" });
+    await page.goto(`/admin/orders?q=${phone.national}`, {
+      waitUntil: "domcontentloaded",
+    });
 
     await expect(page.getByTestId(`order-row-${order.code}`)).toBeVisible();
     // The sound switch is enabled only once React owns the screen.

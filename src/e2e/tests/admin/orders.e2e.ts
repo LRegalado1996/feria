@@ -20,9 +20,11 @@ import { StorePage } from "../../page-objects/store.page";
 
 // FER-027. Each test seeds an article and a login of its own, and finds its
 // orders by their codes or their phone: the store's orders are every spec's
-// (FER-038). The db fixture deletes the orders holding the test's article.
-// The tabs' counts and the navigation's count of orders to pack read every
-// order, so they are `orders.serial.e2e.ts`.
+// (FER-038), so the list is opened searched by the test's phone, never on
+// its first page, which other specs' orders can fill. The db fixture deletes
+// the orders holding the test's article. The tabs' counts and the
+// navigation's count of orders to pack read every order, so they are
+// `orders.serial.e2e.ts`.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const ORDER_CREATE = "/api/orpc/order/create";
@@ -137,18 +139,21 @@ test.describe("Order management", () => {
     );
     const code = (await codeOnPage.textContent()) ?? "";
 
-    // The staff finds it in the list.
+    // The staff finds it in the list, searched by the shopper's phone.
     const orders = await signIn(page, login);
-    await orders.open();
+    await orders.open(`?q=${phone.national}`);
     const row = orders.row(code);
     await expect(row).toContainText("Josefina Núñez");
     await expect(row).toContainText("$ 1.200");
     await expect(row).toContainText("Recibido");
     await expect(row).toContainText("Teléfono confirmado: No");
 
-    // Two taps from the list: the row, then "Mark packed".
+    // Two taps from the list: the row, then "Mark packed". The order's page
+    // keeps the list's search for the way back.
     await orders.openOrder(code);
-    await expect(page).toHaveURL(/\/admin\/orders\/\d+$/u);
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/orders/\\d+\\?q=${phone.national}$`, "u")
+    );
     await expect(page.getByTestId("order-contact")).toContainText(
       phone.international
     );
@@ -186,13 +191,14 @@ test.describe("Order management", () => {
     page,
   }) => {
     const { login, necklace, orderState } = await setup({ db });
+    const phone = uniquePhone();
     const { code } = await placeOrder(page.request, {
       customerName: "Ana Prueba",
-      customerPhone: uniquePhone().international,
+      customerPhone: phone.international,
       productId: necklace.id,
     });
     const orders = await signIn(page, login);
-    await orders.open();
+    await orders.open(`?q=${phone.national}`);
     await orders.openOrder(code);
     await orders.move("Marcar preparado", "packed");
     const undeliverable = orders.getButton("No se pudo entregar");
