@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import type { PublicStore } from "@/server/services/store";
+import { holdRequest, settle } from "@/test/connection";
 
 import { announcementOf, shellOf, streamedShell } from "./store-shell";
 
@@ -75,8 +76,16 @@ describe("streamedShell", () => {
   test("reads the store only once a request is there, then its tagline and its categories", async () => {
     const store = makeStore();
     readStore.mockResolvedValue(store);
+    const request = holdRequest(connection);
 
     const shell = streamedShell("en");
+    await settle();
+
+    expect(connection).toHaveBeenCalledExactlyOnceWith();
+    expect(readStore).not.toHaveBeenCalled();
+    expect(readCategories).not.toHaveBeenCalled();
+
+    request.arrive();
 
     await expect(shell.announcement).resolves.toEqual({
       lang: "en",
@@ -85,11 +94,8 @@ describe("streamedShell", () => {
     await expect(shell.categories).resolves.toEqual([
       { lang: "en", name: "anillos-en", slug: "anillos" },
     ]);
-    expect(readStore).toHaveBeenCalledOnce();
+    expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "en");
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      readStore.mock.invocationCallOrder[0] ?? 0
-    );
   });
 
   test("shows no bar and no category before the store's row exists", async () => {
