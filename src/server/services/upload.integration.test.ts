@@ -100,6 +100,18 @@ describe("cleanUpOrphanBlobs against the database", () => {
     );
   });
 
+  test("keeps a file whose row names it with its scheme in capitals", async () => {
+    const olderThan = new Date("2026-11-14T12:00:00.000Z");
+    const kept = putFile(new Date("2026-11-01T00:00:00.000Z"));
+    // Saved before addresses were stored as a URL writes them.
+    await makeArticleShowing(kept.url.replace("https://", "HTTPS://"));
+
+    await expect(
+      cleanUpOrphanBlobs(db, BLOB_STORE, { olderThan })
+    ).resolves.toEqual({ checked: 1, deleted: [] });
+    expect([...store.files.keys()]).toEqual([kept.url]);
+  });
+
   test("a second run finds nothing more to delete", async () => {
     const olderThan = new Date("2026-11-14T12:00:00.000Z");
     const kept = putFile(new Date("2026-11-01T00:00:00.000Z"));

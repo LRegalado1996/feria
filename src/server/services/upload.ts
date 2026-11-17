@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { del, list } from "@vercel/blob";
 import { generateClientTokenFromReadWriteToken } from "@vercel/blob/client";
-import { like } from "drizzle-orm";
+import { ilike } from "drizzle-orm";
 
 import {
   type BlobNamespace,
@@ -104,18 +104,18 @@ export async function deleteBlobs(
 /**
  * The pathnames (`qa/cover/<id>.webp`) of this deployment's files that a row
  * still names, read from every column in `IMAGE_URL_COLUMNS`. Compared by
- * pathname, not by the whole address, so a host written in capitals still
- * counts as a reference. Every column is read in one snapshot: a cover
- * moved from one column to another between two reads would otherwise be
- * missed by both. `db` is the top-level client, never a transaction:
- * Postgres sets no isolation level on a savepoint.
+ * pathname, not by the whole address, so a host or a scheme written in
+ * capitals still counts as a reference. Every column is read in one
+ * snapshot: a cover moved from one column to another between two reads
+ * would otherwise be missed by both. `db` is the top-level client, never a
+ * transaction: Postgres sets no isolation level on a savepoint.
  */
 async function listReferencedPathnames(
   db: DatabaseClient,
   blobStore: BlobStore
 ): Promise<Set<string>> {
   const referenced = new Set<string>();
-  // The LIKE only narrows the read; `isOwnBlobUrl` decides.
+  // The ILIKE only narrows the read; `isOwnBlobUrl` decides.
   const pattern = `https://%/${blobStore.namespace}/%`;
 
   await db.transaction(
@@ -124,10 +124,10 @@ async function listReferencedPathnames(
         const rows = await tx
           .select({ url: column })
           .from(column.table)
-          .where(like(column, pattern));
+          .where(ilike(column, pattern));
 
         for (const { url } of rows) {
-          // The LIKE leaves no NULL; the check is for the column's type.
+          // The ILIKE leaves no NULL; the check is for the column's type.
           if (url !== null && isOwnBlobUrl(url, blobStore)) {
             referenced.add(new URL(url).pathname.slice(1));
           }

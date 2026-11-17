@@ -251,7 +251,9 @@ describe("cleanUpOrphanBlobs", () => {
         '"store"."catalogCoverPhoneUrl"',
       ].map((column) => ({
         params: ["https://%/qa/%"],
-        sql: `${column} like $1`,
+        // Whatever the case of its scheme or host: a row saved as
+        // `HTTPS://…` still names its file.
+        sql: `${column} ilike $1`,
       }))
     );
     // All five in one snapshot, so a cover moved from one column to another
