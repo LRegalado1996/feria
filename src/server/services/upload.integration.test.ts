@@ -39,7 +39,7 @@ vi.mock("@vercel/blob", () => ({
 const BLOB_STORE: BlobStore = {
   host: "integration.public.blob.vercel-storage.com",
   namespace: "local",
-  token: "vercel_blob_rw_Integration_s3cret",
+  token: "vercel_blob_rw_Integration_synthetic",
 };
 
 // The articles this file created; deleting one deletes its images.

@@ -10,13 +10,13 @@ import { theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import { GET } from "./route";
 
-const SECRET = "integration-cron-secret-0123456789";
+const SECRET = "synthetic-cron-secret-0123456789";
 const HOST = "cronstore.public.blob.vercel-storage.com";
 
 vi.mock("@/env", () => ({
   env: {
     BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_CronStore_s3cretPart",
-    CRON_SECRET: "integration-cron-secret-0123456789",
+    CRON_SECRET: "synthetic-cron-secret-0123456789",
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: "test",
   },

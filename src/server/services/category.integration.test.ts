@@ -412,7 +412,7 @@ describe("category writes under two writers", () => {
 const BLOB_STORE = {
   host: "integration.public.blob.vercel-storage.com",
   namespace: "local",
-  token: "vercel_blob_rw_Integration_s3cretPart",
+  token: "vercel_blob_rw_Integration_synthetic",
 } as const;
 
 /** An address of an upload for covers that no other call gave. */
