@@ -113,6 +113,51 @@ describe("StoreFooter", () => {
     expect(outside()).toEqual(expected);
   });
 
+  test.each([
+    ["three blocks, without social links", makeStore(), 2],
+    [
+      "four blocks, with them",
+      makeStore({ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }),
+      3,
+    ],
+  ])(
+    "with %s, spreads them across the whole width from lg up, the story's measure held",
+    (_case, store, columns) => {
+      const { footer } = setup({ store });
+
+      // One row from lg up, first block on the left edge, last on the
+      // right, even gaps between however many there are.
+      const blocks = required(
+        footer.querySelector('[data-slot="store-footer-blocks"]')
+      );
+      expect(blocks).toHaveClass(
+        "flex",
+        "flex-col",
+        "lg:flex-row",
+        "lg:justify-between"
+      );
+      expect(blocks.firstElementChild).toBe(
+        within(footer).getByTestId("store-footer-brand")
+      );
+      // The columns join that row (`contents`); below lg they share a row
+      // of their own, two side by side on a phone, spread on a tablet.
+      const columnsBox = required(blocks.lastElementChild);
+      expect(columnsBox).toHaveClass(
+        "grid",
+        "grid-cols-2",
+        "md:flex",
+        "md:justify-between",
+        "lg:contents"
+      );
+      expect(columnsBox.children).toHaveLength(columns);
+      // About 48 characters a line, the signature under it.
+      expect(within(footer).getByTestId("store-footer-story")).toHaveClass(
+        "max-w-[40ch]",
+        "text-sm"
+      );
+    }
+  );
+
   test("leaves out the follow section when the store has no social link", () => {
     const { footer } = setup({ store: makeStore({ whatsappNumber: "+1" }) });
 
