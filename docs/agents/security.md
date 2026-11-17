@@ -32,6 +32,11 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 - **Only own files are deleted.** `deleteBlobs` and the orphan cleanup act on this deployment's folder alone (qa, previews and local runs share a store), and the cleanup reads every column in `IMAGE_URL_COLUMNS` (`src/server/services/upload.ts`) before deleting: a new image column joins that list in the same change, or its files are deleted as orphans.
 - **The read-write token stays on the server** (`BLOB_READ_WRITE_TOKEN`, never `NEXT_PUBLIC_`); the browser only ever holds a client token for one file.
 
+## Scheduled jobs
+
+- **A cron route checks `CRON_SECRET` itself.** Vercel calls each `crons` path of `vercel.json` with `Authorization: Bearer <CRON_SECRET>`; the route compares it in constant time (`isCronRequest`, `src/server/api/utils/cron.ts`) and answers 401 otherwise. With no secret configured it answers 503 and does nothing: it never runs open. The production build refuses to start without the secret (`src/env.js`), since production is where Vercel runs crons.
+- **A cron route is outside the proxy's language and launch rules** (it lives under `/api`), and lives in `src/app/api/cron/<job>/route.ts`, wrapped in `withEvlog`: its log line carries the job, the outcome and counts, never a file name or a row.
+
 ## Encode for every sink
 
 - **`href` from the database:** the store's links reach an `href`. They are validated when they are stored, by the schema: a link is `https://` only, never `javascript:`, carries no user name, and a social link stays on its own site. The colors in a `style` attribute are constants of the theme file (`src/styles/theme.ts`), never data.

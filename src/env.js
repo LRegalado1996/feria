@@ -28,6 +28,14 @@ export const env = createEnv({
     SENTRY_PROJECT: z.string().optional(),
     // Unset: /api/health is public. Set: callers present it (bearer or ?secret=).
     HEALTH_SECRET: z.string().min(16).optional(),
+    // Vercel sends it as `Authorization: Bearer …` to every cron it runs
+    // (`/api/cron/*`, vercel.json). Crons run on the production deployment
+    // only, so production refuses to build without it; elsewhere a cron
+    // route answers 503 when it is unset, never runs open.
+    CRON_SECRET:
+      process.env.VERCEL_ENV === "production"
+        ? z.string().min(16)
+        : z.string().min(16).optional(),
     // The launch switch (FER-034, src/lib/env/launch.ts). Unset: production
     // is closed behind the coming-soon page and everything else is open.
     // `true` in production opens the store; `false` closes any environment.
@@ -70,6 +78,7 @@ export const env = createEnv({
     SENTRY_ORG: process.env.SENTRY_ORG,
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
     HEALTH_SECRET: process.env.HEALTH_SECRET,
+    CRON_SECRET: process.env.CRON_SECRET,
     STOREFRONT_LAUNCHED: process.env.STOREFRONT_LAUNCHED,
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,

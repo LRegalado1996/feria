@@ -114,6 +114,12 @@ async function listReferencedPathnames(
   return referenced;
 }
 
+/**
+ * How old an unreferenced file must be before the scheduled cleanup deletes
+ * it: a photo uploaded into a form that is saved within two days is safe.
+ */
+export const ORPHAN_BLOB_MIN_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+
 /** At most this many addresses per delete request. */
 const DELETE_BATCH_SIZE = 100;
 
