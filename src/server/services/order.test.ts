@@ -1107,7 +1107,11 @@ describe("getOrder", () => {
 
   test("shows the full phone, the items and who set each status, from one snapshot", async () => {
     const { db, read, tx } = setupGet(
-      makeOrderRow({ locale: "en", phoneVerifiedAt: NOW })
+      makeOrderRow({
+        locale: "en",
+        phoneVerifiedAt: NOW,
+        token: "T".repeat(43),
+      })
     );
 
     await expect(read()).resolves.toEqual({
@@ -1123,7 +1127,12 @@ describe("getOrder", () => {
       note: null,
       phoneVerified: true,
       status: "received",
+      token: "T".repeat(43),
       totalAmount: 138_000,
+    });
+    // The shopper's link is read for the staff to copy (FER-051).
+    expect(tx.$.select.mock.calls[0]?.[0]).toMatchObject({
+      token: customerOrder.token,
     });
     // A status change committing between the reads can't split them.
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(

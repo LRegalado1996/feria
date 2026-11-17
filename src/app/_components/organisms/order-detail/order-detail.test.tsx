@@ -77,6 +77,7 @@ function makeOrder(
     note: "Lo paso a buscar a las 18",
     phoneVerified: true,
     status: "packed",
+    token: "T".repeat(43),
     totalAmount: 159_050,
     ...overrides,
   };
@@ -511,7 +512,11 @@ describe("OrderDetail", () => {
 
     await user.click(screen.getByRole("button", { name: "Mark delivered" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(
+      await within(screen.getByTestId("admin-primary-action")).findByRole(
+        "status"
+      )
+    ).toHaveTextContent(
       /^Someone already changed this order; we've updated it\.$/u
     );
     expect(
@@ -575,5 +580,147 @@ describe("OrderDetail", () => {
       await screen.findByRole("heading", { level: 1, name: "Order K7P2Q" })
     ).toBeInTheDocument();
     expect(get).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("OrderDetail's stepper", () => {
+  /** The stepper a computer shows, at the top. */
+  const wide = () => screen.getByTestId("order-stepper-wide");
+
+  test("shows the order's steps at the top on a computer and at the end on a phone, both able to move it", async () => {
+    setup();
+    await screen.findByTestId("order-detail");
+
+    const narrow = screen.getByTestId("order-stepper-narrow");
+    expect(wide()).toHaveClass("hidden", "md:block");
+    expect(narrow).toHaveClass("md:hidden");
+    for (const stepper of [wide(), narrow]) {
+      expect(
+        within(stepper).getByRole("list", { name: "Order status: Packed" })
+      ).toBeInTheDocument();
+    }
+    // Under the way back, above the order's cards.
+    expect(
+      screen
+        .getByRole("link", { name: "Back to orders" })
+        .compareDocumentPosition(wide())
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      screen.getByTestId("order-history").compareDocumentPosition(narrow)
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  test("moves the order once the move is confirmed, and shows where it landed", async () => {
+    const { changeStatus, user } = setup({
+      gets: [makeOrder(), makeOrder({ status: "delivered" })],
+    });
+    await screen.findByTestId("order-detail");
+
+    await user.click(
+      within(wide()).getByRole("button", { name: "Move to Delivered" })
+    );
+    expect(changeStatus).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: "Yes, move to Delivered" })
+    );
+
+    expect(changeStatus).toHaveBeenCalledExactlyOnceWith({
+      id: 42,
+      status: "delivered",
+    });
+    expect(
+      await within(wide()).findByRole("list", {
+        name: "Order status: Delivered",
+      })
+    ).toBeInTheDocument();
+  });
+
+  test("cancelled, it moves nothing", async () => {
+    const { changeStatus, user } = setup();
+    await screen.findByTestId("order-detail");
+
+    await user.click(
+      within(wide()).getByRole("button", { name: "Back to Received" })
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(changeStatus).not.toHaveBeenCalled();
+    expect(
+      within(wide()).getByRole("list", { name: "Order status: Packed" })
+    ).toBeInTheDocument();
+  });
+
+  test("a move someone got to first says so beside the moves, and the order is read again", async () => {
+    const { get, user } = setup({
+      change: "conflict",
+      gets: [makeOrder(), makeOrder({ status: "delivered" })],
+    });
+    await screen.findByTestId("order-detail");
+
+    await user.click(
+      within(wide()).getByRole("button", { name: "Move to Delivered" })
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Yes, move to Delivered" })
+    );
+
+    expect(
+      await within(screen.getByTestId("admin-primary-action")).findByRole(
+        "status"
+      )
+    ).toHaveTextContent(
+      /^Someone already changed this order; we've updated it\.$/u
+    );
+    expect(
+      await within(wide()).findByRole("list", {
+        name: "Order status: Delivered",
+      })
+    ).toBeInTheDocument();
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+});
+
+describe("OrderDetail's link for the shopper", () => {
+  test.each([
+    ["es", ""],
+    ["en", "/en"],
+  ] as const)(
+    "copies the order's page in the language it was placed in (%s), whole",
+    async (orderLocale, prefix) => {
+      const { user } = setup({ gets: [makeOrder({ locale: orderLocale })] });
+      const writeText = vi.fn(async (_text: string) => {
+        await Promise.resolve();
+      });
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText },
+      });
+      await screen.findByTestId("order-detail");
+
+      await user.click(
+        within(screen.getByTestId("order-contact")).getByRole("button", {
+          name: "Copy the order's link",
+        })
+      );
+
+      expect(writeText).toHaveBeenCalledExactlyOnceWith(
+        `${window.location.origin}${prefix}/orders/${"T".repeat(43)}`
+      );
+      expect(
+        await within(screen.getByTestId("order-contact")).findByRole("status")
+      ).toHaveTextContent("The order's link is copied.");
+    }
+  );
+
+  test("in Spanish, offers it in Spanish", async () => {
+    setup({ locale: "es" });
+    await screen.findByTestId("order-detail");
+
+    expect(
+      within(screen.getByTestId("order-contact")).getByRole("button", {
+        name: "Copiar el enlace del pedido",
+      })
+    ).toBeEnabled();
   });
 });
