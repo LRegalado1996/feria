@@ -21,6 +21,18 @@ export const common: Dictionary["common"] = {
     unreadable:
       "We couldn't read this number. Type it without a thousands separator, for example 1500 or 12.50.",
   },
+  orderStepper: {
+    current: "current status",
+    done: "done",
+    label: "Order status: {status}",
+    statuses: {
+      delivered: "Delivered",
+      packed: "Packed",
+      received: "Received",
+      undeliverable: "Couldn't deliver",
+    },
+    upcoming: "to come",
+  },
   showPassword: "Show password",
   tryAgain: "Try again",
 };

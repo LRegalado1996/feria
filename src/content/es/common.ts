@@ -21,6 +21,20 @@ export const common = {
     unreadable:
       "No pudimos leer este número. Escribilo sin separador de miles, por ejemplo 1500 o 12,50.",
   },
+  // An order's status as a row of steps (FER-051), in the admin and on the
+  // shopper's page. The list's name says the status in words.
+  orderStepper: {
+    current: "estado actual",
+    done: "hecho",
+    label: "Estado del pedido: {status}",
+    statuses: {
+      delivered: "Entregado",
+      packed: "Preparado",
+      received: "Recibido",
+      undeliverable: "No se pudo entregar",
+    },
+    upcoming: "pendiente",
+  },
   showPassword: "Mostrar contraseña",
   tryAgain: "Reintentar",
 };

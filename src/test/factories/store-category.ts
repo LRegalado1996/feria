@@ -21,6 +21,7 @@ export function makeStoreCategory(
     seoDescriptionEs: null,
     seoTitleEn: null,
     seoTitleEs: null,
+    showInHeader: true,
     slug: "collares",
     ...overrides,
   };

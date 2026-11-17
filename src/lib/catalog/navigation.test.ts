@@ -1,7 +1,8 @@
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import {
   catalogNavigation,
+  headerCategories,
   type NavigationCategory,
   navigationOrder,
 } from "./navigation";
@@ -64,4 +65,46 @@ test("lays a group's categories right after it, one level in", () => {
     ["anillos", 1],
     ["burbujeros", 0],
   ]);
+});
+
+describe("headerCategories", () => {
+  const shown = (category: NavigationCategory, showInHeader = true) => ({
+    ...category,
+    showInHeader,
+  });
+
+  test("keeps every category the admin left in the header, in their order", () => {
+    const store = STORE.map((category) => shown(category));
+
+    expect(headerCategories(store)).toEqual(store);
+  });
+
+  test("drops a category in no group the admin took out of the header", () => {
+    const store = [shown(BIJOUTERIE), shown(CHAINS), shown(BUBBLES, false)];
+
+    expect(headerCategories(store)).toEqual([shown(BIJOUTERIE), shown(CHAINS)]);
+  });
+
+  test("drops a hidden group with all its categories, whatever theirs say", () => {
+    const store = [
+      shown(BIJOUTERIE, false),
+      shown(CHAINS),
+      shown(BUBBLES),
+      shown(RINGS),
+    ];
+
+    expect(headerCategories(store)).toEqual([shown(BUBBLES)]);
+  });
+
+  test("keeps a category in a shown group even when its own choice is off", () => {
+    const store = [shown(BIJOUTERIE), shown(CHAINS, false)];
+
+    expect(headerCategories(store)).toEqual(store);
+  });
+
+  test("reads a category whose group is missing as top-level, by its own choice", () => {
+    expect(headerCategories([shown(CHAINS, false), shown(RINGS)])).toEqual([
+      shown(RINGS),
+    ]);
+  });
 });

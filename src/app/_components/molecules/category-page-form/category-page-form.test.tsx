@@ -52,6 +52,7 @@ function makeCategory(
     seoDescriptionEs: null,
     seoTitleEn: null,
     seoTitleEs: null,
+    showInHeader: true,
     ...overrides,
   };
 }
@@ -388,5 +389,76 @@ describe("CategoryPageForm", () => {
     expect(
       screen.getByRole("form", { name: "Página de «Anillos»" })
     ).toHaveTextContent("Primero elegí la foto para computadora.");
+  });
+
+  test.each([
+    [true, false],
+    [false, true],
+  ])(
+    "a category in no group stored as shown: %s, sends the header choice toggled to %s",
+    async (stored, sent) => {
+      const { onSave, save, user } = setup({
+        category: makeCategory({ showInHeader: stored }),
+      });
+      const box = screen.getByRole("checkbox", { name: "Show in the header" });
+
+      expect(box).toHaveProperty("checked", stored);
+      expect(box).toHaveAccessibleDescription(
+        "Unticked, it leaves the store's menu, but its page stays open."
+      );
+      await user.click(box);
+      await save();
+
+      await waitFor(() => {
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ parentId: null, showInHeader: sent })
+        );
+      });
+    }
+  );
+
+  test("sends the header choice unchanged when it was not touched", async () => {
+    const { onSave, save } = setup();
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ showInHeader: true })
+      );
+    });
+  });
+
+  test("a category put in a group loses the checkbox, says why, and leaves its choice as stored", async () => {
+    const { onSave, save, user } = setup({
+      category: makeCategory({ showInHeader: false }),
+    });
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Group" }),
+      "Bijouterie"
+    );
+
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.getByTestId("category-header-in-group")).toHaveTextContent(
+      "A category in a group always shows in its group's menu."
+    );
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: 6 })
+      );
+    });
+    expect(onSave.mock.calls[0]?.[0]).toHaveProperty("showInHeader", undefined);
+  });
+
+  test("a group has the checkbox, in Spanish too", () => {
+    setup({ isGroup: true, locale: "es" });
+
+    expect(
+      screen.getByRole("checkbox", { name: "Mostrar en el encabezado" })
+    ).toHaveProperty("checked", true);
+    expect(screen.queryByTestId("category-header-in-group")).toBeNull();
   });
 });

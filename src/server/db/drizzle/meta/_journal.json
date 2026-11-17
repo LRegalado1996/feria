@@ -113,6 +113,13 @@
       "when": 1794926249258,
       "tag": "0015_lucky_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794943172932,
+      "tag": "0016_wise_skin",
+      "breakpoints": true
     }
   ]
 }

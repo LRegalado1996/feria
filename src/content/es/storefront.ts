@@ -173,6 +173,8 @@ export const storefront = {
     keepShopping: "Seguir mirando la tienda",
     next: "La tienda te va a escribir al {phone} para coordinar el pago y la entrega. Guardá este enlace: acá ves cómo va tu pedido.",
     note: "Tu nota",
+    // The row under the band (FER-051): one category's articles, at random.
+    orderAgain: "Hacé todos los pedidos que quieras",
     received: "¡Recibimos tu pedido!",
     status: "Estado",
     statuses: {

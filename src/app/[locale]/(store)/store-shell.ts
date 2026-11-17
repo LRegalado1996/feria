@@ -3,7 +3,10 @@ import { connection } from "next/server";
 import type { StoreAnnouncement } from "@/app/_components/organisms/store-frame";
 import type { StoreHeaderProps } from "@/app/_components/organisms/store-header";
 import { getDictionary } from "@/content";
-import type { NavigationCategory } from "@/lib/catalog/navigation";
+import {
+  headerCategories,
+  type NavigationCategory,
+} from "@/lib/catalog/navigation";
 import type { Locale } from "@/lib/i18n/config";
 import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
@@ -26,6 +29,9 @@ export function announcementOf(locale: Locale): StoreAnnouncement {
   return { lang: locale, short, text: full };
 }
 
+/** A category with the admin's choice of whether the header lists it. */
+type HeaderCategory = NavigationCategory & { showInHeader: boolean };
+
 /** The store, once a request is there: the build has no database. */
 async function readStoreAtRequest() {
   await connection();
@@ -40,7 +46,7 @@ async function categoriesAtRequest(
 ) {
   const store = await read;
 
-  return store ? await readCategories(store, locale) : [];
+  return store ? headerCategories(await readCategories(store, locale)) : [];
 }
 
 /**
@@ -65,15 +71,18 @@ export function streamedShell(locale: Locale): StoreShell {
  * read here, before the page renders, so the header's links sit behind no
  * boundary and are in the first response, for a crawler that runs no
  * script (FER-043). A page that read them itself, as of now (a catalog
- * page), hands them over instead of the cached list.
+ * page), hands them over instead of the cached list. Either way the header
+ * gets only those the admin shows there (`headerCategories`, FER-051).
  */
 export async function shellOf(
   store: PublicStore,
   locale: Locale,
-  categories?: readonly NavigationCategory[]
+  categories?: readonly HeaderCategory[]
 ): Promise<StoreShell> {
   return {
     announcement: Promise.resolve(announcementOf(locale)),
-    categories: categories ?? (await readCategories(store, locale)),
+    categories: headerCategories(
+      categories ?? (await readCategories(store, locale))
+    ),
   };
 }

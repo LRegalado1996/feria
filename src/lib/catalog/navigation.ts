@@ -48,3 +48,34 @@ export function navigationOrder(
     ...children.map((child) => ({ ...child, depth: 1 as const })),
   ]);
 }
+
+/**
+ * What the store's header and its phone menu list (FER-051): the groups and
+ * the categories in no group the admin left "Mostrar en el encabezado"
+ * checked, each group with all its categories, which always show in its
+ * dropdown. A hidden group takes its categories with it, so none of them
+ * surfaces at the top. Every page stays reachable: only the header reads
+ * this, never the footer, the filter panel or the catalog.
+ */
+export function headerCategories<
+  Category extends NavigationCategory & { showInHeader: boolean },
+>(categories: readonly Category[]): Category[] {
+  const ids = new Set(categories.map((entry) => entry.id));
+  // The top-level entries the admin shows, as `catalogNavigation` finds the
+  // top: in no group, or in a group the list does not have.
+  const shown = new Set(
+    categories
+      .filter(
+        (entry) =>
+          (entry.parentId === null || !ids.has(entry.parentId)) &&
+          entry.showInHeader
+      )
+      .map((entry) => entry.id)
+  );
+
+  return categories.filter(
+    (entry) =>
+      shown.has(entry.id) ||
+      (entry.parentId !== null && shown.has(entry.parentId))
+  );
+}

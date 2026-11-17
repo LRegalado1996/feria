@@ -7,8 +7,26 @@ import { announcementOf, shellOf, streamedShell } from "./store-shell";
 
 const { connection, readCategories, readStore } = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
+  // One the header shows, one the admin took out of it (FER-051).
   readCategories: vi.fn(async (_store: { id: number }, locale: string) => [
-    { lang: locale, name: `anillos-${locale}`, slug: "anillos" },
+    {
+      id: 1,
+      lang: locale,
+      name: `anillos-${locale}`,
+      parentId: null,
+      path: "/anillos",
+      showInHeader: true,
+      slug: "anillos",
+    },
+    {
+      id: 2,
+      lang: locale,
+      name: `relojes-${locale}`,
+      parentId: null,
+      path: "/relojes",
+      showInHeader: false,
+      slug: "relojes",
+    },
   ]),
   readStore: vi.fn<() => Promise<PublicStore | null>>(),
 }));
@@ -90,8 +108,17 @@ describe("streamedShell", () => {
     request.arrive();
 
     await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.en);
+    // Only those the header shows (FER-051).
     await expect(shell.categories).resolves.toEqual([
-      { lang: "en", name: "anillos-en", slug: "anillos" },
+      {
+        id: 1,
+        lang: "en",
+        name: "anillos-en",
+        parentId: null,
+        path: "/anillos",
+        showInHeader: true,
+        slug: "anillos",
+      },
     ]);
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "en");
@@ -117,8 +144,17 @@ describe("shellOf", () => {
     await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.es);
     // The list itself, not a promise of it: the header renders it in place,
     // behind no boundary, in the first response (FER-043).
+    // Only those the header shows (FER-051).
     expect(shell.categories).toEqual([
-      { lang: "es", name: "anillos-es", slug: "anillos" },
+      {
+        id: 1,
+        lang: "es",
+        name: "anillos-es",
+        parentId: null,
+        path: "/anillos",
+        showInHeader: true,
+        slug: "anillos",
+      },
     ]);
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "es");
     expect(readStore).not.toHaveBeenCalled();
@@ -126,20 +162,21 @@ describe("shellOf", () => {
   });
 
   test("from a page that read its categories as of now, those, reading no cached list (FER-043)", async () => {
-    const own = [
-      {
-        id: 4,
-        lang: "es",
-        name: "Aros",
-        parentId: null,
-        path: "/aros",
-        slug: "aros",
-      },
-    ];
+    const aros = {
+      id: 4,
+      lang: "es",
+      name: "Aros",
+      parentId: null,
+      path: "/aros",
+      showInHeader: true,
+      slug: "aros",
+    };
+    const own = [aros, { ...aros, id: 5, showInHeader: false, slug: "x" }];
 
     const shell = await shellOf(makeStore(), "es", own);
 
-    expect(shell.categories).toBe(own);
+    // Those the header shows (FER-051).
+    expect(shell.categories).toEqual([aros]);
     expect(readCategories).not.toHaveBeenCalled();
   });
 });

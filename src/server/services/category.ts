@@ -50,6 +50,7 @@ export async function listStoreCategories(
       parentId: category.parentId,
       position: category.position,
       productCount: count(product.id),
+      showInHeader: category.showInHeader,
       slug: category.slug,
     })
     .from(category)
@@ -289,7 +290,8 @@ export async function renameCategory(
  * The cover's images (FER-011) change only when given: a new one must be an
  * upload of this deployment for covers (`isOwnBlobUrl`), and a phone image
  * needs a computer one. Answers the addresses the category no longer shows,
- * for the caller to delete those files once this commits.
+ * for the caller to delete those files once this commits. Whether the
+ * store's header lists it (FER-051) changes only when given too.
  */
 export async function updateCategoryPage(
   tx: DatabaseClient,
@@ -341,7 +343,13 @@ export async function updateCategoryPage(
 
   await tx
     .update(category)
-    .set({ parentId: values.parentId, ...cover.columns })
+    .set({
+      parentId: values.parentId,
+      ...(values.showInHeader === undefined
+        ? {}
+        : { showInHeader: values.showInHeader }),
+      ...cover.columns,
+    })
     .where(and(eq(category.id, found.id), eq(category.storeId, storeId)));
 
   for (const locale of ["es", "en"] as const) {

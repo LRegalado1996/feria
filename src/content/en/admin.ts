@@ -90,6 +90,11 @@ export const admin: Dictionary["admin"] = {
         "Left empty, they are written from the category's and the store's names.",
       seoTitleEn: "Title for search engines in English",
       seoTitleEs: "Title for search engines in Spanish",
+      showInHeader: "Show in the header",
+      showInHeaderHint:
+        "Unticked, it leaves the store's menu, but its page stays open.",
+      showInHeaderInGroup:
+        "A category in a group always shows in its group's menu.",
       submit: "Save the page",
       title: "Page of “{name}”",
     },
@@ -186,6 +191,7 @@ export const admin: Dictionary["admin"] = {
     errors: {
       failed:
         "The photo could not be uploaded. Check the connection and retry.",
+      notConfigured: "Photo uploads aren't set up on this server.",
       tooLarge:
         "The photo is still too heavy after shrinking it. Try another one.",
       unreadable: "We could not read this photo. Try a JPEG, PNG or WebP one.",
@@ -226,6 +232,11 @@ export const admin: Dictionary["admin"] = {
     detail: {
       back: "Back to orders",
       contact: "Contact",
+      copyLink: "Copy the order's link",
+      copyLinkCopied: "The order's link is copied.",
+      copyLinkField: "Order's link",
+      copyLinkManual:
+        "We couldn't copy it: select the link and copy it yourself.",
       history: "History",
       historyFormer: "Someone no longer on the team",
       historyPlaced: "Order placed",
@@ -280,6 +291,21 @@ export const admin: Dictionary["admin"] = {
       packed: "Packed",
       received: "Received",
       undeliverable: "Couldn't deliver",
+    },
+    stepper: {
+      back: "Back to {status}",
+      blocked: "{status}: it has to go through Packed first",
+      confirm: {
+        back: "Yes, back to {status}",
+        backTitle: "Move the order back to {status}?",
+        description:
+          "Order {code} moves to “{status}”, and the customer sees it on their order's page.",
+        forward: "Yes, move to {status}",
+        forwardTitle: "Move the order to {status}?",
+      },
+      current: "{status}: the current status",
+      forward: "Move to {status}",
+      pending: "Saving: {status}",
     },
     tab: "{label} ({count})",
     tabAll: "All",

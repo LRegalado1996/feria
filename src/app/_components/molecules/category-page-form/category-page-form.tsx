@@ -39,6 +39,8 @@ export interface CategoryPageFormCategory {
   seoDescriptionEs: string | null;
   seoTitleEn: string | null;
   seoTitleEs: string | null;
+  /** Whether the store's header lists it, when it is in no group (FER-051). */
+  showInHeader: boolean;
 }
 
 export interface CategoryPageFormProps {
@@ -79,7 +81,10 @@ function sameImage(image: CoverImage | null, stored: CoverImage | null) {
  * search engines in both languages (empty: the page writes its own), and
  * its cover: a computer photo and an optional phone one, each uploaded with
  * `ImageUploader` (FER-011) and saved with the rest, and the cover's
- * description in both languages. A phone photo needs a computer one, so
+ * description in both languages. A group or a category in no group says
+ * whether the store's header lists it (FER-051); one in a group always
+ * shows in its group's dropdown, which the form says instead. A phone
+ * photo needs a computer one, so
  * removing the computer photo removes both. Only an image that changed is
  * sent. The English texts wait for an English name, which their row needs.
  * A failure keeps everything typed and says so under the form.
@@ -107,6 +112,7 @@ function CategoryPageForm({
       seoDescriptionEs: category.seoDescriptionEs ?? "",
       seoTitleEn: category.seoTitleEn ?? "",
       seoTitleEs: category.seoTitleEs ?? "",
+      showInHeader: category.showInHeader,
     },
     resolver: zodResolver(
       createCategoryPageFormSchema(admin.categories.errors)
@@ -114,6 +120,7 @@ function CategoryPageForm({
   });
   const { isSubmitting } = useFormState({ control: form.control });
   const hasCover = useWatch({ control: form.control, name: "cover" }) !== null;
+  const inGroup = useWatch({ control: form.control, name: "parentId" }) !== "";
 
   const submit = async (values: CategoryPageFormValues) => {
     setFailed(false);
@@ -133,6 +140,9 @@ function CategoryPageForm({
       seoDescriptionEs: orNull(values.seoDescriptionEs),
       seoTitleEn: english(values.seoTitleEn),
       seoTitleEs: orNull(values.seoTitleEs),
+      // A category in a group always shows in its dropdown: its own choice
+      // is kept as it is for the day it leaves the group.
+      showInHeader: values.parentId === "" ? values.showInHeader : undefined,
     });
 
     setFailed(result === "failed");
@@ -181,6 +191,41 @@ function CategoryPageForm({
               </FormItem>
             )}
           />
+          {inGroup ? (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="category-header-in-group"
+            >
+              {copy.showInHeaderInGroup}
+            </p>
+          ) : (
+            <FormField
+              control={form.control}
+              name="showInHeader"
+              render={({ field: { onChange, value, ...field } }) => (
+                <FormItem className="min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3">
+                  <FormControl>
+                    <input
+                      {...field}
+                      checked={value}
+                      className="size-5 accent-primary"
+                      onChange={(event) => {
+                        onChange(event.currentTarget.checked);
+                      }}
+                      type="checkbox"
+                    />
+                  </FormControl>
+                  {/* 44 px to tap on a phone: the label is the target. */}
+                  <FormLabel className="min-h-11 md:min-h-9">
+                    {copy.showInHeader}
+                  </FormLabel>
+                  <FormDescription className="col-span-2">
+                    {copy.showInHeaderHint}
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             {TEXT_FIELDS.map(([name, lang]) => (
               <FormField

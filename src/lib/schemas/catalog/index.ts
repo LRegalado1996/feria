@@ -307,7 +307,8 @@ export const RESERVED_CATEGORY_SLUGS = [
  * An empty text is `null`: the page writes its own from the names. The
  * cover's two images (FER-011) are each an uploaded image, `null` to remove
  * it, or left out to keep the one stored: what a form that did not touch
- * them sends, and a tab older than uploads.
+ * them sends, and a tab older than uploads. `showInHeader` (FER-051) left
+ * out keeps the stored choice, so a tab older than it changes nothing.
  */
 export const updateCategoryPageSchema = z.object({
   cover: uploadedImageSchema.nullable().optional(),
@@ -320,6 +321,7 @@ export const updateCategoryPageSchema = z.object({
   seoDescriptionEs: optionalText(CATEGORY_SEO_DESCRIPTION_MAX_LENGTH),
   seoTitleEn: optionalText(CATEGORY_SEO_TITLE_MAX_LENGTH),
   seoTitleEs: optionalText(CATEGORY_SEO_TITLE_MAX_LENGTH),
+  showInHeader: z.boolean().optional(),
 });
 
 export type UpdateCategoryPageValues = z.infer<typeof updateCategoryPageSchema>;
@@ -367,6 +369,7 @@ export function createCategoryPageFormSchema(
     ),
     seoTitleEn: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
     seoTitleEs: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
+    showInHeader: z.boolean(),
   });
 }
 

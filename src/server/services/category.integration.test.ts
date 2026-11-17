@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { headerCategories } from "@/lib/catalog/navigation";
 import type { UpdateCategoryPageValues } from "@/lib/schemas/catalog";
 import { db } from "@/server/db";
 import { category, product, store } from "@/server/db/schema";
-import { createProduct } from "@/server/services/catalog";
+import { createProduct, listCategories } from "@/server/services/catalog";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
@@ -845,5 +846,79 @@ describe("category groups under two writers", () => {
       [a.id, group.id],
       [b.id, group.id],
     ]);
+  });
+});
+
+describe("the header's choice (FER-051)", () => {
+  /** `ids`' choices, as the admin's list and the store's header read them. */
+  async function choicesOf(storeId: number, ids: number[]) {
+    const admin = (await listStoreCategories(db, { storeId }))
+      .filter((row) => ids.includes(row.id))
+      .map((row) => [row.id, row.showInHeader]);
+    const header = headerCategories(
+      await listCategories(db, { locale: "es", storeId })
+    )
+      .filter((row) => ids.includes(row.id))
+      .map((row) => row.id);
+
+    return { admin, header };
+  }
+
+  test("a new category is in the header; unticked it leaves, left out it stays as stored, ticked it is back", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const bubbles = await add(storeId, `Burbujeros ${tag}`);
+
+    expect(await choicesOf(storeId, [bubbles.id])).toEqual({
+      admin: [[bubbles.id, true]],
+      header: [bubbles.id],
+    });
+
+    await setPage(storeId, { ...page(bubbles.id, null), showInHeader: false });
+    expect(await choicesOf(storeId, [bubbles.id])).toEqual({
+      admin: [[bubbles.id, false]],
+      header: [],
+    });
+
+    // A tab older than the checkbox sends none: nothing changes.
+    await setPage(storeId, page(bubbles.id, null));
+    expect(await choicesOf(storeId, [bubbles.id])).toEqual({
+      admin: [[bubbles.id, false]],
+      header: [],
+    });
+
+    await setPage(storeId, { ...page(bubbles.id, null), showInHeader: true });
+    expect(await choicesOf(storeId, [bubbles.id])).toEqual({
+      admin: [[bubbles.id, true]],
+      header: [bubbles.id],
+    });
+  });
+
+  test("a hidden group leaves the header with its categories, which stay in the store's list", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const group = await add(storeId, `Bijouterie ${tag}`);
+    const rings = await add(storeId, `Anillos ${tag}`);
+    await setPage(storeId, page(rings.id, group.id));
+
+    expect((await choicesOf(storeId, [group.id, rings.id])).header).toEqual([
+      group.id,
+      rings.id,
+    ]);
+
+    await setPage(storeId, { ...page(group.id, null), showInHeader: false });
+
+    expect(await choicesOf(storeId, [group.id, rings.id])).toEqual({
+      admin: [
+        [group.id, false],
+        [rings.id, true],
+      ],
+      header: [],
+    });
+    expect(
+      (await listCategories(db, { locale: "es", storeId }))
+        .filter((row) => row.id === group.id || row.id === rings.id)
+        .map((row) => row.path)
+    ).toEqual([`/bijouterie-${tag}`, `/bijouterie-${tag}/anillos-${tag}`]);
   });
 });

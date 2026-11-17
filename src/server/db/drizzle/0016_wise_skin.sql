@@ -1,0 +1,1 @@
+ALTER TABLE "category" ADD COLUMN "showInHeader" boolean DEFAULT true NOT NULL;

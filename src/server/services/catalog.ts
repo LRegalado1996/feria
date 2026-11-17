@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   ne,
   or,
@@ -15,7 +16,11 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { coverOf, imageOf } from "@/lib/catalog/cover";
 import { categoryPath } from "@/lib/catalog/paths";
-import { RELATED_FILL_BELOW, RELATED_POOL_SIZE } from "@/lib/catalog/related";
+import {
+  RELATED_FILL_BELOW,
+  RELATED_PICK_MAX,
+  RELATED_POOL_SIZE,
+} from "@/lib/catalog/related";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import {
@@ -57,14 +62,21 @@ interface StoreScope {
 /**
  * A store's categories in their order, each with its name in `locale` (or
  * the language it has), the language it came in, for `lang`, its group
- * (`parentId`, FER-043) and its page's address.
+ * (`parentId`, FER-043), its page's address and whether the header lists it
+ * (`showInHeader`, FER-051).
  */
 export async function listCategories(
   db: DatabaseClient,
   { locale, storeId }: StoreScope & { locale: Locale }
 ) {
   const rows = await db.query.category.findMany({
-    columns: { id: true, parentId: true, position: true, slug: true },
+    columns: {
+      id: true,
+      parentId: true,
+      position: true,
+      showInHeader: true,
+      slug: true,
+    },
     orderBy: [asc(category.position), asc(category.id)],
     where: eq(category.storeId, storeId),
     with: {
@@ -820,6 +832,67 @@ export async function listRelatedPool(
 }
 
 export type RelatedPoolCards = Awaited<ReturnType<typeof listRelatedPool>>;
+
+/**
+ * How many published articles each category holds directly, for the order
+ * page's row (FER-051), which picks one of them at random per visit. A
+ * category with none is left out.
+ */
+export async function countPublishedByCategory(
+  db: DatabaseClient,
+  { storeId }: StoreScope
+) {
+  const rows = await db
+    .select({
+      categoryId: product.categoryId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(product)
+    .where(
+      and(
+        eq(product.storeId, storeId),
+        eq(product.status, "published"),
+        isNotNull(product.categoryId)
+      )
+    )
+    .groupBy(product.categoryId)
+    .orderBy(asc(product.categoryId));
+
+  return rows.flatMap(({ categoryId, count }) =>
+    categoryId === null ? [] : [{ categoryId, count }]
+  );
+}
+
+/**
+ * A category's newest published articles as cards, at most
+ * `RELATED_PICK_MAX`: the order page's row (FER-051).
+ */
+export async function listCategoryArticles(
+  db: DatabaseClient,
+  {
+    categoryId,
+    currencyCode,
+    locale,
+    storeId,
+  }: StoreScope & { categoryId: number; currencyCode: Currency; locale: Locale }
+) {
+  const ids = (
+    await db
+      .select({ id: product.id })
+      .from(product)
+      .where(
+        and(
+          eq(product.storeId, storeId),
+          eq(product.status, "published"),
+          eq(product.categoryId, categoryId)
+        )
+      )
+      .orderBy(desc(product.publishedAt), desc(product.id))
+      .limit(RELATED_PICK_MAX)
+  ).map((row) => row.id);
+
+  return await loadCards(db, { currencyCode, ids, locale });
+}
 
 // ── Store-scoped writes ──────────────────────────────────────────────────
 
