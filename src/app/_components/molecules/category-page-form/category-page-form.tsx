@@ -150,7 +150,10 @@ function CategoryPageForm({
       coverAltEn: english(values.coverAltEn),
       coverAltEs: orNull(values.coverAltEs),
       id: category.id,
-      parentId: values.parentId === "" ? null : Number(values.parentId),
+      // A category that became a group while the form was open (another
+      // joined it) is in none, whatever the shut select still holds.
+      parentId:
+        isGroup || values.parentId === "" ? null : Number(values.parentId),
       seoDescriptionEn: english(values.seoDescriptionEn),
       seoDescriptionEs: orNull(values.seoDescriptionEs),
       seoTitleEn: english(values.seoTitleEn),
@@ -187,6 +190,7 @@ function CategoryPageForm({
                     {...field}
                     className={SELECT_CLASS}
                     disabled={isGroup}
+                    value={isGroup ? "" : field.value}
                   >
                     <option value="">{copy.groupNone}</option>
                     {groups.map((group) => (

@@ -259,6 +259,23 @@ describe("CategoryPageForm", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  test("sends no group once another category joined this one while it was open", async () => {
+    const { onSave, reread, user } = setup();
+    const group = screen.getByRole("combobox", { name: "Group" });
+    await user.selectOptions(group, "Bijouterie");
+
+    reread({ category: makeCategory(), isGroup: true });
+    expect(group).toBeDisabled();
+    expect(group).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null })
+      );
+    });
+  });
+
   test("keeps a group's own group shut, in Spanish too", () => {
     setup({ isGroup: true, locale: "es" });
 
