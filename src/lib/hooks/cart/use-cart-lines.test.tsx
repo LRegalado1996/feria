@@ -1,4 +1,4 @@
-import { onlineManager } from "@tanstack/react-query";
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -104,6 +104,7 @@ function setup({
 afterEach(() => {
   localStorage.clear();
   onlineManager.setOnline(true);
+  focusManager.setFocused(undefined);
 });
 
 describe("useCartLines", () => {
@@ -283,6 +284,31 @@ describe("useCartLines", () => {
     });
     expect(cartProducts.mock.calls).toEqual([[{ ids: [4], locale: "en" }]]);
     expect(result.current.hold).toBe("loading");
+  });
+
+  test("offline, back to the tab, the order holds while the shop's word on the same list waits to be read", async () => {
+    const { cartProducts, lines, result } = setup({
+      cart: [makeLine(4, 2, 40_000)],
+    });
+    await waitFor(() => {
+      expect(result.current.hold).toBeNull();
+    });
+    act(() => {
+      onlineManager.setOnline(false);
+    });
+
+    // The tab is left and come back to: the read again waits for a
+    // connection, with this list's own answer still on screen.
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => {
+      expect(result.current.hold).toBe("loading");
+    });
+    expect(lines()).toEqual([[4, null, 4]]);
+    expect(cartProducts).toHaveBeenCalledOnce();
   });
 
   test("an article added keeps the others as the shop last said and holds the order until its own answer", async () => {
