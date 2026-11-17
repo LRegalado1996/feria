@@ -860,21 +860,31 @@ export async function setProductAvailability(
   return updated;
 }
 
-/** Deletes the article with its texts and images. */
+/**
+ * Deletes the article with its texts and images, and answers the addresses
+ * its images had, for the caller to delete those files once this commits
+ * (FER-011). The article is locked first, so an image added meanwhile waits
+ * and is either listed here or refused.
+ */
 export async function deleteProduct(
   tx: DatabaseClient,
   { id, storeId }: StoreScope & { id: number }
 ) {
+  const current = await lockStoreProduct(tx, { id, storeId });
+  const images = await tx
+    .select({ url: productImage.url })
+    .from(productImage)
+    .where(eq(productImage.productId, current.id));
   const [deleted] = await tx
     .delete(product)
-    .where(and(eq(product.id, id), eq(product.storeId, storeId)))
+    .where(and(eq(product.id, current.id), eq(product.storeId, storeId)))
     .returning({ id: product.id });
 
   if (!deleted) {
-    throw notFound();
+    throw new Error("Deleting a locked article matched no row");
   }
 
-  return deleted;
+  return { id: deleted.id, imageUrls: images.map((image) => image.url) };
 }
 
 /**

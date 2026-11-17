@@ -24,7 +24,11 @@ const services = vi.hoisted(() => ({
     slug: "cadena",
     status: "draft",
   })),
-  deleteProduct: vi.fn(async () => ({ id: 12 })),
+  deleteProduct: vi.fn(async () => ({
+    id: 12,
+    imageUrls: ["https://store9.public.blob.vercel-storage.com/a.webp"],
+  })),
+  discardBlobs: vi.fn<(urls: readonly string[]) => void>(),
   findAdminStore: vi.fn(),
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   publishProduct: vi.fn(async () => ({
@@ -65,6 +69,11 @@ vi.mock("@/server/services/catalog", () => ({
   setProductAvailability: services.setProductAvailability,
   unpublishProduct: services.unpublishProduct,
   updateProduct: services.updateProduct,
+}));
+
+// The files' deletion after the response is `blob-store.test.ts`'s.
+vi.mock("@/server/api/utils/blob-store", () => ({
+  discardBlobs: services.discardBlobs,
 }));
 
 vi.mock("@/server/services/attribute", () => ({
@@ -223,6 +232,31 @@ describe("product router", () => {
       );
     }
   );
+
+  test("delete hands the deleted article's image addresses to the files' deletion, after the write", async () => {
+    const { run } = setup();
+
+    await run("delete", { id: 5 });
+
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith([
+      "https://store9.public.blob.vercel-storage.com/a.webp",
+    ]);
+    expect(services.discardBlobs.mock.invocationCallOrder[0]).toBeGreaterThan(
+      services.invalidateCatalogCache.mock.invocationCallOrder[0] ?? Infinity
+    );
+  });
+
+  test("a refused delete deletes no file", async () => {
+    const { run } = setup();
+    services.deleteProduct.mockRejectedValueOnce(
+      Object.assign(new Error("Article not found"), { code: "NOT_FOUND" })
+    );
+
+    await expect(run("delete", { id: 5 })).rejects.toMatchObject({
+      message: "Article not found",
+    });
+    expect(services.discardBlobs).not.toHaveBeenCalled();
+  });
 
   test("sets availability within the store, then drops its cached catalog", async () => {
     const { run } = setup();

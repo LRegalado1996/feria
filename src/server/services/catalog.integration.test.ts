@@ -721,6 +721,30 @@ describe("store-scoped writes", () => {
     });
   });
 
+  test("deleting an article answers its images' addresses and leaves no image row", async () => {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
+      categoryId: chains.id,
+      images: 2,
+      title: `Cadena ${tag}`,
+    });
+
+    const deleted = await deleteProduct(db, { id: article.id, storeId });
+
+    expect(deleted.id).toBe(article.id);
+    // In no order: the article's images are read only to delete their files.
+    expect(new Set(deleted.imageUrls)).toEqual(
+      new Set(["/seed/test-0.jpg", "/seed/test-1.jpg"])
+    );
+    expect(deleted.imageUrls).toHaveLength(2);
+    await expect(
+      db
+        .select({ id: productImage.id })
+        .from(productImage)
+        .where(eq(productImage.productId, article.id))
+    ).resolves.toEqual([]);
+  });
+
   test("an article the store no longer has is NOT_FOUND for every write", async () => {
     const { chains, storeId, tag } = await setup();
     const article = await makeArticle(storeId, {
