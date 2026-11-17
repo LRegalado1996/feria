@@ -910,6 +910,22 @@ describe("listRelatedPool", () => {
     expect(db.$["select.limit"]).toHaveBeenNthCalledWith(2, 16);
   });
 
+  test("an article moved out of the category between the two reads is handed over once, among the category's", async () => {
+    const { db } = setup();
+    db.$["select.limit"]
+      .mockResolvedValueOnce([{ id: 11 }, { id: 12 }, { id: 13 }])
+      // By the second read 11 sits in another category.
+      .mockResolvedValueOnce([{ id: 11 }, { id: 20 }]);
+    db.query.product.findMany.mockResolvedValue(
+      [11, 12, 13, 20].map((id) => cardRow(id))
+    );
+
+    await expect(pool(db, 9)).resolves.toEqual({
+      others: [card(20)],
+      same: [card(11), card(12), card(13)],
+    });
+  });
+
   test("for an article without a category, hands over the rest of the store only", async () => {
     const { db } = setup();
     db.$["select.limit"].mockResolvedValueOnce([{ id: 20 }]);
