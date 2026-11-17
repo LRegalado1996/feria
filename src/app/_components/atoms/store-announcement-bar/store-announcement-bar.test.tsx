@@ -48,6 +48,38 @@ describe("StoreAnnouncementBar", () => {
     expect(line?.textContent).toBe(" ");
   });
 
+  test("with a phone's version, keeps the whole notice for every reader and shows the short one to the eye below lg", () => {
+    const { bar, line } = setup({
+      children: "Te esperamos en la Feria Paseo Prado, puesto 86",
+      short: "Feria Paseo Prado · Puesto 86",
+    });
+
+    const full = bar.querySelector('[data-slot="store-announcement-bar-full"]');
+    const short = bar.querySelector(
+      '[data-slot="store-announcement-bar-short"]'
+    );
+    expect(full).toHaveTextContent(
+      /^Te esperamos en la Feria Paseo Prado, puesto 86$/u
+    );
+    expect(full).toHaveClass("max-lg:sr-only");
+    expect(full).not.toHaveAttribute("aria-hidden");
+    expect(short).toHaveTextContent(/^Feria Paseo Prado · Puesto 86$/u);
+    expect(short).toHaveAttribute("aria-hidden", "true");
+    expect(short).toHaveClass("lg:hidden");
+    expect(line?.children).toHaveLength(2);
+  });
+
+  test("without a phone's version, is the notice alone", () => {
+    const { bar } = setup();
+
+    expect(
+      bar.querySelector('[data-slot="store-announcement-bar-short"]')
+    ).toBeNull();
+    expect(
+      bar.querySelector('[data-slot="store-announcement-bar-full"]')
+    ).toBeNull();
+  });
+
   test("keeps a caller's class", () => {
     const { bar } = setup({ className: "sticky" });
 

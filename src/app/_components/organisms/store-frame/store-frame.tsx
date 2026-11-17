@@ -10,6 +10,8 @@ import {
 /** The words on the bar above the header, and the language they are in. */
 export interface StoreAnnouncement {
   lang: string;
+  /** Shown instead of `text` on a phone, to the eye only. */
+  short?: string;
   text: string;
 }
 
@@ -33,7 +35,9 @@ function Announcement({
   const said = use(announcement);
 
   return said ? (
-    <StoreAnnouncementBar lang={said.lang}>{said.text}</StoreAnnouncementBar>
+    <StoreAnnouncementBar lang={said.lang} short={said.short}>
+      {said.text}
+    </StoreAnnouncementBar>
   ) : null;
 }
 

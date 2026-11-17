@@ -45,10 +45,40 @@ export class StorePage extends BasePage {
     return this.getByTestId("store-cart-button").filter({ visible: true });
   }
 
-  /** The lime line above the header, with the store's tagline (FER-039). */
+  /**
+   * The lime line above the header (FER-039): the fair and the stall until
+   * FER-020, the whole notice from `lg` up and a short one on a phone.
+   */
   getAnnouncementBar(): Locator {
     return this.getByTestId("store-announcement-bar").filter({
       visible: true,
+    });
+  }
+
+  /** The bar's whole notice, in the HTML at every width. */
+  getAnnouncementFull(): Locator {
+    return this.getAnnouncementBar().getByTestId("store-announcement-bar-full");
+  }
+
+  /** The bar's phone version, for the eye only. */
+  getAnnouncementShort(): Locator {
+    return this.getAnnouncementBar().getByTestId(
+      "store-announcement-bar-short"
+    );
+  }
+
+  /**
+   * How many lines the bar's words take on screen: the line boxes of the
+   * version shown (the whole notice from `lg` up, the short one below).
+   */
+  async announcementLines(): Promise<number> {
+    return await this.getAnnouncementBar().evaluate((bar) => {
+      const shown = [...bar.querySelectorAll("span")].find(
+        (span) => span.getClientRects().length > 0 && span.offsetWidth > 1
+      );
+      const rects = shown ? [...shown.getClientRects()] : [];
+
+      return new Set(rects.map((rect) => Math.round(rect.top))).size;
     });
   }
 

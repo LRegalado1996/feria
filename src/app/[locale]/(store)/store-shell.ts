@@ -1,8 +1,8 @@
 import { connection } from "next/server";
 
 import type { StoreAnnouncement } from "@/app/_components/organisms/store-frame";
+import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
-import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
@@ -14,18 +14,14 @@ export interface StoreShell {
 }
 
 /**
- * The bar's words in the page's language (FER-039): until the store has
- * announcements of its own (FER-020), its tagline; nothing without one.
+ * The bar's words in the page's language (FER-039): until the store writes
+ * its own announcements (FER-020), a fixed one from the dictionaries, the
+ * fair and the stall, with a shorter version for a phone.
  */
-export function announcementOf(
-  store: PublicStore,
-  locale: Locale
-): StoreAnnouncement | null {
-  const text = pickTranslation(store.translations, locale);
+export function announcementOf(locale: Locale): StoreAnnouncement {
+  const { full, short } = getDictionary(locale).storefront.shell.announcement;
 
-  return text && text.tagline.trim() !== ""
-    ? { lang: text.locale, text: text.tagline }
-    : null;
+  return { lang: locale, short, text: full };
 }
 
 /** The store, once a request is there: the build has no database. */
@@ -33,16 +29,6 @@ async function readStoreAtRequest() {
   await connection();
 
   return await readStore();
-}
-
-/** The bar's words, from the store once it is read. */
-async function announcementAtRequest(
-  read: Promise<PublicStore | null>,
-  locale: Locale
-) {
-  const store = await read;
-
-  return store ? announcementOf(store, locale) : null;
 }
 
 /** The header's categories, from the store once it is read. */
@@ -58,14 +44,14 @@ async function categoriesAtRequest(
 /**
  * The frame of a page read per request (the catalog, the cart): promises,
  * which the frame resolves behind boundaries of its own, so the header stays
- * in the page's static shell and the bar and the categories stream in after
- * it. One read of the store feeds both.
+ * in the page's static shell and the categories stream in after it. The
+ * bar's words are fixed until FER-020, so they need no read.
  */
 export function streamedShell(locale: Locale): StoreShell {
   const read = readStoreAtRequest();
 
   return {
-    announcement: announcementAtRequest(read, locale),
+    announcement: Promise.resolve(announcementOf(locale)),
     categories: categoriesAtRequest(read, locale),
   };
 }
@@ -77,7 +63,7 @@ export function streamedShell(locale: Locale): StoreShell {
  */
 export function shellOf(store: PublicStore, locale: Locale): StoreShell {
   return {
-    announcement: Promise.resolve(announcementOf(store, locale)),
+    announcement: Promise.resolve(announcementOf(locale)),
     categories: readCategories(store, locale),
   };
 }

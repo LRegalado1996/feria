@@ -3,19 +3,31 @@ import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
 
+/** The bar's words until FER-020, as Lucas wrote them (FER-039). */
+const ANNOUNCEMENT = {
+  en: {
+    full: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
+    short: "Paseo Prado Fair · Stall 86",
+  },
+  es: {
+    full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+    short: "Feria Paseo Prado · Puesto 86",
+  },
+} as const;
+
 // FER-021. Every page of the store sits between one header and one footer;
 // the footer reads the store's settings, the run's (`STORE_SETTINGS`).
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("Storefront shell", () => {
-  test("the bar shows the store's tagline, the full logo leads home, the links lead to the catalog, and the skip link to the content", async ({
+  test("the bar shows the fair and the stall, the full logo leads home, the links lead to the catalog, and the skip link to the content", async ({
     page,
   }) => {
     const storePage = new StorePage(page);
     await storePage.goto();
 
-    await expect(storePage.getAnnouncementBar()).toHaveText(
-      STORE_TEXTS.es.tagline
+    await expect(storePage.getAnnouncementFull()).toHaveText(
+      ANNOUNCEMENT.es.full
     );
     const header = storePage.getSiteHeader();
     const home = header.getByRole("link", { name: "LR Market, ir al inicio" });
@@ -55,6 +67,53 @@ test.describe("Storefront shell", () => {
       page.getByRole("link", { name: "Volver al inicio de la tienda" })
     ).toHaveAttribute("href", "/");
   });
+
+  for (const [width, shown, hidden] of [
+    [375, "short", "full"],
+    [390, "short", "full"],
+    [1440, "full", "short"],
+  ] as const) {
+    test(`at ${width} px the bar is one line, the ${shown} notice on screen, the whole one in the HTML for every reader`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ height: 844, width });
+      const storePage = new StorePage(page);
+
+      for (const [locale, open] of [
+        ["es", () => storePage.goto()],
+        ["en", () => storePage.gotoEnglish()],
+      ] as const) {
+        await open();
+        const texts = ANNOUNCEMENT[locale];
+        const visible =
+          shown === "full"
+            ? storePage.getAnnouncementFull()
+            : storePage.getAnnouncementShort();
+        const other =
+          hidden === "full"
+            ? storePage.getAnnouncementFull()
+            : storePage.getAnnouncementShort();
+
+        await expect(visible).toHaveText(texts[shown]);
+        await expect(other).toHaveText(texts[hidden]);
+        // Below lg the whole notice is visually hidden, never removed; the
+        // short one is display: none from lg up.
+        if (hidden === "full") {
+          await expect(other).toHaveCSS("position", "absolute");
+          await expect(other).toHaveCSS("width", "1px");
+        } else {
+          await expect(other).toBeHidden();
+        }
+        // The bar names its words to a screen reader as the whole notice.
+        await expect(storePage.getAnnouncementShort()).toHaveAttribute(
+          "aria-hidden",
+          "true"
+        );
+        expect(await storePage.announcementLines()).toBe(1);
+        await storePage.expectNoHorizontalScroll();
+      }
+    });
+  }
 
   for (const { name, viewport } of [
     { name: "a computer", viewport: { height: 900, width: 1440 } },
