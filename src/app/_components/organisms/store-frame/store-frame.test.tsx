@@ -1,8 +1,10 @@
-import { act, screen, within } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { NavigationCategory } from "@/lib/catalog/navigation";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { type StoreAnnouncement, StoreFrame } from "./store-frame";
 
@@ -50,7 +52,8 @@ async function setup({
       >
         <main>Contenido</main>
       </StoreFrame>,
-      { locale: "es" }
+      // The cart's side panel reads the shop through the query client.
+      { locale: "es", wrapper: createQueryWrapper() }
     );
     await Promise.resolve();
   });
@@ -60,8 +63,13 @@ async function setup({
     frame: document.querySelector('[data-slot="store-frame"]'),
     header: screen.getByTestId("store-header"),
     main: screen.getByTestId("store-main"),
+    user: userEvent.setup(),
   };
 }
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 describe("StoreFrame", () => {
   test("puts the page under the header, in the content the skip link leads to", async () => {
@@ -138,5 +146,23 @@ describe("StoreFrame", () => {
     expect(
       nav.getByRole("link", { name: "Todos los artículos" })
     ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("holds the cart's side panel, which the header's cart opens and closes back to it", async () => {
+    const { user } = await setup();
+    const cart = screen.getByRole("link", { name: "Carrito, vacío" });
+
+    await user.click(cart);
+
+    const panel = screen.getByRole("dialog", { name: "Tu carrito" });
+    expect(panel).toHaveAttribute("data-testid", "store-cart-panel");
+    expect(within(panel).getByText("Tu carrito está vacío.")).toBeVisible();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("store-cart-panel")).toBeNull();
+    });
+    expect(cart).toHaveFocus();
   });
 });

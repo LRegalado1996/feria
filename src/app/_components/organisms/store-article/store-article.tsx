@@ -222,6 +222,7 @@ function StoreArticle({
               className="mt-6"
               priceAmount={article.priceAmount}
               productId={article.id}
+              title={article.title}
             />
           ) : (
             <p className="mt-6.5 text-base">{copy.article.unavailableBody}</p>

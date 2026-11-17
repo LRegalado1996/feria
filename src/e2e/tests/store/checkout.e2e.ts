@@ -10,9 +10,11 @@ import {
   uniqueTag,
 } from "../../fixtures";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
+import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
 
-// FER-026. Each test seeds articles of its own, in a category of its own,
+// FER-026, FER-045: the cart is a side panel, the checkout its own page.
+// Each test seeds articles of its own, in a category of its own,
 // and orders from a phone of its own: the hourly limit counts a phone across
 // the store every spec shares (FER-038). The db fixture deletes the orders
 // holding the test's articles, and the ones its pages placed.
@@ -72,24 +74,26 @@ async function openCartWith(
   await page.goto(path);
 }
 
-/** A cart line, by the article's title. */
+/** A line of the checkout's summary, by the article's title. */
 function cartLine(page: Page, title: string) {
-  return page.getByTestId("store-cart-line").filter({ hasText: title });
+  return page
+    .getByTestId("store-checkout")
+    .getByTestId("store-cart-line")
+    .filter({ hasText: title });
 }
 
 /**
  * Adds the necklace and the bracelet, each from its own page: a card in the
  * catalog is a link to the article, and adding happens there (FER-039).
+ * Each add opens the cart's side panel (FER-045), named after its units.
  */
 async function addBothArticles(
   page: Page,
   { braceletSlug, necklaceSlug }: { braceletSlug: string; necklaceSlug: string }
 ) {
-  const storePage = new StorePage(page);
-
   for (const [slug, units] of [
-    [necklaceSlug, "Carrito, 1 unidad"],
-    [braceletSlug, "Carrito, 2 unidades"],
+    [necklaceSlug, "Tu carrito, 1 unidad"],
+    [braceletSlug, "Tu carrito, 2 unidades"],
   ] as const) {
     await page.goto(`/productos/${slug}`);
     const add = page.getByRole("button", {
@@ -99,8 +103,17 @@ async function addBothArticles(
     // Enabled only once React owns it; a retried click would add twice.
     await expect(add).toBeEnabled();
     await add.click();
-    await expect(storePage.getCartButton()).toHaveAccessibleName(units);
+    await expect(page.getByRole("dialog", { name: units })).toBeVisible();
   }
+}
+
+/** Opens the side panel from the checkout's "Editar el carrito". */
+async function editCart(page: Page) {
+  await page.getByTestId("store-checkout-edit").click();
+  const panel = new StorePage(page).getCartPanel();
+  await expect(panel).toBeVisible();
+
+  return panel;
 }
 
 /** Fills the checkout once React owns the form. */
@@ -126,9 +139,8 @@ test.describe("Cart and checkout", () => {
       necklaceSlug: necklace.slug,
     });
 
-    await storePage.getCartButton().click();
-    await expect(page).toHaveURL("/cart");
-    const necklaceLine = cartLine(page, "Collar dorado");
+    // The quantity changes in the panel the second add opened.
+    const necklaceLine = storePage.getCartPanelLine("Collar dorado");
     await expect(necklaceLine.getByTestId("store-cart-quantity")).toHaveText(
       "1"
     );
@@ -138,10 +150,18 @@ test.describe("Cart and checkout", () => {
     await expect(necklaceLine.getByTestId("store-cart-quantity")).toHaveText(
       "2"
     );
+    await storePage
+      .getCartPanel()
+      .getByRole("link", { name: "Hacer el pedido" })
+      .click();
+    await expect(page).toHaveURL("/cart");
     await expect(
-      cartLine(page, "Pulsera violeta").getByTestId("store-cart-quantity")
-    ).toHaveText("1");
-    await expect(page.getByTestId("store-cart-total")).toHaveText(
+      cartLine(page, "Collar dorado").getByTestId("store-cart-line-price")
+    ).toHaveText(/^2 × \$\s1\.200$/u);
+    await expect(
+      cartLine(page, "Pulsera violeta").getByTestId("store-cart-line-price")
+    ).toHaveText(/^1 × \$\s540$/u);
+    await expect(page.getByTestId("store-checkout-total")).toHaveText(
       "Total$ 2.940"
     );
     await fillCheckout(page, phone.local);
@@ -252,7 +272,7 @@ test.describe("Cart and checkout", () => {
 
     await page.goBack();
     await expect(page).toHaveURL("/cart");
-    await expect(page.getByTestId("store-cart-empty")).toContainText(
+    await expect(page.getByTestId("store-checkout-empty")).toContainText(
       "Tu carrito está vacío."
     );
     expect(await orders()).toHaveLength(1);
@@ -282,13 +302,21 @@ test.describe("Cart and checkout", () => {
     ).toBeVisible();
     await expect(submit).toBeDisabled();
     // Its price is not in the order's total.
-    await expect(page.getByTestId("store-cart-total")).toHaveText(
+    await expect(page.getByTestId("store-checkout-total")).toHaveText(
       "Total$ 1.200"
     );
 
-    await soldOut
+    // Taken out in the side panel, which flags it the same way.
+    const panel = await editCart(page);
+    const inPanel = new StorePage(page).getCartPanelLine("Pulsera violeta");
+    await expect(inPanel).toHaveAttribute("data-flag", "unavailable");
+    await expect(panel.getByTestId("store-cart-panel-checkout")).toBeDisabled();
+    await inPanel
       .getByRole("button", { name: "Quitar Pulsera violeta" })
       .click();
+    await expect(inPanel).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expectDialogRemoved(page, panel);
 
     await expect(soldOut).toHaveCount(0);
     await expect(
@@ -314,12 +342,19 @@ test.describe("Cart and checkout", () => {
       await route.abort("failed");
     });
 
-    await cartLine(page, "Pulsera violeta")
+    const panel = await editCart(page);
+    await new StorePage(page)
+      .getCartPanelLine("Pulsera violeta")
       .getByRole("button", { name: "Quitar Pulsera violeta" })
       .click();
+    await expect(panel.getByRole("alert")).toContainText(
+      "No pudimos traer los precios de ahora."
+    );
+    await page.keyboard.press("Escape");
+    await expectDialogRemoved(page, panel);
 
     await expect(
-      page.getByTestId("store-cart").getByRole("alert")
+      page.getByTestId("store-checkout").getByRole("alert")
     ).toContainText("No pudimos traer los precios de ahora.");
     await expect(page.getByLabel("Tu nombre")).toHaveValue("Ana Prueba");
     await expect(page.getByLabel("Tu celular")).toHaveValue(phone.local);
@@ -331,7 +366,7 @@ test.describe("Cart and checkout", () => {
     await page.unroute(CART_PRODUCTS);
     await page.getByRole("button", { name: "Probar de nuevo" }).click();
     await expect(cartLine(page, "Collar dorado")).toBeVisible();
-    await expect(page.getByTestId("store-cart-total")).toHaveText(
+    await expect(page.getByTestId("store-checkout-total")).toHaveText(
       "Total$ 1.200"
     );
 
@@ -356,7 +391,7 @@ test.describe("Cart and checkout", () => {
     await expect(order).toContainText("Paso a la tarde.");
   });
 
-  test("in English, the cart speaks English, from the same cart as the Spanish pages", async ({
+  test("in English, the checkout and its panel speak English, from the same cart as the Spanish pages", async ({
     db,
     page,
   }) => {
@@ -367,22 +402,34 @@ test.describe("Cart and checkout", () => {
     const line = cartLine(page, "Collar dorado");
 
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      "Your cart"
+      "Your order"
     );
-    await expect(line).toContainText("UYU 1,200 each");
-    await expect(
-      line.getByRole("button", { name: "One unit more of Collar dorado" })
-    ).toBeVisible();
-    await expect(page.getByTestId("store-cart-total")).toHaveText(
+    await expect(line.getByTestId("store-cart-line-price")).toHaveText(
+      "2 × UYU 1,200"
+    );
+    await expect(page.getByTestId("store-checkout-total")).toHaveText(
       "TotalUYU 2,400"
     );
+    await page.getByRole("button", { name: "Edit the cart" }).click();
+    const panel = new StorePage(page).getCartPanel();
+    await expect(
+      page.getByRole("dialog", { name: "Your cart, 2 units" })
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "One unit more of Collar dorado" })
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("link", { name: "Place the order" })
+    ).toHaveAttribute("href", "/en/cart");
+    await panel.getByRole("button", { name: "Keep shopping" }).click();
+    await expectDialogRemoved(page, panel);
     await expect(
       page.getByRole("heading", { level: 2, name: "Your details" })
     ).toBeVisible();
     await expect(page.getByLabel("Your mobile")).toBeVisible();
     await expect(page.getByTestId("store-checkout-submit")).toHaveText(
-      "Place order"
+      "Place the order"
     );
-    await expect(page).toHaveTitle(`Your cart · ${STORE_SETTINGS.name}`);
+    await expect(page).toHaveTitle(`Your order · ${STORE_SETTINGS.name}`);
   });
 });

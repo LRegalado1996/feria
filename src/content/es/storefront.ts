@@ -35,6 +35,8 @@ export const storefront = {
     shopNow: "Comprar ahora",
   },
   cart: {
+    // The empty cart's way on, in the panel and on the checkout page.
+    browse: "Ver el catálogo",
     checkout: {
       name: "Tu nombre",
       nameRequired: "Escribí tu nombre.",
@@ -49,7 +51,6 @@ export const storefront = {
       submitting: "Enviando el pedido…",
       title: "Tus datos",
     },
-    continueShopping: "Seguir mirando",
     decrease: "Una unidad menos de {title}",
     empty: "Tu carrito está vacío.",
     errors: {
@@ -72,6 +73,23 @@ export const storefront = {
     },
     increase: "Una unidad más de {title}",
     loading: "Trayendo los precios de ahora…",
+    // The checkout page (FER-045): the order's summary, then the form.
+    page: {
+      edit: "Editar el carrito",
+      lineQuantity: "{quantity} × {price}",
+      summary: "Resumen",
+      title: "Tu pedido",
+    },
+    // The side panel that adding and the header's cart open (FER-045).
+    panel: {
+      added: "Agregaste {title} al carrito.",
+      close: "Cerrar",
+      keepShopping: "Seguir comprando",
+      placeOrder: "Hacer el pedido",
+      // The title's name for a screen reader, which hears the units.
+      units: "Tu carrito, {count} unidades",
+      unitsOne: "Tu carrito, 1 unidad",
+    },
     quantity: "Cantidad de {title}",
     remove: "Quitar {title}",
     removed: "Quitaste {title} del carrito.",

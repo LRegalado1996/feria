@@ -143,7 +143,19 @@ test.describe("Article page", () => {
     await expect(quantity).toHaveText("3");
     await page.getByRole("button", { name: "Agregar al carrito" }).click();
 
-    await expect(page.getByText("Agregado al carrito.")).toBeVisible();
+    // Adding opens the cart's side panel on the article (FER-045).
+    await expect(
+      page.getByRole("dialog", { name: "Tu carrito, 3 unidades" })
+    ).toBeVisible();
+    await expect(
+      storePage.getCartPanel().getByTestId("store-cart-panel-status")
+    ).toHaveText("Agregaste Anillo de plata al carrito.");
+    await expect(
+      storePage
+        .getCartPanelLine("Anillo de plata")
+        .getByTestId("store-cart-quantity")
+    ).toHaveText("3");
+    await storePage.closeCartPanel();
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, 3 unidades"
     );

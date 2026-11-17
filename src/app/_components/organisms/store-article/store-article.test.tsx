@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import useEmblaCarousel from "embla-carousel-react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { CartPanelContext, type CartPanelOptions } from "@/lib/hooks/cart";
 import type * as UiHooks from "@/lib/hooks/ui";
 import type { Locale } from "@/lib/i18n/config";
 import { createFakeEmbla } from "@/test/embla";
@@ -98,14 +99,18 @@ function setup({
     createFakeEmbla({ snaps: 2 }).hook
   );
   const user = userEvent.setup();
+  const openPanel = vi.fn<(options?: CartPanelOptions) => void>();
   renderWithI18n(
-    <StoreArticle
-      article={article}
-      copy={DICTIONARIES[locale].storefront}
-      locale={locale}
-      related={related}
-      whatsappHref={whatsappHref}
-    />,
+    // In a store page's frame, whose cart panel adding opens.
+    <CartPanelContext value={{ isOpen: false, open: openPanel }}>
+      <StoreArticle
+        article={article}
+        copy={DICTIONARIES[locale].storefront}
+        locale={locale}
+        related={related}
+        whatsappHref={whatsappHref}
+      />
+    </CartPanelContext>,
     { locale }
   );
 
@@ -118,6 +123,7 @@ function setup({
       )
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")]),
+    openPanel,
     page: screen.getByTestId("store-article"),
     user,
   };
@@ -126,6 +132,7 @@ function setup({
 afterEach(() => {
   Reflect.deleteProperty(navigator, "share");
   Reflect.deleteProperty(navigator, "clipboard");
+  localStorage.clear();
 });
 
 describe("StoreArticle", () => {
@@ -246,6 +253,27 @@ describe("StoreArticle", () => {
       expect(writeText).toHaveBeenCalledExactlyOnceWith(url);
     }
   );
+
+  test("adding opens the cart's panel on the article, named as the page names it", async () => {
+    const { openPanel, page, user } = setup();
+    localStorage.setItem("feria:cart", "[]");
+    const add = within(page).getByRole("button", {
+      name: "Agregar al carrito",
+    });
+
+    await user.click(add);
+
+    expect(openPanel).toHaveBeenCalledExactlyOnceWith({
+      added: {
+        message: "Agregaste Collar de perlas al carrito.",
+        productId: 42,
+      },
+      returnFocus: add,
+    });
+    expect(JSON.parse(localStorage.getItem("feria:cart") ?? "null")).toEqual([
+      { productId: 42, quantity: 1, seenPriceAmount: 120_000 },
+    ]);
+  });
 
   test("shows the whole description in its language, a paragraph for each blank line, its line breaks kept", () => {
     const { page } = setup();

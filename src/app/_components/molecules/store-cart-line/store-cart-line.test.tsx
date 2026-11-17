@@ -2,11 +2,11 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
-import type { CartProduct } from "@/lib/hooks/cart";
+import type { CartLineFlag, CartProduct } from "@/lib/hooks/cart";
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
 
-import { type CartLineFlag, StoreCartLine } from "./store-cart-line";
+import { StoreCartLine } from "./store-cart-line";
 
 function makeProduct(overrides: Partial<CartProduct> = {}): CartProduct {
   return {
@@ -30,30 +30,46 @@ function makeProduct(overrides: Partial<CartProduct> = {}): CartProduct {
 
 interface SetupOptions {
   flag?: CartLineFlag | null;
+  justAdded?: boolean;
   locale?: Locale;
   product?: CartProduct | null;
   quantity?: number;
   seenPriceAmount?: number;
+  variant?: "panel" | "summary";
 }
 
 function setup({
   flag = null,
+  justAdded,
   locale = "en",
   product = makeProduct(),
   quantity = 2,
   seenPriceAmount,
+  variant = "panel",
 }: SetupOptions = {}) {
   const onQuantity = vi.fn((_quantity: number) => undefined);
   const lineOf = (props: Required<Pick<SetupOptions, "flag" | "product">>) => (
     <ul>
-      <StoreCartLine
-        className="custom"
-        flag={props.flag}
-        onQuantity={onQuantity}
-        product={props.product}
-        quantity={quantity}
-        seenPriceAmount={seenPriceAmount}
-      />
+      {variant === "summary" ? (
+        <StoreCartLine
+          className="custom"
+          flag={props.flag}
+          product={props.product}
+          quantity={quantity}
+          seenPriceAmount={seenPriceAmount}
+          variant="summary"
+        />
+      ) : (
+        <StoreCartLine
+          className="custom"
+          flag={props.flag}
+          justAdded={justAdded}
+          onQuantity={onQuantity}
+          product={props.product}
+          quantity={quantity}
+          seenPriceAmount={seenPriceAmount}
+        />
+      )}
     </ul>
   );
   const { rerender } = renderWithI18n(lineOf({ flag, product }), { locale });
@@ -93,7 +109,7 @@ describe("StoreCartLine", () => {
 
     expect(
       line().querySelector('[data-slot="store-cart-line-tile"]')
-    ).toHaveClass("size-20", "bg-store-surface");
+    ).toHaveClass("size-24", "bg-store-surface");
     expect(screen.getByRole("link", { name: "Collar de perlas" })).toHaveClass(
       "font-display",
       "font-extrabold",
@@ -325,4 +341,148 @@ describe("StoreCartLine", () => {
       expect(remove).toHaveAttribute("data-cart-remove", "");
     }
   );
+
+  test("a line whose article is on its way is busy, the shape of a name and a price", () => {
+    const { line } = setup({ flag: "pending", product: null });
+
+    expect(line()).toHaveAttribute("aria-busy", "true");
+    // A bare tile: not "no photo" before the shop has said so.
+    expect(
+      line().querySelector('[data-slot="store-cart-line-tile"]')?.innerHTML
+    ).toBe("");
+    const bars = [...line().querySelectorAll('span[aria-hidden="true"]')];
+    expect(bars.map((bar) => bar.className)).toEqual([
+      "h-3 w-3/4 bg-store-surface",
+      "h-3 w-1/3 bg-store-surface",
+    ]);
+  });
+
+  test("a line with its article is not busy", () => {
+    const { line } = setup();
+
+    expect(line()).not.toHaveAttribute("aria-busy");
+  });
+
+  test("just added, the line rises into place under a lime wash that fades, both only with motion", () => {
+    const { line } = setup({ justAdded: true });
+
+    expect(line()).toHaveAttribute("data-just-added", "");
+    const wash = line().querySelector('[data-slot="store-cart-line-wash"]');
+    expect(wash).toHaveAttribute("aria-hidden", "true");
+    expect(wash).toHaveClass(
+      "bg-store-accent/30",
+      "motion-safe:animate-store-wash",
+      "motion-reduce:hidden"
+    );
+    expect(line().firstElementChild).toBe(wash);
+    expect(wash?.nextElementSibling).toHaveClass(
+      "motion-safe:animate-store-rise"
+    );
+  });
+
+  test.each([
+    ["not just added", { justAdded: false }],
+    [
+      "just added, its article still on its way",
+      {
+        flag: "pending",
+        justAdded: true,
+        product: null,
+      },
+    ],
+  ] as const)("%s, the line is neither washed nor rising", (_case, options) => {
+    const { line } = setup(options);
+
+    expect(line()).not.toHaveAttribute("data-just-added");
+    expect(
+      line().querySelector('[data-slot="store-cart-line-wash"]')
+    ).toBeNull();
+    expect(
+      line().querySelector(".motion-safe\\:animate-store-rise")
+    ).toBeNull();
+  });
+
+  test("the rise starts once the article arrives, not with the placeholder", () => {
+    const { line, refresh } = setup({
+      flag: "pending",
+      justAdded: true,
+      product: null,
+    });
+    const placeholder = line().firstElementChild;
+
+    refresh({ flag: null, product: makeProduct() });
+
+    const wash = line().firstElementChild;
+    expect(wash).toHaveAttribute("data-slot", "store-cart-line-wash");
+    expect(wash?.nextElementSibling).not.toBe(placeholder);
+    expect(wash?.nextElementSibling).toHaveClass(
+      "motion-safe:animate-store-rise"
+    );
+  });
+
+  test.each([
+    ["en", "2 × UYU 1,250", "UYU 2,500"],
+    ["es", "2 × $ 1.250", "$ 2.500"],
+  ] as const)(
+    "in %s, a summary line says %j and what they come to, %j, with nothing to change",
+    (locale, each, total) => {
+      const { line } = setup({ locale, variant: "summary" });
+
+      expect(line()).toHaveAttribute("data-variant", "summary");
+      expect(
+        screen
+          .getByTestId("store-cart-line-price")
+          .textContent?.replaceAll("\u00A0", " ")
+      ).toBe(each);
+      expect(
+        screen
+          .getByTestId("store-cart-line-total")
+          .textContent?.replaceAll("\u00A0", " ")
+      ).toBe(total);
+      expect(screen.queryByRole("button")).toBeNull();
+      expect(screen.queryByRole("group")).toBeNull();
+      expect(
+        line().querySelector('[data-slot="store-cart-line-tile"]')
+      ).toHaveClass("size-16");
+      expect(
+        screen.getByRole("link", { name: "Collar de perlas" })
+      ).toHaveAttribute(
+        "href",
+        locale === "en"
+          ? "/en/productos/collar-de-perlas"
+          : "/productos/collar-de-perlas"
+      );
+    }
+  );
+
+  test("a sold-out summary line says so, with no price, no total and nothing to press", () => {
+    const { line } = setup({
+      flag: "unavailable",
+      product: makeProduct({ isAvailable: false }),
+      variant: "summary",
+    });
+
+    expect(line()).toHaveAttribute("data-flag", "unavailable");
+    expect(screen.getByText("Sold out for now.")).toBeVisible();
+    expect(screen.queryByTestId("store-cart-line-price")).toBeNull();
+    expect(screen.queryByTestId("store-cart-line-total")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  test("a summary line whose price changed says what it was and still counts", () => {
+    setup({
+      flag: "price_changed",
+      seenPriceAmount: 100_000,
+      variant: "summary",
+    });
+
+    expect(
+      screen.getByText("The price changed: it was UYU 1,000.")
+    ).toBeVisible();
+    expect(
+      screen
+        .getByTestId("store-cart-line-total")
+        .textContent?.replaceAll("\u00A0", " ")
+    ).toBe("UYU 2,500");
+  });
 });

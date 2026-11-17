@@ -114,10 +114,11 @@ test.describe("Order management", () => {
     // Enabled only once React owns it; a retried click would add twice.
     await expect(add).toBeEnabled();
     await add.click();
-    await expect(storePage.getCartButton()).toHaveAccessibleName(
-      "Carrito, 1 unidad"
-    );
-    await storePage.getCartButton().click();
+    // Adding opens the cart's side panel (FER-045), the way to the checkout.
+    await storePage
+      .getCartPanel()
+      .getByRole("link", { name: "Hacer el pedido" })
+      .click();
     await expect(page).toHaveURL("/cart");
     await expect(page.getByTestId("store-checkout-submit")).toBeEnabled();
     await page.getByLabel("Tu nombre").fill("Josefina Núñez");

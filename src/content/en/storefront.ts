@@ -37,6 +37,7 @@ export const storefront: Dictionary["storefront"] = {
     shopNow: "Shop now",
   },
   cart: {
+    browse: "Browse the catalog",
     checkout: {
       name: "Your name",
       nameRequired: "Write your name.",
@@ -47,11 +48,10 @@ export const storefront: Dictionary["storefront"] = {
       phone: "Your mobile",
       phoneHint: "The store writes to you on WhatsApp to arrange delivery.",
       phoneInvalid: "Write a mobile number, for example +598 99 123 456.",
-      submit: "Place order",
+      submit: "Place the order",
       submitting: "Sending the order…",
       title: "Your details",
     },
-    continueShopping: "Keep browsing",
     decrease: "One unit less of {title}",
     empty: "Your cart is empty.",
     errors: {
@@ -74,6 +74,20 @@ export const storefront: Dictionary["storefront"] = {
     },
     increase: "One unit more of {title}",
     loading: "Fetching the current prices…",
+    page: {
+      edit: "Edit the cart",
+      lineQuantity: "{quantity} × {price}",
+      summary: "Summary",
+      title: "Your order",
+    },
+    panel: {
+      added: "You added {title} to your cart.",
+      close: "Close",
+      keepShopping: "Keep shopping",
+      placeOrder: "Place the order",
+      units: "Your cart, {count} units",
+      unitsOne: "Your cart, 1 unit",
+    },
     quantity: "Quantity of {title}",
     remove: "Remove {title}",
     removed: "You removed {title} from the cart.",
