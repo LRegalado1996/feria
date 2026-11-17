@@ -101,8 +101,8 @@ describe("error contract", () => {
     const { mockCtx } = createMockContext();
     const procedure = publicProcedure.handler(({ errors }) => {
       throw errors.NOT_FOUND({
-        message: "That post no longer exists.",
-        data: { fix: "Refresh the feed.", why: ERROR_WHYS.DATABASE },
+        message: "That order no longer exists.",
+        data: { fix: "Refresh the page.", why: ERROR_WHYS.DATABASE },
       });
     });
 
@@ -110,9 +110,9 @@ describe("error contract", () => {
       call(procedure, undefined, { context: mockCtx as never })
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
-      message: "That post no longer exists.",
+      message: "That order no longer exists.",
       defined: true,
-      data: { fix: "Refresh the feed.", why: ERROR_WHYS.DATABASE },
+      data: { fix: "Refresh the page.", why: ERROR_WHYS.DATABASE },
     });
   });
 
@@ -157,11 +157,11 @@ describe("timing", () => {
 
     await call(procedure, undefined, {
       context: mockCtx as never,
-      path: ["post", "create"],
+      path: ["category", "create"],
     });
 
     expect(requestLog.set).toHaveBeenCalledExactlyOnceWith({
-      orpc: { procedure: "post.create", durationMs: 42 },
+      orpc: { procedure: "category.create", durationMs: 42 },
     });
   });
 

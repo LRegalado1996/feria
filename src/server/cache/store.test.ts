@@ -4,7 +4,11 @@ import { db } from "@/server/db";
 import type { MockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { getStoreForPath, invalidateStoreCache } from "./store";
+import {
+  getDefaultStore,
+  getStoreForPath,
+  invalidateStoreCache,
+} from "./store";
 
 const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
   cacheLife: vi.fn<(profile: string) => void>(),
@@ -23,6 +27,29 @@ function setup({ found }: { found?: { id: number; slug: string } } = {}) {
 
   return { findFirst: database.query.store.findFirst };
 }
+
+describe("getDefaultStore", () => {
+  test("returns the default store, read through the service, under the default's tag", async () => {
+    const found = { id: 7, slug: "lr-market" };
+    const { findFirst } = setup({ found });
+
+    await expect(getDefaultStore()).resolves.toBe(found);
+
+    const query = findFirst.mock.calls[0]?.[0] as { where: unknown };
+    expect(renderQuery(query.where)).toEqual({
+      sql: '"store"."isDefault" = $1',
+      params: [true],
+    });
+    expect(cacheTag).toHaveBeenCalledExactlyOnceWith("store-default");
+    expect(cacheLife).toHaveBeenCalledExactlyOnceWith("hours");
+  });
+
+  test("answers null when no store is the default", async () => {
+    setup();
+
+    await expect(getDefaultStore()).resolves.toBeNull();
+  });
+});
 
 describe("getStoreForPath", () => {
   test("returns the active store at that address, read through the service", async () => {
@@ -80,12 +107,13 @@ describe("getStoreForPath", () => {
 });
 
 describe("invalidateStoreCache", () => {
-  test("expires the store's id tag and its address tag at once, serving nothing stale", () => {
+  test("expires the store's id tag, its address tag and the default's tag at once, serving nothing stale", () => {
     invalidateStoreCache({ id: 7, slug: "lr-market" });
 
     expect(revalidateTag.mock.calls).toEqual([
       ["store:7", { expire: 0 }],
       ["store-slug:lr-market", { expire: 0 }],
+      ["store-default", { expire: 0 }],
     ]);
   });
 });

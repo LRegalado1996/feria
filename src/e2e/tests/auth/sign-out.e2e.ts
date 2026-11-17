@@ -1,31 +1,19 @@
 import { expect, test } from "../../fixtures";
-import { HomePage } from "../../page-objects/home.page";
+import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
+import { AdminPage } from "../../page-objects/admin.page";
 
 test.describe("Sign Out", () => {
-  test("should sign out successfully", async ({
-    freshAuthenticatedPage,
-    identity,
-  }) => {
-    const homePage = new HomePage(freshAuthenticatedPage);
-    await homePage.goto();
-
-    await homePage.expectAuthenticated(identity.name);
-
-    await homePage.signOut();
-
-    await homePage.expectUnauthenticated();
-  });
-
-  test("should show auth form after signing out", async ({
+  test("signing out shows the sign-in form again", async ({
     freshAuthenticatedPage,
   }) => {
-    const homePage = new HomePage(freshAuthenticatedPage);
-    await homePage.goto();
+    const admin = new AdminPage(freshAuthenticatedPage);
+    await admin.goto();
 
-    await homePage.signOut();
+    await admin.signOut();
 
-    await expect(homePage.getInput("Email")).toBeVisible();
-    await expect(homePage.getInput("Contraseña")).toBeVisible();
-    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
+    const signIn = new AdminSignInPage(freshAuthenticatedPage);
+    await expect(signIn.getInput("Email")).toBeVisible();
+    await expect(signIn.getInput("Contraseña")).toBeVisible();
+    await expect(signIn.submitButton()).toBeVisible();
   });
 });

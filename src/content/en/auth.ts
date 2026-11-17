@@ -24,8 +24,4 @@ export const auth: Dictionary["auth"] = {
     emailInvalid: "Please enter a valid email",
     passwordTooShort: "Password must be at least 8 characters",
   },
-  welcome: {
-    subtitle: "Sign in to your account to continue",
-    title: "Welcome back",
-  },
 };

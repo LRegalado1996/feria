@@ -11,7 +11,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 
 ## Layouts and pages
 
-- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/[locale]/page.tsx`: `Home` → `HomeResolver`).
+- **Never `await` the session, `headers()` or `cookies()` at the top of a layout or page.** A top-level request read holds the whole segment, `{children}` included, behind the request. Put the decision in an async resolver inside `<Suspense>`, with a static fallback above it (`src/app/[locale]/admin/page.tsx`: `AdminHome` → `AdminLanding`).
 - A fallback mirrors what it stands for, or stays an empty `aria-busy` canvas when the outcomes differ (signed out vs signed in): a skeleton for the wrong screen is a lie and a layout shift.
 - **Layouts are UI chrome.** Auth is decided per page, inside its boundary.
 - **The root layout is `src/app/[locale]/layout.tsx`.** `locale` is the one param known at build time (`generateStaticParams` lists both languages), so awaiting it at the top of a layout or page holds nothing behind a request; every other param follows the rule below. Types for `params` are written by hand (`Promise<{ locale: string }>`): nothing here runs `next typegen`, so `PageProps`, `LayoutProps` and `next/root-params` are not available to `pnpm typecheck`.
@@ -65,7 +65,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 
 The server renders at one instant and the browser hydrates later; React throws away the server HTML for any subtree whose first client render differs.
 
-- A client component's first render reads nothing the server could not: no `Date.now()`, `Math.random()`, `window`, `localStorage` or time-zone-dependent formatting. Seed a clock from the server's instant and switch after mount: `useNow(renderedAt)` (`src/lib/hooks/ui/use-now.ts`), as the feed's relative times do.
+- A client component's first render reads nothing the server could not: no `Date.now()`, `Math.random()`, `window`, `localStorage` or time-zone-dependent formatting. Seed a clock from the server's instant and switch after mount: `useNow(renderedAt)` (`src/lib/hooks/ui/use-now.ts`), as the orders' relative times do.
 - A remembered client preference (`localStorage`) never changes the first client render: read it with `useSyncExternalStore` and a `null` server snapshot, and keep the region's skeleton until it resolves.
 - A value several client components read from the query cache is seeded at a shared ancestor above all of them: React hydrates whichever boundary the user touches first.
 - A Suspense fallback or `loading.tsx` declares the same structure as the page it stands for.

@@ -12,9 +12,9 @@
 
 **LR Market** (this repository is named Feria) is a multi-store, bilingual mini e-commerce. Each store gets a public storefront made for a phone, and an admin panel where loading an article takes under a minute because Claude fills it in from the photos. The first store sells bubble guns and jewelry at a street Christmas fair from December 5, 2026, and online afterwards. What the product is, the decisions behind it and the roadmap are in [the project overview](docs/project/overview.md); the work is split into [tickets](docs/tickets/README.md).
 
-Today the repository holds the base it is built on: one Next.js deployment on Vercel with the pages, a typed oRPC API, Better Auth email and password sign-in, and PostgreSQL through Drizzle ORM. A small posts demo still runs through every layer once (sign in, write a post, scroll the feed, delete your own post) and stays as the worked example until the catalog replaces it ([FER-012](docs/tickets/FER-012-remove-post-demo.md)).
+Today the repository holds the base it is built on: one Next.js deployment on Vercel with the pages, a typed oRPC API, Better Auth email and password sign-in, and PostgreSQL through Drizzle ORM. On top of it sit the catalog (categories, filters, articles), the storefront (home, catalog, article, cart and checkout) and the admin (sign-in, categories, filters, orders); the categories are the worked example the rules point to.
 
-The machinery around the demo is what the product keeps: guardrails that fail the build instead of relying on review, tests that must be able to fail, one place that reports errors, and a release pipeline that only ships what CI tested. Every rule was added because a real bug shipped without it, and [`AGENTS.md`](AGENTS.md) records why.
+The machinery around the features is what holds them up: guardrails that fail the build instead of relying on review, tests that must be able to fail, one place that reports errors, and a release pipeline that only ships what CI tested. Every rule was added because a real bug shipped without it, and [`AGENTS.md`](AGENTS.md) records why.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ flowchart LR
 The boundaries that hold it together. Each one is written up in full, with the bug it prevents, in [`AGENTS.md`](AGENTS.md) and [`docs/agents/`](docs/agents):
 
 - **Routers are thin; services own every query.** A procedure validates its input with zod, checks auth, and makes one service call. A service is a plain function that takes the database first and nothing request-scoped, so a script or a test can call it too. `pnpm check` fails if a router imports Drizzle.
-- **An id from the client is a claim, never a grant.** The actor comes from the session. A write filters by owner and id together, so deleting someone else's post finds nothing and answers "not found".
+- **An id from the client is a claim, never a grant.** The actor comes from the session. A write filters by owner and id together, so renaming another store's category finds nothing and answers "not found".
 - **The database is relational.** No JSON columns, 3NF at least. App tables use integer identity ids, timestamps carry their time zone, and every foreign key states `onDelete` and has an index. A paginated list sorts on a unique key, so pages never shuffle.
 - **Errors are reported once, in the right place.** An expected failure (not signed in, not found) is a typed `ORPCError` and is not an incident. A Postgres constraint error becomes an answer the user can act on. Anything else is reported to Sentry once and answered with a curated 500 that never leaks the raw message.
 - **Server first, URL as context.** Pages are server components unless they need interaction. Context lives in the URL, not in cookies, so every view is bookmarkable and safe in several tabs. Layouts never enforce auth: each page and each procedure does.
@@ -47,29 +47,28 @@ The boundaries that hold it together. Each one is written up in full, with the b
 
 ## One request, end to end
 
-Creating a post:
+Adding a category in the admin:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor U as User
-    participant C as Compose box<br/>useCreatePost
-    participant A as /api/orpc<br/>post.create
-    participant S as createPost<br/>service
+    participant C as Category form<br/>useCreateCategory
+    participant A as /api/orpc<br/>category.create
+    participant S as createCategory<br/>service
     participant D as PostgreSQL
-    U->>C: types a post and sends it
-    C->>C: shows it in the feed at once (optimistic)
-    C->>A: post.create, pinned to this deployment
-    A->>A: session check, then zod input
-    A->>S: createPost(db, name, author from the session)
-    S->>D: insert into post
+    U->>C: types the name and saves
+    C->>A: category.create, pinned to this deployment
+    A->>A: zod input, session, then the store checked against the caller
+    A->>S: createCategory(tx, the store from that check, the names)
+    S->>D: insert into category, inside the access-checked transaction
     D-->>S: the new row
-    S-->>C: the post
-    C->>C: refreshes the feed from the server
-    Note over C,A: On failure the feed rolls back, the text stays in the box,<br/>and the error is reported once
+    S-->>C: the category, with the slug and place the server chose
+    C->>C: reads the list again from the server
+    Note over C,A: On failure the name stays in the form,<br/>with the error beside its field
 ```
 
-The page itself renders on the server: it fetches the first page of the feed and hands it to the browser with the HTML, behind a skeleton while it loads. If that fetch fails, the feed fetches again from the browser instead of showing an empty list.
+The page itself renders on the server: it checks the session and the store, fetches the list and hands it to the browser with the HTML, behind a skeleton while it loads. If that fetch fails, the list is fetched again from the browser instead of showing an empty one.
 
 ## Getting started
 
@@ -77,7 +76,7 @@ You need Docker (Docker Desktop or OrbStack), the Node version in [`.nvmrc`](.nv
 
 ```bash
 pnpm wt:provision   # installs dependencies and writes this worktree's .env; starts no containers
-pnpm db:seed        # starts this worktree's Postgres, migrates it, adds a post, two stores (/lr-market, /tienda-demo) the sample catalog (five categories, eleven articles and a Color filter in /lr-market) and three logins, all with password123: test@example.com (superadmin), member@example.com (member of lr-market), multi@example.com (member of both)
+pnpm db:seed        # starts this worktree's Postgres, migrates it, adds two stores (/lr-market, /tienda-demo) the sample catalog (five categories, eleven articles and a Color filter in /lr-market) and three logins, all with password123: test@example.com (superadmin), member@example.com (member of lr-market), multi@example.com (member of both)
 pnpm db:create-superadmin  # the first login of a fresh database (qa, production): reads SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD, refused once a superadmin exists
 pnpm dev            # next dev on this worktree's own port
 pnpm wt:ports       # prints that port, the Postgres port and the app URL (it is not 3000)

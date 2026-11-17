@@ -32,6 +32,26 @@ export class AdminPage extends BasePage {
     });
   }
 
+  /**
+   * The link to this page in the other language. After a switch the page
+   * left behind stays mounted, hidden, with a toggle of its own: the visible
+   * one is the one a user presses.
+   */
+  localeToggle(): Locator {
+    return this.getByTestId("locale-toggle").filter({ visible: true });
+  }
+
+  async chooseTheme(theme: "Claro" | "Oscuro" | "Sistema"): Promise<void> {
+    // Right after a reload the streamed page can briefly hold a second,
+    // hidden copy of the shell; the visible one is the one a user presses.
+    const option = this.page.getByRole("menuitemradio", { name: theme });
+    await this.clickUntilVisible(
+      this.getByTestId("theme-toggle").filter({ visible: true }),
+      option
+    );
+    await option.click();
+  }
+
   /** Signs out once, waiting for Better Auth's answer, then the sign-in. */
   async signOut(): Promise<void> {
     const button = this.getButton("Cerrar sesión").filter({ visible: true });

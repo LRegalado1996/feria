@@ -153,23 +153,23 @@ A procedure is input schema → auth check → one service call. Routers hold no
 ## Good examples to follow
 
 - Component with variants: `src/app/_components/atoms/button/button.tsx` (test: `button.test.tsx`)
-- Router · service tested on the SQL it sends: `src/server/api/routers/post.ts` · `src/server/services/post.ts`
-- Procedure test (`setup()`, factory, `call()`, codes pinned, both sides of boundaries): `src/server/api/routers/post.test.ts`
-- Schema with inferred type: `src/lib/schemas/post/index.ts` · Drizzle table: `src/server/db/schema/post.ts`
-- Form: `src/app/_components/organisms/auth-form/auth-form.tsx`
-- Hooks: `src/lib/hooks/post/use-get-posts.ts`, `use-create-post.ts` (optimistic; test over MSW)
-- Text in both languages: `src/content/es/auth.ts` · `src/content/en/auth.ts`, read by `organisms/auth-form` (client) and `src/app/[locale]/page.tsx` (server)
+- Router · service tested on the SQL it sends: `src/server/api/routers/category.ts` · `src/server/services/category.ts` (two-writer test: `src/server/services/category.integration.test.ts`)
+- Procedure test (`setup()`, factory, `call()`, codes pinned, both sides of boundaries): `src/server/api/routers/category.test.ts`
+- Schema with inferred type: `src/lib/schemas/catalog/index.ts` · Drizzle tables: `src/server/db/schema/catalog.ts`
+- Forms: `src/app/_components/organisms/auth-form/auth-form.tsx` · `src/app/_components/molecules/category-form/category-form.tsx`
+- Hooks: `src/lib/hooks/category/use-store-categories.ts`, `use-create-category.ts`, `use-reorder-categories.ts` (optimistic, with rollback; tests over MSW) · `src/lib/hooks/order/use-orders.ts` (paged)
+- Text in both languages: `src/content/es/auth.ts` · `src/content/en/auth.ts`, read by `organisms/auth-form` (client); `src/content/{es,en}/admin.ts`, read by `src/app/[locale]/admin/sign-in/page.tsx` (server)
 - Test doubles: `src/server/test/context.ts` (`createMockDatabase`)
 
 ## Naming
 
-| Thing                    | Convention                                            | Example                                 |
-| ------------------------ | ----------------------------------------------------- | --------------------------------------- |
-| Files                    | kebab-case                                            | `auth-form.tsx`                         |
-| Components · Props       | PascalCase function · + Props                         | `AuthForm` · `AuthFormProps`            |
-| Schemas · inferred types | camelCase + Schema · Pascal + Values                  | `createPostSchema` · `CreatePostValues` |
-| Variants · hooks         | camelCase + Variants · use + Action                   | `buttonVariants` · `useGetPosts`        |
-| Tests                    | `.test.{ts,tsx}` · `.integration.test.ts` · `.e2e.ts` | `button.test.tsx`                       |
+| Thing                    | Convention                                            | Example                                         |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------------- |
+| Files                    | kebab-case                                            | `auth-form.tsx`                                 |
+| Components · Props       | PascalCase function · + Props                         | `AuthForm` · `AuthFormProps`                    |
+| Schemas · inferred types | camelCase + Schema · Pascal + Values                  | `createCategorySchema` · `CreateCategoryValues` |
+| Variants · hooks         | camelCase + Variants · use + Action                   | `buttonVariants` · `useOrders`                  |
+| Tests                    | `.test.{ts,tsx}` · `.integration.test.ts` · `.e2e.ts` | `button.test.tsx`                               |
 
 ## Testing
 

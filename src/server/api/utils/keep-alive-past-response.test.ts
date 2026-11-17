@@ -25,7 +25,7 @@ function offeredToAfter(): Promise<unknown> | undefined {
 
 describe("keepAlivePastResponse", () => {
   test("registers the work with after() inside a request scope", async () => {
-    keepAlivePastResponse(Promise.resolve("sent"), { action: "Post.notify" });
+    keepAlivePastResponse(Promise.resolve("sent"), { action: "Order.notify" });
 
     expect(mocks.after).toHaveBeenCalledExactlyOnceWith(expect.any(Promise));
     await offeredToAfter();
@@ -38,7 +38,7 @@ describe("keepAlivePastResponse", () => {
       throw OUTSIDE_SCOPE;
     });
 
-    keepAlivePastResponse(Promise.resolve("sent"), { action: "Post.notify" });
+    keepAlivePastResponse(Promise.resolve("sent"), { action: "Order.notify" });
 
     // The same bounded, reporting promise `after()` refused.
     expect(mocks.waitUntil).toHaveBeenCalledExactlyOnceWith(offeredToAfter());
@@ -53,7 +53,7 @@ describe("keepAlivePastResponse", () => {
     });
 
     expect(() => {
-      keepAlivePastResponse(Promise.resolve(), { action: "Post.notify" });
+      keepAlivePastResponse(Promise.resolve(), { action: "Order.notify" });
     }).toThrow(refusal);
     expect(mocks.waitUntil).not.toHaveBeenCalled();
   });
@@ -61,12 +61,12 @@ describe("keepAlivePastResponse", () => {
   test("reports work that fails, under its action", async () => {
     const failure = new Error("webhook refused");
 
-    keepAlivePastResponse(Promise.reject(failure), { action: "Post.notify" });
+    keepAlivePastResponse(Promise.reject(failure), { action: "Order.notify" });
 
     await offeredToAfter();
     expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
       failure,
-      { action: "Post.notify" }
+      { action: "Order.notify" }
     );
   });
 
@@ -76,14 +76,14 @@ describe("keepAlivePastResponse", () => {
     });
 
     keepAlivePastResponse(neverSettles, {
-      action: "Post.notify",
+      action: "Order.notify",
       timeoutMs: 5,
     });
 
     await offeredToAfter();
     expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
-      new Error("Post.notify was still running after 5 ms"),
-      { action: "Post.notify" }
+      new Error("Order.notify was still running after 5 ms"),
+      { action: "Order.notify" }
     );
   });
 });

@@ -4,7 +4,6 @@ import {
   type BrowserContext,
   expect,
   type Page,
-  type Response,
   type WorkerInfo,
 } from "@playwright/test";
 import { betterAuth } from "better-auth";
@@ -35,20 +34,9 @@ export interface Identity {
   password: string;
 }
 
-/** Rows the UI created during a test, read off the requests that created them. */
-export interface CreatedRows {
-  /** Response bodies still being read when the test ended. */
-  pending: Promise<void>[];
-  postIds: number[];
-  /** Why a created row's id could not be read: that row leaks. */
-  unreadable: string[];
-}
-
 export interface UserFixtures {
   /** A page signed in as the worker's user, in its own context. */
   authenticatedPage: Page;
-  /** Rows the test's pages created through the UI, for the db fixture to delete. */
-  createdRows: CreatedRows;
   /** A page with a session of its own, from a real sign-in: sign-out tests. */
   freshAuthenticatedPage: Page;
   /** Who the worker's user is. */
@@ -169,37 +157,6 @@ async function signIn(
   return context;
 }
 
-/**
- * Records the rows a page creates through the UI (a post)
- * from the responses that created them, so teardown deletes exactly those.
- */
-function captureCreatedRows(page: Page, rows: CreatedRows): void {
-  page.on("response", (response) => {
-    const request = response.request();
-
-    if (request.method() !== "POST" || !response.ok()) {
-      return;
-    }
-
-    const { pathname } = new URL(response.url());
-
-    if (pathname === "/api/orpc/post/create") {
-      rows.pending.push(recordPost(response, rows));
-    }
-  });
-}
-
-/** oRPC answers `{ json: <the created post> }`. */
-async function recordPost(response: Response, rows: CreatedRows) {
-  try {
-    const body = (await response.json()) as { json: { id: number } };
-    rows.postIds.push(body.json.id);
-  } catch (error) {
-    // The page went away before the body was read.
-    rows.unreadable.push(`post.create: ${String(error)}`);
-  }
-}
-
 export const test = base.extend<UserFixtures, WorkerFixtures>({
   workerUser: [
     async (
@@ -252,58 +209,38 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     await use(workerUser.storageState);
   },
 
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
-  createdRows: async ({}, use) => {
-    await use({ pending: [], postIds: [], unreadable: [] });
-  },
-
-  page: async ({ createdRows, page }, use) => {
-    captureCreatedRows(page, createdRows);
-    await use(page);
-  },
-
-  authenticatedPage: async (
-    { baseURL, browser, createdRows, workerUser },
-    use
-  ) => {
+  authenticatedPage: async ({ baseURL, browser, workerUser }, use) => {
     const context = await browser.newContext({
       baseURL: requireBaseURL(baseURL),
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerUser.storageState,
     });
     const page = await context.newPage();
-    captureCreatedRows(page, createdRows);
 
     await use(page);
     await context.close();
   },
 
-  superadminPage: async (
-    { baseURL, browser, createdRows, workerSuperadmin },
-    use
-  ) => {
+  superadminPage: async ({ baseURL, browser, workerSuperadmin }, use) => {
     const context = await browser.newContext({
       baseURL: requireBaseURL(baseURL),
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerSuperadmin.storageState,
     });
     const page = await context.newPage();
-    captureCreatedRows(page, createdRows);
 
     await use(page);
     await context.close();
   },
 
-  freshAuthenticatedPage: async (
-    { baseURL, browser, createdRows, identity },
-    use
-  ) => {
+  freshAuthenticatedPage: async ({ baseURL, browser, identity }, use) => {
     const context = await signIn(browser, requireBaseURL(baseURL), identity);
     const page = await context.newPage();
-    captureCreatedRows(page, createdRows);
-    await page.goto("/");
-    // The navbar renders for a signed-in visitor only.
-    await expect(page.getByTestId("navbar").first()).toBeVisible();
+    await page.goto("/admin");
+    // The admin's shell renders for a signed-in visitor only.
+    await expect(
+      page.getByTestId("admin-shell").filter({ visible: true }).first()
+    ).toBeVisible();
 
     await use(page);
     await context.close();

@@ -29,8 +29,8 @@ describe("captureExceptionWithScope", () => {
 
     const eventId = captureExceptionWithScope(error, {
       action: "Auth.better_auth_log",
-      context: { postId: 7 },
-      procedure: "post.create",
+      context: { orderId: 7 },
+      procedure: "category.create",
       requestId: "req-1",
     });
 
@@ -38,11 +38,11 @@ describe("captureExceptionWithScope", () => {
     expect(sentry.captureException).toHaveBeenCalledExactlyOnceWith(error);
     expect(sentry.scope.setTag.mock.calls).toEqual([
       ["action", "Auth.better_auth_log"],
-      ["procedure", "post.create"],
+      ["procedure", "category.create"],
       ["request_id", "req-1"],
     ]);
     expect(sentry.scope.setContext).toHaveBeenCalledExactlyOnceWith("details", {
-      postId: 7,
+      orderId: 7,
     });
   });
 

@@ -1,10 +1,10 @@
-import { count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { UserRole } from "@/lib/schemas/access";
 import { createStoreSchema } from "@/lib/schemas/store";
 import { type AccountAuth, createAccount } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
-import { post, user } from "@/server/db/schema";
+import { user } from "@/server/db/schema";
 import {
   addStoreMember,
   listStoreIdsBySlug,
@@ -197,7 +197,7 @@ async function ensureAccount(
 
 /**
  * Development data: two stores, and on a local database a superadmin and two
- * members who can sign in, a first post and the members' memberships. Safe
+ * members who can sign in, with the members' memberships. Safe
  * to run again: whatever already exists is left alone.
  */
 export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
@@ -219,16 +219,6 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
     if (created) {
       createdAccounts.push(account.email);
     }
-  }
-
-  const authorId = accounts.get(SEED_USER.email);
-  const [posts] = await db.select({ total: count() }).from(post);
-  const createPost = authorId !== undefined && (posts?.total ?? 0) === 0;
-
-  if (createPost) {
-    await db
-      .insert(post)
-      .values({ name: "Welcome to the feed!", createdById: authorId });
   }
 
   const takenSlugs = await listTakenStoreSlugs(
@@ -276,7 +266,6 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
   return {
     createdAccounts,
     createdArticles,
-    createdPost: createPost,
     createdStores,
   };
 }

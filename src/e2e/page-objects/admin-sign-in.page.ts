@@ -16,22 +16,48 @@ export class AdminSignInPage extends BasePage {
     return this.getByTestId("admin-sign-in");
   }
 
+  submitButton(): Locator {
+    return this.getButton("Iniciar sesión");
+  }
+
   /**
-   * Signs in through the form and waits for Better Auth's answer. The submit
-   * button is enabled only once React owns the form, so typing waits for it.
+   * The submit button stays disabled until React owns the form, so it being
+   * enabled is the proof that typing and submitting now reach React.
    */
-  async signIn(email: string, password: string): Promise<void> {
-    const submit = this.getButton("Iniciar sesión");
-    await expect(submit).toBeEnabled();
+  async waitForForm(): Promise<void> {
+    await expect(this.submitButton()).toBeEnabled();
+  }
+
+  async fillCredentials(email: string, password: string): Promise<void> {
+    await this.waitForForm();
     await this.fillField("Email", email);
     await this.fillField("Contraseña", password);
+  }
+
+  /**
+   * Signs in through the form and waits for Better Auth's answer, `status`
+   * (200 by default). A submit is never retried: a lost one fails here, at
+   * the request.
+   */
+  async signIn(email: string, password: string, status = 200): Promise<void> {
+    await this.fillCredentials(email, password);
     await completeRpcAction(
       this.page,
       "/api/auth/sign-in/email",
       async () => {
-        await submit.click();
+        await this.submitButton().click();
       },
-      { input: { email } }
+      { input: { email }, status }
     );
+  }
+
+  async expectAuthError(message: string | RegExp): Promise<void> {
+    await expect(this.getByTestId("auth-error")).toContainText(message);
+  }
+
+  async expectFieldError(message: string | RegExp): Promise<void> {
+    await expect(
+      this.getByTestId("form-message").getByText(message)
+    ).toBeVisible();
   }
 }

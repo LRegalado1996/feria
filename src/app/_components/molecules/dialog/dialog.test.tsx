@@ -21,7 +21,7 @@ function setup({ locale = "en" }: { locale?: "en" | "es" } = {}) {
     <Dialog onOpenChange={onOpenChange} open>
       <DialogContent className="custom">
         <DialogHeader>
-          <DialogTitle>Delete this post?</DialogTitle>
+          <DialogTitle>Delete this category?</DialogTitle>
           <DialogDescription>It cannot be undone.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -39,7 +39,7 @@ describe("Dialog", () => {
   test("is a modal dialog named by its title and described by its description", () => {
     const { dialog } = setup();
 
-    expect(dialog).toHaveAccessibleName("Delete this post?");
+    expect(dialog).toHaveAccessibleName("Delete this category?");
     expect(dialog).toHaveAccessibleDescription("It cannot be undone.");
     expect(dialog).toHaveAttribute("data-slot", "dialog-content");
     expect(dialog).toHaveClass("custom", "max-h-[calc(100dvh-2rem)]");
@@ -56,7 +56,7 @@ describe("Dialog", () => {
 
     expect(
       dialog.querySelector('[data-slot="dialog-header"]')
-    ).toHaveTextContent("Delete this post?");
+    ).toHaveTextContent("Delete this category?");
     expect(
       dialog.querySelector('[data-slot="dialog-footer"]')
     ).toContainElement(screen.getByRole("button", { name: "Delete" }));

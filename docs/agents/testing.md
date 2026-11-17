@@ -10,7 +10,7 @@ A reader understands a test without scrolling: everything it depends on is built
 - A test that needs state calls `setup()` on its first line and takes all of it from the return value: context, database double, spies, the rendered UI and the actions to drive it. Options select the variant (`setup({ signedIn: false })`). A pure function called with literals needs no `setup()`.
 - No mutable `let` at `describe` or module scope. `beforeEach`/`afterEach` only clean up (restore a global, delete the rows a file created), never build state for the next test.
 - `describe` only groups, by procedure or feature, one level deep. Never nest one to share setup.
-- A literal that appears in more than 2 tests becomes a factory with overrides (`makePost({ name: "x" })`).
+- A literal that appears in more than 2 tests becomes a factory with overrides (`makeCategory({ nameEs: "x" })`).
 - Cases that differ only in data are one `test.each` table, the expected value a column of it.
 - `vi.mock()` stays at module level: Vitest hoists it above the imports. A value its factory needs comes from `vi.hoisted()`.
 
@@ -23,7 +23,7 @@ function setup({ signedIn = true } = {}) {
   return {
     db: mockCtx.db,
     create: async (input: unknown) =>
-      await call(postRouter.create, input as never, {
+      await call(categoryRouter.create, input as never, {
         context: mockCtx as never,
       }),
   };
@@ -32,7 +32,9 @@ function setup({ signedIn = true } = {}) {
 test("refuses a signed-out caller before touching the database", async () => {
   const { db, create } = setup({ signedIn: false });
 
-  await expect(create({ name: "Hello" })).rejects.toMatchObject({
+  await expect(
+    create({ nameEs: "Collares", storeSlug: "lr-market" })
+  ).rejects.toMatchObject({
     code: "UNAUTHORIZED",
     message: "Unauthorized",
   });
@@ -48,9 +50,9 @@ Banned, because each stays green with the rule broken:
 
 - **Execution-only hook tests:** `isSuccess` as the only assertion, or a mocked `[]`/`{}` payload. Answer with a non-empty payload and assert the exact fields and the side effect (the cache, the request the server received).
 - **Argument-blind spies:** `toHaveBeenCalled()`, `toHaveBeenCalledTimes(n)` or `toHaveBeenCalledOnce()` without the arguments. Use `toHaveBeenCalledWith(…)` or `toHaveBeenCalledExactlyOnceWith(…)`. `not.toHaveBeenCalled()` is fine: nothing happened is the claim. Lint flags the blind forms, but its fixer writes a zero-argument `toHaveBeenCalledWith()` (the `zero-argument-called-with` ratchet stops it): fix these by hand.
-- **Error class only:** `rejects.toThrow(ORPCError)`, `rejects.toThrow()`, `toBeInstanceOf(Error)`. Pin the code and the message: `rejects.toMatchObject({ code: "NOT_FOUND", message: "Post not found" })`.
+- **Error class only:** `rejects.toThrow(ORPCError)`, `rejects.toThrow()`, `toBeInstanceOf(Error)`. Pin the code and the message: `rejects.toMatchObject({ code: "NOT_FOUND", message: "Category not found" })`.
 - **Negations that any other outcome satisfies:** `not.toMatchObject({ code: "FORBIDDEN" })`, `resolves.not.toThrow()`. Assert the exact value.
-- **Label without value:** scope to the row or `data-testid` and assert the value bound to the label (`toHaveTextContent("2 posts")`).
+- **Label without value:** scope to the row or `data-testid` and assert the value bound to the label (`toHaveTextContent("2 artículos")`).
 - **Shape without contents:** `toHaveLength(n)`, `toBeDefined()`, `toBeInstanceOf(X)` or `typeof` alone. Assert the elements and the fields.
 
 And required:
@@ -76,7 +78,7 @@ And required:
 - Drizzle: `mockCtx.db` is `createMockDatabase()`, a `Proxy` double that needs no table or chain step listed. Configure and inspect relational reads on `db.query.<model>.findFirst/findMany` and builder chains on `db.$["<operation>.<step>"]` (`$["insert.values"]`, `$["insert.returning"]`, `$.insert`). Unconfigured, `findFirst` resolves to `undefined` and `findMany` or any chain to `[]`; `db.transaction(fn)` runs `fn` with the same double.
 - No unit test opens a Postgres connection: `setup-common.ts` mocks `@/server/db` with that double for every file. A file that needs another shape declares its own `vi.mock("@/server/db", ...)`; `src/server/db/index.test.ts` unmocks it to test the real module.
 - HTTP goes through MSW: never stub `fetch` or fake a client's responses inside a `vi.mock` factory. `setup-common.ts` starts the server once and resets handlers after every test, so a file never calls `listen`/`close`; it adds handlers with `server.use(...)` from `@/test/msw`. A request no handler answers fails the test. Defaults: Better Auth's `get-session` answers `null` (signed out) and sign-in succeeds; there is no sign-up (FER-009).
-- oRPC from hooks and components: mock `@/lib/orpc/client` with `orpcClientMock` from `@/test/mocks/orpc-client`, whose calls are real requests, and answer them with `createOrpcHandler("post.create", resolve)` or `createOrpcErrorHandler(path, { code, message, status, data })`. A `vi.fn()` resolver is the spy on the input the client sent. The mock keeps the hook's own `onMutate`/`onSettled`, so cache effects stay testable.
+- oRPC from hooks and components: mock `@/lib/orpc/client` with `orpcClientMock` from `@/test/mocks/orpc-client`, whose calls are real requests, and answer them with `createOrpcHandler("category.create", resolve)` or `createOrpcErrorHandler(path, { code, message, status, data })`. A `vi.fn()` resolver is the spy on the input the client sent. The mock keeps the hook's own `onMutate`/`onSettled`, so cache effects stay testable.
 - Hooks: `createQueryWrapper()` from `@/test/setup-helpers`, a fresh QueryClient with retries off, exposed as `wrapper.queryClient`.
 - Languages: a component or hook that reads `useDictionary()` or `useLocale()` renders through `renderWithI18n(ui, { locale })` or `createI18nWrapper(locale)` from `@/test/i18n`; English unless the test says otherwise, and one case per component in Spanish, so a string hardcoded in either language fails. A server component's test mocks `server-only` and passes the locale in (`docs/agents/i18n.md` § Tests).
 - Navigation: spy on `window.location.assign` (`vi.spyOn(window.location, "assign").mockImplementation(() => undefined)`); auth changes reload the page instead of calling the router (`docs/agents/nextjs.md` § Navigation).
@@ -93,7 +95,7 @@ And required:
 - Cover real database operations, auth flows and cross-service interactions. A multi-step write also gets the two-writer test in `docs/agents/database.md`.
 - **A database per worker.** `src/server/test/integration-global-setup.ts` clones the migrated database in `DATABASE_URL` once per Vitest worker (`<db>_w1` … `<db>_wN`, N = `min(8, cores)`) and drops the clones at the end; `integration-worker-database.ts` points each worker at its own. Files running at the same time never share a row, so they run in parallel. Cloning needs the template idle, so the setup closes other connections to it (a dev server's pool reconnects on its next query), and a second run against the same database waits for the first (a session advisory lock, released if a run dies).
 - **Fails closed.** No `DATABASE_URL`, no run: the global setup throws instead of skipping. Never `describe.skipIf(!dbAvailable)`: a broken database must be a red job, not a green one with zero tests.
-- **Own your rows.** Files that share a worker run back to back against one clone, so every file seeds what it reads (a fresh user per test: `randomUUID()` in the email), asserts only on its own rows (filter the feed by the ids it created), and deletes what it created in `afterEach` by the captured ids (deleting a user cascades to its sessions, accounts and posts). Never by name prefix or `LIKE`.
+- **Own your rows.** Files that share a worker run back to back against one clone, so every file seeds what it reads (a fresh user per test: `randomUUID()` in the email), asserts only on its own rows (a store of its own, or a list filtered by the ids it created), and deletes what it created in `afterEach` by the captured ids (deleting a store cascades to its catalog and orders, a user to its sessions and accounts). Never by name prefix or `LIKE`.
 - CI runs them in their own job, against a Postgres service, in parallel with the unit tests.
 - Locally: `pnpm test:integration` starts this worktree's Postgres first. The config reads `DATABASE_URL` from `.env` unless it is already exported.
 

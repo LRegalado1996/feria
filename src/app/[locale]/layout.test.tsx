@@ -42,7 +42,7 @@ vi.mock("@/app/_components/organisms/app-providers", () => ({
     <div
       data-locale={locale}
       data-testid="app-providers"
-      data-welcome={dictionary.auth.welcome.title}
+      data-welcome={dictionary.auth.signIn.submit}
     >
       {children}
     </div>
@@ -58,7 +58,7 @@ vi.mock("@vercel/speed-insights/next", () => ({
   SpeedInsights: () => <div data-testid="vercel-speed-insights" />,
 }));
 
-const WELCOME = { es: "Hola de nuevo", en: "Welcome back" };
+const WELCOME = { es: "Iniciar sesión", en: "Sign In" };
 const ANALYTICS =
   '<div data-testid="vercel-analytics"></div><div data-testid="vercel-speed-insights"></div>';
 const SHELL_END = "</body></html>";

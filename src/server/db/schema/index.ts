@@ -13,7 +13,6 @@ export {
   orderStatusEnum,
   orderStatusEvent,
 } from "./order";
-export { post } from "./post";
 export {
   accountRelations,
   attributeRelations,
@@ -29,7 +28,6 @@ export {
   productImageTranslationRelations,
   productRelations,
   productTranslationRelations,
-  postRelations,
   productAttributeValueRelations,
   sessionRelations,
   storeMemberRelations,

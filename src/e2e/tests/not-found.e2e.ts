@@ -11,9 +11,10 @@ test.describe("Not found", () => {
 
     await expect(page).toHaveTitle("Página no encontrada");
 
-    await page.getByTestId("not-found-home-link").click();
-
-    await expect(page).toHaveURL("/");
+    await expect(page.getByTestId("not-found-home-link")).toHaveAttribute(
+      "href",
+      "/"
+    );
   });
 
   test("an unknown English address answers 404 in English, with a way to the English home", async ({
@@ -28,8 +29,9 @@ test.describe("Not found", () => {
     await expect(page).toHaveTitle("Page not found");
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
-    await page.getByTestId("not-found-home-link").click();
-
-    await expect(page).toHaveURL("/en");
+    await expect(page.getByTestId("not-found-home-link")).toHaveAttribute(
+      "href",
+      "/en"
+    );
   });
 });

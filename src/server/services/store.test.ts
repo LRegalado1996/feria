@@ -9,6 +9,7 @@ import { renderQuery, renderSql } from "@/server/test/render-sql";
 import {
   createStore,
   findActiveStoreBySlug,
+  findDefaultStore,
   getActiveStoreBySlug,
   listTakenStoreSlugs,
   updateStore,
@@ -117,6 +118,34 @@ function setup() {
     },
   };
 }
+
+describe("findDefaultStore", () => {
+  test("reads the id and the address of the store marked as the default", async () => {
+    const { db } = setup();
+    db.query.store.findFirst.mockResolvedValue({ id: 7, slug: "lr-market" });
+
+    await expect(findDefaultStore(db as never)).resolves.toEqual({
+      id: 7,
+      slug: "lr-market",
+    });
+
+    const query = db.query.store.findFirst.mock.calls[0]?.[0] as {
+      columns: unknown;
+      where: unknown;
+    };
+    expect(query.columns).toEqual({ id: true, slug: true });
+    expect(renderQuery(query.where)).toEqual({
+      sql: '"store"."isDefault" = $1',
+      params: [true],
+    });
+  });
+
+  test("answers null, never undefined, when no store is the default", async () => {
+    const { db } = setup();
+
+    await expect(findDefaultStore(db as never)).resolves.toBeNull();
+  });
+});
 
 describe("findActiveStoreBySlug", () => {
   test("looks up the slug among active stores only", async () => {

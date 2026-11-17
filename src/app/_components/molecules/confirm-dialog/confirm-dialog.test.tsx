@@ -29,7 +29,7 @@ function setup(
             onOpenChange(next);
           }}
           open={open}
-          title="Delete this post?"
+          title="Delete this category?"
           {...props}
         />
       </>
@@ -45,7 +45,9 @@ describe("ConfirmDialog", () => {
   test("asks with a title, a description and the two answers", () => {
     setup();
 
-    const dialog = screen.getByRole("dialog", { name: "Delete this post?" });
+    const dialog = screen.getByRole("dialog", {
+      name: "Delete this category?",
+    });
     expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(

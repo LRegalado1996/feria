@@ -72,7 +72,7 @@ const RELATIVE_DIVISIONS: {
  * `date` relative to `now`, which the caller passes in rather than this
  * reading the clock: a render that reads `Date.now()` disagrees with its own
  * hydration, and the React Compiler memoizes it as if it were pure. A `date`
- * ahead of `now` (a post created since the clock last ticked) reads "now".
+ * ahead of `now` (an order placed since the clock last ticked) reads "now".
  */
 export function formatRelativeTime(
   date: Date,

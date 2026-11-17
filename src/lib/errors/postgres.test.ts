@@ -9,10 +9,10 @@ function violation(code: string, constraint?: string): DrizzleQueryError {
     code,
     constraint,
   });
-  return new DrizzleQueryError("insert into post", ["x"], pgError);
+  return new DrizzleQueryError("insert into category", ["x"], pgError);
 }
 
-const scope = { procedure: "post.create", requestId: "req-1" };
+const scope = { procedure: "category.create", requestId: "req-1" };
 
 describe("translatePostgresError", () => {
   test.each([
@@ -59,7 +59,7 @@ describe("translatePostgresError", () => {
     expect(translated?.error.message).toBe(message);
     expect(translated?.error.data).toEqual({
       fix,
-      procedure: "post.create",
+      procedure: "category.create",
       requestId: "req-1",
     });
   });
