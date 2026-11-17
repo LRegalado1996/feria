@@ -8,7 +8,7 @@ import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { getDictionary } from "@/content";
 import { selectionName } from "@/lib/catalog/heading";
 import { navigationOrder } from "@/lib/catalog/navigation";
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import {
   type CatalogQuery,
   catalogHref,
@@ -315,9 +315,7 @@ export async function CatalogPageView(props: CatalogPageProps) {
               description: loaded.description,
               items: firstPage.items.map((item) => ({
                 name: item.title,
-                url: absoluteUrl(
-                  localizePath(`/products/${item.slug}`, locale)
-                ),
+                url: absoluteUrl(localizePath(articlePath(item.slug), locale)),
               })),
               locale,
               name: heading,

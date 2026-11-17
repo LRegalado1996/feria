@@ -16,7 +16,7 @@ import {
 import { StoreRelatedRow } from "@/app/_components/molecules/store-related-row";
 import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { Dictionary } from "@/content";
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import type { Currency } from "@/lib/utils/format";
@@ -112,7 +112,7 @@ function StoreArticle({
     ? localizePath(article.category.path, locale)
     : null;
   const group = article.category?.group ?? null;
-  const path = localizePath(`/products/${article.slug}`, locale);
+  const path = localizePath(articlePath(article.slug), locale);
   const labels = { card: copy.articleCard, price: copy.price };
   const paragraphs = paragraphsOf(article.description);
   const relatedCard = (item: StoreRelatedArticle) => ({
@@ -121,7 +121,7 @@ function StoreArticle({
         amount={item.priceAmount}
         currency={item.currencyCode}
         headingLevel="h3"
-        href={localizePath(`/products/${item.slug}`, locale)}
+        href={localizePath(articlePath(item.slug), locale)}
         image={item.cover ? { alt: item.cover.alt, src: item.cover.url } : null}
         labels={labels}
         locale={locale}

@@ -280,7 +280,7 @@ test.describe("Catalog", () => {
     await expect(grid.getByRole("button")).toHaveCount(0);
 
     await grid.getByRole("link", { name: /Collar dorado/u }).click();
-    await expect(page).toHaveURL(`/products/${goldNecklace.slug}`);
+    await expect(page).toHaveURL(`/productos/${goldNecklace.slug}`);
     // Enabled only once React owns it; a retried click would add twice.
     const add = page.getByRole("button", {
       exact: true,

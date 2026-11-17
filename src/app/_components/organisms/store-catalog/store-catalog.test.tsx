@@ -619,7 +619,7 @@ describe("StoreCatalog", () => {
     const link = within(first ?? document.body).getByRole("link", {
       name: "Artículo 1",
     });
-    expect(link).toHaveAttribute("href", "/products/articulo-1");
+    expect(link).toHaveAttribute("href", "/productos/articulo-1");
     // The name's language is on its link; the card keeps the page's.
     expect(link).toHaveAttribute("lang", "es");
     expect(first?.closest("li")).not.toHaveAttribute("lang");
@@ -635,7 +635,7 @@ describe("StoreCatalog", () => {
     const grid = within(screen.getByTestId("store-catalog-grid"));
     expect(grid.getByRole("link", { name: "Artículo 1" })).toHaveAttribute(
       "href",
-      "/en/products/articulo-1"
+      "/en/productos/articulo-1"
     );
     expect(grid.getByText("Sold out")).toBeVisible();
   });

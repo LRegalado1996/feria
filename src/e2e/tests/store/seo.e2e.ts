@@ -99,12 +99,12 @@ test.describe("sitemap.xml", () => {
     // The store's own pages first, then its articles, this test's among them.
     const pages = ["/", "/en", "/productos", "/en/productos"];
     const article = [
-      `/products/${published.slug}`,
-      `/en/products/${published.slug}`,
+      `/productos/${published.slug}`,
+      `/en/productos/${published.slug}`,
     ];
     expect(locs.slice(0, pages.length)).toEqual(pages);
     expect(locs.filter((path) => article.includes(path))).toEqual(article);
-    expect(alternates).toContain(`/en/products/${published.slug}`);
+    expect(alternates).toContain(`/en/productos/${published.slug}`);
 
     const everything = [...locs, ...alternates];
     expect(everything.filter((path) => path.endsWith(draft.slug))).toEqual([]);
@@ -138,7 +138,7 @@ test.describe("llms.txt", () => {
       expect(body).toContain(`${heading}\n`);
       expect(body).toMatch(
         new RegExp(
-          String.raw`^- \[Anillo sello\]\(https?://[^/)]+${prefix}/products/${published.slug}\): `,
+          String.raw`^- \[Anillo sello\]\(https?://[^/)]+${prefix}/productos/${published.slug}\): `,
           "mu"
         )
       );

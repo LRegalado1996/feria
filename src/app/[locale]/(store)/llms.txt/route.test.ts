@@ -67,14 +67,14 @@ describe("GET /[locale]/llms.txt", () => {
       "es",
       "## Categorías",
       `${ORIGIN}/bijouterie/anillos`,
-      `${ORIGIN}/products/anillo-sello`,
+      `${ORIGIN}/productos/anillo-sello`,
       `${ORIGIN}/en/llms.txt`,
     ],
     [
       "en",
       "## Categories",
       `${ORIGIN}/en/bijouterie/anillos`,
-      `${ORIGIN}/en/products/anillo-sello`,
+      `${ORIGIN}/en/productos/anillo-sello`,
       `${ORIGIN}/llms.txt`,
     ],
   ])(

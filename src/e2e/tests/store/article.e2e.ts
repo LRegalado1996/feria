@@ -42,7 +42,7 @@ test.describe("Article page", () => {
     page,
   }) => {
     const { article } = await setup({ db });
-    await page.goto(`/products/${article.slug}`);
+    await page.goto(`/productos/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
     // Said to a screen reader, out of sight.
     const position = gallery.locator("output");
@@ -95,7 +95,7 @@ test.describe("Article page", () => {
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {
     const { article } = await setup({ db });
-    await page.goto(`/products/${article.slug}`);
+    await page.goto(`/productos/${article.slug}`);
     const storePage = new StorePage(page);
     const quantity = page.getByTestId("store-article-quantity");
 
@@ -131,7 +131,7 @@ test.describe("Article page", () => {
         priceAmount: 99_000,
         title: "Anillo de prueba",
       });
-      await page.goto(`/products/${article.slug}`);
+      await page.goto(`/productos/${article.slug}`);
 
       const name = page.getByRole("heading", { level: 1 });
       await expect(name).toHaveText("Anillo de prueba");
@@ -206,7 +206,7 @@ test.describe("Article page", () => {
       });
     }
 
-    await page.goto(`/products/${article.slug}`);
+    await page.goto(`/productos/${article.slug}`);
     const row = page.getByRole("region", { name: "También te puede gustar" });
     const names = row.getByRole("heading", { level: 3 });
 
@@ -238,7 +238,7 @@ test.describe("Article page", () => {
     page,
   }) => {
     const { article } = await setup({ db });
-    await page.goto(`/products/${article.slug}`);
+    await page.goto(`/productos/${article.slug}`);
     const band = page.getByTestId("store-article-band");
     await band.scrollIntoViewIfNeeded();
     await expect(band).toHaveAttribute("data-running", "true");
@@ -264,7 +264,7 @@ test.describe("Article page", () => {
     page,
   }) => {
     const { article } = await setup({ db }, { isAvailable: false });
-    await page.goto(`/products/${article.slug}`);
+    await page.goto(`/productos/${article.slug}`);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Anillo de plata" })
@@ -294,7 +294,7 @@ test.describe("Article page", () => {
       page,
     }) => {
       const { article } = await setup({ db });
-      const path = `${prefix}/products/${article.slug}`;
+      const path = `${prefix}/productos/${article.slug}`;
 
       const response = await page.goto(path);
 
@@ -340,7 +340,7 @@ test.describe("Article page", () => {
       title: "Borrador",
     });
 
-    const response = await page.goto(`/products/${draft.slug}`);
+    const response = await page.goto(`/productos/${draft.slug}`);
 
     expect(response?.status()).toBe(404);
     await expect(new StorePage(page).getNotFoundHeading()).toBeVisible();

@@ -78,11 +78,11 @@ describe("sitemap", () => {
       ...pair("/bijouterie", "/en/bijouterie", RING_UPDATED),
       ...pair("/bijouterie/anillos", "/en/bijouterie/anillos", RING_UPDATED),
       ...pair(
-        "/products/anillo-sello",
-        "/en/products/anillo-sello",
+        "/productos/anillo-sello",
+        "/en/productos/anillo-sello",
         RING_UPDATED
       ),
-      ...pair("/products/cadena", "/en/products/cadena", CHAIN_UPDATED),
+      ...pair("/productos/cadena", "/en/productos/cadena", CHAIN_UPDATED),
     ]);
     expect(mocks.connection).toHaveBeenCalledExactlyOnceWith();
     expect(mocks.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);

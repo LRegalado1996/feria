@@ -23,6 +23,7 @@ import {
 } from "@/app/_components/molecules/store-catalog-filters";
 import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { CatalogCover } from "@/lib/catalog/cover";
+import { articlePath } from "@/lib/catalog/paths";
 import {
   type CatalogQuery,
   catalogHref,
@@ -344,7 +345,7 @@ function StoreCatalog({
                   amount={item.priceAmount}
                   currency={item.currencyCode}
                   headingLevel="h2"
-                  href={localizePath(`/products/${item.slug}`, locale)}
+                  href={localizePath(articlePath(item.slug), locale)}
                   image={
                     item.cover
                       ? { alt: item.cover.alt, src: item.cover.url }

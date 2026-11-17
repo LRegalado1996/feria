@@ -6,7 +6,7 @@ import { StoreArticle } from "@/app/_components/organisms/store-article";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { getDictionary } from "@/content";
 import type { BRAND_LOGO_FILES } from "@/lib/brand/logo-svg";
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
@@ -109,7 +109,7 @@ export async function generateMetadata({
       ? excerpt(article.description)
       : pickTranslation(store.translations, locale)?.tagline);
 
-  const path = `/products/${article.slug}`;
+  const path = articlePath(article.slug);
 
   return {
     alternates: buildAlternates(path, locale),
@@ -138,7 +138,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const related = await readRelatedArticles(store, article, locale);
   const home = absoluteUrl(localizePath("/", locale));
   const catalog = absoluteUrl(localizePath(ALL_ARTICLES_PATH, locale));
-  const url = absoluteUrl(localizePath(`/products/${article.slug}`, locale));
+  const url = absoluteUrl(localizePath(articlePath(article.slug), locale));
   const whatsappHref = store.whatsappNumber
     ? `https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}?text=${encodeURIComponent(
         interpolate(storefront.article.askWhatsappText, {

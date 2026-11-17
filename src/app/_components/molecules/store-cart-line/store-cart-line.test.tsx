@@ -125,8 +125,8 @@ describe("StoreCartLine", () => {
   });
 
   test.each([
-    ["en", "/en/products/collar-de-perlas"],
-    ["es", "/products/collar-de-perlas"],
+    ["en", "/en/productos/collar-de-perlas"],
+    ["es", "/productos/collar-de-perlas"],
   ] as const)("in %s, links to the article at %s", (locale, href) => {
     setup({ locale });
 

@@ -84,11 +84,11 @@ test.describe("Editing the store", () => {
     });
     const article = page.getByTestId("store-article");
     // Visited in pesos first: that is what the article's static page holds.
-    await page.goto(`/products/${ring.slug}`);
+    await page.goto(`/productos/${ring.slug}`);
     await expect(article.getByText("$ 1.200", { exact: true })).toBeVisible();
 
     await storeEdit.update({ currencyCode: "USD" });
-    await page.goto(`/products/${ring.slug}`);
+    await page.goto(`/productos/${ring.slug}`);
 
     await expect(article.getByText("US$ 1.200", { exact: true })).toBeVisible();
     await expect(article.getByText("$ 1.200", { exact: true })).toHaveCount(0);

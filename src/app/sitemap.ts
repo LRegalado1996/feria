@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { connection } from "next/server";
 
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import { isStorefrontLaunched } from "@/lib/env/launch";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
@@ -77,7 +77,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       entries(origin, category.path, catalogChanged)
     ),
     ...articles.flatMap((article) =>
-      entries(origin, `/products/${article.slug}`, article.updatedAt)
+      entries(origin, articlePath(article.slug), article.updatedAt)
     ),
   ];
 }

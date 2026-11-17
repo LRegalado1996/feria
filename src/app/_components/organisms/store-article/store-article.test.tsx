@@ -225,8 +225,8 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["es", "Compartir", "http://localhost:3000/products/collar-de-perlas"],
-    ["en", "Share", "http://localhost:3000/en/products/collar-de-perlas"],
+    ["es", "Compartir", "http://localhost:3000/productos/collar-de-perlas"],
+    ["en", "Share", "http://localhost:3000/en/productos/collar-de-perlas"],
   ] as const)(
     "in %s, shares the article's own address",
     async (locale, name, url) => {
@@ -308,7 +308,7 @@ describe("StoreArticle", () => {
     const [available, soldOut] = within(section).getAllByRole("article");
     expect(
       within(available ?? section).getByRole("link", { name: "Artículo 7" })
-    ).toHaveAttribute("href", "/products/articulo-7");
+    ).toHaveAttribute("href", "/productos/articulo-7");
     expect(
       within(available ?? section).getByRole("heading", { level: 3 })
     ).toHaveTextContent(/^Artículo 7$/u);
@@ -407,7 +407,7 @@ describe("StoreArticle", () => {
     ]);
     expect(screen.getByRole("link", { name: "Artículo 7" })).toHaveAttribute(
       "href",
-      "/en/products/articulo-7"
+      "/en/productos/articulo-7"
     );
     expect(
       screen.getByRole("region", { name: "You may also like" })

@@ -91,7 +91,7 @@ async function addBothArticles(
     [necklaceSlug, "Carrito, 1 unidad"],
     [braceletSlug, "Carrito, 2 unidades"],
   ] as const) {
-    await page.goto(`/products/${slug}`);
+    await page.goto(`/productos/${slug}`);
     const add = page.getByRole("button", {
       exact: true,
       name: "Agregar al carrito",

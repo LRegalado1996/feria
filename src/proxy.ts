@@ -115,7 +115,7 @@ export const config = {
   // site-wide metadata routes at the root: rewritten to `/es/...` they would
   // be a 404, and redirected to the coming-soon page while the store is
   // closed, a crawler would read no rules at all. A blanket "anything with a
-  // dot" would also skip pages (`/products/2.5mm`) and API routes
+  // dot" would also skip pages (`/productos/2.5mm`) and API routes
   // (`/api/docs/spec.json`); a test holds this list to `public/` and to the
   // languages, so a new file or language fails until it is added.
   matcher: [

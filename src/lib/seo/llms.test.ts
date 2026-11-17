@@ -72,7 +72,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Artículos",
         "",
-        `- [Anillo sello](${ORIGIN}/products/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
+        `- [Anillo sello](${ORIGIN}/productos/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
         "",
         "## Optional",
         "",
@@ -98,7 +98,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Articles",
         "",
-        `- [Signet ring](${ORIGIN}/en/products/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
+        `- [Signet ring](${ORIGIN}/en/productos/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
         "",
         "## Optional",
         "",
@@ -116,7 +116,7 @@ describe("buildStoreLlms", () => {
         currencyCode: "USD",
       })
     ).toContain(
-      `/products/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
+      `/productos/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
     );
     expect(formatPrice(129_050, "USD", "es")).toMatch(/^US\$\s1\.290,50$/u);
   });
@@ -147,7 +147,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Articles",
         "",
-        `- [Cadena](${ORIGIN}/en/products/cadena)`,
+        `- [Cadena](${ORIGIN}/en/productos/cadena)`,
         "",
         "## Optional",
         "",
@@ -189,7 +189,7 @@ describe("buildStoreLlms", () => {
         categories: [{ name: "Aros \\ dijes", path: "/aros" }],
       })
     ).toContain(
-      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/products/anillo-sello)`
+      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/productos/anillo-sello)`
     );
     expect(
       build({ categories: [{ name: "Aros \\ dijes", path: "/aros" }] })
@@ -198,7 +198,7 @@ describe("buildStoreLlms", () => {
 
   test("writes an article without any title as an empty link text", () => {
     expect(build({ articles: [makeArticle({ titles: [] })] })).toContain(
-      `- [](${ORIGIN}/products/anillo-sello)`
+      `- [](${ORIGIN}/productos/anillo-sello)`
     );
   });
 });

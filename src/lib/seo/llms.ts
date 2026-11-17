@@ -1,4 +1,5 @@
 import type { Dictionary } from "@/content/es";
+import { articlePath } from "@/lib/catalog/paths";
 import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
@@ -67,7 +68,7 @@ export function buildStoreLlms({
       articles.map((article) => {
         const title = pickTranslation(article.titles, locale)?.title ?? "";
         const link = `- [${linkText(title)}](${url(
-          localizePath(`/products/${article.slug}`, locale)
+          localizePath(articlePath(article.slug), locale)
         )})`;
 
         return article.priceAmount === null

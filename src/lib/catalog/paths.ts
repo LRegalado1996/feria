@@ -5,6 +5,15 @@
  */
 export const ALL_ARTICLES_PATH = "/productos";
 
+/**
+ * An article's page, under all articles' (`/productos/anillo-sello`): a
+ * category can never be `productos` (`RESERVED_CATEGORY_SLUGS`), so the two
+ * never meet.
+ */
+export function articlePath(slug: string): string {
+  return `${ALL_ARTICLES_PATH}/${slug}`;
+}
+
 /** A category as its page's address needs it: its slug and its group's. */
 export interface CategoryPlace {
   /** The group's slug, or `null` for a category outside any group. */
