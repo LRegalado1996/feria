@@ -308,7 +308,7 @@ describe("useCartLines", () => {
       expect(result.current.hold).toBe("loading");
     });
     expect(lines()).toEqual([[4, null, 4]]);
-    expect(cartProducts).toHaveBeenCalledOnce();
+    expect(cartProducts.mock.calls).toEqual([[{ ids: [4], locale: "en" }]]);
   });
 
   test("an article added keeps the others as the shop last said and holds the order until its own answer", async () => {

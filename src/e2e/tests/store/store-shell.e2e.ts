@@ -331,6 +331,13 @@ test.describe("Storefront shell", () => {
           (await shop.getByRole("link").all()).map(boxOf)
         );
         expect(links[0]?.y ?? 0).toBeGreaterThanOrEqual(title.y + title.height);
+        // Every link inside the shop's block, its left edge and its right.
+        expect(
+          links.filter(
+            (link) =>
+              link.x < edge.x || link.x + link.width > edge.x + edge.width
+          )
+        ).toEqual([]);
         for (const [index, link] of links.slice(1).entries()) {
           const before = links[index];
           if (before && link.y === before.y) {
