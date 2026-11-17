@@ -50,6 +50,7 @@ vi.mock("@/server/better-auth/server", () => ({ getSession }));
 vi.mock("next/navigation", async (importOriginal) => ({
   ...(await importOriginal<typeof Navigation>()),
   usePathname: () => "/admin/sign-in",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

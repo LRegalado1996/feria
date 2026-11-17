@@ -79,6 +79,11 @@ export class AdminPage extends BasePage {
     return this.getByTestId("locale-toggle").filter({ visible: true });
   }
 
+  /** The toggle's thumb: `data-side` says which language it sits under. */
+  localeToggleThumb(): Locator {
+    return this.localeToggle().getByTestId("locale-toggle-thumb");
+  }
+
   async chooseTheme(theme: "Claro" | "Oscuro" | "Sistema"): Promise<void> {
     // Right after a reload the streamed page can briefly hold a second,
     // hidden copy of the shell; the visible one is the one a user presses.

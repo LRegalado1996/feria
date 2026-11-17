@@ -4,9 +4,9 @@ import { StoreArrowLink } from "@/app/_components/atoms/store-arrow-link";
 import { StoreEyebrow } from "@/app/_components/atoms/store-eyebrow";
 import { StoreHeading } from "@/app/_components/atoms/store-heading";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
-import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreFairCountdown } from "@/app/_components/molecules/store-fair-countdown";
+import { StoreLocaleToggle } from "@/app/_components/molecules/store-locale-toggle";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
@@ -33,9 +33,7 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
         <StoreBubbles label={comingSoon.bubbles}>
           <StoreLogo className="h-12" variant="mark" />
         </StoreBubbles>
-        {/* The toggle is built on the app's tokens, which follow the theme;
-            the storefront has one palette, so its colors are set here. */}
-        <LocaleToggle className="relative z-10 min-h-11 text-store-background hover:bg-store-background hover:text-store-foreground dark:hover:bg-store-background" />
+        <StoreLocaleToggle className="relative z-10" tone="contrast" />
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">

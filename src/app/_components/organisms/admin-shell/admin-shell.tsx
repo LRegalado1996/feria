@@ -155,8 +155,8 @@ function AdminSidebar({
             {login.email}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <LocaleToggle className="flex-1 justify-start" />
+        <div className="flex items-center justify-between gap-2 pl-3">
+          <LocaleToggle />
           <ThemeToggle />
         </div>
         <SignOutButton
