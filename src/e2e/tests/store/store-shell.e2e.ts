@@ -243,6 +243,56 @@ test.describe("Storefront shell", () => {
     ).toHaveAttribute("href", "https://lucasregalado.com");
   });
 
+  for (const width of [1440, 2000]) {
+    test(`at ${width} px, the footer's blocks span its whole width, the first on the left edge, the last on the right, with even gaps`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ height: 900, width });
+      const storePage = new StorePage(page);
+      await storePage.goto();
+      const footer = storePage.getFooter();
+      await footer.scrollIntoViewIfNeeded();
+      // The run's store has Instagram: four blocks (FER-044).
+      const boxes = await Promise.all(
+        [
+          footer.getByTestId("store-footer-brand"),
+          footer.getByRole("navigation", { name: "Tienda" }),
+          footer.getByRole("region", { name: "Ayuda" }),
+          footer.getByRole("region", { name: "Seguinos" }),
+        ].map(async (block) => await block.boundingBox())
+      );
+      const credit = await footer
+        .getByRole("link", { name: /Hecho por Lucas Regalado/u })
+        .boundingBox();
+      const left = boxes[0]?.x ?? 0;
+      const last = boxes.at(-1);
+
+      // The page's margin on both sides: 28 px from md up.
+      expect(left).toBe(28);
+      expect(Math.round((last?.x ?? 0) + (last?.width ?? 0))).toBe(width - 28);
+      // The bottom row keeps its place: the credit on the right edge.
+      expect(Math.round((credit?.x ?? 0) + (credit?.width ?? 0))).toBe(
+        width - 28
+      );
+      const gaps = boxes
+        .slice(1)
+        .map(
+          (box, index) =>
+            (box?.x ?? 0) -
+            ((boxes[index]?.x ?? 0) + (boxes[index]?.width ?? 0))
+        );
+      for (const gap of gaps) {
+        expect(Math.abs(gap - (gaps[0] ?? 0))).toBeLessThanOrEqual(1);
+      }
+      // All on one row.
+      expect(new Set(boxes.map((box) => Math.round(box?.y ?? 0))).size).toBe(1);
+      // The story's measure is held, however wide the window.
+      expect(
+        (await footer.getByTestId("store-footer-story").boundingBox())?.width
+      ).toBeLessThanOrEqual(400);
+    });
+  }
+
   test("the cart button says how many units the browser's one cart holds", async ({
     page,
   }) => {
