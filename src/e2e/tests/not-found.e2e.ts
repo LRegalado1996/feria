@@ -5,7 +5,8 @@ import { StorePage } from "../page-objects/store.page";
 
 // Every address no page answers renders the store's not-found page, under
 // the store's header. One of three segments or more reaches the store's
-// catch-all (`(store)/[...rest]`), a real 404 for everyone. One of one or
+// catch-all (`(store)/[...rest]`), and any under `/admin` its own
+// (`(store)/admin/[...rest]`), a real 404 for everyone. One of one or
 // two segments has the shape of a catalog page (`/burbujeros`,
 // `/bijouterie/anillos`, FER-043): a crawler that runs no script gets a real
 // 404, while a browser gets the page's shell first and the not-found page,
@@ -16,14 +17,19 @@ test.use({ storageState: { cookies: [], origins: [] } });
 const BINGBOT =
   "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)";
 
-/** Whether an address has a catalog page's shape: one or two segments. */
+/**
+ * Whether an address has a catalog page's shape: one or two segments, never
+ * under `/admin`, whose own catch-all answers a real 404.
+ */
 function couldBeCatalogPage(path: string) {
   const segments = path
     .replace(/^\/en(?=\/|$)/u, "")
     .split("/")
     .filter(Boolean);
 
-  return segments.length >= 1 && segments.length <= 2;
+  return (
+    segments[0] !== "admin" && segments.length >= 1 && segments.length <= 2
+  );
 }
 
 /**
@@ -41,6 +47,8 @@ async function expectNotFound(
     return;
   }
 
+  // The shell went out first, so the browser's status is a 200.
+  expect(status).toBe(200);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
     "content",
     "noindex"

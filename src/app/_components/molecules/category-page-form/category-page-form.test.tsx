@@ -174,6 +174,31 @@ describe("CategoryPageForm", () => {
   });
 
   test.each([
+    ["Title for search engines in Spanish", "seoTitleEs", 70],
+    ["Description for search engines in English", "seoDescriptionEn", 160],
+    ["Cover description in Spanish", "coverAltEs", 200],
+  ])("sends a %s of exactly its limit unchanged", async (name, key, length) => {
+    const { field, onSave, user } = setup({
+      category: makeCategory({
+        cover: {
+          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+          phone: null,
+        },
+      }),
+    });
+
+    await user.click(field(name));
+    await user.paste("x".repeat(length));
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ [key]: "x".repeat(length) })
+      );
+    });
+  });
+
+  test.each([
     ["Title for search engines in Spanish", 71, "Use up to 70 characters."],
     [
       "Description for search engines in English",
@@ -237,6 +262,15 @@ describe("CategoryPageForm", () => {
         name: "Preview: Phone photo (optional)",
       })
     ).toHaveAttribute("height", "1200");
+    // next/image serves each through its optimizer, the file as `url`.
+    expect(
+      ["Computer photo", "Phone photo (optional)"].map((name) =>
+        new URL(
+          within(photo(name)).getByRole("img").getAttribute("src") ?? "",
+          "http://localhost"
+        ).searchParams.get("url")
+      )
+    ).toEqual(["/seed/ring-2.jpg", "/seed/ring-1.jpg"]);
     expect(
       screen.getByRole("textbox", { name: "Cover description in English" })
     ).toBeEnabled();

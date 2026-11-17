@@ -253,12 +253,20 @@ export async function catalogMetadata(
       copy.searchResult
     ) ?? name;
   const ownTitle = !narrowed(query) && page?.seoTitle ? page.seoTitle : null;
+  // Its words leave the search out for the same reason.
+  const sharedDescription =
+    query.filters.length > 0
+      ? interpolate(copy.filteredDescription, {
+          selection: shared,
+          store: store.name,
+        })
+      : pageDescription(copy, store, page, loaded.locale);
 
   return {
     alternates: alternatesOf(loaded.locale, query),
     description,
     openGraph: {
-      description,
+      description: sharedDescription,
       ...(cover
         ? {
             images: [

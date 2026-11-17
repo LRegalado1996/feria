@@ -529,6 +529,14 @@ describe("seedCatalogPages", () => {
         makeRow(10, "collares", { coverUrl: "/seed/a.jpg", parentId: 9 }),
       ],
     ],
+    [
+      "puts nothing in a Bijouterie that is in a group itself: three levels are never made",
+      [
+        makeRow(70, "accesorios", { coverUrl: "/seed/a.jpg" }),
+        makeRow(60, "bijouterie", { coverUrl: "/seed/a.jpg", parentId: 70 }),
+        makeRow(3, "anillos", { coverUrl: "/seed/a.jpg" }),
+      ],
+    ],
   ])("%s", async (_case, before) => {
     const { db, run, updates } = setupPages({ before, storeCovered: true });
 
