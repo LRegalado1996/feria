@@ -16,7 +16,7 @@ An admin can upload phone photos straight from the browser, and the storefront s
 - Client-side downscale before upload so a 12 MB phone photo does not travel whole.
 - Store width and height so layouts reserve space; serve through `next/image` with the Blob host allowed in `next.config.ts`.
 - Deleting an image or an article removes the blobs. A scheduled job removes blobs that no row references.
-- A reusable uploader used by articles and banners (the logo is code since [FER-038](FER-038-single-store.md)).
+- A reusable uploader used by articles, banners and catalog covers ([FER-043](FER-043-category-groups-and-pages.md): a computer and an optional phone image per catalog page; the logo is code since [FER-038](FER-038-single-store.md)).
 
 The first consumer is the catalog page covers of FER-043 (a desktop image and an optional phone image per group, category and the all-articles page), wired into the admin's categories screen once that branch lands. Articles (FER-017) and banners (FER-020) reuse the same pieces. The count cap per article belongs to FER-017, which adds an article's photos.
 

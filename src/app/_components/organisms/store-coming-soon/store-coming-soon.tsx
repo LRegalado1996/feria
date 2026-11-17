@@ -4,9 +4,9 @@ import { StoreArrowLink } from "@/app/_components/atoms/store-arrow-link";
 import { StoreEyebrow } from "@/app/_components/atoms/store-eyebrow";
 import { StoreHeading } from "@/app/_components/atoms/store-heading";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
-import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreFairCountdown } from "@/app/_components/molecules/store-fair-countdown";
+import { StoreLocaleToggle } from "@/app/_components/molecules/store-locale-toggle";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
@@ -34,12 +34,7 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
           {/* The full logo, the brand on every storefront page (FER-039). */}
           <StoreLogo className="h-14 md:h-16" variant="full" />
         </StoreBubbles>
-        {/* A plain link styled here: the app's button would follow the
-            app's theme, and the storefront has one palette. */}
-        <LocaleToggle
-          className="relative z-10 inline-flex min-h-11 items-center rounded-full px-4 font-display text-xs font-extrabold text-store-accent uppercase hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
-          tone="bare"
-        />
+        <StoreLocaleToggle className="relative z-10" />
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">

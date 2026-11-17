@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";
@@ -61,6 +61,7 @@ test("leaves one login with its credential, and a second run creates nothing", a
 
     expect(first.createdAccounts).toEqual([SEED_USER.email]);
     expect(second).toEqual({
+      catalogPages: { covers: 0, grouped: 0, groups: 0 },
       createdAccounts: [],
       createdArticles: 0,
       createdStoreTexts: [],
@@ -103,7 +104,11 @@ test("gives the one store its texts in both languages and its sample catalog, on
       columns: { name: true },
       where: eq(store.id, storeId),
       with: {
-        categories: { columns: { slug: true }, orderBy: category.position },
+        categories: {
+          columns: { slug: true },
+          orderBy: category.position,
+          with: { parent: { columns: { slug: true } } },
+        },
         products: { columns: { status: true } },
         translations: {
           columns: { locale: true },
@@ -112,12 +117,16 @@ test("gives the one store its texts in both languages and its sample catalog, on
       },
     });
     expect(seeded?.name).toBe(before?.name);
-    expect(seeded?.categories.map(({ slug }) => slug)).toEqual([
-      "burbujeros",
-      "cadenas",
-      "anillos",
-      "aros",
-      "pulseras",
+    // Bijouterie first, holding four; the bubble guns in no group (FER-043).
+    expect(
+      seeded?.categories.map(({ parent, slug }) => [slug, parent?.slug ?? null])
+    ).toEqual([
+      ["bijouterie", null],
+      ["cadenas", "bijouterie"],
+      ["anillos", "bijouterie"],
+      ["aros", "bijouterie"],
+      ["pulseras", "bijouterie"],
+      ["burbujeros", null],
     ]);
     expect(seeded?.products.map(({ status }) => status)).toEqual(
       Array.from({ length: 11 }, () => "published")
@@ -135,5 +144,83 @@ test("gives the one store its texts in both languages and its sample catalog, on
   });
 
   // A failed expectation above rejects with its own message instead.
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});
+
+// A database seeded before FER-043 has its five categories in no group and
+// no covers: the next seed gives it the group and the covers, and keeps
+// every article where it was.
+test("gives a catalog seeded before groups its Bijouterie, first, and its covers", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+    await runSeed(tx);
+    // Back to how the earlier seed left it.
+    await tx
+      .update(category)
+      .set({
+        coverHeight: null,
+        coverPhoneHeight: null,
+        coverPhoneUrl: null,
+        coverPhoneWidth: null,
+        coverUrl: null,
+        coverWidth: null,
+        parentId: null,
+      })
+      .where(eq(category.storeId, storeId));
+    await tx
+      .delete(category)
+      .where(
+        and(eq(category.storeId, storeId), eq(category.slug, "bijouterie"))
+      );
+    await tx
+      .update(store)
+      .set({
+        catalogCoverHeight: null,
+        catalogCoverUrl: null,
+        catalogCoverWidth: null,
+        catalogCoverPhoneHeight: null,
+        catalogCoverPhoneUrl: null,
+        catalogCoverPhoneWidth: null,
+      })
+      .where(eq(store.id, storeId));
+
+    const upgraded = await runSeed(tx);
+
+    expect(upgraded.catalogPages).toEqual({ covers: 7, grouped: 4, groups: 1 });
+    const categories = await tx.query.category.findMany({
+      columns: { coverUrl: true, position: true, slug: true },
+      orderBy: category.position,
+      where: eq(category.storeId, storeId),
+      with: { parent: { columns: { slug: true } } },
+    });
+    expect(
+      categories.map(({ coverUrl, parent, slug }) => [
+        slug,
+        parent?.slug ?? null,
+        coverUrl,
+      ])
+    ).toEqual([
+      ["bijouterie", null, "/seed/necklace-2.jpg"],
+      ["cadenas", "bijouterie", "/seed/necklace-1.jpg"],
+      ["anillos", "bijouterie", "/seed/ring-2.jpg"],
+      ["aros", "bijouterie", "/seed/earrings-2.jpg"],
+      ["pulseras", "bijouterie", "/seed/bracelet-2.jpg"],
+      ["burbujeros", null, "/seed/bubble-gun-1.jpg"],
+    ]);
+    // The group takes the first place and every other moves one down; the
+    // place the deleted group left (1) stays empty: only the order counts.
+    expect(categories.map(({ position }) => position)).toEqual([
+      0, 2, 3, 4, 5, 6,
+    ]);
+    const [cover] = await tx
+      .select({ url: store.catalogCoverUrl })
+      .from(store)
+      .where(eq(store.id, storeId));
+    expect(cover?.url).toBe("/seed/ring-3.jpg");
+
+    throw new Error(ROLLED_BACK);
+  });
+
   await expect(run).rejects.toThrow(ROLLED_BACK);
 });

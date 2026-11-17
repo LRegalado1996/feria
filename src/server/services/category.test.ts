@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import type { UpdateCategoryPageValues } from "@/lib/schemas/catalog";
 import { category, categoryTranslation, product } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
+import { makeStoreCategory } from "@/test/factories/store-category";
 
 import {
   createCategory,
@@ -10,6 +12,7 @@ import {
   listStoreCategories,
   renameCategory,
   reorderCategories,
+  updateCategoryPage,
 } from "./category";
 
 const STORE_ID = 3;
@@ -103,21 +106,74 @@ function setup({
 }
 
 describe("listStoreCategories", () => {
-  test("names each category by locale, counts its articles, in the store's order", async () => {
+  test("names each category by locale, counts its articles, with its group, page texts and cover, in the store's order", async () => {
     const { db, selectWheres } = setup();
+    const noCover = {
+      coverHeight: null,
+      coverPhoneHeight: null,
+      coverPhoneUrl: null,
+      coverPhoneWidth: null,
+      coverUrl: null,
+      coverWidth: null,
+    };
     db.$["select.orderBy"].mockResolvedValue([
-      { id: 4, position: 0, productCount: 3, slug: "collares" },
-      { id: 2, position: 1, productCount: 0, slug: "aros" },
-      { id: 9, position: 2, productCount: 0, slug: "sin-nombre" },
+      {
+        ...noCover,
+        coverHeight: 800,
+        coverPhoneHeight: 1200,
+        coverPhoneUrl: "/seed/ring-1.jpg",
+        coverPhoneWidth: 1000,
+        coverUrl: "/seed/ring-2.jpg",
+        coverWidth: 1200,
+        id: 4,
+        parentId: null,
+        position: 0,
+        productCount: 3,
+        slug: "collares",
+      },
+      {
+        ...noCover,
+        id: 2,
+        parentId: 4,
+        position: 1,
+        productCount: 0,
+        slug: "aros",
+      },
+      {
+        ...noCover,
+        id: 9,
+        parentId: null,
+        position: 2,
+        productCount: 0,
+        slug: "sin-nombre",
+      },
     ]);
+    const text = (overrides: Record<string, unknown>) => ({
+      coverAlt: null,
+      seoDescription: null,
+      seoTitle: null,
+      ...overrides,
+    });
     db.$["select.where"].mockImplementation(async (where: unknown) =>
       renderQuery(where).sql.startsWith('"category_translation"')
         ? await Promise.resolve([
-            { categoryId: 4, locale: "en", name: "Necklaces" },
-            { categoryId: 2, locale: "es", name: "Aros" },
-            { categoryId: 4, locale: "es", name: "Collares" },
+            text({
+              categoryId: 4,
+              coverAlt: "Rings",
+              locale: "en",
+              name: "Necklaces",
+              seoTitle: "Necklaces at the fair",
+            }),
+            text({ categoryId: 2, locale: "es", name: "Aros" }),
+            text({
+              categoryId: 4,
+              coverAlt: "Anillos",
+              locale: "es",
+              name: "Collares",
+              seoDescription: "Collares de la feria",
+            }),
             // Another category's names never land on these rows.
-            { categoryId: 7, locale: "es", name: "Ajena" },
+            text({ categoryId: 7, locale: "es", name: "Ajena" }),
           ])
         : await Promise.resolve([])
     );
@@ -125,36 +181,48 @@ describe("listStoreCategories", () => {
     await expect(
       listStoreCategories(db as never, { storeId: STORE_ID })
     ).resolves.toEqual([
-      {
+      makeStoreCategory({
+        cover: {
+          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+          phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1000 },
+        },
+        coverAltEn: "Rings",
+        coverAltEs: "Anillos",
         id: 4,
         nameEn: "Necklaces",
         nameEs: "Collares",
         position: 0,
         productCount: 3,
+        seoDescriptionEs: "Collares de la feria",
+        seoTitleEn: "Necklaces at the fair",
         slug: "collares",
-      },
-      {
+      }),
+      makeStoreCategory({
         id: 2,
-        nameEn: null,
         nameEs: "Aros",
+        parentId: 4,
         position: 1,
-        productCount: 0,
         slug: "aros",
-      },
-      {
+      }),
+      makeStoreCategory({
         id: 9,
-        nameEn: null,
         nameEs: "",
         position: 2,
-        productCount: 0,
         slug: "sin-nombre",
-      },
+      }),
     ]);
 
     const [columns] = db.$.select.mock.calls[0] ?? [];
     const { productCount, ...plain } = columns as Record<string, unknown>;
     expect(plain).toEqual({
+      coverHeight: category.coverHeight,
+      coverPhoneHeight: category.coverPhoneHeight,
+      coverPhoneUrl: category.coverPhoneUrl,
+      coverPhoneWidth: category.coverPhoneWidth,
+      coverUrl: category.coverUrl,
+      coverWidth: category.coverWidth,
       id: category.id,
+      parentId: category.parentId,
       position: category.position,
       slug: category.slug,
     });
@@ -180,8 +248,11 @@ describe("listStoreCategories", () => {
     expect(db.$.select.mock.calls[1]).toEqual([
       {
         categoryId: categoryTranslation.categoryId,
+        coverAlt: categoryTranslation.coverAlt,
         locale: categoryTranslation.locale,
         name: categoryTranslation.name,
+        seoDescription: categoryTranslation.seoDescription,
+        seoTitle: categoryTranslation.seoTitle,
       },
     ]);
     expect(selectWheres()).toEqual([
@@ -274,6 +345,28 @@ describe("createCategory", () => {
     );
   });
 
+  test.each([
+    ["Cart", "cart-2"],
+    ["Productos", "productos-2"],
+    ["EN", "en-2"],
+    ["Admin", "admin-2"],
+    ["Cartera", "cartera"],
+  ])(
+    "gives %s the slug %s: never an address the site already answers",
+    async (nameEs, slug) => {
+      const { db } = setup();
+      db.$["insert.returning"].mockResolvedValue([
+        { id: 7, position: 0, slug },
+      ]);
+
+      await create(db, makeNames({ nameEs }));
+
+      expect(db.$["insert.values"].mock.calls[0]).toEqual([
+        { position: 0, slug, storeId: STORE_ID },
+      ]);
+    }
+  );
+
   test("puts the store's first category at position 0, with only its Spanish name", async () => {
     const { db } = setup();
     db.$["insert.returning"].mockResolvedValue([
@@ -344,7 +437,7 @@ describe("renameCategory", () => {
     expect(db.$.insert).not.toHaveBeenCalled();
   });
 
-  test("replaces both names and returns the category with its slug", async () => {
+  test("writes both names over the ones it has, keeping its page texts, and returns the category with its slug", async () => {
     const { db, locks } = setup({ own: [5] });
 
     await expect(rename(db)).resolves.toEqual({
@@ -359,28 +452,252 @@ describe("renameCategory", () => {
       db.$["select.where"].mock.invocationCallOrder[0] ?? 0
     );
 
-    expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(categoryTranslation);
-    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
-      params: [5],
-      sql: '"category_translation"."categoryId" = $1',
-    });
+    // Upserted, not deleted and inserted: a row's page texts (FER-043)
+    // would go with it.
+    expect(db.$.delete).not.toHaveBeenCalled();
     expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(categoryTranslation);
     expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith([
       { categoryId: 5, locale: "es", name: "Collares" },
       { categoryId: 5, locale: "en", name: "Necklaces" },
     ]);
-    expect(db.$["delete.where"].mock.invocationCallOrder[0] ?? 0).toBeLessThan(
-      db.$["insert.values"].mock.invocationCallOrder[0] ?? 0
-    );
+    const [conflict] = db.$["insert.onConflictDoUpdate"].mock.calls[0] ?? [];
+    const { set, target } = conflict as {
+      set: Record<string, unknown>;
+      target: unknown[];
+    };
+    expect(target).toEqual([
+      categoryTranslation.categoryId,
+      categoryTranslation.locale,
+    ]);
+    expect(Object.keys(set)).toEqual(["name", "updatedAt"]);
+    expect(renderQuery(set.name)).toEqual({
+      params: [],
+      sql: 'excluded."name"',
+    });
   });
 
-  test("drops the English name when it is cleared", async () => {
+  test("drops the English row, its page texts with it, when the English name is cleared", async () => {
     const { db } = setup({ own: [5] });
 
     await rename(db, { values: makeNames({ nameEn: null }) });
 
+    expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(categoryTranslation);
+    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
+      params: [5, "en"],
+      sql: '("category_translation"."categoryId" = $1 and "category_translation"."locale" = $2)',
+    });
     expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith([
       { categoryId: 5, locale: "es", name: "Collares" },
+    ]);
+  });
+});
+
+describe("updateCategoryPage", () => {
+  const CHILD_SQL =
+    '("category"."storeId" = $1 and "category"."parentId" = $2)';
+  const ENGLISH_SQL =
+    '("category_translation"."categoryId" = $1 and "category_translation"."locale" = $2)';
+
+  function makePage(overrides: Partial<UpdateCategoryPageValues> = {}) {
+    return {
+      coverAltEn: null,
+      coverAltEs: null,
+      id: 5,
+      parentId: null,
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: null,
+      ...overrides,
+    };
+  }
+
+  /**
+   * The store's categories by id, each with its group (`null`: in none);
+   * `english`: whether the category has an English row; `holds`: whether it
+   * is a group already, holding a category.
+   */
+  function setupPage({
+    english = true,
+    holds = false,
+    own = { 5: null, 6: null },
+  }: {
+    english?: boolean;
+    holds?: boolean;
+    own?: Record<number, number | null>;
+  } = {}) {
+    const { db } = setup();
+    db.$["select.where"].mockImplementation(async (where: unknown) => {
+      const { params, sql } = renderQuery(where);
+
+      if (sql === ENGLISH_SQL && params[1] === "en") {
+        return await Promise.resolve(english ? [{ id: 40 }] : []);
+      }
+
+      return await Promise.resolve([]);
+    });
+    db.$["select.for"].mockImplementation(async () => {
+      const { params, sql } = renderQuery(
+        db.$["select.where"].mock.calls.at(-1)?.[0]
+      );
+      const id = params[0] as number;
+
+      return await Promise.resolve(
+        sql === FIND_SQL && params[1] === STORE_ID && id in own
+          ? [{ id, parentId: own[id] ?? null, slug: `categoria-${id}` }]
+          : []
+      );
+    });
+    db.$["select.limit"].mockImplementation(async () => {
+      const { params, sql } = renderQuery(
+        db.$["select.where"].mock.calls.at(-1)?.[0]
+      );
+
+      return await Promise.resolve(
+        sql === CHILD_SQL && params[1] === 5 && holds ? [{ id: 9 }] : []
+      );
+    });
+
+    return {
+      db,
+      update: async (values = makePage()) =>
+        await updateCategoryPage(db as never, { storeId: STORE_ID, values }),
+    };
+  }
+
+  test("puts the category in a group and writes each language's texts to its own row, under the lock", async () => {
+    const { db, update } = setupPage();
+
+    await expect(
+      update(
+        makePage({
+          coverAltEn: "Rings",
+          parentId: 6,
+          seoDescriptionEs: "Anillos de la feria",
+          seoTitleEn: "Rings at the fair",
+          seoTitleEs: "Anillos dorados",
+        })
+      )
+    ).resolves.toEqual({ id: 5, parentId: 6 });
+
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual(LOCK);
+    // The category to write, then its group to keep while it joins.
+    expect(db.$["select.for"].mock.calls).toEqual([["update"], ["share"]]);
+    expect(db.$.update.mock.calls).toEqual([
+      [category],
+      [categoryTranslation],
+      [categoryTranslation],
+    ]);
+    expect(db.$["update.set"].mock.calls).toEqual([
+      [{ parentId: 6 }],
+      [
+        {
+          coverAlt: null,
+          seoDescription: "Anillos de la feria",
+          seoTitle: "Anillos dorados",
+        },
+      ],
+      [
+        {
+          coverAlt: "Rings",
+          seoDescription: null,
+          seoTitle: "Rings at the fair",
+        },
+      ],
+    ]);
+    expect(
+      db.$["update.where"].mock.calls.map(([where]) => renderQuery(where))
+    ).toEqual([
+      { params: [5, STORE_ID], sql: FIND_SQL },
+      { params: [5, "es"], sql: ENGLISH_SQL },
+      { params: [5, "en"], sql: ENGLISH_SQL },
+    ]);
+  });
+
+  test("takes a category out of its group without reading any group", async () => {
+    const { db, update } = setupPage({ own: { 5: 6, 6: null } });
+
+    await expect(update(makePage({ parentId: null }))).resolves.toEqual({
+      id: 5,
+      parentId: null,
+    });
+    expect(db.$["select.for"].mock.calls).toEqual([["update"]]);
+    expect(db.$["update.set"].mock.calls[0]).toEqual([{ parentId: null }]);
+  });
+
+  test.each([
+    [
+      "itself",
+      { parentId: 5 },
+      {},
+      { code: "BAD_REQUEST", message: "A category cannot be its own group" },
+    ],
+    [
+      "a category of another store",
+      { parentId: 8 },
+      {},
+      { code: "NOT_FOUND", message: "Group not found" },
+    ],
+    [
+      "a category that is in a group",
+      { parentId: 6 },
+      { own: { 5: null, 6: 7 } },
+      {
+        code: "BAD_REQUEST",
+        message: "A category in a group cannot be a group",
+      },
+    ],
+    [
+      "any group while it holds a category",
+      { parentId: 6 },
+      { holds: true },
+      { code: "BAD_REQUEST", message: "A group cannot join another group" },
+    ],
+  ])(
+    "refuses to put the category in %s, writing nothing",
+    async (_case, page, options, error) => {
+      const { db, update } = setupPage(options);
+
+      await expect(update(makePage(page))).rejects.toMatchObject(error);
+      expect(db.$.update).not.toHaveBeenCalled();
+    }
+  );
+
+  test("refuses a category of another store before reading any group", async () => {
+    const { db, update } = setupPage({ own: { 6: null } });
+
+    await expect(update(makePage({ parentId: 6 }))).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Category not found",
+    });
+    expect(db.$["select.for"].mock.calls).toEqual([["update"]]);
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["title", { seoTitleEn: "Rings" }],
+    ["description", { seoDescriptionEn: "Rings at the fair" }],
+    ["cover's alt text", { coverAltEn: "A ring" }],
+  ])(
+    "refuses an English %s for a category with no English name",
+    async (_case, page) => {
+      const { db, update } = setupPage({ english: false });
+
+      await expect(update(makePage(page))).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Name the category in English before its English page texts",
+      });
+      expect(db.$.update).not.toHaveBeenCalled();
+    }
+  );
+
+  test("takes Spanish texts alone for a category with no English name", async () => {
+    const { db, update } = setupPage({ english: false });
+
+    await update(makePage({ seoTitleEs: "Anillos dorados" }));
+
+    expect(db.$["update.set"].mock.calls[1]).toEqual([
+      { coverAlt: null, seoDescription: null, seoTitle: "Anillos dorados" },
     ]);
   });
 });
@@ -450,6 +767,21 @@ describe("deleteCategory", () => {
     sql: FIND_SQL,
   };
 
+  /** The deleted category's own categories left in no group (FER-043). */
+  function expectDetached(db: ReturnType<typeof setup>["db"]) {
+    expect(db.$.update).toHaveBeenCalledExactlyOnceWith(category);
+    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
+      parentId: null,
+    });
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, 5],
+      sql: '("category"."storeId" = $1 and "category"."parentId" = $2)',
+    });
+    expect(db.$["update.where"].mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      db.$["delete.where"].mock.invocationCallOrder[0] ?? 0
+    );
+  }
+
   test("refuses a category of another store before counting its articles", async () => {
     const { db, selectWheres } = setup({ own: [6] });
 
@@ -481,7 +813,7 @@ describe("deleteCategory", () => {
         { params: [5, STORE_ID], sql: FIND_SQL },
         { params: [STORE_ID, 5], sql: HELD_SQL },
       ]);
-      expect(db.$.update).not.toHaveBeenCalled();
+      expectDetached(db);
       expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(category);
       expect(deletedWhere(db)).toEqual(DELETED);
     }
@@ -506,7 +838,9 @@ describe("deleteCategory", () => {
         code: "BAD_REQUEST",
         message,
       });
-      expect(db.$.update).not.toHaveBeenCalled();
+      // Only the group's categories were let go, in the transaction the
+      // refusal rolls back: no article moved.
+      expect(db.$.update.mock.calls).toEqual([[category]]);
       expect(db.$.delete).not.toHaveBeenCalled();
     }
   );
@@ -519,7 +853,7 @@ describe("deleteCategory", () => {
       message: "Category not found",
     });
     expect(selectWheres()[2]).toEqual({ params: [8, STORE_ID], sql: FIND_SQL });
-    expect(db.$.update).not.toHaveBeenCalled();
+    expect(db.$.update.mock.calls).toEqual([[category]]);
     expect(db.$.delete).not.toHaveBeenCalled();
   });
 
@@ -544,21 +878,22 @@ describe("deleteCategory", () => {
       '"product"."id" asc'
     );
     expect(db.$["select.for"].mock.invocationCallOrder[2] ?? 0).toBeLessThan(
-      db.$["update.where"].mock.invocationCallOrder[0] ?? 0
+      db.$["update.where"].mock.invocationCallOrder[1] ?? 0
     );
     expect(db.$["update.returning"]).toHaveBeenCalledExactlyOnceWith({
       id: product.id,
     });
-    expect(db.$.update).toHaveBeenCalledExactlyOnceWith(product);
-    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      categoryId: 6,
-    });
-    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+    expect(db.$.update.mock.calls).toEqual([[category], [product]]);
+    expect(db.$["update.set"].mock.calls).toEqual([
+      [{ parentId: null }],
+      [{ categoryId: 6 }],
+    ]);
+    expect(renderQuery(db.$["update.where"].mock.calls[1]?.[0])).toEqual({
       params: [STORE_ID, 5],
       sql: HELD_SQL,
     });
     expect(deletedWhere(db)).toEqual(DELETED);
-    expect(db.$["update.where"].mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+    expect(db.$["update.where"].mock.invocationCallOrder[1] ?? 0).toBeLessThan(
       db.$["delete.where"].mock.invocationCallOrder[0] ?? 0
     );
   });

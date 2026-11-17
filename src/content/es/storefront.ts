@@ -1,12 +1,16 @@
 export const storefront = {
   article: {
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "¡Felices Fiestas!",
+    bandPause: "Pausar la animación",
     addedCapped:
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
     askWhatsapp: "Consultar por WhatsApp",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
     breadcrumb: "Ruta",
-    catalog: "Catálogo",
+    catalog: "Todos los artículos",
     decrease: "Una unidad menos",
     gallery: "Fotos de {title}",
     galleryNext: "Foto siguiente",
@@ -76,14 +80,20 @@ export const storefront = {
     unitPrice: "{price} c/u",
   },
   catalog: {
-    addToCart: "Agregar al carrito: {name}",
-    addToCartShort: "Agregar",
     addFailed: "No pudimos agregarlo. Probá de nuevo.",
     added: "Agregado al carrito.",
     atMax: "Ya tenés {max} de este artículo, el máximo por pedido.",
     cartFull: "El carrito ya tiene {max} artículos distintos, el máximo.",
     categories: "Categorías",
     allCategories: "Todas",
+    breadcrumb: "Ruta",
+    // A category's and a group's page, when the admin wrote no text of
+    // their own (FER-043).
+    categoryDescription:
+      "Comprá {name} en {store}. Mirá los precios y hacé tu pedido online.",
+    groupDescription:
+      "Comprá {name} en {store}: {categories}. Mirá los precios y hacé tu pedido online.",
+    home: "Inicio",
     clear: "Limpiar",
     clearAll: "Limpiar todo",
     closeFilters: "Cerrar los filtros",
@@ -117,7 +127,7 @@ export const storefront = {
       price_asc: "Precio: menor a mayor",
       price_desc: "Precio: mayor a menor",
     },
-    title: "Catálogo",
+    title: "Todos los artículos",
   },
   home: {
     browse: "Ver el catálogo",
@@ -159,11 +169,19 @@ export const storefront = {
     viewAllOf: "Ver todo: {title}",
   },
   shell: {
+    // The bar above the header until FER-020 lets the store write its own.
+    // The short one is for a phone, where the whole one would not fit.
+    announcement: {
+      full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+      short: "Feria Paseo Prado · Puesto 86",
+    },
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
-    catalog: "Catálogo",
+    catalog: "Todos los artículos",
     closeMenu: "Cerrar el menú",
+    // The button beside a group in the header (FER-043).
+    groupToggle: "{name}: sus categorías",
     copyright: "© {store}",
     credit: "Hecho por Lucas Regalado",
     error: {

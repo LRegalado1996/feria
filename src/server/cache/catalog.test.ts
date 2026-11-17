@@ -8,7 +8,9 @@ import { db } from "@/server/db";
 
 import {
   invalidateCatalogCache,
+  readAllArticlesCover,
   readCategories,
+  readCategoryPage,
   readPublishedArticle,
   readRelatedArticles,
 } from "./catalog";
@@ -21,22 +23,30 @@ const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
 
 // The queries are `src/server/services/catalog.test.ts`'s: here only what the
 // cache layer adds around them.
-const { getPublishedProduct, listCategories, listRelatedProducts } = vi.hoisted(
-  () => ({
-    getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-    listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-    listRelatedProducts: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  })
-);
+const {
+  getAllArticlesCover,
+  getCategoryPage,
+  getPublishedProduct,
+  listCategories,
+  listRelatedPool,
+} = vi.hoisted(() => ({
+  getAllArticlesCover: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  getCategoryPage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listRelatedPool: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+}));
 
 // Next's cache only exists inside a Next render. Outside it `"use cache"` is
 // a plain string, so the function under test runs on every call.
 vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
 
 vi.mock("@/server/services/catalog", () => ({
+  getAllArticlesCover,
+  getCategoryPage,
   getPublishedProduct,
   listCategories,
-  listRelatedProducts,
+  listRelatedPool,
 }));
 
 function makeStore(): { currencyCode: Currency; id: number } {
@@ -59,13 +69,16 @@ function makeArticle(overrides: Record<string, unknown> = {}) {
  */
 function setup({ error }: { error?: Error } = {}) {
   const article = makeArticle();
-  const related = [makeArticle({ id: 12, slug: "anillo" })];
+  const related = {
+    others: [],
+    same: [makeArticle({ id: 12, slug: "anillo" })],
+  };
   if (error === undefined) {
     getPublishedProduct.mockResolvedValue(article);
   } else {
     getPublishedProduct.mockRejectedValue(error);
   }
-  listRelatedProducts.mockResolvedValue(related);
+  listRelatedPool.mockResolvedValue(related);
 
   return {
     article,
@@ -152,17 +165,16 @@ describe("readPublishedArticle", () => {
 });
 
 describe("readRelatedArticles", () => {
-  test("lists up to four articles beside this one, from its category, in that language and currency", async () => {
+  test("hands over the pool to pick the suggestions from, by its category, in that language and currency", async () => {
     const { readRelated, related } = setup();
 
     await expect(readRelated({ categoryId: 3, id: 11 }, "en")).resolves.toBe(
       related
     );
 
-    expect(listRelatedProducts).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(listRelatedPool).toHaveBeenCalledExactlyOnceWith(db, {
       categoryId: 3,
       currencyCode: "USD",
-      limit: 4,
       locale: "en",
       productId: 11,
       storeId: 7,
@@ -186,6 +198,52 @@ describe("readCategories", () => {
   });
 });
 
+describe("readCategoryPage", () => {
+  test("answers the store's category page at that address, in that language", async () => {
+    const page = { name: "Rings", path: "/bijouterie/anillos" };
+    getCategoryPage.mockResolvedValue(page);
+
+    await expect(readCategoryPage({ id: 7 }, "anillos", "en")).resolves.toBe(
+      page
+    );
+    expect(getCategoryPage).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      slug: "anillos",
+      storeId: 7,
+    });
+  });
+
+  test.each([
+    ["one character too long", "a".repeat(CATALOG_SLUG_MAX_LENGTH + 1)],
+    ["with a capital", "Anillos"],
+    ["with an underscore", "__sample__"],
+    ["padded with spaces", " anillos "],
+  ])(
+    "answers null for an address %s without a query or a cache entry",
+    async (_case, slug) => {
+      await expect(readCategoryPage({ id: 7 }, slug, "es")).resolves.toBeNull();
+      expect(getCategoryPage).not.toHaveBeenCalled();
+      expect(cacheTag).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe("readAllArticlesCover", () => {
+  test("answers the store's cover of all articles, described in that language", async () => {
+    const cover = { alt: "Rings", computer: null, phone: null };
+    getAllArticlesCover.mockResolvedValue(cover);
+
+    await expect(
+      readAllArticlesCover({ id: 7 }, "en", "All articles")
+    ).resolves.toBe(cover);
+    expect(getAllArticlesCover).toHaveBeenCalledExactlyOnceWith(db, {
+      fallbackAlt: "All articles",
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
 describe("cached reads", () => {
   test.each([
     [
@@ -198,6 +256,14 @@ describe("cached reads", () => {
         await readRelated({ categoryId: null, id: 11 }),
     ],
     ["the categories", async () => await readCategories({ id: 7 }, "es")],
+    [
+      "a category's page",
+      async () => await readCategoryPage({ id: 7 }, "anillos", "es"),
+    ],
+    [
+      "the cover of all articles",
+      async () => await readAllArticlesCover({ id: 7 }, "es", "Todos"),
+    ],
   ])(
     "tag %s with the store's catalog and keep it for hours",
     async (_case, read) => {

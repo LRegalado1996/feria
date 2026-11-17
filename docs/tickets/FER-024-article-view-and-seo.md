@@ -30,6 +30,8 @@ An article page convinces, loads instantly from a shared link, and is fully read
 
 Read the `seo-ai-visibility` skill in `this-is-pepe` before starting.
 
+Since [FER-043](FER-043-category-groups-and-pages.md) an article's page is `/productos/{slug}` (English `/en/productos/{slug}`), under the page of all articles; the addresses below are the ones this ticket was written with.
+
 ## Outcome
 
 - `/{store}/products/{slug}` (`organisms/store-article`): a breadcrumb, the photos (`molecules/store-gallery`: swipe with snap, previous and next, thumbnails, a full-screen zoom where the phone's pinch works), the name in the display face, the price, the quantity and "Agregar al carrito" (`molecules/store-article-purchase`, saying what adding did), "Consultar por WhatsApp" with the article and its link pre-written when the store has WhatsApp, the share button, the description and related articles with their own "Agregar".

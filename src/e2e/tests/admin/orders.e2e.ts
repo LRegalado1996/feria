@@ -100,15 +100,16 @@ test.describe("Order management", () => {
     db,
     page,
   }) => {
-    const { jewels, login, orderState } = await setup({ db });
+    const { login, necklace, orderState } = await setup({ db });
     const phone = uniquePhone();
     const storePage = new StorePage(page);
 
-    // The shopper: the article into the cart from its category, then the
+    // The shopper: the article into the cart from its page, then the
     // checkout.
-    await page.goto(`/products?category=${jewels.slug}`);
+    await page.goto(`/productos/${necklace.slug}`);
     const add = page.getByRole("button", {
-      name: "Agregar al carrito: Collar dorado",
+      exact: true,
+      name: "Agregar al carrito",
     });
     // Enabled only once React owns it; a retried click would add twice.
     await expect(add).toBeEnabled();

@@ -2,13 +2,17 @@ import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
   article: {
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "Happy Holidays!",
+    bandPause: "Pause the animation",
     addedCapped:
       "Added {added}: with them you have {max}, the most an order takes.",
     addToCart: "Add to cart",
     askWhatsapp: "Ask on WhatsApp",
     askWhatsappText: "Hi! I'm writing about “{title}”: {url}",
     breadcrumb: "Breadcrumb",
-    catalog: "Catalog",
+    catalog: "All articles",
     decrease: "One unit less",
     gallery: "Photos of {title}",
     galleryNext: "Next photo",
@@ -78,8 +82,6 @@ export const storefront: Dictionary["storefront"] = {
     unitPrice: "{price} each",
   },
   catalog: {
-    addToCart: "Add to cart: {name}",
-    addToCartShort: "Add",
     addFailed: "We could not add it. Try again.",
     added: "Added to cart.",
     atMax: "You already have {max} of this article, the most an order takes.",
@@ -87,6 +89,12 @@ export const storefront: Dictionary["storefront"] = {
       "The cart already holds {max} different articles, the most it takes.",
     categories: "Categories",
     allCategories: "All",
+    breadcrumb: "Breadcrumb",
+    categoryDescription:
+      "Shop {name} at {store}. See the prices and order online.",
+    groupDescription:
+      "Shop {name} at {store}: {categories}. See the prices and order online.",
+    home: "Home",
     clear: "Clear",
     clearAll: "Clear all",
     closeFilters: "Close the filters",
@@ -119,7 +127,7 @@ export const storefront: Dictionary["storefront"] = {
       price_asc: "Price: low to high",
       price_desc: "Price: high to low",
     },
-    title: "Catalog",
+    title: "All articles",
   },
   home: {
     browse: "See the catalog",
@@ -161,11 +169,18 @@ export const storefront: Dictionary["storefront"] = {
     viewAllOf: "See all: {title}",
   },
   shell: {
+    // The bar above the header until FER-020 lets the store write its own.
+    // The short one is for a phone, where the whole one would not fit.
+    announcement: {
+      full: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
+      short: "Paseo Prado Fair · Stall 86",
+    },
     cartCount: "Cart, {count} items",
     cartCountOne: "Cart, 1 item",
     cartEmpty: "Cart, empty",
-    catalog: "Catalog",
+    catalog: "All articles",
     closeMenu: "Close the menu",
+    groupToggle: "{name}: its categories",
     copyright: "© {store}",
     credit: "Made by Lucas Regalado",
     error: {

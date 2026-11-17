@@ -9,15 +9,19 @@ import {
   categoryTranslation,
   productImage,
   productImageTranslation,
+  store,
+  storeTranslation,
 } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
 import {
+  SEED_ALL_ARTICLES_COVER,
   SEED_ARTICLES,
   SEED_CATEGORIES,
   SEED_COLORS,
   seedCatalog,
+  seedCatalogPages,
 } from "./seed-catalog";
 
 const { createProduct, publishProduct } = vi.hoisted(() => ({
@@ -177,7 +181,25 @@ describe("seedCatalog", () => {
     }
   });
 
-  test("creates the five launch categories in order, named in both languages", async () => {
+  test.each(["es", "en"] as const)(
+    "every sample article's %s description is two paragraphs of two or three sentences in all",
+    (locale) => {
+      for (const article of SEED_ARTICLES) {
+        const text = article.description[locale];
+        const paragraphs = text.split("\n\n");
+        const sentences = text.match(/[.!?](?=\s|$)/gu) ?? [];
+
+        expect(paragraphs).toHaveLength(2);
+        expect(
+          paragraphs.every((paragraph) => paragraph.trim() === paragraph)
+        ).toBe(true);
+        expect(sentences.length).toBeGreaterThanOrEqual(2);
+        expect(sentences.length).toBeLessThanOrEqual(3);
+      }
+    }
+  );
+
+  test("creates the launch categories in order, the Bijouterie group first, named in both languages", async () => {
     const { db, run } = setup();
 
     await expect(run()).resolves.toBe(11);
@@ -185,17 +207,52 @@ describe("seedCatalog", () => {
       table === category ? [db.$["insert.values"].mock.calls[index]?.[0]] : []
     );
     expect(categoryRows).toEqual([
-      { position: 0, slug: "burbujeros", storeId: 7 },
+      { position: 0, slug: "bijouterie", storeId: 7 },
       { position: 1, slug: "cadenas", storeId: 7 },
       { position: 2, slug: "anillos", storeId: 7 },
       { position: 3, slug: "aros", storeId: 7 },
       { position: 4, slug: "pulseras", storeId: 7 },
+      { position: 5, slug: "burbujeros", storeId: 7 },
     ]);
     expect(db.$["insert.values"]).toHaveBeenCalledWith([
-      { categoryId: 1, locale: "es", name: "Burbujeros" },
-      { categoryId: 1, locale: "en", name: "Bubble guns" },
+      { categoryId: 1, locale: "es", name: "Bijouterie" },
+      { categoryId: 1, locale: "en", name: "Jewelry" },
+    ]);
+    expect(db.$["insert.values"]).toHaveBeenCalledWith([
+      { categoryId: 6, locale: "es", name: "Burbujeros" },
+      { categoryId: 6, locale: "en", name: "Bubble guns" },
     ]);
     expect(db.$.insert).toHaveBeenCalledWith(categoryTranslation);
+  });
+
+  test("every seeded cover is a photo in public/seed, and every group is listed before its categories", () => {
+    const slugs = SEED_CATEGORIES.map((entry) => entry.slug);
+    const files = [
+      SEED_ALL_ARTICLES_COVER,
+      ...SEED_CATEGORIES.map((entry) => entry.cover),
+    ].flatMap((cover) =>
+      [cover.computer, cover.phone].flatMap((image) =>
+        image ? [image.file] : []
+      )
+    );
+
+    // Eleven photos: seven computer images and four phone ones.
+    expect(files).toHaveLength(11);
+    expect(
+      files.filter(
+        (file) => !existsSync(path.join(process.cwd(), "public/seed", file))
+      )
+    ).toEqual([]);
+    expect(
+      SEED_CATEGORIES.flatMap((entry, index) =>
+        entry.group && slugs.indexOf(entry.group) >= index ? [entry.slug] : []
+      )
+    ).toEqual([]);
+    expect(
+      SEED_CATEGORIES.filter((entry) => entry.group === "bijouterie").map(
+        (entry) => entry.slug
+      )
+    ).toEqual(["cadenas", "anillos", "aros", "pulseras"]);
   });
 
   test("creates, illustrates and publishes every sample article in its category", async () => {
@@ -207,7 +264,7 @@ describe("seedCatalog", () => {
     expect(createProduct).toHaveBeenNthCalledWith(1, db, {
       storeId: 7,
       values: {
-        categoryId: 1,
+        categoryId: 6,
         isAvailable: true,
         priceAmount: 69_000,
         translations: [
@@ -282,5 +339,208 @@ describe("seedCatalog", () => {
     expect(
       SEED_ARTICLES.filter((article) => !article.isAvailable)
     ).toHaveLength(1);
+  });
+});
+describe("seedCatalogPages", () => {
+  /** A category's row as the step reads it: in no group, without a cover. */
+  function makeRow(
+    id: number,
+    slug: string,
+    overrides: { coverUrl?: string | null; parentId?: number | null } = {}
+  ): {
+    coverUrl: string | null;
+    id: number;
+    parentId: number | null;
+    slug: string;
+  } {
+    return { coverUrl: null, id, parentId: null, slug, ...overrides };
+  }
+
+  /** A write's values as a plain record, to read its fields. */
+  function fieldsOf(value: unknown): Record<string, unknown> {
+    return typeof value === "object" && value !== null
+      ? Object.fromEntries(Object.entries(value))
+      : {};
+  }
+
+  /**
+   * The store's categories before the step (`before`) and after it inserts
+   * the group (`after`), and whether the store's cover is still empty.
+   */
+  function setupPages({
+    after,
+    before,
+    storeCovered = false,
+  }: {
+    after?: ReturnType<typeof makeRow>[];
+    before: ReturnType<typeof makeRow>[];
+    storeCovered?: boolean;
+  }) {
+    const db = createMockDatabase();
+    let reads = 0;
+    db.$["select.where"].mockImplementation(async () => {
+      reads += 1;
+      return await Promise.resolve(reads === 1 ? before : (after ?? before));
+    });
+    db.$["insert.returning"].mockResolvedValue([{ id: 60 }]);
+    db.$["update.returning"].mockResolvedValue(storeCovered ? [] : [{ id: 7 }]);
+    /** Every UPDATE as its table, its values and its condition. */
+    const updates = () =>
+      db.$.update.mock.calls.map(([table], index) => ({
+        set: fieldsOf(db.$["update.set"].mock.calls[index]?.[0]),
+        table,
+        where: renderQuery(db.$["update.where"].mock.calls[index]?.[0]),
+      }));
+
+    return {
+      db,
+      run: async () => await seedCatalogPages(db as never, 7),
+      updates,
+    };
+  }
+
+  const FLAT = [
+    makeRow(1, "burbujeros"),
+    makeRow(2, "cadenas"),
+    makeRow(3, "anillos"),
+    makeRow(4, "aros"),
+    makeRow(5, "pulseras"),
+  ];
+
+  test("gives a catalog seeded before groups its Bijouterie first, its four categories in it and every cover", async () => {
+    const { db, run, updates } = setupPages({
+      after: [...FLAT, makeRow(60, "bijouterie")],
+      before: FLAT,
+    });
+
+    await expect(run()).resolves.toEqual({ covers: 7, grouped: 4, groups: 1 });
+
+    // Every category moves one place down, then the group takes the first.
+    expect(updates()[0]).toEqual({
+      set: { position: expect.anything() },
+      table: category,
+      where: { params: [7], sql: '"category"."storeId" = $1' },
+    });
+    expect(renderQuery(updates()[0]?.set.position)).toEqual({
+      params: [],
+      sql: '"category"."position" + 1',
+    });
+    expect(db.$["insert.values"].mock.calls).toEqual([
+      [{ position: 0, slug: "bijouterie", storeId: 7 }],
+      [
+        [
+          { categoryId: 60, locale: "es", name: "Bijouterie" },
+          { categoryId: 60, locale: "en", name: "Jewelry" },
+        ],
+      ],
+    ]);
+    expect(
+      updates().filter((update) => update.set.parentId !== undefined)
+    ).toEqual(
+      [2, 3, 4, 5].map((id) => ({
+        set: { parentId: 60 },
+        table: category,
+        where: {
+          params: [id],
+          sql: '("category"."id" = $1 and "category"."parentId" is null)',
+        },
+      }))
+    );
+    // Anillos' cover, filled only where it is still empty, and its alt texts.
+    expect(updates()).toContainEqual({
+      set: {
+        coverHeight: 800,
+        coverPhoneHeight: 1200,
+        coverPhoneUrl: "/seed/ring-1.jpg",
+        coverPhoneWidth: 1200,
+        coverUrl: "/seed/ring-2.jpg",
+        coverWidth: 1200,
+      },
+      table: category,
+      where: {
+        params: [3],
+        sql: '("category"."id" = $1 and "category"."coverUrl" is null)',
+      },
+    });
+    expect(updates()).toContainEqual({
+      set: { coverAlt: "Anillo sello dorado" },
+      table: categoryTranslation,
+      where: {
+        params: [3, "es"],
+        sql: '("category_translation"."categoryId" = $1 and "category_translation"."locale" = $2 and "category_translation"."coverAlt" is null)',
+      },
+    });
+    expect(updates()).toContainEqual({
+      set: {
+        catalogCoverHeight: 800,
+        catalogCoverPhoneHeight: 1200,
+        catalogCoverPhoneUrl: "/seed/earrings-1.jpg",
+        catalogCoverPhoneWidth: 1200,
+        catalogCoverUrl: "/seed/ring-3.jpg",
+        catalogCoverWidth: 1200,
+      },
+      table: store,
+      where: {
+        params: [7],
+        sql: '("store"."id" = $1 and "store"."catalogCoverUrl" is null)',
+      },
+    });
+    expect(updates()).toContainEqual({
+      set: { catalogCoverAlt: "Gold ring with pink stones" },
+      table: storeTranslation,
+      where: {
+        params: [7, "en"],
+        sql: '("store_translation"."storeId" = $1 and "store_translation"."locale" = $2 and "store_translation"."catalogCoverAlt" is null)',
+      },
+    });
+  });
+
+  test("leaves a catalog that has its group, its categories in it and its covers alone", async () => {
+    const done = [
+      makeRow(60, "bijouterie", { coverUrl: "/seed/a.jpg" }),
+      ...FLAT.map((row) => ({
+        ...row,
+        coverUrl: "/seed/a.jpg",
+        parentId: row.slug === "burbujeros" ? null : 60,
+      })),
+    ];
+    const { db, run, updates } = setupPages({
+      before: done,
+      storeCovered: true,
+    });
+
+    await expect(run()).resolves.toEqual({ covers: 0, grouped: 0, groups: 0 });
+    expect(db.$.insert).not.toHaveBeenCalled();
+    // Only the store's guarded cover write, which changed nothing.
+    expect(updates().map((update) => update.table)).toEqual([store]);
+  });
+
+  test.each([
+    [
+      "adds no group to a store that has none of its categories",
+      [makeRow(1, "burbujeros", { coverUrl: "/seed/a.jpg" })],
+    ],
+    [
+      "keeps a category that is a group itself out of the seeded group",
+      [
+        makeRow(60, "bijouterie", { coverUrl: "/seed/a.jpg" }),
+        // The store's own group, named like a seeded category.
+        makeRow(9, "cadenas", { coverUrl: "/seed/a.jpg" }),
+        makeRow(10, "collares", { coverUrl: "/seed/a.jpg", parentId: 9 }),
+      ],
+    ],
+  ])("%s", async (_case, before) => {
+    const { db, run, updates } = setupPages({ before, storeCovered: true });
+
+    await expect(run()).resolves.toEqual({ covers: 0, grouped: 0, groups: 0 });
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(updates().map((update) => update.table)).toEqual([store]);
+  });
+
+  test("fails loudly when the group's insert returns no row", async () => {
+    const { db, run } = setupPages({ before: FLAT });
+    db.$["insert.returning"].mockResolvedValue([]);
+
+    await expect(run()).rejects.toThrow("Inserting a category returned no row");
   });
 });

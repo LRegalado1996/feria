@@ -1,7 +1,6 @@
 import { ImageOff } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
 
 import { StoreBadge } from "@/app/_components/atoms/store-badge";
 import {
@@ -15,11 +14,6 @@ export type StoreArticleCardProps = Pick<
   StorePriceTagProps,
   "amount" | "currency" | "locale" | "previousAmount"
 > & {
-  /**
-   * A control under the price (add to cart): drawn above the card's
-   * stretched link, so it is its own tab stop and its own click.
-   */
-  action?: ReactNode;
   className?: string;
   /** The heading level the card's name takes in the page's outline. */
   headingLevel?: "h2" | "h3";
@@ -38,6 +32,13 @@ export type StoreArticleCardProps = Pick<
     price: Dictionary["storefront"]["price"];
   };
   name: string;
+  /**
+   * `two` keeps the name's height at two lines, clamping a longer one: for a
+   * row whose cards change after they are first shown (the suggestions
+   * under an article), so the row does not grow or shrink. `auto`, the
+   * default, lets the name take the lines it needs.
+   */
+  nameLines?: "auto" | "two";
   /**
    * The language the name is in, when it may differ from the page's (an
    * article with no English title on an English page): set on the name
@@ -73,7 +74,6 @@ export const STORE_CARD_SIZES = {
  * card, so there is one tab stop and no interactive element inside another.
  */
 function StoreArticleCard({
-  action,
   amount,
   className,
   currency,
@@ -85,6 +85,7 @@ function StoreArticleCard({
   locale,
   name,
   nameLang,
+  nameLines = "auto",
   previousAmount = null,
   sizes = STORE_CARD_SIZES.grid,
   unavailable = false,
@@ -134,6 +135,7 @@ function StoreArticleCard({
       <Heading
         className={cn(
           "mt-3 mb-1 font-display text-xs leading-tight font-extrabold wrap-anywhere uppercase group-hover:underline group-hover:underline-offset-4",
+          nameLines === "two" && "line-clamp-2 min-h-[2lh]",
           unavailable && "text-store-muted"
         )}
       >
@@ -162,7 +164,6 @@ function StoreArticleCard({
           previousAmount={previousAmount}
         />
       )}
-      {action ? <div className="relative z-10 mt-3">{action}</div> : null}
     </article>
   );
 }

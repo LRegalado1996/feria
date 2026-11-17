@@ -7,6 +7,7 @@ import { type Ref, useId, useRef, useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import type { Dictionary } from "@/content";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import type { Locale } from "@/lib/i18n/config";
@@ -56,7 +57,7 @@ function SearchForm({
   return (
     <search className="mx-auto block max-w-275">
       <form
-        action={localizePath("/products", locale)}
+        action={localizePath(ALL_ARTICLES_PATH, locale)}
         // Its underline is the field's focus mark: it turns the accent.
         className="flex items-end gap-3 border-b-2 border-store-background focus-within:border-store-accent"
         data-testid={testId}

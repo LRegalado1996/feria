@@ -2,8 +2,10 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P1
-- **Status:** todo
+- **Status:** superseded by [FER-043](FER-043-category-groups-and-pages.md)
 - **Depends on:** FER-039
+
+FER-043 absorbs this ticket: the catalog moves to pages of their own (`/productos`, `/bijouterie`, `/bijouterie/anillos`), and each is sent whole to these crawlers there.
 
 ## Goal
 

@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   inArray,
+  isNull,
   ne,
   or,
   type SQL,
@@ -12,6 +13,9 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { coverOf, imageOf } from "@/lib/catalog/cover";
+import { categoryPath } from "@/lib/catalog/paths";
+import { RELATED_FILL_BELOW, RELATED_POOL_SIZE } from "@/lib/catalog/related";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import type {
@@ -30,6 +34,7 @@ import {
   productAttributeValue,
   productImage,
   productTranslation,
+  store,
 } from "@/server/db/schema";
 
 /**
@@ -50,27 +55,186 @@ interface StoreScope {
 
 /**
  * A store's categories in their order, each with its name in `locale` (or
- * the language it has) and the language it came in, for `lang`.
+ * the language it has), the language it came in, for `lang`, its group
+ * (`parentId`, FER-043) and its page's address.
  */
 export async function listCategories(
   db: DatabaseClient,
   { locale, storeId }: StoreScope & { locale: Locale }
 ) {
   const rows = await db.query.category.findMany({
-    columns: { id: true, position: true, slug: true },
+    columns: { id: true, parentId: true, position: true, slug: true },
     orderBy: [asc(category.position), asc(category.id)],
     where: eq(category.storeId, storeId),
     with: {
       translations: { columns: { locale: true, name: true } },
     },
   });
+  const slugOf = new Map(rows.map((row) => [row.id, row.slug]));
 
   return rows.map(({ translations, ...row }) => {
     const name = pickTranslation(translations, locale);
+    const parentSlug =
+      row.parentId === null ? null : (slugOf.get(row.parentId) ?? null);
 
-    return { ...row, lang: name?.locale ?? locale, name: name?.name ?? "" };
+    return {
+      ...row,
+      lang: name?.locale ?? locale,
+      name: name?.name ?? "",
+      path: categoryPath({ parentSlug, slug: row.slug }),
+    };
   });
 }
+
+export type PublicCategory = Awaited<ReturnType<typeof listCategories>>[number];
+
+/**
+ * One category's page (FER-043) by its slug, in `locale`: its name, its
+ * group's, the categories it holds when it is a group, its texts for search
+ * engines and its cover; `null` when the store has no such category.
+ */
+export async function getCategoryPage(
+  db: DatabaseClient,
+  { locale, slug, storeId }: StoreScope & { locale: Locale; slug: string }
+) {
+  const textColumns = {
+    columns: {
+      coverAlt: true,
+      locale: true,
+      name: true,
+      seoDescription: true,
+      seoTitle: true,
+    },
+  } as const;
+  const found = await db.query.category.findFirst({
+    columns: {
+      coverHeight: true,
+      coverPhoneHeight: true,
+      coverPhoneUrl: true,
+      coverPhoneWidth: true,
+      coverUrl: true,
+      coverWidth: true,
+      id: true,
+      slug: true,
+    },
+    where: and(eq(category.storeId, storeId), eq(category.slug, slug)),
+    with: {
+      children: {
+        columns: { slug: true },
+        orderBy: [asc(category.position), asc(category.id)],
+        with: { translations: { columns: { locale: true, name: true } } },
+      },
+      parent: {
+        columns: { slug: true },
+        with: { translations: { columns: { locale: true, name: true } } },
+      },
+      translations: textColumns,
+    },
+  });
+
+  if (!found) {
+    return null;
+  }
+
+  const text = pickTranslation(found.translations, locale);
+  const name = text?.name ?? "";
+  const parent = found.parent
+    ? {
+        lang:
+          pickTranslation(found.parent.translations, locale)?.locale ?? locale,
+        name: pickTranslation(found.parent.translations, locale)?.name ?? "",
+        path: categoryPath({ parentSlug: null, slug: found.parent.slug }),
+        slug: found.parent.slug,
+      }
+    : null;
+
+  return {
+    children: found.children.map((child) => {
+      const childName = pickTranslation(child.translations, locale);
+
+      return {
+        lang: childName?.locale ?? locale,
+        name: childName?.name ?? "",
+        path: categoryPath({ parentSlug: found.slug, slug: child.slug }),
+        slug: child.slug,
+      };
+    }),
+    cover: coverOf(
+      {
+        computer: imageOf(found.coverUrl, found.coverWidth, found.coverHeight),
+        phone: imageOf(
+          found.coverPhoneUrl,
+          found.coverPhoneWidth,
+          found.coverPhoneHeight
+        ),
+      },
+      text?.coverAlt ?? null,
+      name
+    ),
+    id: found.id,
+    lang: text?.locale ?? locale,
+    name,
+    parent,
+    path: categoryPath({ parentSlug: parent?.slug ?? null, slug: found.slug }),
+    seoDescription: text?.seoDescription ?? null,
+    seoTitle: text?.seoTitle ?? null,
+    slug: found.slug,
+  };
+}
+
+/**
+ * The cover of the page of all the store's articles (FER-043), held on the
+ * store's row, described in `locale` (else the language it has, else by
+ * `fallbackAlt`); `null` without one.
+ */
+export async function getAllArticlesCover(
+  db: DatabaseClient,
+  {
+    fallbackAlt,
+    locale,
+    storeId,
+  }: StoreScope & { fallbackAlt: string; locale: Locale }
+) {
+  const found = await db.query.store.findFirst({
+    columns: {
+      catalogCoverHeight: true,
+      catalogCoverPhoneHeight: true,
+      catalogCoverPhoneUrl: true,
+      catalogCoverPhoneWidth: true,
+      catalogCoverUrl: true,
+      catalogCoverWidth: true,
+    },
+    where: eq(store.id, storeId),
+    with: {
+      translations: { columns: { catalogCoverAlt: true, locale: true } },
+    },
+  });
+
+  if (!found) {
+    return null;
+  }
+
+  return coverOf(
+    {
+      computer: imageOf(
+        found.catalogCoverUrl,
+        found.catalogCoverWidth,
+        found.catalogCoverHeight
+      ),
+      phone: imageOf(
+        found.catalogCoverPhoneUrl,
+        found.catalogCoverPhoneWidth,
+        found.catalogCoverPhoneHeight
+      ),
+    },
+    pickTranslation(found.translations, locale)?.catalogCoverAlt ?? null,
+    fallbackAlt
+  );
+}
+
+export type CategoryPage = NonNullable<
+  Awaited<ReturnType<typeof getCategoryPage>>
+>;
 
 /** `%`, `_` and the escape itself, taken literally inside an ILIKE. */
 function likePattern(search: string): string {
@@ -104,6 +268,22 @@ function matchesSearch(search: string, locale: Locale): SQL {
       sql`unaccent(${shown.description}) ilike unaccent(${pattern})`
     )
   )})`;
+}
+
+/**
+ * Whether the article (joined to its category) is in the category at
+ * `slug`, or in one of its categories when it is a group (FER-043): a
+ * group's page lists everything in it.
+ */
+function inCategory(slug: string): SQL {
+  const group = alias(category, "category_group");
+  const fromGroup = sql`${category} as ${sql.identifier("category_group")}`;
+
+  return sql`(${eq(category.slug, slug)} or exists (select 1 from ${fromGroup} where ${and(
+    eq(group.id, category.parentId),
+    eq(group.storeId, category.storeId),
+    eq(group.slug, slug)
+  )}))`;
 }
 
 /**
@@ -306,9 +486,7 @@ export async function listPublishedProducts(
       and(
         eq(product.storeId, storeId),
         eq(product.status, "published"),
-        categorySlug === undefined
-          ? undefined
-          : eq(category.slug, categorySlug),
+        categorySlug === undefined ? undefined : inCategory(categorySlug),
         q === undefined ? undefined : matchesSearch(q, locale),
         ...valueGroups.map((group) => carriesOneOf(group)),
         cursor === undefined ? undefined : afterCursor(cursor, sort)
@@ -386,7 +564,13 @@ export async function getPublishedProduct(
     with: {
       category: {
         columns: { slug: true },
-        with: { translations: { columns: { locale: true, name: true } } },
+        with: {
+          parent: {
+            columns: { slug: true },
+            with: { translations: { columns: { locale: true, name: true } } },
+          },
+          translations: { columns: { locale: true, name: true } },
+        },
       },
       images: {
         columns: { height: true, id: true, url: true, width: true },
@@ -416,7 +600,7 @@ export async function getPublishedProduct(
 
   return {
     category: found.category
-      ? { name: categoryName?.name ?? "", slug: found.category.slug }
+      ? articleCategory(found.category, categoryName?.name ?? "", locale)
       : null,
     categoryId: found.categoryId,
     currencyCode,
@@ -444,6 +628,36 @@ export async function getPublishedProduct(
 }
 
 export type PublishedProduct = Awaited<ReturnType<typeof getPublishedProduct>>;
+
+/**
+ * An article's category as its page shows it: its name, its page's address
+ * and the group it is in, for the article's breadcrumb (FER-043).
+ */
+function articleCategory(
+  found: {
+    parent: {
+      slug: string;
+      translations: { locale: Locale; name: string }[];
+    } | null;
+    slug: string;
+  },
+  name: string,
+  locale: Locale
+) {
+  const group = found.parent;
+
+  return {
+    group: group
+      ? {
+          name: pickTranslation(group.translations, locale)?.name ?? "",
+          path: categoryPath({ parentSlug: null, slug: group.slug }),
+        }
+      : null,
+    name,
+    path: categoryPath({ parentSlug: group?.slug ?? null, slug: found.slug }),
+    slug: found.slug,
+  };
+}
 
 /**
  * The id and category of a published article of the store, or NOT_FOUND:
@@ -514,6 +728,76 @@ export async function listRelatedProducts(
     locale,
   });
 }
+
+/**
+ * What the article's page picks its suggestions from (FER-039,
+ * `src/lib/catalog/related.ts`): up to `RELATED_POOL_SIZE` other published
+ * articles of its category, newest first, and, only when the category has
+ * fewer than `RELATED_FILL_BELOW` of them, up to as many from the rest of
+ * the store (outside the category, or in none). The article is never in it.
+ */
+export async function listRelatedPool(
+  db: DatabaseClient,
+  {
+    categoryId,
+    currencyCode,
+    locale,
+    productId,
+    storeId,
+  }: StoreScope & {
+    categoryId: number | null;
+    currencyCode: Currency;
+    locale: Locale;
+    productId: number;
+  }
+) {
+  const others = and(
+    eq(product.storeId, storeId),
+    eq(product.status, "published"),
+    ne(product.id, productId)
+  );
+  const idsWhere = async (where: SQL | undefined) =>
+    (
+      await db
+        .select({ id: product.id })
+        .from(product)
+        .where(where)
+        .orderBy(desc(product.publishedAt), desc(product.id))
+        .limit(RELATED_POOL_SIZE)
+    ).map((row) => row.id);
+
+  const sameIds =
+    categoryId === null
+      ? []
+      : await idsWhere(and(others, eq(product.categoryId, categoryId)));
+  const restIds =
+    sameIds.length >= RELATED_FILL_BELOW
+      ? []
+      : await idsWhere(
+          categoryId === null
+            ? others
+            : and(
+                others,
+                or(
+                  isNull(product.categoryId),
+                  ne(product.categoryId, categoryId)
+                )
+              )
+        );
+  const cards = await loadCards(db, {
+    currencyCode,
+    ids: [...sameIds, ...restIds],
+    locale,
+  });
+  const inCategory = new Set(sameIds);
+
+  return {
+    others: cards.filter((card) => !inCategory.has(card.id)),
+    same: cards.filter((card) => inCategory.has(card.id)),
+  };
+}
+
+export type RelatedPoolCards = Awaited<ReturnType<typeof listRelatedPool>>;
 
 // ── Store-scoped writes ──────────────────────────────────────────────────
 

@@ -8,6 +8,7 @@ import type {
   CatalogCategory,
   CatalogFilter,
 } from "@/app/_components/molecules/store-catalog-filters";
+import type { CatalogCover } from "@/lib/catalog/cover";
 import { type CatalogQuery, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import type { CatalogPage } from "@/lib/hooks/catalog";
 import type { Locale } from "@/lib/i18n/config";
@@ -15,6 +16,7 @@ import { createQueryClient } from "@/lib/orpc/query-client";
 import { renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
+import { required } from "@/test/required";
 
 import { StoreCatalog } from "./store-catalog";
 
@@ -27,8 +29,14 @@ vi.mock("@/lib/orpc/client", async () => {
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
 const CATEGORIES: CatalogCategory[] = [
-  { lang: "es", name: "Collares", slug: "collares" },
-  { lang: "es", name: "Aros", slug: "aros" },
+  {
+    depth: 0,
+    lang: "es",
+    name: "Collares",
+    path: "/collares",
+    slug: "collares",
+  },
+  { depth: 0, lang: "es", name: "Aros", path: "/aros", slug: "aros" },
 ];
 
 const FILTERS: CatalogFilter[] = [
@@ -95,13 +103,15 @@ function makeQuery(overrides: Partial<CatalogQuery> = {}): CatalogQuery {
 
 /** A selection of a category, a filter value and a search, by price. */
 const CHOSEN = makeQuery({
-  category: "collares",
+  category: { path: "/collares", slug: "collares" },
   filters: [{ attribute: "color", values: ["dorado"] }],
   q: "perla",
   sort: "price_asc",
 });
 
 interface SetupOptions {
+  /** The page's cover (FER-043); none by default. */
+  cover?: CatalogCover | null;
   firstPage?: CatalogPage;
   locale?: Locale;
   /**
@@ -113,6 +123,7 @@ interface SetupOptions {
 }
 
 function setup({
+  cover = null,
   firstPage = makePage([makeItem(1), makeItem(2, { isAvailable: false })]),
   locale = "es",
   next = "ok",
@@ -158,7 +169,12 @@ function setup({
   const user = userEvent.setup();
   const catalog = (next: CatalogQuery, page: CatalogPage) => (
     <StoreCatalog
+      breadcrumb={{
+        items: [{ href: "/", name: "Inicio" }, { name: "Collares" }],
+        label: "Ruta",
+      }}
       categories={CATEGORIES}
+      cover={cover}
       description="Todos los artículos de LR Market."
       filters={FILTERS}
       firstPage={page}
@@ -225,6 +241,95 @@ describe("StoreCatalog", () => {
       /^Todos los artículos de LR Market\.$/u
     );
     expect(screen.getByRole("button", { name: "Compartir" })).toBeVisible();
+    // Without a cover, the plain title: no photo.
+    expect(screen.queryByTestId("store-catalog-cover")).toBeNull();
+  });
+
+  test("starts with the trail to the page, every step a link but the page itself (FER-043)", () => {
+    setup();
+
+    const trail = screen.getByRole("navigation", { name: "Ruta" });
+    expect(
+      within(trail)
+        .getAllByRole("listitem")
+        .map((item) => [
+          item.textContent,
+          item.querySelector("a")?.getAttribute("href") ?? null,
+        ])
+    ).toEqual([
+      ["Inicio", "/"],
+      ["Collares", null],
+    ]);
+    expect(within(trail).getByText("Collares")).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+  });
+
+  test.each([
+    [
+      "a phone image, which shows below md",
+      { height: 1200, url: "/seed/ring-1.jpg", width: 1000 },
+      "/seed/ring-1.jpg",
+      ["(min-width: 768px)"],
+    ],
+    [
+      "no phone image: the computer one everywhere",
+      null,
+      "/seed/ring-2.jpg",
+      [],
+    ],
+  ])(
+    "with a cover and %s, puts the page's h1 over the photo, fetched first",
+    (_case, phone, phoneSrc, computerMedia) => {
+      setup({
+        cover: {
+          alt: "Anillo sello dorado",
+          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+          phone,
+        },
+      });
+
+      const cover = screen.getByTestId("store-catalog-cover");
+      const image = within(cover).getByRole("img", {
+        name: "Anillo sello dorado",
+      });
+      expect(
+        within(cover).getByRole("heading", { level: 1, name: "Collares" })
+      ).toBeVisible();
+      expect(image.getAttribute("src")).toContain(encodeURIComponent(phoneSrc));
+      expect(image).toHaveAttribute("fetchpriority", "high");
+      expect(image).toHaveAttribute("loading", "eager");
+      expect(image).toHaveAttribute("sizes", "100vw");
+      expect(
+        [...cover.querySelectorAll("source")].map((source) =>
+          source.getAttribute("media")
+        )
+      ).toEqual(computerMedia);
+      expect(cover).toHaveClass("aspect-square", "md:aspect-3/1");
+      // One h1 on the page: the plain title is not drawn as well.
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    }
+  );
+
+  test("serves the computer image from md up when the cover has a phone one", () => {
+    setup({
+      cover: {
+        alt: "Anillos",
+        computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+        phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1000 },
+      },
+    });
+
+    const source = required(
+      screen.getByTestId("store-catalog-cover").querySelector("source")
+    );
+    expect(source.getAttribute("srcset")).toContain(
+      encodeURIComponent("/seed/ring-2.jpg")
+    );
+    expect(source.getAttribute("srcset")).not.toContain(
+      encodeURIComponent("/seed/ring-1.jpg")
+    );
   });
 
   test.each([
@@ -250,15 +355,15 @@ describe("StoreCatalog", () => {
     );
 
     expect(sortItems()).toEqual([
-      ["Más nuevos", "/products?category=collares&color=dorado&q=perla", null],
+      ["Más nuevos", "/collares?color=dorado&q=perla", null],
       [
         "Precio: menor a mayor",
-        "/products?category=collares&color=dorado&q=perla&sort=price_asc",
+        "/collares?color=dorado&q=perla&sort=price_asc",
         "true",
       ],
       [
         "Precio: mayor a menor",
-        "/products?category=collares&color=dorado&q=perla&sort=price_desc",
+        "/collares?color=dorado&q=perla&sort=price_desc",
         null,
       ],
     ]);
@@ -276,9 +381,9 @@ describe("StoreCatalog", () => {
     await user.click(screen.getByRole("button", { name: "Sort by: Newest" }));
 
     expect(sortItems()).toEqual([
-      ["Newest", "/en/products", "true"],
-      ["Price: low to high", "/en/products?sort=price_asc", null],
-      ["Price: high to low", "/en/products?sort=price_desc", null],
+      ["Newest", "/en/productos", "true"],
+      ["Price: low to high", "/en/productos?sort=price_asc", null],
+      ["Price: high to low", "/en/productos?sort=price_desc", null],
     ]);
   });
 
@@ -314,7 +419,7 @@ describe("StoreCatalog", () => {
     await user.click(screen.getByRole("button", { name: "Compartir" }));
 
     expect(writeText).toHaveBeenCalledExactlyOnceWith(
-      "http://localhost:3000/products?category=collares&color=dorado&q=perla&sort=price_asc"
+      "http://localhost:3000/collares?color=dorado&q=perla&sort=price_asc"
     );
   });
 
@@ -384,26 +489,42 @@ describe("StoreCatalog", () => {
     );
   });
 
-  test("following a choice in the panel leaves it open, and the new selection shows in it", async () => {
+  test("following a filter in the panel leaves it open, and the new selection shows in it", async () => {
     const { navigate, user } = setup();
     const trigger = screen.getByRole("button", { name: "Filtrar" });
     await user.click(trigger);
     const panel = screen.getByTestId("store-catalog-panel");
 
-    await user.click(within(panel).getByRole("link", { name: "Aros" }));
+    await user.click(within(panel).getByRole("link", { name: /^Dorado/u }));
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
 
     // The router renders the catalog again for the address it followed.
-    navigate(makeQuery({ category: "aros" }));
+    navigate(
+      makeQuery({ filters: [{ attribute: "color", values: ["dorado"] }] })
+    );
 
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
-    expect(within(panel).getByRole("link", { name: "Aros" })).toHaveAttribute(
-      "aria-current",
-      "true"
-    );
+    expect(
+      within(panel).getByRole("link", { name: /^Dorado/u })
+    ).toHaveAttribute("aria-current", "true");
     // Behind the open panel (hidden from a screen reader while it is open),
     // its button already counts the new choice.
     expect(trigger).toHaveTextContent(/^Filtrar \(1\)$/u);
+  });
+
+  test("following a category in the panel closes it at once: the category is another page (FER-043)", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Filtrar" }));
+
+    await user.click(
+      within(screen.getByTestId("store-catalog-panel")).getByRole("link", {
+        name: "Aros",
+      })
+    );
+
+    expect(screen.queryByTestId("store-catalog-panel")).toBeNull();
+    // No exit animation leaves the scrim behind on the page left behind.
+    expect(screen.queryByTestId("dialog-overlay")).toBeNull();
   });
 
   test("the panel offers to clear what is chosen, keeping the sort, only when something is", async () => {
@@ -414,7 +535,7 @@ describe("StoreCatalog", () => {
 
     expect(
       within(screen.getByRole("dialog")).getByRole("link", { name: "Limpiar" })
-    ).toHaveAttribute("href", "/products?sort=price_asc");
+    ).toHaveAttribute("href", "/productos?sort=price_asc");
   });
 
   test("the panel has nothing to clear with nothing chosen", async () => {
@@ -451,20 +572,17 @@ describe("StoreCatalog", () => {
           link.getAttribute("href"),
         ])
     ).toEqual([
-      ["Quitar: Collares", "/products?color=dorado&q=perla&sort=price_asc"],
-      ["Quitar: Dorado", "/products?category=collares&q=perla&sort=price_asc"],
-      [
-        "Quitar: perla",
-        "/products?category=collares&color=dorado&sort=price_asc",
-      ],
-      ["Limpiar todo", "/products?sort=price_asc"],
+      ["Quitar: Collares", "/productos?color=dorado&q=perla&sort=price_asc"],
+      ["Quitar: Dorado", "/collares?q=perla&sort=price_asc"],
+      ["Quitar: perla", "/collares?color=dorado&sort=price_asc"],
+      ["Limpiar todo", "/productos?sort=price_asc"],
     ]);
   });
 
   test("leaves out chips for choices the store does not have, and shows none with nothing chosen", () => {
     setup({
       query: makeQuery({
-        category: "anillos",
+        category: { path: "/anillos", slug: "anillos" },
         filters: [
           { attribute: "color", values: ["verde"] },
           { attribute: "talle", values: ["m"] },
@@ -493,7 +611,7 @@ describe("StoreCatalog", () => {
     ).toHaveAttribute("sizes", "(min-width: 768px) 25vw, 50vw");
   });
 
-  test("an available card has an add button, a sold-out one says so instead", () => {
+  test("a card is a link with nothing to add, available or sold out; a sold-out one says so", () => {
     setup();
 
     const grid = within(screen.getByTestId("store-catalog-grid"));
@@ -501,31 +619,24 @@ describe("StoreCatalog", () => {
     const link = within(first ?? document.body).getByRole("link", {
       name: "Artículo 1",
     });
-    expect(link).toHaveAttribute("href", "/products/articulo-1");
+    expect(link).toHaveAttribute("href", "/productos/articulo-1");
     // The name's language is on its link; the card keeps the page's.
     expect(link).toHaveAttribute("lang", "es");
     expect(first?.closest("li")).not.toHaveAttribute("lang");
-    expect(
-      within(first ?? document.body).getByRole("button", {
-        name: "Agregar al carrito: Artículo 1",
-      })
-    ).toBeVisible();
+    expect(within(first ?? document.body).queryByRole("button")).toBeNull();
     expect(within(second ?? document.body).queryByRole("button")).toBeNull();
     expect(second).toHaveTextContent("Agotado");
     expect(first).not.toHaveTextContent("Agotado");
   });
 
-  test("in English, links the cards to the English pages and names the button in English", () => {
+  test("in English, links the cards to the English pages and says sold out in English", () => {
     setup({ locale: "en" });
 
     const grid = within(screen.getByTestId("store-catalog-grid"));
     expect(grid.getByRole("link", { name: "Artículo 1" })).toHaveAttribute(
       "href",
-      "/en/products/articulo-1"
+      "/en/productos/articulo-1"
     );
-    expect(
-      grid.getByRole("button", { name: "Add to cart: Artículo 1" })
-    ).toBeVisible();
     expect(grid.getByText("Sold out")).toBeVisible();
   });
 
@@ -564,7 +675,7 @@ describe("StoreCatalog", () => {
     const way = within(empty).getByRole("link", {
       name: "Ver todo el catálogo",
     });
-    expect(way).toHaveAttribute("href", "/products?sort=price_asc");
+    expect(way).toHaveAttribute("href", "/productos?sort=price_asc");
     expect(way).toHaveAttribute("data-slot", "store-button");
   });
 

@@ -182,12 +182,12 @@ describe("listIndexableArticles", () => {
 });
 
 describe("listIndexableCategories", () => {
-  test("reads the store's categories with a published article, in their order, by name", async () => {
+  test("reads the store's categories with a published article, in them or in a category of theirs, in their order, by name, at their pages", async () => {
     const { db } = setup();
     db.$["select.orderBy"].mockResolvedValue([
-      { id: 1, slug: "anillos" },
-      { id: 2, slug: "aros" },
-      { id: 3, slug: "sin-nombre" },
+      { id: 1, parentSlug: "bijouterie", slug: "anillos" },
+      { id: 2, parentSlug: null, slug: "aros" },
+      { id: 3, parentSlug: null, slug: "sin-nombre" },
     ]);
     answerTexts(db, [
       { categoryId: 1, locale: "es", name: "Anillos" },
@@ -199,9 +199,9 @@ describe("listIndexableCategories", () => {
     await expect(
       listIndexableCategories(db as never, { locale: "en", storeId: STORE_ID })
     ).resolves.toEqual([
-      { name: "Rings", slug: "anillos" },
-      { name: "Aros", slug: "aros" },
-      { name: "sin-nombre", slug: "sin-nombre" },
+      { name: "Rings", path: "/bijouterie/anillos", slug: "anillos" },
+      { name: "Aros", path: "/aros", slug: "aros" },
+      { name: "sin-nombre", path: "/sin-nombre", slug: "sin-nombre" },
     ]);
 
     expect(db.$["select.from"].mock.calls).toEqual([
@@ -209,6 +209,11 @@ describe("listIndexableCategories", () => {
       [categoryTranslation],
     ]);
     expect(db.$["select.innerJoin"]).not.toHaveBeenCalled();
+    // Its group, of the same store, for its page's address.
+    expect(renderQuery(db.$["select.leftJoin"].mock.calls[0]?.[1])).toEqual({
+      params: [],
+      sql: '("category_group"."id" = "category"."parentId" and "category_group"."storeId" = "category"."storeId")',
+    });
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
@@ -216,7 +221,9 @@ describe("listIndexableCategories", () => {
         params: [STORE_ID, "published"],
         sql:
           '("category"."storeId" = $1 and exists (select 1 from "product" where ' +
-          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $2)))',
+          '("product"."storeId" = "category"."storeId" and "product"."status" = $2 and ' +
+          '("product"."categoryId" = "category"."id" or "product"."categoryId" in ' +
+          '(select "category_child"."id" from "category" as "category_child" where "category_child"."parentId" = "category"."id")))))',
       },
       {
         params: [1, 2, 3],

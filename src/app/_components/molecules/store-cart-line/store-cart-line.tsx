@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
+import { articlePath } from "@/lib/catalog/paths";
 import type { CartProduct } from "@/lib/hooks/cart";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -107,7 +108,7 @@ function StoreCartLine({
               NAME_CLASS,
               "self-start text-store-foreground underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
             )}
-            href={localizePath(`/products/${product.slug}`, locale)}
+            href={localizePath(articlePath(product.slug), locale)}
             lang={product.lang}
           >
             {product.title}

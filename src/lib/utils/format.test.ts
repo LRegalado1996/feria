@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   APP_TIME_ZONE,
   formatDate,
+  formatList,
   formatInteger,
   formatPercent,
   formatPrice,
@@ -132,6 +133,22 @@ describe("formatInteger", () => {
       expect(formatInteger(value, "en")).toBe(english);
     }
   );
+});
+
+describe("formatList", () => {
+  test.each([
+    [[], "", ""],
+    [["Cadenas"], "Cadenas", "Cadenas"],
+    [["Cadenas", "Anillos"], "Cadenas y Anillos", "Cadenas and Anillos"],
+    [
+      ["Cadenas", "Anillos", "Aros"],
+      "Cadenas, Anillos y Aros",
+      "Cadenas, Anillos, and Aros",
+    ],
+  ])("joins %j as %j and %j", (items, spanish, english) => {
+    expect(formatList(items, "es")).toBe(spanish);
+    expect(formatList(items, "en")).toBe(english);
+  });
 });
 
 describe("formatDate", () => {

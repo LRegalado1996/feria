@@ -81,6 +81,7 @@ describe("API docs route", () => {
       ["/products/{slug}/related", ["get"]],
       ["/admin/categories", ["get", "post"]],
       ["/admin/categories/{id}", ["put", "delete"]],
+      ["/admin/categories/{id}/page", ["put"]],
       ["/admin/categories/order", ["put"]],
       ["/orders", ["post"]],
       ["/orders/{token}", ["get"]],

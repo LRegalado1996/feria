@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
+import { categoryPath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import type { DatabaseClient } from "@/server/db";
@@ -105,23 +107,34 @@ export type IndexableArticle = Awaited<
 
 /**
  * A store's categories in their order, named in `locale` (else the language
- * they have), only those with a published article: a link to an empty
- * listing tells an assistant nothing.
+ * they have), each with its page's address (FER-043), only those with a
+ * published article, in themselves or, for a group, in one of its
+ * categories: a link to an empty listing tells an assistant nothing.
  */
 export async function listIndexableCategories(
   db: DatabaseClient,
   { locale, storeId }: StoreScope & { locale: Locale }
 ) {
+  const group = alias(category, "category_group");
+  const child = alias(category, "category_child");
   const rows = await db
-    .select({ id: category.id, slug: category.slug })
+    .select({
+      id: category.id,
+      parentSlug: group.slug,
+      slug: category.slug,
+    })
     .from(category)
+    .leftJoin(
+      group,
+      and(eq(group.id, category.parentId), eq(group.storeId, category.storeId))
+    )
     .where(
       and(
         eq(category.storeId, storeId),
         sql`exists (select 1 from ${product} where ${and(
-          eq(product.categoryId, category.id),
           eq(product.storeId, category.storeId),
-          eq(product.status, "published")
+          eq(product.status, "published"),
+          sql`(${eq(product.categoryId, category.id)} or ${product.categoryId} in (select ${child.id} from ${category} as ${sql.identifier("category_child")} where ${eq(child.parentId, category.id)}))`
         )})`
       )
     )
@@ -145,12 +158,13 @@ export async function listIndexableCategories(
       )
     );
 
-  return rows.map(({ id, slug }) => ({
+  return rows.map(({ id, parentSlug, slug }) => ({
     name:
       pickTranslation(
         names.filter((name) => name.categoryId === id),
         locale
       )?.name ?? slug,
+    path: categoryPath({ parentSlug, slug }),
     slug,
   }));
 }

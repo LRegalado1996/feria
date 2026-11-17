@@ -35,6 +35,9 @@ export const admin = {
       load: "No pudimos cargar las categorías.",
       nameRequired: "Escribí el nombre en español.",
       nameTooLong: "Usá hasta 60 caracteres.",
+      altTooLong: "Usá hasta 200 caracteres.",
+      descriptionTooLong: "Usá hasta 160 caracteres.",
+      titleTooLong: "Usá hasta 70 caracteres.",
     },
     fields: {
       nameEn: "Nombre en inglés (opcional)",
@@ -55,10 +58,47 @@ export const admin = {
       stayed: "«{name}» quedó donde estaba.",
       up: "Subir: {name}",
     },
+    // A category's page in the store: its group, its texts for search
+    // engines and its cover (FER-043).
+    page: {
+      action: "Página y grupo: {name}",
+      cancel: "Cancelar",
+      cover: "Portada",
+      coverAltEn: "Descripción de la portada en inglés",
+      coverAltEs: "Descripción de la portada en español",
+      coverComputer: "En la computadora",
+      coverNone:
+        "Esta categoría todavía no tiene portada: su página muestra solo el título.",
+      coverPhone: "En el celular",
+      coverPhoneSame: "En el celular se ve la misma foto.",
+      coverUpload:
+        "Muy pronto vas a poder subir y cambiar la portada desde acá (FER-011).",
+      englishNeedsName:
+        "Para escribir los textos en inglés, primero ponele un nombre en inglés a la categoría.",
+      group: "Grupo",
+      groupHint:
+        "Un grupo junta categorías en el menú de la tienda, como Bijouterie con Cadenas y Anillos. Su página muestra todos sus artículos.",
+      groupIsGroup:
+        "Esta categoría es un grupo: tiene categorías adentro, así que no puede entrar en otro.",
+      groupNone: "Sin grupo",
+      holds: "Grupo de {count} categorías",
+      holdsOne: "Grupo de 1 categoría",
+      inGroup: "En {group}",
+      pending: "Guardando…",
+      seoDescriptionEn: "Descripción para buscadores en inglés",
+      seoDescriptionEs: "Descripción para buscadores en español",
+      seoHint:
+        "Si los dejás vacíos, se escriben solos con el nombre de la categoría y el de la tienda.",
+      seoTitleEn: "Título para buscadores en inglés",
+      seoTitleEs: "Título para buscadores en español",
+      submit: "Guardar la página",
+      title: "Página de «{name}»",
+    },
     title: "Categorías",
     toasts: {
       created: "Categoría agregada.",
       deleted: "Categoría eliminada.",
+      pageSaved: "Página guardada.",
       renamed: "Categoría renombrada.",
     },
   },
@@ -95,7 +135,7 @@ export const admin = {
       title: "¿Eliminar el valor?",
     },
     description:
-      "Con los filtros tus clientes encuentran lo que buscan, por ejemplo por color. Cada filtro tiene su propio enlace: /products?color=dorado.",
+      "Con los filtros tus clientes encuentran lo que buscan, por ejemplo por color. Cada filtro tiene su propio enlace: /productos?color=dorado.",
     edit: {
       action: "Renombrar filtro: {name}",
       cancel: "Cancelar",

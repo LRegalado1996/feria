@@ -5,6 +5,7 @@ import { cache, Suspense } from "react";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreOrder } from "@/app/_components/organisms/store-order";
 import { getDictionary } from "@/content";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
@@ -124,11 +125,11 @@ async function OrderResolver({ params }: OrderPageProps) {
     <StoreFrame
       copy={storefront.shell}
       locale={locale}
-      {...shellOf(store, locale)}
+      {...await shellOf(store, locale)}
     >
       <main data-testid="store-order-page">
         <StoreOrder
-          catalogHref={localizePath("/products", locale)}
+          catalogHref={localizePath(ALL_ARTICLES_PATH, locale)}
           labels={storefront.order}
           locale={locale}
           newTabLabel={storefront.shell.newTab}

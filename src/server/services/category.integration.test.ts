@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import type { UpdateCategoryPageValues } from "@/lib/schemas/catalog";
 import { db } from "@/server/db";
 import { category, product } from "@/server/db/schema";
 import { createProduct } from "@/server/services/catalog";
@@ -12,6 +13,7 @@ import {
   listStoreCategories,
   renameCategory,
   reorderCategories,
+  updateCategoryPage,
 } from "./category";
 
 vi.mock("@/env", () => ({
@@ -399,6 +401,242 @@ describe("category writes under two writers", () => {
     expect([first, second]).toMatchObject([
       { status: "fulfilled", value: { position: last + 1 } },
       { status: "fulfilled", value: { position: last + 2 } },
+    ]);
+  });
+});
+/** A category's page with no texts, in `parentId`'s group or in none. */
+function page(id: number, parentId: number | null): UpdateCategoryPageValues {
+  return {
+    coverAltEn: null,
+    coverAltEs: null,
+    id,
+    parentId,
+    seoDescriptionEn: null,
+    seoDescriptionEs: null,
+    seoTitleEn: null,
+    seoTitleEs: null,
+  };
+}
+
+async function setPage(
+  storeId: number,
+  values: ReturnType<typeof page> & Record<string, unknown>
+) {
+  return await db.transaction(
+    async (tx) => await updateCategoryPage(tx, { storeId, values })
+  );
+}
+
+/** Each of `ids`' group, as the admin's list reads it. */
+async function groupsOf(storeId: number, ids: number[]) {
+  return (await listStoreCategories(db, { storeId }))
+    .filter((row) => ids.includes(row.id))
+    .map((row) => [row.id, row.parentId]);
+}
+
+describe("category groups and pages (FER-043)", () => {
+  test("a category joins a group and leaves it; a group joins none and a category in a group holds none", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const group = await add(storeId, `Bijouterie ${tag}`);
+    const rings = await add(storeId, `Anillos ${tag}`);
+    const chains = await add(storeId, `Cadenas ${tag}`);
+
+    await setPage(storeId, page(rings.id, group.id));
+    expect(await groupsOf(storeId, [group.id, rings.id])).toEqual([
+      [group.id, null],
+      [rings.id, group.id],
+    ]);
+
+    await expect(
+      setPage(storeId, page(group.id, chains.id))
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A group cannot join another group",
+    });
+    await expect(
+      setPage(storeId, page(chains.id, rings.id))
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A category in a group cannot be a group",
+    });
+
+    await setPage(storeId, page(rings.id, null));
+    expect(await groupsOf(storeId, [rings.id])).toEqual([[rings.id, null]]);
+  });
+
+  test("the database refuses a category as its own group, and a group of another store's", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const rings = await add(storeId, `Anillos ${tag}`);
+
+    await expect(
+      db
+        .update(category)
+        .set({ parentId: rings.id })
+        .where(eq(category.id, rings.id))
+    ).rejects.toMatchObject({
+      cause: { constraint: "category_parent_not_self" },
+    });
+    await expect(
+      db
+        .update(category)
+        .set({ parentId: 2_000_000_000 })
+        .where(eq(category.id, rings.id))
+    ).rejects.toMatchObject({
+      cause: { constraint: "category_store_parent_fk" },
+    });
+  });
+
+  test("page texts are kept by a rename, and English ones need an English name", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const rings = await add(storeId, `Anillos ${tag}`, `Rings ${tag}`);
+
+    await setPage(storeId, {
+      ...page(rings.id, null),
+      coverAltEn: "A ring",
+      seoTitleEn: "Rings at the fair",
+      seoTitleEs: "Anillos de la feria",
+    });
+    await db.transaction(
+      async (tx) =>
+        await renameCategory(tx, {
+          id: rings.id,
+          storeId,
+          values: { nameEn: `Rings! ${tag}`, nameEs: `Anillos! ${tag}` },
+        })
+    );
+
+    expect(
+      (await listStoreCategories(db, { storeId })).find(
+        (row) => row.id === rings.id
+      )
+    ).toMatchObject({
+      coverAltEn: "A ring",
+      nameEn: `Rings! ${tag}`,
+      nameEs: `Anillos! ${tag}`,
+      seoTitleEn: "Rings at the fair",
+      seoTitleEs: "Anillos de la feria",
+    });
+
+    // Without its English name, its English texts go with the row.
+    await db.transaction(
+      async (tx) =>
+        await renameCategory(tx, {
+          id: rings.id,
+          storeId,
+          values: { nameEn: null, nameEs: `Anillos! ${tag}` },
+        })
+    );
+    expect(
+      (await listStoreCategories(db, { storeId })).find(
+        (row) => row.id === rings.id
+      )
+    ).toMatchObject({ coverAltEn: null, nameEn: null, seoTitleEn: null });
+    await expect(
+      setPage(storeId, { ...page(rings.id, null), seoTitleEn: "Rings" })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Name the category in English before its English page texts",
+    });
+  });
+
+  test("deleting a group leaves its categories, in no group", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const group = await add(storeId, `Bijouterie ${tag}`);
+    const rings = await add(storeId, `Anillos ${tag}`);
+    await setPage(storeId, page(rings.id, group.id));
+
+    await db.transaction(
+      async (tx) =>
+        await deleteCategory(tx, { id: group.id, moveToId: null, storeId })
+    );
+
+    expect(await groupsOf(storeId, [group.id, rings.id])).toEqual([
+      [rings.id, null],
+    ]);
+  });
+});
+
+/**
+ * Two page writes in the store, the second started while the first holds
+ * the store's category lock: it waits, then decides on what the first wrote.
+ */
+async function overlappingPages(
+  storeId: number,
+  values: [ReturnType<typeof page>, ReturnType<typeof page>]
+) {
+  const held = deferred();
+  const locked = deferred();
+  const first = db.transaction(async (tx) => {
+    const result = await updateCategoryPage(tx, {
+      storeId,
+      values: values[0],
+    });
+    locked.resolve(undefined);
+    await held.promise;
+
+    return result;
+  });
+  await Promise.race([locked.promise, first]);
+  const second = setPage(storeId, values[1]);
+
+  try {
+    await waitUntilBlocked();
+  } finally {
+    held.resolve(undefined);
+  }
+
+  return await Promise.allSettled([first, second]);
+}
+
+describe("category groups under two writers", () => {
+  test("two categories put into each other at once end in one group and one refusal, never a loop", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const a = await add(storeId, `Uno ${tag}`);
+    const b = await add(storeId, `Dos ${tag}`);
+
+    const [first, second] = await overlappingPages(storeId, [
+      page(a.id, b.id),
+      page(b.id, a.id),
+    ]);
+
+    expect(first.status).toBe("fulfilled");
+    expect(second).toMatchObject({
+      reason: {
+        code: "BAD_REQUEST",
+        message: "A category in a group cannot be a group",
+      },
+      status: "rejected",
+    });
+    expect(await groupsOf(storeId, [a.id, b.id])).toEqual([
+      [a.id, b.id],
+      [b.id, null],
+    ]);
+  });
+
+  test("control: two categories put into one group at once both join it", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const group = await add(storeId, `Grupo ${tag}`);
+    const a = await add(storeId, `Uno ${tag}`);
+    const b = await add(storeId, `Dos ${tag}`);
+
+    const results = await overlappingPages(storeId, [
+      page(a.id, group.id),
+      page(b.id, group.id),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+    ]);
+    expect(await groupsOf(storeId, [a.id, b.id])).toEqual([
+      [a.id, group.id],
+      [b.id, group.id],
     ]);
   });
 });

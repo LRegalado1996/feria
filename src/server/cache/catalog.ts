@@ -2,16 +2,15 @@ import { ORPCError } from "@orpc/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import type { Locale } from "@/lib/i18n/config";
-import {
-  catalogSlugSchema,
-  RELATED_PRODUCTS_DEFAULT,
-} from "@/lib/schemas/catalog";
+import { catalogSlugSchema } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
+  getAllArticlesCover,
+  getCategoryPage,
   getPublishedProduct,
   listCategories,
-  listRelatedProducts,
+  listRelatedPool,
 } from "@/server/services/catalog";
 
 /** Every cached read of one store's published articles. */
@@ -69,7 +68,11 @@ async function readCachedArticle(
   }
 }
 
-/** The articles shown beside one, cached with the store's catalog. */
+/**
+ * What the suggestions under an article are picked from (its category, and
+ * the rest of the store when the category is small), cached with the
+ * store's catalog. The browser draws from it per visit (FER-039).
+ */
 export async function readRelatedArticles(
   store: { currencyCode: Currency; id: number },
   article: { categoryId: number | null; id: number },
@@ -79,10 +82,9 @@ export async function readRelatedArticles(
   cacheLife("hours");
   cacheTag(catalogTag(store.id));
 
-  return await listRelatedProducts(db, {
+  return await listRelatedPool(db, {
     categoryId: article.categoryId,
     currencyCode: store.currencyCode,
-    limit: RELATED_PRODUCTS_DEFAULT,
     locale,
     productId: article.id,
     storeId: store.id,
@@ -101,6 +103,58 @@ export async function readCategories(store: { id: number }, locale: Locale) {
   cacheTag(catalogTag(store.id));
 
   return await listCategories(db, { locale, storeId: store.id });
+}
+
+/**
+ * A category's page (FER-043) at `slug` in `locale`: its names, its group,
+ * its categories, its texts and its cover, or `null`. Cached with the
+ * catalog, so every category write drops it. An address that can never be
+ * a category's is answered before the cache, like an article's.
+ */
+export async function readCategoryPage(
+  store: { id: number },
+  slug: string,
+  locale: Locale
+) {
+  const parsed = catalogSlugSchema.safeParse(slug);
+
+  if (!parsed.success || parsed.data !== slug) {
+    return null;
+  }
+
+  return await readCachedCategoryPage(store, slug, locale);
+}
+
+async function readCachedCategoryPage(
+  store: { id: number },
+  slug: string,
+  locale: Locale
+) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await getCategoryPage(db, { locale, slug, storeId: store.id });
+}
+
+/**
+ * The cover of the page of all the store's articles (FER-043), cached with
+ * the catalog; a store edit drops the tag too (`invalidateCatalogCache`).
+ */
+export async function readAllArticlesCover(
+  store: { id: number },
+  locale: Locale,
+  fallbackAlt: string
+) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await getAllArticlesCover(db, {
+    fallbackAlt,
+    locale,
+    storeId: store.id,
+  });
 }
 
 /**

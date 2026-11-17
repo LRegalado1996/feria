@@ -118,6 +118,28 @@ describe("StorePageFooter", () => {
     expect(screen.getByTestId("footer")).toHaveTextContent("no tagline");
   });
 
+  test("lists the categories a page read itself, as of now, instead of the cached ones (FER-043)", async () => {
+    render(
+      await StorePageFooter({
+        categories: [
+          {
+            id: 4,
+            lang: "es",
+            name: "Aros",
+            parentId: null,
+            path: "/aros",
+            slug: "aros",
+          },
+        ],
+        locale: "es",
+        store: makeStore(),
+      })
+    );
+
+    expect(screen.getByTestId("footer")).toHaveTextContent(/\| Aros$/u);
+    expect(readCategories).not.toHaveBeenCalled();
+  });
+
   test("sits at the bottom of a short page", async () => {
     render(await StorePageFooter({ locale: "es", store: makeStore() }));
 

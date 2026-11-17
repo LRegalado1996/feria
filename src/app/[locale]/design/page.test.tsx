@@ -266,7 +266,7 @@ describe("DesignPage", () => {
       ["Add to cart", "primary", "lg"],
       ["See the catalog", "outline", "md"],
       ["Clear", "ghost", "md"],
-      ["Add to cart", "primary", "icon-lg"],
+      ["Add to cart", "accent", "icon-lg"],
       ["On the moss", "contrast", "md"],
       ["Search the store", "contrast", "icon"],
     ]);
@@ -462,14 +462,8 @@ describe("DesignPage", () => {
       within(shell.getByRole("navigation", { name: "Secciones de la tienda" }))
         .getAllByRole("link")
         .map((link) => link.textContent)
-    ).toEqual([
-      "Catálogo",
-      "Burbujeros",
-      "Cadenas",
-      "Anillos",
-      "Aros",
-      "Pulseras",
-    ]);
+      // The group's categories wait behind its button (FER-043).
+    ).toEqual(["Todos los artículos", "Bijouterie", "Burbujeros"]);
     // Its skip link leads to the gallery's own content.
     expect(page).toHaveAttribute("id", "store-main");
     expect(page).toHaveAttribute("tabindex", "-1");

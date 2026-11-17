@@ -28,7 +28,7 @@ export function useCatalogProducts({
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       initialPageParam: undefined as ListProductsValues["cursor"],
       input: (cursor) => ({
-        category: query.category ?? undefined,
+        category: query.category?.slug,
         cursor,
         filters: query.filters,
         locale,

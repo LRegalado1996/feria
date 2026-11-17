@@ -81,8 +81,12 @@ export interface DbFixture {
        * (and English when given). The name and slug carry the test's own tag.
        */
       createCategory: (names: {
+        /** A computer image from `public/seed/` for its page (FER-043). */
+        cover?: { height: number; url: string; width: number };
         nameEn?: string;
         nameEs: string;
+        /** The group it is in (FER-043). */
+        parentId?: number;
         slug: string;
       }) => Promise<{ id: number; slug: string }>;
       /**
@@ -144,10 +148,14 @@ export const test = userTest.extend<DbFixture>({
         const storeId = theStore.id;
 
         const seed: DbFixture["db"]["seed"] = {
-          createCategory: async ({ nameEn, nameEs, slug }) => {
+          createCategory: async ({ cover, nameEn, nameEs, parentId, slug }) => {
             const [created] = await db
               .insert(category)
               .values({
+                coverHeight: cover?.height,
+                coverUrl: cover?.url,
+                coverWidth: cover?.width,
+                parentId,
                 // After every category of the store, as the admin adds one.
                 position: sql`(select coalesce(max(${category.position}), -1) + 1 from ${category} where ${category.storeId} = ${storeId})`,
                 slug,

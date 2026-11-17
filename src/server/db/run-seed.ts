@@ -14,7 +14,7 @@ try {
     nodeEnv: process.env.NODE_ENV,
   });
   console.log(
-    `db:seed: logins ${result.createdAccounts.length > 0 ? `created: ${result.createdAccounts.join(", ")}` : "already there"}; store texts ${result.createdStoreTexts.length > 0 ? `created: ${result.createdStoreTexts.join(", ")}` : "already there"}; sample articles ${result.createdArticles > 0 ? `created: ${result.createdArticles}` : "already there"}`
+    `db:seed: logins ${result.createdAccounts.length > 0 ? `created: ${result.createdAccounts.join(", ")}` : "already there"}; store texts ${result.createdStoreTexts.length > 0 ? `created: ${result.createdStoreTexts.join(", ")}` : "already there"}; sample articles ${result.createdArticles > 0 ? `created: ${result.createdArticles}` : "already there"}; catalog pages: ${result.catalogPages.groups} groups added, ${result.catalogPages.grouped} categories grouped, ${result.catalogPages.covers} covers set`
   );
 } catch (error) {
   process.exitCode = 1;

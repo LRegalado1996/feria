@@ -94,8 +94,8 @@ async function setup({
 
 describe("StoreHome", () => {
   test.each([
-    ["es", "Ver el catálogo", "/products"],
-    ["en", "See the catalog", "/en/products"],
+    ["es", "Ver el catálogo", "/productos"],
+    ["en", "See the catalog", "/en/productos"],
   ] as const)(
     "in %s, leads into the catalog from the intro with %j",
     async (locale, label, href) => {

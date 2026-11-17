@@ -43,6 +43,40 @@ export function breadcrumbList(crumbs: Crumb[]) {
 }
 
 /**
+ * A catalog page as a schema.org `CollectionPage` (FER-043): its name, its
+ * description and address, the trail to it, and the articles it shows first
+ * as an `ItemList`, in their order on the page.
+ */
+export function collectionPage(page: {
+  breadcrumb: Crumb[];
+  description: string;
+  items: Crumb[];
+  locale: string;
+  name: string;
+  url: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: page.name,
+    description: page.description,
+    url: page.url,
+    inLanguage: page.locale,
+    breadcrumb: breadcrumbList(page.breadcrumb),
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: page.items.length,
+      itemListElement: page.items.map((item, index) => ({
+        "@type": "ListItem",
+        name: item.name,
+        position: index + 1,
+        url: item.url,
+      })),
+    },
+  };
+}
+
+/**
  * An article as a schema.org `Product` with its `Offer` (FER-024): only
  * what the page shows, its price in major units with two decimals, as
  * schema.org expects, and whether it can be bought now.

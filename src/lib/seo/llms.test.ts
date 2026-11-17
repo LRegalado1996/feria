@@ -46,7 +46,7 @@ function build(overrides: Partial<StoreLlmsInput> = {}) {
 
   return buildStoreLlms({
     articles: [makeArticle()],
-    categories: [{ name: "Anillos", slug: "anillos" }],
+    categories: [{ name: "Anillos", path: "/bijouterie/anillos" }],
     copy: (locale === "es" ? es : en).seo.llms,
     currencyCode: "UYU",
     locale,
@@ -68,15 +68,15 @@ describe("buildStoreLlms", () => {
         "",
         "## Categorías",
         "",
-        `- [Anillos](${ORIGIN}/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/bijouterie/anillos)`,
         "",
         "## Artículos",
         "",
-        `- [Anillo sello](${ORIGIN}/products/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
+        `- [Anillo sello](${ORIGIN}/productos/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [Catálogo completo](${ORIGIN}/productos)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
@@ -94,15 +94,15 @@ describe("buildStoreLlms", () => {
         "",
         "## Categories",
         "",
-        `- [Anillos](${ORIGIN}/en/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/en/bijouterie/anillos)`,
         "",
         "## Articles",
         "",
-        `- [Signet ring](${ORIGIN}/en/products/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
+        `- [Signet ring](${ORIGIN}/en/productos/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Full catalog](${ORIGIN}/en/productos)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -116,7 +116,7 @@ describe("buildStoreLlms", () => {
         currencyCode: "USD",
       })
     ).toContain(
-      `/products/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
+      `/productos/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
     );
     expect(formatPrice(129_050, "USD", "es")).toMatch(/^US\$\s1\.290,50$/u);
   });
@@ -147,11 +147,11 @@ describe("buildStoreLlms", () => {
         "",
         "## Articles",
         "",
-        `- [Cadena](${ORIGIN}/en/products/cadena)`,
+        `- [Cadena](${ORIGIN}/en/productos/cadena)`,
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Full catalog](${ORIGIN}/en/productos)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -171,7 +171,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [Catálogo completo](${ORIGIN}/productos)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
@@ -186,19 +186,19 @@ describe("buildStoreLlms", () => {
             titles: [{ locale: "es", title: "Aros [edición]\n limitada" }],
           }),
         ],
-        categories: [{ name: "Aros \\ dijes", slug: "aros" }],
+        categories: [{ name: "Aros \\ dijes", path: "/aros" }],
       })
     ).toContain(
-      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/products/anillo-sello)`
+      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/productos/anillo-sello)`
     );
     expect(
-      build({ categories: [{ name: "Aros \\ dijes", slug: "aros" }] })
+      build({ categories: [{ name: "Aros \\ dijes", path: "/aros" }] })
     ).toContain(String.raw`- [Aros \\ dijes](`);
   });
 
   test("writes an article without any title as an empty link text", () => {
     expect(build({ articles: [makeArticle({ titles: [] })] })).toContain(
-      `- [](${ORIGIN}/products/anillo-sello)`
+      `- [](${ORIGIN}/productos/anillo-sello)`
     );
   });
 });

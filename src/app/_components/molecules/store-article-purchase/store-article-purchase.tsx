@@ -21,8 +21,9 @@ export interface StoreArticlePurchaseProps {
 
 /**
  * How many to take and the button that adds them (FER-024): a pill with the
- * two steps and the count, beside the page's one primary pill, which takes
- * the rest of the row (FER-039). From 1 to the per-article cap; what adding
+ * two steps and the count, and beside it, on one row at every width down to
+ * 375 px, the page's one primary pill, which takes the rest of the row
+ * (FER-039, like landonorris.store's "QTY 1" beside "ADD TO BAG"). From 1 to the per-article cap; what adding
  * did is said in a polite live region, a repeat included.
  */
 function StoreArticlePurchase({
@@ -44,10 +45,13 @@ function StoreArticlePurchase({
       className={cn("flex flex-col gap-3", className)}
       data-slot="store-article-purchase"
     >
-      {/* On a narrow phone the button drops under the quantity rather
-          than squeezing it. */}
-      <div className="flex flex-wrap items-stretch gap-2.5">
-        <fieldset className="inline-flex h-13 shrink-0 items-center rounded-full border-2 border-store-foreground px-0.5">
+      {/* One row: the stepper keeps its 44 px steps and gives up its
+          padding first, so the label fits beside it on a 375 px phone. */}
+      <div
+        className="flex items-stretch gap-2"
+        data-testid="store-article-purchase-row"
+      >
+        <fieldset className="inline-flex h-13 shrink-0 items-center rounded-full border-2 border-store-foreground">
           {/* Its steps say what they do; the group's name is for a screen
               reader, which hears it on entering. */}
           <legend className="sr-only">{copy.quantity}</legend>
@@ -65,7 +69,7 @@ function StoreArticlePurchase({
           </StoreButton>
           <output
             aria-live="polite"
-            className="min-w-8 text-center text-base font-semibold tabular-nums"
+            className="min-w-7 text-center text-base font-semibold tabular-nums"
             data-testid="store-article-quantity"
           >
             {quantity}
@@ -84,10 +88,10 @@ function StoreArticlePurchase({
           </StoreButton>
         </fieldset>
         <StoreButton
-          // Beside the quantity only where its label fits on one line there;
-          // otherwise (a phone, the article's column on a computer) it takes
-          // a row of its own, full width, rather than breaking its label.
-          className="min-w-0 grow basis-60 px-5 text-center text-xs whitespace-normal"
+          // The rest of the row. Its label fits on one line at 375 px; on a
+          // narrower screen, or a larger text setting, it breaks inside the
+          // pill rather than pushing the pill under the quantity.
+          className="min-w-0 flex-1 px-3.5 text-center text-xs leading-tight whitespace-normal"
           disabled={!hydrated}
           onClick={() => {
             const had =

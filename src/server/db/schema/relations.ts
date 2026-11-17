@@ -54,6 +54,13 @@ export const storeTranslationRelations = relations(
 );
 
 export const categoryRelations = relations(category, ({ many, one }) => ({
+  // A group and the categories in it (FER-043), one level deep.
+  children: many(category, { relationName: "categoryGroup" }),
+  parent: one(category, {
+    fields: [category.parentId],
+    references: [category.id],
+    relationName: "categoryGroup",
+  }),
   products: many(product),
   store: one(store, { fields: [category.storeId], references: [store.id] }),
   translations: many(categoryTranslation),

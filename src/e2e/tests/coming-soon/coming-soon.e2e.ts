@@ -20,12 +20,13 @@ test.describe("Launch switch off: the store is closed", () => {
   // The store's pages (FER-038), and an address no page answers.
   for (const [path, target] of [
     ["/", "/coming-soon"],
-    ["/products?color=dorado", "/coming-soon"],
-    ["/products/collar-de-perlas", "/coming-soon"],
+    ["/productos?color=dorado", "/coming-soon"],
+    ["/bijouterie/anillos", "/coming-soon"],
+    ["/productos/collar-de-perlas", "/coming-soon"],
     ["/cart", "/coming-soon"],
     ["/lr-market", "/coming-soon"],
     ["/en", "/en/coming-soon"],
-    ["/en/products/pearl-necklace", "/en/coming-soon"],
+    ["/en/productos/pearl-necklace", "/en/coming-soon"],
   ] as const) {
     test(`${path} answers a temporary redirect to ${target}`, async ({
       request,
