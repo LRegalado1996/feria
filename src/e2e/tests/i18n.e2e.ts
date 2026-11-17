@@ -272,6 +272,50 @@ test.describe("Languages, signed in", () => {
     });
   }
 
+  // Next hides the page it leaves and shows it again, state and all, both
+  // on Back and on a link back to it (the Next guide "Preserving UI state").
+  for (const { name, comeBack } of [
+    {
+      name: "Back",
+      comeBack: async (_admin: AdminPage, page: Page) => {
+        await page.goBack();
+      },
+    },
+    {
+      name: "the pill",
+      comeBack: async (admin: AdminPage) => {
+        await expect(admin.localeToggle()).toHaveAttribute(
+          "href",
+          "/admin/products"
+        );
+        await admin.localeToggle().click();
+      },
+    },
+  ]) {
+    test(`the Spanish page shown again by ${name} rests on Spanish and switches again`, async ({
+      authenticatedPage: page,
+    }) => {
+      const admin = new AdminPage(page);
+      await page.goto("/admin/products");
+      await admin.waitForLoad();
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
+
+      await comeBack(admin, page);
+
+      await expect(page).toHaveURL("/admin/products");
+      await expect(admin.heading()).toHaveText("Artículos");
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
+    });
+  }
+
   for (const { path, signOut } of [
     { path: "/admin", signOut: "Cerrar sesión" },
     { path: "/en/admin", signOut: "Sign out" },
