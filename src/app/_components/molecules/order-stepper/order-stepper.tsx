@@ -8,7 +8,7 @@ import {
   PackageCheck,
   X,
 } from "lucide-react";
-import { type MouseEvent, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/app/_components/atoms/button";
 import {
@@ -136,6 +136,15 @@ function isBack(from: OrderStatus, to: OrderStatus) {
   return ORDER_STATUSES.indexOf(to) < ORDER_STATUSES.indexOf(from);
 }
 
+/** Focus to the step the order is at, where it goes when nothing else can. */
+function focusCurrentStep(list: HTMLOListElement | null) {
+  list
+    ?.querySelector<HTMLElement>(
+      '[aria-current="step"] [data-slot="order-stepper-circle"]'
+    )
+    ?.focus();
+}
+
 function canMove(from: OrderStatus, to: OrderStatus) {
   return ORDER_MOVES[from].includes(to);
 }
@@ -210,7 +219,23 @@ function OrderStepper({
   });
   // The control that opened the dialog, where focus goes back on close.
   const opener = useRef<HTMLButtonElement | null>(null);
+  const list = useRef<HTMLOListElement>(null);
   const app = tone === "app";
+
+  // The detour leaves the page once the order takes it. Holding focus as the
+  // move lands, after the dialog closed, it would drop focus to the page:
+  // the step the order reached takes it instead.
+  useEffect(() => {
+    if (
+      status === "undeliverable" &&
+      opener.current !== null &&
+      !opener.current.isConnected &&
+      document.activeElement === document.body
+    ) {
+      opener.current = null;
+      focusCurrentStep(list.current);
+    }
+  }, [status]);
 
   const ask = (to: OrderStatus) => (event: MouseEvent<HTMLButtonElement>) => {
     if (
@@ -382,7 +407,14 @@ function OrderStepper({
         onCloseAutoFocus={(event) => {
           // It has no trigger of its own: the control that opened it.
           event.preventDefault();
-          opener.current?.focus();
+          // The move landed first and took its control away (the detour):
+          // the step the order reached instead.
+          if (opener.current?.isConnected) {
+            opener.current.focus();
+          } else {
+            opener.current = null;
+            focusCurrentStep(list.current);
+          }
         }}
         onConfirm={() => {
           setAsking({ open: false, to });
@@ -405,9 +437,11 @@ function OrderStepper({
       data-mode={moves ? "interactive" : "read-only"}
       data-slot="order-stepper"
       data-status={status}
+      data-testid="order-stepper"
       data-tone={tone}
     >
       <ol
+        ref={list}
         aria-label={interpolate(copy.label, {
           status: copy.statuses[status],
         })}

@@ -28,10 +28,11 @@ function setup({
   const moves = interactive
     ? { code: "K7P2Q", onMove, pendingMove }
     : undefined;
+  const stepper = (at: OrderStatus) => (
+    <OrderStepper moves={moves} status={at} {...props} />
+  );
 
-  renderWithI18n(<OrderStepper moves={moves} status={status} {...props} />, {
-    locale,
-  });
+  const { rerender } = renderWithI18n(stepper(status), { locale });
 
   const list = () => screen.getByRole("list");
   const steps = () =>
@@ -51,7 +52,18 @@ function setup({
       .filter((button) => !button.hasAttribute("aria-disabled"))
       .map((button) => button.dataset.move);
 
-  return { control, enabledMoves, list, onMove, steps, user };
+  return {
+    control,
+    enabledMoves,
+    /** The order read again at `at`, as the page does after a move. */
+    land: (at: OrderStatus) => {
+      rerender(stepper(at));
+    },
+    list,
+    onMove,
+    steps,
+    user,
+  };
 }
 
 describe("OrderStepper", () => {
@@ -355,6 +367,48 @@ describe("OrderStepper with moves", () => {
     await user.click(confirm);
 
     expect(onMove).toHaveBeenCalledExactlyOnceWith("undeliverable");
+  });
+
+  test("the detour's move landing as its dialog closes hands focus to the step the order reached", async () => {
+    const { control, land, onMove, user } = setup({ interactive: true });
+    onMove.mockImplementation((to) => {
+      land(to);
+    });
+
+    await user.click(control("undeliverable"));
+    await user.click(
+      screen.getByRole("button", { name: "Yes, it couldn't be delivered" })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(control("undeliverable")).toHaveAttribute(
+      "data-slot",
+      "order-stepper-circle"
+    );
+    expect(control("undeliverable")).toHaveFocus();
+  });
+
+  test("the detour's move landing after its dialog closed hands focus to the step the order reached", async () => {
+    const { control, land, user } = setup({ interactive: true });
+
+    await user.click(control("undeliverable"));
+    await user.click(
+      screen.getByRole("button", { name: "Yes, it couldn't be delivered" })
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(control("undeliverable")).toHaveFocus();
+
+    land("undeliverable");
+
+    expect(control("undeliverable")).toHaveAttribute(
+      "data-slot",
+      "order-stepper-circle"
+    );
+    expect(control("undeliverable")).toHaveFocus();
   });
 
   test.each([
