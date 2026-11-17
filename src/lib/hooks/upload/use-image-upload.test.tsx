@@ -122,7 +122,7 @@ function setup({
       })
   );
   const onUploaded = vi.fn<(image: UploadedImage) => void>();
-  const { result } = renderHook(
+  const { result, unmount } = renderHook(
     () => useImageUpload({ onUploaded, purpose: "cover" }),
     { wrapper: createQueryWrapper() }
   );
@@ -143,6 +143,7 @@ function setup({
     onUploaded,
     result,
     tokenRequests,
+    unmount,
     upload,
   };
 }
@@ -335,6 +336,51 @@ describe("useImageUpload", () => {
 
     expect(onUploaded).not.toHaveBeenCalled();
     expect(result.current.state).toEqual({ status: "cancelled" });
+  });
+
+  test("leaving the form while the token is on its way sends nothing", async () => {
+    const { file, giveToken, onUploaded, result, tokenRequests, unmount } =
+      setup({ holdsToken: true });
+
+    act(() => {
+      result.current.start(file);
+    });
+    await waitFor(() => {
+      expect(tokenRequests).toHaveBeenCalledOnce();
+    });
+    unmount();
+    giveToken();
+
+    // The token's answer has come and gone, and nothing was sent with it.
+    await waitFor(() => {
+      expect(tokenRequests.mock.results[0]?.type).toBe("return");
+    });
+    await act(async () => {
+      await tokenRequests.mock.results[0]?.value;
+    });
+    expect(mocks.put).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
+  });
+
+  test("leaving the form mid-upload aborts it and hands nothing over", async () => {
+    const { file, onUploaded, result, unmount, upload } = setup({
+      ignoresAbort: true,
+    });
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+
+    unmount();
+    expect(sending.options.abortSignal.aborted).toBe(true);
+    // A store that finishes anyway is not listened to.
+    await act(async () => {
+      sending.finish();
+      await Promise.resolve();
+    });
+
+    expect(onUploaded).not.toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   test("a photo the browser cannot read asks for another, unreported and without a retry", async () => {

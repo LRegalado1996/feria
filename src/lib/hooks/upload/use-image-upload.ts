@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { put } from "@vercel/blob/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { reportError } from "@/lib/errors/client";
 import { orpc } from "@/lib/orpc/client";
@@ -38,8 +38,8 @@ interface Attempt {
  * the browser, asks the server for a client token (an admin's only), then
  * sends the file with its progress. `retry()` sends the same prepared file
  * again with a fresh token after a failure; `cancel()` stops it wherever it
- * is. A finished upload is handed to `onUploaded` with its size in pixels,
- * for the form to save. A failure is reported once, here; a file the browser
+ * is, and so does leaving the form. A finished upload is handed to
+ * `onUploaded` with its size in pixels, for the form to save. A failure is reported once, here; a file the browser
  * cannot read is the user's to change, not a defect.
  */
 export function useImageUpload({
@@ -59,6 +59,16 @@ export function useImageUpload({
 
   const isCurrent = (attempt: Attempt) =>
     current.current === attempt && !attempt.controller.signal.aborted;
+
+  // Leaving the form stops its upload: a token that arrives later sends
+  // nothing, and a transfer under way is aborted, handing nothing over.
+  useEffect(
+    () => () => {
+      current.current?.controller.abort();
+      current.current = null;
+    },
+    []
+  );
 
   async function send(attempt: Attempt, prepared: PreparedImage) {
     if (prepared.blob.size > IMAGE_PURPOSE_MAX_BYTES[purpose]) {
