@@ -486,6 +486,9 @@ function CategoryRow({
             <Button
               aria-expanded={paging}
               aria-label={interpolate(copy.page.action, { name: row.nameEs })}
+              // While a save is on its way the page stays as it is: closing and
+              // reopening it would let that save close a newer editor.
+              disabled={updatePage.isPending}
               onClick={() => {
                 setPaging((was) => !was);
               }}
@@ -520,7 +523,9 @@ function CategoryRow({
           </div>
         </>
       )}
-      {paging && !editing ? (
+      {/* Kept while the names are being renamed: what was typed in the page
+          stays. */}
+      {paging ? (
         <CategoryPageForm
           category={row}
           className="min-w-0 basis-full border-t pt-4 md:px-12"

@@ -12,6 +12,7 @@ import type { StoreCategory } from "@/server/services/category";
 import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
+import { required } from "@/test/required";
 
 import { CategoryManager } from "./category-manager";
 
@@ -1231,6 +1232,62 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
     expect(reportError).toHaveBeenCalledWith(expect.anything(), {
       action: "Category.update_page",
     });
+  });
+
+  test("holds the page open while its save is on its way, so the save cannot close a newer editor", async () => {
+    const { row, spies, user } = setup({
+      list: GROUPED,
+      writes: { updatePage: "hang" },
+    });
+    await shown();
+    const toggle = within(row("aros")).getByRole("button", {
+      name: "Page and group: Aros",
+    });
+    await user.click(toggle);
+
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(spies.updatePage).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ id: 2 })
+      );
+    });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("category-page-form")).toBeVisible();
+  });
+
+  test("keeps what was typed in the page while the category is renamed and the rename cancelled", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Page and group: Aros" })
+    );
+    const description = screen.getByRole("textbox", {
+      name: "Description for search engines in Spanish",
+    });
+    await user.type(description, "Aros dorados");
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    );
+    // The rename's own Cancel, not the page's.
+    await user.click(
+      required(
+        within(row("aros"))
+          .getAllByRole("button", { name: "Cancel" })
+          .find((button) => !button.closest('[data-slot="category-page-form"]'))
+      )
+    );
+    expect(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    ).toBeVisible();
+
+    expect(
+      screen.getByRole("textbox", {
+        name: "Description for search engines in Spanish",
+      })
+    ).toHaveValue("Aros dorados");
   });
 
   test("closes the page without saving, handing focus back to its button", async () => {
