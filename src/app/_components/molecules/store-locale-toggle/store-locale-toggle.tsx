@@ -1,21 +1,61 @@
-import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
+import {
+  LocaleToggle,
+  type LocaleToggleClassNames,
+} from "@/app/_components/molecules/locale-toggle";
 import { cn } from "@/lib/utils";
 
 export interface StoreLocaleToggleProps {
   className?: string;
+  /** `page` on the store's background (the header), `contrast` on a dark block. */
+  tone?: "page" | "contrast";
 }
 
+// The pill in the store's palette: a hairline capsule, the thumb filled under
+// the current language, the other code in the block's text color. On a
+// contrast block that is the background, never the accent: the palette
+// promises the accent only 3:1 there, enough for a display heading but not
+// for a 12 px code (design.md § Storefront).
+const TONES = {
+  contrast: {
+    code: "data-[state=off]:text-store-background data-[state=on]:text-store-foreground",
+    thumb: "bg-store-accent",
+    track:
+      "border border-store-accent group-hover:bg-store-accent/15 group-focus-visible:outline-store-accent",
+  },
+  page: {
+    code: "data-[state=off]:text-store-foreground data-[state=on]:text-store-background",
+    thumb: "bg-store-foreground",
+    track:
+      "border border-store-foreground group-hover:bg-store-surface group-focus-visible:outline-store-foreground",
+  },
+} as const satisfies Record<
+  NonNullable<StoreLocaleToggleProps["tone"]>,
+  Required<LocaleToggleClassNames>
+>;
+
 /**
- * The language toggle in a store's colors: the same link, which keeps the
- * store, the path and the query string, without the app's button.
+ * The language pill in the store's colors: the app's link, which keeps the
+ * path and the query string, drawn with the store's tokens instead of the
+ * app's. A 44 px target; focus is the storefront's 3 px outline, on the
+ * capsule.
  */
-function StoreLocaleToggle({ className }: StoreLocaleToggleProps) {
+function StoreLocaleToggle({
+  className,
+  tone = "page",
+}: StoreLocaleToggleProps) {
+  const look = TONES[tone];
+
   return (
     <LocaleToggle
-      className={cn(
-        "inline-flex min-h-11 items-center px-2 text-sm font-semibold text-store-foreground underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground",
-        className
-      )}
+      className={cn("min-h-11 px-1", className)}
+      classNames={{
+        code: cn("text-xs font-semibold", look.code),
+        thumb: look.thumb,
+        track: cn(
+          "transition-colors group-focus-visible:outline-3 group-focus-visible:outline-offset-2",
+          look.track
+        ),
+      }}
       tone="bare"
     />
   );

@@ -21,6 +21,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
   notFound,
   usePathname: () => "/design",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

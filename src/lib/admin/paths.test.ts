@@ -19,10 +19,10 @@ describe("admin paths", () => {
 
   test("lists one set of sections, in the navigation's order, and opens on the orders", () => {
     expect(ADMIN_SECTIONS).toEqual([
+      "orders",
       "products",
       "categories",
       "filters",
-      "orders",
       "home",
       "settings",
       "users",

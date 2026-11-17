@@ -39,7 +39,10 @@ function setup({
       redirect(`/admin/sign-in?next=${encodeURIComponent(returnTo)}`);
     }
 
-    return await Promise.resolve({ name: "Ada Admin" });
+    return await Promise.resolve({
+      email: "ada@example.com",
+      name: "Ada Admin",
+    });
   });
 
   return { land: async () => await AdminLanding({ locale }) };

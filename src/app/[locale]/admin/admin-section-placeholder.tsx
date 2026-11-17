@@ -42,10 +42,15 @@ export async function AdminSectionPlaceholderResolver({
 }: AdminSectionPlaceholderProps) {
   const locale = await readLocale(params);
   const { admin } = getDictionary(locale);
-  await requireAdmin(adminSectionPath(section, locale), locale);
+  const login = await requireAdmin(adminSectionPath(section, locale), locale);
 
   return (
-    <AdminShell dictionary={admin} locale={locale} section={section}>
+    <AdminShell
+      dictionary={admin}
+      locale={locale}
+      login={login}
+      section={section}
+    >
       <AdminPlaceholder
         body={admin.comingSoon.body}
         status={admin.comingSoon.title}

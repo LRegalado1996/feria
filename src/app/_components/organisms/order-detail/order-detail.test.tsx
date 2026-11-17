@@ -429,6 +429,48 @@ describe("OrderDetail", () => {
     );
   });
 
+  test("makes the order's moves the screen's main action, with what a move said beside them", async () => {
+    const { user } = setup({ change: "fail" });
+    await screen.findByTestId("order-detail");
+
+    // In the top bar from md up, in the bar under the thumb on a phone.
+    const action = screen.getByTestId("admin-primary-action");
+    expect(screen.getByTestId("admin-top-bar")).toContainElement(action);
+    expect(
+      within(action)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+    ).toEqual(["Mark delivered", "Couldn't deliver", "Back to received"]);
+    // A phone gives the first move the whole row, the others share the next.
+    expect(
+      within(action).getByRole("button", { name: "Mark delivered" })
+    ).toHaveClass("first-of-type:basis-full", "md:basis-auto");
+
+    await user.click(
+      within(action).getByRole("button", { name: "Mark delivered" })
+    );
+
+    expect(await within(action).findByRole("alert")).toHaveTextContent(
+      /^We couldn't change the status\. Try again\.$/u
+    );
+  });
+
+  test("sets the order's parts in cards, each headed by what it holds", async () => {
+    const { section } = setup();
+    await screen.findByTestId("order-detail");
+
+    for (const name of [
+      "Status",
+      "Articles",
+      "Customer's note",
+      "Contact",
+      "History",
+    ]) {
+      expect(section(name)).toHaveClass("rounded-lg", "border", "bg-card");
+    }
+    expect(within(section("Status")).getByText("Packed")).toBeInTheDocument();
+  });
+
   test("moves the order on one tap, then shows where it landed", async () => {
     const { changeStatus, get, user } = setup({
       gets: [makeOrder(), makeOrder({ status: "delivered" })],

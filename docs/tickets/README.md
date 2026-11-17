@@ -62,7 +62,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
 | [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo        |
 | [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo        |
-| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | todo        |
+| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done        |
 
 ### M4 Storefront and orders
 
@@ -104,7 +104,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 004 → 035 → 017
 005, 008 → 021 → 023, 024
 010 → 025 → 026 → 027 → 028
-012, 027 → 038 → 039 → 040
+012, 027 → 038 → 040 → 039
 038 → 041
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022

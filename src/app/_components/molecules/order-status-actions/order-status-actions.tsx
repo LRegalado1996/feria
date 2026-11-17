@@ -112,7 +112,9 @@ function OrderStatusActions({
         return (
           <Button
             aria-disabled={pending || undefined}
-            className="h-11 aria-disabled:opacity-50 md:h-9"
+            // On a phone the first move takes the whole row and the others
+            // share the next one; from `md` up they sit in one line.
+            className="flex-1 basis-[calc(50%-0.25rem)] first-of-type:basis-full aria-disabled:opacity-50 md:flex-none md:basis-auto md:first-of-type:basis-auto"
             data-move={to}
             key={to}
             onClick={() => {

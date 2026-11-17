@@ -14,7 +14,7 @@ A price tag holding the monogram **LR**, with **MARKET** under it. Generic on pu
 
 | Version                     | Use it                                                              | Files in `public/brand/` |
 | --------------------------- | ------------------------------------------------------------------- | ------------------------ |
-| Full logo (tag, LR, MARKET) | 96 px tall and up: share cards, signs, posts                        | `lr-market-logo*.svg`    |
+| Full logo (tag, LR, MARKET) | 96 px tall and up: share cards, signs, posts, the admin (FER-040)   | `lr-market-logo*.svg`    |
 | Mark (tag, LR)              | Under 96 px, down to 24 px: site header, tab icon, home-screen icon | `lr-market-mark*.svg`    |
 
 Each version comes in four colorways:

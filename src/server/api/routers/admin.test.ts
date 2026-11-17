@@ -40,10 +40,13 @@ function setup({
 }
 
 describe("admin.me", () => {
-  test("answers the signed-in login's name, once the database confirms the login", async () => {
+  test("answers the signed-in login's name and email, once the database confirms the login", async () => {
     const { db, me } = setup();
 
-    await expect(me()).resolves.toEqual({ name: "Test User" });
+    await expect(me()).resolves.toEqual({
+      email: "test@example.com",
+      name: "Test User",
+    });
     expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
       db,
       "test-user-id"

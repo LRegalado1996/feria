@@ -31,7 +31,10 @@ export default function CategoriesPage({ params }: CategoriesPageProps) {
 async function CategoriesResolver({ params }: CategoriesPageProps) {
   const locale = await readLocale(params);
   const { admin } = getDictionary(locale);
-  await requireAdmin(adminSectionPath("categories", locale), locale);
+  const login = await requireAdmin(
+    adminSectionPath("categories", locale),
+    locale
+  );
   const queryClient = getQueryClient();
 
   // A failed prefetch is not fatal: the screen fetches again and shows its
@@ -39,7 +42,12 @@ async function CategoriesResolver({ params }: CategoriesPageProps) {
   await queryClient.query(orpc.category.list.queryOptions()).catch(noop);
 
   return (
-    <AdminShell dictionary={admin} locale={locale} section="categories">
+    <AdminShell
+      dictionary={admin}
+      locale={locale}
+      login={login}
+      section="categories"
+    >
       <HydrationBoundary state={dehydrate(queryClient)}>
         <CategoryManager />
       </HydrationBoundary>

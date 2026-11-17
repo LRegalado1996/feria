@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import { Folder, Package, Users } from "lucide-react";
 import { describe, expect, test } from "vitest";
 
 import { AdminNav, type AdminNavItem, type AdminNavProps } from "./admin-nav";
@@ -6,8 +7,9 @@ import { AdminNav, type AdminNavItem, type AdminNavProps } from "./admin-nav";
 function makeItem(overrides: Partial<AdminNavItem> = {}): AdminNavItem {
   return {
     current: false,
-    href: "/en/admin/products",
-    label: "Articles",
+    href: "/en/admin/categories",
+    icon: Folder,
+    label: "Categories",
     ...overrides,
   };
 }
@@ -16,13 +18,14 @@ function setup(props: Partial<AdminNavProps> = {}) {
   render(
     <AdminNav
       items={[
-        makeItem(),
         makeItem({
           current: true,
           href: "/en/admin/orders",
+          icon: Package,
           label: "Orders",
         }),
-        makeItem({ href: "/en/admin/users", label: "Users" }),
+        makeItem(),
+        makeItem({ href: "/en/admin/users", icon: Users, label: "Users" }),
       ]}
       label="Admin sections"
       {...props}
@@ -42,73 +45,87 @@ describe("AdminNav", () => {
     expect(nav).toHaveClass("min-w-0", "custom");
   });
 
-  test("lists each item as a link to its address, in order", () => {
+  test("lists each item as a link to its address, in order, named by its label", () => {
     const { links } = setup();
 
     expect(
       links.map((link) => [link.textContent, link.getAttribute("href")])
     ).toEqual([
-      ["Articles", "/en/admin/products"],
       ["Orders", "/en/admin/orders"],
+      ["Categories", "/en/admin/categories"],
       ["Users", "/en/admin/users"],
+    ]);
+    expect(links[1]).toHaveAccessibleName("Categories");
+  });
+
+  test("draws each item's own icon before its label, hidden from screen readers", () => {
+    const { links } = setup();
+
+    const icons = links.map((link) => link.firstElementChild);
+    expect(icons.map((icon) => icon?.tagName.toLowerCase())).toEqual([
+      "svg",
+      "svg",
+      "svg",
+    ]);
+    expect(icons.map((icon) => icon?.getAttribute("aria-hidden"))).toEqual([
+      "true",
+      "true",
+      "true",
+    ]);
+    // Lucide names each drawing in its class: one icon per section.
+    expect(icons.map((icon) => icon?.getAttribute("class"))).toEqual([
+      expect.stringContaining("lucide-package"),
+      expect.stringContaining("lucide-folder"),
+      expect.stringContaining("lucide-users"),
     ]);
   });
 
-  test("marks only the current item as the page on screen", () => {
+  test("marks only the current item as the page on screen, filled and bold", () => {
     const { links } = setup();
 
     expect(links.map((link) => link.getAttribute("aria-current"))).toEqual([
-      null,
       "page",
       null,
+      null,
     ]);
-    expect(screen.getByRole("link", { name: "Orders" })).toHaveClass(
-      "font-semibold"
-    );
-    expect(screen.getByRole("link", { name: "Users" })).not.toHaveClass(
-      "font-semibold"
-    );
+    expect(links[0]).toHaveClass("bg-sidebar-accent", "font-semibold");
+    expect(links[1]).not.toHaveClass("bg-sidebar-accent");
+    expect(links[1]).not.toHaveClass("font-semibold");
+    expect(links[1]).toHaveClass("text-muted-foreground");
   });
 
-  test("shows a title above the links when it is given one", () => {
-    const { nav } = setup({ title: "LR Market" });
+  test("is a 44 px row on a phone and a compact one from md up", () => {
+    const { links } = setup();
 
-    expect(nav.firstElementChild).toHaveTextContent(/^LR Market$/);
-    expect(nav.firstElementChild?.tagName).toBe("P");
+    for (const link of links) {
+      expect(link).toHaveClass("h-11", "md:h-9");
+    }
   });
 
-  test("shows no title without one: the list comes first", () => {
-    const { nav } = setup();
-
-    expect(nav.firstElementChild?.tagName).toBe("UL");
-  });
-
-  test("shows an item's badge inside its link, after the label, and lets it name the link", () => {
+  test("shows an item's badge at the end of its link, and lets it name the link", () => {
     const { links } = setup({
       items: [
-        makeItem(),
         makeItem({
-          badge: <span data-testid="badge">Orders, 3 waiting</span>,
+          badge: <span data-testid="badge">Orders, 3 to pack</span>,
           href: "/en/admin/orders",
+          icon: Package,
           label: "Orders",
         }),
+        makeItem(),
       ],
     });
 
-    expect(links.map((link) => link.textContent)).toEqual([
-      "Articles",
-      "OrdersOrders, 3 waiting",
-    ]);
     // The badge says the whole name: the label is there for the eye only.
-    expect(links[1]).toHaveAccessibleName("Orders, 3 waiting");
-    const [label, badge] = [...(links[1]?.firstElementChild?.children ?? [])];
+    expect(links[0]).toHaveAccessibleName("Orders, 3 to pack");
+    const [icon, label, badge] = [...(links[0]?.children ?? [])];
+    expect(icon?.tagName.toLowerCase()).toBe("svg");
     expect(label).toHaveAttribute("aria-hidden", "true");
     expect(label).toHaveTextContent(/^Orders$/u);
     expect(badge).toBe(screen.getByTestId("badge"));
-    expect(links[1]?.children).toHaveLength(1);
+    expect(links[0]?.children).toHaveLength(3);
     // Without a badge the label is the name, hidden from no one.
-    expect(links[0]).toHaveAccessibleName("Articles");
-    expect(links[0]?.firstElementChild?.textContent).toBe("Articles");
-    expect(links[0]?.firstElementChild?.children).toHaveLength(0);
+    expect(links[1]).toHaveAccessibleName("Categories");
+    expect(links[1]?.children[1]).not.toHaveAttribute("aria-hidden");
+    expect(links[1]?.children).toHaveLength(2);
   });
 });

@@ -373,6 +373,26 @@ describe("FilterManager", () => {
     ).toHaveTextContent(/^New value of “Material”$/u);
   });
 
+  test("heads the screen with its title and its main action, which takes focus to the add form", async () => {
+    const { formWith, user } = setup();
+    await shown();
+    const card = screen.getByRole("heading", {
+      level: 2,
+      name: "New filter",
+    }).parentElement;
+    const scrolled = vi.spyOn(card ?? document.body, "scrollIntoView");
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Filters$/u
+    );
+    await user.click(screen.getByRole("button", { name: "New filter" }));
+
+    expect(scrolled).toHaveBeenCalledExactlyOnceWith({ block: "start" });
+    expect(
+      formWith("Add filter").getByLabelText(/^Name in Spanish/u)
+    ).toHaveFocus();
+  });
+
   test("adds a filter, says so and reads the list again", async () => {
     const { formWith, spies, user } = setup();
     await shown();

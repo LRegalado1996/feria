@@ -118,7 +118,10 @@ function setup({
       redirect(`/admin/sign-in?next=${encodeURIComponent(returnTo)}`);
     }
 
-    return await Promise.resolve({ name: "Ada Admin" });
+    return await Promise.resolve({
+      email: "ada@example.com",
+      name: "Ada Admin",
+    });
   });
   get.mockImplementation(async () => {
     if (order === "missing") {
@@ -250,6 +253,7 @@ describe("OrderPage", () => {
       expect(shellProps).toHaveBeenCalledExactlyOnceWith({
         dictionary: DICTIONARIES[locale].admin,
         locale,
+        login: { email: "ada@example.com", name: "Ada Admin" },
         section: "orders",
       });
       expect(connection).toHaveBeenCalledExactlyOnceWith();

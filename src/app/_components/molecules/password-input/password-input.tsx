@@ -23,14 +23,14 @@ function PasswordInput({ className, ...props }: PasswordInputProps) {
   return (
     <div className="relative" data-slot="password-input">
       <Input
-        className={cn("pr-10", className)}
+        className={cn("pr-12 md:pr-10", className)}
         type={revealed ? "text" : "password"}
         {...props}
       />
       <Button
         aria-label={revealed ? common.hidePassword : common.showPassword}
         aria-pressed={revealed}
-        className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        className="absolute top-1/2 right-0 -translate-y-1/2 text-muted-foreground hover:text-foreground md:right-1 md:size-7"
         data-testid="password-input-toggle"
         onClick={() => {
           setRevealed((current) => !current);

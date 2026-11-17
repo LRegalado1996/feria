@@ -24,4 +24,24 @@ describe("AdminShellSkeleton", () => {
       expect(skeleton).toHaveTextContent(new RegExp(`^${loading}$`, "u"));
     }
   );
+
+  test("mirrors the shell: the logo and a row per section beside the top bar, from md up", () => {
+    renderWithI18n(<AdminShellSkeleton />);
+
+    const skeleton = screen.getByTestId("admin-shell-skeleton");
+    expect(skeleton).toHaveClass(
+      "md:grid",
+      "md:grid-cols-[16rem_minmax(0,1fr)]"
+    );
+    // The logo is the brand, no secret, and says nothing while it waits.
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(skeleton.querySelector('[data-slot="store-logo"]')).toHaveAttribute(
+      "aria-hidden",
+      "true"
+    );
+    const sidebar = skeleton.querySelector('[data-slot="store-logo"]')
+      ?.parentElement?.parentElement;
+    expect(sidebar).toHaveClass("hidden", "md:flex");
+    expect(sidebar?.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(8);
+  });
 });

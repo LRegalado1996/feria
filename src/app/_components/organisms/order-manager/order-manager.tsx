@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Volume2, VolumeX } from "lucide-react";
+import { ChevronRight, Sparkles, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
@@ -13,6 +13,7 @@ import {
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
+import { AdminPage } from "@/app/_components/molecules/admin-page";
 import { EmptyState } from "@/app/_components/molecules/empty-state";
 import { OrderPhoneVerified } from "@/app/_components/molecules/order-phone-verified";
 import { OrderSearch } from "@/app/_components/molecules/order-search";
@@ -44,6 +45,22 @@ import {
 } from "@/lib/utils/format";
 
 type OrderRow = OrdersPage["items"][number];
+
+/**
+ * A row's columns, shared by the column names above the rows from `xl` up.
+ * The fixed ones take 36rem: beside the 16rem sidebar, a narrower window
+ * left the customer's column 14 px at 1024 px.
+ */
+const ORDER_ROW_COLUMNS =
+  "grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[8rem_minmax(0,1fr)_9rem_11rem_7rem_1rem]";
+
+/**
+ * Where a row's parts sit: a card below `xl` (the code and the total, the
+ * customer and their phone, the status and the age), one line of columns
+ * from `xl` up. The parts keep the order a screen reader says them in.
+ */
+const ORDER_ROW_AREAS =
+  "[grid-template-areas:'code_total'_'who_who'_'phone_phone'_'status_time'] xl:[grid-template-areas:'code_who_time_status_total_chevron'_'code_phone_time_status_total_chevron']";
 
 export interface OrderManagerProps {
   /** The status and search in the address, already read and checked. */
@@ -202,21 +219,15 @@ function OrderManager({ query, renderedAt }: OrderManagerProps) {
   const { list, loadMore } = useLoadMore(orders, query, rowCount);
 
   return (
-    <section
-      className="space-y-6"
-      data-slot="order-manager"
-      data-testid="order-manager"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-2xl font-bold">{copy.title}</h1>
-          <p className="text-sm text-muted-foreground">{copy.description}</p>
-        </div>
-        <div className="flex min-w-0 flex-col items-end gap-1">
+    <section data-slot="order-manager" data-testid="order-manager">
+      <AdminPage
+        actions={
+          // A setting of the screen, not its main action: it stays in the
+          // top bar at every width, its words only for the ear on a phone.
           <Button
             aria-describedby={sound.needsGesture ? soundHint : undefined}
             aria-pressed={sound.enabled === true}
-            className="h-11 md:h-8"
+            className="w-11 md:w-auto"
             disabled={sound.enabled === null}
             onClick={() => {
               sound.setEnabled(sound.enabled !== true);
@@ -230,74 +241,95 @@ function OrderManager({ query, renderedAt }: OrderManagerProps) {
             ) : (
               <VolumeX aria-hidden="true" />
             )}
-            {copy.sound}
+            <span className="sr-only md:not-sr-only">{copy.sound}</span>
           </Button>
-          {sound.needsGesture ? (
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="order-sound-hint"
-              id={soundHint}
-            >
+        }
+        notice={
+          sound.needsGesture ? (
+            <p data-testid="order-sound-hint" id={soundHint}>
               {copy.soundHint}
             </p>
-          ) : null}
+          ) : null
+        }
+        title={copy.title}
+      >
+        <p className="text-sm text-muted-foreground">{copy.description}</p>
+        <div className="space-y-3">
+          <OrderTabs query={query} />
+          <OrderSearch className="md:max-w-sm" query={query} />
         </div>
-      </div>
-      <OrderTabs query={query} />
-      <OrderSearch query={query} />
-      <output aria-live="polite" className="sr-only">
-        {arrivals.message}
-      </output>
-      {waitsForList ? (
-        <div
-          aria-busy="true"
-          className="space-y-2"
-          data-testid="order-list-skeleton"
-        >
-          <span className="sr-only">{common.loading}</span>
-          {["first", "second", "third"].map((row) => (
-            <Skeleton className="h-20 w-full" key={row} />
-          ))}
-        </div>
-      ) : null}
-      <OrderListError orders={orders} />
-      {items?.length === 0 && !orders.isPlaceholderData ? (
-        <OrderListEmpty query={query} />
-      ) : null}
-      {items && items.length > 0 ? (
-        <ul
-          aria-label={copy.list}
-          className="divide-y rounded-lg border"
-          data-testid="order-list"
-          ref={list}
-        >
-          {items.map((order) => (
-            <OrderListRow
-              from={query}
-              isNew={isFreshArrival(arrivals.fresh, order, now)}
-              key={order.id}
-              now={now}
-              order={order}
-            />
-          ))}
-        </ul>
-      ) : null}
-      {orders.isFetchNextPageError ? (
-        <p className="text-sm" role="alert">
-          {copy.errors.loadMore}
-        </p>
-      ) : null}
-      {orders.hasNextPage ? (
-        <Button
-          aria-disabled={orders.isFetchingNextPage || undefined}
-          className="h-11 w-full aria-disabled:opacity-50 md:h-9 md:w-auto"
-          onClick={loadMore}
-          type="button"
-          variant="outline"
-        >
-          {orders.isFetchingNextPage ? copy.loadingMore : copy.loadMore}
-        </Button>
-      ) : null}
+        <output aria-live="polite" className="sr-only">
+          {arrivals.message}
+        </output>
+        {waitsForList ? (
+          <div
+            aria-busy="true"
+            className="space-y-2"
+            data-testid="order-list-skeleton"
+          >
+            <span className="sr-only">{common.loading}</span>
+            {["first", "second", "third"].map((row) => (
+              <Skeleton className="h-28 w-full rounded-lg xl:h-14" key={row} />
+            ))}
+          </div>
+        ) : null}
+        <OrderListError orders={orders} />
+        {items?.length === 0 && !orders.isPlaceholderData ? (
+          <OrderListEmpty query={query} />
+        ) : null}
+        {items && items.length > 0 ? (
+          // From `xl` up one card of rows under their column names; below
+          // it every row is a card of its own.
+          <div className="xl:overflow-hidden xl:rounded-lg xl:border xl:bg-card">
+            <div
+              aria-hidden="true"
+              className={cn(
+                "hidden h-10 items-center gap-x-4 border-b bg-muted/50 px-4 text-xs text-muted-foreground xl:grid",
+                ORDER_ROW_COLUMNS
+              )}
+              data-testid="order-list-columns"
+            >
+              <span>{copy.columns.code}</span>
+              <span>{copy.columns.customer}</span>
+              <span>{copy.columns.placed}</span>
+              <span>{copy.columns.status}</span>
+              <span className="text-right">{copy.columns.total}</span>
+            </div>
+            <ul
+              aria-label={copy.list}
+              className="space-y-2 xl:space-y-0 xl:divide-y"
+              data-testid="order-list"
+              ref={list}
+            >
+              {items.map((order) => (
+                <OrderListRow
+                  from={query}
+                  isNew={isFreshArrival(arrivals.fresh, order, now)}
+                  key={order.id}
+                  now={now}
+                  order={order}
+                />
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {orders.isFetchNextPageError ? (
+          <p className="text-sm" role="alert">
+            {copy.errors.loadMore}
+          </p>
+        ) : null}
+        {orders.hasNextPage ? (
+          <Button
+            aria-disabled={orders.isFetchingNextPage || undefined}
+            className="w-full aria-disabled:opacity-50 md:w-auto"
+            onClick={loadMore}
+            type="button"
+            variant="outline"
+          >
+            {orders.isFetchingNextPage ? copy.loadingMore : copy.loadMore}
+          </Button>
+        ) : null}
+      </AdminPage>
     </section>
   );
 }
@@ -323,7 +355,10 @@ function OrderListError({
   }
 
   return (
-    <div className="space-y-2" role="alert">
+    <div
+      className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
+      role="alert"
+    >
       <p className="text-sm">
         {orders.isRefetchError
           ? admin.orders.errors.refresh
@@ -349,6 +384,7 @@ function OrderListEmpty({ query }: { query: OrdersQuery }) {
 
   return (
     <EmptyState
+      className="rounded-lg border bg-card px-6"
       message={
         query.q
           ? interpolate(copy.empty.search, { q: query.q })
@@ -379,7 +415,8 @@ function OrderTabs({ query }: { query: OrdersQuery }) {
 
   return (
     <nav aria-label={copy.tabs} className="min-w-0">
-      <ul className="flex gap-1 overflow-x-auto overflow-y-clip pb-1">
+      {/* Its own scroll box, padded so a focus ring is not cut off. */}
+      <ul className="-m-1 flex gap-2 overflow-x-auto overflow-y-clip p-1">
         {[undefined, ...ORDER_STATUSES].map((status) => {
           const label = status ? copy.statuses[status] : copy.tabAll;
           const count = tabCount(status);
@@ -390,10 +427,10 @@ function OrderTabs({ query }: { query: OrdersQuery }) {
               <Link
                 aria-current={current ? "page" : undefined}
                 className={cn(
-                  "flex h-11 items-center rounded-md px-3 text-sm whitespace-nowrap transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:h-9",
+                  "flex h-11 items-center rounded-full border px-4 text-sm whitespace-nowrap transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:h-8 md:px-3",
                   current
-                    ? "bg-secondary font-semibold text-secondary-foreground"
-                    : "text-muted-foreground"
+                    ? "border-foreground bg-foreground font-semibold text-background"
+                    : "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
                 href={ordersPath(locale, { q: query.q, status })}
               >
@@ -431,36 +468,49 @@ function OrderListRow({
   return (
     <li data-testid={`order-row-${order.code}`}>
       <Link
-        className="flex flex-col gap-1 p-3 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className={cn(
+          "grid gap-x-4 gap-y-1 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset xl:rounded-none xl:border-0 xl:bg-transparent xl:px-4 xl:py-3",
+          ORDER_ROW_COLUMNS,
+          ORDER_ROW_AREAS
+        )}
         href={orderPath(order.id, locale, from)}
       >
-        <span className="flex flex-wrap items-center gap-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-2 [grid-area:code] xl:self-center">
           <span className="font-mono text-sm font-semibold">{order.code}</span>
           {isNew ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground"
+              className="inline-flex h-6 items-center gap-1 rounded-full bg-primary px-2.5 text-xs font-medium text-primary-foreground"
               data-testid="order-new"
             >
               <Sparkles aria-hidden="true" className="size-3.5" />
               {copy.new}
             </span>
           ) : null}
-          <OrderStatusBadge className="ml-auto" status={order.status} />
         </span>
-        <span className="flex items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-sm">
-            {order.customerName}
-          </span>
-          <span className="text-sm font-semibold tabular-nums">
-            {formatPrice(order.totalAmount, order.currencyCode, locale)}
-          </span>
+        <OrderStatusBadge
+          className="mt-2 self-center justify-self-start [grid-area:status] xl:mt-0"
+          status={order.status}
+        />
+        <span className="mt-1 min-w-0 truncate text-base font-medium [grid-area:who] xl:mt-0 xl:self-end xl:text-sm">
+          {order.customerName}
         </span>
-        <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <time dateTime={createdAt.toISOString()}>
-            {formatRelativeTime(createdAt, now, locale)}
-          </time>
-          <OrderPhoneVerified verified={order.phoneVerified} />
+        <span className="self-center text-right text-base font-semibold tabular-nums [grid-area:total] xl:text-sm">
+          {formatPrice(order.totalAmount, order.currencyCode, locale)}
         </span>
+        <time
+          className="mt-2 self-center text-right text-xs text-muted-foreground [grid-area:time] xl:mt-0 xl:text-left"
+          dateTime={createdAt.toISOString()}
+        >
+          {formatRelativeTime(createdAt, now, locale)}
+        </time>
+        <OrderPhoneVerified
+          className="text-xs text-muted-foreground [grid-area:phone] xl:self-start"
+          verified={order.phoneVerified}
+        />
+        <ChevronRight
+          aria-hidden="true"
+          className="hidden size-4 self-center text-muted-foreground [grid-area:chevron] xl:block"
+        />
       </Link>
     </li>
   );

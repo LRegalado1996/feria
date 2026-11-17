@@ -96,7 +96,7 @@ export const admin: Dictionary["admin"] = {
       title: "Delete the value?",
     },
     description:
-      "Filters help your customers find what they want, by color for example. Each filter has its own link: /your-store/products?color=dorado.",
+      "Filters help your customers find what they want, by color for example. Each filter has its own link: /products?color=dorado.",
     edit: {
       action: "Rename filter: {name}",
       cancel: "Cancel",
@@ -155,6 +155,13 @@ export const admin: Dictionary["admin"] = {
     },
     arrived: "Order {code} arrived",
     arrivedMany: "{count} orders arrived: {codes}",
+    columns: {
+      code: "Order",
+      customer: "Customer",
+      placed: "When",
+      status: "Status",
+      total: "Total",
+    },
     detail: {
       back: "Back to orders",
       contact: "Contact",
@@ -225,7 +232,10 @@ export const admin: Dictionary["admin"] = {
     },
   },
   shell: {
+    closeMenu: "Close the menu",
+    menu: "Menu",
     navigation: "Admin sections",
+    signedInAs: "Signed in as",
     skipToContent: "Skip to content",
   },
   signIn: {

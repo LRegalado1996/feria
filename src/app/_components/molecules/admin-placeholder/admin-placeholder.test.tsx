@@ -23,5 +23,14 @@ describe("AdminPlaceholder", () => {
     expect(section).toHaveTextContent(
       /^OrdersComing soonThis section is still being built\.$/
     );
+    // The name heads the top bar; what to expect is a card under it.
+    expect(screen.getByTestId("admin-top-bar")).toContainElement(
+      screen.getByRole("heading", { level: 1 })
+    );
+    expect(screen.getByText("Coming soon").parentElement).toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-card"
+    );
   });
 });

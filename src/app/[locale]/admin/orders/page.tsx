@@ -44,7 +44,7 @@ async function OrdersResolver({ params, searchParams }: OrdersPageProps) {
   const query = readOrdersQuery(await searchParams);
   const { admin } = getDictionary(locale);
   // Signing in comes back to the same tab and search.
-  await requireAdmin(ordersPath(locale, query), locale);
+  const login = await requireAdmin(ordersPath(locale, query), locale);
   const queryClient = getQueryClient();
 
   // A failed prefetch is not fatal: the screen fetches again and shows its
@@ -70,7 +70,12 @@ async function OrdersResolver({ params, searchParams }: OrdersPageProps) {
   // same counts as the tabs.
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AdminShell dictionary={admin} locale={locale} section="orders">
+      <AdminShell
+        dictionary={admin}
+        locale={locale}
+        login={login}
+        section="orders"
+      >
         <OrderManager query={query} renderedAt={renderedAt} />
       </AdminShell>
     </HydrationBoundary>

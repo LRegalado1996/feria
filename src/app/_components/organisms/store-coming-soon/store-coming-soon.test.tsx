@@ -18,6 +18,7 @@ vi.mock("next/server", () => ({
 // The language toggle reads the URL, which exists only inside a Next render.
 vi.mock("next/navigation", () => ({
   usePathname: () => "/coming-soon",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -120,7 +121,10 @@ describe("StoreComingSoon", () => {
     const toggle = within(page).getByRole("link", { name: "English" });
 
     expect(toggle).toHaveAttribute("href", "/en/coming-soon");
-    expect(toggle).toHaveClass("text-store-background", "min-h-11");
+    expect(toggle).toHaveClass("min-h-11");
+    expect(
+      toggle.querySelector('[data-slot="locale-toggle-thumb"]')
+    ).toHaveClass("bg-store-accent");
   });
 
   test.each([

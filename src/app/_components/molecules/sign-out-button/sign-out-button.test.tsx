@@ -55,6 +55,9 @@ describe("SignOutButton", () => {
     expect(button).toHaveAttribute("data-slot", "sign-out-button");
     expect(button).toHaveClass("custom");
     expect(button).toBeEnabled();
+    // The door icon is for the eye: the words are the name.
+    expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(button.querySelector("svg")).toHaveClass("lucide-log-out");
   });
 
   test.each([

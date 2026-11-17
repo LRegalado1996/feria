@@ -210,6 +210,29 @@ describe("CategoryManager", () => {
     expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
+  test("is a stack of cards on a phone, and one card of rows from md up", async () => {
+    const { row } = setup();
+    await shown();
+
+    expect(row("aros")).toHaveClass(
+      "rounded-lg",
+      "border",
+      "bg-card",
+      "md:rounded-none",
+      "md:border-0"
+    );
+    expect(screen.getByTestId("category-list")).toHaveClass(
+      "space-y-2",
+      "md:divide-y",
+      "md:rounded-lg",
+      "md:border"
+    );
+    // The name takes the first line on a phone; the buttons, the next.
+    expect(
+      within(row("aros")).getByTestId("category-name").parentElement
+    ).toHaveClass("basis-[calc(100%-3.25rem)]", "md:basis-0");
+  });
+
   test("names every row's controls after its category", async () => {
     const { row } = setup();
     await shown();
@@ -225,6 +248,24 @@ describe("CategoryManager", () => {
       "Rename: Aros",
       "Delete: Aros",
     ]);
+  });
+
+  test("heads the screen with its title and its main action, which takes focus to the add form", async () => {
+    const { user } = setup();
+    await shown();
+    const form = screen.getByRole("heading", {
+      level: 2,
+      name: "New category",
+    }).parentElement;
+    const scrolled = vi.spyOn(form ?? document.body, "scrollIntoView");
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Categories$/u
+    );
+    await user.click(screen.getByRole("button", { name: "New category" }));
+
+    expect(scrolled).toHaveBeenCalledExactlyOnceWith({ block: "start" });
+    expect(screen.getByLabelText(/^Name in Spanish/u)).toHaveFocus();
   });
 
   test("adds a category and reads the list again", async () => {

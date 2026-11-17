@@ -9,6 +9,7 @@ import { STORE_MAIN_ID, StoreHeader } from "./store-header";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
@@ -110,15 +111,25 @@ describe("StoreHeader", () => {
     await user.click(screen.getByRole("button", { name: "Menú" }));
 
     const menu = within(screen.getByRole("dialog", { name: "Menú" }));
+    // The language pill's text is its codes; its name is the language.
     expect(
       menu
         .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")])
+        .map((link) => [
+          link.dataset.slot === "locale-toggle"
+            ? link.getAttribute("lang")
+            : link.textContent,
+          link.getAttribute("href"),
+        ])
     ).toEqual([
       ["Inicio", "/"],
       ["Catálogo", "/products"],
-      ["English", "/en"],
+      ["en", "/en"],
     ]);
+    expect(menu.getByRole("link", { name: "English" })).toHaveAttribute(
+      "href",
+      "/en"
+    );
     expect(
       menu.getByRole("searchbox", { name: "Buscar en la tienda" })
     ).toHaveAttribute("id", "store-search-menu");
