@@ -164,6 +164,21 @@ describe("ImageUploader", () => {
     expect(hook.retry).toHaveBeenCalledExactlyOnceWith();
   });
 
+  test("a retry after removing the stored photo no longer says it was removed", async () => {
+    const { copy, group, named, user } = setup({
+      state: { reason: "failed", status: "failed" },
+      value: makeImage(),
+    });
+    const status = within(group).getByRole("status");
+
+    await user.click(named(copy.remove));
+    expect(status).toHaveTextContent(copy.removed);
+    await user.click(named(copy.retry));
+
+    expect(hook.retry).toHaveBeenCalledExactlyOnceWith();
+    expect(status).toBeEmptyDOMElement();
+  });
+
   test.each([
     [
       "unreadable",

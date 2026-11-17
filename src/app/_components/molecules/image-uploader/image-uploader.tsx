@@ -149,6 +149,8 @@ function ImageUploader({
               <Button
                 aria-label={named(copy.retry)}
                 onClick={() => {
+                  // A retry is a new try: a removal made meantime is not news.
+                  setRemoved(false);
                   retry();
                 }}
                 type="button"
