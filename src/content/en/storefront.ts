@@ -12,7 +12,7 @@ export const storefront: Dictionary["storefront"] = {
     askWhatsapp: "Ask on WhatsApp",
     askWhatsappText: "Hi! I'm writing about “{title}”: {url}",
     breadcrumb: "Breadcrumb",
-    catalog: "All articles",
+    catalog: "Catalog",
     decrease: "One unit less",
     gallery: "Photos of {title}",
     galleryNext: "Next photo",

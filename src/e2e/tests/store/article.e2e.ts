@@ -161,6 +161,33 @@ test.describe("Article page", () => {
     );
   });
 
+  test("trails from a house named Inicio through “Catálogo” and its category to the article itself", async ({
+    db,
+    page,
+  }) => {
+    const { article, rings } = await setup({ db });
+    await page.goto(`/productos/${article.slug}`);
+    const trail = page.getByRole("navigation", { name: "Ruta" });
+
+    await expect(trail.getByRole("listitem")).toHaveText([
+      "Inicio",
+      "Catálogo",
+      `Anillos ${rings.slug.slice("anillos-".length)}`,
+      "Anillo de plata",
+    ]);
+    const home = trail.getByRole("link", { name: "Inicio" });
+    await expect(home).toHaveAttribute("href", "/");
+    await expect(home.getByTestId("store-breadcrumb-home-icon")).toBeVisible();
+    await expect(trail.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "href",
+      "/productos"
+    );
+    await expect(trail.getByText("Anillo de plata")).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+  });
+
   test("offers no share button: the page is shared from the browser (FER-045)", async ({
     db,
     page,

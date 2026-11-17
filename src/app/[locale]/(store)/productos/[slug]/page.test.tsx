@@ -455,7 +455,7 @@ describe("ArticlePage", () => {
           {
             "@type": "ListItem",
             item: `${ORIGIN}/productos`,
-            name: "Todos los artículos",
+            name: "Catálogo",
             position: 2,
           },
           {
@@ -527,7 +527,7 @@ describe("ArticlePage", () => {
           {
             "@type": "ListItem",
             item: `${ORIGIN}/en/productos`,
-            name: "All articles",
+            name: "Catalog",
             position: 2,
           },
           {

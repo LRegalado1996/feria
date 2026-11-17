@@ -121,8 +121,11 @@ function setup({
           name: locale === "es" ? "Ruta" : "Breadcrumb",
         })
       )
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
+        .getAllByRole("listitem")
+        .map((step) => [
+          step.textContent,
+          step.querySelector("a")?.getAttribute("href") ?? null,
+        ]),
     openPanel,
     page: screen.getByTestId("store-article"),
     user,
@@ -134,13 +137,25 @@ afterEach(() => {
 });
 
 describe("StoreArticle", () => {
-  test("leads back to the catalog and to the article's category", () => {
-    const { breadcrumb } = setup();
+  test("trails from the home through the catalog and the category to the article itself", () => {
+    const { breadcrumb, page } = setup();
 
     expect(breadcrumb()).toEqual([
-      ["Todos los artículos", "/productos"],
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
       ["Collares", "/collares"],
+      ["Collar de perlas", null],
     ]);
+    // The catalog pages' trail (FER-044): the home a house, the article the
+    // page itself, in its language.
+    expect(within(page).getByTestId("store-breadcrumb-home-icon")).toHaveClass(
+      "lucide-house"
+    );
+    const itself = within(page).getByText("Collar de perlas", {
+      selector: "[aria-current]",
+    });
+    expect(itself).toHaveAttribute("aria-current", "page");
+    expect(itself).toHaveAttribute("lang", "es");
   });
 
   test("leads back through the group of the article's category (FER-043)", () => {
@@ -156,16 +171,22 @@ describe("StoreArticle", () => {
     });
 
     expect(breadcrumb()).toEqual([
-      ["Todos los artículos", "/productos"],
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
       ["Bijouterie", "/bijouterie"],
       ["Anillos", "/bijouterie/anillos"],
+      ["Collar de perlas", null],
     ]);
   });
 
   test("leads back without a category when the article has none", () => {
     const { breadcrumb } = setup({ article: makeArticle({ category: null }) });
 
-    expect(breadcrumb()).toEqual([["Todos los artículos", "/productos"]]);
+    expect(breadcrumb()).toEqual([
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
+      ["Collar de perlas", null],
+    ]);
   });
 
   test("names the article in a heading marked with its language, and shows its price and photos", () => {
@@ -417,8 +438,10 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup({ locale: "en" });
 
     expect(breadcrumb()).toEqual([
-      ["All articles", "/en/productos"],
+      ["Home", "/en"],
+      ["Catalog", "/en/productos"],
       ["Collares", "/en/collares"],
+      ["Collar de perlas", null],
     ]);
     expect(screen.getByRole("link", { name: "Artículo 7" })).toHaveAttribute(
       "href",

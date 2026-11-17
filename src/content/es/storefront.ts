@@ -10,7 +10,8 @@ export const storefront = {
     askWhatsapp: "Consultar por WhatsApp",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
     breadcrumb: "Ruta",
-    catalog: "Todos los artículos",
+    // Like the header's first link (FER-044).
+    catalog: "Catálogo",
     decrease: "Una unidad menos",
     gallery: "Fotos de {title}",
     galleryNext: "Foto siguiente",
