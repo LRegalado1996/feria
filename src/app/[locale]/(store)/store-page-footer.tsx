@@ -5,7 +5,6 @@ import { StoreFooter } from "@/app/_components/organisms/store-footer";
 import { getDictionary } from "@/content";
 import type { NavigationCategory } from "@/lib/catalog/navigation";
 import type { Locale } from "@/lib/i18n/config";
-import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
@@ -26,8 +25,6 @@ export async function StorePageFooter({
   locale: Locale;
   store: PublicStore;
 }) {
-  const text = pickTranslation(store.translations, locale);
-
   return (
     <StoreFooter
       categories={categories ?? (await readCategories(store, locale))}
@@ -36,7 +33,6 @@ export async function StorePageFooter({
       copy={getDictionary(locale).storefront.shell}
       locale={locale}
       store={store}
-      tagline={text ? { lang: text.locale, text: text.tagline } : null}
     />
   );
 }

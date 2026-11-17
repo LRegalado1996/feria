@@ -214,6 +214,10 @@ export const storefront: Dictionary["storefront"] = {
     searchSubmit: "Search",
     shop: "Shop",
     skipToContent: "Skip to content",
+    story: {
+      signature: "Pepe",
+      text: "For more than 20 years my family has set up its stall at the Christmas fair. I started out helping my parents, and for about 10 years now I have had my own. We have sold a bit of everything: shoes, clothes, toys, perfumes. This year we are bringing jewelry and bubble guns: come by stall 86 or order from here.",
+    },
     tiktok: "{store} on TikTok",
     whatsapp: "Write to us on WhatsApp",
   },

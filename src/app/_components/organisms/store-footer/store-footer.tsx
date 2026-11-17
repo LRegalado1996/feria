@@ -5,8 +5,8 @@ import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
 import {
+  catalogNavigation,
   type NavigationCategory,
-  navigationOrder,
 } from "@/lib/catalog/navigation";
 import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
@@ -19,8 +19,8 @@ export const CREDIT_URL = "https://lucasregalado.com";
 
 export interface StoreFooterProps {
   /**
-   * The store's categories, in their order, for the shop's links: a
-   * group's categories right after it, one step in (FER-043).
+   * The store's categories, in their order, for the shop's links: the
+   * groups and the categories in none, as the header lists them (FER-044).
    */
   categories: readonly NavigationCategory[];
   className?: string;
@@ -32,8 +32,6 @@ export interface StoreFooterProps {
     tiktokUrl: string | null;
     whatsappNumber: string | null;
   };
-  /** The store's tagline in the page's language, with the language it is in. */
-  tagline: { lang: string; text: string } | null;
 }
 
 const HEADING_CLASS =
@@ -46,10 +44,11 @@ const LINK_CLASS =
 
 /**
  * Every page of the store ends here (FER-021, FER-039): dark, with the
- * accent for its headings. The full logo and the store's tagline; the shop's
- * links (the catalog and each category); help (how to order, and a WhatsApp
- * chat when the store has it); Instagram and TikTok when it has them; and
- * a quiet credit to Lucas Regalado.
+ * accent for its headings. The full logo and, under it, Pepe's own story
+ * of the stall, signed (FER-044); the shop's links (the catalog, then each
+ * group and each category in none, in the header's order); help (how to
+ * order, and a WhatsApp chat when the store has it); Instagram and TikTok
+ * when it has them; and a quiet credit to Lucas Regalado.
  */
 function StoreFooter({
   categories,
@@ -57,7 +56,6 @@ function StoreFooter({
   copy,
   locale,
   store,
-  tagline,
 }: StoreFooterProps) {
   const socials = [
     store.instagramUrl
@@ -97,14 +95,15 @@ function StoreFooter({
           >
             <StoreLogo aria-hidden="true" className="h-15.5" />
           </Link>
-          {tagline ? (
-            <p
-              className="mt-3.5 max-w-xs text-sm wrap-anywhere text-store-contrast-muted"
-              lang={tagline.lang}
-            >
-              {tagline.text}
-            </p>
-          ) : null}
+          {/* A quote with its author: the stall's story in Pepe's words. */}
+          <figure className="mt-4 max-w-sm" data-testid="store-footer-story">
+            <blockquote className="text-sm text-store-contrast-muted">
+              <p>{copy.story.text}</p>
+            </blockquote>
+            <figcaption className="mt-2.5 font-display text-xs leading-none font-extrabold text-store-accent uppercase">
+              {copy.story.signature}
+            </figcaption>
+          </figure>
         </div>
         <nav aria-labelledby="store-footer-shop">
           <h2 className={HEADING_CLASS} id="store-footer-shop">
@@ -119,17 +118,16 @@ function StoreFooter({
                 {copy.catalog}
               </Link>
             </li>
-            {navigationOrder(categories).map((category) => (
-              <li
-                className={category.depth === 1 ? "pl-4" : undefined}
-                key={category.slug}
-              >
+            {/* What the header's line lists: a group's categories are on
+                its page and in the header's list, not here (FER-044). */}
+            {catalogNavigation(categories).map((entry) => (
+              <li key={entry.slug}>
                 <Link
                   className={LINK_CLASS}
-                  href={localizePath(category.path, locale)}
-                  lang={category.lang}
+                  href={localizePath(entry.path, locale)}
+                  lang={entry.lang}
                 >
-                  {category.name}
+                  {entry.name}
                 </Link>
               </li>
             ))}

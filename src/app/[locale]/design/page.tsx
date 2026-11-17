@@ -495,7 +495,6 @@ export default async function DesignPage({ params }: DesignPageProps) {
           copy={storefront.shell}
           locale={locale}
           store={SAMPLE_STORE}
-          tagline={{ lang: locale, text: comingSoon.eyebrow }}
         />
       </section>
     </main>
