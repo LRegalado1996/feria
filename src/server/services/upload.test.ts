@@ -254,6 +254,12 @@ describe("cleanUpOrphanBlobs", () => {
         sql: `${column} like $1`,
       }))
     );
+    // All five in one snapshot, so a cover moved from one column to another
+    // between two reads is seen in one of them.
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function),
+      { accessMode: "read only", isolationLevel: "repeatable read" }
+    );
   });
 
   test("never deletes a file of its folder that is not one of its uploads", async () => {
