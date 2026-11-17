@@ -1252,9 +1252,16 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
         expect.objectContaining({ id: 2 })
       );
     });
-    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("category-page-form")).toBeVisible();
+    // Still focusable: the save's end hands focus back to it before the
+    // list re-renders it, and a disabled button refuses focus.
+    act(() => {
+      toggle.focus();
+    });
+    expect(toggle).toHaveFocus();
   });
 
   test("keeps what was typed in the page while the category is renamed and the rename cancelled", async () => {
