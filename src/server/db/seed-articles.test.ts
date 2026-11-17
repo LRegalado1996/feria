@@ -64,7 +64,9 @@ describe("SEED_PHOTOS", () => {
   });
 
   test("every photo is some article's", () => {
-    const used = new Set(SEED_ARTICLES.flatMap((article) => article.images));
+    const used = new Set<string>(
+      SEED_ARTICLES.flatMap((article) => article.images)
+    );
 
     expect(Object.keys(SEED_PHOTOS).filter((file) => !used.has(file))).toEqual(
       []
