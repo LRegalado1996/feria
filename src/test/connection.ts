@@ -8,11 +8,11 @@ import type { Mock } from "vitest";
  * cannot happen before `arrive()`, and one that does not happens at once.
  *
  *   const request = holdRequest(connection);
- *   const content = StoreHomeContent({ locale: "es" });
+ *   const page = StoreHome({ params: makeParams("es") });
  *   await settle();
  *   expect(readStore).not.toHaveBeenCalled();
  *   request.arrive();
- *   render(await content);
+ *   render(await page);
  */
 export function holdRequest(connectionMock: Mock<typeof connection>) {
   let arrive: () => void = () => undefined;

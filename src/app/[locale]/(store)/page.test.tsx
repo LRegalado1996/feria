@@ -1,12 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 
-import StoreHome, { generateMetadata, StoreHomeContent } from "./page";
+import StoreHome, { generateMetadata } from "./page";
 
 const { connection, readStore } = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
@@ -66,44 +65,12 @@ async function setup({
 }: { locale?: Locale; store?: PublicStore | null } = {}) {
   readStore.mockResolvedValue(store);
 
-  render(await StoreHomeContent({ locale }));
+  render(await StoreHome({ params: makeParams(locale) }));
 
   return { page: screen.getByTestId("store-home") };
 }
 
 describe("StoreHome", () => {
-  test.each([
-    ["es", "Cargando"],
-    ["en", "Loading"],
-  ] as const)(
-    "in %s, streams the home behind an empty, busy main, reading nothing yet",
-    async (locale, loading) => {
-      const page: ReactElement<{
-        children: ReactElement<{ locale: Locale }>;
-        fallback: ReactNode;
-      }> = await StoreHome({ params: makeParams(locale) });
-
-      render(page.props.fallback);
-
-      expect(screen.getByTestId("store-home-skeleton")).toHaveAttribute(
-        "aria-busy",
-        "true"
-      );
-      expect(screen.getByRole("status")).toHaveTextContent(loading);
-      expect(page.props.children.props).toEqual({ locale });
-      expect(readStore).not.toHaveBeenCalled();
-    }
-  );
-
-  test("answers 404 for a language the product does not speak, before any read", async () => {
-    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
-      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
-    );
-    expect(readStore).not.toHaveBeenCalled();
-  });
-});
-
-describe("StoreHomeContent", () => {
   test("introduces the store by name in the page's h1, inside its main landmark, then its footer", async () => {
     const { page } = await setup();
 
@@ -152,31 +119,41 @@ describe("StoreHomeContent", () => {
     expect(page).toHaveTextContent(/^Sample Store$/u);
   });
 
-  test("waits for a request before reading the store, so the build needs no database", async () => {
+  // Behind no boundary: what the page returns is the home itself, so a
+  // crawler that runs no script gets it in the first response.
+  test("waits for a request before reading the store, then answers the whole home, so the build needs no database", async () => {
     readStore.mockResolvedValue(makeStore());
     const request = holdRequest(connection);
 
-    const content = StoreHomeContent({ locale: "es" });
+    const page = StoreHome({ params: makeParams("es") });
     await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
 
     request.arrive();
-    render(await content);
+    render(await page);
 
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Sample Store$/u
+    expect(screen.getByTestId("store-home")).toContainElement(
+      screen.getByRole("heading", { level: 1, name: "Sample Store" })
     );
+    expect(screen.getByTestId("footer")).toHaveTextContent("Sample Store es");
+  });
+
+  test("answers 404 for a language the product does not speak, before any read", async () => {
+    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
+      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    );
+    expect(readStore).not.toHaveBeenCalled();
   });
 
   test("answers the not-found page when the store's row is missing", async () => {
     readStore.mockResolvedValue(null);
 
-    await expect(StoreHomeContent({ locale: "es" })).rejects.toMatchObject({
-      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
-    });
+    await expect(StoreHome({ params: makeParams("es") })).rejects.toMatchObject(
+      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
+    );
   });
 });
 

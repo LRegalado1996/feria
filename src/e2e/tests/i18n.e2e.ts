@@ -161,13 +161,12 @@ test.describe("Languages, signed out", () => {
 
       try {
         const page = await context.newPage();
-        // Without scripts nothing changes after the load event, which
-        // `goto` waits for: the whole response is in. The home's content
-        // is in it, though not always in place: React streams a finished
-        // part of the page apart from the shell once both pass its chunk
-        // budget (12,800 bytes), and only a script moves it in.
         await page.goto(path);
-        await expect(page.getByTestId("store-home")).toBeAttached();
+        // Visible, not only attached: a boundary's content that React
+        // streams apart from the first response sits in a `<div hidden>`
+        // that only a script reveals, so this crawler would never see it
+        // (docs/agents/nextjs.md § Store pages).
+        await new StorePage(page).waitForLoad();
 
         await expectAlternates(page, origin, { path, scope: "head " });
       } finally {
