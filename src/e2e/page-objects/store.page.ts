@@ -1,5 +1,6 @@
 import { expect, type Locator } from "@playwright/test";
 
+import { expectDialogRemoved } from "../fixtures/expect-dialog-removed";
 import { BasePage } from "./base.page";
 
 /**
@@ -43,6 +44,42 @@ export class StorePage extends BasePage {
   /** The cart's link in the header, named after its count. */
   getCartButton(): Locator {
     return this.getByTestId("store-cart-button").filter({ visible: true });
+  }
+
+  /**
+   * The header's cart once React owns it, when a click opens the side panel
+   * (FER-045); before then it is a plain link to the checkout page. It says
+   * it opens a dialog only from then on, so that is what this waits for.
+   */
+  async getLiveCartButton(): Promise<Locator> {
+    const button = this.getCartButton();
+    await expect(button).toHaveAttribute("aria-haspopup", "dialog", {
+      timeout: 60_000,
+    });
+
+    return button;
+  }
+
+  /** The cart's side panel (FER-045), while it is open. */
+  getCartPanel(): Locator {
+    return this.getByTestId("store-cart-panel").filter({ visible: true });
+  }
+
+  /** A line of the open side panel, by its article's title. */
+  getCartPanelLine(title: string): Locator {
+    return this.getCartPanel()
+      .getByTestId("store-cart-line")
+      .filter({ hasText: title });
+  }
+
+  /**
+   * Closes the side panel with "Seguir comprando" and waits for it and its
+   * scrim to be gone: closed is not removed (`src/e2e/AGENTS.md`).
+   */
+  async closeCartPanel(): Promise<void> {
+    const panel = this.getCartPanel();
+    await panel.getByRole("button", { name: "Seguir comprando" }).click();
+    await expectDialogRemoved(this.page, panel);
   }
 
   /**

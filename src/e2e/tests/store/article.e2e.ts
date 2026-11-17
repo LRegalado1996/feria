@@ -37,7 +37,7 @@ async function setup(
 }
 
 test.describe("Article page", () => {
-  test("the gallery's round arrow steps through the photos and back, and the one in view opens full screen", async ({
+  test("the gallery's round arrow steps through the photos and goes round past the last, and the one in view opens full screen", async ({
     db,
     page,
   }) => {
@@ -45,7 +45,7 @@ test.describe("Article page", () => {
     await page.goto(`/productos/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
     // Said to a screen reader, out of sight.
-    const position = gallery.locator("output");
+    const position = gallery.getByTestId("store-gallery-position");
     await expect(position).toHaveText("Foto 1 de 3");
 
     await clickUntilVisible(
@@ -61,7 +61,8 @@ test.describe("Article page", () => {
         slide(place).getByRole("img").boundingBox(),
         gallery.boundingBox(),
       ]);
-      return Math.round((box?.x ?? -1) - (frame?.x ?? 0));
+      // `|| 0`: a slide moved round by a transform can sit at -0.
+      return Math.round((box?.x ?? -1) - (frame?.x ?? 0)) || 0;
     };
     await expect.poll(async () => await leftEdge(2)).toBe(0);
     await gallery.getByRole("button", { name: "Foto siguiente" }).click();
@@ -86,11 +87,46 @@ test.describe("Article page", () => {
     await zoom.getByRole("button", { name: "Cerrar la foto ampliada" }).click();
     await expectDialogRemoved(page, zoom);
 
-    // At the last photo the arrow leads back to the first.
-    await gallery
-      .getByRole("button", { name: "Volver a la primera foto" })
-      .click();
+    // Past the last photo comes the first again (FER-045): the arrow still
+    // leads on, and the first photo glides in from the right.
+    const arrow = gallery.getByRole("button", { name: "Foto siguiente" });
+    await arrow.click();
     await expect(position).toHaveText("Foto 1 de 3");
+    await expect.poll(async () => await leftEdge(1)).toBe(0);
+    await expect(
+      gallery.getByRole("button", { name: "Volver a la primera foto" })
+    ).toHaveCount(0);
+    // And back round the other way, by the keyboard.
+    await arrow.focus();
+    await page.keyboard.press("ArrowLeft");
+    await expect(position).toHaveText("Foto 3 de 3");
+    await expect.poll(async () => await leftEdge(3)).toBe(0);
+  });
+
+  test("an article with one photo has nothing to move it", async ({
+    db,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const rings = await db.seed.createCategory({
+      nameEs: `Anillos ${tag}`,
+      slug: `anillos-${tag}`,
+    });
+    const article = await db.seed.createArticle({
+      categoryId: rings.id,
+      priceAmount: 120_000,
+      title: "Anillo de plata",
+    });
+    await page.goto(`/productos/${article.slug}`);
+    const gallery = page.getByTestId("store-gallery");
+
+    await expect(
+      gallery.getByRole("button", { name: "Ampliar la foto" })
+    ).toBeEnabled();
+    await expect(
+      gallery.getByRole("button", { name: "Foto siguiente" })
+    ).toHaveCount(0);
+    await expect(gallery.getByTestId("store-gallery-position")).toHaveCount(0);
   });
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {
@@ -107,9 +143,63 @@ test.describe("Article page", () => {
     await expect(quantity).toHaveText("3");
     await page.getByRole("button", { name: "Agregar al carrito" }).click();
 
-    await expect(page.getByText("Agregado al carrito.")).toBeVisible();
+    // Adding opens the cart's side panel on the article (FER-045).
+    await expect(
+      page.getByRole("dialog", { name: "Tu carrito, 3 unidades" })
+    ).toBeVisible();
+    await expect(
+      storePage.getCartPanel().getByTestId("store-cart-panel-status")
+    ).toHaveText("Agregaste Anillo de plata al carrito.");
+    await expect(
+      storePage
+        .getCartPanelLine("Anillo de plata")
+        .getByTestId("store-cart-quantity")
+    ).toHaveText("3");
+    await storePage.closeCartPanel();
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, 3 unidades"
+    );
+  });
+
+  test("trails from a house named Inicio through “Catálogo” and its category to the article itself", async ({
+    db,
+    page,
+  }) => {
+    const { article, rings } = await setup({ db });
+    await page.goto(`/productos/${article.slug}`);
+    const trail = page.getByRole("navigation", { name: "Ruta" });
+
+    await expect(trail.getByRole("listitem")).toHaveText([
+      "Inicio",
+      "Catálogo",
+      `Anillos ${rings.slug.slice("anillos-".length)}`,
+      "Anillo de plata",
+    ]);
+    const home = trail.getByRole("link", { name: "Inicio" });
+    await expect(home).toHaveAttribute("href", "/");
+    await expect(home.getByTestId("store-breadcrumb-home-icon")).toBeVisible();
+    await expect(trail.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "href",
+      "/productos"
+    );
+    await expect(trail.getByText("Anillo de plata")).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+  });
+
+  test("offers no share button: the page is shared from the browser (FER-045)", async ({
+    db,
+    page,
+  }) => {
+    const { article } = await setup({ db });
+    await page.goto(`/productos/${article.slug}`);
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Anillo de plata" })
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Compartir" })).toHaveCount(
+      0
     );
   });
 

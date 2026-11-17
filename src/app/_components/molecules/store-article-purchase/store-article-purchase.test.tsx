@@ -1,7 +1,8 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { CartPanelContext, type CartPanelOptions } from "@/lib/hooks/cart";
 import type { Locale } from "@/lib/i18n/config";
 import { collectHydrationErrors } from "@/test/hydration";
 import { createI18nWrapper, DICTIONARIES, renderWithI18n } from "@/test/i18n";
@@ -24,21 +25,35 @@ function makeCart(count: number) {
 function setup({
   cart = [],
   locale = "es",
+  panel = false,
   productId = 42,
 }: {
   cart?: { productId: number; quantity: number }[];
   locale?: Locale;
+  /** Inside a store page's frame, whose cart panel adding opens. */
+  panel?: boolean;
   productId?: number;
 } = {}) {
   localStorage.setItem(KEY, JSON.stringify(cart));
   const copy = DICTIONARIES[locale].storefront.article;
   const user = userEvent.setup();
-  renderWithI18n(
+  const open = vi.fn<(options?: CartPanelOptions) => void>();
+  const purchase = (
     <StoreArticlePurchase
       className="custom"
       priceAmount={PRICE}
       productId={productId}
-    />,
+      title="Collar de perlas"
+    />
+  );
+  renderWithI18n(
+    panel ? (
+      <CartPanelContext value={{ isOpen: false, open }}>
+        {purchase}
+      </CartPanelContext>
+    ) : (
+      purchase
+    ),
     { locale }
   );
   const group = () => screen.getByRole("group", { name: copy.quantity });
@@ -56,6 +71,7 @@ function setup({
     /** What the message region says, without its invisible mark. */
     said: () => message()?.textContent?.replaceAll(MARK, ""),
     message,
+    open,
     storedCart: (): unknown => JSON.parse(localStorage.getItem(KEY) ?? "null"),
     user,
   };
@@ -261,12 +277,72 @@ describe("StoreArticlePurchase", () => {
   );
 });
 
+describe("StoreArticlePurchase in a store page's frame", () => {
+  test.each([
+    ["es", "Agregaste Collar de perlas al carrito."],
+    ["en", "You added Collar de perlas to your cart."],
+  ] as const)(
+    "in %s, adding opens the cart's panel on the article's line, says it there and nothing here",
+    async (locale, text) => {
+      const { add, open, said, storedCart } = setup({ locale, panel: true });
+
+      await add();
+
+      expect(storedCart()).toEqual([
+        { productId: 42, quantity: 1, seenPriceAmount: PRICE },
+      ]);
+      expect(open).toHaveBeenCalledExactlyOnceWith({
+        added: { message: text, productId: 42 },
+        returnFocus: screen.getByRole("button", {
+          name: DICTIONARIES[locale].storefront.article.addToCart,
+        }),
+      });
+      expect(said()).toBe("");
+    }
+  );
+
+  test("adding fewer than chosen opens the panel saying how many it took", async () => {
+    const { add, increase, open, said, user } = setup({
+      cart: [{ productId: 42, quantity: 9 }],
+      panel: true,
+    });
+
+    await user.click(increase());
+    await add();
+
+    expect(open).toHaveBeenCalledExactlyOnceWith({
+      added: {
+        message: "Agregamos 1: con ellos tenés 10, el máximo por pedido.",
+        productId: 42,
+      },
+      returnFocus: screen.getByRole("button", { name: "Agregar al carrito" }),
+    });
+    expect(said()).toBe("");
+  });
+
+  test("adding nothing leaves the panel shut and says why under the button", async () => {
+    const { add, open, said } = setup({
+      cart: [{ productId: 42, quantity: 10 }],
+      panel: true,
+    });
+
+    await add();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(said()).toBe("Ya tenés 10 de este artículo, el máximo por pedido.");
+  });
+});
+
 describe("StoreArticlePurchase before hydration", () => {
   test("its add button is disabled in the server's HTML and enabled once React owns it", () => {
     const I18n = createI18nWrapper("es");
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
       <I18n>
-        <StoreArticlePurchase priceAmount={PRICE} productId={42} />
+        <StoreArticlePurchase
+          priceAmount={PRICE}
+          productId={42}
+          title="Collar de perlas"
+        />
       </I18n>,
       { clientNowMs: 1000, serverNowMs: 0 }
     );

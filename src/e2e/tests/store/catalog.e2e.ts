@@ -493,7 +493,11 @@ test.describe("Catalog", () => {
     await expect(add).toBeEnabled();
     await add.click();
 
-    await expect(page.getByText("Agregado al carrito.")).toBeVisible();
+    // Adding opens the cart's side panel on the article (FER-045).
+    await expect(
+      storePage.getCartPanel().getByTestId("store-cart-panel-status")
+    ).toHaveText("Agregaste Collar dorado al carrito.");
+    await storePage.closeCartPanel();
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, 1 unidad"
     );

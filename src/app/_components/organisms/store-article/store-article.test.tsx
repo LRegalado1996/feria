@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import useEmblaCarousel from "embla-carousel-react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { CartPanelContext, type CartPanelOptions } from "@/lib/hooks/cart";
 import type * as UiHooks from "@/lib/hooks/ui";
 import type { Locale } from "@/lib/i18n/config";
 import { createFakeEmbla } from "@/test/embla";
@@ -98,14 +99,18 @@ function setup({
     createFakeEmbla({ snaps: 2 }).hook
   );
   const user = userEvent.setup();
+  const openPanel = vi.fn<(options?: CartPanelOptions) => void>();
   renderWithI18n(
-    <StoreArticle
-      article={article}
-      copy={DICTIONARIES[locale].storefront}
-      locale={locale}
-      related={related}
-      whatsappHref={whatsappHref}
-    />,
+    // In a store page's frame, whose cart panel adding opens.
+    <CartPanelContext value={{ isOpen: false, open: openPanel }}>
+      <StoreArticle
+        article={article}
+        copy={DICTIONARIES[locale].storefront}
+        locale={locale}
+        related={related}
+        whatsappHref={whatsappHref}
+      />
+    </CartPanelContext>,
     { locale }
   );
 
@@ -116,26 +121,41 @@ function setup({
           name: locale === "es" ? "Ruta" : "Breadcrumb",
         })
       )
-        .getAllByRole("link")
-        .map((link) => [link.textContent, link.getAttribute("href")]),
+        .getAllByRole("listitem")
+        .map((step) => [
+          step.textContent,
+          step.querySelector("a")?.getAttribute("href") ?? null,
+        ]),
+    openPanel,
     page: screen.getByTestId("store-article"),
     user,
   };
 }
 
 afterEach(() => {
-  Reflect.deleteProperty(navigator, "share");
-  Reflect.deleteProperty(navigator, "clipboard");
+  localStorage.clear();
 });
 
 describe("StoreArticle", () => {
-  test("leads back to the catalog and to the article's category", () => {
-    const { breadcrumb } = setup();
+  test("trails from the home through the catalog and the category to the article itself", () => {
+    const { breadcrumb, page } = setup();
 
     expect(breadcrumb()).toEqual([
-      ["Todos los artículos", "/productos"],
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
       ["Collares", "/collares"],
+      ["Collar de perlas", null],
     ]);
+    // The catalog pages' trail (FER-044): the home a house, the article the
+    // page itself, in its language.
+    expect(within(page).getByTestId("store-breadcrumb-home-icon")).toHaveClass(
+      "lucide-house"
+    );
+    const itself = within(page).getByText("Collar de perlas", {
+      selector: "[aria-current]",
+    });
+    expect(itself).toHaveAttribute("aria-current", "page");
+    expect(itself).toHaveAttribute("lang", "es");
   });
 
   test("leads back through the group of the article's category (FER-043)", () => {
@@ -151,16 +171,22 @@ describe("StoreArticle", () => {
     });
 
     expect(breadcrumb()).toEqual([
-      ["Todos los artículos", "/productos"],
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
       ["Bijouterie", "/bijouterie"],
       ["Anillos", "/bijouterie/anillos"],
+      ["Collar de perlas", null],
     ]);
   });
 
   test("leads back without a category when the article has none", () => {
     const { breadcrumb } = setup({ article: makeArticle({ category: null }) });
 
-    expect(breadcrumb()).toEqual([["Todos los artículos", "/productos"]]);
+    expect(breadcrumb()).toEqual([
+      ["Inicio", "/"],
+      ["Catálogo", "/productos"],
+      ["Collar de perlas", null],
+    ]);
   });
 
   test("names the article in a heading marked with its language, and shows its price and photos", () => {
@@ -225,27 +251,37 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["es", "Compartir", "http://localhost:3000/productos/collar-de-perlas"],
-    ["en", "Share", "http://localhost:3000/en/productos/collar-de-perlas"],
+    ["es", "Compartir"],
+    ["en", "Share"],
   ] as const)(
-    "in %s, shares the article's own address",
-    async (locale, name, url) => {
-      const { user } = setup({ locale });
-      const writeText = vi.fn(async (_text: string) => {});
-      Object.defineProperty(navigator, "share", {
-        configurable: true,
-        value: undefined,
-      });
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: { writeText },
-      });
+    "in %s, offers no %j button: the article's page is not shared from itself (FER-045)",
+    (locale, name) => {
+      const { page } = setup({ locale });
 
-      await user.click(screen.getByRole("button", { name }));
-
-      expect(writeText).toHaveBeenCalledExactlyOnceWith(url);
+      expect(within(page).queryByRole("button", { name })).toBeNull();
     }
   );
+
+  test("adding opens the cart's panel on the article, named as the page names it", async () => {
+    const { openPanel, page, user } = setup();
+    localStorage.setItem("feria:cart", "[]");
+    const add = within(page).getByRole("button", {
+      name: "Agregar al carrito",
+    });
+
+    await user.click(add);
+
+    expect(openPanel).toHaveBeenCalledExactlyOnceWith({
+      added: {
+        message: "Agregaste Collar de perlas al carrito.",
+        productId: 42,
+      },
+      returnFocus: add,
+    });
+    expect(JSON.parse(localStorage.getItem("feria:cart") ?? "null")).toEqual([
+      { productId: 42, quantity: 1, seenPriceAmount: 120_000 },
+    ]);
+  });
 
   test("shows the whole description in its language, a paragraph for each blank line, its line breaks kept", () => {
     const { page } = setup();
@@ -410,8 +446,10 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup({ locale: "en" });
 
     expect(breadcrumb()).toEqual([
-      ["All articles", "/en/productos"],
+      ["Home", "/en"],
+      ["Catalog", "/en/productos"],
       ["Collares", "/en/collares"],
+      ["Collar de perlas", null],
     ]);
     expect(screen.getByRole("link", { name: "Artículo 7" })).toHaveAttribute(
       "href",

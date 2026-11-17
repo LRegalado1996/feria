@@ -1,5 +1,1 @@
-export {
-  type CartLineFlag,
-  StoreCartLine,
-  type StoreCartLineProps,
-} from "./store-cart-line";
+export { StoreCartLine, type StoreCartLineProps } from "./store-cart-line";

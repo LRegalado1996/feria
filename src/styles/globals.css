@@ -35,6 +35,22 @@
   --animate-store-sway: store-sway 2.4s ease-in-out infinite alternate;
   --animate-store-twinkle: store-twinkle 3.6s ease-in-out infinite;
 
+  /* The cart's side panel (FER-045): it slides in from the right over a
+     scrim that fades in, and leaves the same way, quicker. The line just
+     added rises into place while a lime wash over it fades; a count that
+     grew bumps once. Transform and opacity only, all done in under two
+     seconds; reduced motion drops every one of them. */
+  --animate-store-panel-in: store-panel-in 0.3s cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+  --animate-store-panel-out: store-panel-out 0.2s cubic-bezier(0.4, 0, 1, 1)
+    both;
+  --animate-store-scrim-in: store-scrim-in 0.3s ease-out both;
+  --animate-store-scrim-out: store-scrim-out 0.2s ease-in both;
+  --animate-store-rise: store-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s
+    both;
+  --animate-store-wash: store-wash 1.8s ease-out 0.12s both;
+  --animate-store-bump: store-bump 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+
   /* A column the band's height, from just above the band to below it, at
      one steady speed (the theme value is `linear`; only the transform's
      ends are set, so the stops below change the opacity alone). Over the
@@ -87,6 +103,55 @@
   @keyframes store-line {
     from {
       transform: translateY(105%);
+    }
+  }
+
+  @keyframes store-panel-in {
+    from {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes store-panel-out {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes store-scrim-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes store-scrim-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes store-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+  }
+
+  /* Held a moment, then gone. */
+  @keyframes store-wash {
+    from,
+    35% {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes store-bump {
+    40% {
+      transform: scale(1.45);
     }
   }
 

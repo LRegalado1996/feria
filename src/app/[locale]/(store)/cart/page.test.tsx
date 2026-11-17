@@ -2,17 +2,17 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
-import type { StoreCartProps } from "@/app/_components/organisms/store-cart";
+import type { StoreCheckoutProps } from "@/app/_components/organisms/store-checkout";
 import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 
-import * as cartModule from "./page";
+import * as checkoutModule from "./page";
 
-const { cartProps, connection, frameProps, readStore, streamedShell } =
+const { checkoutProps, connection, frameProps, readStore, streamedShell } =
   vi.hoisted(() => ({
-    cartProps: vi.fn<(props: StoreCartProps) => void>(),
+    checkoutProps: vi.fn<(props: StoreCheckoutProps) => void>(),
     connection: vi.fn(async () => undefined),
     frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
     readStore: vi.fn<() => Promise<PublicStore | null>>(),
@@ -41,11 +41,11 @@ vi.mock("next/server", () => ({ connection }));
 // The cached read has its own tests; here it answers what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore }));
 
-// The cart has its own tests; here it records what the page handed it.
-vi.mock("@/app/_components/organisms/store-cart", () => ({
-  StoreCart: (props: StoreCartProps) => {
-    cartProps(props);
-    return <div data-testid="store-cart" />;
+// The checkout has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-checkout", () => ({
+  StoreCheckout: (props: StoreCheckoutProps) => {
+    checkoutProps(props);
+    return <div data-testid="store-checkout" />;
   },
 }));
 
@@ -56,7 +56,7 @@ vi.mock("../store-page-footer", () => ({
   ),
 }));
 
-const { default: CartPage, generateMetadata } = cartModule;
+const { default: CheckoutPage, generateMetadata } = checkoutModule;
 
 function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   return {
@@ -84,20 +84,20 @@ function setup({
   return {
     metadata: async () =>
       await generateMetadata({ params: makeParams(locale) }),
-    page: async () => await CartPage({ params: makeParams(locale) }),
+    page: async () => await CheckoutPage({ params: makeParams(locale) }),
   };
 }
 
-describe("CartPage", () => {
-  test("shows the cart inside the page's main landmark, then the footer streamed in the page's language", async () => {
+describe("CheckoutPage", () => {
+  test("shows the checkout inside the page's main landmark, then the footer streamed in the page's language", async () => {
     const { page } = setup({ locale: "en" });
 
     render(await page());
 
-    const main = screen.getByTestId("store-cart-page");
+    const main = screen.getByTestId("store-checkout-page");
     expect(main.tagName).toBe("MAIN");
-    expect(main).toContainElement(screen.getByTestId("store-cart"));
-    expect(cartProps).toHaveBeenCalledExactlyOnceWith({});
+    expect(main).toContainElement(screen.getByTestId("store-checkout"));
+    expect(checkoutProps).toHaveBeenCalledExactlyOnceWith({});
     expect(screen.getByTestId("footer")).toHaveTextContent(/^en$/u);
     expect(main.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
@@ -110,7 +110,7 @@ describe("CartPage", () => {
     render(await page());
 
     expect(screen.getByTestId("store-frame")).toContainElement(
-      screen.getByTestId("store-cart-page")
+      screen.getByTestId("store-checkout-page")
     );
     expect(frameProps).toHaveBeenCalledExactlyOnceWith({
       copy: getDictionary("en").storefront.shell,
@@ -128,17 +128,17 @@ describe("CartPage", () => {
     expect(connection).not.toHaveBeenCalled();
   });
 
-  test("answers 404 for a language the product does not speak, showing no cart", async () => {
+  test("answers 404 for a language the product does not speak, showing no checkout", async () => {
     const { page } = setup({ locale: "fr" });
 
     await expect(page()).rejects.toMatchObject({
       digest: "NEXT_HTTP_ERROR_FALLBACK;404",
     });
-    expect(cartProps).not.toHaveBeenCalled();
+    expect(checkoutProps).not.toHaveBeenCalled();
   });
 
   test("blocks on nothing: no static-output or instant-navigation exemption", () => {
-    expect(new Set(Object.keys(cartModule))).toEqual(
+    expect(new Set(Object.keys(checkoutModule))).toEqual(
       new Set(["default", "generateMetadata"])
     );
   });
@@ -146,10 +146,10 @@ describe("CartPage", () => {
 
 describe("generateMetadata", () => {
   test.each([
-    ["es", "/cart", "Tu carrito · Sample Store"],
-    ["en", "/en/cart", "Your cart · Sample Store"],
+    ["es", "/cart", "Tu pedido · Sample Store"],
+    ["en", "/en/cart", "Your order · Sample Store"],
   ] as const)(
-    "titles the %s cart in its language after the store, never indexed, with both addresses",
+    "titles the %s checkout in its language after the store, never indexed, with both addresses",
     async (locale, canonical, title) => {
       const { metadata } = setup({ locale });
 
@@ -177,16 +177,16 @@ describe("generateMetadata", () => {
     request.arrive();
 
     await expect(pending).resolves.toMatchObject({
-      title: { absolute: "Tu carrito · Sample Store" },
+      title: { absolute: "Tu pedido · Sample Store" },
     });
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
   });
 
-  test("keeps the cart's own title when the store's row is missing", async () => {
+  test("keeps the checkout's own title when the store's row is missing", async () => {
     const { metadata } = setup({ store: null });
 
     await expect(metadata()).resolves.toMatchObject({
-      title: { absolute: "Tu carrito" },
+      title: { absolute: "Tu pedido" },
     });
   });
 

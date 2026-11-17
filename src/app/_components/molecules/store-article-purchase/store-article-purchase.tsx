@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
-import { useCart } from "@/lib/hooks/cart";
+import { useCart, useCartPanel } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -17,23 +17,30 @@ export interface StoreArticlePurchaseProps {
   /** The price the page shows, so the cart can say if it changes. */
   priceAmount: number;
   productId: number;
+  /** The article's name, for what adding did. */
+  title: string;
 }
 
 /**
  * How many to take and the button that adds them (FER-024): a pill with the
  * two steps and the count, and beside it, on one row at every width down to
  * 375 px, the page's one primary pill, which takes the rest of the row
- * (FER-039, like landonorris.store's "QTY 1" beside "ADD TO BAG"). From 1 to the per-article cap; what adding
- * did is said in a polite live region, a repeat included.
+ * (FER-039, like landonorris.store's "QTY 1" beside "ADD TO BAG"). From 1
+ * to the per-article cap. What adding did opens the cart's side panel with
+ * the article's line marked and says so there (FER-045); what it could not
+ * do, and anything at all outside a store page's frame, is said here, in a
+ * polite live region, a repeat included.
  */
 function StoreArticlePurchase({
   className,
   priceAmount,
   productId,
+  title,
 }: StoreArticlePurchaseProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
   const { add, items } = useCart();
+  const panel = useCartPanel();
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState({ count: 0, text: "" });
   // Disabled until React owns it: a press on the server's HTML would add
@@ -93,20 +100,33 @@ function StoreArticlePurchase({
           // pill rather than pushing the pill under the quantity.
           className="min-w-0 flex-1 px-3.5 text-center text-xs leading-tight whitespace-normal"
           disabled={!hydrated}
-          onClick={() => {
+          onClick={(event) => {
             const had =
               items.find((item) => item.productId === productId)?.quantity ?? 0;
             const outcome = add(productId, quantity, priceAmount);
             // The cart keeps at most the cap of one article: when it took
             // fewer than chosen, the shopper is told how many, not "added".
             const added = Math.min(quantity, CART_QUANTITY_MAX - had);
-            const text =
-              outcome === "added" && added < quantity
-                ? interpolate(copy.addedCapped, {
-                    added,
-                    max: CART_QUANTITY_MAX,
-                  })
-                : addOutcomeMessage(outcome, storefront.catalog);
+            let text = addOutcomeMessage(outcome, storefront.catalog);
+
+            if (outcome === "added" && added < quantity) {
+              text = interpolate(copy.addedCapped, {
+                added,
+                max: CART_QUANTITY_MAX,
+              });
+            } else if (outcome === "added" && panel) {
+              text = interpolate(storefront.cart.panel.added, { title });
+            }
+
+            if (outcome === "added" && panel) {
+              panel.open({
+                added: { message: text, productId },
+                returnFocus: event.currentTarget,
+              });
+              // Said in the panel: nothing older stays under the button.
+              text = "";
+            }
+
             setStatus((previous) => ({ count: previous.count + 1, text }));
           }}
           size="lg"

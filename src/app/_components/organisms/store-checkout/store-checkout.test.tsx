@@ -8,14 +8,18 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import type { CartProduct } from "@/lib/hooks/cart";
+import {
+  CartPanelContext,
+  type CartPanelOptions,
+  type CartProduct,
+} from "@/lib/hooks/cart";
 import type { Locale } from "@/lib/i18n/config";
 import { collectHydrationErrors } from "@/test/hydration";
 import { createI18nWrapper, DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
-import { StoreCart } from "./store-cart";
+import { StoreCheckout } from "./store-checkout";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -68,12 +72,25 @@ function deferred<T>() {
   return { promise, resolve: settle };
 }
 
+/**
+ * The cart changed from outside this page's lines, as the side panel over
+ * it or another tab changes it: the shared cart tells its readers.
+ */
+function storeCart(cart: unknown[]) {
+  act(() => {
+    localStorage.setItem(KEY, JSON.stringify(cart));
+    window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+  });
+}
+
 /** Two articles, as added: 2 of article 4 at its price then, 1 of 9. */
 const CART = [makeLine(4, 2, 40_000), makeLine(9, 1, 90_000)];
 
 interface SetupOptions {
   cart?: unknown[];
   locale?: Locale;
+  /** Inside a store page's frame, whose side panel edits the cart. */
+  panel?: boolean;
   /** How `catalog.cartProducts` answers: the articles, a failure or never. */
   products?: "fail" | "hang" | CartProduct[];
 }
@@ -81,6 +98,7 @@ interface SetupOptions {
 function setup({
   cart = CART,
   locale = "en",
+  panel = true,
   products = [makeProduct(4), makeProduct(9)],
 }: SetupOptions = {}) {
   localStorage.setItem(KEY, JSON.stringify(cart));
@@ -98,14 +116,33 @@ function setup({
   );
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
-  renderWithI18n(<StoreCart className="custom" />, {
-    locale,
-    wrapper,
-  });
+  const open = vi.fn<(options?: CartPanelOptions) => void>();
+  renderWithI18n(
+    panel ? (
+      <CartPanelContext value={{ isOpen: false, open }}>
+        <StoreCheckout className="custom" />
+      </CartPanelContext>
+    ) : (
+      <StoreCheckout className="custom" />
+    ),
+    { locale, wrapper }
+  );
 
   const dictionary = DICTIONARIES[locale].storefront.cart.checkout;
 
   return {
+    cartProducts,
+    /** The lines on screen, as `[title, flag]`. */
+    lines: () =>
+      screen
+        .queryAllByTestId("store-cart-line")
+        .map((line) => [
+          within(line).queryByRole("link")?.textContent ??
+            line.querySelector("p")?.textContent ??
+            line.querySelector(".sr-only")?.textContent,
+          line.dataset.flag ?? null,
+        ]),
+    open,
     /** Writes the shopper's details and sends the order. */
     placeOrder: async () => {
       await user.type(
@@ -118,25 +155,18 @@ function setup({
       );
       await user.click(screen.getByTestId("store-checkout-submit"));
     },
-    /** The polite announcement of the last line taken out. */
-    announcement: () =>
-      document.querySelector('[data-slot="store-cart"] > output')
-        ?.textContent ?? null,
-    cartProducts,
-    /** The lines on screen, as `[title, flag]`. */
-    lines: () =>
+    /** What each line says it orders: how many, at what price. */
+    quantities: () =>
       screen
-        .getAllByTestId("store-cart-line")
-        .map((line) => [
-          within(line).queryByRole("link")?.textContent ??
-            line.querySelector("p")?.textContent,
-          line.dataset.flag ?? null,
-        ]),
-    shown: async () => await screen.findByTestId("store-cart"),
+        .getAllByTestId("store-cart-line-price")
+        .map((price) => price.textContent?.replaceAll(" ", " ")),
+    shown: async () => await screen.findByTestId("store-checkout"),
     storedCart: (): unknown => JSON.parse(localStorage.getItem(KEY) ?? "null"),
     submit: () => screen.getByTestId("store-checkout-submit"),
     total: () =>
-      screen.getByTestId("store-cart-total").textContent?.replaceAll(" ", " "),
+      screen
+        .getByTestId("store-checkout-total")
+        .textContent?.replaceAll(" ", " "),
     user,
   };
 }
@@ -148,22 +178,30 @@ afterEach(() => {
   onlineManager.setOnline(true);
 });
 
-describe("StoreCart", () => {
-  test("lists the stored articles at the shop's prices now, with the total", async () => {
-    const { cartProducts, lines, shown, total } = setup();
+describe("StoreCheckout", () => {
+  test("sums up the stored articles at the shop's prices now, read only, with the total", async () => {
+    const { cartProducts, lines, quantities, shown, total } = setup();
 
     await shown();
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Your cart" })
+      screen.getByRole("heading", { level: 1, name: "Your order" })
     ).toBeVisible();
+    expect(screen.getByRole("region", { name: "Summary" })).toContainElement(
+      screen.getAllByTestId("store-cart-line")[0] ?? null
+    );
     expect(lines()).toEqual([
       ["Artículo 4", null],
       ["Artículo 9", null],
     ]);
+    expect(quantities()).toEqual(["2 × UYU 400", "1 × UYU 900"]);
+    // Nothing to change here: the quantities are the panel's.
+    expect(screen.queryAllByTestId("store-cart-quantity")).toEqual([]);
     expect(
-      screen.getAllByTestId("store-cart-quantity").map((q) => q.textContent)
-    ).toEqual(["2", "1"]);
+      screen
+        .getAllByTestId("store-cart-line")
+        .map((line) => line.dataset.variant)
+    ).toEqual(["summary", "summary"]);
     // 2 × 400 + 1 × 900.
     expect(total()).toBe("TotalUYU 1,700");
     expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
@@ -177,17 +215,44 @@ describe("StoreCart", () => {
 
     await shown();
 
+    expect(screen.getByTestId("store-checkout").parentElement).toHaveClass(
+      "custom"
+    );
     expect(screen.getByRole("heading", { level: 1 })).toHaveClass(
       "font-display",
       "font-extrabold",
       "store-display-page"
     );
     const [label, amount] = [
-      ...screen.getByTestId("store-cart-total").children,
+      ...screen.getByTestId("store-checkout-total").children,
     ];
     expect(label).toHaveClass("font-display", "uppercase");
     expect(amount).toHaveClass("tabular-nums", "text-xl");
     expect(amount).not.toHaveClass("font-display");
+  });
+
+  test.each([
+    ["en", "Edit the cart"],
+    ["es", "Editar el carrito"],
+  ] as const)(
+    "in %s, %j opens the side panel, which gives focus back to it",
+    async (locale, name) => {
+      const { open, shown, user } = setup({ locale });
+
+      await shown();
+      const edit = screen.getByRole("button", { name });
+      await user.click(edit);
+
+      expect(open).toHaveBeenCalledExactlyOnceWith({ returnFocus: edit });
+    }
+  );
+
+  test("outside a store page's frame there is no panel, and no way to edit", async () => {
+    const { shown } = setup({ panel: false });
+
+    await shown();
+
+    expect(screen.queryByTestId("store-checkout-edit")).toBeNull();
   });
 
   test("says when an article's price changed since it was added, and still takes the order", async () => {
@@ -217,7 +282,7 @@ describe("StoreCart", () => {
   });
 
   test("leaves a sold-out article out of the total and holds the order until it is taken out", async () => {
-    const { lines, shown, storedCart, submit, total, user } = setup({
+    const { lines, shown, submit, total } = setup({
       products: [makeProduct(4), makeProduct(9, { isAvailable: false })],
     });
 
@@ -233,12 +298,13 @@ describe("StoreCart", () => {
       "Remove the articles that can no longer be bought to place the order."
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove Artículo 9" }));
+    // Taken out in the panel over the page.
+    storeCart([makeLine(4, 2, 40_000)]);
 
-    expect(storedCart()).toEqual([makeLine(4, 2, 40_000)]);
     await waitFor(() => {
       expect(submit()).toBeEnabled();
     });
+    expect(lines()).toEqual([["Artículo 4", null]]);
   });
 
   test("an article the shop no longer has holds the order", async () => {
@@ -270,24 +336,19 @@ describe("StoreCart", () => {
       ["Article no longer for sale", "gone"],
       ["Article no longer for sale", "gone"],
     ]);
-    expect(screen.queryByTestId("store-cart-total")).toBeNull();
+    expect(screen.queryByTestId("store-checkout-total")).toBeNull();
   });
 
-  test("a quantity changed is stored", async () => {
-    const { shown, storedCart, user } = setup();
+  test("a quantity changed in the panel shows here at once", async () => {
+    const { quantities, shown, total } = setup();
 
     await shown();
-    await user.click(
-      screen.getByRole("button", { name: "One unit more of Artículo 4" })
-    );
+    storeCart([makeLine(4, 3, 40_000), makeLine(9, 1, 90_000)]);
 
-    expect(storedCart()).toEqual([
-      makeLine(4, 3, 40_000),
-      makeLine(9, 1, 90_000),
-    ]);
-    expect(
-      screen.getAllByTestId("store-cart-quantity").map((q) => q.textContent)
-    ).toEqual(["3", "1"]);
+    await waitFor(() => {
+      expect(quantities()).toEqual(["3 × UYU 400", "1 × UYU 900"]);
+    });
+    expect(total()).toBe("TotalUYU 2,100");
   });
 
   test("says the prices are on their way while they load", async () => {
@@ -296,8 +357,8 @@ describe("StoreCart", () => {
     expect(
       await screen.findByText("Fetching the current prices…")
     ).toBeVisible();
-    expect(screen.queryByTestId("store-cart")).toBeNull();
-    expect(screen.queryByTestId("store-cart-empty")).toBeNull();
+    expect(screen.queryByTestId("store-checkout")).toBeNull();
+    expect(screen.queryByTestId("store-checkout-empty")).toBeNull();
   });
 
   test("says the prices could not be read, and reads them again on retry", async () => {
@@ -313,7 +374,7 @@ describe("StoreCart", () => {
       ["Fetching the current prices…", "pending"],
       ["Fetching the current prices…", "pending"],
     ]);
-    expect(screen.queryByTestId("store-cart-total")).toBeNull();
+    expect(screen.queryByTestId("store-checkout-total")).toBeNull();
     expect(submit()).toBeDisabled();
     expect(submit()).toHaveAccessibleDescription(
       "We could not fetch the current prices."
@@ -326,10 +387,12 @@ describe("StoreCart", () => {
     await user.click(retry);
 
     await shown();
-    expect(lines()).toEqual([
-      ["Artículo 4", null],
-      ["Artículo 9", null],
-    ]);
+    await waitFor(() => {
+      expect(lines()).toEqual([
+        ["Artículo 4", null],
+        ["Artículo 9", null],
+      ]);
+    });
     expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
       ids: [4, 9],
       locale: "en",
@@ -337,14 +400,14 @@ describe("StoreCart", () => {
   });
 
   test.each([
-    ["en", "Your cart is empty.", "Keep browsing", "/en/productos"],
-    ["es", "Tu carrito está vacío.", "Seguir mirando", "/productos"],
+    ["en", "Your cart is empty.", "Browse the catalog", "/en/productos"],
+    ["es", "Tu carrito está vacío.", "Ver el catálogo", "/productos"],
   ] as const)(
     "in %s, an empty cart says %j and links to the catalog",
     async (locale, text, link, href) => {
       const { cartProducts } = setup({ cart: [], locale });
 
-      const empty = await screen.findByTestId("store-cart-empty");
+      const empty = await screen.findByTestId("store-checkout-empty");
 
       expect(empty).toHaveTextContent(text);
       const back = within(empty).getByRole("link", { name: link });
@@ -412,17 +475,11 @@ describe("StoreCart", () => {
       );
     });
     // Another tab raises article 4 and adds article 11 meanwhile.
-    act(() => {
-      localStorage.setItem(
-        KEY,
-        JSON.stringify([
-          makeLine(4, 3, 40_000),
-          makeLine(9, 1, 90_000),
-          makeLine(11, 1),
-        ])
-      );
-      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
-    });
+    storeCart([
+      makeLine(4, 3, 40_000),
+      makeLine(9, 1, 90_000),
+      makeLine(11, 1),
+    ]);
     answer.release();
 
     await waitFor(() => {
@@ -566,13 +623,7 @@ describe("StoreCart", () => {
     cartProducts.mockImplementation(
       async () => await new Promise<never>(() => {})
     );
-    act(() => {
-      localStorage.setItem(
-        KEY,
-        JSON.stringify([makeLine(4, 2, 40_000), makeLine(11, 1)])
-      );
-      window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
-    });
+    storeCart([makeLine(4, 2, 40_000), makeLine(11, 1)]);
 
     await waitFor(() => {
       expect(lines()).toEqual([
@@ -588,23 +639,6 @@ describe("StoreCart", () => {
     expect(submit()).toHaveAccessibleDescription(
       "Fetching the current prices…"
     );
-  });
-
-  test("taking out a line moves focus to the remove button now in its place, and says what was taken out", async () => {
-    const { announcement, shown, user } = setup({
-      cart: [...CART, makeLine(12, 1, 120_000)],
-      products: [makeProduct(4), makeProduct(9), makeProduct(12)],
-    });
-
-    await shown();
-    await user.click(screen.getByRole("button", { name: "Remove Artículo 4" }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Remove Artículo 9" })
-      ).toHaveFocus();
-    });
-    expect(announcement()).toBe("You removed Artículo 4 from the cart.\u2060");
   });
 
   test("a read that fails after a line is taken out keeps what the shopper typed, and the order goes through after a retry", async () => {
@@ -632,7 +666,7 @@ describe("StoreCart", () => {
       })
     );
 
-    await user.click(screen.getByRole("button", { name: "Remove Artículo 4" }));
+    storeCart([makeLine(9, 1, 90_000)]);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We could not fetch the current prices."
@@ -694,14 +728,8 @@ describe("StoreCart", () => {
     act(() => {
       onlineManager.setOnline(false);
     });
-    const [first] = screen.getAllByRole("button", {
-      name: "Remove Fetching the current prices…",
-    });
-    if (!first) {
-      throw new Error("No line to remove");
-    }
 
-    await user.click(first);
+    storeCart([makeLine(9, 1, 90_000)]);
 
     await waitFor(() => {
       expect(screen.queryByRole("alert")).toBeNull();
@@ -717,7 +745,7 @@ describe("StoreCart", () => {
   });
 
   test("a line taken out after a failed first read keeps the form and what was typed while the shorter list loads", async () => {
-    const { cartProducts, submit, user } = setup({ products: "fail" });
+    const { cartProducts, lines, submit, user } = setup({ products: "fail" });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We could not fetch the current prices."
     );
@@ -738,14 +766,8 @@ describe("StoreCart", () => {
     cartProducts.mockImplementation(
       async () => await new Promise<never>(() => {})
     );
-    const [first] = screen.getAllByRole("button", {
-      name: "Remove Fetching the current prices…",
-    });
-    if (!first) {
-      throw new Error("No line to remove");
-    }
 
-    await user.click(first);
+    storeCart([makeLine(9, 1, 90_000)]);
 
     await waitFor(() => {
       expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
@@ -753,12 +775,8 @@ describe("StoreCart", () => {
         locale: "en",
       });
     });
-    // The lines' place says the prices are on their way.
-    const items = screen.getByRole("region", { name: "Your cart" });
-    expect(within(items).getByRole("status")).toHaveTextContent(
-      "Fetching the current prices…"
-    );
-    expect(screen.queryAllByTestId("store-cart-line")).toEqual([]);
+    // The line left waits for its price, in the shape of a line.
+    expect(lines()).toEqual([["Fetching the current prices…", "pending"]]);
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("textbox", { name: "Your name" })).toHaveValue(
       "Ana Pérez"
@@ -772,70 +790,6 @@ describe("StoreCart", () => {
     expect(submit()).toBeDisabled();
     expect(submit()).toHaveAccessibleDescription(
       "Fetching the current prices…"
-    );
-  });
-
-  test("taking out the last of several lines moves focus to the one before it", async () => {
-    const { shown, user } = setup();
-
-    await shown();
-    await user.click(screen.getByRole("button", { name: "Remove Artículo 9" }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Remove Artículo 4" })
-      ).toHaveFocus();
-    });
-  });
-
-  test.each([
-    ["en", "Keep browsing", "You removed Artículo 4 from the cart.\u2060"],
-    ["es", "Seguir mirando", "Quitaste Artículo 4 del carrito.\u2060"],
-  ] as const)(
-    "in %s, taking out the only line moves focus to %j and announces it",
-    async (locale, link, said) => {
-      const { announcement, shown, user } = setup({
-        cart: [makeLine(4, 2, 40_000)],
-        locale,
-        products: [makeProduct(4)],
-      });
-
-      await shown();
-      await user.click(
-        screen.getByRole("button", {
-          name: locale === "en" ? "Remove Artículo 4" : "Quitar Artículo 4",
-        })
-      );
-
-      const empty = await screen.findByTestId("store-cart-empty");
-      expect(within(empty).getByRole("link", { name: link })).toHaveFocus();
-      expect(announcement()).toBe(said);
-    }
-  );
-
-  test("the same message said twice flips its invisible mark, so it is announced again", async () => {
-    const { announcement, lines, shown, user } = setup({ products: [] });
-
-    await shown();
-    expect(announcement()).toBe("");
-    const [first] = screen.getAllByRole("button", {
-      name: "Remove Article no longer for sale",
-    });
-    if (!first) {
-      throw new Error("No line to remove");
-    }
-    await user.click(first);
-    await waitFor(() => {
-      expect(lines()).toEqual([["Article no longer for sale", "gone"]]);
-    });
-    expect(announcement()).toBe(
-      "You removed Article no longer for sale from the cart.\u2060"
-    );
-    await user.click(screen.getByRole("button", { name: /^Remove /u }));
-
-    await screen.findByTestId("store-cart-empty");
-    expect(announcement()).toBe(
-      "You removed Article no longer for sale from the cart."
     );
   });
 
@@ -870,7 +824,7 @@ describe("StoreCart", () => {
   });
 });
 
-describe("StoreCart before hydration", () => {
+describe("StoreCheckout before hydration", () => {
   test("reads as loading, not empty, until React reads the cart", () => {
     localStorage.setItem(KEY, "[]");
     const I18n = createI18nWrapper("en");
@@ -886,7 +840,7 @@ describe("StoreCart before hydration", () => {
 
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
       <Providers>
-        <StoreCart />
+        <StoreCheckout />
       </Providers>,
       { clientNowMs: 1000, serverNowMs: 0 }
     );

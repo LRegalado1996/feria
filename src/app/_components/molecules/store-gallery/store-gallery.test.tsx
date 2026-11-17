@@ -26,10 +26,17 @@ function makeImages(count: number): StoreGalleryImage[] {
 function setup({
   count = 3,
   locale = "es",
+  loop = true,
   snaps = count,
-}: { count?: number; locale?: Locale; snaps?: number } = {}) {
+}: {
+  count?: number;
+  locale?: Locale;
+  /** Whether Embla could go round: it gives up when the photos are few. */
+  loop?: boolean;
+  snaps?: number;
+} = {}) {
   stubReducedMotion(false);
-  const embla = createFakeEmbla({ snaps });
+  const embla = createFakeEmbla({ loop, snaps });
   vi.mocked(useEmblaCarousel).mockReturnValue(embla.hook);
   renderWithI18n(
     <StoreGallery
@@ -73,13 +80,34 @@ describe("StoreGallery", () => {
     }
   );
 
-  test("hands Embla a row of photos that starts at its left edge", () => {
+  test("hands Embla a row of photos that starts at its left edge and goes round", () => {
     setup();
 
     expect(useEmblaCarousel).toHaveBeenCalledWith(
-      { align: "start", containScroll: "trimSnaps" },
+      { align: "start", loop: true },
       undefined
     );
+  });
+
+  test("going round, its round arrow always leads on: past the last photo comes the first", async () => {
+    const { arrow, embla, status, user } = setup();
+
+    await user.click(required(arrow()));
+    await user.click(required(arrow()));
+    expect(status()).toHaveTextContent("Foto 3 de 3");
+    expect(arrow()).toHaveAccessibleName("Foto siguiente");
+
+    await user.click(required(arrow()));
+
+    expect(status()).toHaveTextContent("Foto 1 de 3");
+    expect(arrow()).toHaveAccessibleName("Foto siguiente");
+    // Three steps on, gliding; never a jump back to the start.
+    expect(embla.fake.scrollNext.mock.calls).toEqual([
+      [false],
+      [false],
+      [false],
+    ]);
+    expect(embla.fake.scrollTo).not.toHaveBeenCalled();
   });
 
   test("loads the first photo first, the others lazily", () => {
@@ -90,8 +118,8 @@ describe("StoreGallery", () => {
     expect(photos[1]).toHaveAttribute("loading", "lazy");
   });
 
-  test("its round arrow shows the next photo, then leads back to the first", async () => {
-    const { arrow, embla, status, user } = setup();
+  test("where Embla could not go round, its round arrow shows the next photo, then leads back to the first", async () => {
+    const { arrow, embla, status, user } = setup({ loop: false });
 
     expect(arrow()).toHaveAccessibleName("Foto siguiente");
     // Lime on any photo: the accent, not the ink of the main buttons.

@@ -186,13 +186,15 @@ describe("StoreCheckoutForm", () => {
     expect(
       screen.getByRole("textbox", { name: "Note for the store (optional)" })
     ).toHaveAttribute("placeholder", "For example, what time suits you.");
-    expect(screen.getByRole("button", { name: "Place order" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Place the order" })
+    ).toBeEnabled();
   });
 
   test("is the cart's one action: a primary pill as wide as the form, its title in the display face", () => {
     setup();
 
-    const submit = screen.getByRole("button", { name: "Place order" });
+    const submit = screen.getByRole("button", { name: "Place the order" });
     expect(submit).toHaveAttribute("data-slot", "store-button");
     expect(submit).toHaveAttribute("data-variant", "primary");
     expect(submit).toHaveAttribute("data-size", "lg");

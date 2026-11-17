@@ -64,6 +64,12 @@ function setup({ ids = [4, 9] }: { ids?: number[] } = {}) {
     release: () => {
       held.release();
     },
+    /**
+     * Another reader of the cart, mounted now on the same client (the side
+     * panel opening after adding), asking for `ids` in `locale`.
+     */
+    readAnew: (ids: number[], locale: "en" | "es" = "es") =>
+      renderHook(() => useCartProducts({ ids, locale }), { wrapper }).result,
     rerender: (next: number[]) => {
       rerender({ current: next });
     },
@@ -117,5 +123,45 @@ describe("useCartProducts", () => {
       expect(result.current.data).toEqual([makeProduct(9)]);
     });
     expect(result.current.isPlaceholderData).toBe(false);
+  });
+
+  test("a new reader of a grown cart shows the newest answer about another cart while its own loads", async () => {
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    const { holdNext, readAnew, release, rerender, result } = setup();
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeProduct(4), makeProduct(9)]);
+    });
+    // A newer answer, about another list.
+    vi.setSystemTime(new Date("2026-11-18T12:00:05Z"));
+    rerender([9]);
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeProduct(9)]);
+    });
+    holdNext();
+
+    const grown = readAnew([9, 11]);
+
+    expect(grown.current.isPlaceholderData).toBe(true);
+    expect(grown.current.data).toEqual([makeProduct(9)]);
+
+    release();
+
+    await waitFor(() => {
+      expect(grown.current.data).toEqual([makeProduct(9), makeProduct(11)]);
+    });
+    expect(grown.current.isPlaceholderData).toBe(false);
+  });
+
+  test("a new reader in another language shows nothing of this one's answers while its own loads", async () => {
+    const { holdNext, readAnew, result } = setup();
+    await waitFor(() => {
+      expect(result.current.data).toEqual([makeProduct(4), makeProduct(9)]);
+    });
+    holdNext();
+
+    const english = readAnew([4, 9, 11], "en");
+
+    expect(english.current.data).toBeUndefined();
+    expect(english.current.isPlaceholderData).toBe(false);
   });
 });
