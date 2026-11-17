@@ -82,6 +82,34 @@ export class StorePage extends BasePage {
     await expectDialogRemoved(this.page, panel);
   }
 
+  /** The checkout's confirmation (FER-050), while it is open. */
+  getCheckoutConfirm(): Locator {
+    return this.getByTestId("store-checkout-confirm").filter({ visible: true });
+  }
+
+  /**
+   * Submits the checkout's form, which asks first (FER-050), and waits for
+   * the confirmation it opens.
+   */
+  async askToConfirmOrder(): Promise<Locator> {
+    await this.getByTestId("store-checkout-submit")
+      .filter({ visible: true })
+      .click();
+    const dialog = this.getCheckoutConfirm();
+    await expect(dialog).toBeVisible();
+
+    return dialog;
+  }
+
+  /**
+   * Submits the checkout and confirms the order in the dialog: the whole
+   * way to an order. Wrap it in `completeRpcAction`.
+   */
+  async submitAndConfirmOrder(): Promise<void> {
+    const dialog = await this.askToConfirmOrder();
+    await dialog.getByTestId("store-checkout-confirm-submit").click();
+  }
+
   /**
    * The lime line above the header (FER-039): the fair and the stall until
    * FER-020, the whole notice from `lg` up and a short one on a phone.
@@ -109,14 +137,30 @@ export class StorePage extends BasePage {
    * version shown (the whole notice from `lg` up, the short one below).
    */
   async announcementLines(): Promise<number> {
-    return await this.getAnnouncementBar().evaluate((bar) => {
-      const shown = [...bar.querySelectorAll("span")].find(
-        (span) => span.getClientRects().length > 0 && span.offsetWidth > 1
+    // Each version's lines, none when it is not drawn: hidden, or
+    // `sr-only`, one pixel wide.
+    const linesOf = async (version: Locator) =>
+      await version.evaluateAll((elements) =>
+        elements.flatMap((element) =>
+          element instanceof HTMLElement &&
+          element.getClientRects().length > 0 &&
+          element.offsetWidth > 1
+            ? [
+                new Set(
+                  [...element.getClientRects()].map((rect) =>
+                    Math.round(rect.top)
+                  )
+                ).size,
+              ]
+            : []
+        )
       );
-      const rects = shown ? [...shown.getClientRects()] : [];
+    const shown = [
+      ...(await linesOf(this.getAnnouncementFull())),
+      ...(await linesOf(this.getAnnouncementShort())),
+    ];
 
-      return new Set(rects.map((rect) => Math.round(rect.top))).size;
-    });
+    return shown[0] ?? 0;
   }
 
   /**

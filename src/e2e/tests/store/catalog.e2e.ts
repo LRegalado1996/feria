@@ -421,6 +421,33 @@ test.describe("Catalog", () => {
     await expect(titles(page)).toHaveCount(49);
   });
 
+  test("on a phone, with one taller article a row, the next page starts loading while the list's end is still 700 px below the window", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    // 4 + 45 = 49 articles: three pages of 24.
+    await seedMany({ count: 45, db, tag });
+    await page.setViewportSize({ height: 844, width: 390 });
+
+    await page.goto(`/productos?q=${tag}`);
+    await expect(titles(page)).toHaveCount(24);
+    const more = page.getByRole("link", { name: "Cargar más" });
+    await expect(more).toBeVisible();
+
+    // Short of the end by a row and a half of these cards: the shopper has
+    // not reached the last one yet, and the next page comes all the same.
+    await more.evaluate((link) => {
+      const top = link.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(0, top - window.innerHeight - 700);
+    });
+
+    await expect(titles(page)).toHaveCount(48);
+    // Nothing scrolled further: the end was still out of sight.
+    const end = await titles(page).nth(23).boundingBox();
+    expect(end?.y ?? 0).toBeGreaterThan(844);
+  });
+
   test("without the script, Cargar más is a link that opens the next page, kept out of the index", async ({
     baseURL,
     browser,
@@ -505,6 +532,41 @@ test.describe("Catalog", () => {
       { productId: goldNecklace.id, quantity: 1, seenPriceAmount: 120_000 },
     ]);
   });
+
+  for (const [width, columns] of [
+    [390, 1],
+    [768, 2],
+    [1440, 4],
+  ] as const) {
+    test(`at ${width} px the grid shows ${columns} article${columns === 1 ? "" : "s"} a row (FER-050)`, async ({
+      db,
+      page,
+    }) => {
+      const { tag } = await setup({ db });
+      await page.setViewportSize({ height: 900, width });
+
+      await page.goto(`/productos?q=${tag}`);
+      await expect(titles(page)).toHaveCount(4);
+
+      const cards = page.getByTestId("store-catalog-grid").getByRole("article");
+      const boxes = await Promise.all(
+        (await cards.all()).map(async (card) => await card.boundingBox())
+      );
+      // As many on the first row as the columns, the next one under them.
+      const firstRowY = boxes[0]?.y;
+      expect(boxes.filter((box) => box?.y === firstRowY)).toHaveLength(columns);
+      if (columns < boxes.length) {
+        expect(boxes[columns]?.x).toBe(boxes[0]?.x);
+        expect(boxes[columns]?.y ?? 0).toBeGreaterThan(
+          (boxes[0]?.y ?? 0) + (boxes[0]?.height ?? 0)
+        );
+      }
+      if (columns === 1) {
+        // One article the width of the page, less its 16 px margins.
+        expect(boxes[0]?.width).toBe(width - 32);
+      }
+    });
+  }
 
   test("a catalog page shows neither its description nor a share button (FER-044)", async ({
     db,

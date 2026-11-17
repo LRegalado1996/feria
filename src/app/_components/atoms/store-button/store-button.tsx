@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 
 const storeButtonVariants = cva(
   // A pill, 44 px tall at least: tapped with a thumb. Its words are in the
-  // display face; an icon-only one is a circle.
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-full font-display leading-none font-extrabold whitespace-nowrap uppercase transition-[color,background-color,filter] focus-visible:outline-3 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  // display face; an icon-only one is a circle. The hand on hover, like a
+  // link's: a button keeps the arrow by default (FER-050).
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full font-display leading-none font-extrabold whitespace-nowrap uppercase transition-[color,background-color,filter] focus-visible:outline-3 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {

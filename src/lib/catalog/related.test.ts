@@ -1,11 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import {
-  pickRelated,
-  RELATED_FILL_BELOW,
-  RELATED_PICK_MAX,
-  seededRandom,
-} from "./related";
+import { pickRelated, seededRandom } from "./related";
 
 /** `count` articles of a kind, named by kind and number. */
 function articles(kind: string, count: number): string[] {
@@ -32,22 +27,38 @@ describe("seededRandom", () => {
 });
 
 describe("pickRelated", () => {
+  // The rules' numbers are written out, not read from the module: a test
+  // that read the limit would follow it to nine.
   test("without a source keeps the pool's order: the server's render", () => {
-    expect(pickRelated(setup({ same: 10 }), null)).toEqual(
-      articles("s", RELATED_PICK_MAX)
-    );
+    expect(pickRelated(setup({ same: 10 }), null)).toEqual([
+      "s1",
+      "s2",
+      "s3",
+      "s4",
+      "s5",
+      "s6",
+      "s7",
+      "s8",
+    ]);
   });
 
-  test.each([1, 2, 3, 99])(
-    "with seed %i, draws up to eight of the category, each once, and none from the rest",
-    (seed) => {
-      const pool = setup({ others: 5, same: 12 });
+  test.each([
+    [7, 7],
+    [8, 8],
+    [9, 8],
+    [12, 8],
+  ])(
+    "with %i in the category, draws %i of them, each once, and none from the rest",
+    (same, length) => {
+      const pool = setup({ others: 5, same });
 
-      const picked = pickRelated(pool, seededRandom(seed));
+      for (const seed of [1, 2, 3, 99]) {
+        const picked = pickRelated(pool, seededRandom(seed));
 
-      expect(picked).toHaveLength(RELATED_PICK_MAX);
-      expect(new Set(picked).size).toBe(RELATED_PICK_MAX);
-      expect(picked.every((item) => pool.same.includes(item))).toBe(true);
+        expect(picked).toHaveLength(length);
+        expect(new Set(picked).size).toBe(length);
+        expect(picked.every((item) => pool.same.includes(item))).toBe(true);
+      }
     }
   );
 
@@ -63,33 +74,35 @@ describe("pickRelated", () => {
   });
 
   test("with exactly four in the category, shows those four and nothing from the rest", () => {
-    const picked = pickRelated(
-      setup({ others: 9, same: RELATED_FILL_BELOW }),
-      seededRandom(5)
-    );
+    const picked = pickRelated(setup({ others: 9, same: 4 }), seededRandom(5));
 
     expect(new Set(picked)).toEqual(new Set(["s1", "s2", "s3", "s4"]));
     expect(picked).toHaveLength(4);
   });
 
   test("with three in the category, shows all three first, then fills from the rest up to eight", () => {
-    const picked = pickRelated(
-      setup({ others: 9, same: RELATED_FILL_BELOW - 1 }),
-      seededRandom(5)
-    );
+    const picked = pickRelated(setup({ others: 9, same: 3 }), seededRandom(5));
 
-    expect(picked).toHaveLength(RELATED_PICK_MAX);
+    expect(picked).toHaveLength(8);
     expect(new Set(picked.slice(0, 3))).toEqual(new Set(["s1", "s2", "s3"]));
     expect(picked.slice(3).every((item) => item.startsWith("o"))).toBe(true);
-    expect(new Set(picked).size).toBe(RELATED_PICK_MAX);
+    expect(new Set(picked).size).toBe(8);
   });
 
   test.each([
-    ["an empty category and a store of two", { others: 2, same: 0 }, 2],
-    ["nothing anywhere", { others: 0, same: 0 }, 0],
-    ["a category of two and no rest", { others: 0, same: 2 }, 2],
-  ])("with %s, shows what there is", (_case, sizes, length) => {
-    expect(pickRelated(setup(sizes), seededRandom(3))).toHaveLength(length);
+    [
+      "an empty category and a store of two",
+      { others: 2, same: 0 },
+      ["o1", "o2"],
+    ],
+    ["nothing anywhere", { others: 0, same: 0 }, []],
+    ["a category of two and no rest", { others: 0, same: 2 }, ["s1", "s2"]],
+  ])("with %s, shows what there is, each once", (_case, sizes, expected) => {
+    const picked = pickRelated(setup(sizes), seededRandom(3));
+
+    // The order is the draw's; which articles and how many are the rule.
+    expect(new Set(picked)).toEqual(new Set(expected));
+    expect(picked).toHaveLength(expected.length);
   });
 
   test("the pick's size depends on the pool only, so the server's render and the browser's match", () => {

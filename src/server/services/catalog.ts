@@ -818,12 +818,14 @@ export async function listRelatedPool(
                 )
               )
         );
+  const inCategory = new Set(sameIds);
   const cards = await loadCards(db, {
     currencyCode,
-    ids: [...sameIds, ...restIds],
+    // An article moved out of the category between the two reads is in
+    // both: it stays where the first one found it, once.
+    ids: [...sameIds, ...restIds.filter((id) => !inCategory.has(id))],
     locale,
   });
-  const inCategory = new Set(sameIds);
 
   return {
     others: cards.filter((card) => !inCategory.has(card.id)),

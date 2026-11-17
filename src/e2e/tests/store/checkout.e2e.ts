@@ -170,7 +170,7 @@ test.describe("Cart and checkout", () => {
       page,
       ORDER_CREATE,
       async () => {
-        await page.getByTestId("store-checkout-submit").click();
+        await new StorePage(page).submitAndConfirmOrder();
       },
       {
         input: {
@@ -225,7 +225,103 @@ test.describe("Cart and checkout", () => {
       .toEqual(["no-referrer"]);
   });
 
-  test("a double tap on the submit places one order, and the cart is empty afterwards", async ({
+  test("asks before sending: invalid, the fields say why and nothing opens; the confirmation sums up the order, Volver and Escape keep the form, and Confirmar pedido places it and lands on its page", async ({
+    db,
+    page,
+  }) => {
+    const { bracelet, necklace, orders, phone } = await setup({ db });
+    const storePage = new StorePage(page);
+    await openCartWith(page, "/cart", [
+      { productId: necklace.id, quantity: 2 },
+      { productId: bracelet.id, quantity: 1 },
+    ]);
+    await expect(page.getByTestId("store-checkout-total")).toHaveText(
+      "Total$ 2.940"
+    );
+    await fillCheckout(page, phone.local);
+    const submit = page.getByTestId("store-checkout-submit");
+    const name = page.getByLabel("Tu nombre");
+    // Every order request this page sends, caught as it starts.
+    const sent: Request[] = [];
+    page.on("request", (request: Request) => {
+      if (
+        request.method() === "POST" &&
+        new URL(request.url()).pathname === ORDER_CREATE
+      ) {
+        sent.push(request);
+      }
+    });
+
+    // Invalid: the field says why, and no confirmation opens.
+    await name.fill("");
+    await submit.click();
+    await expect(page.getByText("Escribí tu nombre.")).toBeVisible();
+    await expect(name).toHaveAttribute("aria-invalid", "true");
+    await expect(storePage.getCheckoutConfirm()).toHaveCount(0);
+    await name.fill("Ana Prueba");
+
+    // Valid: it asks, summing the order up, and focus is on "Volver".
+    let dialog = await storePage.askToConfirmOrder();
+    await expect(
+      page.getByRole("dialog", { name: "¿Confirmás el pedido?" })
+    ).toBeVisible();
+    await expect(dialog.getByTestId("store-checkout-confirm-units")).toHaveText(
+      "Unidades3"
+    );
+    await expect(dialog.getByTestId("store-checkout-confirm-total")).toHaveText(
+      /^Total\$\s2\.940$/u
+    );
+    await expect(dialog.getByTestId("store-checkout-confirm-name")).toHaveText(
+      "NombreAna Prueba"
+    );
+    await expect(dialog.getByTestId("store-checkout-confirm-phone")).toHaveText(
+      `Celular${phone.local}`
+    );
+    await expect(dialog.getByRole("button", { name: "Volver" })).toBeFocused();
+
+    // "Volver": closed, everything typed still there, nothing sent.
+    await dialog.getByRole("button", { name: "Volver" }).click();
+    await expectDialogRemoved(page, dialog);
+    await expect(submit).toBeFocused();
+    await expect(name).toHaveValue("Ana Prueba");
+    await expect(page.getByLabel("Tu celular")).toHaveValue(phone.local);
+    await expect(page.getByLabel("Nota para la tienda (opcional)")).toHaveValue(
+      "Paso a la tarde."
+    );
+
+    // Escape does the same.
+    dialog = await storePage.askToConfirmOrder();
+    await page.keyboard.press("Escape");
+    await expectDialogRemoved(page, dialog);
+    await expect(submit).toBeFocused();
+    await expect(name).toHaveValue("Ana Prueba");
+    expect(sent).toEqual([]);
+    expect(await orders()).toEqual([]);
+
+    // Confirmed, it is sent, and the page moves on to the order.
+    await completeRpcAction(
+      page,
+      ORDER_CREATE,
+      async () => {
+        await storePage.submitAndConfirmOrder();
+      },
+      {
+        input: {
+          customerName: "Ana Prueba",
+          customerPhone: phone.local,
+          note: "Paso a la tarde.",
+        },
+      }
+    );
+    const [placed] = await orders();
+    await expect(page).toHaveURL(`/orders/${placed?.token ?? ""}`);
+    await expect(
+      page.getByTestId("store-order-page").getByTestId("store-order-banner")
+    ).toContainText("¡Recibimos tu pedido!");
+    expect(sent).toHaveLength(1);
+  });
+
+  test("a double tap on the submit opens one confirmation, a double tap on Confirmar pedido places one order, and the cart is empty afterwards", async ({
     db,
     page,
   }) => {
@@ -250,7 +346,12 @@ test.describe("Cart and checkout", () => {
       page,
       ORDER_CREATE,
       async () => {
+        // The second tap lands on the scrim, which leaves the dialog
+        // open (FER-050).
         await page.getByTestId("store-checkout-submit").dblclick();
+        const dialog = new StorePage(page).getCheckoutConfirm();
+        await expect(dialog).toBeVisible();
+        await dialog.getByTestId("store-checkout-confirm-submit").dblclick();
       },
       { input: { customerName: "Ana Prueba", customerPhone: phone.local } }
     );
@@ -374,7 +475,7 @@ test.describe("Cart and checkout", () => {
       page,
       ORDER_CREATE,
       async () => {
-        await submit.click();
+        await new StorePage(page).submitAndConfirmOrder();
       },
       {
         input: {

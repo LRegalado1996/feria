@@ -33,16 +33,19 @@ function makeImage(overrides: Partial<UploadedImage> = {}): UploadedImage {
 }
 
 function setup({
+  disabled = false,
   locale = "en",
   state = { status: "idle" },
   value = null,
 }: {
+  disabled?: boolean;
   locale?: Locale;
   state?: ImageUploadState;
   value?: UploadedImage | null;
 } = {}) {
   const copy = DICTIONARIES[locale].admin.imageUpload;
   const onChange = vi.fn((_image: UploadedImage | null) => undefined);
+  const onBusyChange = vi.fn((_busy: boolean) => undefined);
   hook.useImageUpload.mockReturnValue({
     cancel: hook.cancel,
     retry: hook.retry,
@@ -53,7 +56,9 @@ function setup({
   renderWithI18n(
     <ImageUploader
       aria-describedby="form-error"
+      disabled={disabled}
       label={LABEL}
+      onBusyChange={onBusyChange}
       onChange={onChange}
       purpose="cover"
       value={value}
@@ -64,12 +69,12 @@ function setup({
   const named = (action: string) =>
     within(group).getByRole("button", { name: `${action}: ${LABEL}` });
 
-  return { copy, group, named, onChange, user };
+  return { copy, group, named, onBusyChange, onChange, user };
 }
 
 describe("ImageUploader", () => {
   test("offers to choose a photo, the formats under its label, and hands the hook the purpose and the form's setter", () => {
-    const { copy, group, named, onChange } = setup();
+    const { copy, group, named, onBusyChange, onChange } = setup();
 
     expect(group).toHaveAccessibleDescription(copy.hint);
     expect(group).toHaveAttribute(
@@ -80,6 +85,7 @@ describe("ImageUploader", () => {
     expect(within(group).queryByRole("progressbar")).toBeNull();
     expect(within(group).queryByRole("img")).toBeNull();
     expect(hook.useImageUpload).toHaveBeenCalledWith({
+      onBusyChange,
       onUploaded: onChange,
       purpose: "cover",
     });
@@ -149,6 +155,22 @@ describe("ImageUploader", () => {
     expect(within(group).getByRole("status")).toHaveTextContent(copy.preparing);
   });
 
+  test("once shut, keeps its cancel while a photo is on its way", () => {
+    const { copy, named } = setup({
+      disabled: true,
+      state: { percent: 42, status: "uploading" },
+    });
+
+    expect(named(copy.cancel)).toBeEnabled();
+  });
+
+  test("once shut and at rest, shuts its choice", () => {
+    const { copy, named } = setup({ disabled: true });
+
+    // A control in a shut fieldset is disabled, whatever its own attribute.
+    expect(named(copy.choose)).toBeDisabled();
+  });
+
   test("a failed upload says so in an alert and offers a retry", async () => {
     const { copy, group, named, user } = setup({
       state: { reason: "failed", status: "failed" },
@@ -162,6 +184,21 @@ describe("ImageUploader", () => {
     await user.click(named(copy.retry));
 
     expect(hook.retry).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  test("a retry after removing the stored photo no longer says it was removed", async () => {
+    const { copy, group, named, user } = setup({
+      state: { reason: "failed", status: "failed" },
+      value: makeImage(),
+    });
+    const status = within(group).getByRole("status");
+
+    await user.click(named(copy.remove));
+    expect(status).toHaveTextContent(copy.removed);
+    await user.click(named(copy.retry));
+
+    expect(hook.retry).toHaveBeenCalledExactlyOnceWith();
+    expect(status).toBeEmptyDOMElement();
   });
 
   test.each([

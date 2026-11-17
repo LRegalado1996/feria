@@ -44,8 +44,10 @@ export interface StoreNavGroupProps {
  * The line's one control, a link before the script runs and a button
  * after: the same box either way, so nothing moves when React takes over.
  */
+// `cursor-pointer`: a button keeps the arrow by default, and this one
+// sits among links, which show the hand (FER-050).
 const BAR_TRIGGER_CLASS =
-  "inline-flex min-h-11 items-center gap-1.5 font-display text-xs font-extrabold whitespace-nowrap text-store-accent uppercase underline-offset-6 decoration-2 hover:underline aria-[current=page]:underline data-[current=true]:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
+  "inline-flex min-h-11 cursor-pointer items-center gap-1.5 font-display text-xs font-extrabold whitespace-nowrap text-store-accent uppercase underline-offset-6 decoration-2 hover:underline aria-[current=page]:underline data-[current=true]:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
 
 const MENU_NAME_CLASS =
   "flex min-h-13 min-w-0 flex-1 items-center font-display text-lg font-extrabold wrap-anywhere text-store-accent uppercase aria-[current=page]:underline aria-[current=page]:underline-offset-6 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
@@ -195,7 +197,7 @@ function StoreNavGroup({
             aria-controls={listId}
             aria-expanded={open}
             aria-label={toggleLabel}
-            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-store-accent hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+            className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-store-accent hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
             data-slot="store-nav-group-toggle"
             onClick={toggle}
             ref={button}

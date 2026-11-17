@@ -52,6 +52,17 @@ export const storefront: Dictionary["storefront"] = {
       submitting: "Sending the order…",
       title: "Your details",
     },
+    confirm: {
+      back: "Go back",
+      confirm: "Confirm order",
+      description:
+        "Check that everything is right: we write to that mobile on WhatsApp.",
+      name: "Name",
+      phone: "Mobile",
+      title: "Confirm your order?",
+      total: "Total",
+      units: "Units",
+    },
     decrease: "One unit less of {title}",
     empty: "Your cart is empty.",
     errors: {
@@ -214,6 +225,8 @@ export const storefront: Dictionary["storefront"] = {
     instagram: "{store} on Instagram",
     logo: "{brand}, go to the home page",
     menu: "Menu",
+    // The logo at the top of the phone menu, which leads home (FER-050).
+    menuLogo: "{brand}, home",
     navigation: "Store sections",
     newTab: "(opens in a new tab)",
     notFound: {

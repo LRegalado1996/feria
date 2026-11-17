@@ -1,9 +1,10 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { required } from "@/test/required";
 
 import {
   BAR_CATEGORIES_MAX,
@@ -228,16 +229,21 @@ describe("StoreHeader", () => {
   });
 
   test(`holds at most ${BAR_CATEGORIES_MAX} entries on its line`, async () => {
-    const many = Array.from({ length: BAR_CATEGORIES_MAX + 1 }, (_, index) =>
+    const many = Array.from({ length: 6 }, (_, index) =>
       makeCategory(index + 1, `C${index}`, `c${index}`)
     );
-    const { bar } = await setup({ categories: many, locale: "es" });
+    const { barElement } = await setup({ categories: many, locale: "es" });
 
-    // "Catálogo" and the first five.
-    expect(bar().getAllByRole("link")).toHaveLength(BAR_CATEGORIES_MAX + 1);
-    expect(
-      bar().queryByRole("link", { name: `C${BAR_CATEGORIES_MAX}` })
-    ).toBeNull();
+    // "Catálogo" and the first five, in order; never the sixth.
+    // Written out, so a limit raised by mistake goes red.
+    expect(linksOf(barElement())).toEqual([
+      ["Catálogo", "/productos"],
+      ["C0", "/c0"],
+      ["C1", "/c1"],
+      ["C2", "/c2"],
+      ["C3", "/c3"],
+      ["C4", "/c4"],
+    ]);
   });
 
   test("stops at the first entry whose name would not fit on the line", async () => {
@@ -343,7 +349,7 @@ describe("StoreHeader", () => {
     ).toHaveAttribute("href", "/en");
   });
 
-  test("on a phone, the menu holds home, all articles, the same entries and the language, the group unfolding to its categories", async () => {
+  test("on a phone, the menu holds the logo home, all articles, the same entries and the language, the group unfolding to its categories", async () => {
     const { dialog, user } = await setup({
       categories: CATEGORIES,
       currentPath: "/productos",
@@ -354,7 +360,7 @@ describe("StoreHeader", () => {
 
     const menu = within(dialog());
     expect(linksOf(dialog())).toEqual([
-      ["Inicio", "/"],
+      ["", "/"],
       ["Catálogo", "/productos"],
       ["Burbujeros", "/burbujeros"],
       ["Bijouterie", "/bijouterie"],
@@ -370,7 +376,7 @@ describe("StoreHeader", () => {
     );
 
     expect(linksOf(dialog()).map(([name]) => name)).toEqual([
-      "Inicio",
+      "",
       "Catálogo",
       "Burbujeros",
       "Bijouterie",
@@ -383,15 +389,73 @@ describe("StoreHeader", () => {
     expect(menu.getByRole("button", { name: "Cerrar el menú" })).toBeVisible();
   });
 
-  test("on a phone without categories, the menu holds home, all articles and the language", async () => {
+  test("on a phone without categories, the menu holds the logo home, all articles and the language", async () => {
     const { dialog, user } = await setup({ locale: "es" });
 
     await user.click(screen.getByRole("button", { name: "Menú" }));
 
-    expect(linksOf(dialog()).map(([name]) => name)).toEqual([
-      "Inicio",
-      "Catálogo",
-      "English",
-    ]);
+    expect(
+      within(dialog())
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href"))
+    ).toEqual(["/", "/productos", "/en"]);
+  });
+
+  test.each([
+    ["es", "/", "LR Market, inicio"],
+    ["en", "/en", "LR Market, home"],
+  ] as const)(
+    "in %s, the menu opens on the full logo, centered over the links, leading home at %s, named %j",
+    async (locale, href, name) => {
+      const { dialog, user } = await setup({ categories: CATEGORIES, locale });
+      const copy = DICTIONARIES[locale].storefront.shell;
+
+      await user.click(screen.getByRole("button", { name: copy.menu }));
+
+      const home = within(dialog()).getByTestId("store-mobile-menu-home");
+      expect(home).toHaveAccessibleName(name);
+      expect(home).toHaveAttribute("href", href);
+      // No "Inicio" among the links: the logo is the way home.
+      expect(
+        within(dialog()).queryByRole("link", { name: copy.home })
+      ).toBeNull();
+      const logo = required(home.querySelector('[data-slot="store-logo"]'));
+      expect(logo).toHaveAttribute("data-variant", "full");
+      expect(logo).toHaveAttribute("aria-hidden", "true");
+      // First in the menu's navigation, centered, with room under it.
+      const nav = within(dialog()).getByRole("navigation", {
+        name: copy.navigation,
+      });
+      const holder = required(home.parentElement);
+      expect(nav.firstElementChild).toBe(holder);
+      expect(holder).toHaveClass("flex", "justify-center", "pb-8");
+    }
+  );
+
+  test("following the menu's logo closes the menu", async () => {
+    const { user } = await setup({ categories: CATEGORIES, locale: "es" });
+    await user.click(screen.getByRole("button", { name: "Menú" }));
+
+    await user.click(screen.getByTestId("store-mobile-menu-home"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("store-mobile-menu")).toBeNull();
+    });
+  });
+
+  test("the menu's language pill comes last, pushed to the panel's bottom-left corner", async () => {
+    const { dialog, user } = await setup({
+      categories: CATEGORIES,
+      locale: "es",
+    });
+    await user.click(screen.getByRole("button", { name: "Menú" }));
+
+    const pill = within(dialog()).getByRole("link", { name: "English" });
+    // The panel's body is a column as tall as the panel: the pill's own
+    // `mt-auto` takes the room left above it, `self-start` keeps it left.
+    const body = required(pill.parentElement);
+    expect(body.lastElementChild).toBe(pill);
+    expect(body).toHaveClass("flex", "flex-1", "flex-col");
+    expect(pill).toHaveClass("mt-auto", "self-start");
   });
 });

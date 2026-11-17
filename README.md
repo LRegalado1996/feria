@@ -231,7 +231,7 @@ Documentation is part of the change: every pull request says `Documentation: upd
 ## Security
 
 - **Never commit `.env` or a secret.** Gitleaks checks each commit in the pre-commit hook, and CI scans the whole history. Never bypass a hook with `--no-verify`.
-- **Fixtures use made-up data.** Fake secrets and passwords in tests start with `synthetic-`, the only values the scanner lets through, and only in test files.
+- **Fixtures use made-up data.** Fake secrets and passwords in tests start with `synthetic-`, the prefix the scanner lets through, and only in test files. A fake token whose shape the code checks, such as a Blob token, keeps that shape and writes `synthetic` where its secret goes, with no digit anywhere (`vercel_blob_rw_Integration_synthetic`): the scanner passes a value of letters and underscores alone.
 - **Logs carry ids and enums only**, never a request body or free text. Unexpected errors reach the browser as a curated message with an event id, never the raw error.
 - **Authorize every id.** Any id in input, a header or a cookie comes from the caller: filter by owner and id, and take the actor from the session ([`docs/agents/security.md`](docs/agents/security.md)).
 

@@ -15,16 +15,8 @@ import { uploadRouter } from "./upload";
 
 // A token of the right shape: signing happens in this process, so no test
 // reaches the real store.
-// Made up, and built from its parts so the secret scanner does not take it
-// for a real token.
 const CONFIGURED = {
-  BLOB_READ_WRITE_TOKEN: [
-    "vercel",
-    "blob",
-    "rw",
-    "Integration",
-    "s3cretPart",
-  ].join("_"),
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_Integration_synthetic",
 };
 const env = vi.hoisted(() => ({
   BLOB_READ_WRITE_TOKEN: undefined as string | undefined,

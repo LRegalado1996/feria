@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
@@ -59,11 +59,14 @@ function makeCategory(
 
 function setup({
   category = makeCategory(),
+  holdsUpload = false,
   isGroup = false,
   locale = "en",
   saves = "saved",
 }: {
   category?: CategoryPageFormCategory;
+  /** The store keeps each upload open until `finishUpload()`. */
+  holdsUpload?: boolean;
   isGroup?: boolean;
   locale?: Locale;
   saves?: "failed" | "saved";
@@ -84,36 +87,70 @@ function setup({
     height: 800,
     width: 2400,
   });
-  blob.put.mockResolvedValue({ url: UPLOADED });
+  const held: (() => void)[] = [];
+  blob.put.mockImplementation(
+    async () =>
+      await new Promise((resolve) => {
+        const finish = () => {
+          resolve({ url: UPLOADED });
+        };
+
+        if (holdsUpload) {
+          held.push(finish);
+        } else {
+          finish();
+        }
+      })
+  );
   const wrapper = createQueryWrapper();
-  renderWithI18n(
+  const form = (props: {
+    category: CategoryPageFormCategory;
+    isGroup: boolean;
+  }) => (
     <CategoryPageForm
-      category={category}
+      {...props}
       groups={[
         { id: 6, name: "Bijouterie" },
         { id: 1, name: "Burbujeros" },
       ]}
-      isGroup={isGroup}
       onCancel={onCancel}
       onSave={onSave}
-    />,
-    { locale, wrapper }
+    />
   );
+  const { rerender } = renderWithI18n(form({ category, isGroup }), {
+    locale,
+    wrapper,
+  });
   const user = userEvent.setup();
   const photo = (name: string) => screen.getByRole("group", { name });
 
+  /** Chooses a file in the photo field `name`, without waiting for it. */
+  const choose = async (name: string) => {
+    await user.upload(
+      within(photo(name)).getByTestId("image-uploader-input"),
+      new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
+    );
+  };
+
   return {
+    choose,
     field: (name: string) => screen.getByRole("textbox", { name }),
+    /** The store ends the upload it holds open, once it was sent. */
+    finishUpload: async () => {
+      await waitFor(() => {
+        expect(held).toHaveLength(1);
+      });
+      act(() => {
+        held.shift()?.();
+      });
+    },
     photo,
     save: async () => {
       await user.click(screen.getByRole("button", { name: "Save the page" }));
     },
     /** Chooses a file in the photo field `name` and waits for its upload. */
     upload: async (name: string) => {
-      await user.upload(
-        within(photo(name)).getByTestId("image-uploader-input"),
-        new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
-      );
+      await choose(name);
       await waitFor(() => {
         expect(within(photo(name)).getByRole("status")).toHaveTextContent(
           "Photo uploaded."
@@ -122,6 +159,13 @@ function setup({
     },
     onCancel,
     onSave,
+    /** The list read again while the form stays open, as the admin's row does. */
+    reread: (props: {
+      category: CategoryPageFormCategory;
+      isGroup: boolean;
+    }) => {
+      rerender(form(props));
+    },
     user,
   };
 }
@@ -206,10 +250,18 @@ describe("CategoryPageForm", () => {
       161,
       "Use up to 160 characters.",
     ],
+    ["Cover description in Spanish", 201, "Use up to 200 characters."],
   ])(
     "refuses a %s of %i characters under its field, sending nothing",
     async (name, length, message) => {
-      const { field, onSave, user } = setup();
+      const { field, onSave, user } = setup({
+        category: makeCategory({
+          cover: {
+            computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+            phone: null,
+          },
+        }),
+      });
 
       await user.click(field(name));
       await user.paste("x".repeat(length));
@@ -234,6 +286,23 @@ describe("CategoryPageForm", () => {
         expect.objectContaining({ seoTitleEn: null })
       );
     });
+  });
+
+  test("saves once a rename took the English name away, whatever its shut English texts still hold", async () => {
+    const { field, onSave, reread, user } = setup();
+    await user.click(field("Title for search engines in English"));
+    await user.paste("x".repeat(71));
+
+    reread({ category: makeCategory({ nameEn: null }), isGroup: false });
+    expect(field("Title for search engines in English")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ seoTitleEn: null })
+      );
+    });
+    expect(screen.queryByText("Use up to 70 characters.")).toBeNull();
   });
 
   test("says a failed save under the form and keeps what was typed", async () => {
@@ -327,6 +396,32 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("keeps an untouched cover out of the save when another tab changed it meanwhile", async () => {
+    const { field, onSave, reread, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+    const elsewhere = { height: 800, url: UPLOADED, width: 2400 };
+
+    reread({
+      category: makeCategory({
+        cover: { computer: elsewhere, phone: null },
+      }),
+      isGroup: false,
+    });
+    await user.type(field("Title for search engines in Spanish"), "Anillos");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: undefined,
+          coverPhone: undefined,
+          seoTitleEs: "Anillos",
+        })
+      );
+    });
+  });
+
   test("removing the computer photo removes the phone one too, and sends both as none", async () => {
     const { onSave, photo, save, user } = setup({
       category: makeCategory({ cover: STORED }),
@@ -369,6 +464,96 @@ describe("CategoryPageForm", () => {
     ).toBeEnabled();
   });
 
+  test("Save waits for a photo still on its way, Cancel does not, and the photo goes with the page", async () => {
+    const { choose, finishUpload, onSave, save } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Computer photo");
+
+    await waitFor(() => {
+      expect(saveButton).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+
+    await finishUpload();
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: { height: 800, url: UPLOADED, width: 2400 },
+        })
+      );
+    });
+  });
+
+  test("a phone photo that lands after the computer photo was removed is dropped", async () => {
+    const { choose, finishUpload, onSave, photo, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    await finishUpload();
+    await waitFor(() => {
+      expect(within(phone).getByRole("status")).toHaveTextContent(
+        "Photo uploaded."
+      );
+    });
+
+    expect(within(phone).queryByRole("img")).toBeNull();
+    await save();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: null, coverPhone: null })
+      );
+    });
+  });
+
+  test("a phone upload left without its computer photo can still be cancelled, and Save opens", async () => {
+    const { choose, photo, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    const cancel = await within(phone).findByRole("button", {
+      name: "Cancel: Phone photo (optional)",
+    });
+    expect(cancel).toBeEnabled();
+    expect(saveButton).toBeDisabled();
+
+    await user.click(cancel);
+
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    expect(
+      within(phone).getByRole("button", {
+        name: "Choose a photo: Phone photo (optional)",
+      })
+    ).toBeDisabled();
+  });
+
   test("cancels without saving", async () => {
     const { onCancel, onSave, user } = setup();
 
@@ -376,6 +561,23 @@ describe("CategoryPageForm", () => {
 
     expect(onCancel).toHaveBeenCalledExactlyOnceWith();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("sends no group once another category joined this one while it was open", async () => {
+    const { onSave, reread, user } = setup();
+    const group = screen.getByRole("combobox", { name: "Group" });
+    await user.selectOptions(group, "Bijouterie");
+
+    reread({ category: makeCategory(), isGroup: true });
+    expect(group).toBeDisabled();
+    expect(group).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null })
+      );
+    });
   });
 
   test("keeps a group's own group shut, in Spanish too", () => {

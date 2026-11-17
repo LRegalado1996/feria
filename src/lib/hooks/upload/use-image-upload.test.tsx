@@ -137,8 +137,9 @@ function setup({
       })
   );
   const onUploaded = vi.fn<(image: UploadedImage) => void>();
-  const { result } = renderHook(
-    () => useImageUpload({ onUploaded, purpose: "cover" }),
+  const onBusyChange = vi.fn<(busy: boolean) => void>();
+  const { result, unmount } = renderHook(
+    () => useImageUpload({ onBusyChange, onUploaded, purpose: "cover" }),
     { wrapper: createQueryWrapper() }
   );
   const file = new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" });
@@ -155,16 +156,21 @@ function setup({
     giveToken: () => {
       releaseToken();
     },
+    onBusyChange,
     onUploaded,
     result,
     tokenRequests,
+    unmount,
     upload,
   };
 }
 
 describe("useImageUpload", () => {
   test("prepares the photo, asks for a token for it, then sends it with its progress", async () => {
-    const { file, onUploaded, result, tokenRequests, upload } = setup();
+    const prepared = makePrepared();
+    const { file, onUploaded, result, tokenRequests, upload } = setup({
+      prepared,
+    });
 
     act(() => {
       result.current.start(file);
@@ -177,9 +183,10 @@ describe("useImageUpload", () => {
       purpose: "cover",
       size: 900_000,
     });
+    // The prepared photo, shrunk and stripped, never the file as chosen.
     expect(mocks.put).toHaveBeenCalledExactlyOnceWith(
       PATHNAME,
-      expect.any(Blob),
+      prepared.blob,
       expect.objectContaining({
         access: "public",
         contentType: "image/webp",
@@ -205,6 +212,54 @@ describe("useImageUpload", () => {
       width: 2400,
     });
     expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("a progress report that arrives after the upload ended changes nothing", async () => {
+    const { file, onBusyChange, result, upload } = setup();
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+    act(() => {
+      sending.finish();
+    });
+    await waitFor(() => {
+      expect(result.current.state).toEqual({ status: "done" });
+    });
+
+    act(() => {
+      sending.options.onUploadProgress({ percentage: 100 });
+    });
+
+    expect(result.current.state).toEqual({ status: "done" });
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  test("a progress report that arrives after a failed transfer keeps the failure and its retry", async () => {
+    const { file, onBusyChange, result, upload } = setup();
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+    act(() => {
+      sending.fail(new Error("network"));
+    });
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        reason: "failed",
+        status: "failed",
+      });
+    });
+
+    act(() => {
+      sending.options.onUploadProgress({ percentage: 60 });
+    });
+
+    expect(result.current.state).toEqual({
+      reason: "failed",
+      status: "failed",
+    });
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
   });
 
   test("says it is preparing while the photo is downscaled", async () => {
@@ -428,6 +483,85 @@ describe("useImageUpload", () => {
 
     expect(onUploaded).not.toHaveBeenCalled();
     expect(result.current.state).toEqual({ status: "cancelled" });
+  });
+
+  test.each([
+    ["finishes", "done"],
+    ["fails", "failed"],
+    ["is cancelled", "cancelled"],
+  ] as const)(
+    "says a photo is on its way once, and no longer once it %s",
+    async (_end, status) => {
+      const { file, onBusyChange, result, upload } = setup();
+      act(() => {
+        result.current.start(file);
+      });
+      const sending = await upload();
+      act(() => {
+        sending.options.onUploadProgress({ percentage: 42 });
+      });
+      expect(onBusyChange.mock.calls).toEqual([[true]]);
+
+      act(() => {
+        if (status === "done") {
+          sending.finish();
+        } else if (status === "failed") {
+          sending.fail(new Error("network"));
+        } else {
+          result.current.cancel();
+        }
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.status).toBe(status);
+      });
+      expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+    }
+  );
+
+  test("leaving the form while the token is on its way sends nothing", async () => {
+    const { file, giveToken, onUploaded, result, tokenRequests, unmount } =
+      setup({ holdsToken: true });
+
+    act(() => {
+      result.current.start(file);
+    });
+    await waitFor(() => {
+      expect(tokenRequests).toHaveBeenCalledOnce();
+    });
+    unmount();
+    giveToken();
+
+    // The token's answer has come and gone, and nothing was sent with it.
+    await waitFor(() => {
+      expect(tokenRequests.mock.results[0]?.type).toBe("return");
+    });
+    await act(async () => {
+      await tokenRequests.mock.results[0]?.value;
+    });
+    expect(mocks.put).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
+  });
+
+  test("leaving the form mid-upload aborts it and hands nothing over", async () => {
+    const { file, onUploaded, result, unmount, upload } = setup({
+      ignoresAbort: true,
+    });
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+
+    unmount();
+    expect(sending.options.abortSignal.aborted).toBe(true);
+    // A store that finishes anyway is not listened to.
+    await act(async () => {
+      sending.finish();
+      await Promise.resolve();
+    });
+
+    expect(onUploaded).not.toHaveBeenCalled();
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   test("a photo the browser cannot read asks for another, unreported and without a retry", async () => {

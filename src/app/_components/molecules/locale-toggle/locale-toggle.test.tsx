@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from "@testing-library/react";
+import { Activity } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
@@ -44,10 +45,14 @@ function setup({
   useSearchParams.mockReturnValue(new URLSearchParams(search));
   stubReducedMotion(reducedMotion);
 
-  renderWithI18n(
-    <LocaleToggle className="custom" classNames={classNames} tone={tone} />,
-    { locale }
+  // Next hides a page it leaves in an `<Activity>` and shows it again on
+  // Back, state and all (the Next guide "Preserving UI state").
+  const page = (mode: "hidden" | "visible") => (
+    <Activity mode={mode}>
+      <LocaleToggle className="custom" classNames={classNames} tone={tone} />
+    </Activity>
   );
+  const { rerender } = renderWithI18n(page("visible"), { locale });
 
   const link = screen.getByRole("link");
   const part = (slot: string) => {
@@ -64,7 +69,16 @@ function setup({
       ...link.querySelectorAll<HTMLElement>('[data-slot="locale-toggle-code"]'),
     ].map((code) => [code.textContent, code.dataset.state]);
 
-  return { codes, link, part, thumb: () => part("locale-toggle-thumb") };
+  return {
+    codes,
+    leaveAndComeBack: () => {
+      rerender(page("hidden"));
+      rerender(page("visible"));
+    },
+    link,
+    part,
+    thumb: () => part("locale-toggle-thumb"),
+  };
 }
 
 describe("LocaleToggle", () => {
@@ -186,6 +200,30 @@ describe("LocaleToggle", () => {
     });
 
     expect(push).toHaveBeenCalledExactlyOnceWith("/en");
+  });
+
+  test("a page left for the other language and shown again, as Back shows it, rests on its own language and switches again", () => {
+    vi.useFakeTimers();
+    const { codes, leaveAndComeBack, link, thumb } = setup();
+
+    fireEvent.click(link);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    leaveAndComeBack();
+
+    expect(thumb()).toHaveAttribute("data-side", "start");
+    expect(codes()).toEqual([
+      ["ES", "on"],
+      ["EN", "off"],
+    ]);
+
+    fireEvent.click(link);
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(push.mock.calls).toEqual([["/en"], ["/en"]]);
   });
 
   test("under reduced motion, the thumb does not slide and nothing waits", () => {

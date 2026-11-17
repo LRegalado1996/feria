@@ -52,7 +52,7 @@ A bilingual mini e-commerce for one store, Lucas Regalado's own: bubble guns and
 
 Every catalog page (FER-043) has its own address, title, description, canonical and `hreflang`, a visible breadcrumb, JSON-LD (`CollectionPage`, `ItemList`, `BreadcrumbList`), a sitemap and `llms.txt` entry, and an optional cover. The path segment is Spanish in both languages: the URL's `/en` prefix is the only difference between a page's two languages (`docs/agents/i18n.md`). An article lives under all articles' address, which no category can take.
 
-Supporting flow, not counted as views: the cart, a side panel that adding an article or the header's cart opens on any store page ([FER-045](../tickets/FER-045-cart-drawer.md)); the checkout page `/cart` · `/en/cart` ("Hacer el pedido" in the panel leads there, and the header's cart links there before the page's script runs): the order's summary and the form; and the order confirmation page `/orders/{token}` (which also hosts the code form when verification is on).
+Supporting flow, not counted as views: the cart, a side panel that adding an article or the header's cart opens on any store page ([FER-045](../tickets/FER-045-cart-drawer.md)); the checkout page `/cart` · `/en/cart` ("Hacer el pedido" in the panel leads there, and the header's cart links there before the page's script runs): the order's summary and the form, whose submit opens a dialog that sums the order up and asks before it is sent ([FER-050](../tickets/FER-050-storefront-round.md)); and the order confirmation page `/orders/{token}` (which also hosts the code form when verification is on).
 
 ## Admin
 
