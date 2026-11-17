@@ -43,6 +43,7 @@ interface SeedArticle {
   category: string;
   /** The slugs of the colors it carries (FER-033). */
   colors: string[];
+  /** Two short paragraphs, split by a blank line: what it is, then how to wear it. */
   description: { en: string; es: string };
   image: {
     alt: { en: string; es: string };
@@ -207,8 +208,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["azul"],
     category: "burbujeros",
     description: {
-      en: "Shoots a stream of bubbles at the press of a trigger. Runs on batteries; bubble liquid included.",
-      es: "Lanza una lluvia de burbujas con solo apretar el gatillo. Funciona a pilas; incluye líquido.",
+      en: "A clear bubble gun that shoots a stream of bubbles at the press of a trigger.\n\nIt runs on batteries and comes with bubble liquid to start right away. Made for the park, a birthday or a sunny day at the fair.",
+      es: "Un burbujero transparente que lanza una lluvia de burbujas con solo apretar el gatillo.\n\nFunciona a pilas y viene con líquido para empezar a jugar. Ideal para la plaza, un cumpleaños o un día de sol en la feria.",
     },
     image: {
       alt: {
@@ -227,8 +228,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["plateado"],
     category: "cadenas",
     description: {
-      en: "Fine silver chain with small heart charms. Adjustable length.",
-      es: "Cadena fina de plata con pequeños dijes de corazón. Largo regulable.",
+      en: "A fine silver chain with small heart charms spread along it.\n\nIts length adjusts, so you can wear it close to the neck or a little lower. It looks good on its own or layered with a shorter chain.",
+      es: "Una cadena fina de plata con pequeños dijes de corazón repartidos a lo largo.\n\nEl largo se regula, así que la podés usar pegada al cuello o un poco más abajo. Queda linda sola o combinada con otra cadena más corta.",
     },
     image: {
       alt: {
@@ -247,8 +248,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["plateado"],
     category: "cadenas",
     description: {
-      en: "Silver box chain with a bright pendant. Comes in a gift box.",
-      es: "Cadena de plata tipo veneciana con dije brillante. Viene en caja de regalo.",
+      en: "A silver box chain with a bright pendant at its center.\n\nIt comes in a gift box, ready to give. It suits a plain tee or an open neckline, by day or at night.",
+      es: "Una cadena de plata tipo veneciana con un dije brillante al centro.\n\nViene en caja de regalo, lista para dar. Va bien con una remera lisa o con un escote abierto, de día o de noche.",
     },
     image: {
       alt: {
@@ -267,8 +268,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "cadenas",
     description: {
-      en: "Gold-plated rope chain with a crown pendant.",
-      es: "Cadena tipo soga con baño de oro y dije de corona.",
+      en: "A gold-plated rope chain with a crown pendant.\n\nThe twisted rope weave gives it body and shine. Wear it on its own, over your clothes, so the pendant shows.",
+      es: "Una cadena tipo soga con baño de oro y un dije de corona.\n\nEl tejido en soga le da cuerpo y brillo. Usala sola, por fuera de la ropa, para que el dije se luzca.",
     },
     image: {
       alt: {
@@ -287,8 +288,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "anillos",
     description: {
-      en: "Gold-plated ring with an emerald-cut stone.",
-      es: "Anillo con baño de oro y piedra de talle esmeralda.",
+      en: "A gold-plated ring with an emerald-cut stone.\n\nThe rectangular stone, held by four prongs, takes center stage. For a special day, or to lift an everyday outfit.",
+      es: "Un anillo con baño de oro y una piedra de talle esmeralda.\n\nLa piedra rectangular, sostenida por cuatro garras, es la protagonista. Para un día especial o para darle un toque a lo de todos los días.",
     },
     image: {
       alt: {
@@ -307,8 +308,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "anillos",
     description: {
-      en: "Gold-plated signet ring with a medallion.",
-      es: "Anillo sello con baño de oro y medallón.",
+      en: "A gold-plated signet ring with a raised medallion.\n\nIts wide face stands out on the hand. Wear it on the little or ring finger, alone or with thin rings.",
+      es: "Un anillo sello con baño de oro y un medallón en relieve.\n\nTiene un frente ancho que se nota en la mano. Se usa en el meñique o en el anular, solo o junto a anillos finos.",
     },
     image: {
       alt: { en: "Gold signet ring", es: "Anillo sello dorado" },
@@ -324,8 +325,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado", "oro-rosa"],
     category: "anillos",
     description: {
-      en: "Gold-plated cluster ring with pink stones.",
-      es: "Anillo con baño de oro y piedras rosadas.",
+      en: "A gold-plated ring with pink stones clustered into a flower.\n\nTogether the stones make a large, bright face. It goes well with gold and pink tones.",
+      es: "Un anillo con baño de oro y piedras rosadas agrupadas en forma de flor.\n\nLas piedras juntas forman un frente grande y luminoso. Combina con tonos dorados y rosados.",
     },
     image: {
       alt: {
@@ -344,8 +345,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "aros",
     description: {
-      en: "Small gold-plated studs, for every day.",
-      es: "Aros pequeños con baño de oro, para todos los días.",
+      en: "Small gold-plated stud earrings.\n\nThey are discreet and comfortable, for every day. They pair with any other earring if you have more than one piercing.",
+      es: "Aros pequeños abotonados, con baño de oro.\n\nSon discretos y cómodos, para usar todos los días. Combinan con cualquier otro aro si tenés más de una perforación.",
     },
     image: {
       alt: { en: "Gold stud earrings", es: "Aros dorados pequeños" },
@@ -361,8 +362,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["plateado", "blanco"],
     category: "aros",
     description: {
-      en: "Crystal wreath earrings for a night out.",
-      es: "Aros de cristales en forma de corona, para salir.",
+      en: "Earrings of crystals shaped like a wreath of leaves.\n\nThe crystals catch the light with every move. Made for a night out, a party or an event.",
+      es: "Aros de cristales en forma de corona de hojas.\n\nLos cristales reflejan la luz con cada movimiento. Pensados para salir, una fiesta o un evento.",
     },
     image: {
       alt: { en: "Crystal wreath earrings", es: "Aros de cristales" },
@@ -378,8 +379,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "pulseras",
     description: {
-      en: "Fine gold-plated bracelet with an ID tag to engrave.",
-      es: "Pulsera fina con baño de oro y chapita para grabar.",
+      en: "A fine gold-plated bracelet with an ID tag at its center.\n\nThe tag is plain, ready to engrave with a name, a date or an initial. A personal gift for someone special.",
+      es: "Una pulsera fina con baño de oro y una chapita al centro.\n\nLa chapita es lisa, para grabarle un nombre, una fecha o una inicial. Un regalo personal para alguien especial.",
     },
     image: {
       alt: {
@@ -398,8 +399,8 @@ export const SEED_ARTICLES: SeedArticle[] = [
     colors: ["dorado"],
     category: "pulseras",
     description: {
-      en: "A pair of gold-plated bangles.",
-      es: "Par de esclavas con baño de oro.",
+      en: "A pair of gold-plated bangles.\n\nWear them together, so they chime as you move, or one on each wrist. They add shine to any outfit.",
+      es: "Un par de esclavas con baño de oro.\n\nSe pueden usar juntas, para que suenen al moverse, o una en cada muñeca. Suman brillo a cualquier conjunto.",
     },
     image: {
       alt: { en: "Two gold bangles", es: "Dos esclavas doradas" },

@@ -24,6 +24,7 @@ import {
   listCartProducts,
   listCategories,
   listPublishedProducts,
+  listRelatedPool,
   listRelatedProducts,
   publishProduct,
   reorderProductImages,
@@ -1136,6 +1137,100 @@ describe("listRelatedProducts", () => {
       '"product"."publishedAt" desc, "product"."id" desc'
     );
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(4);
+  });
+});
+
+describe("listRelatedPool", () => {
+  async function pool(
+    db: ReturnType<typeof setup>["db"],
+    categoryId: number | null
+  ) {
+    return await listRelatedPool(db as never, {
+      categoryId,
+      currencyCode: "UYU",
+      locale: "es",
+      productId: 7,
+      storeId: STORE_ID,
+    });
+  }
+
+  /** The nth id query's filter, as SQL. */
+  function whereOf(db: ReturnType<typeof setup>["db"], call: number) {
+    return renderQuery(db.$["select.where"].mock.calls[call]?.[0]);
+  }
+
+  test("with four others in the category, hands over those only, newest first, sixteen at most", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValueOnce([
+      { id: 5 },
+      { id: 4 },
+      { id: 3 },
+      { id: 2 },
+    ]);
+    db.query.product.findMany.mockResolvedValue([
+      cardRow(2),
+      cardRow(3),
+      cardRow(4),
+      cardRow(5),
+    ]);
+
+    await expect(pool(db, 9)).resolves.toEqual({
+      others: [],
+      same: [card(5), card(4), card(3), card(2)],
+    });
+    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(whereOf(db, 0)).toEqual({
+      params: [STORE_ID, "published", 7, 9],
+      sql: '(("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3) and "product"."categoryId" = $4)',
+    });
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
+      '"product"."publishedAt" desc, "product"."id" desc'
+    );
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(16);
+  });
+
+  test("with three others in the category, adds the rest of the store, outside the category or in none", async () => {
+    const { db } = setup();
+    db.$["select.limit"]
+      .mockResolvedValueOnce([{ id: 5 }, { id: 4 }, { id: 3 }])
+      .mockResolvedValueOnce([{ id: 20 }, { id: 21 }]);
+    db.query.product.findMany.mockResolvedValue(
+      [3, 4, 5, 20, 21].map((id) => cardRow(id))
+    );
+
+    await expect(pool(db, 9)).resolves.toEqual({
+      others: [card(20), card(21)],
+      same: [card(5), card(4), card(3)],
+    });
+    expect(whereOf(db, 1)).toEqual({
+      params: [STORE_ID, "published", 7, 9],
+      sql: '(("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3) and ("product"."categoryId" is null or "product"."categoryId" <> $4))',
+    });
+    expect(db.$["select.limit"]).toHaveBeenNthCalledWith(2, 16);
+  });
+
+  test("for an article without a category, hands over the rest of the store only", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValueOnce([{ id: 20 }]);
+    db.query.product.findMany.mockResolvedValue([cardRow(20)]);
+
+    await expect(pool(db, null)).resolves.toEqual({
+      others: [card(20)],
+      same: [],
+    });
+    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(whereOf(db, 0)).toEqual({
+      params: [STORE_ID, "published", 7],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3)',
+    });
+  });
+
+  test("with nothing else published, hands over nothing and reads no card", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValue([]);
+
+    await expect(pool(db, 9)).resolves.toEqual({ others: [], same: [] });
+    expect(db.query.product.findMany).not.toHaveBeenCalled();
   });
 });
 

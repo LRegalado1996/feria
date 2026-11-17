@@ -64,14 +64,20 @@ function titles(page: Page): Locator {
 }
 
 /**
- * Waits until React owns the page: an add-to-cart button is disabled until
- * it does, and the filter panel's button hydrates with it, so a key pressed
- * on that button after this opens the panel.
+ * Presses Enter on the focused `trigger` until `panel` opens, then never
+ * again: a key pressed before React owns the button does nothing, and the
+ * catalog has no other control that says when React took over. Focus goes
+ * back to the trigger before each try, as a first press could have moved it.
  */
-async function waitForHydration(page: Page, title: string): Promise<void> {
-  await expect(
-    page.getByRole("button", { name: `Agregar al carrito: ${title}` })
-  ).toBeEnabled();
+async function openByKeyboard(trigger: Locator, panel: Locator): Promise<void> {
+  await expect(async () => {
+    if (!(await panel.isVisible())) {
+      await trigger.focus();
+      await trigger.press("Enter");
+    }
+
+    await expect(panel).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 60_000 });
 }
 
 test.describe("Catalog filter panel", () => {
@@ -85,7 +91,6 @@ test.describe("Catalog filter panel", () => {
       "Pulsera dorada",
       "Pulsera plateada",
     ]);
-    await waitForHydration(page, "Pulsera dorada");
     const trigger = page.getByRole("button", { name: /^Filtrar/u });
     const panel = page.getByRole("dialog", { name: "Filtrar" });
 
@@ -96,8 +101,7 @@ test.describe("Catalog filter panel", () => {
     await expect(trigger).toBeFocused();
     await expect(trigger).toHaveAccessibleName("Filtrar (1)");
 
-    await page.keyboard.press("Enter");
-    await expect(panel).toBeVisible();
+    await openByKeyboard(trigger, panel);
     // Focus moved inside, to its first control, and Tab goes on to the
     // categories, "Todas" first.
     await expect(
@@ -123,11 +127,8 @@ test.describe("Catalog filter panel", () => {
     await expect(panel).toBeHidden();
 
     // On the new page the panel opens again by keyboard, all marked.
-    await waitForHydration(page, "Collar dorado");
-    await trigger.focus();
     await expect(trigger).toHaveAccessibleName("Filtrar");
-    await page.keyboard.press("Enter");
-    await expect(panel).toBeVisible();
+    await openByKeyboard(trigger, panel);
     await expect(all).toHaveAttribute("aria-current", "true");
     await expect(
       panel.getByRole("link", { name: `Pulseras ${tag}` })

@@ -85,7 +85,7 @@ describe("StoreArticlePurchase", () => {
     expect(message()?.textContent).toBe("");
   });
 
-  test("draws the quantity as a pill beside the page's one primary pill, which takes the rest of the row", () => {
+  test("draws the quantity as a pill beside the page's one primary pill, on one row, the pill taking the rest", () => {
     const { decrease, group, increase } = setup();
 
     expect(group()).toHaveClass(
@@ -101,11 +101,17 @@ describe("StoreArticlePurchase", () => {
     const add = screen.getByRole("button", { name: "Agregar al carrito" });
     expect(add).toHaveAttribute("data-variant", "primary");
     expect(add).toHaveAttribute("data-size", "lg");
-    // Beside the quantity, in one row that wraps where the column is narrow:
-    // there the button, at least 240 px, takes a full-width row of its own.
-    expect(add).toHaveClass("grow", "basis-60");
+    // Beside the quantity, on one row that never wraps: the button takes the
+    // rest of it, and its label breaks inside it before the row would.
+    expect(add).toHaveClass("flex-1", "min-w-0", "whitespace-normal");
     expect(add.parentElement).toBe(group().parentElement);
-    expect(add.parentElement).toHaveClass("flex-wrap");
+    expect(add.parentElement).toHaveAttribute(
+      "data-testid",
+      "store-article-purchase-row"
+    );
+    expect(add.parentElement).not.toHaveClass("flex-wrap");
+    // The stepper gives up its padding first; its steps stay 44 px.
+    expect(group()).not.toHaveClass("px-0.5");
   });
 
   test("steps the quantity up to 10 and back down to 1, no further either way", async () => {

@@ -27,6 +27,7 @@ vi.mock("next/server", () => ({ connection }));
 vi.mock("next/navigation", () => ({
   notFound,
   usePathname: () => "/coming-soon",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

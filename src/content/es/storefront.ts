@@ -1,5 +1,9 @@
 export const storefront = {
   article: {
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "¡Felices Fiestas!",
+    bandPause: "Pausar la animación",
     addedCapped:
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
@@ -76,8 +80,6 @@ export const storefront = {
     unitPrice: "{price} c/u",
   },
   catalog: {
-    addToCart: "Agregar al carrito: {name}",
-    addToCartShort: "Agregar",
     addFailed: "No pudimos agregarlo. Probá de nuevo.",
     added: "Agregado al carrito.",
     atMax: "Ya tenés {max} de este artículo, el máximo por pedido.",
@@ -167,6 +169,12 @@ export const storefront = {
     viewAllOf: "Ver todo: {title}",
   },
   shell: {
+    // The bar above the header until FER-020 lets the store write its own.
+    // The short one is for a phone, where the whole one would not fit.
+    announcement: {
+      full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+      short: "Feria Paseo Prado · Puesto 86",
+    },
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",

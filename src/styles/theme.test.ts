@@ -48,9 +48,14 @@ const CONTRAST_RULES = [
     STORE_THEME.surface,
   ],
   [
-    "the text on the accent (the bar, a button)",
+    "the text on the accent (the bar, a round arrow)",
     STORE_THEME.foreground,
     STORE_THEME.accent,
+  ],
+  [
+    "the accent as text on the ink (the main button)",
+    STORE_THEME.accent,
+    STORE_THEME.foreground,
   ],
   [
     "the background as text on the contrast (the search field, the footer)",

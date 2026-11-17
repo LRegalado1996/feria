@@ -181,6 +181,24 @@ describe("seedCatalog", () => {
     }
   });
 
+  test.each(["es", "en"] as const)(
+    "every sample article's %s description is two paragraphs of two or three sentences in all",
+    (locale) => {
+      for (const article of SEED_ARTICLES) {
+        const text = article.description[locale];
+        const paragraphs = text.split("\n\n");
+        const sentences = text.match(/[.!?](?=\s|$)/gu) ?? [];
+
+        expect(paragraphs).toHaveLength(2);
+        expect(
+          paragraphs.every((paragraph) => paragraph.trim() === paragraph)
+        ).toBe(true);
+        expect(sentences.length).toBeGreaterThanOrEqual(2);
+        expect(sentences.length).toBeLessThanOrEqual(3);
+      }
+    }
+  );
+
   test("creates the launch categories in order, the Bijouterie group first, named in both languages", async () => {
     const { db, run } = setup();
 

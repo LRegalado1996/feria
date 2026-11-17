@@ -235,23 +235,25 @@ describe("StoreArticleCard", () => {
     ).toHaveTextContent("Nothing to see");
   });
 
-  test("draws its action above the stretched link, as a control of its own", () => {
-    const { card, link } = setup({
-      action: <button type="button">Add to cart: Pearl necklace</button>,
-    });
+  test.each([
+    ["auto", false],
+    ["two", true],
+  ] as const)(
+    "with nameLines %s, keeps two lines for the name: %s",
+    (nameLines, kept) => {
+      const { card } = setup({ nameLines });
+      const heading = within(card).getByRole("heading");
 
-    const button = within(card).getByRole("button", {
-      name: "Add to cart: Pearl necklace",
-    });
-    expect(button.parentElement).toHaveClass("relative", "z-10");
-    expect(link).not.toContainElement(button);
-  });
+      expect(heading.classList.contains("line-clamp-2")).toBe(kept);
+      expect(heading.classList.contains("min-h-[2lh]")).toBe(kept);
+    }
+  );
 
-  test("has no action slot without an action", () => {
-    const { card } = setup();
+  test("is one link and nothing else to press: adding to the cart is on the article's page", () => {
+    const { card, link } = setup();
 
+    expect(within(card).getAllByRole("link")).toEqual([link]);
     expect(within(card).queryByRole("button")).toBeNull();
-    expect(card.querySelector(".z-10")).toBeNull();
   });
 
   test("marks the name's language on its link only, so the price keeps the page's", () => {

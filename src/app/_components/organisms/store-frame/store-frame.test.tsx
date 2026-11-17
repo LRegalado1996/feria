@@ -87,10 +87,19 @@ describe("StoreFrame", () => {
     expect(bar()).toHaveAttribute("data-placeholder", "true");
     expect(bar()?.nextElementSibling).toBe(header);
 
-    await words.settle({ lang: "es", text: "Burbujeros y joyas en la feria" });
+    await words.settle({
+      lang: "es",
+      short: "Feria Paseo Prado · Puesto 86",
+      text: "Te esperamos en la Feria Paseo Prado, puesto 86",
+    });
 
     expect(bar()).toHaveAttribute("data-placeholder", "false");
-    expect(bar()).toHaveTextContent("Burbujeros y joyas en la feria");
+    expect(
+      bar()?.querySelector('[data-slot="store-announcement-bar-full"]')
+    ).toHaveTextContent("Te esperamos en la Feria Paseo Prado, puesto 86");
+    expect(
+      bar()?.querySelector('[data-slot="store-announcement-bar-short"]')
+    ).toHaveTextContent("Feria Paseo Prado · Puesto 86");
     expect(bar()?.querySelector("p")).toHaveAttribute("lang", "es");
     expect(bar()?.nextElementSibling).toBe(header);
   });

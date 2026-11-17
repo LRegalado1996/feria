@@ -161,8 +161,13 @@ test.describe("Languages, signed out", () => {
 
       try {
         const page = await context.newPage();
+        // Without scripts nothing changes after the load event, which
+        // `goto` waits for: the whole response is in. The home's content
+        // is in it, though not always in place: React streams a finished
+        // part of the page apart from the shell once both pass its chunk
+        // budget (12,800 bytes), and only a script moves it in.
         await page.goto(path);
-        await new StorePage(page).waitForLoad();
+        await expect(page.getByTestId("store-home")).toBeAttached();
 
         await expectAlternates(page, origin, { path, scope: "head " });
       } finally {
@@ -203,45 +208,69 @@ test.describe("Languages, signed out", () => {
 });
 
 test.describe("Languages, signed in", () => {
-  test("the toggle switches language on the same page and keeps the query string, there and back", async ({
-    authenticatedPage: page,
-  }) => {
-    // A dark system theme, to see that switching language keeps it.
-    await page.emulateMedia({ colorScheme: "dark" });
-    const admin = new AdminPage(page);
-    // A section that stays where it is: `/admin` itself opens the orders.
-    await page.goto(`/admin/products${QUERY}`);
-    await admin.waitForLoad();
-    await admin.expectDocumentLanguage("es");
-    await expect(admin.getButton("Cerrar sesión")).toBeVisible();
+  for (const { name, viewport } of [
+    { name: "a computer", viewport: { height: 800, width: 1280 } },
+    // On a phone the pill is in the menu (FER-040).
+    { name: "a phone", viewport: { height: 844, width: 390 } },
+  ]) {
+    test(`on ${name}, the pill switches language on the same page and keeps the query string, there and back`, async ({
+      authenticatedPage: page,
+    }) => {
+      await page.setViewportSize(viewport);
+      // A dark system theme, to see that switching language keeps it.
+      await page.emulateMedia({ colorScheme: "dark" });
+      const admin = new AdminPage(page);
+      const reachToggle = async () => {
+        if (viewport.width < 768) {
+          await admin.openMenu();
+        }
+      };
+      // A section that stays where it is: `/admin` itself opens the orders.
+      await page.goto(`/admin/products${QUERY}`);
+      await admin.waitForLoad();
+      await admin.expectDocumentLanguage("es");
+      await reachToggle();
+      await expect(admin.getButton("Cerrar sesión")).toBeVisible();
 
-    // The query string reaches the link once React has read the URL: the
-    // prerendered shell is the same for every query.
-    await expect(admin.localeToggle()).toHaveAttribute(
-      "href",
-      `/en/admin/products${QUERY}`
-    );
-    await expect(admin.localeToggle()).toHaveText("English");
-    await admin.localeToggle().click();
+      // The query string reaches the link once React has read the URL: the
+      // prerendered shell is the same for every query.
+      await expect(admin.localeToggle()).toHaveAttribute(
+        "href",
+        `/en/admin/products${QUERY}`
+      );
+      await expect(admin.localeToggle()).toHaveAccessibleName("English");
+      await expect(admin.localeToggle()).toHaveAccessibleDescription(
+        "Idioma actual: español"
+      );
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await admin.localeToggle().click();
 
-    await expect(page).toHaveURL(`/en/admin/products${QUERY}`);
-    await expect(admin.getButton("Sign out")).toBeVisible();
-    await expect(admin.heading()).toHaveText("Articles");
-    await admin.expectDocumentLanguage("en");
-    await expect(page.locator("html")).toHaveClass(DARK_CLASS);
+      await expect(page).toHaveURL(`/en/admin/products${QUERY}`);
+      await expect(admin.heading()).toHaveText("Articles");
+      await admin.expectDocumentLanguage("en");
+      await expect(page.locator("html")).toHaveClass(DARK_CLASS);
+      await reachToggle();
+      await expect(admin.getButton("Sign out")).toBeVisible();
 
-    await expect(admin.localeToggle()).toHaveAttribute(
-      "href",
-      `/admin/products${QUERY}`
-    );
-    await expect(admin.localeToggle()).toHaveText("Español");
-    await admin.localeToggle().click();
+      await expect(admin.localeToggle()).toHaveAttribute(
+        "href",
+        `/admin/products${QUERY}`
+      );
+      await expect(admin.localeToggle()).toHaveAccessibleName("Español");
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "end"
+      );
+      await admin.localeToggle().click();
 
-    await expect(page).toHaveURL(`/admin/products${QUERY}`);
-    await expect(admin.getButton("Cerrar sesión")).toBeVisible();
-    await expect(admin.heading()).toHaveText("Artículos");
-    await admin.expectDocumentLanguage("es");
-  });
+      await expect(page).toHaveURL(`/admin/products${QUERY}`);
+      await expect(admin.heading()).toHaveText("Artículos");
+      await admin.expectDocumentLanguage("es");
+    });
+  }
 
   for (const { path, signOut } of [
     { path: "/admin", signOut: "Cerrar sesión" },

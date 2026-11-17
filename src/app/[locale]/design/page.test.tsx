@@ -266,7 +266,7 @@ describe("DesignPage", () => {
       ["Add to cart", "primary", "lg"],
       ["See the catalog", "outline", "md"],
       ["Clear", "ghost", "md"],
-      ["Add to cart", "primary", "icon-lg"],
+      ["Add to cart", "accent", "icon-lg"],
       ["On the moss", "contrast", "md"],
       ["Search the store", "contrast", "icon"],
     ]);

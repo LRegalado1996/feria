@@ -15,6 +15,8 @@ const { connection, readCategories, readStore } = vi.hoisted(() => ({
 
 vi.mock("next/server", () => ({ connection }));
 
+vi.mock("server-only", () => ({}));
+
 // The cached reads have their own tests; here they answer what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore }));
 
@@ -44,36 +46,36 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
   };
 }
 
+/** The bar's words in each language, as Lucas wrote them (FER-039). */
+const ANNOUNCEMENT = {
+  en: {
+    lang: "en",
+    short: "Paseo Prado Fair · Stall 86",
+    text: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
+  },
+  es: {
+    lang: "es",
+    short: "Feria Paseo Prado · Puesto 86",
+    text: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+  },
+} as const;
+
 describe("announcementOf", () => {
-  test.each([
-    ["es", SPANISH.tagline],
-    ["en", ENGLISH.tagline],
-  ] as const)(
-    "says the store's tagline in %s, the page's language",
-    (locale, text) => {
-      expect(announcementOf(makeStore(), locale)).toEqual({
-        lang: locale,
-        text,
-      });
+  test.each(["es", "en"] as const)(
+    "says the fair and the stall in %s, the page's language, with a phone's version, not the store's tagline",
+    (locale) => {
+      const announcement = announcementOf(locale);
+
+      expect(announcement).toEqual(ANNOUNCEMENT[locale]);
+      expect(announcement.text).not.toBe(
+        locale === "es" ? SPANISH.tagline : ENGLISH.tagline
+      );
     }
   );
-
-  test("says the Spanish tagline, marked as Spanish, on an English page of a store written in Spanish only", () => {
-    expect(
-      announcementOf(makeStore({ translations: [SPANISH] }), "en")
-    ).toEqual({ lang: "es", text: SPANISH.tagline });
-  });
-
-  test.each([
-    ["no texts", []],
-    ["a blank tagline", [{ ...SPANISH, tagline: "  " }]],
-  ])("says nothing for a store with %s", (_case, translations) => {
-    expect(announcementOf(makeStore({ translations }), "es")).toBeNull();
-  });
 });
 
 describe("streamedShell", () => {
-  test("reads the store only once a request is there, then its tagline and its categories", async () => {
+  test("reads the store only once a request is there, then its categories; the bar needs no read", async () => {
     const store = makeStore();
     readStore.mockResolvedValue(store);
     const request = holdRequest(connection);
@@ -87,10 +89,7 @@ describe("streamedShell", () => {
 
     request.arrive();
 
-    await expect(shell.announcement).resolves.toEqual({
-      lang: "en",
-      text: ENGLISH.tagline,
-    });
+    await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.en);
     await expect(shell.categories).resolves.toEqual([
       { lang: "en", name: "anillos-en", slug: "anillos" },
     ]);
@@ -98,27 +97,24 @@ describe("streamedShell", () => {
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "en");
   });
 
-  test("shows no bar and no category before the store's row exists", async () => {
+  test("shows the bar but no category before the store's row exists", async () => {
     readStore.mockResolvedValue(null);
 
     const shell = streamedShell("es");
 
-    await expect(shell.announcement).resolves.toBeNull();
+    await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.es);
     await expect(shell.categories).resolves.toEqual([]);
     expect(readCategories).not.toHaveBeenCalled();
   });
 });
 
 describe("shellOf", () => {
-  test("from a store already read, its tagline and its cached categories, read before it answers", async () => {
+  test("from a store already read, the fixed announcement and its cached categories, read before it answers", async () => {
     const store = makeStore();
 
     const shell = await shellOf(store, "es");
 
-    await expect(shell.announcement).resolves.toEqual({
-      lang: "es",
-      text: SPANISH.tagline,
-    });
+    await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.es);
     // The list itself, not a promise of it: the header renders it in place,
     // behind no boundary, in the first response (FER-043).
     expect(shell.categories).toEqual([

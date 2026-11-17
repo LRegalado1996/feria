@@ -21,7 +21,7 @@ function setup(props: StoreButtonProps = {}) {
 }
 
 describe("StoreButton", () => {
-  test("is a pill in the display face, 44 px tall, the accent by default", () => {
+  test("is a pill in the display face, 44 px tall, the accent on the ink by default", () => {
     const { button } = setup();
 
     expect(button).toHaveAccessibleName("Agregar");
@@ -33,9 +33,23 @@ describe("StoreButton", () => {
       "min-h-11",
       "font-display",
       "uppercase",
-      "bg-store-accent",
-      "text-store-foreground"
+      "bg-store-foreground",
+      "text-store-accent",
+      "hover:bg-store-contrast"
     );
+    expect(button).not.toHaveClass("bg-store-accent");
+  });
+
+  test("the accent variant, for a round arrow over a photo, is the ink on the accent", () => {
+    const { button } = setup({ variant: "accent" });
+
+    expect(button).toHaveAttribute("data-variant", "accent");
+    expect(button).toHaveClass(
+      "bg-store-accent",
+      "text-store-foreground",
+      "focus-visible:outline-store-foreground"
+    );
+    expect(button).not.toHaveClass("bg-store-foreground");
   });
 
   test.each([

@@ -10,7 +10,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import { StoreChip } from "@/app/_components/atoms/store-chip";
-import { StoreAddToCartButton } from "@/app/_components/molecules/store-add-to-cart-button";
 import { StoreArticleCard } from "@/app/_components/molecules/store-article-card";
 import {
   StoreBreadcrumb,
@@ -342,15 +341,6 @@ function StoreCatalog({
             {products.items.map((item) => (
               <li className="min-w-0" key={item.id}>
                 <StoreArticleCard
-                  action={
-                    item.isAvailable ? (
-                      <StoreAddToCartButton
-                        name={item.title}
-                        priceAmount={item.priceAmount}
-                        productId={item.id}
-                      />
-                    ) : undefined
-                  }
                   amount={item.priceAmount}
                   currency={item.currencyCode}
                   headingLevel="h2"

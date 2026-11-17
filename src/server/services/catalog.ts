@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   inArray,
+  isNull,
   ne,
   or,
   type SQL,
@@ -14,6 +15,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { coverOf, imageOf } from "@/lib/catalog/cover";
 import { categoryPath } from "@/lib/catalog/paths";
+import { RELATED_FILL_BELOW, RELATED_POOL_SIZE } from "@/lib/catalog/related";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import type {
@@ -726,6 +728,76 @@ export async function listRelatedProducts(
     locale,
   });
 }
+
+/**
+ * What the article's page picks its suggestions from (FER-039,
+ * `src/lib/catalog/related.ts`): up to `RELATED_POOL_SIZE` other published
+ * articles of its category, newest first, and, only when the category has
+ * fewer than `RELATED_FILL_BELOW` of them, up to as many from the rest of
+ * the store (outside the category, or in none). The article is never in it.
+ */
+export async function listRelatedPool(
+  db: DatabaseClient,
+  {
+    categoryId,
+    currencyCode,
+    locale,
+    productId,
+    storeId,
+  }: StoreScope & {
+    categoryId: number | null;
+    currencyCode: Currency;
+    locale: Locale;
+    productId: number;
+  }
+) {
+  const others = and(
+    eq(product.storeId, storeId),
+    eq(product.status, "published"),
+    ne(product.id, productId)
+  );
+  const idsWhere = async (where: SQL | undefined) =>
+    (
+      await db
+        .select({ id: product.id })
+        .from(product)
+        .where(where)
+        .orderBy(desc(product.publishedAt), desc(product.id))
+        .limit(RELATED_POOL_SIZE)
+    ).map((row) => row.id);
+
+  const sameIds =
+    categoryId === null
+      ? []
+      : await idsWhere(and(others, eq(product.categoryId, categoryId)));
+  const restIds =
+    sameIds.length >= RELATED_FILL_BELOW
+      ? []
+      : await idsWhere(
+          categoryId === null
+            ? others
+            : and(
+                others,
+                or(
+                  isNull(product.categoryId),
+                  ne(product.categoryId, categoryId)
+                )
+              )
+        );
+  const cards = await loadCards(db, {
+    currencyCode,
+    ids: [...sameIds, ...restIds],
+    locale,
+  });
+  const inCategory = new Set(sameIds);
+
+  return {
+    others: cards.filter((card) => !inCategory.has(card.id)),
+    same: cards.filter((card) => inCategory.has(card.id)),
+  };
+}
+
+export type RelatedPoolCards = Awaited<ReturnType<typeof listRelatedPool>>;
 
 // ── Store-scoped writes ──────────────────────────────────────────────────
 
