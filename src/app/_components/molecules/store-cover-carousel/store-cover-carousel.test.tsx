@@ -215,6 +215,30 @@ describe("StoreCoverCarousel", () => {
     expect(plugin.play).toHaveBeenCalledOnce();
   });
 
+  // Embla measures again on a resize, and starts its plugins anew, stopped.
+  test("plays again once Embla has measured again after a resize", () => {
+    const { embla } = setup();
+    plugin.play.mockClear();
+
+    act(() => {
+      embla.resize(3);
+    });
+
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  test("stays still after a resize while it is paused", () => {
+    const { embla, pause } = setup();
+    fireEvent.click(required(pause()));
+    plugin.play.mockClear();
+
+    act(() => {
+      embla.resize(3);
+    });
+
+    expect(plugin.play).not.toHaveBeenCalled();
+  });
+
   test("a dot shows its banner, and the dot of the banner shown is marked", async () => {
     const { embla, user } = setup();
 

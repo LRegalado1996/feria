@@ -76,19 +76,30 @@ function RotatingCover({ banners }: { banners: readonly StoreCoverBanner[] }) {
     !reduced && !paused && !holds.focus && !holds.hover && !holds.touch;
 
   // The plugin Embla runs is the external system: it plays exactly while the
-  // cover rotates. Before Embla is ready there is nothing to play.
+  // cover rotates. Embla starts its plugins anew, stopped, each time it
+  // measures again (a resize), so the decision is applied again then too.
+  // Before Embla is ready there is nothing to play.
   useEffect(() => {
     if (!api) {
-      return;
+      return undefined;
     }
 
-    const { autoplay } = api.plugins();
+    const apply = () => {
+      const { autoplay } = api.plugins();
 
-    if (rotating) {
-      autoplay.play();
-    } else {
-      autoplay.stop();
-    }
+      if (rotating) {
+        autoplay.play();
+      } else {
+        autoplay.stop();
+      }
+    };
+
+    apply();
+    api.on("reInit", apply);
+
+    return () => {
+      api.off("reInit", apply);
+    };
   }, [api, rotating]);
 
   // A finger (or a mouse) dragging it holds it, from Embla's own events.
