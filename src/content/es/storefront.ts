@@ -1,14 +1,9 @@
 export const storefront = {
   article: {
-    // The moss band between the article and its suggestions: decoration,
-    // hidden from screen readers, so nothing here is the page's only copy.
-    band: {
-      brand: "LR Market",
-      bubbles: "Burbujas",
-      bijou: "Bijou",
-      fair: "Feria Paseo Prado",
-      stall: "Puesto 86",
-    },
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "¡Felices Fiestas!",
+    bandPause: "Pausar la animación",
     addedCapped:
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",

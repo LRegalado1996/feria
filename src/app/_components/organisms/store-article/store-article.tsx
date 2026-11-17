@@ -229,13 +229,8 @@ function StoreArticle({
         </div>
       </div>
       <StoreArticleBand
-        words={[
-          copy.article.band.brand,
-          copy.article.band.bubbles,
-          copy.article.band.bijou,
-          copy.article.band.fair,
-          copy.article.band.stall,
-        ]}
+        greeting={copy.article.bandGreeting}
+        pauseLabel={copy.article.bandPause}
       />
       <StoreRelatedRow
         others={related.others.map(relatedCard)}

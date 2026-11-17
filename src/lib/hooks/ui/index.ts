@@ -4,4 +4,5 @@ export { usePrefersReducedMotion } from "./use-prefers-reduced-motion";
 export { type ScrollEntryState, useScrollEntry } from "./use-scroll-entry";
 export { useHydrated } from "./use-hydrated";
 export { useVisitSeed } from "./use-visit-seed";
-export { useSeenOnce } from "./use-seen-once";
+export { useOnScreen } from "./use-on-screen";
+export { useSessionFlag } from "./use-session-flag";

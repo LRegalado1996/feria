@@ -4,12 +4,12 @@ import { describe, expect, test, vi } from "vitest";
 
 import { stubIntersectionObserver } from "@/test/intersection-observer";
 
-import { useSeenOnce } from "./use-seen-once";
+import { useOnScreen } from "./use-on-screen";
 
 function Probe() {
-  const [ref, seen] = useSeenOnce();
+  const [ref, onScreen] = useOnScreen();
 
-  return <div data-seen={String(seen)} ref={ref} />;
+  return <div data-on-screen={String(onScreen)} ref={ref} />;
 }
 
 function setup({ intersectionObserver = true } = {}) {
@@ -20,7 +20,7 @@ function setup({ intersectionObserver = true } = {}) {
   }
 
   const element = document.createElement("div");
-  const view = renderHook(() => useSeenOnce());
+  const view = renderHook(() => useOnScreen());
 
   return {
     attach: () => {
@@ -35,47 +35,48 @@ function setup({ intersectionObserver = true } = {}) {
       });
     },
     observers,
-    seen: () => view.result.current[1],
+    onScreen: () => view.result.current[1],
+    view,
   };
 }
 
-describe("useSeenOnce", () => {
+describe("useOnScreen", () => {
   test("is false on the server", () => {
     stubIntersectionObserver();
 
-    expect(renderToString(<Probe />)).toBe('<div data-seen="false"></div>');
+    expect(renderToString(<Probe />)).toBe(
+      '<div data-on-screen="false"></div>'
+    );
   });
 
-  test("watches its element and turns true, for good, once it is half on screen", () => {
-    const { attach, element, emit, observers, seen } = setup();
+  test("follows its element onto the screen and off it again", () => {
+    const { attach, element, emit, observers, onScreen } = setup();
 
     attach();
     expect(observers.instances.at(-1)?.observed).toEqual([element]);
-    expect(observers.instances.at(-1)?.thresholds).toEqual([0.5]);
-    emit(false);
-    expect(seen()).toBe(false);
+    expect(onScreen()).toBe(false);
 
     emit(true);
+    expect(onScreen()).toBe(true);
 
-    expect(seen()).toBe(true);
+    emit(false);
+    expect(onScreen()).toBe(false);
+  });
+
+  test("stops watching when it unmounts", () => {
+    const { attach, observers, view } = setup();
+
+    attach();
+    view.unmount();
+
     expect(observers.instances.at(-1)?.disconnected).toBe(true);
   });
 
-  test("counts an element already on screen when the page hydrates", () => {
-    const { attach, emit, seen } = setup();
-
-    attach();
-    // The first report of a real observer, for an element in view.
-    emit(true);
-
-    expect(seen()).toBe(true);
-  });
-
   test("stays false without IntersectionObserver", () => {
-    const { attach, seen } = setup({ intersectionObserver: false });
+    const { attach, onScreen } = setup({ intersectionObserver: false });
 
     attach();
 
-    expect(seen()).toBe(false);
+    expect(onScreen()).toBe(false);
   });
 });

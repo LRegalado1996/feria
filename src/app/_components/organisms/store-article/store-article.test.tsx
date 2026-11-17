@@ -332,16 +332,24 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["es", "Feria Paseo Prado", "También te puede gustar"],
-    ["en", "Paseo Prado Fair", "You may also like"],
+    [
+      "es",
+      "¡Felices Fiestas!",
+      "Pausar la animación",
+      "También te puede gustar",
+    ],
+    ["en", "Happy Holidays!", "Pause the animation", "You may also like"],
   ] as const)(
-    "in %s, separates the article from its suggestions with the moss band, for the eye only",
-    (locale, word, related) => {
+    "in %s, separates the article from its suggestions with the festive band, its picture for the eye only",
+    (locale, greeting, pause, related) => {
       const { page } = setup({ locale });
 
       const band = within(page).getByTestId("store-article-band");
-      expect(band).toHaveAttribute("aria-hidden", "true");
-      expect(band).toHaveTextContent(word);
+      expect(
+        within(band).getByTestId("store-article-band-picture")
+      ).toHaveAttribute("aria-hidden", "true");
+      expect(band).toHaveTextContent(greeting);
+      expect(within(band).getByRole("button")).toHaveAccessibleName(pause);
       expect(
         band.compareDocumentPosition(
           screen.getByRole("region", { name: related })

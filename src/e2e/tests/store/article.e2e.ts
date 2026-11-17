@@ -211,9 +211,12 @@ test.describe("Article page", () => {
     const names = row.getByRole("heading", { level: 3 });
 
     await expect(names).toHaveCount(8);
-    // The moss band sits between the article and the row, for the eye only.
+    // The festive band sits between the article and the row; its picture is
+    // for the eye only.
     const band = page.getByTestId("store-article-band");
-    await expect(band).toHaveAttribute("aria-hidden", "true");
+    await expect(
+      band.getByTestId("store-article-band-picture")
+    ).toHaveAttribute("aria-hidden", "true");
     const [bandBox, rowBox, addBox] = await Promise.all([
       band.boundingBox(),
       row.boundingBox(),
@@ -228,6 +231,32 @@ test.describe("Article page", () => {
     expect(shown).not.toContain(`Anillo ${tag}`);
     // The category's own come first, whatever the draw.
     expect(new Set(shown.slice(0, 2))).toEqual(new Set(sameTitles));
+  });
+
+  test("the festive band moves while it is on screen, and its pause button holds every piece still", async ({
+    db,
+    page,
+  }) => {
+    const { article } = await setup({ db });
+    await page.goto(`/products/${article.slug}`);
+    const band = page.getByTestId("store-article-band");
+    await band.scrollIntoViewIfNeeded();
+    await expect(band).toHaveAttribute("data-running", "true");
+    const pause = band.getByRole("button", { name: "Pausar la animación" });
+    const streamer = band.getByTestId("store-article-band-streamer").first();
+    // Running is only set once React owns the band: one click is enough,
+    // and a second would start it again.
+    await expect(streamer).toHaveCSS("animation-play-state", "running");
+
+    await pause.click();
+
+    await expect(pause).toHaveAttribute("aria-pressed", "true");
+    await expect(band).toHaveAttribute("data-running", "false");
+    // Paused where it is, so nothing jumps.
+    await expect(streamer).toHaveCSS("animation-play-state", "paused");
+
+    await pause.click();
+    await expect(band).toHaveAttribute("data-running", "true");
   });
 
   test("a sold-out article stays visible, cannot be added, and offers the store's WhatsApp with the article written", async ({

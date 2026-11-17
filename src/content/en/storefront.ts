@@ -2,15 +2,10 @@ import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
   article: {
-    // The moss band between the article and its suggestions: decoration,
-    // hidden from screen readers, so nothing here is the page's only copy.
-    band: {
-      brand: "LR Market",
-      bubbles: "Bubbles",
-      bijou: "Bijou",
-      fair: "Paseo Prado Fair",
-      stall: "Stall 86",
-    },
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "Happy Holidays!",
+    bandPause: "Pause the animation",
     addedCapped:
       "Added {added}: with them you have {max}, the most an order takes.",
     addToCart: "Add to cart",

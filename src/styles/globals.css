@@ -26,17 +26,54 @@
   --animate-store-bubble: store-bubble var(--store-bubble-duration, 3s)
     cubic-bezier(0.22, 1, 0.36, 1) var(--store-bubble-delay, 0s) both;
 
-  /* The article's band (FER-039): one slow drift, then still. Each line
-     sets where it starts and ends, and the band its duration. */
-  --animate-store-drift: store-drift 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* The article's festive band (FER-039): three waves of streamers fall
+     through it at three speeds, swaying like paper, and its icons twinkle.
+     Each piece sets its own duration and delay inline (a custom property
+     here would resolve on the root, the same for every piece); the band
+     pauses them all. */
+  --animate-store-stream: store-stream 10s linear infinite;
+  --animate-store-sway: store-sway 2.4s ease-in-out infinite alternate;
+  --animate-store-twinkle: store-twinkle 3.6s ease-in-out infinite;
 
-  @keyframes store-drift {
+  /* A column the band's height, from just above the band to below it, at
+     one steady speed (the theme value is `linear`; only the transform's
+     ends are set, so the stops below change the opacity alone). Over the
+     greeting, a third to two thirds down, it fades back; it starts and ends
+     out of sight, so the loop has no seam. */
+  @keyframes store-stream {
     from {
-      transform: translateX(var(--store-drift-from, 0));
+      transform: translateY(-12%);
+    }
+
+    38%,
+    72% {
+      opacity: 1;
+    }
+
+    48%,
+    62% {
+      opacity: 0.25;
     }
 
     to {
-      transform: translateX(var(--store-drift-to, 0));
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes store-sway {
+    from {
+      transform: translateX(-5px) rotate(calc(var(--store-turn, 0deg) - 16deg));
+    }
+
+    to {
+      transform: translateX(5px) rotate(calc(var(--store-turn, 0deg) + 16deg));
+    }
+  }
+
+  @keyframes store-twinkle {
+    50% {
+      opacity: 0.5;
+      transform: scale(0.82);
     }
   }
 
@@ -136,12 +173,6 @@
 
 @utility store-display-page {
   font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.875rem);
-}
-
-/* Letters drawn as a lime outline, hollow: the article band's second line. */
-@utility store-text-outline {
-  color: transparent;
-  -webkit-text-stroke: 1.5px var(--store-accent);
 }
 
 @utility store-display-article {
