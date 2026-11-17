@@ -228,6 +228,8 @@ function StoreArticleBand({
           >
             <span
               className={cn("block motion-safe:animate-store-sway", HELD)}
+              data-slot="store-article-band-sway"
+              data-testid="store-article-band-sway"
               style={swayStyle(streamer, index)}
             >
               <Streamer
@@ -253,6 +255,7 @@ function StoreArticleBand({
             <span
               className={cn("block motion-safe:animate-store-twinkle", HELD)}
               data-slot="store-article-band-icon"
+              data-testid="store-article-band-icon"
               style={iconStyle(index)}
             >
               <Icon

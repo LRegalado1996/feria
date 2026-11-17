@@ -1178,7 +1178,7 @@ describe("listRelatedPool", () => {
       others: [],
       same: [card(5), card(4), card(3), card(2)],
     });
-    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: product.id });
     expect(whereOf(db, 0)).toEqual({
       params: [STORE_ID, "published", 7, 9],
       sql: '(("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3) and "product"."categoryId" = $4)',
@@ -1209,6 +1209,22 @@ describe("listRelatedPool", () => {
     expect(db.$["select.limit"]).toHaveBeenNthCalledWith(2, 16);
   });
 
+  test("an article moved out of the category between the two reads is handed over once, among the category's", async () => {
+    const { db } = setup();
+    db.$["select.limit"]
+      .mockResolvedValueOnce([{ id: 11 }, { id: 12 }, { id: 13 }])
+      // By the second read 11 sits in another category.
+      .mockResolvedValueOnce([{ id: 11 }, { id: 20 }]);
+    db.query.product.findMany.mockResolvedValue(
+      [11, 12, 13, 20].map((id) => cardRow(id))
+    );
+
+    await expect(pool(db, 9)).resolves.toEqual({
+      others: [card(20)],
+      same: [card(11), card(12), card(13)],
+    });
+  });
+
   test("for an article without a category, hands over the rest of the store only", async () => {
     const { db } = setup();
     db.$["select.limit"].mockResolvedValueOnce([{ id: 20 }]);
@@ -1218,7 +1234,7 @@ describe("listRelatedPool", () => {
       others: [card(20)],
       same: [],
     });
-    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: product.id });
     expect(whereOf(db, 0)).toEqual({
       params: [STORE_ID, "published", 7],
       sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3)',

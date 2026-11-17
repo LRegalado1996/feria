@@ -219,16 +219,21 @@ describe("StoreHeader", () => {
   });
 
   test(`holds at most ${BAR_CATEGORIES_MAX} entries on its line`, async () => {
-    const many = Array.from({ length: BAR_CATEGORIES_MAX + 1 }, (_, index) =>
+    const many = Array.from({ length: 6 }, (_, index) =>
       makeCategory(index + 1, `C${index}`, `c${index}`)
     );
-    const { bar } = await setup({ categories: many, locale: "es" });
+    const { barElement } = await setup({ categories: many, locale: "es" });
 
-    // "Todos los artículos" and the first five.
-    expect(bar().getAllByRole("link")).toHaveLength(BAR_CATEGORIES_MAX + 1);
-    expect(
-      bar().queryByRole("link", { name: `C${BAR_CATEGORIES_MAX}` })
-    ).toBeNull();
+    // "Todos los artículos" and the first five, in order; never the sixth.
+    // Written out, so a limit raised by mistake goes red.
+    expect(linksOf(barElement())).toEqual([
+      ["Todos los artículos", "/productos"],
+      ["C0", "/c0"],
+      ["C1", "/c1"],
+      ["C2", "/c2"],
+      ["C3", "/c3"],
+      ["C4", "/c4"],
+    ]);
   });
 
   test("stops at the first entry whose name would not fit on the line", async () => {
