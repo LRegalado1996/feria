@@ -105,17 +105,21 @@ export function useImageUpload({
       return;
     }
 
+    // The browser can report the last progress after the upload resolved:
+    // once it has, a report would take a finished photo back to "uploading".
+    let sent = false;
     const uploaded = await put(pathname, prepared.blob, {
       abortSignal: attempt.controller.signal,
       access: "public",
       contentType: prepared.contentType,
       onUploadProgress: ({ percentage }) => {
-        if (isCurrent(attempt)) {
+        if (!sent && isCurrent(attempt)) {
           update({ percent: percentage, status: "uploading" });
         }
       },
       token,
     });
+    sent = true;
 
     if (!isCurrent(attempt)) {
       return;

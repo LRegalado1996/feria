@@ -199,6 +199,27 @@ describe("useImageUpload", () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
+  test("a progress report that arrives after the upload ended changes nothing", async () => {
+    const { file, onBusyChange, result, upload } = setup();
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+    act(() => {
+      sending.finish();
+    });
+    await waitFor(() => {
+      expect(result.current.state).toEqual({ status: "done" });
+    });
+
+    act(() => {
+      sending.options.onUploadProgress({ percentage: 100 });
+    });
+
+    expect(result.current.state).toEqual({ status: "done" });
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   test("says it is preparing while the photo is downscaled", async () => {
     const { file, result } = setup();
     mocks.prepareImage.mockReturnValue(new Promise<never>(() => {}));
