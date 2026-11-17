@@ -158,10 +158,13 @@ test.describe("Article page", () => {
       // One row: side by side, the same height and top.
       expect(addBox?.y).toBe(quantityBox?.y);
       expect((addBox?.x ?? 0) > (quantityBox?.x ?? 0)).toBe(true);
-      // The price right under the name.
-      expect(
-        (priceBox?.y ?? 0) - ((nameBox?.y ?? 0) + (nameBox?.height ?? 0))
-      ).toBeLessThan(16);
+      // The price right under the name: below its bottom, by less than 16 px.
+      expect(nameBox).not.toBeNull();
+      expect(priceBox).not.toBeNull();
+      const gap =
+        (priceBox?.y ?? 0) - ((nameBox?.y ?? 0) + (nameBox?.height ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThan(16);
       // The ink with the lime (FER-039).
       await expect(add).toHaveCSS("background-color", "rgb(21, 22, 15)");
       await expect(add).toHaveCSS("color", "rgb(200, 243, 29)");
@@ -243,20 +246,42 @@ test.describe("Article page", () => {
     await band.scrollIntoViewIfNeeded();
     await expect(band).toHaveAttribute("data-running", "true");
     const pause = band.getByRole("button", { name: "Pausar la animación" });
-    const streamer = band.getByTestId("store-article-band-streamer").first();
+    // Every animated piece, each read on its own: the streamers, the sway
+    // inside each one and the icons.
+    const pieces = [
+      band.getByTestId("store-article-band-streamer"),
+      band.getByTestId("store-article-band-sway"),
+      band.getByTestId("store-article-band-icon"),
+    ];
+    const playStates = async () =>
+      (
+        await Promise.all(
+          pieces.map(
+            async (piece) =>
+              await piece.evaluateAll((elements) =>
+                elements.map(
+                  (element) => getComputedStyle(element).animationPlayState
+                )
+              )
+          )
+        )
+      ).flat();
+    const everyPiece = (state: string) =>
+      Array.from({ length: 12 + 12 + 14 }, () => state);
     // Running is only set once React owns the band: one click is enough,
     // and a second would start it again.
-    await expect(streamer).toHaveCSS("animation-play-state", "running");
+    await expect.poll(playStates).toEqual(everyPiece("running"));
 
     await pause.click();
 
     await expect(pause).toHaveAttribute("aria-pressed", "true");
     await expect(band).toHaveAttribute("data-running", "false");
     // Paused where it is, so nothing jumps.
-    await expect(streamer).toHaveCSS("animation-play-state", "paused");
+    await expect.poll(playStates).toEqual(everyPiece("paused"));
 
     await pause.click();
     await expect(band).toHaveAttribute("data-running", "true");
+    await expect.poll(playStates).toEqual(everyPiece("running"));
   });
 
   test("a sold-out article stays visible, cannot be added, and offers the store's WhatsApp with the article written", async ({
