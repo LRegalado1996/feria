@@ -22,6 +22,7 @@ vi.mock("@/app/_components/molecules/orders-pending-badge", () => ({
 // The language toggle reads the URL, which exists only inside a Next render.
 vi.mock("next/navigation", () => ({
   usePathname: () => "/admin",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 

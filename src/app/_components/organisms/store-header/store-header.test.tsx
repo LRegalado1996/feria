@@ -67,11 +67,19 @@ async function setup({
   };
 }
 
-/** Each link inside an element, as its text and its address. */
+/**
+ * Each link inside an element, as its text and its address. The language
+ * pill shows codes; it counts by its name, the text a screen reader reads.
+ */
 function linksOf(scope: HTMLElement): [string, string | null][] {
   return within(scope)
     .getAllByRole("link")
-    .map((link) => [link.textContent, link.getAttribute("href")]);
+    .map((link) => [
+      link.dataset.slot === "locale-toggle"
+        ? (link.querySelector(".sr-only")?.textContent ?? "")
+        : link.textContent,
+      link.getAttribute("href"),
+    ]);
 }
 
 describe("StoreHeader", () => {
