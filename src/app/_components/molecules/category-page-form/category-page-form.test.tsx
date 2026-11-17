@@ -580,6 +580,29 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("a category that became a group while a group was chosen offers the header choice and sends it", async () => {
+    const { onSave, reread, user } = setup({
+      category: makeCategory({ showInHeader: true }),
+    });
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Group" }),
+      "Bijouterie"
+    );
+    expect(screen.queryByRole("checkbox")).toBeNull();
+
+    reread({ category: makeCategory({ showInHeader: true }), isGroup: true });
+    const box = screen.getByRole("checkbox", { name: "Show in the header" });
+    expect(screen.queryByTestId("category-header-in-group")).toBeNull();
+    await user.click(box);
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null, showInHeader: false })
+      );
+    });
+  });
+
   test("keeps a group's own group shut, in Spanish too", () => {
     setup({ isGroup: true, locale: "es" });
 

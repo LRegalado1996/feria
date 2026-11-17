@@ -128,7 +128,10 @@ function CategoryPageForm({
   });
   const { isSubmitting } = useFormState({ control: form.control });
   const hasCover = useWatch({ control: form.control, name: "cover" }) !== null;
-  const inGroup = useWatch({ control: form.control, name: "parentId" }) !== "";
+  const parentId = useWatch({ control: form.control, name: "parentId" });
+  // A group is in none, whatever its shut select still holds (a group was
+  // chosen before another category joined this one): it has the checkbox.
+  const inGroup = !isGroup && parentId !== "";
   // A photo still on its way is not in the form yet: a save now would leave
   // it out. Save waits for it; its own cancel and the form's Cancel do not.
   const [uploading, setUploading] = useState({
@@ -160,7 +163,8 @@ function CategoryPageForm({
       seoTitleEs: orNull(values.seoTitleEs),
       // A category in a group always shows in its dropdown: its own choice
       // is kept as it is for the day it leaves the group.
-      showInHeader: values.parentId === "" ? values.showInHeader : undefined,
+      showInHeader:
+        isGroup || values.parentId === "" ? values.showInHeader : undefined,
     });
 
     setFailed(result === "failed");
