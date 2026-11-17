@@ -83,8 +83,9 @@ function opensElsewhere(event: MouseEvent) {
  * trail home under it, then a bar with "Filtrar", which opens the panel of
  * categories and filters (a drawer from the left on a computer, a sheet
  * from the bottom on a phone) and says how many filters are chosen, and
- * the sort on the right; and a grid of four columns (two on a phone) that
- * loads the next page by itself as the shopper nears its end. "Cargar más"
+ * the sort on the right; and a grid of four columns on a computer (two on
+ * a tablet, one on a phone, FER-050) that loads the next page by itself as
+ * the shopper nears its end. "Cargar más"
  * is a real link to that page, for a visitor without the script and for a
  * crawler; with the script it loads in place. Everything chosen lives in
  * the address, so a shared link opens on the same selection.
@@ -371,7 +372,9 @@ function StoreCatalog({
           </div>
         ) : (
           <ul
-            className="grid grid-cols-2 gap-x-2.5 gap-y-6 md:grid-cols-4 md:gap-x-3.5 md:gap-y-9"
+            // One article a row on a phone, so each is larger (FER-050),
+            // two from `sm` (a tablet), four from `lg` (a computer).
+            className="grid grid-cols-1 gap-x-2.5 gap-y-8 sm:grid-cols-2 sm:gap-y-6 md:gap-x-3.5 md:gap-y-9 lg:grid-cols-4"
             data-testid="store-catalog-grid"
             ref={grid}
           >
@@ -391,8 +394,8 @@ function StoreCatalog({
                   locale={locale}
                   name={item.title}
                   nameLang={item.lang}
-                  // Four columns from a tablet up, two on a phone.
-                  sizes="(min-width: 768px) 25vw, 50vw"
+                  // Four columns from `lg`, two from `sm`, one on a phone.
+                  sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
                   unavailable={!item.isAvailable}
                 />
               </li>
