@@ -16,13 +16,13 @@ vi.mock("@/env", () => ({
 }));
 
 // Migration 0015 (FER-043) renames every category whose slug is a path the
-// site already answers, then refuses such a slug: it rewrites rows, so it
-// must converge when replayed (docs/agents/database.md § Migrations). Each
-// test recreates the state the migration met, inside a transaction it rolls
-// back, so the worker's database is left as it was.
+// site already answers: it rewrites rows, so it must converge when replayed
+// (docs/agents/database.md § Migrations). The test writes the state the
+// migration met inside a transaction it rolls back, so the worker's
+// database is left as it was.
 
 const MIGRATION = readFileSync(
-  new URL("0015_left_donald_blake.sql", import.meta.url),
+  new URL("0015_overrated_ego.sql", import.meta.url),
   "utf-8"
 );
 
@@ -59,34 +59,15 @@ async function slugsOf(tx: DatabaseClient, ids: number[]) {
   return ids.map((id) => rows.find((row) => row.id === id)?.slug);
 }
 
-/** Whether a reserved slug is refused now; tried under a savepoint. */
-async function refusesAReservedSlug(tx: DatabaseClient, storeId: number) {
-  try {
-    await tx.transaction(async (savepoint) => {
-      await addCategories(savepoint, storeId, ["productos"]);
-    });
-
-    return false;
-  } catch (error) {
-    return (
-      (error as { cause?: { constraint?: string } }).cause?.constraint ===
-      "category_slug_not_reserved"
-    );
-  }
-}
-
 /**
  * Runs `scenario` on the store in a transaction it then rolls back, failing
- * on its own error. The state before 0015: no check on the slug.
+ * on its own error.
  */
 async function rolledBack(
   scenario: (tx: DatabaseClient, storeId: number) => Promise<void>
 ) {
   const storeId = await theStoreId(db);
   const run = db.transaction(async (tx) => {
-    await tx.execute(
-      sql`alter table "category" drop constraint if exists "category_slug_not_reserved"`
-    );
     await scenario(tx, storeId);
 
     throw new Error(ROLLED_BACK);
@@ -119,13 +100,6 @@ describe("migration 0015: no category on a reserved path", () => {
         "productos-2",
         own,
       ]);
-      expect(await refusesAReservedSlug(tx, storeId)).toBe(true);
-    });
-  });
-
-  test("control: before the migration a reserved slug is let in", async () => {
-    await rolledBack(async (tx, storeId) => {
-      expect(await refusesAReservedSlug(tx, storeId)).toBe(false);
     });
   });
 });
