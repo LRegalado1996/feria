@@ -389,8 +389,11 @@ describe("StoreCatalog", () => {
     const trigger = screen.getByRole("button", { name: "Filtrar" });
     await user.click(trigger);
     const panel = screen.getByTestId("store-catalog-panel");
+    const aros = within(panel).getByRole("link", { name: "Aros" });
+    // The address the router follows, so the selection below is the link's.
+    expect(aros).toHaveAttribute("href", "/products?category=aros");
 
-    await user.click(within(panel).getByRole("link", { name: "Aros" }));
+    await user.click(aros);
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
 
     // The router renders the catalog again for the address it followed.

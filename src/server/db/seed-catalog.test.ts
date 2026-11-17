@@ -186,9 +186,13 @@ describe("seedCatalog", () => {
         const sentences = text.match(/[.!?](?=\s|$)/gu) ?? [];
 
         expect(paragraphs).toHaveLength(2);
+        // Each one written and already trimmed: a trailing blank line would
+        // make an empty second paragraph.
         expect(
-          paragraphs.every((paragraph) => paragraph.trim() === paragraph)
-        ).toBe(true);
+          paragraphs.filter(
+            (paragraph) => paragraph === "" || paragraph.trim() !== paragraph
+          )
+        ).toEqual([]);
         expect(sentences.length).toBeGreaterThanOrEqual(2);
         expect(sentences.length).toBeLessThanOrEqual(3);
       }

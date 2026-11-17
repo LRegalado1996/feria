@@ -879,7 +879,7 @@ describe("listRelatedPool", () => {
       others: [],
       same: [card(5), card(4), card(3), card(2)],
     });
-    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: product.id });
     expect(whereOf(db, 0)).toEqual({
       params: [STORE_ID, "published", 7, 9],
       sql: '(("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3) and "product"."categoryId" = $4)',
@@ -935,7 +935,7 @@ describe("listRelatedPool", () => {
       others: [card(20)],
       same: [],
     });
-    expect(db.$.select).toHaveBeenCalledOnce();
+    expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: product.id });
     expect(whereOf(db, 0)).toEqual({
       params: [STORE_ID, "published", 7],
       sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."id" <> $3)',

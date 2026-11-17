@@ -239,17 +239,25 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["only blank lines", "\n\n  \n", 0],
-    ["blank lines around one paragraph", "\n\nUno.\n\n\n", 1],
-    ["the same paragraph twice", "Igual.\n\nIgual.", 2],
-  ])("with %s, shows that many paragraphs", (_case, text, count) => {
-    const { page } = setup({ article: makeArticle({ description: text }) });
+    ["only blank lines", "\n\n  \n", []],
+    ["blank lines around one paragraph", "\n\nUno.\n\n\n", ["Uno."]],
+    ["the same paragraph twice", "Igual.\n\nIgual.", ["Igual.", "Igual."]],
+  ])(
+    "with %s, shows those paragraphs and no other",
+    (_case, text, expected) => {
+      const { page } = setup({ article: makeArticle({ description: text }) });
 
-    expect(
-      within(page).queryByTestId("store-article-description")?.children
-        .length ?? 0
-    ).toBe(count);
-  });
+      const description = within(page).queryByTestId(
+        "store-article-description"
+      );
+      expect(
+        [...(description?.children ?? [])].map((paragraph) => [
+          paragraph.tagName,
+          paragraph.textContent,
+        ])
+      ).toEqual(expected.map((paragraph) => ["P", paragraph]));
+    }
+  );
 
   test("sets the price as plain text right under the name, then the description, then the quantity beside the button", () => {
     const { page } = setup();

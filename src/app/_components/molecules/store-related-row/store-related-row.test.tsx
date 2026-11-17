@@ -90,9 +90,9 @@ describe("StoreRelatedRow", () => {
     const { render, shown } = setup({ others: 9, same: 2, seed: 5 });
     render();
 
-    const names = shown();
-    expect(names).toHaveLength(8);
-    expect(names.filter((name) => name?.startsWith("s"))).toHaveLength(2);
+    // Both of the category first, then six others of the store, each once:
+    // the pick seed 5 draws.
+    expect(shown()).toEqual(["s1", "s2", "o6", "o3", "o8", "o1", "o2", "o5"]);
   });
 
   test("shows nothing at all when the pool is empty", () => {
