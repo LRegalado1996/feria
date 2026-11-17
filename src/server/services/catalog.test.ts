@@ -350,6 +350,12 @@ describe("getCategoryPage", () => {
       params: [STORE_ID, "bijouterie"],
       sql: '("category"."storeId" = $1 and "category"."slug" = $2)',
     });
+    // Its categories in the store's order, which the page's text and links
+    // follow, not in whatever order the database returns them.
+    const children = config.with?.children as { orderBy?: unknown };
+    expect(renderOrderBy(children.orderBy)).toBe(
+      '"category"."position" asc, "category"."id" asc'
+    );
   });
 
   test("reads a category in a group with its cover, its group's name and its own alt text", async () => {
