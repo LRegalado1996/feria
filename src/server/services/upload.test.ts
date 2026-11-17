@@ -256,6 +256,31 @@ describe("cleanUpOrphanBlobs", () => {
     );
   });
 
+  test("never deletes a file of its folder that is not one of its uploads", async () => {
+    const orphan = makePathname();
+    const { db } = setup({
+      pages: [
+        {
+          blobs: [
+            makeListed("qa/branding/logo.png", OLD),
+            makeListed(`qa/cover/${randomUUID()}.svg`, OLD),
+            makeListed(orphan, OLD),
+          ],
+        },
+      ],
+      stored: [],
+    });
+
+    await expect(
+      cleanUpOrphanBlobs(db as never, STORE, { olderThan: OLDER_THAN })
+    ).resolves.toEqual({ checked: 1, deleted: [orphan] });
+
+    expect(blob.del).toHaveBeenCalledExactlyOnceWith(
+      [`https://${HOST}/${orphan}`],
+      { token: STORE.token }
+    );
+  });
+
   test("deletes in batches of 100", async () => {
     const listed = Array.from({ length: 101 }, () =>
       makeListed(makePathname(), OLD)

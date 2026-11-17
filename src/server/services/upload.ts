@@ -164,7 +164,9 @@ export async function cleanUpOrphanBlobs(
     });
 
     for (const blob of page.blobs) {
-      if (blob.uploadedAt < olderThan) {
+      // Only a file this deployment uploaded is ever deleted: anything else
+      // in its folder (put there by hand or by another tool) is left alone.
+      if (blob.uploadedAt < olderThan && isOwnBlobUrl(blob.url, blobStore)) {
         candidates.push({ pathname: blob.pathname, url: blob.url });
       }
     }
