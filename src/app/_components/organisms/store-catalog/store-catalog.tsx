@@ -35,7 +35,7 @@ import { type CatalogPage, useCatalogProducts } from "@/lib/hooks/catalog";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
-import { PRODUCT_SORTS } from "@/lib/schemas/catalog";
+import { DEFAULT_PRODUCT_SORT, PRODUCT_SORTS } from "@/lib/schemas/catalog";
 
 export interface StoreCatalogProps {
   /** The trail from the home to this page, shown above it (FER-043). */
@@ -248,13 +248,21 @@ function StoreCatalog({
             className="inline-flex min-h-11 items-center gap-1.5 font-display text-xs leading-none font-extrabold text-store-foreground uppercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
             data-slot="store-catalog-sort"
           >
-            {/* On a phone only the sort shows; a screen reader hears both. */}
-            <span className="sr-only sm:not-sr-only">
-              {copy.sort.label}
-            </span>{" "}
-            <span className="underline decoration-2 underline-offset-4">
-              {copy.sort[query.sort]}
-            </span>
+            {/* The store's own order is the one nobody chose: the button
+                names no sort then (FER-044). Another sort is named, and on
+                a phone only it shows; a screen reader hears both. */}
+            {query.sort === DEFAULT_PRODUCT_SORT ? (
+              <span>{copy.sort.prompt}</span>
+            ) : (
+              <>
+                <span className="sr-only sm:not-sr-only">
+                  {copy.sort.label}
+                </span>{" "}
+                <span className="underline decoration-2 underline-offset-4">
+                  {copy.sort[query.sort]}
+                </span>
+              </>
+            )}
             <ChevronDown aria-hidden="true" className="size-4" />
           </DropdownMenuPrimitive.Trigger>
           <DropdownMenuPrimitive.Content
@@ -264,21 +272,27 @@ function StoreCatalog({
             loop
             sideOffset={6}
           >
-            {PRODUCT_SORTS.map((sort) => (
-              <DropdownMenuPrimitive.Item asChild key={sort}>
-                <Link
-                  aria-current={query.sort === sort ? "true" : undefined}
-                  className="flex min-h-11 items-center justify-between gap-4 px-3 text-sm outline-none data-highlighted:bg-store-foreground data-highlighted:text-store-background"
-                  href={href({ ...query, sort })}
-                  scroll={false}
-                >
-                  {copy.sort[sort]}
-                  {query.sort === sort ? (
-                    <Check aria-hidden="true" className="size-4" />
-                  ) : null}
-                </Link>
-              </DropdownMenuPrimitive.Item>
-            ))}
+            {PRODUCT_SORTS.map((sort) => {
+              // The default is never marked: it is what nothing chosen means.
+              const chosenSort =
+                query.sort === sort && sort !== DEFAULT_PRODUCT_SORT;
+
+              return (
+                <DropdownMenuPrimitive.Item asChild key={sort}>
+                  <Link
+                    aria-current={chosenSort ? "true" : undefined}
+                    className="flex min-h-11 items-center justify-between gap-4 px-3 text-sm outline-none data-highlighted:bg-store-foreground data-highlighted:text-store-background"
+                    href={href({ ...query, sort })}
+                    scroll={false}
+                  >
+                    {copy.sort[sort]}
+                    {chosenSort ? (
+                      <Check aria-hidden="true" className="size-4" />
+                    ) : null}
+                  </Link>
+                </DropdownMenuPrimitive.Item>
+              );
+            })}
           </DropdownMenuPrimitive.Content>
         </DropdownMenuPrimitive.Root>
       </div>

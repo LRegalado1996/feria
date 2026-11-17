@@ -333,12 +333,14 @@ describe("StoreCatalog", () => {
   });
 
   test.each([
-    ["es", "Ordenar por: Más nuevos"],
-    ["en", "Sort by: Newest"],
+    ["es", "position", "Ordenar por"],
+    ["en", "position", "Sort by"],
+    ["es", "newest", "Ordenar por: Más nuevos"],
+    ["en", "price_desc", "Sort by: Price: high to low"],
   ] as const)(
-    "in %s, names the sort's button after the current sort: %j",
-    (locale, name) => {
-      setup({ locale });
+    "in %s, with the %s sort, names the sort's button %j",
+    (locale, sort, name) => {
+      setup({ locale, query: makeQuery({ sort }) });
 
       expect(screen.getByRole("button", { name })).toHaveAttribute(
         "aria-haspopup",
@@ -347,7 +349,7 @@ describe("StoreCatalog", () => {
     }
   );
 
-  test("opens the three sorts as links, the current one marked, keeping the selection", async () => {
+  test("opens the four sorts as links, the current one marked, keeping the selection", async () => {
     const { user } = setup({ query: CHOSEN });
 
     await user.click(
@@ -355,7 +357,7 @@ describe("StoreCatalog", () => {
     );
 
     expect(sortItems()).toEqual([
-      ["Más nuevos", "/collares?color=dorado&q=perla", null],
+      ["Destacados", "/collares?color=dorado&q=perla", null],
       [
         "Precio: menor a mayor",
         "/collares?color=dorado&q=perla&sort=price_asc",
@@ -366,32 +368,35 @@ describe("StoreCatalog", () => {
         "/collares?color=dorado&q=perla&sort=price_desc",
         null,
       ],
+      ["Más nuevos", "/collares?color=dorado&q=perla&sort=newest", null],
     ]);
     // Only the current one carries the tick.
-    const [newest, cheapest] = within(screen.getByRole("menu")).getAllByRole(
+    const [featured, cheapest] = within(screen.getByRole("menu")).getAllByRole(
       "menuitem"
     );
-    expect(newest?.querySelector("svg")).toBeNull();
+    expect(featured?.querySelector("svg")).toBeNull();
     expect(cheapest?.querySelector("svg")).not.toBeNull();
   });
 
-  test("in English, names the sorts in English and marks the newest by default", async () => {
+  test("in English, names the sorts in English and marks none for the store's own order", async () => {
     const { user } = setup({ locale: "en" });
 
-    await user.click(screen.getByRole("button", { name: "Sort by: Newest" }));
+    await user.click(screen.getByRole("button", { name: "Sort by" }));
 
     expect(sortItems()).toEqual([
-      ["Newest", "/en/productos", "true"],
+      ["Featured", "/en/productos", null],
       ["Price: low to high", "/en/productos?sort=price_asc", null],
       ["Price: high to low", "/en/productos?sort=price_desc", null],
+      ["Newest", "/en/productos?sort=newest", null],
     ]);
+    expect(
+      within(screen.getByRole("menu")).getAllByRole("menuitem")[0]
+    ).not.toContainHTML("svg");
   });
 
   test("the sort's menu opens from the keyboard and Escape closes it, handing focus back", async () => {
     const { user } = setup();
-    const trigger = screen.getByRole("button", {
-      name: "Ordenar por: Más nuevos",
-    });
+    const trigger = screen.getByRole("button", { name: "Ordenar por" });
     trigger.focus();
 
     await user.keyboard("{Enter}");

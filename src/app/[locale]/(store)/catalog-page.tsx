@@ -23,6 +23,7 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { caller } from "@/lib/orpc/server";
+import { DEFAULT_PRODUCT_SORT } from "@/lib/schemas/catalog";
 import { absoluteUrl } from "@/lib/seo/origin";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import { breadcrumbList, collectionPage } from "@/lib/seo/structured-data";
@@ -189,7 +190,7 @@ const loadCatalogPage = cache(
 
 /** The page's address in each language, its selection kept, sort aside. */
 function alternatesOf(locale: Locale, query: CatalogQuery) {
-  const canonical = { ...query, q: null, sort: "newest" as const };
+  const canonical = { ...query, q: null, sort: DEFAULT_PRODUCT_SORT };
 
   return {
     canonical: catalogHref(locale, canonical),
@@ -301,7 +302,7 @@ export async function CatalogPageView(props: CatalogPageProps) {
   const loaded = await resolve(props);
   const { copy, firstPage, heading, locale, page, query, store } = loaded;
   const canonical = absoluteUrl(
-    catalogHref(locale, { ...query, q: null, sort: "newest" })
+    catalogHref(locale, { ...query, q: null, sort: DEFAULT_PRODUCT_SORT })
   );
   const { storefront } = getDictionary(locale);
 

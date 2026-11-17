@@ -6,6 +6,7 @@ import {
   index,
   integer,
   pgEnum,
+  pgSequence,
   pgTable,
   text,
   timestamp,
@@ -17,6 +18,7 @@ import {
   CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
   CATEGORY_SEO_TITLE_MAX_LENGTH,
   COVER_ALT_MAX_LENGTH,
+  INT4_MAX,
   PRODUCT_STATUSES,
   RESERVED_ATTRIBUTE_SLUGS,
   SWATCH_COLOR_PATTERN,
@@ -132,12 +134,25 @@ export const categoryTranslation = pgTable(
 );
 
 /**
+ * Where a new article goes in the store's own order (FER-044): after every
+ * article there is. A sequence, not `max() + 1`, so two articles added at
+ * once never share a place, whoever inserts them (the service, the seed, a
+ * test, or a build that predates the column and names no position).
+ */
+export const productPositionSequence = pgSequence("product_position_seq", {
+  // The column is an `integer`: the sequence stops where it does.
+  maxValue: INT4_MAX,
+});
+
+/**
  * An article ("artículo" on screen). A draft may lack its category and its
  * price while it is being loaded; publishing requires both, an image and a
  * Spanish title (`resolvePublishGaps`). The price is an integer in minor units
  * of the store's currency. The slug comes from the Spanish title and stops
  * following it once the article was first published (`publishedAt` set), so
- * a shared link keeps working.
+ * a shared link keeps working. `position` is the order the store chooses, the
+ * catalog's default (FER-044): a new article goes last; reordering them is
+ * the article list's (FER-019).
  */
 export const product = pgTable(
   "product",
@@ -151,6 +166,9 @@ export const product = pgTable(
     categoryId: integer(),
     slug: text().notNull(),
     priceAmount: integer(),
+    position: integer()
+      .notNull()
+      .default(sql`nextval('product_position_seq')`),
     status: productStatusEnum().notNull().default("draft"),
     isAvailable: boolean().notNull().default(true),
     publishedAt: timestamp({
@@ -181,6 +199,13 @@ export const product = pgTable(
       // `desc()` asks for, so the index serves the order and the LIMIT.
       table.publishedAt.desc().nullsFirst(),
       table.id.desc().nullsFirst()
+    ),
+    // The catalog's default order (FER-044), the id breaking ties.
+    index("product_position_list_index").on(
+      table.storeId,
+      table.status,
+      table.position,
+      table.id
     ),
     check("product_slug_format", sql`${table.slug} ~ ${slugPattern}`),
     check(

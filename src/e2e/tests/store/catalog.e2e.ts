@@ -218,13 +218,20 @@ test.describe("Catalog", () => {
     ]);
     const menu = page.getByRole("menu");
 
+    // The store's own order is the default: nothing chosen, nothing named.
     await clickUntilVisible(
-      page.getByRole("button", { name: "Ordenar por: Más nuevos" }),
+      page.getByRole("button", { exact: true, name: "Ordenar por" }),
       menu
     );
-    await expect(
-      menu.getByRole("menuitem", { name: "Más nuevos" })
-    ).toHaveAttribute("aria-current", "true");
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Destacados",
+      "Precio: menor a mayor",
+      "Precio: mayor a menor",
+      "Más nuevos",
+    ]);
+    for (const item of await menu.getByRole("menuitem").all()) {
+      await expect(item).not.toHaveAttribute("aria-current");
+    }
     await menu.getByRole("menuitem", { name: "Precio: menor a mayor" }).click();
 
     await expect(page).toHaveURL(

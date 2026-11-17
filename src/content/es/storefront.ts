@@ -124,8 +124,12 @@ export const storefront = {
       // Before the current sort on its button: "Ordenar por: Más nuevos".
       label: "Ordenar por:",
       newest: "Más nuevos",
+      // The store's own order, the default (FER-044): chosen, the button
+      // names no sort and reads only the prompt.
+      position: "Destacados",
       price_asc: "Precio: menor a mayor",
       price_desc: "Precio: mayor a menor",
+      prompt: "Ordenar por",
     },
     title: "Todos los artículos",
   },

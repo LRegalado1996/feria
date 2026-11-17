@@ -96,7 +96,8 @@ export const catalogRouter = {
     .route({
       method: "GET",
       path: "/products",
-      summary: "List a store's published articles, newest first or by price",
+      summary:
+        "List a store's published articles in its own order, newest first or by price",
       tags: ["catalog"],
     }),
 

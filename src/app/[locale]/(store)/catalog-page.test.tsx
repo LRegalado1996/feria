@@ -266,7 +266,7 @@ describe("a catalog page's address", () => {
       filters: [],
       locale: "es",
       q: undefined,
-      sort: "newest",
+      sort: "position",
     });
     expect(catalog()).toMatchObject({
       breadcrumb: {

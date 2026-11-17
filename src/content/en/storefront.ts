@@ -124,8 +124,10 @@ export const storefront: Dictionary["storefront"] = {
     sort: {
       label: "Sort by:",
       newest: "Newest",
+      position: "Featured",
       price_asc: "Price: low to high",
       price_desc: "Price: high to low",
+      prompt: "Sort by",
     },
     title: "All articles",
   },

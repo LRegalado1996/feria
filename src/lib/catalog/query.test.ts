@@ -4,10 +4,12 @@ import {
   type CatalogQuery,
   catalogHref,
   clearFilters,
+  cursorParam,
   EMPTY_CATALOG_QUERY,
   isFiltered,
   knownOnly,
   rawSearchParams,
+  readCatalogCursor,
   readCatalogQuery,
   searchOf,
   toggleFilterValue,
@@ -56,13 +58,13 @@ describe("readCatalogQuery", () => {
     });
   });
 
-  test("reads an empty address of all articles as the whole catalog, newest first", () => {
+  test("reads an empty address of all articles as the whole catalog, in the store's order", () => {
     expect(readCatalogQuery({}, null)).toEqual(EMPTY_CATALOG_QUERY);
     expect(EMPTY_CATALOG_QUERY).toEqual({
       category: null,
       filters: [],
       q: null,
-      sort: "newest",
+      sort: "position",
     });
   });
 
@@ -70,8 +72,15 @@ describe("readCatalogQuery", () => {
     ["an unknown sort", { sort: "cheapest" }],
     ["a sort in capitals", { sort: "PRICE_ASC" }],
     ["a repeated sort", { sort: ["price_asc", "price_desc"] }],
-  ])("reads %s as the newest first", (_case, raw) => {
-    expect(readCatalogQuery(raw, null).sort).toBe("newest");
+  ])("reads %s as the store's order", (_case, raw) => {
+    expect(readCatalogQuery(raw, null).sort).toBe("position");
+  });
+
+  test.each([
+    ["newest", "newest"],
+    ["the store's order, asked by name", "position"],
+  ] as const)("reads a sort of %s", (_case, sort) => {
+    expect(readCatalogQuery({ sort }, null).sort).toBe(sort);
   });
 
   test.each([
@@ -189,9 +198,84 @@ describe("rawSearchParams and searchOf", () => {
   });
 });
 
+describe("cursorParam and readCatalogCursor", () => {
+  test.each([
+    ["the store's order", { id: 7, position: 0, sort: "position" }, "0.7"],
+    [
+      "a price order",
+      { id: 48, priceAmount: 69_000, sort: "price_desc" },
+      "69000.48",
+    ],
+    [
+      "the newest first, its date in milliseconds",
+      { id: 3, publishedAt: "2026-11-18T12:30:00.250Z", sort: "newest" },
+      "1795005000250.3",
+    ],
+  ] as const)(
+    "writes and reads back a cursor of %s",
+    (_case, cursor, param) => {
+      expect(cursorParam(cursor)).toBe(param);
+      expect(readCatalogCursor({ cursor: param }, cursor.sort)).toEqual(cursor);
+    }
+  );
+
+  test("reads the key as the address's sort's own", () => {
+    expect(readCatalogCursor({ cursor: "120.5" }, "price_asc")).toEqual({
+      id: 5,
+      priceAmount: 120,
+      sort: "price_asc",
+    });
+    expect(readCatalogCursor({ cursor: "120.5" }, "position")).toEqual({
+      id: 5,
+      position: 120,
+      sort: "position",
+    });
+  });
+
+  test.each([
+    ["none", undefined],
+    ["empty", ""],
+    ["repeated", ["1.2", "3.4"]],
+    ["without its id", "120"],
+    ["with a sign", "-1.2"],
+    ["with letters", "abc.2"],
+    ["with an id of 0", "120.0"],
+    ["with an id past the database's integers", "1.2147483648"],
+    ["with a key past the database's integers", "2147483648.1"],
+    ["a key too long to be one", "1234567890123456.1"],
+  ])("reads a cursor %s as the first page", (_case, cursor) => {
+    expect(readCatalogCursor({ cursor }, "price_asc")).toBeNull();
+  });
+
+  test("reads the highest key and id the database holds", () => {
+    expect(
+      readCatalogCursor({ cursor: "2147483647.2147483647" }, "position")
+    ).toEqual({ id: 2_147_483_647, position: 2_147_483_647, sort: "position" });
+  });
+});
+
 describe("catalogHref", () => {
   test("leaves every default out on the page of all articles", () => {
     expect(catalogHref("es", makeQuery())).toBe("/productos");
+    expect(catalogHref("es", makeQuery({ sort: "position" }))).toBe(
+      "/productos"
+    );
+  });
+
+  test("writes the newest first, no longer the default, as a sort", () => {
+    expect(catalogHref("es", makeQuery({ sort: "newest" }))).toBe(
+      "/productos?sort=newest"
+    );
+  });
+
+  test("writes a cursor last, its sort's key then the id", () => {
+    expect(
+      catalogHref("es", makeQuery({ q: "oro", sort: "price_asc" }), {
+        id: 48,
+        priceAmount: 120_000,
+        sort: "price_asc",
+      })
+    ).toBe("/productos?q=oro&sort=price_asc&cursor=120000.48");
   });
 
   test("writes the category's page, then filters as given, search and sort, commas readable", () => {
