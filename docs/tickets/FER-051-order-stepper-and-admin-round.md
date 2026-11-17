@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-027, FER-043, FER-011, FER-045 (stacked after it)
 
 ## Goal
@@ -50,11 +50,28 @@ The storefront's header, phone menu, catalog grid, footer and checkout page (ano
 
 ## Decisions
 
-_Filled in as the work lands._
+- **The stepper is one molecule with two modes** (`molecules/order-stepper`): `moves` given, the circles are buttons (the admin); left out, it only shows. The storefront wears it through `molecules/store-order-stepper` (`tone="bare"` and the store's classes), as the language pill does, so no storefront style leaks into the admin.
+- **The detour is a small secondary button under the last step**, "No se pudo entregar" with an ✕, rather than a last circle offering two outcomes: one circle, one meaning. It follows `ORDER_MOVES` like the circles (enabled only from Preparado) and is gone once the order took it, when the last circle itself turns red with the ✕.
+- **A refused move says why in its name and its tooltip, the same words**: "Entregado: antes tiene que pasar por Preparado" (every refused move in the domain goes through Preparado). The current step says "Preparado: es el estado actual". They are `aria-disabled`, not `disabled`, so focus and the tooltip reach them.
+- **The confirmation reuses `molecules/confirm-dialog`**, which gained `confirmVariant`: a move forward or back confirms with the default button ("Sí, pasar a Preparado", "Sí, volver a Recibido"); the detour keeps the destructive one and the existing words ("¿No se pudo entregar el pedido?").
+- **The move buttons stay** in the top bar and in the bar under the thumb: they are the screen's main action, one tap each (FER-027's "two taps from the list"), and the stepper is the picture with a confirmed shortcut. Both call the same `onMove`, so a stale move is explained the same way ("Alguien ya cambió este pedido; lo actualizamos.") and the order is read again.
+- **Two copies on each page, one per layout**: across at the top on a computer (`hidden md:block`), down at the end on a phone (`md:hidden`), so the reading order matches what each screen shows; the hidden one is out of the accessibility tree.
+- **On the shopper's page the phone's stepper sits above the buttons**, at the end of the order, as the admin's sits above its bar of moves. With the store's WhatsApp, its button and "Seguir mirando la tienda" are stacked, each centered, the way back last.
+- **The detour's red on the storefront is a sixth theme color, `store-danger` (`#b42318`)**, in `src/styles/theme.ts` with its contrast tested (6.6:1 both ways) and added to the storefront-style ratchet: the storefront's palette had no color for something that went wrong, and design.md bans colors outside the theme.
+- **The copy-link button is in the contact card**, under WhatsApp: both are ways to reach the shopper. The link is the order's page in the language the order was placed in, on the origin the admin is open at, resolved when pressed. A refused clipboard (`NotAllowedError`, or none on an insecure page) shows the link selected in a read-only field with the reason; it is the browser's policy, so it is not reported; any other failure is. `order.get` now answers the token (admins only).
+- **The row's category is drawn on the server per visit** (`pickReorderCategory`, `Math.random` after the order's request-time read): among categories with four or more published articles, else any with one. The counts and the chosen category's articles are cached reads with the catalog's tag, so nothing new is cached per visit, and the browser only shows what the server drew: no hydration mismatch. The row's "Ver todo" is named after the category ("Ver todo: Aros"), through a new `viewAllOf` on the article row.
+- **Uploads not configured answer `SERVICE_UNAVAILABLE`** (503) with `why: uploads_not_configured`: a configuration problem, not a request the admin can correct, and not one of the codes the error reporting ignores, so the uploader reports it once (the server reports nothing and logs `upload.configured: false`); the uploader says so plainly and offers no retry, which cannot succeed.
+- **"Mostrar en el encabezado"** shows for a group and for a category in no group; with a group chosen it gives way to a line saying a category in a group always shows in its group's menu, and the form does not send it. Hiding a group hides its categories from the header too. The procedure takes it as optional: left out (an older tab) keeps the stored choice. The header's filter is data only (`headerCategories`, applied in `store-shell.ts`); the footer, the filter panel and the catalog pages are untouched.
 
 ## Outcome
 
-_Filled in when the ticket closes._
+- **Stepper** (`molecules/order-stepper`, `molecules/store-order-stepper`): Recibido → Preparado → Entregado, the detour red with an ✕, `aria-current="step"` on the current step, the list named with the status in words, each step's progress said; across from `md` up, down below it. Interactive in the admin with a confirmation before every move, only `ORDER_MOVES` enabled, the others explained in their name and tooltip; read only on the shopper's page.
+- **Admin order page** (`organisms/order-detail`): the stepper in a card at the top, centered, on a computer; at the end, above the moves' bar, on a phone. "Copiar el enlace del pedido" (`molecules/copy-link-button`) in the contact card.
+- **Public order page** (`organisms/store-order`, `(store)/orders/[token]/page.tsx`): the read-only stepper, the buttons centered, the festive band with room above and below, and "Hacé todos los pedidos que quieras", a row of one category drawn per visit (`src/lib/catalog/reorder.ts`, `countPublishedByCategory` and `listCategoryArticles` behind `readCategoryCounts` and `readCategoryArticles`).
+- **Categories screen**: every icon-only button (drag, up, down, page and group, rename, delete) shows its name in a tooltip on hover and on focus; the not-configured upload says "La subida de fotos no está configurada en este servidor"; "Mostrar en el encabezado" (migration `0016_wise_skin`: `category.showInHeader boolean not null default true`, additive) with the header and the phone menu listing only those checked.
+- **Real upload, 2026-11-17**: with this worktree's token, on a local production build, a test category's cover went to `feria-images-qa` (`local/cover/…webp`, HEAD 200), showed on its page, and deleting the category through the admin removed the file (HEAD 404 within 12 s). A second test category left by a failed first run of the script was deleted the same way, its file gone too. With the token unset, `upload.createToken` answered 503 with the request's log line saying `upload.configured: false` and no error-level line, and the uploader showed its message.
+- **Tests**: unit tests for every new and changed file, each rule broken once and seen red (the moves allowed, no move without confirming, read only without buttons, `aria-current`, the detour's place, the copied URL whole and in the order's language, the draw, the band's margin, the token read); E2E `tests/admin/order-stepper.e2e.ts` (a move cancelled and confirmed through the dialog, the detour, the shopper's page following, the centered button and the band, the link copied, the phone's layout), `tests/admin/category-header.e2e.ts` (unchecked, gone from the phone menu and the header, its page still there), the tooltips in `tests/admin/categories.e2e.ts`; the order page's specs in `checkout.e2e.ts` and `cart-panel.e2e.ts` read the order's lines by their section.
+- **Docs**: `design.md` (§ Components, § Admin: the stepper, the order page, the categories screen; § Storefront: `store-danger`, the order page), `docs/project/data-model.md`, `docs/agents/security.md`, `docs/agents/observability.md`.
 
 ## Reporting
 
