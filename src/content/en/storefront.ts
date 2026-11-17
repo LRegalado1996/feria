@@ -133,9 +133,6 @@ export const storefront: Dictionary["storefront"] = {
     },
     retry: "Try again",
     searchResult: "“{q}”",
-    share: "Share",
-    shareCopied: "Link copied.",
-    shareFailed: "We could not copy the link.",
     showResults: "See results",
     sort: {
       label: "Sort by:",

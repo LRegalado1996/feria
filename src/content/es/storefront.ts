@@ -139,9 +139,6 @@ export const storefront = {
     },
     retry: "Probar de nuevo",
     searchResult: "«{q}»",
-    share: "Compartir",
-    shareCopied: "Enlace copiado.",
-    shareFailed: "No pudimos copiar el enlace.",
     showResults: "Ver resultados",
     sort: {
       // Before the current sort on its button: "Ordenar por: Más nuevos".

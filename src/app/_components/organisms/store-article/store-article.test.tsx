@@ -238,7 +238,6 @@ describe("StoreArticle", () => {
       const { page } = setup({ locale });
 
       expect(within(page).queryByRole("button", { name })).toBeNull();
-      expect(page.querySelector('[data-slot="store-share-button"]')).toBeNull();
     }
   );
 
