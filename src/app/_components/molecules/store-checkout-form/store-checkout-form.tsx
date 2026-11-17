@@ -152,6 +152,9 @@ function StoreCheckoutForm({
     units: number;
   } | null>(null);
   const submitButton = useRef<HTMLButtonElement>(null);
+  // Where the confirmation hands focus back when the cart was held while it
+  // was open: the button is disabled by then, and cannot take it.
+  const title = useRef<HTMLHeadingElement>(null);
 
   const placeOrder = async (values: CheckoutValues) => {
     if (inFlight.current) {
@@ -230,8 +233,11 @@ function StoreCheckoutForm({
       data-slot="store-checkout-form"
     >
       <h2
-        className="font-display store-display-section leading-display font-extrabold uppercase"
+        // Focused only by the code, never by a tab or a click.
+        className="font-display store-display-section leading-display font-extrabold uppercase focus-visible:outline-none"
         id="store-checkout-title"
+        ref={title}
+        tabIndex={-1}
       >
         {copy.checkout.title}
       </h2>
@@ -361,7 +367,7 @@ function StoreCheckoutForm({
         }}
         open={confirming !== null}
         phone={confirming?.customerPhone ?? ""}
-        returnFocus={submitButton}
+        returnFocus={blockedReason === null ? submitButton : title}
         sending={sending}
         total={sent ? sent.total : total}
         units={sent ? sent.units : unitsOf(items)}

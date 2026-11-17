@@ -321,6 +321,49 @@ test.describe("Cart and checkout", () => {
     expect(sent).toHaveLength(1);
   });
 
+  test("a cart another tab changes while the confirmation is open holds the order: Volver closes it and focus lands on the form's title, the button being disabled", async ({
+    db,
+    page,
+  }) => {
+    const { bracelet, necklace, orders, phone } = await setup({ db });
+    await openCartWith(page, "/cart", [
+      { productId: necklace.id, quantity: 1 },
+    ]);
+    await fillCheckout(page, phone.local);
+    const submit = page.getByTestId("store-checkout-submit");
+    const dialog = await new StorePage(page).askToConfirmOrder();
+    // The new list's prices cannot be read: the order waits on them.
+    await page.route(CART_PRODUCTS, async (route) => {
+      await route.abort("failed");
+    });
+
+    // Another tab of the same store adds the bracelet: this tab's cart
+    // follows, and asks for the prices of a list it has not read.
+    const other = await page.context().newPage();
+    await new StorePage(other).goto();
+    await other.evaluate(
+      ([key, value]) => {
+        window.localStorage.setItem(key, value);
+      },
+      [
+        CART_KEY,
+        JSON.stringify([
+          { productId: necklace.id, quantity: 1 },
+          { productId: bracelet.id, quantity: 1 },
+        ]),
+      ] as const
+    );
+    await other.close();
+    await expect(submit).toBeDisabled();
+
+    await dialog.getByRole("button", { name: "Volver" }).click();
+    await expectDialogRemoved(page, dialog);
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Tus datos" })
+    ).toBeFocused();
+    expect(await orders()).toEqual([]);
+  });
+
   test("a double tap on the submit opens one confirmation, a double tap on Confirmar pedido places one order, and the cart is empty afterwards", async ({
     db,
     page,

@@ -762,21 +762,41 @@ describe("StoreCheckoutForm", () => {
     });
   });
 
-  test("a cart held while the confirmation is open closes it and sends nothing", async () => {
-    const { ask, confirm, fill, queryDialog, received, rerender, submit } =
-      setup();
+  test.each(["Confirm order", "Go back"] as const)(
+    "a cart held while the confirmation is open: %s closes it, sends nothing and gives focus to the form's title, the button being disabled",
+    async (how) => {
+      const {
+        ask,
+        confirm,
+        dialog,
+        fill,
+        queryDialog,
+        received,
+        rerender,
+        submit,
+        user,
+      } = setup();
 
-    await fill();
-    await ask();
-    rerender(makeItems(), "Bringing today's prices…");
-    await confirm();
+      await fill();
+      await ask();
+      rerender(makeItems(), "Bringing today's prices…");
+      await (how === "Confirm order"
+        ? confirm()
+        : user.click(
+            within(dialog()).getByRole("button", { name: "Go back" })
+          ));
 
-    await waitFor(() => {
-      expect(queryDialog()).toBeNull();
-    });
-    expect(submit()).toHaveAccessibleDescription("Bringing today's prices…");
-    expect(received).toEqual([]);
-  });
+      await waitFor(() => {
+        expect(queryDialog()).toBeNull();
+      });
+      expect(submit()).toBeDisabled();
+      expect(submit()).toHaveAccessibleDescription("Bringing today's prices…");
+      expect(
+        screen.getByRole("heading", { level: 2, name: "Your details" })
+      ).toHaveFocus();
+      expect(received).toEqual([]);
+    }
+  );
 
   test.each([
     ["en", "customerName", "The name can be up to 80 characters.", 81],
