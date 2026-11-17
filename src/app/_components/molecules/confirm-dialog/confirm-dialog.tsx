@@ -18,6 +18,12 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Defaults to the dictionary's "Delete". */
   confirmLabel?: string;
+  /**
+   * The confirm button's look: `destructive` (the default) for what loses
+   * something, `default` for a change that is easily undone (an order's
+   * status moved forward, FER-051).
+   */
+  confirmVariant?: "default" | "destructive";
   description: string;
   /** The action is running: the confirm button says so and stays disabled. */
   isPending?: boolean;
@@ -34,10 +40,11 @@ export interface ConfirmDialogProps {
   title: string;
 }
 
-/** Asks before a destructive action; the action runs only on confirm. */
+/** Asks before an action; the action runs only on confirm. */
 function ConfirmDialog({
   cancelLabel,
   confirmLabel,
+  confirmVariant = "destructive",
   description,
   isPending = false,
   onCloseAutoFocus,
@@ -74,7 +81,7 @@ function ConfirmDialog({
             disabled={isPending}
             onClick={onConfirm}
             type="button"
-            variant="destructive"
+            variant={confirmVariant}
           >
             {isPending
               ? (pendingLabel ?? common.deleting)

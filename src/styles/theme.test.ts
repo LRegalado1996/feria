@@ -68,6 +68,17 @@ const CONTRAST_RULES = [
     STORE_THEME.accent,
     STORE_THEME.contrast,
   ],
+  // An order that could not be delivered (FER-051): its step and its name.
+  [
+    "the background as text on the danger fill",
+    STORE_THEME.background,
+    STORE_THEME.danger,
+  ],
+  [
+    "the danger as text on the background",
+    STORE_THEME.danger,
+    STORE_THEME.background,
+  ],
   [
     "the small muted text on the background",
     derived("muted"),
@@ -89,6 +100,7 @@ describe("STORE_THEME", () => {
       "foreground",
       "contrast",
       "accent",
+      "danger",
     ]);
 
     for (const color of Object.values(STORE_THEME)) {
@@ -117,7 +129,7 @@ describe("STORE_THEME", () => {
 
   test("is the only place the five are written: globals.css declares none of them", () => {
     expect(GLOBALS_CSS).not.toMatch(
-      /--store-(?:accent|background|contrast|foreground|surface):/u
+      /--store-(?:accent|background|contrast|danger|foreground|surface):/u
     );
   });
 });
@@ -130,6 +142,7 @@ describe("storeThemeStyle", () => {
       "--store-accent": STORE_THEME.accent,
       "--store-background": STORE_THEME.background,
       "--store-contrast": STORE_THEME.contrast,
+      "--store-danger": STORE_THEME.danger,
       "--store-foreground": STORE_THEME.foreground,
       "--store-surface": STORE_THEME.surface,
     });
