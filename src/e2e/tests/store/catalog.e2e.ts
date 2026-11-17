@@ -98,10 +98,15 @@ async function setup({ db }: { db: DbFixture["db"] }) {
  * the grid is still what the address shows.
  */
 function titles(page: Page) {
-  return page.getByTestId("store-catalog-grid").getByRole("heading", {
-    includeHidden: true,
-    level: 2,
-  });
+  // The page on screen: a catalog page left behind stays mounted, hidden
+  // (docs/agents/nextjs.md § Navigation).
+  return page
+    .getByTestId("store-catalog-grid")
+    .filter({ visible: true })
+    .getByRole("heading", {
+      includeHidden: true,
+      level: 2,
+    });
 }
 
 /**
@@ -126,7 +131,7 @@ test.describe("Catalog", () => {
     page,
   }) => {
     const { bracelets, color, necklaces, tag } = await setup({ db });
-    await page.goto(`/products?category=${bracelets.slug}`);
+    await page.goto(`/${bracelets.slug}`);
     await expect(titles(page)).toHaveText([
       "Pulsera dorada",
       "Pulsera violeta",
@@ -134,25 +139,24 @@ test.describe("Catalog", () => {
     const panel = await openFilters(page);
 
     await panel.getByRole("link", { name: `Collares ${tag}` }).click();
-    await expect(page).toHaveURL(
-      new RegExp(`\\?category=${necklaces.slug}$`, "u")
-    );
+    await expect(page).toHaveURL(new RegExp(`/${necklaces.slug}$`, "u"));
     await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
-    // The panel stays open for the next choice, the one taken marked in it.
-    await expect(panel).toBeVisible();
+    // A category is a page of its own (FER-043): its panel opens fresh, the
+    // category marked in it, and stays open while a filter is chosen.
+    const again = await openFilters(page);
     await expect(
-      panel.getByRole("link", { name: `Collares ${tag}` })
+      again.getByRole("link", { name: `Collares ${tag}` })
     ).toHaveAttribute("aria-current", "true");
-    await panel
+    await again
       .getByRole("link", { name: new RegExp(`^Dorado ${tag}`, "u") })
       .click();
     await expect(page).toHaveURL(
-      new RegExp(`\\?category=${necklaces.slug}&${color}=dorado$`, "u")
+      new RegExp(`/${necklaces.slug}\\?${color}=dorado$`, "u")
     );
     await expect(titles(page)).toHaveText(["Collar dorado"]);
-    await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: "Ver resultados" }).click();
-    await expectDialogRemoved(page, panel);
+    await expect(again).toBeVisible();
+    await again.getByRole("button", { name: "Ver resultados" }).click();
+    await expectDialogRemoved(page, again);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       `Collares ${tag} · Dorado ${tag}`
     );
@@ -168,9 +172,7 @@ test.describe("Catalog", () => {
     });
     try {
       const fresh = await context.newPage();
-      await fresh.goto(
-        `/en/products?category=${necklaces.slug}&${color}=dorado`
-      );
+      await fresh.goto(`/en/${necklaces.slug}?${color}=dorado`);
       await expect(titles(fresh)).toHaveText(["Collar dorado"]);
       await expect(fresh.getByRole("heading", { level: 1 })).toHaveText(
         `Collares ${tag} · Dorado ${tag}`
@@ -187,7 +189,7 @@ test.describe("Catalog", () => {
     const { color, tag } = await setup({ db });
 
     await page.goto(
-      `/products?q=${tag}&fbclid=IwAR_X&utm_source=wa&${color}=fucsia&talle=m`
+      `/productos?q=${tag}&fbclid=IwAR_X&utm_source=wa&${color}=fucsia&talle=m`
     );
 
     await expect(titles(page)).toHaveText([
@@ -207,7 +209,7 @@ test.describe("Catalog", () => {
     page,
   }) => {
     const { tag } = await setup({ db });
-    await page.goto(`/products?q=${tag}`);
+    await page.goto(`/productos?q=${tag}`);
     await expect(titles(page)).toHaveText([
       "Collar dorado",
       "Collar violeta",
@@ -256,7 +258,7 @@ test.describe("Catalog", () => {
       });
     }
 
-    await page.goto(`/products?q=${tag}&sort=price_desc`);
+    await page.goto(`/productos?q=${tag}&sort=price_desc`);
     await expect(titles(page).first()).toHaveText("Collar dorado");
     await expect(titles(page)).toHaveCount(24);
 
@@ -270,7 +272,7 @@ test.describe("Catalog", () => {
     page,
   }) => {
     const { goldNecklace, tag } = await setup({ db });
-    await page.goto(`/products?q=${tag}`);
+    await page.goto(`/productos?q=${tag}`);
     const storePage = new StorePage(page);
     // Enabled only once React owns it; a retried click would add twice.
     const add = page.getByRole("button", {
@@ -307,7 +309,7 @@ test.describe("Catalog", () => {
   }) => {
     const { color } = await setup({ db });
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/products?${color}=dorado`);
+    await page.goto(`/productos?${color}=dorado`);
     // A computer browser without a share sheet copies the link.
     await page.evaluate(() => {
       Object.defineProperty(navigator, "share", { value: undefined });

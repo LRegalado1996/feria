@@ -30,9 +30,14 @@ async function setup({ db }: { db: DbFixture["db"] }) {
 
 /** The titles the catalog's grid shows. */
 function titles(page: Page): Locator {
-  return page.getByTestId("store-catalog-grid").getByRole("heading", {
-    level: 2,
-  });
+  // The page on screen: a catalog page left behind stays mounted, hidden
+  // (docs/agents/nextjs.md § Navigation).
+  return page
+    .getByTestId("store-catalog-grid")
+    .filter({ visible: true })
+    .getByRole("heading", {
+      level: 2,
+    });
 }
 
 /**
@@ -70,12 +75,12 @@ test.describe("Search panel", () => {
     await expect(field).toHaveAttribute("placeholder", "Buscá lo que quieras");
     await expect(panel.getByTestId("store-search-form")).toHaveAttribute(
       "action",
-      "/products"
+      "/productos"
     );
     await field.fill(tag);
     await panel.getByRole("button", { name: "Buscar", exact: true }).click();
 
-    await expect(page).toHaveURL(`/products?q=${tag}`);
+    await expect(page).toHaveURL(`/productos?q=${tag}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       `«${tag}»`
     );
@@ -115,7 +120,7 @@ test.describe("Search panel", () => {
     await page.keyboard.type(tag);
     await page.keyboard.press("Enter");
 
-    await expect(page).toHaveURL(`/products?q=${tag}`);
+    await expect(page).toHaveURL(`/productos?q=${tag}`);
     await expect(titles(page)).toHaveText(["Pulsera hallada"]);
   });
 
@@ -158,7 +163,7 @@ test.describe("Search panel", () => {
         .fill(tag);
       await plain.getByRole("button", { name: "Buscar", exact: true }).click();
 
-      await expect(page).toHaveURL(`/products?q=${tag}`);
+      await expect(page).toHaveURL(`/productos?q=${tag}`);
     });
   });
 

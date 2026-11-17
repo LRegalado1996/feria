@@ -144,4 +144,58 @@ test.describe("Category management", () => {
     await expect(chains).toHaveCount(0);
     await expect(bracelets).toContainText("2 artículos");
   });
+
+  // FER-043: a category joins a group from its page's panel, and the store
+  // then has the category's page under the group's.
+  test("puts a category in a group and gives it a title for search engines; its page is then under the group's", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup(
+      { db, page },
+      {
+        categories: [
+          { name: "Bijou", slug: "bijou" },
+          { articles: 0, name: "Anillos", slug: "anillos" },
+        ],
+      }
+    );
+    const rings = page.getByTestId(`category-row-anillos-${tag}`);
+    const form = page.getByTestId("category-page-form");
+
+    // The first open after the page loaded: repeated until React owns it.
+    await clickUntilVisible(
+      rings.getByRole("button", { name: `Página y grupo: Anillos ${tag}` }),
+      form
+    );
+    await form.getByLabel("Grupo").selectOption({ label: `Bijou ${tag}` });
+    await form
+      .getByLabel("Título para buscadores en español")
+      .fill(`Anillos de la feria ${tag}`);
+    await completeRpcAction(
+      page,
+      "/api/orpc/category/updatePage",
+      async () => {
+        await form.getByRole("button", { name: "Guardar la página" }).click();
+      },
+      { input: { seoTitleEs: `Anillos de la feria ${tag}` } }
+    );
+
+    await expect(form).toHaveCount(0);
+    await expect(rings.getByTestId("category-group")).toHaveText(
+      `En Bijou ${tag}`
+    );
+    await expect(
+      page
+        .getByTestId(`category-row-bijou-${tag}`)
+        .getByTestId("category-group")
+    ).toHaveText("Grupo de 1 categoría");
+
+    // The storefront follows at once: the write dropped the cached catalog.
+    await page.goto(`/bijou-${tag}/anillos-${tag}`);
+    await expect(page).toHaveTitle(`Anillos de la feria ${tag}`);
+    await expect(
+      page.getByRole("navigation", { name: "Ruta" }).getByRole("listitem")
+    ).toHaveText(["Inicio", `Bijou ${tag}`, `Anillos ${tag}`]);
+  });
 });

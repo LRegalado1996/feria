@@ -97,7 +97,7 @@ test.describe("sitemap.xml", () => {
 
     expect(response.status()).toBe(200);
     // The store's own pages first, then its articles, this test's among them.
-    const pages = ["/", "/en", "/products", "/en/products"];
+    const pages = ["/", "/en", "/productos", "/en/productos"];
     const article = [
       `/products/${published.slug}`,
       `/en/products/${published.slug}`,

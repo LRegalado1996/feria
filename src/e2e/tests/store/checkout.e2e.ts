@@ -86,7 +86,7 @@ async function addBothArticles(
   { braceletSlug, category }: { braceletSlug: string; category: string }
 ) {
   const storePage = new StorePage(page);
-  await page.goto(`/products?category=${category}`);
+  await page.goto(`/${category}`);
   const addNecklace = page.getByRole("button", {
     name: "Agregar al carrito: Collar dorado",
   });

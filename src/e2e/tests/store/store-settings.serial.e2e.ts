@@ -92,7 +92,7 @@ test.describe("Editing the store", () => {
 
     await expect(article.getByText("US$ 1.200", { exact: true })).toBeVisible();
     await expect(article.getByText("$ 1.200", { exact: true })).toHaveCount(0);
-    await page.goto(`/products?category=${rings.slug}`);
+    await page.goto(`/${rings.slug}`);
     await expect(
       page
         .getByTestId("store-catalog-grid")

@@ -20,7 +20,8 @@ test.describe("Launch switch off: the store is closed", () => {
   // The store's pages (FER-038), and an address no page answers.
   for (const [path, target] of [
     ["/", "/coming-soon"],
-    ["/products?color=dorado", "/coming-soon"],
+    ["/productos?color=dorado", "/coming-soon"],
+    ["/bijouterie/anillos", "/coming-soon"],
     ["/products/collar-de-perlas", "/coming-soon"],
     ["/cart", "/coming-soon"],
     ["/lr-market", "/coming-soon"],

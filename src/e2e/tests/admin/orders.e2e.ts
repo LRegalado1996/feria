@@ -106,7 +106,7 @@ test.describe("Order management", () => {
 
     // The shopper: the article into the cart from its category, then the
     // checkout.
-    await page.goto(`/products?category=${jewels.slug}`);
+    await page.goto(`/${jewels.slug}`);
     const add = page.getByRole("button", {
       name: "Agregar al carrito: Collar dorado",
     });

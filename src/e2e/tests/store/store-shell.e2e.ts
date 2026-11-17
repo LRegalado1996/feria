@@ -27,10 +27,9 @@ test.describe("Storefront shell", () => {
     const nav = header.getByRole("navigation", {
       name: "Secciones de la tienda",
     });
-    await expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
-      "href",
-      "/products"
-    );
+    await expect(
+      nav.getByRole("link", { name: "Todos los artículos" })
+    ).toHaveAttribute("href", "/productos");
 
     // The first Tab of the page reaches the skip link, which moves focus to
     // the page's content.
@@ -46,7 +45,9 @@ test.describe("Storefront shell", () => {
   }) => {
     const storePage = new StorePage(page);
 
-    const response = await page.goto("/no-such-page");
+    // Three segments: no catalog page has that shape (FER-043), so the
+    // catch-all answers it, a real 404 for a browser too (not-found.e2e.ts).
+    const response = await page.goto("/no/such/page");
 
     expect(response?.status()).toBe(404);
     await expect(storePage.getNotFoundHeading()).toBeVisible();
@@ -97,7 +98,9 @@ test.describe("Storefront shell", () => {
         x: 0,
         y: 0,
       });
-      await expect(menu.getByRole("link", { name: "Catálogo" })).toBeVisible();
+      await expect(
+        menu.getByRole("link", { name: "Todos los artículos" })
+      ).toBeVisible();
       await expect(menu.getByRole("link", { name: "English" })).toBeVisible();
       await menu.getByRole("button", { name: "Cerrar el menú" }).click();
       await expectDialogRemoved(page, menu);
