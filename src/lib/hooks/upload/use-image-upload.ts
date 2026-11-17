@@ -105,21 +105,23 @@ export function useImageUpload({
       return;
     }
 
-    // The browser can report the last progress after the upload resolved:
-    // once it has, a report would take a finished photo back to "uploading".
-    let sent = false;
+    // The SDK can report progress after the transfer settled, resolved or
+    // failed: once it has, a report would take the photo back to
+    // "uploading", hiding Retry and keeping the form's Save shut.
+    let settled = false;
     const uploaded = await put(pathname, prepared.blob, {
       abortSignal: attempt.controller.signal,
       access: "public",
       contentType: prepared.contentType,
       onUploadProgress: ({ percentage }) => {
-        if (!sent && isCurrent(attempt)) {
+        if (!settled && isCurrent(attempt)) {
           update({ percent: percentage, status: "uploading" });
         }
       },
       token,
+    }).finally(() => {
+      settled = true;
     });
-    sent = true;
 
     if (!isCurrent(attempt)) {
       return;

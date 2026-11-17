@@ -220,6 +220,33 @@ describe("useImageUpload", () => {
     expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
   });
 
+  test("a progress report that arrives after a failed transfer keeps the failure and its retry", async () => {
+    const { file, onBusyChange, result, upload } = setup();
+    act(() => {
+      result.current.start(file);
+    });
+    const sending = await upload();
+    act(() => {
+      sending.fail(new Error("network"));
+    });
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        reason: "failed",
+        status: "failed",
+      });
+    });
+
+    act(() => {
+      sending.options.onUploadProgress({ percentage: 60 });
+    });
+
+    expect(result.current.state).toEqual({
+      reason: "failed",
+      status: "failed",
+    });
+    expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+  });
+
   test("says it is preparing while the photo is downscaled", async () => {
     const { file, result } = setup();
     mocks.prepareImage.mockReturnValue(new Promise<never>(() => {}));
