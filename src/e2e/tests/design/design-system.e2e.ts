@@ -4,6 +4,9 @@ import { DesignPage } from "../../page-objects/design.page";
 const PHONE = { height: 812, width: 375 };
 const DESKTOP = { height: 800, width: 1280 };
 
+/** How long each banner of the cover stays (`COVER_DELAY_MS` in its component). */
+const COVER_DELAY_MS = 6000;
+
 test.describe("Storefront design system", () => {
   // The gallery is public: no session decides what it shows.
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -240,18 +243,22 @@ test.describe("Storefront design system", () => {
     ).toHaveAttribute("aria-current", "true");
   });
 
-  test("under reduced motion the cover stays still and offers no pause button", async ({
+  test("under reduced motion the cover stays still past a banner's time and offers no pause button", async ({
     page,
   }) => {
+    // The page's timers follow a clock the test moves, so the cover's
+    // delay is passed without being waited out.
+    await page.clock.install();
     await page.emulateMedia({ reducedMotion: "reduce" });
     const designPage = new DesignPage(page);
     await designPage.goto();
     const cover = designPage.getCover();
     await cover.scrollIntoViewIfNeeded();
+    // Hovering would hold it still too, and hide a cover that moves.
+    await page.mouse.move(0, 0);
 
-    await expect(
-      cover.getByRole("button", { name: "Ver la portada 1" })
-    ).toHaveAttribute("aria-current", "true");
+    // The server renders a pause button: its going says React has read
+    // the setting, and the cover is announced as a still one.
     await expect(
       cover.getByRole("button", { name: "Pausar la portada" })
     ).toHaveCount(0);
@@ -259,6 +266,18 @@ test.describe("Storefront design system", () => {
       "aria-live",
       "polite"
     );
+
+    // From here time moves only when the test says: a check retried while
+    // it flowed could wait for a moving cover to come round to its first
+    // banner again.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+    // Half again the time a banner stays: a cover that moved would show
+    // its second banner, too soon to have come round to the first again.
+    await page.clock.runFor(COVER_DELAY_MS * 1.5);
+
+    await expect(
+      cover.getByRole("button", { name: "Ver la portada 1" })
+    ).toHaveAttribute("aria-current", "true");
   });
 
   test("a block below the fold waits, then reveals when scrolled to", async ({

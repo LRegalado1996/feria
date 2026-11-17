@@ -403,7 +403,21 @@ describe("DesignPage", () => {
       "region",
       { name: "Cover" }
     );
-    expect(within(cover).getAllByRole("group")).toHaveLength(3);
+    // Each banner's words (its title, then the call to shop) and where it
+    // leads, slide by slide.
+    expect(
+      within(cover)
+        .getAllByRole("group")
+        .map((slide) => {
+          const banner = within(slide).getByRole("link");
+
+          return [banner.textContent, banner.getAttribute("href")];
+        })
+    ).toEqual([
+      ["Bubbles for the whole fairShop now", "#cover"],
+      ["Earrings for every dayShop now", "#cover"],
+      ["Rings that shineShop now", "#cover"],
+    ]);
     expect(
       within(cover).getByRole("button", { name: "Pause the cover" })
     ).toHaveAttribute("aria-pressed", "false");
