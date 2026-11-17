@@ -395,6 +395,32 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("keeps an untouched cover out of the save when another tab changed it meanwhile", async () => {
+    const { field, onSave, reread, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+    const elsewhere = { height: 800, url: UPLOADED, width: 2400 };
+
+    reread({
+      category: makeCategory({
+        cover: { computer: elsewhere, phone: null },
+      }),
+      isGroup: false,
+    });
+    await user.type(field("Title for search engines in Spanish"), "Anillos");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: undefined,
+          coverPhone: undefined,
+          seoTitleEs: "Anillos",
+        })
+      );
+    });
+  });
+
   test("removing the computer photo removes the phone one too, and sends both as none", async () => {
     const { onSave, photo, save, user } = setup({
       category: makeCategory({ cover: STORED }),
