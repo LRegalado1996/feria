@@ -9,7 +9,6 @@ import {
   knownOnly,
   rawSearchParams,
   readCatalogQuery,
-  readLegacyCategory,
   searchOf,
   toggleFilterValue,
 } from "./query";
@@ -168,30 +167,6 @@ describe("readCatalogQuery", () => {
     expect(readCatalogQuery({ color: values.join(",") }, null).filters).toEqual(
       [{ attribute: "color", values }]
     );
-  });
-});
-
-describe("readLegacyCategory", () => {
-  test("reads the category of the catalog's old address", () => {
-    expect(readLegacyCategory({ category: "anillos", color: "dorado" })).toBe(
-      "anillos"
-    );
-  });
-
-  test("keeps a category of exactly 80 characters", () => {
-    expect(readLegacyCategory({ category: "a".repeat(80) })).toBe(
-      "a".repeat(80)
-    );
-  });
-
-  test.each([
-    ["no category", {}],
-    ["a category with a capital", { category: "Anillos" }],
-    ["an empty category", { category: "" }],
-    ["a repeated category", { category: ["anillos", "aros"] }],
-    ["a category past 80 characters", { category: "a".repeat(81) }],
-  ])("reads %s as none", (_case, raw) => {
-    expect(readLegacyCategory(raw)).toBeNull();
   });
 });
 

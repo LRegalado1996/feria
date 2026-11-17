@@ -55,8 +55,8 @@ function single(value: string | string[] | undefined) {
 /**
  * Reads a catalog address the way a shared link must be read: anything
  * malformed is dropped, never sent to the API, which refuses a malformed
- * filter. `q` and `sort` are the catalog's own, `category` too (the old
- * address's, now the path's: `readLegacyCategory`); every other
+ * filter. `q` and `sort` are the catalog's own, and so is `category`, which
+ * no filter may take (the category is the path, FER-043); every other
  * parameter whose name and comma-separated values are slugs is a filter.
  * `fbclid`, `utm_source` or a stray capital fall away, so a link with them
  * still shows its selection. Nothing is capped here: a slug-shaped tracking
@@ -146,16 +146,6 @@ export function searchOf(raw: RawSearchParams): string {
   }
 
   return params.toString().replaceAll("%2C", ",");
-}
-
-/**
- * The category an address of the catalog's old page asks for
- * (`/products?category=anillos`, before FER-043), or `null`: a slug only.
- */
-export function readLegacyCategory(raw: RawSearchParams): string | null {
-  const category = single(raw.category);
-
-  return category !== null && isSlug(category) ? category : null;
 }
 
 /** `query` with `value` of `attribute` added, or taken out if it was in. */

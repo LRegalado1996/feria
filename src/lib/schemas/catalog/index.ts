@@ -272,7 +272,6 @@ export const RESERVED_CATEGORY_SLUGS = [
   "monitoring",
   "opengraph-image",
   "orders",
-  "products",
   "productos",
   "robots",
   "seed",

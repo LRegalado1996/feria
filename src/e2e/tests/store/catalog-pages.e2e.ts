@@ -249,26 +249,6 @@ test.describe("Catalog pages", () => {
     expect(unknown.status()).toBe(404);
   });
 
-  test("the catalog's old address answers a permanent redirect to the category's page, its filter kept", async ({
-    db,
-    request,
-  }) => {
-    const { rings, ringsPath } = await setup({ db });
-
-    const old = await request.get(
-      `/products?category=${rings.slug}&color=dorado`,
-      { maxRedirects: 0 }
-    );
-    const all = await request.get("/en/products?q=anillo", {
-      maxRedirects: 0,
-    });
-
-    expect(old.status()).toBe(308);
-    expect(old.headers().location).toBe(`${ringsPath}?color=dorado`);
-    expect(all.status()).toBe(308);
-    expect(all.headers().location).toBe("/en/productos?q=anillo");
-  });
-
   test("on a phone, the menu's group unfolds to its categories, each leading to its page", async ({
     db,
     page,
