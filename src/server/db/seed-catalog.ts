@@ -15,6 +15,7 @@ import {
   setProductAttributeValues,
 } from "@/server/services/attribute";
 import { createProduct, publishProduct } from "@/server/services/catalog";
+import { lockStoreCategories } from "@/server/services/category";
 
 interface SeedImage {
   /** A photo in `public/seed/`. */
@@ -525,6 +526,9 @@ export async function seedCatalog(
  * has is left alone, so it is safe to run again. Returns what it changed.
  */
 export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
+  // Under the admin's category lock: a group moved while this reads the
+  // groups could otherwise take a category into a group inside a group.
+  await lockStoreCategories(tx, storeId);
   const changes = { covers: 0, grouped: 0, groups: 0 };
   const rows = async () =>
     await tx

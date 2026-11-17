@@ -411,6 +411,20 @@ describe("seedCatalogPages", () => {
     makeRow(5, "pulseras"),
   ];
 
+  test("takes the store's category lock before it reads a category", async () => {
+    const { db, run } = setupPages({ before: FLAT });
+
+    await run();
+
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+      params: ["category:7"],
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+    });
+    expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      db.$["select.where"].mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
   test("gives a catalog seeded before groups its Bijouterie first, its four categories in it and every cover", async () => {
     const { db, run, updates } = setupPages({
       after: [...FLAT, makeRow(60, "bijouterie")],
