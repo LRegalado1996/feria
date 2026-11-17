@@ -212,11 +212,12 @@ test.describe("Catalog pages", () => {
       ).toBeVisible();
       // Loaded, not just placed: the browser chose a source and drew it.
       await expect
-        .poll(async () =>
-          image.evaluate(
-            (element: HTMLImageElement) =>
-              element.complete && element.naturalWidth > 0
-          )
+        .poll(
+          async () =>
+            await image.evaluate(
+              (element: HTMLImageElement) =>
+                element.complete && element.naturalWidth > 0
+            )
         )
         .toBe(true);
       const box = await cover.boundingBox();

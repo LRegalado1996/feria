@@ -43,7 +43,7 @@ function setup({
   const onSave = vi.fn(
     async (_values: unknown) => await Promise.resolve(saves)
   );
-  const onCancel = vi.fn();
+  const onCancel = vi.fn<() => void>();
   renderWithI18n(
     <CategoryPageForm
       category={category}

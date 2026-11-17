@@ -83,7 +83,7 @@ function setup({
   locale?: Locale;
   query?: CatalogQuery;
 } = {}) {
-  const onCategoryChoice = vi.fn();
+  const onCategoryChoice = vi.fn<() => void>();
   const { container } = render(
     <StoreCatalogFilters
       categories={categories}
