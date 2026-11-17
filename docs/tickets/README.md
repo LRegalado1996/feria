@@ -66,18 +66,19 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M4 Storefront and orders
 
-| ID                                                   | Title                                           | Priority | Status      |
-| ---------------------------------------------------- | ----------------------------------------------- | -------- | ----------- |
-| [FER-021](FER-021-storefront-shell.md)               | Storefront shell                                | P0       | in progress |
-| [FER-022](FER-022-home-view.md)                      | Home view                                       | P0       | todo        |
-| [FER-023](FER-023-catalog-view.md)                   | Catalog view                                    | P0       | done        |
-| [FER-024](FER-024-article-view-and-seo.md)           | Article view and SEO                            | P0       | in progress |
-| [FER-025](FER-025-order-domain.md)                   | Order domain                                    | P0       | done        |
-| [FER-026](FER-026-cart-and-checkout.md)              | Cart and checkout                               | P0       | in progress |
-| [FER-027](FER-027-order-management.md)               | Order management in the admin                   | P0       | done        |
-| [FER-028](FER-028-whatsapp-phone-verification.md)    | Phone verification by WhatsApp code             | P2       | todo        |
-| [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                             | P0       | done        |
-| [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script | P1       | todo        |
+| ID                                                   | Title                                            | Priority | Status      |
+| ---------------------------------------------------- | ------------------------------------------------ | -------- | ----------- |
+| [FER-021](FER-021-storefront-shell.md)               | Storefront shell                                 | P0       | in progress |
+| [FER-022](FER-022-home-view.md)                      | Home view                                        | P0       | todo        |
+| [FER-023](FER-023-catalog-view.md)                   | Catalog view                                     | P0       | done        |
+| [FER-024](FER-024-article-view-and-seo.md)           | Article view and SEO                             | P0       | in progress |
+| [FER-025](FER-025-order-domain.md)                   | Order domain                                     | P0       | done        |
+| [FER-026](FER-026-cart-and-checkout.md)              | Cart and checkout                                | P0       | in progress |
+| [FER-027](FER-027-order-management.md)               | Order management in the admin                    | P0       | done        |
+| [FER-028](FER-028-whatsapp-phone-verification.md)    | Phone verification by WhatsApp code              | P2       | todo        |
+| [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                              | P0       | done        |
+| [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script  | P1       | superseded  |
+| [FER-043](FER-043-category-groups-and-pages.md)      | Category groups and a page of their own for each | P0       | in progress |
 
 ### M5 Metrics
 
@@ -109,7 +110,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 038 → 041
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
-039 → 042
+039 → 042 → 043
 024 → 029 → 030
 everything P0 → 031 → 032
 ```
