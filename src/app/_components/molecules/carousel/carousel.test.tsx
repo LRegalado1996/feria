@@ -12,6 +12,7 @@ import {
   CarouselContent,
   CarouselItem,
   useCarousel,
+  WHEEL_LINE_PX,
   WHEEL_REST_MS,
   WHEEL_STEP_PX,
 } from "./carousel";
@@ -111,11 +112,20 @@ function setup({
   };
 }
 
-/** A wheel event on the window the slides move in. */
-function wheel(target: HTMLElement, deltaX: number, deltaY = 0) {
+/**
+ * A wheel event on the window the slides move in, in pixels unless the
+ * wheel counts in lines or pages (`deltaMode`).
+ */
+function wheel(
+  target: HTMLElement,
+  deltaX: number,
+  deltaY = 0,
+  deltaMode: number = WheelEvent.DOM_DELTA_PIXEL
+) {
   const event = new WheelEvent("wheel", {
     bubbles: true,
     cancelable: true,
+    deltaMode,
     deltaX,
     deltaY,
   });
@@ -253,6 +263,45 @@ describe("Carousel", () => {
     });
     wheel(embla.root, -WHEEL_STEP_PX);
     expect(embla.fake.scrollPrev).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
+  // A mouse wheel can count in lines, or in pages when the system scrolls a
+  // screen at a time: a page sideways is the carousel's own width.
+  test.each([
+    ["lines", WheelEvent.DOM_DELTA_LINE, WHEEL_STEP_PX / WHEEL_LINE_PX],
+    ["pages", WheelEvent.DOM_DELTA_PAGE, WHEEL_STEP_PX / 320],
+  ])(
+    "a sideways wheel that counts in %s moves one step once they add up to a step",
+    (_unit, deltaMode, step) => {
+      vi.useFakeTimers();
+      const { embla } = setup();
+      Object.defineProperty(embla.root, "clientWidth", { value: 320 });
+
+      const short = wheel(embla.root, step * 0.75, 0, deltaMode);
+      expect(short.defaultPrevented).toBe(true);
+      expect(embla.fake.scrollNext).not.toHaveBeenCalled();
+
+      act(() => {
+        vi.advanceTimersByTime(WHEEL_REST_MS);
+      });
+      wheel(embla.root, step, 0, deltaMode);
+      expect(embla.fake.scrollNext).toHaveBeenCalledExactlyOnceWith(false);
+
+      act(() => {
+        vi.advanceTimersByTime(WHEEL_REST_MS);
+      });
+      wheel(embla.root, -step, 0, deltaMode);
+      expect(embla.fake.scrollPrev).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  );
+
+  test("one notch of a wheel that scrolls a page at a time moves one step", () => {
+    const { embla } = setup();
+    Object.defineProperty(embla.root, "clientWidth", { value: 320 });
+
+    wheel(embla.root, 1, 0, WheelEvent.DOM_DELTA_PAGE);
+
+    expect(embla.fake.scrollNext).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   test("a vertical scroll over it is left to the page", () => {

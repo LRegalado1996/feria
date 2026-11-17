@@ -26,6 +26,12 @@ type CarouselPlugins = Parameters<typeof useEmblaCarousel>[1];
 export const WHEEL_STEP_PX = 40;
 
 /**
+ * The pixels a line stands for, for a wheel that counts in lines
+ * (`deltaMode`): a trackpad counts pixels, some mouse wheels lines.
+ */
+export const WHEEL_LINE_PX = 16;
+
+/**
  * How long a swipe's wheel events must stop for the next swipe to count:
  * a trackpad keeps sending them, slower and slower, after the fingers lift.
  */
@@ -60,6 +66,23 @@ const AT_REST: CarouselPosition = {
 };
 
 const CarouselContext = createContext<CarouselContextValue | null>(null);
+
+/**
+ * How far a wheel event goes sideways, in pixels whatever it counts in: a
+ * wheel set to scroll a screen at a time counts pages, and a page sideways
+ * is the width of the window the slides move in.
+ */
+function sidewaysPixels(event: WheelEvent, viewport: HTMLElement): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return event.deltaX * WHEEL_LINE_PX;
+  }
+
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+    return event.deltaX * viewport.clientWidth;
+  }
+
+  return event.deltaX;
+}
 
 /** The carousel around a control (a button, a dot): where it is, and how to move it. */
 function useCarousel(): CarouselContextValue {
@@ -157,7 +180,7 @@ function Carousel({
         return;
       }
 
-      travelled += event.deltaX;
+      travelled += sidewaysPixels(event, root);
 
       if (Math.abs(travelled) >= WHEEL_STEP_PX) {
         stepped = true;
