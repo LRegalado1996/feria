@@ -152,7 +152,10 @@ function setup({
 
 describe("useImageUpload", () => {
   test("prepares the photo, asks for a token for it, then sends it with its progress", async () => {
-    const { file, onUploaded, result, tokenRequests, upload } = setup();
+    const prepared = makePrepared();
+    const { file, onUploaded, result, tokenRequests, upload } = setup({
+      prepared,
+    });
 
     act(() => {
       result.current.start(file);
@@ -165,9 +168,10 @@ describe("useImageUpload", () => {
       purpose: "cover",
       size: 900_000,
     });
+    // The prepared photo, shrunk and stripped, never the file as chosen.
     expect(mocks.put).toHaveBeenCalledExactlyOnceWith(
       PATHNAME,
-      expect.any(Blob),
+      prepared.blob,
       expect.objectContaining({
         access: "public",
         contentType: "image/webp",
