@@ -39,6 +39,7 @@ const services = vi.hoisted(() => ({
   ]),
   renameCategory: vi.fn(async () => ({ id: 13, slug: "collares" })),
   reorderCategories: vi.fn(async () => ({ ids: [3, 1, 2] })),
+  updateCategoryPage: vi.fn(async () => ({ id: 5, parentId: 6 })),
   withAdmin: vi.fn(
     async (
       _db: unknown,
@@ -54,6 +55,7 @@ vi.mock("@/server/services/category", () => ({
   listStoreCategories: services.listStoreCategories,
   renameCategory: services.renameCategory,
   reorderCategories: services.reorderCategories,
+  updateCategoryPage: services.updateCategoryPage,
 }));
 
 vi.mock("@/server/services/access", () => ({
@@ -77,6 +79,21 @@ vi.mock("@/server/better-auth", () => ({
 
 const STORE = { id: 7 };
 const USER_ID = "test-user-id";
+
+/** A category's page as the admin's form sends it: every text valid. */
+function makePageInput(overrides: Record<string, unknown> = {}) {
+  return {
+    coverAltEn: "",
+    coverAltEs: " Anillo sello ",
+    id: "5",
+    parentId: 6,
+    seoDescriptionEn: "  ",
+    seoDescriptionEs: "Anillos de la feria",
+    seoTitleEn: "Rings",
+    seoTitleEs: "",
+    ...overrides,
+  };
+}
 
 /**
  * A signed-in admin working on the store (or a login the database no longer
@@ -102,6 +119,8 @@ function setup({
       await call(categoryRouter.rename, input as never, options),
     reorder: async (input: unknown) =>
       await call(categoryRouter.reorder, input as never, options),
+    updatePage: async (input: unknown) =>
+      await call(categoryRouter.updatePage, input as never, options),
   };
   const run = async (name: keyof typeof procedures, input: unknown) =>
     await procedures[name](input);
@@ -179,6 +198,36 @@ describe("category router", () => {
       storeId: 7,
       values: { nameEn: "Necklaces", nameEs: "Collares" },
     });
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  test("sets a category's page by id within the store, blank texts as none, then drops its cached catalog", async () => {
+    const { db, run } = setup();
+
+    await expect(run("updatePage", makePageInput())).resolves.toEqual({
+      id: 5,
+      parentId: 6,
+    });
+
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID,
+      expect.any(Function)
+    );
+    expect(services.updateCategoryPage).toHaveBeenCalledExactlyOnceWith(TX, {
+      storeId: 7,
+      values: {
+        coverAltEn: null,
+        coverAltEs: "Anillo sello",
+        id: 5,
+        parentId: 6,
+        seoDescriptionEn: null,
+        seoDescriptionEs: "Anillos de la feria",
+        seoTitleEn: "Rings",
+        seoTitleEs: null,
+      },
+    });
+    // A group changes the header, the pages' addresses and their texts.
     expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
@@ -261,6 +310,8 @@ describe("category router", () => {
     ["create", { nameEn: null, nameEs: "  " }],
     ["reorder", { ids: [1, 1] }],
     ["delete", { id: 5, moveToId: "6" }],
+    // Valid but for the group sent as text, so only its rule refuses it.
+    ["updatePage", makePageInput({ parentId: "6" })],
   ] as const)(
     "refuses invalid %s input before reading the login",
     async (name, input) => {

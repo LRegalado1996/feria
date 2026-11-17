@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  check,
   integer,
   pgEnum,
   pgTable,
@@ -9,8 +10,10 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { COVER_ALT_MAX_LENGTH } from "@/lib/schemas/catalog";
 import { STORE_CURRENCIES } from "@/lib/schemas/store";
 
+import { coverChecks } from "./cover";
 import { localeEnum } from "./locale";
 
 export const currencyCodeEnum = pgEnum("currency_code", STORE_CURRENCIES);
@@ -36,6 +39,14 @@ export const store = pgTable(
     instagramUrl: text(),
     tiktokUrl: text(),
     currencyCode: currencyCodeEnum().notNull(),
+    // The cover of the page of all the store's articles (FER-043), as a
+    // category holds its own: a computer image and an optional phone image.
+    catalogCoverUrl: text(),
+    catalogCoverWidth: integer(),
+    catalogCoverHeight: integer(),
+    catalogCoverPhoneUrl: text(),
+    catalogCoverPhoneWidth: integer(),
+    catalogCoverPhoneHeight: integer(),
     createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
@@ -44,10 +55,22 @@ export const store = pgTable(
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
   },
-  () => [
+  (table) => [
     // Every row indexes the same constant, so a second row is a unique
     // violation: the database refuses it, whatever writes it.
     uniqueIndex("store_single_row").on(sql`(true)`),
+    ...coverChecks("store_catalog", {
+      computer: {
+        height: table.catalogCoverHeight,
+        url: table.catalogCoverUrl,
+        width: table.catalogCoverWidth,
+      },
+      phone: {
+        height: table.catalogCoverPhoneHeight,
+        url: table.catalogCoverPhoneUrl,
+        width: table.catalogCoverPhoneWidth,
+      },
+    }),
   ]
 );
 
@@ -61,6 +84,8 @@ export const storeTranslation = pgTable(
     locale: localeEnum().notNull(),
     tagline: text().notNull(),
     description: text().notNull(),
+    // What the catalog's cover shows (FER-043).
+    catalogCoverAlt: text(),
     createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
@@ -73,5 +98,9 @@ export const storeTranslation = pgTable(
     // One text per language. Its index leads with `storeId`, so it is also
     // the index the foreign key needs: a second one would only cost writes.
     unique().on(table.storeId, table.locale),
+    check(
+      "store_translation_catalog_cover_alt_length",
+      sql`char_length(${table.catalogCoverAlt}) <= ${sql.raw(String(COVER_ALT_MAX_LENGTH))}`
+    ),
   ]
 );

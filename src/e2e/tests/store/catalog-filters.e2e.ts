@@ -52,10 +52,15 @@ async function setup({ db }: { db: DbFixture["db"] }) {
 
 /** The titles the grid shows, the ones the open panel hides included. */
 function titles(page: Page): Locator {
-  return page.getByTestId("store-catalog-grid").getByRole("heading", {
-    includeHidden: true,
-    level: 2,
-  });
+  // The page on screen: a catalog page left behind stays mounted, hidden
+  // (docs/agents/nextjs.md § Navigation).
+  return page
+    .getByTestId("store-catalog-grid")
+    .filter({ visible: true })
+    .getByRole("heading", {
+      includeHidden: true,
+      level: 2,
+    });
 }
 
 /**
@@ -76,12 +81,12 @@ async function openByKeyboard(trigger: Locator, panel: Locator): Promise<void> {
 }
 
 test.describe("Catalog filter panel", () => {
-  test("works by keyboard: opens from Filtrar, applies a category and stays open, then Escape hands focus back", async ({
+  test("works by keyboard: opens from Filtrar, applies a category, which leads to its page, and Escape hands focus back", async ({
     db,
     page,
   }) => {
     const { bracelets, tag } = await setup({ db });
-    await page.goto(`/products?category=${bracelets.slug}&q=${tag}`);
+    await page.goto(`/${bracelets.slug}?q=${tag}`);
     await expect(titles(page)).toHaveText([
       "Pulsera dorada",
       "Pulsera plateada",
@@ -108,17 +113,22 @@ test.describe("Catalog filter panel", () => {
     await expect(
       panel.getByRole("link", { name: `Pulseras ${tag}` })
     ).toHaveAttribute("aria-current", "true");
-
     await page.keyboard.press("Enter");
 
-    // The address and the grid follow; the panel stays open on the choice.
-    await expect(page).toHaveURL(new RegExp(`/products\\?q=${tag}$`, "u"));
+    // A category is a page of its own (FER-043): the choice leads to all
+    // articles' page, the search kept, and the panel closes with the page it
+    // was on.
+    await expect(page).toHaveURL(new RegExp(`/productos\\?q=${tag}$`, "u"));
     await expect(titles(page)).toHaveText([
       "Collar dorado",
       "Pulsera dorada",
       "Pulsera plateada",
     ]);
-    await expect(panel).toBeVisible();
+    await expect(panel).toBeHidden();
+
+    // On the new page the panel opens again by keyboard, all marked.
+    await expect(trigger).toHaveAccessibleName("Filtrar");
+    await openByKeyboard(trigger, panel);
     await expect(all).toHaveAttribute("aria-current", "true");
     await expect(
       panel.getByRole("link", { name: `Pulseras ${tag}` })
@@ -127,7 +137,6 @@ test.describe("Catalog filter panel", () => {
     await page.keyboard.press("Escape");
     await expectDialogRemoved(page, panel);
     await expect(trigger).toBeFocused();
-    await expect(trigger).toHaveAccessibleName("Filtrar");
   });
 
   test("on a computer it is a drawer along the left edge, full height", async ({
@@ -135,7 +144,7 @@ test.describe("Catalog filter panel", () => {
     page,
   }) => {
     const { tag } = await setup({ db });
-    await page.goto(`/products?q=${tag}`);
+    await page.goto(`/productos?q=${tag}`);
     const panel = page.getByRole("dialog", { name: "Filtrar" });
 
     await clickUntilVisible(
@@ -165,7 +174,7 @@ test.describe("Catalog filter panel", () => {
       page,
     }) => {
       const { tag } = await setup({ db });
-      await page.goto(`/products?q=${tag}`);
+      await page.goto(`/productos?q=${tag}`);
       const panel = page.getByRole("dialog", { name: "Filtrar" });
 
       await clickUntilVisible(

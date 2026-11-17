@@ -1,4 +1,5 @@
 import type { Dictionary } from "@/content/es";
+import { articlePath } from "@/lib/catalog/paths";
 import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
@@ -9,7 +10,7 @@ import type { IndexableArticle, IndexableStore } from "@/server/services/seo";
 
 export interface StoreLlmsInput {
   articles: Pick<IndexableArticle, "priceAmount" | "slug" | "titles">[];
-  categories: { name: string; slug: string }[];
+  categories: { name: string; path: string }[];
   copy: Dictionary["seo"]["llms"];
   currencyCode: Currency;
   locale: Locale;
@@ -32,7 +33,7 @@ function section(title: string, lines: string[]) {
 /**
  * The store's `llms.txt` (llmstxt.org) in `locale`: the store's name as the
  * one H1, its tagline as the blockquote summary, its description, then
- * links to its categories and to every published article with its price.
+ * links to its categories' and groups' pages (FER-043) and to every published article with its price.
  * Generated from the same rows as the pages, so it never drifts from them.
  */
 export function buildStoreLlms({
@@ -59,12 +60,7 @@ export function buildStoreLlms({
       copy.categories,
       categories.map(
         (entry) =>
-          `- [${linkText(entry.name)}](${url(
-            catalogHref(locale, {
-              ...EMPTY_CATALOG_QUERY,
-              category: entry.slug,
-            })
-          )})`
+          `- [${linkText(entry.name)}](${url(localizePath(entry.path, locale))})`
       )
     ),
     ...section(
@@ -72,7 +68,7 @@ export function buildStoreLlms({
       articles.map((article) => {
         const title = pickTranslation(article.titles, locale)?.title ?? "";
         const link = `- [${linkText(title)}](${url(
-          localizePath(`/products/${article.slug}`, locale)
+          localizePath(articlePath(article.slug), locale)
         )})`;
 
         return article.priceAmount === null

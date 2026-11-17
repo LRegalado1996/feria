@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, test, vi } from "vitest";
 
+import { makeStoreCategory } from "@/test/factories/store-category";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
@@ -16,14 +17,13 @@ vi.mock("@/lib/orpc/client", async () => {
 const KEY = storeCategoriesKey();
 
 function makeRow(id: number, position: number) {
-  return {
+  return makeStoreCategory({
     id,
-    nameEn: null,
     nameEs: `Categoría ${id}`,
     position,
     productCount: id,
     slug: `categoria-${id}`,
-  };
+  });
 }
 
 const LIST = [makeRow(1, 0), makeRow(2, 1), makeRow(3, 2)];

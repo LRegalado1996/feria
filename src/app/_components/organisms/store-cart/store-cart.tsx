@@ -11,6 +11,7 @@ import {
   StoreCartLine,
 } from "@/app/_components/molecules/store-cart-line";
 import { StoreCheckoutForm } from "@/app/_components/molecules/store-checkout-form";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import { type CartProduct, useCart, useCartProducts } from "@/lib/hooks/cart";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
@@ -137,7 +138,7 @@ function CartBody({
     ids: items.map((item) => item.productId),
     locale,
   });
-  const catalogHref = localizePath("/products", locale);
+  const catalogHref = localizePath(ALL_ARTICLES_PATH, locale);
   // Taken: the ordered articles leave the cart while the order's page
   // loads, which must not read as "your cart is empty". A transition, so the
   // page shown again with the back button starts over, never "sending".

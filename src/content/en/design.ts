@@ -34,6 +34,7 @@ export const design: Dictionary["design"] = {
       bubbles: "Bubble guns",
       chains: "Chains",
       earrings: "Earrings",
+      jewelry: "Jewelry",
       rings: "Rings",
     },
     chips: {

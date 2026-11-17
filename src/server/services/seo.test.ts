@@ -182,26 +182,55 @@ describe("listIndexableArticles", () => {
 });
 
 describe("listIndexableCategories", () => {
-  test("reads the store's categories with a published article, in their order, by name", async () => {
+  test("reads the store's categories with a published article, in them or in a category of theirs, in their order, by name, at their pages", async () => {
     const { db } = setup();
+    const at = (day: number) => new Date(Date.UTC(2026, 10, day, 12));
     db.$["select.orderBy"].mockResolvedValue([
-      { id: 1, slug: "anillos" },
-      { id: 2, slug: "aros" },
-      { id: 3, slug: "sin-nombre" },
+      { id: 1, parentSlug: "bijouterie", slug: "anillos", updatedAt: at(10) },
+      { id: 2, parentSlug: null, slug: "aros", updatedAt: at(12) },
+      { id: 3, parentSlug: null, slug: "sin-nombre", updatedAt: at(11) },
     ]);
     answerTexts(db, [
-      { categoryId: 1, locale: "es", name: "Anillos" },
-      { categoryId: 1, locale: "en", name: "Rings" },
-      { categoryId: 2, locale: "es", name: "Aros" },
+      { categoryId: 1, locale: "es", name: "Anillos", updatedAt: at(10) },
+      { categoryId: 1, locale: "en", name: "Rings", updatedAt: at(14) },
+      { categoryId: 2, locale: "es", name: "Aros", updatedAt: at(9) },
     ]);
 
-    // In the asked language, else the one it has, else by its slug.
+    // In the asked language, else the one it has, else by its slug; changed
+    // when its row or its texts in either language last were.
     await expect(
       listIndexableCategories(db as never, { locale: "en", storeId: STORE_ID })
     ).resolves.toEqual([
-      { name: "Rings", slug: "anillos" },
-      { name: "Aros", slug: "aros" },
-      { name: "sin-nombre", slug: "sin-nombre" },
+      {
+        name: "Rings",
+        path: "/bijouterie/anillos",
+        slug: "anillos",
+        updatedAt: at(14),
+      },
+      { name: "Aros", path: "/aros", slug: "aros", updatedAt: at(12) },
+      {
+        name: "sin-nombre",
+        path: "/sin-nombre",
+        slug: "sin-nombre",
+        updatedAt: at(11),
+      },
+    ]);
+    expect(db.$.select.mock.calls).toEqual([
+      [
+        expect.objectContaining({
+          id: category.id,
+          slug: category.slug,
+          updatedAt: category.updatedAt,
+        }),
+      ],
+      [
+        {
+          categoryId: categoryTranslation.categoryId,
+          locale: categoryTranslation.locale,
+          name: categoryTranslation.name,
+          updatedAt: categoryTranslation.updatedAt,
+        },
+      ],
     ]);
 
     expect(db.$["select.from"].mock.calls).toEqual([
@@ -209,6 +238,11 @@ describe("listIndexableCategories", () => {
       [categoryTranslation],
     ]);
     expect(db.$["select.innerJoin"]).not.toHaveBeenCalled();
+    // Its group, of the same store, for its page's address.
+    expect(renderQuery(db.$["select.leftJoin"].mock.calls[0]?.[1])).toEqual({
+      params: [],
+      sql: '("category_group"."id" = "category"."parentId" and "category_group"."storeId" = "category"."storeId")',
+    });
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
@@ -216,7 +250,9 @@ describe("listIndexableCategories", () => {
         params: [STORE_ID, "published"],
         sql:
           '("category"."storeId" = $1 and exists (select 1 from "product" where ' +
-          '("product"."categoryId" = "category"."id" and "product"."storeId" = "category"."storeId" and "product"."status" = $2)))',
+          '("product"."storeId" = "category"."storeId" and "product"."status" = $2 and ' +
+          '("product"."categoryId" = "category"."id" or "product"."categoryId" in ' +
+          '(select "category_child"."id" from "category" as "category_child" where "category_child"."parentId" = "category"."id")))))',
       },
       {
         params: [1, 2, 3],

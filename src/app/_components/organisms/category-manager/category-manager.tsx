@@ -26,6 +26,7 @@ import { ORPCError } from "@orpc/client";
 import {
   ArrowDown,
   ArrowUp,
+  FileText,
   GripVertical,
   Pencil,
   Plus,
@@ -42,6 +43,7 @@ import {
   CategoryForm,
   type CategoryFormResult,
 } from "@/app/_components/molecules/category-form";
+import { CategoryPageForm } from "@/app/_components/molecules/category-page-form";
 import { DeleteCategoryDialog } from "@/app/_components/molecules/delete-category-dialog";
 import { EmptyState } from "@/app/_components/molecules/empty-state";
 import { focusFirstField } from "@/lib/admin/focus-first-field";
@@ -52,6 +54,7 @@ import {
   useRenameCategory,
   useReorderCategories,
   useStoreCategories,
+  useUpdateCategoryPage,
 } from "@/lib/hooks/category";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -297,6 +300,15 @@ function CategoryList({
             <CategoryRow
               countLabel={countLabel(row.productCount)}
               first={index === 0}
+              groups={rows
+                .filter(
+                  (other) => other.parentId === null && other.id !== row.id
+                )
+                .map((other) => ({ id: other.id, name: other.nameEs }))}
+              holds={rows.filter((other) => other.parentId === row.id).length}
+              inGroup={
+                rows.find((other) => other.id === row.parentId)?.nameEs ?? null
+              }
               key={row.id}
               last={index === rows.length - 1}
               onMove={(offset) => {
@@ -313,9 +325,34 @@ function CategoryList({
   );
 }
 
+/**
+ * Where a category stands among the groups (FER-043): in one, holding some,
+ * or neither.
+ */
+function groupCaption(
+  copy: { holds: string; holdsOne: string; inGroup: string },
+  inGroup: string | null,
+  holds: number
+): string | null {
+  if (inGroup !== null) {
+    return interpolate(copy.inGroup, { group: inGroup });
+  }
+
+  if (holds === 0) {
+    return null;
+  }
+
+  return holds === 1
+    ? copy.holdsOne
+    : interpolate(copy.holds, { count: String(holds) });
+}
+
 function CategoryRow({
   countLabel,
   first,
+  groups,
+  holds,
+  inGroup,
   last,
   onMove,
   others,
@@ -324,6 +361,12 @@ function CategoryRow({
 }: {
   countLabel: string;
   first: boolean;
+  /** The groups it can join (FER-043). */
+  groups: { id: number; name: string }[];
+  /** How many categories it holds, as a group. */
+  holds: number;
+  /** The name of the group it is in, or `null`. */
+  inGroup: string | null;
   last: boolean;
   onMove: (offset: number) => void;
   others: StoreCategory[];
@@ -334,6 +377,10 @@ function CategoryRow({
   const { admin } = useDictionary();
   const copy = admin.categories;
   const rename = useRenameCategory();
+  const updatePage = useUpdateCategoryPage();
+  const groupLabel = groupCaption(copy.page, inGroup, holds);
+  const [paging, setPaging] = useState(false);
+  const pageButton = useRef<HTMLButtonElement>(null);
   const remove = useDeleteCategory();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -404,6 +451,14 @@ function CategoryRow({
               {row.nameEn ? <span lang="en">{row.nameEn} · </span> : null}
               <span data-testid="category-count">{countLabel}</span>
             </p>
+            {groupLabel ? (
+              <p
+                className="truncate text-xs font-medium"
+                data-testid="category-group"
+              >
+                {groupLabel}
+              </p>
+            ) : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
@@ -427,6 +482,26 @@ function CategoryRow({
               variant="ghost"
             >
               <ArrowDown aria-hidden="true" className="size-4" />
+            </Button>
+            <Button
+              // While a save is on its way the page stays as it is: closing and
+              // reopening it would let that save close a newer editor. Only
+              // `aria-disabled`, so the button can take focus back the moment
+              // the save ends, before the list re-renders it (design.md).
+              aria-disabled={updatePage.isPending || undefined}
+              aria-expanded={paging}
+              aria-label={interpolate(copy.page.action, { name: row.nameEs })}
+              className="aria-disabled:opacity-50"
+              onClick={() => {
+                if (!updatePage.isPending) {
+                  setPaging((was) => !was);
+                }
+              }}
+              ref={pageButton}
+              size="icon"
+              variant="ghost"
+            >
+              <FileText aria-hidden="true" className="size-4" />
             </Button>
             <Button
               aria-label={interpolate(copy.edit.action, { name: row.nameEs })}
@@ -453,6 +528,32 @@ function CategoryRow({
           </div>
         </>
       )}
+      {/* Kept while the names are being renamed: what was typed in the page
+          stays. */}
+      {paging ? (
+        <CategoryPageForm
+          category={row}
+          className="min-w-0 basis-full border-t pt-4 md:px-12"
+          groups={groups}
+          isGroup={holds > 0}
+          onCancel={() => {
+            setPaging(false);
+            pageButton.current?.focus();
+          }}
+          onSave={async (values) => {
+            try {
+              await updatePage.mutateAsync(values);
+              setPaging(false);
+              toast.success(copy.toasts.pageSaved);
+              pageButton.current?.focus();
+              return "saved";
+            } catch (error) {
+              reportError(error, { action: "Category.update_page" });
+              return "failed";
+            }
+          }}
+        />
+      ) : null}
       {deleting ? (
         <DeleteCategoryDialog
           category={{

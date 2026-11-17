@@ -8,8 +8,11 @@ import { describe, expect, test, vi } from "vitest";
 import { Toaster } from "@/app/_components/molecules/sonner";
 import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
+import type { StoreCategory } from "@/server/services/category";
+import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
+import { required } from "@/test/required";
 
 import { CategoryManager } from "./category-manager";
 
@@ -23,21 +26,15 @@ vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 function makeRow(
   id: number,
   nameEs: string,
-  overrides: Partial<{
-    nameEn: string | null;
-    position: number;
-    productCount: number;
-  }> = {}
+  overrides: Partial<StoreCategory> = {}
 ) {
-  return {
+  return makeStoreCategory({
     id,
-    nameEn: null,
     nameEs,
     position: id - 1,
-    productCount: 0,
     slug: nameEs.toLowerCase(),
     ...overrides,
-  };
+  });
 }
 
 type Row = ReturnType<typeof makeRow>;
@@ -76,7 +73,10 @@ interface SetupOptions {
   locale?: Locale;
   /** How each write ends. */
   writes?: Partial<
-    Record<"create" | "delete" | "rename" | "reorder", "fail" | "hang" | "ok">
+    Record<
+      "create" | "delete" | "rename" | "reorder" | "updatePage",
+      "fail" | "hang" | "ok"
+    >
   >;
 }
 
@@ -91,13 +91,14 @@ function setup({ list = ROWS, locale = "en", writes = {} }: SetupOptions = {}) {
     list: vi.fn((_input: unknown) => (Array.isArray(list) ? list : ROWS)),
     rename: vi.fn((_input: unknown) => ({ id: 1, slug: "collares" })),
     reorder: vi.fn((input: unknown) => input),
+    updatePage: vi.fn((_input: unknown) => ({ id: 2, parentId: 1 })),
   };
   server.use(
     Array.isArray(list)
       ? createOrpcHandler("category.list", spies.list)
       : answer("category.list", spies.list, list === "fail" ? "fail" : "hang"),
-    ...(["create", "delete", "rename", "reorder"] as const).map((name) =>
-      answer(`category.${name}`, spies[name], writes[name] ?? "ok")
+    ...(["create", "delete", "rename", "reorder", "updatePage"] as const).map(
+      (name) => answer(`category.${name}`, spies[name], writes[name] ?? "ok")
     )
   );
   const queryClient = new QueryClient({
@@ -245,6 +246,7 @@ describe("CategoryManager", () => {
       "Drag to reorder: Aros",
       "Move up: Aros",
       "Move down: Aros",
+      "Page and group: Aros",
       "Rename: Aros",
       "Delete: Aros",
     ]);
@@ -1040,5 +1042,293 @@ describe("CategoryManager", () => {
       "Arrastrar para ordenar: Pulseras",
     ]);
     expect(screen.getByRole("button", { name: "Agregar" })).toBeVisible();
+  });
+});
+const COVER = {
+  computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+  phone: null,
+};
+
+/** Collares a group holding Aros; Pulseras in none, with a cover (FER-043). */
+const GROUPED: Row[] = [
+  makeRow(1, "Collares", { nameEn: "Necklaces" }),
+  makeRow(2, "Aros", {
+    nameEn: "Earrings",
+    parentId: 1,
+    seoTitleEs: "Aros de la feria",
+  }),
+  makeRow(3, "Pulseras", { coverAltEs: "Dos esclavas", cover: COVER }),
+];
+
+describe("CategoryManager: groups and pages (FER-043)", () => {
+  test("says which group a category is in and how many a group holds", async () => {
+    const { row } = setup({ list: GROUPED });
+    await shown();
+
+    expect(
+      within(row("collares")).getByTestId("category-group")
+    ).toHaveTextContent(/^Group of 1 category$/u);
+    expect(within(row("aros")).getByTestId("category-group")).toHaveTextContent(
+      /^In Collares$/u
+    );
+    expect(within(row("pulseras")).queryByTestId("category-group")).toBeNull();
+  });
+
+  test("opens a category's page with its texts, offers only the categories in no group, and saves the group and the texts", async () => {
+    const { row, spies, user } = setup({ list: GROUPED });
+    await shown();
+    const toggle = within(row("pulseras")).getByRole("button", {
+      name: "Page and group: Pulseras",
+    });
+
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const form = screen.getByRole("form", { name: "Page of “Pulseras”" });
+    const group = within(form).getByRole("combobox", { name: "Group" });
+    // Itself and Aros (in a group already) are not groups it can join.
+    expect(
+      within(group)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["No group", "Collares"]);
+
+    await user.selectOptions(group, "Collares");
+    await user.type(
+      within(form).getByRole("textbox", {
+        name: "Title for search engines in Spanish",
+      }),
+      "Pulseras doradas"
+    );
+    await user.click(
+      within(form).getByRole("button", { name: "Save the page" })
+    );
+
+    await waitFor(() => {
+      expect(spies.updatePage).toHaveBeenCalledExactlyOnceWith({
+        coverAltEn: null,
+        coverAltEs: "Dos esclavas",
+        id: 3,
+        parentId: 1,
+        seoDescriptionEn: null,
+        seoDescriptionEs: null,
+        seoTitleEn: null,
+        seoTitleEs: "Pulseras doradas",
+      });
+    });
+    expect(await screen.findByText("Page saved.")).toBeVisible();
+    expect(screen.queryByTestId("category-page-form")).toBeNull();
+    expect(toggle).toHaveFocus();
+  });
+
+  test("keeps a group out of any other, and says why", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+
+    await user.click(
+      within(row("collares")).getByRole("button", {
+        name: "Page and group: Collares",
+      })
+    );
+
+    const group = screen.getByRole("combobox", { name: "Group" });
+    expect(group).toBeDisabled();
+    expect(group).toHaveAccessibleDescription(
+      "This category is a group: it holds categories, so it cannot join another."
+    );
+  });
+
+  test("waits for an English name before the English texts", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", {
+        name: "Page and group: Pulseras",
+      })
+    );
+
+    const form = screen.getByTestId("category-page-form");
+    expect(
+      within(form).getByRole("textbox", {
+        name: "Title for search engines in English",
+      })
+    ).toBeDisabled();
+    expect(
+      within(form).getByRole("textbox", {
+        name: "Title for search engines in Spanish",
+      })
+    ).toBeEnabled();
+    expect(form).toHaveTextContent(
+      "To write the English texts, first give the category an English name."
+    );
+  });
+
+  test("previews the cover, the phone using the computer's photo, with the note that uploading comes with FER-011", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+
+    await user.click(
+      within(row("pulseras")).getByRole("button", {
+        name: "Page and group: Pulseras",
+      })
+    );
+
+    const cover = screen.getByRole("region", { name: "Cover" });
+    expect(
+      within(cover).getByRole("img", { name: "Dos esclavas" })
+    ).toBeVisible();
+    expect(cover).toHaveTextContent("A phone shows the same photo.");
+    expect(cover).toHaveTextContent(
+      "Soon you will be able to upload and change the cover here (FER-011)."
+    );
+    expect(
+      within(cover).getByRole("textbox", {
+        name: "Cover description in Spanish",
+      })
+    ).toHaveValue("Dos esclavas");
+  });
+
+  test("says a category has no cover yet, and asks for no description of one", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Page and group: Aros" })
+    );
+
+    const cover = screen.getByRole("region", { name: "Cover" });
+    expect(cover).toHaveTextContent(
+      "This category has no cover yet: its page shows its title alone."
+    );
+    expect(within(cover).queryByRole("textbox")).toBeNull();
+    expect(
+      screen.getByRole("textbox", {
+        name: "Title for search engines in Spanish",
+      })
+    ).toHaveValue("Aros de la feria");
+  });
+
+  test("keeps what was typed when the save fails, and says so", async () => {
+    const { row, user } = setup({
+      list: GROUPED,
+      writes: { updatePage: "fail" },
+    });
+    await shown();
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Page and group: Aros" })
+    );
+    const title = screen.getByRole("textbox", {
+      name: "Description for search engines in Spanish",
+    });
+
+    await user.type(title, "Aros dorados");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not save the change. Try again."
+    );
+    expect(title).toHaveValue("Aros dorados");
+    expect(reportError).toHaveBeenCalledWith(expect.anything(), {
+      action: "Category.update_page",
+    });
+  });
+
+  test("holds the page open while its save is on its way, so the save cannot close a newer editor", async () => {
+    const { row, spies, user } = setup({
+      list: GROUPED,
+      writes: { updatePage: "hang" },
+    });
+    await shown();
+    const toggle = within(row("aros")).getByRole("button", {
+      name: "Page and group: Aros",
+    });
+    await user.click(toggle);
+
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(spies.updatePage).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ id: 2 })
+      );
+    });
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("category-page-form")).toBeVisible();
+    // Still focusable: the save's end hands focus back to it before the
+    // list re-renders it, and a disabled button refuses focus.
+    act(() => {
+      toggle.focus();
+    });
+    expect(toggle).toHaveFocus();
+  });
+
+  test("keeps what was typed in the page while the category is renamed and the rename cancelled", async () => {
+    const { row, user } = setup({ list: GROUPED });
+    await shown();
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Page and group: Aros" })
+    );
+    const description = screen.getByRole("textbox", {
+      name: "Description for search engines in Spanish",
+    });
+    await user.type(description, "Aros dorados");
+
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    );
+    // The rename's own Cancel, not the page's.
+    await user.click(
+      required(
+        within(row("aros"))
+          .getAllByRole("button", { name: "Cancel" })
+          .find((button) => !button.closest('[data-slot="category-page-form"]'))
+      )
+    );
+    expect(
+      within(row("aros")).getByRole("button", { name: "Rename: Aros" })
+    ).toBeVisible();
+
+    expect(
+      screen.getByRole("textbox", {
+        name: "Description for search engines in Spanish",
+      })
+    ).toHaveValue("Aros dorados");
+  });
+
+  test("closes the page without saving, handing focus back to its button", async () => {
+    const { row, spies, user } = setup({ list: GROUPED });
+    await shown();
+    const toggle = within(row("aros")).getByRole("button", {
+      name: "Page and group: Aros",
+    });
+
+    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByTestId("category-page-form")).toBeNull();
+    expect(toggle).toHaveFocus();
+    expect(spies.updatePage).not.toHaveBeenCalled();
+  });
+
+  test("in Spanish, names the page's controls in Spanish", async () => {
+    const { row, user } = setup({ list: GROUPED, locale: "es" });
+    await shown();
+
+    expect(within(row("aros")).getByTestId("category-group")).toHaveTextContent(
+      /^En Collares$/u
+    );
+    await user.click(
+      within(row("aros")).getByRole("button", { name: "Página y grupo: Aros" })
+    );
+
+    expect(
+      screen.getByRole("form", { name: "Página de «Aros»" })
+    ).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Grupo" })).toHaveValue("1");
+    expect(
+      screen.getByRole("button", { name: "Guardar la página" })
+    ).toBeVisible();
   });
 });

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { DatabaseClient } from "@/server/db";
 import {
@@ -6,6 +6,8 @@ import {
   categoryTranslation,
   productImage,
   productImageTranslation,
+  store,
+  storeTranslation,
 } from "@/server/db/schema";
 import {
   createAttribute,
@@ -13,10 +15,32 @@ import {
   setProductAttributeValues,
 } from "@/server/services/attribute";
 import { createProduct, publishProduct } from "@/server/services/catalog";
+import { lockStoreCategories } from "@/server/services/category";
+
+interface SeedImage {
+  /** A photo in `public/seed/`. */
+  file: string;
+  height: number;
+  width: number;
+}
+
+/**
+ * A page's cover: one alt text for both images, so the phone's is the
+ * computer's photo cropped for a phone (`<photo>-phone.jpg`), never another
+ * picture; without one a phone shows the computer's.
+ */
+interface SeedCover {
+  alt: { en: string; es: string };
+  computer: SeedImage;
+  phone: SeedImage | null;
+}
 
 interface SeedCategory {
+  cover: SeedCover;
   en: string;
   es: string;
+  /** The slug of the group it is in (FER-043), listed before it. */
+  group?: string;
   slug: string;
 }
 
@@ -55,14 +79,130 @@ export const SEED_COLORS = [
   { en: "Blue", es: "Azul", slug: "azul", swatch: "#2980b9" },
 ];
 
-/** The launch categories of Lucas's store, in their order (FER-010). */
+/**
+ * The launch categories of Lucas's store, in their order (FER-010): the
+ * Bijouterie group first, with its four categories, then the bubble guns,
+ * which are in no group (Lucas, 2026-11-17, FER-043). Each with the cover
+ * of its page, from the photos in `public/seed/`, until uploads exist
+ * (FER-011).
+ */
 export const SEED_CATEGORIES: SeedCategory[] = [
-  { en: "Bubble guns", es: "Burbujeros", slug: "burbujeros" },
-  { en: "Chains", es: "Cadenas", slug: "cadenas" },
-  { en: "Rings", es: "Anillos", slug: "anillos" },
-  { en: "Earrings", es: "Aros", slug: "aros" },
-  { en: "Bracelets", es: "Pulseras", slug: "pulseras" },
+  {
+    cover: {
+      alt: {
+        en: "Silver chain with a bright pendant",
+        es: "Cadena de plata con dije brillante",
+      },
+      computer: { file: "necklace-2.jpg", height: 800, width: 1200 },
+      phone: { file: "necklace-2-phone.jpg", height: 800, width: 800 },
+    },
+    en: "Jewelry",
+    es: "Bijouterie",
+    slug: "bijouterie",
+  },
+  {
+    cover: {
+      alt: {
+        en: "Silver chain with heart charms",
+        es: "Cadena de plata con dijes de corazón",
+      },
+      computer: { file: "necklace-1.jpg", height: 1026, width: 1200 },
+      phone: null,
+    },
+    en: "Chains",
+    es: "Cadenas",
+    group: "bijouterie",
+    slug: "cadenas",
+  },
+  {
+    cover: {
+      alt: { en: "Gold signet ring", es: "Anillo sello dorado" },
+      computer: { file: "ring-2.jpg", height: 800, width: 1200 },
+      phone: { file: "ring-2-phone.jpg", height: 800, width: 800 },
+    },
+    en: "Rings",
+    es: "Anillos",
+    group: "bijouterie",
+    slug: "anillos",
+  },
+  {
+    cover: {
+      alt: { en: "Crystal wreath earrings", es: "Aros de cristales" },
+      computer: { file: "earrings-2.jpg", height: 1200, width: 1200 },
+      phone: null,
+    },
+    en: "Earrings",
+    es: "Aros",
+    group: "bijouterie",
+    slug: "aros",
+  },
+  {
+    cover: {
+      alt: { en: "Two gold bangles", es: "Dos esclavas doradas" },
+      computer: { file: "bracelet-2.jpg", height: 1200, width: 1200 },
+      phone: null,
+    },
+    en: "Bracelets",
+    es: "Pulseras",
+    group: "bijouterie",
+    slug: "pulseras",
+  },
+  {
+    cover: {
+      alt: {
+        en: "Clear bubble gun with bubbles behind it",
+        es: "Burbujero transparente con burbujas detrás",
+      },
+      computer: { file: "bubble-gun-1.jpg", height: 899, width: 1199 },
+      phone: null,
+    },
+    en: "Bubble guns",
+    es: "Burbujeros",
+    slug: "burbujeros",
+  },
 ];
+
+/** The cover of the page of all articles, on the store's row (FER-043). */
+export const SEED_ALL_ARTICLES_COVER: SeedCover = {
+  alt: {
+    en: "Gold ring with pink stones",
+    es: "Anillo dorado con piedras rosadas",
+  },
+  computer: { file: "ring-3.jpg", height: 800, width: 1200 },
+  phone: { file: "ring-3-phone.jpg", height: 800, width: 800 },
+};
+
+/** A cover's columns, as the `category` and `store` tables name them. */
+function coverColumns(cover: SeedCover) {
+  return {
+    computer: {
+      height: cover.computer.height,
+      url: `/seed/${cover.computer.file}`,
+      width: cover.computer.width,
+    },
+    phone: cover.phone
+      ? {
+          height: cover.phone.height,
+          url: `/seed/${cover.phone.file}`,
+          width: cover.phone.width,
+        }
+      : { height: null, url: null, width: null },
+  };
+}
+
+/** A category's cover as its row's columns. */
+function categoryCover(cover: SeedCover) {
+  const { computer, phone } = coverColumns(cover);
+
+  return {
+    coverHeight: computer.height,
+    coverPhoneHeight: phone.height,
+    coverPhoneUrl: phone.url,
+    coverPhoneWidth: phone.width,
+    coverUrl: computer.url,
+    coverWidth: computer.width,
+  };
+}
 
 /**
  * Sample articles with the photos in `public/seed/` (credits in
@@ -380,4 +520,150 @@ export async function seedCatalog(
   }
 
   return SEED_ARTICLES.length;
+}
+
+/**
+ * Lucas's catalog pages (FER-043) on a store seeded before or after them:
+ * the Bijouterie group, first in the list, when the store has none and has
+ * one of its categories; each seeded category not yet in a group put in
+ * its own; and the covers and their alt texts that are still empty, the
+ * store's for the page of all articles included. Whatever the store already
+ * has is left alone, so it is safe to run again. Returns what it changed.
+ */
+export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
+  // Under the admin's category lock: a group moved while this reads the
+  // groups could otherwise take a category into a group inside a group.
+  await lockStoreCategories(tx, storeId);
+  const changes = { covers: 0, grouped: 0, groups: 0 };
+  const rows = async () =>
+    await tx
+      .select({
+        coverUrl: category.coverUrl,
+        id: category.id,
+        parentId: category.parentId,
+        slug: category.slug,
+      })
+      .from(category)
+      .where(eq(category.storeId, storeId));
+  const present = new Set((await rows()).map((row) => row.slug));
+  const groups = new Set(
+    SEED_CATEGORIES.flatMap((entry) => (entry.group ? [entry.group] : []))
+  );
+
+  for (const seedGroup of SEED_CATEGORIES.filter((entry) =>
+    groups.has(entry.slug)
+  )) {
+    const holdsOne = SEED_CATEGORIES.some(
+      (entry) => entry.group === seedGroup.slug && present.has(entry.slug)
+    );
+
+    if (!present.has(seedGroup.slug) && holdsOne) {
+      // First in the list: every other category moves one place down.
+      await tx
+        .update(category)
+        .set({ position: sql`${category.position} + 1` })
+        .where(eq(category.storeId, storeId));
+      const [row] = await tx
+        .insert(category)
+        .values({ position: 0, slug: seedGroup.slug, storeId })
+        .returning({ id: category.id });
+
+      if (!row) {
+        throw new Error("Inserting a category returned no row");
+      }
+
+      await tx.insert(categoryTranslation).values([
+        { categoryId: row.id, locale: "es", name: seedGroup.es },
+        { categoryId: row.id, locale: "en", name: seedGroup.en },
+      ]);
+      changes.groups += 1;
+    }
+  }
+
+  const existing = await rows();
+  const idOf = new Map(existing.map((row) => [row.slug, row.id]));
+  const isGroup = new Set(existing.map((row) => row.parentId));
+  // A group in a group itself would make three levels: such a group takes
+  // no category, one level only, as the service holds it.
+  const inAGroup = new Set(
+    existing.flatMap((row) => (row.parentId === null ? [] : [row.id]))
+  );
+
+  for (const seedCategory of SEED_CATEGORIES) {
+    const row = existing.find((entry) => entry.slug === seedCategory.slug);
+    const groupId = seedCategory.group ? idOf.get(seedCategory.group) : null;
+
+    if (!row) {
+      continue;
+    }
+
+    if (
+      groupId !== undefined &&
+      groupId !== null &&
+      !inAGroup.has(groupId) &&
+      row.parentId === null &&
+      !isGroup.has(row.id)
+    ) {
+      await tx
+        .update(category)
+        .set({ parentId: groupId })
+        .where(and(eq(category.id, row.id), isNull(category.parentId)));
+      changes.grouped += 1;
+    }
+
+    if (row.coverUrl === null) {
+      await tx
+        .update(category)
+        .set(categoryCover(seedCategory.cover))
+        .where(and(eq(category.id, row.id), isNull(category.coverUrl)));
+
+      for (const locale of ["es", "en"] as const) {
+        await tx
+          .update(categoryTranslation)
+          .set({ coverAlt: seedCategory.cover.alt[locale] })
+          .where(
+            and(
+              eq(categoryTranslation.categoryId, row.id),
+              eq(categoryTranslation.locale, locale),
+              isNull(categoryTranslation.coverAlt)
+            )
+          );
+      }
+
+      changes.covers += 1;
+    }
+  }
+
+  const { computer, phone } = coverColumns(SEED_ALL_ARTICLES_COVER);
+  const covered = await tx
+    .update(store)
+    .set({
+      catalogCoverHeight: computer.height,
+      catalogCoverPhoneHeight: phone.height,
+      catalogCoverPhoneUrl: phone.url,
+      catalogCoverPhoneWidth: phone.width,
+      catalogCoverUrl: computer.url,
+      catalogCoverWidth: computer.width,
+    })
+    .where(and(eq(store.id, storeId), isNull(store.catalogCoverUrl)))
+    .returning({ id: store.id });
+
+  if (covered.length > 0) {
+    for (const locale of ["es", "en"] as const) {
+      await tx
+        .update(storeTranslation)
+        .set({ catalogCoverAlt: SEED_ALL_ARTICLES_COVER.alt[locale] })
+        .where(
+          and(
+            eq(storeTranslation.storeId, storeId),
+            eq(storeTranslation.locale, locale),
+            isNull(storeTranslation.catalogCoverAlt)
+          )
+        );
+    }
+
+    changes.covers += 1;
+  }
+
+  return changes;
 }

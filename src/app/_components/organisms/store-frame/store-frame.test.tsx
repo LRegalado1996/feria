@@ -1,6 +1,7 @@
 import { act, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { NavigationCategory } from "@/lib/catalog/navigation";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import { type StoreAnnouncement, StoreFrame } from "./store-frame";
@@ -35,7 +36,7 @@ async function setup({
   categories,
 }: {
   announcement?: Promise<StoreAnnouncement | null>;
-  categories?: Promise<{ lang: string; name: string; slug: string }[]>;
+  categories?: Promise<readonly NavigationCategory[]>;
 } = {}) {
   // Awaited: a render that suspends only resumes inside an awaited act.
   await act(async () => {
@@ -44,7 +45,7 @@ async function setup({
         announcement={announcement}
         categories={categories}
         copy={DICTIONARIES.es.storefront.shell}
-        current="catalog"
+        currentPath="/productos"
         locale="es"
       >
         <main>Contenido</main>
@@ -113,22 +114,29 @@ describe("StoreFrame", () => {
   });
 
   test("hands the header its categories and the page it is on", async () => {
-    const categories =
-      deferred<{ lang: string; name: string; slug: string }[]>();
+    const categories = deferred<readonly NavigationCategory[]>();
     await setup({ categories: categories.promise });
 
-    await categories.settle([{ lang: "es", name: "Anillos", slug: "anillos" }]);
+    await categories.settle([
+      {
+        id: 1,
+        lang: "es",
+        name: "Anillos",
+        parentId: null,
+        path: "/anillos",
+        slug: "anillos",
+      },
+    ]);
 
     const nav = within(
       screen.getByRole("navigation", { name: "Secciones de la tienda" })
     );
     expect(nav.getByRole("link", { name: "Anillos" })).toHaveAttribute(
       "href",
-      "/products?category=anillos"
+      "/anillos"
     );
-    expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
-      "aria-current",
-      "page"
-    );
+    expect(
+      nav.getByRole("link", { name: "Todos los artículos" })
+    ).toHaveAttribute("aria-current", "page");
   });
 });

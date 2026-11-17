@@ -7,7 +7,11 @@ import {
   createAttributeFormSchema,
   createAttributeSchema,
   createAttributeValueSchema,
+  CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
+  CATEGORY_SEO_TITLE_MAX_LENGTH,
+  COVER_ALT_MAX_LENGTH,
   createCategoryFormSchema,
+  createCategoryPageFormSchema,
   createCategorySchema,
   createProductSchema,
   deleteAttributeSchema,
@@ -25,6 +29,7 @@ import {
   setProductAttributeValuesSchema,
   SWATCH_COLOR_PATTERN,
   updateAttributeValueSchema,
+  updateCategoryPageSchema,
 } from ".";
 
 function makeTranslation(overrides: Record<string, unknown> = {}) {
@@ -433,6 +438,117 @@ describe("createCategoryFormSchema", () => {
       nameEn: "",
       nameEs: "Collares",
     });
+  });
+});
+
+function makePageInput(overrides: Record<string, unknown> = {}) {
+  return {
+    coverAltEn: "",
+    coverAltEs: "",
+    id: 5,
+    parentId: null,
+    seoDescriptionEn: "",
+    seoDescriptionEs: "",
+    seoTitleEn: "",
+    seoTitleEs: "",
+    ...overrides,
+  };
+}
+
+describe("updateCategoryPageSchema", () => {
+  test("reads blank texts as none, so the page writes its own", () => {
+    expect(
+      updateCategoryPageSchema.parse(
+        makePageInput({ seoTitleEn: "   ", seoTitleEs: " Anillos dorados " })
+      )
+    ).toEqual({
+      coverAltEn: null,
+      coverAltEs: null,
+      id: 5,
+      parentId: null,
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: "Anillos dorados",
+    });
+  });
+
+  test.each([
+    ["seoTitleEs", CATEGORY_SEO_TITLE_MAX_LENGTH],
+    ["seoTitleEn", CATEGORY_SEO_TITLE_MAX_LENGTH],
+    ["seoDescriptionEs", CATEGORY_SEO_DESCRIPTION_MAX_LENGTH],
+    ["seoDescriptionEn", CATEGORY_SEO_DESCRIPTION_MAX_LENGTH],
+    ["coverAltEs", COVER_ALT_MAX_LENGTH],
+    ["coverAltEn", COVER_ALT_MAX_LENGTH],
+  ])("takes %s up to %i characters and refuses one more", (field, max) => {
+    expect(
+      updateCategoryPageSchema.safeParse(
+        makePageInput({ [field]: "x".repeat(max) })
+      ).success
+    ).toBe(true);
+    expect(
+      updateCategoryPageSchema.safeParse(
+        makePageInput({ [field]: "x".repeat(max + 1) })
+      ).success
+    ).toBe(false);
+  });
+
+  test.each([
+    ["a group sent as text", { parentId: "6" }],
+    ["group 0", { parentId: 0 }],
+    ["a missing group", { parentId: undefined }],
+  ])("refuses %s", (_case, overrides) => {
+    expect(
+      updateCategoryPageSchema.safeParse(makePageInput(overrides)).success
+    ).toBe(false);
+  });
+
+  test("takes a group by its id", () => {
+    expect(
+      updateCategoryPageSchema.parse(makePageInput({ parentId: 6 })).parentId
+    ).toBe(6);
+  });
+});
+
+describe("createCategoryPageFormSchema", () => {
+  const MESSAGES = {
+    altTooLong: "Alt too long",
+    descriptionTooLong: "Description too long",
+    titleTooLong: "Title too long",
+  };
+  const schema = createCategoryPageFormSchema(MESSAGES, { english: true });
+  const messagesOf = (input: unknown, english = true) =>
+    createCategoryPageFormSchema(MESSAGES, { english })
+      .safeParse(input)
+      .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
+  const form = (overrides: Record<string, unknown> = {}) =>
+    makePageInput({ id: undefined, parentId: "", ...overrides });
+
+  test.each([
+    [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
+    [
+      { seoDescriptionEn: "x".repeat(161) },
+      [["seoDescriptionEn", "Description too long"]],
+    ],
+    [{ coverAltEs: "x".repeat(201) }, [["coverAltEs", "Alt too long"]]],
+    [{ seoTitleEs: "x".repeat(70), parentId: "12" }, undefined],
+  ])("%j shows %j", (overrides, expected) => {
+    expect(messagesOf(form(overrides))).toEqual(expected);
+  });
+
+  test("refuses a group that is not an id", () => {
+    expect(schema.safeParse(form({ parentId: "abc" })).success).toBe(false);
+  });
+
+  // Without an English name the English texts are shut and sent as none:
+  // what they still hold cannot block the save, the Spanish limits still do.
+  test.each([
+    [{ seoTitleEn: "x".repeat(71) }, undefined],
+    [{ seoDescriptionEn: "x".repeat(161) }, undefined],
+    [{ coverAltEn: "x".repeat(201) }, undefined],
+    [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
+  ])("without English, %j shows %j", (overrides, expected) => {
+    expect(messagesOf(form(overrides), false)).toEqual(expected);
   });
 });
 

@@ -1,14 +1,16 @@
 import type { MetadataRoute } from "next";
 import { connection } from "next/server";
 
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import { isStorefrontLaunched } from "@/lib/env/launch";
-import { LOCALES, type Locale } from "@/lib/i18n/config";
+import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/origin";
 import { db } from "@/server/db";
 import {
   findIndexableStore,
   listIndexableArticles,
+  listIndexableCategories,
 } from "@/server/services/seo";
 
 /** One page in every language, each naming the others (`hreflang`). */
@@ -35,7 +37,8 @@ function latest(dates: Date[]) {
 }
 
 /**
- * `sitemap.xml` (FER-024): the store's home, its catalog and every published
+ * `sitemap.xml` (FER-024): the store's home, the page of all its articles,
+ * each group and category page that lists one (FER-043) and every published
  * article, in Spanish and English. Read at request time, so a new article
  * is listed at once and the build needs no database. Empty while the
  * storefront is closed: every page leads to the coming-soon page then.
@@ -55,17 +58,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
-  const articles = await listIndexableArticles(db, { storeId: store.id });
+  const [articles, categories] = await Promise.all([
+    listIndexableArticles(db, { storeId: store.id }),
+    // A page's address is the same in both languages: the names are not
+    // listed, so either language reads them.
+    listIndexableCategories(db, { locale: DEFAULT_LOCALE, storeId: store.id }),
+  ]);
+  const catalogChanged = latest([
+    store.updatedAt,
+    ...articles.map((row) => row.updatedAt),
+  ]);
 
   return [
     ...entries(origin, "/", store.updatedAt),
-    ...entries(
-      origin,
-      "/products",
-      latest([store.updatedAt, ...articles.map((row) => row.updatedAt)])
+    ...entries(origin, ALL_ARTICLES_PATH, catalogChanged),
+    // Every group and category page with a published article (FER-043),
+    // changed with the catalog or with its own texts.
+    ...categories.flatMap((category) =>
+      entries(
+        origin,
+        category.path,
+        latest([catalogChanged, category.updatedAt])
+      )
     ),
     ...articles.flatMap((article) =>
-      entries(origin, `/products/${article.slug}`, article.updatedAt)
+      entries(origin, articlePath(article.slug), article.updatedAt)
     ),
   ];
 }

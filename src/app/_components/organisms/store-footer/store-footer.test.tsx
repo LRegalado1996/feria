@@ -11,9 +11,32 @@ type Store = StoreFooterProps["store"];
 const INSTAGRAM = "https://instagram.com/lrmarket";
 const TIKTOK = "https://tiktok.com/@lrmarket";
 
+// A group holding Anillos, then Aros in no group (FER-043).
 const CATEGORIES = [
-  { lang: "es", name: "Anillos", slug: "anillos" },
-  { lang: "es", name: "Aros", slug: "aros" },
+  {
+    id: 6,
+    lang: "es",
+    name: "Bijouterie",
+    parentId: null,
+    path: "/bijouterie",
+    slug: "bijouterie",
+  },
+  {
+    id: 1,
+    lang: "es",
+    name: "Anillos",
+    parentId: 6,
+    path: "/bijouterie/anillos",
+    slug: "anillos",
+  },
+  {
+    id: 2,
+    lang: "es",
+    name: "Aros",
+    parentId: null,
+    path: "/aros",
+    slug: "aros",
+  },
 ];
 
 function makeStore(overrides: Partial<Store> = {}): Store {
@@ -101,11 +124,11 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["en", "Shop", "Catalog", "/en/products", "/en/products?category=anillos"],
-    ["es", "Tienda", "Catálogo", "/products", "/products?category=anillos"],
+    ["en", "Shop", "All articles", "/en"],
+    ["es", "Tienda", "Todos los artículos", ""],
   ] as const)(
-    "in %s, the %s links lead to the catalog and to each category",
-    (locale, heading, catalog, catalogHref, ringsHref) => {
+    "in %s, the %s links lead to all articles and to each page, a group's categories after it, one step in",
+    (locale, heading, catalog, prefix) => {
       const { footer } = setup({ locale });
 
       const shop = within(
@@ -113,17 +136,17 @@ describe("StoreFooter", () => {
       );
       expect(
         shop
-          .getAllByRole("link")
-          .map((link) => [link.textContent, link.getAttribute("href")])
+          .getAllByRole("listitem")
+          .map((item) => [
+            item.textContent,
+            item.querySelector("a")?.getAttribute("href"),
+            item.className,
+          ])
       ).toEqual([
-        [catalog, catalogHref],
-        ["Anillos", ringsHref],
-        [
-          "Aros",
-          locale === "en"
-            ? "/en/products?category=aros"
-            : "/products?category=aros",
-        ],
+        [catalog, `${prefix}/productos`, ""],
+        ["Bijouterie", `${prefix}/bijouterie`, ""],
+        ["Anillos", `${prefix}/bijouterie/anillos`, "pl-4"],
+        ["Aros", `${prefix}/aros`, ""],
       ]);
       expect(shop.getByRole("link", { name: "Anillos" })).toHaveAttribute(
         "lang",
@@ -132,7 +155,7 @@ describe("StoreFooter", () => {
     }
   );
 
-  test("with no category, the shop links lead to the catalog alone", () => {
+  test("with no category, the shop links lead to all articles alone", () => {
     const { footer } = setup({ categories: [] });
 
     const shop = within(
@@ -142,7 +165,7 @@ describe("StoreFooter", () => {
       shop
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")])
-    ).toEqual([["Catalog", "/en/products"]]);
+    ).toEqual([["All articles", "/en/productos"]]);
   });
 
   test.each([

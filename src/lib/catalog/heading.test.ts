@@ -27,7 +27,11 @@ describe("selectionName", () => {
   test.each([
     ["nothing chosen", {}, null],
     ["only a sort", { sort: "price_asc" as const }, null],
-    ["a category", { category: "aros" }, "Aros"],
+    [
+      "a category",
+      { category: { path: "/bijouterie/aros", slug: "aros" } },
+      "Aros",
+    ],
     ["a search, in «»", { q: "corona" }, "«corona»"],
     [
       "a filter's values, joined in the address's order",
@@ -37,7 +41,7 @@ describe("selectionName", () => {
     [
       "everything, category first and the search last",
       {
-        category: "anillos",
+        category: { path: "/bijouterie/anillos", slug: "anillos" },
         filters: [
           { attribute: "color", values: ["dorado"] },
           { attribute: "talle", values: ["m"] },
@@ -49,7 +53,7 @@ describe("selectionName", () => {
     [
       "names the store does not have, left out",
       {
-        category: "pulseras",
+        category: { path: "/pulseras", slug: "pulseras" },
         filters: [
           { attribute: "color", values: ["morado", "dorado"] },
           { attribute: "marca", values: ["acme"] },
@@ -61,7 +65,7 @@ describe("selectionName", () => {
     [
       "only unknown names",
       {
-        category: "pulseras",
+        category: { path: "/pulseras", slug: "pulseras" },
         filters: [{ attribute: "marca", values: ["acme"] }],
       },
       null,

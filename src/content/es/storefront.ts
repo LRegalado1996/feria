@@ -10,7 +10,7 @@ export const storefront = {
     askWhatsapp: "Consultar por WhatsApp",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
     breadcrumb: "Ruta",
-    catalog: "Catálogo",
+    catalog: "Todos los artículos",
     decrease: "Una unidad menos",
     gallery: "Fotos de {title}",
     galleryNext: "Foto siguiente",
@@ -86,6 +86,14 @@ export const storefront = {
     cartFull: "El carrito ya tiene {max} artículos distintos, el máximo.",
     categories: "Categorías",
     allCategories: "Todas",
+    breadcrumb: "Ruta",
+    // A category's and a group's page, when the admin wrote no text of
+    // their own (FER-043).
+    categoryDescription:
+      "Comprá {name} en {store}. Mirá los precios y hacé tu pedido online.",
+    groupDescription:
+      "Comprá {name} en {store}: {categories}. Mirá los precios y hacé tu pedido online.",
+    home: "Inicio",
     clear: "Limpiar",
     clearAll: "Limpiar todo",
     closeFilters: "Cerrar los filtros",
@@ -119,7 +127,7 @@ export const storefront = {
       price_asc: "Precio: menor a mayor",
       price_desc: "Precio: mayor a menor",
     },
-    title: "Catálogo",
+    title: "Todos los artículos",
   },
   home: {
     browse: "Ver el catálogo",
@@ -170,8 +178,10 @@ export const storefront = {
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
-    catalog: "Catálogo",
+    catalog: "Todos los artículos",
     closeMenu: "Cerrar el menú",
+    // The button beside a group in the header (FER-043).
+    groupToggle: "{name}: sus categorías",
     copyright: "© {store}",
     credit: "Hecho por Lucas Regalado",
     error: {

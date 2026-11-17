@@ -1,7 +1,12 @@
 import { ORPCError } from "@orpc/server";
 import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 
-import type { CreateCategoryValues } from "@/lib/schemas/catalog";
+import { imageOf } from "@/lib/catalog/cover";
+import {
+  type CreateCategoryValues,
+  RESERVED_CATEGORY_SLUGS,
+  type UpdateCategoryPageValues,
+} from "@/lib/schemas/catalog";
 import { firstFreeSlug, slugify } from "@/lib/utils/slugify";
 import type { DatabaseClient } from "@/server/db";
 import { category, categoryTranslation, product } from "@/server/db/schema";
@@ -33,7 +38,14 @@ export async function listStoreCategories(
   // columns unqualified, and inside a subquery "id" would be the product's.
   const rows = await db
     .select({
+      coverHeight: category.coverHeight,
+      coverPhoneHeight: category.coverPhoneHeight,
+      coverPhoneUrl: category.coverPhoneUrl,
+      coverPhoneWidth: category.coverPhoneWidth,
+      coverUrl: category.coverUrl,
+      coverWidth: category.coverWidth,
       id: category.id,
+      parentId: category.parentId,
       position: category.position,
       productCount: count(product.id),
       slug: category.slug,
@@ -43,14 +55,17 @@ export async function listStoreCategories(
     .where(eq(category.storeId, storeId))
     .groupBy(category.id)
     .orderBy(asc(category.position), asc(category.id));
-  const names =
+  const texts =
     rows.length === 0
       ? []
       : await db
           .select({
             categoryId: categoryTranslation.categoryId,
+            coverAlt: categoryTranslation.coverAlt,
             locale: categoryTranslation.locale,
             name: categoryTranslation.name,
+            seoDescription: categoryTranslation.seoDescription,
+            seoTitle: categoryTranslation.seoTitle,
           })
           .from(categoryTranslation)
           .where(
@@ -59,16 +74,41 @@ export async function listStoreCategories(
               rows.map((row) => row.id)
             )
           );
-  const nameOf = (categoryId: number, locale: "en" | "es") =>
-    names.find(
-      (name) => name.categoryId === categoryId && name.locale === locale
-    )?.name;
+  const textOf = (categoryId: number, locale: "en" | "es") =>
+    texts.find(
+      (text) => text.categoryId === categoryId && text.locale === locale
+    );
 
-  return rows.map((row) => ({
-    ...row,
-    nameEn: nameOf(row.id, "en") ?? null,
-    nameEs: nameOf(row.id, "es") ?? "",
-  }));
+  return rows.map(
+    ({
+      coverHeight,
+      coverPhoneHeight,
+      coverPhoneUrl,
+      coverPhoneWidth,
+      coverUrl,
+      coverWidth,
+      ...row
+    }) => {
+      const es = textOf(row.id, "es");
+      const en = textOf(row.id, "en");
+
+      return {
+        ...row,
+        cover: {
+          computer: imageOf(coverUrl, coverWidth, coverHeight),
+          phone: imageOf(coverPhoneUrl, coverPhoneWidth, coverPhoneHeight),
+        },
+        coverAltEn: en?.coverAlt ?? null,
+        coverAltEs: es?.coverAlt ?? null,
+        nameEn: en?.name ?? null,
+        nameEs: es?.name ?? "",
+        seoDescriptionEn: en?.seoDescription ?? null,
+        seoDescriptionEs: es?.seoDescription ?? null,
+        seoTitleEn: en?.seoTitle ?? null,
+        seoTitleEs: es?.seoTitle ?? null,
+      };
+    }
+  );
 }
 export type StoreCategory = Awaited<
   ReturnType<typeof listStoreCategories>
@@ -76,10 +116,11 @@ export type StoreCategory = Awaited<
 
 /**
  * Every write to a store's categories takes this lock first, held to the end
- * of its transaction: the duplicate-name check, the slug and the next
- * position are then decided by one writer at a time.
+ * of its transaction: the duplicate-name check, the slug, the next position
+ * and the groups are then decided by one writer at a time. The seed takes it
+ * too (`seedCatalogPages`).
  */
-async function lockStoreCategories(tx: DatabaseClient, storeId: number) {
+export async function lockStoreCategories(tx: DatabaseClient, storeId: number) {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`category:${storeId}`}))`
   );
@@ -144,9 +185,10 @@ export async function createCategory(
     .select({ position: category.position, slug: category.slug })
     .from(category)
     .where(eq(category.storeId, storeId));
+  // A slug is a page's address (FER-043): never one the site already has.
   const slug = firstFreeSlug(
     slugify(values.nameEs, CATEGORY_SLUG_FALLBACK),
-    new Set(existing.map((row) => row.slug))
+    new Set([...RESERVED_CATEGORY_SLUGS, ...existing.map((row) => row.slug)])
   );
   // Under the lock, so two creations never take the same place.
   const position = Math.max(-1, ...existing.map((row) => row.position)) + 1;
@@ -194,7 +236,11 @@ async function findStoreCategory(
   return found;
 }
 
-/** Replaces a category's names; its slug and place stay. */
+/**
+ * Replaces a category's names; its slug, its place and its page's texts
+ * stay. Without an English name its English row goes, its English page
+ * texts with it: they described a name it no longer has.
+ */
 export async function renameCategory(
   tx: DatabaseClient,
   { id, storeId, values }: StoreScope & { id: number; values: CategoryNames }
@@ -203,14 +249,152 @@ export async function renameCategory(
   const found = await findStoreCategory(tx, { id, lock: "update", storeId });
   await assertNameFree(tx, { excludeId: id, nameEs: values.nameEs, storeId });
 
-  await tx
-    .delete(categoryTranslation)
-    .where(eq(categoryTranslation.categoryId, found.id));
+  if (values.nameEn === null) {
+    await tx
+      .delete(categoryTranslation)
+      .where(
+        and(
+          eq(categoryTranslation.categoryId, found.id),
+          eq(categoryTranslation.locale, "en")
+        )
+      );
+  }
+
   await tx
     .insert(categoryTranslation)
-    .values(toTranslationRows(found.id, values));
+    .values(toTranslationRows(found.id, values))
+    .onConflictDoUpdate({
+      set: { name: sql`excluded."name"`, updatedAt: sql`excluded."updatedAt"` },
+      target: [categoryTranslation.categoryId, categoryTranslation.locale],
+    });
 
   return found;
+}
+
+/**
+ * Sets a category's page (FER-043): the group it belongs to, and its texts
+ * for search engines and its cover's alt text in both languages. A group is
+ * another category of the store that is in no group itself, and a category
+ * that is a group joins none: one level only, decided under the store's
+ * category lock, so two admins cannot nest two categories into each other at
+ * once. English texts need the English name's row: without an English name
+ * there is no English page text to keep.
+ */
+export async function updateCategoryPage(
+  tx: DatabaseClient,
+  { storeId, values }: StoreScope & { values: UpdateCategoryPageValues }
+) {
+  await lockStoreCategories(tx, storeId);
+  const found = await findStoreCategory(tx, {
+    id: values.id,
+    lock: "update",
+    storeId,
+  });
+
+  if (values.parentId !== null) {
+    await assertCanJoin(tx, {
+      id: found.id,
+      parentId: values.parentId,
+      storeId,
+    });
+  }
+
+  const english = [
+    values.seoTitleEn,
+    values.seoDescriptionEn,
+    values.coverAltEn,
+  ].some((text) => text !== null);
+  const [hasEnglish] = await tx
+    .select({ id: categoryTranslation.id })
+    .from(categoryTranslation)
+    .where(
+      and(
+        eq(categoryTranslation.categoryId, found.id),
+        eq(categoryTranslation.locale, "en")
+      )
+    );
+
+  if (english && !hasEnglish) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "Name the category in English before its English page texts",
+    });
+  }
+
+  await tx
+    .update(category)
+    .set({ parentId: values.parentId })
+    .where(and(eq(category.id, found.id), eq(category.storeId, storeId)));
+
+  for (const locale of ["es", "en"] as const) {
+    const own =
+      locale === "es"
+        ? {
+            coverAlt: values.coverAltEs,
+            seoDescription: values.seoDescriptionEs,
+            seoTitle: values.seoTitleEs,
+          }
+        : {
+            coverAlt: values.coverAltEn,
+            seoDescription: values.seoDescriptionEn,
+            seoTitle: values.seoTitleEn,
+          };
+
+    await tx
+      .update(categoryTranslation)
+      .set(own)
+      .where(
+        and(
+          eq(categoryTranslation.categoryId, found.id),
+          eq(categoryTranslation.locale, locale)
+        )
+      );
+  }
+
+  return { id: found.id, parentId: values.parentId };
+}
+
+/**
+ * Refuses a group the category cannot join: itself, a category of another
+ * store or none (NOT_FOUND, as for the category), a category that is in a
+ * group already, or any group while the category holds categories itself.
+ */
+async function assertCanJoin(
+  tx: DatabaseClient,
+  { id, parentId, storeId }: StoreScope & { id: number; parentId: number }
+) {
+  if (parentId === id) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A category cannot be its own group",
+    });
+  }
+
+  const [group] = await tx
+    .select({ id: category.id, parentId: category.parentId })
+    .from(category)
+    .where(and(eq(category.id, parentId), eq(category.storeId, storeId)))
+    .for("share");
+
+  if (!group) {
+    throw new ORPCError("NOT_FOUND", { message: "Group not found" });
+  }
+
+  if (group.parentId !== null) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A category in a group cannot be a group",
+    });
+  }
+
+  const [child] = await tx
+    .select({ id: category.id })
+    .from(category)
+    .where(and(eq(category.storeId, storeId), eq(category.parentId, id)))
+    .limit(1);
+
+  if (child) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A group cannot join another group",
+    });
+  }
 }
 
 /**
@@ -270,6 +454,11 @@ export async function deleteCategory(
   // Locked first: an article written into it meanwhile waits for the
   // deletion, then finds the category gone instead of a foreign-key error.
   await findStoreCategory(tx, { id, lock: "update", storeId });
+  // A group's categories stay, out of any group: their articles are theirs.
+  await tx
+    .update(category)
+    .set({ parentId: null })
+    .where(and(eq(category.storeId, storeId), eq(category.parentId, id)));
 
   const [held] = await tx
     .select({ total: count() })

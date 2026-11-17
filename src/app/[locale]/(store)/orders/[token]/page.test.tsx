@@ -154,8 +154,8 @@ describe("OrderPage", () => {
   });
 
   test.each([
-    ["es", "/products", "(se abre en otra pestaña)"],
-    ["en", "/en/products", "(opens in a new tab)"],
+    ["es", "/productos", "(se abre en otra pestaña)"],
+    ["en", "/en/productos", "(opens in a new tab)"],
   ] as const)(
     "hands the order its %s words, catalog link and the order read by its token",
     async (locale, catalogHref, newTabLabel) => {

@@ -131,17 +131,37 @@ describe("streamedShell", () => {
 });
 
 describe("shellOf", () => {
-  test("from a store already read, the fixed announcement and its cached categories", async () => {
+  test("from a store already read, the fixed announcement and its cached categories, read before it answers", async () => {
     const { store } = setup();
 
-    const shell = shellOf(store, "es");
+    const shell = await shellOf(store, "es");
 
     await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.es);
-    await expect(shell.categories).resolves.toEqual([
+    // The list itself, not a promise of it: the header renders it in place,
+    // behind no boundary, in the first response (FER-043).
+    expect(shell.categories).toEqual([
       { lang: "es", name: "anillos-es", slug: "anillos" },
     ]);
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "es");
     expect(readStore).not.toHaveBeenCalled();
     expect(connection).not.toHaveBeenCalled();
+  });
+
+  test("from a page that read its categories as of now, those, reading no cached list (FER-043)", async () => {
+    const own = [
+      {
+        id: 4,
+        lang: "es",
+        name: "Aros",
+        parentId: null,
+        path: "/aros",
+        slug: "aros",
+      },
+    ];
+
+    const shell = await shellOf(makeStore(), "es", own);
+
+    expect(shell.categories).toBe(own);
+    expect(readCategories).not.toHaveBeenCalled();
   });
 });

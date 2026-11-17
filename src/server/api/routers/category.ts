@@ -3,6 +3,7 @@ import {
   deleteCategorySchema,
   renameCategorySchema,
   reorderCategoriesSchema,
+  updateCategoryPageSchema,
 } from "@/lib/schemas/catalog";
 import { adminProcedure } from "@/server/api/orpc";
 import { writeToCatalog } from "@/server/api/utils/write-to-store";
@@ -12,6 +13,7 @@ import {
   listStoreCategories,
   renameCategory,
   reorderCategories,
+  updateCategoryPage,
 } from "@/server/services/category";
 
 /**
@@ -72,6 +74,24 @@ export const categoryRouter = {
       method: "PUT",
       path: "/admin/categories/{id}",
       summary: "Rename a category in both languages",
+      tags: ["categories"],
+    }),
+
+  updatePage: adminProcedure
+    .input(updateCategoryPageSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToCatalog(
+          context,
+          async (tx, storeId) =>
+            await updateCategoryPage(tx, { storeId, values: input })
+        )
+    )
+    .route({
+      method: "PUT",
+      path: "/admin/categories/{id}/page",
+      summary:
+        "Set a category's group, its texts for search engines and its cover's description",
       tags: ["categories"],
     }),
 

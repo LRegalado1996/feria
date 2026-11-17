@@ -1,0 +1,301 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, test, vi } from "vitest";
+
+import type { Locale } from "@/lib/i18n/config";
+import { renderWithI18n } from "@/test/i18n";
+
+import {
+  CategoryPageForm,
+  type CategoryPageFormCategory,
+} from "./category-page-form";
+
+function makeCategory(
+  overrides: Partial<CategoryPageFormCategory> = {}
+): CategoryPageFormCategory {
+  return {
+    cover: { computer: null, phone: null },
+    coverAltEn: null,
+    coverAltEs: null,
+    id: 3,
+    nameEn: "Rings",
+    nameEs: "Anillos",
+    parentId: null,
+    seoDescriptionEn: null,
+    seoDescriptionEs: null,
+    seoTitleEn: null,
+    seoTitleEs: null,
+    ...overrides,
+  };
+}
+
+function setup({
+  category = makeCategory(),
+  isGroup = false,
+  locale = "en",
+  saves = "saved",
+}: {
+  category?: CategoryPageFormCategory;
+  isGroup?: boolean;
+  locale?: Locale;
+  saves?: "failed" | "saved";
+} = {}) {
+  const onSave = vi.fn(
+    async (_values: unknown) => await Promise.resolve(saves)
+  );
+  const onCancel = vi.fn<() => void>();
+  const form = (props: {
+    category: CategoryPageFormCategory;
+    isGroup: boolean;
+  }) => (
+    <CategoryPageForm
+      {...props}
+      groups={[
+        { id: 6, name: "Bijouterie" },
+        { id: 1, name: "Burbujeros" },
+      ]}
+      onCancel={onCancel}
+      onSave={onSave}
+    />
+  );
+  const { rerender } = renderWithI18n(form({ category, isGroup }), {
+    locale,
+  });
+
+  return {
+    field: (name: string) => screen.getByRole("textbox", { name }),
+    onCancel,
+    onSave,
+    /** The list read again while the form stays open, as the admin's row does. */
+    reread: (props: {
+      category: CategoryPageFormCategory;
+      isGroup: boolean;
+    }) => {
+      rerender(form(props));
+    },
+    user: userEvent.setup(),
+  };
+}
+
+describe("CategoryPageForm", () => {
+  test("sends the chosen group and every text, empty ones as none", async () => {
+    const { field, onSave, user } = setup({
+      category: makeCategory({ seoTitleEn: "Old title" }),
+    });
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Group" }),
+      "Bijouterie"
+    );
+    await user.clear(field("Title for search engines in English"));
+    await user.type(
+      field("Description for search engines in Spanish"),
+      "  Anillos de la feria  "
+    );
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        coverAltEn: null,
+        coverAltEs: null,
+        id: 3,
+        parentId: 6,
+        seoDescriptionEn: null,
+        seoDescriptionEs: "Anillos de la feria",
+        seoTitleEn: null,
+        seoTitleEs: null,
+      });
+    });
+  });
+
+  test("takes a category out of its group with No group", async () => {
+    const { onSave, user } = setup({
+      category: makeCategory({ parentId: 6 }),
+    });
+    const group = screen.getByRole("combobox", { name: "Group" });
+
+    expect(group).toHaveValue("6");
+    await user.selectOptions(group, "No group");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null })
+      );
+    });
+  });
+
+  test.each([
+    ["Title for search engines in Spanish", "seoTitleEs", 70],
+    ["Description for search engines in English", "seoDescriptionEn", 160],
+    ["Cover description in Spanish", "coverAltEs", 200],
+  ])("sends a %s of exactly its limit unchanged", async (name, key, length) => {
+    const { field, onSave, user } = setup({
+      category: makeCategory({
+        cover: {
+          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+          phone: null,
+        },
+      }),
+    });
+
+    await user.click(field(name));
+    await user.paste("x".repeat(length));
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ [key]: "x".repeat(length) })
+      );
+    });
+  });
+
+  test.each([
+    ["Title for search engines in Spanish", 71, "Use up to 70 characters."],
+    [
+      "Description for search engines in English",
+      161,
+      "Use up to 160 characters.",
+    ],
+    ["Cover description in Spanish", 201, "Use up to 200 characters."],
+  ])(
+    "refuses a %s of %i characters under its field, sending nothing",
+    async (name, length, message) => {
+      const { field, onSave, user } = setup({
+        category: makeCategory({
+          cover: {
+            computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+            phone: null,
+          },
+        }),
+      });
+
+      await user.click(field(name));
+      await user.paste("x".repeat(length));
+      await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+      expect(await screen.findByText(message)).toBeVisible();
+      expect(field(name)).toHaveAttribute("aria-invalid", "true");
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
+  test("sends no English text for a category without an English name", async () => {
+    const { field, onSave, user } = setup({
+      category: makeCategory({ nameEn: null, seoTitleEn: "Stale" }),
+    });
+
+    expect(field("Title for search engines in English")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ seoTitleEn: null })
+      );
+    });
+  });
+
+  test("saves once a rename took the English name away, whatever its shut English texts still hold", async () => {
+    const { field, onSave, reread, user } = setup();
+    await user.click(field("Title for search engines in English"));
+    await user.paste("x".repeat(71));
+
+    reread({ category: makeCategory({ nameEn: null }), isGroup: false });
+    expect(field("Title for search engines in English")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ seoTitleEn: null })
+      );
+    });
+    expect(screen.queryByText("Use up to 70 characters.")).toBeNull();
+  });
+
+  test("says a failed save under the form and keeps what was typed", async () => {
+    const { field, user } = setup({ saves: "failed" });
+
+    await user.type(field("Title for search engines in Spanish"), "Anillos");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not save the change. Try again."
+    );
+    expect(field("Title for search engines in Spanish")).toHaveValue("Anillos");
+  });
+
+  test("shows both cover images with their own description, and asks for the description in both languages", () => {
+    setup({
+      category: makeCategory({
+        cover: {
+          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+          phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
+        },
+        coverAltEs: "Anillo sello",
+      }),
+    });
+
+    const cover = screen.getByRole("region", { name: "Cover" });
+    expect(
+      within(cover)
+        .getAllByRole("img", { name: "Anillo sello" })
+        .map((image) => [
+          image.closest("figure")?.querySelector("figcaption")?.textContent,
+          // next/image serves it through its optimizer, the file as `url`.
+          new URL(
+            image.getAttribute("src") ?? "",
+            "http://localhost"
+          ).searchParams.get("url"),
+        ])
+    ).toEqual([
+      ["On a computer", "/seed/ring-2.jpg"],
+      ["On a phone", "/seed/ring-1.jpg"],
+    ]);
+    expect(
+      within(cover).getByRole("textbox", {
+        name: "Cover description in English",
+      })
+    ).toBeEnabled();
+  });
+
+  test("cancels without saving", async () => {
+    const { onCancel, onSave, user } = setup();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onCancel).toHaveBeenCalledExactlyOnceWith();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("sends no group once another category joined this one while it was open", async () => {
+    const { onSave, reread, user } = setup();
+    const group = screen.getByRole("combobox", { name: "Group" });
+    await user.selectOptions(group, "Bijouterie");
+
+    reread({ category: makeCategory(), isGroup: true });
+    expect(group).toBeDisabled();
+    expect(group).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null })
+      );
+    });
+  });
+
+  test("keeps a group's own group shut, in Spanish too", () => {
+    setup({ isGroup: true, locale: "es" });
+
+    const group = screen.getByRole("combobox", { name: "Grupo" });
+    expect(group).toBeDisabled();
+    expect(group).toHaveAccessibleDescription(
+      "Esta categoría es un grupo: tiene categorías adentro, así que no puede entrar en otro."
+    );
+    expect(
+      screen.getByRole("form", { name: "Página de «Anillos»" })
+    ).toHaveTextContent(
+      "Esta categoría todavía no tiene portada: su página muestra solo el título."
+    );
+  });
+});

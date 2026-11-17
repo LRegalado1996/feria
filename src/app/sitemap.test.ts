@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   findIndexableStore: vi.fn(),
   isStorefrontLaunched: vi.fn<() => boolean>(),
   listIndexableArticles: vi.fn(),
+  listIndexableCategories: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({ connection: mocks.connection }));
@@ -23,12 +24,14 @@ vi.mock("@/lib/env/launch", () => ({
 vi.mock("@/server/services/seo", () => ({
   findIndexableStore: mocks.findIndexableStore,
   listIndexableArticles: mocks.listIndexableArticles,
+  listIndexableCategories: mocks.listIndexableCategories,
 }));
 
 const ORIGIN = "https://lrmarket.example";
 const STORE_UPDATED = new Date("2026-11-10T10:00:00.000Z");
 const RING_UPDATED = new Date("2026-11-12T10:00:00.000Z");
 const CHAIN_UPDATED = new Date("2026-11-11T10:00:00.000Z");
+const RINGS_PAGE_UPDATED = new Date("2026-11-13T10:00:00.000Z");
 
 /** One page in both languages, as the sitemap lists it. */
 function pair(spanish: string, english: string, lastModified: Date) {
@@ -45,10 +48,30 @@ function setup({
     { slug: "anillo-sello", updatedAt: RING_UPDATED },
     { slug: "cadena", updatedAt: CHAIN_UPDATED },
   ],
+  categories = [
+    {
+      name: "Bijouterie",
+      path: "/bijouterie",
+      slug: "bijouterie",
+      updatedAt: STORE_UPDATED,
+    },
+    {
+      name: "Anillos",
+      path: "/bijouterie/anillos",
+      slug: "anillos",
+      updatedAt: RINGS_PAGE_UPDATED,
+    },
+  ],
   launched = true,
   store = { id: 7, updatedAt: STORE_UPDATED },
 }: {
   articles?: { slug: string; updatedAt: Date }[];
+  categories?: {
+    name: string;
+    path: string;
+    slug: string;
+    updatedAt: Date;
+  }[];
   launched?: boolean;
   store?: { id: number; updatedAt: Date } | null;
 } = {}) {
@@ -56,36 +79,49 @@ function setup({
   mocks.isStorefrontLaunched.mockReturnValue(launched);
   mocks.findIndexableStore.mockResolvedValue(store);
   mocks.listIndexableArticles.mockResolvedValue(articles);
+  mocks.listIndexableCategories.mockResolvedValue(categories);
 }
 
 describe("sitemap", () => {
-  test("lists the store's home, catalog and articles in both languages, at request time", async () => {
+  test("lists the store's home, all articles, its group and category pages and its articles in both languages, at request time", async () => {
     setup();
 
     await expect(sitemap()).resolves.toEqual([
       ...pair("/", "/en", STORE_UPDATED),
       // The catalog changed when its newest article did.
-      ...pair("/products", "/en/products", RING_UPDATED),
+      ...pair("/productos", "/en/productos", RING_UPDATED),
+      // A page's address is the same in both languages (FER-043). It
+      // changed with the catalog, or later with its own texts.
+      ...pair("/bijouterie", "/en/bijouterie", RING_UPDATED),
       ...pair(
-        "/products/anillo-sello",
-        "/en/products/anillo-sello",
+        "/bijouterie/anillos",
+        "/en/bijouterie/anillos",
+        RINGS_PAGE_UPDATED
+      ),
+      ...pair(
+        "/productos/anillo-sello",
+        "/en/productos/anillo-sello",
         RING_UPDATED
       ),
-      ...pair("/products/cadena", "/en/products/cadena", CHAIN_UPDATED),
+      ...pair("/productos/cadena", "/en/productos/cadena", CHAIN_UPDATED),
     ]);
     expect(mocks.connection).toHaveBeenCalledExactlyOnceWith();
     expect(mocks.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);
     expect(mocks.listIndexableArticles).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });
+    expect(mocks.listIndexableCategories).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "es",
+      storeId: 7,
+    });
   });
 
   test("dates the catalog of a store with no articles by the store itself", async () => {
-    setup({ articles: [] });
+    setup({ articles: [], categories: [] });
 
     await expect(sitemap()).resolves.toEqual([
       ...pair("/", "/en", STORE_UPDATED),
-      ...pair("/products", "/en/products", STORE_UPDATED),
+      ...pair("/productos", "/en/productos", STORE_UPDATED),
     ]);
   });
 

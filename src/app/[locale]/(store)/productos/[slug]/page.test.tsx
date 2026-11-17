@@ -355,11 +355,11 @@ describe("ArticlePage", () => {
   test.each([
     [
       "es",
-      "¡Hola! Te escribo por «Aros & cadenas»: http://localhost:3000/products/aros-y-cadenas",
+      "¡Hola! Te escribo por «Aros & cadenas»: http://localhost:3000/productos/aros-y-cadenas",
     ],
     [
       "en",
-      "Hi! I'm writing about “Aros & cadenas”: http://localhost:3000/en/products/aros-y-cadenas",
+      "Hi! I'm writing about “Aros & cadenas”: http://localhost:3000/en/productos/aros-y-cadenas",
     ],
   ] as const)(
     "in %s, opens the store's WhatsApp at its digits with the article's name and address written",
@@ -385,7 +385,12 @@ describe("ArticlePage", () => {
   test("describes the article, its trail and the store, with the brand's logo, as structured data", async () => {
     const { show } = setup({
       article: makeArticle({
-        category: { name: "Anillos", slug: "anillos" },
+        category: {
+          group: { name: "Bijouterie", path: "/bijouterie" },
+          name: "Anillos",
+          path: "/bijouterie/anillos",
+          slug: "anillos",
+        },
         categoryId: 5,
         images: [
           {
@@ -412,7 +417,7 @@ describe("ArticlePage", () => {
     });
 
     const { jsonLd } = await show();
-    const url = `${ORIGIN}/products/anillo-de-plata`;
+    const url = `${ORIGIN}/productos/anillo-de-plata`;
 
     expect(jsonLd()).toEqual([
       {
@@ -449,21 +454,27 @@ describe("ArticlePage", () => {
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/products`,
-            name: "Catálogo",
+            item: `${ORIGIN}/productos`,
+            name: "Todos los artículos",
             position: 2,
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/products?category=anillos`,
-            name: "Anillos",
+            item: `${ORIGIN}/bijouterie`,
+            name: "Bijouterie",
             position: 3,
+          },
+          {
+            "@type": "ListItem",
+            item: `${ORIGIN}/bijouterie/anillos`,
+            name: "Anillos",
+            position: 4,
           },
           {
             "@type": "ListItem",
             item: url,
             name: "Anillo de plata",
-            position: 4,
+            position: 5,
           },
         ],
       },
@@ -482,7 +493,7 @@ describe("ArticlePage", () => {
     const { show } = setup({ locale: "en" });
 
     const { jsonLd } = await show();
-    const url = `${ORIGIN}/en/products/anillo-de-plata`;
+    const url = `${ORIGIN}/en/productos/anillo-de-plata`;
 
     expect(jsonLd()).toEqual([
       {
@@ -515,8 +526,8 @@ describe("ArticlePage", () => {
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/en/products`,
-            name: "Catalog",
+            item: `${ORIGIN}/en/productos`,
+            name: "All articles",
             position: 2,
           },
           {
@@ -556,8 +567,8 @@ describe("generateMetadata", () => {
   });
 
   test.each([
-    ["es", "/products/anillo-de-plata"],
-    ["en", "/en/products/anillo-de-plata"],
+    ["es", "/productos/anillo-de-plata"],
+    ["en", "/en/productos/anillo-de-plata"],
   ] as const)(
     "in %s, prefers the article's own search title and description, with both addresses, after which the store's name",
     async (locale, canonical) => {
@@ -573,9 +584,9 @@ describe("generateMetadata", () => {
         alternates: {
           canonical,
           languages: {
-            en: "/en/products/anillo-de-plata",
-            es: "/products/anillo-de-plata",
-            "x-default": "/products/anillo-de-plata",
+            en: "/en/productos/anillo-de-plata",
+            es: "/productos/anillo-de-plata",
+            "x-default": "/productos/anillo-de-plata",
           },
         },
         description: "El anillo de plata que buscabas.",
@@ -648,11 +659,11 @@ describe("generateMetadata", () => {
 
     await expect(metadata()).resolves.toStrictEqual({
       alternates: {
-        canonical: "/products/anillo-de-plata",
+        canonical: "/productos/anillo-de-plata",
         languages: {
-          en: "/en/products/anillo-de-plata",
-          es: "/products/anillo-de-plata",
-          "x-default": "/products/anillo-de-plata",
+          en: "/en/productos/anillo-de-plata",
+          es: "/productos/anillo-de-plata",
+          "x-default": "/productos/anillo-de-plata",
         },
       },
       description: undefined,
@@ -661,7 +672,7 @@ describe("generateMetadata", () => {
         siteName: "Sample Store",
         title: "Anillo de plata",
         type: "website",
-        url: "/products/anillo-de-plata",
+        url: "/productos/anillo-de-plata",
       },
       title: { absolute: "Anillo de plata · Sample Store" },
     });

@@ -50,7 +50,7 @@ function setup({
     },
   ]);
   services.listIndexableCategories.mockResolvedValue([
-    { name: "Anillos", slug: "anillos" },
+    { name: "Anillos", path: "/bijouterie/anillos", slug: "anillos" },
   ]);
 
   return {
@@ -66,15 +66,15 @@ describe("GET /[locale]/llms.txt", () => {
     [
       "es",
       "## Categorías",
-      `${ORIGIN}/products?category=anillos`,
-      `${ORIGIN}/products/anillo-sello`,
+      `${ORIGIN}/bijouterie/anillos`,
+      `${ORIGIN}/productos/anillo-sello`,
       `${ORIGIN}/en/llms.txt`,
     ],
     [
       "en",
       "## Categories",
-      `${ORIGIN}/en/products?category=anillos`,
-      `${ORIGIN}/en/products/anillo-sello`,
+      `${ORIGIN}/en/bijouterie/anillos`,
+      `${ORIGIN}/en/productos/anillo-sello`,
       `${ORIGIN}/llms.txt`,
     ],
   ])(

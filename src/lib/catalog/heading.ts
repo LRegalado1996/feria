@@ -20,7 +20,9 @@ export function selectionName(
   filters: (Named & { values: Named[] })[],
   searchTemplate: string
 ): string | null {
-  const category = categories.find((entry) => entry.slug === query.category);
+  const category = categories.find(
+    (entry) => entry.slug === query.category?.slug
+  );
   const values = query.filters.flatMap((entry) => {
     const filter = filters.find((known) => known.slug === entry.attribute);
     const names = entry.values.flatMap((slug) => {

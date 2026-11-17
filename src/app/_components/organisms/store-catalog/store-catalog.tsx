@@ -12,11 +12,18 @@ import { StoreButton } from "@/app/_components/atoms/store-button";
 import { StoreChip } from "@/app/_components/atoms/store-chip";
 import { StoreArticleCard } from "@/app/_components/molecules/store-article-card";
 import {
+  StoreBreadcrumb,
+  type StoreBreadcrumbItem,
+} from "@/app/_components/molecules/store-breadcrumb";
+import { StoreCatalogCover } from "@/app/_components/molecules/store-catalog-cover";
+import {
   type CatalogCategory,
   type CatalogFilter,
   StoreCatalogFilters,
 } from "@/app/_components/molecules/store-catalog-filters";
 import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
+import type { CatalogCover } from "@/lib/catalog/cover";
+import { articlePath } from "@/lib/catalog/paths";
 import {
   type CatalogQuery,
   catalogHref,
@@ -31,7 +38,11 @@ import { localizePath } from "@/lib/i18n/paths";
 import { PRODUCT_SORTS } from "@/lib/schemas/catalog";
 
 export interface StoreCatalogProps {
+  /** The trail from the home to this page, shown above it (FER-043). */
+  breadcrumb: { items: readonly StoreBreadcrumbItem[]; label: string };
   categories: CatalogCategory[];
+  /** The page's photo, with its title over it; none, a plain title. */
+  cover: CatalogCover | null;
   /** The one line under the heading: what this selection is, in the store. */
   description: string;
   filters: CatalogFilter[];
@@ -58,7 +69,9 @@ const TEXT_LINK_CLASS =
  * in the address, so a shared link opens on the same selection.
  */
 function StoreCatalog({
+  breadcrumb,
   categories,
+  cover,
   description,
   filters,
   firstPage,
@@ -121,20 +134,36 @@ function StoreCatalog({
       data-slot="store-catalog"
       data-testid="store-catalog"
     >
-      <header
-        className={`${GUTTER_CLASS} flex flex-col items-center gap-3 pt-9 pb-5.5 text-center md:pt-13 md:pb-7.5`}
-      >
-        <h1 className="font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
-          {heading}
-        </h1>
-        <p className="max-w-prose text-sm text-store-muted md:text-base">
-          {description}
-        </p>
-        <StoreShareButton
-          className="justify-center"
-          path={selection}
-          title={heading}
+      <header className="flex flex-col">
+        <StoreBreadcrumb
+          className={`${GUTTER_CLASS} py-1.5`}
+          items={breadcrumb.items}
+          label={breadcrumb.label}
         />
+        {cover ? (
+          <StoreCatalogCover cover={cover}>
+            <h1 className="max-w-[18ch] font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
+              {heading}
+            </h1>
+          </StoreCatalogCover>
+        ) : null}
+        <div
+          className={`${GUTTER_CLASS} flex flex-col items-center gap-3 pb-5.5 text-center md:pb-7.5 ${cover ? "pt-5 md:pt-7" : "pt-7 md:pt-11"}`}
+        >
+          {cover ? null : (
+            <h1 className="font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
+              {heading}
+            </h1>
+          )}
+          <p className="max-w-prose text-sm text-store-muted md:text-base">
+            {description}
+          </p>
+          <StoreShareButton
+            className="justify-center"
+            path={selection}
+            title={heading}
+          />
+        </div>
       </header>
       <div
         className={`${GUTTER_CLASS} flex items-center justify-between gap-3 pb-3.5 md:pb-4.5`}
@@ -148,17 +177,20 @@ function StoreCatalog({
               {panelChoices > 0 ? ` (${panelChoices})` : null}
             </StoreButton>
           </DialogPrimitive.Trigger>
-          {/* In place, not in a portal, like every storefront dialog. Its
-              open and close are short slides, which reduced motion drops
-              (src/styles/globals.css). */}
+          {/* In place, not in a portal, like every storefront dialog. It
+              opens with a short slide, which reduced motion drops
+              (src/styles/globals.css), and leaves at once: a category is a
+              page of its own (FER-043), and the page left behind stays
+              mounted, hidden, where an exit animation never ends and would
+              keep its scrim in the document (design.md § Admin, the menu). */}
           <DialogPrimitive.Overlay
-            className="fixed inset-0 z-50 bg-store-foreground/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+            className="fixed inset-0 z-50 bg-store-foreground/50 data-[state=open]:animate-in data-[state=open]:fade-in-0"
             data-slot="dialog-overlay"
             data-testid="dialog-overlay"
           />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            className="fixed inset-x-0 bottom-0 z-50 flex h-[86dvh] flex-col overflow-hidden rounded-t-2xl bg-store-background text-store-foreground shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=open]:animate-in max-md:data-[state=closed]:slide-out-to-bottom max-md:data-[state=open]:slide-in-from-bottom md:inset-y-0 md:right-auto md:h-full md:w-full md:max-w-100 md:rounded-none md:data-[state=closed]:slide-out-to-left md:data-[state=open]:slide-in-from-left"
+            className="fixed inset-x-0 bottom-0 z-50 flex h-[86dvh] flex-col overflow-hidden rounded-t-2xl bg-store-background text-store-foreground shadow-lg duration-200 outline-none data-[state=open]:animate-in max-md:data-[state=open]:slide-in-from-bottom md:inset-y-0 md:right-auto md:h-full md:w-full md:max-w-100 md:rounded-none md:data-[state=open]:slide-in-from-left"
             data-slot="dialog-content"
             data-testid="store-catalog-panel"
           >
@@ -185,6 +217,9 @@ function StoreCatalog({
                 filters={filters}
                 idPrefix="panel"
                 locale={locale}
+                onCategoryChoice={() => {
+                  setPanelOpen(false);
+                }}
                 query={query}
               />
             </div>
@@ -310,7 +345,7 @@ function StoreCatalog({
                   amount={item.priceAmount}
                   currency={item.currencyCode}
                   headingLevel="h2"
-                  href={localizePath(`/products/${item.slug}`, locale)}
+                  href={localizePath(articlePath(item.slug), locale)}
                   image={
                     item.cover
                       ? { alt: item.cover.alt, src: item.cover.url }
@@ -398,7 +433,9 @@ function chosenChips(
   filters: CatalogFilter[]
 ) {
   const chips: { key: string; name: string; without: CatalogQuery }[] = [];
-  const category = categories.find((entry) => entry.slug === query.category);
+  const category = categories.find(
+    (entry) => entry.slug === query.category?.slug
+  );
 
   if (category) {
     chips.push({

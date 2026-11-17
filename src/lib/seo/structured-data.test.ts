@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   breadcrumbList,
+  collectionPage,
   productWithOffer,
   storeOrganization,
 } from "./structured-data";
@@ -115,6 +116,69 @@ describe("breadcrumbList", () => {
         },
       ],
     });
+  });
+});
+
+describe("collectionPage", () => {
+  test("describes a catalog page, its trail and its first articles in their order", () => {
+    const home = { name: "LR Market", url: "https://lr.example/" };
+    const rings = {
+      name: "Anillos",
+      url: "https://lr.example/bijouterie/anillos",
+    };
+
+    expect(
+      collectionPage({
+        breadcrumb: [home, rings],
+        description: "Comprá Anillos en LR Market.",
+        items: [
+          { name: "Anillo sello", url: "https://lr.example/products/sello" },
+          { name: "Anillo flor", url: "https://lr.example/products/flor" },
+        ],
+        locale: "es",
+        name: "Anillos",
+        url: rings.url,
+      })
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      breadcrumb: breadcrumbList([home, rings]),
+      description: "Comprá Anillos en LR Market.",
+      inLanguage: "es",
+      mainEntity: {
+        "@type": "ItemList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            name: "Anillo sello",
+            position: 1,
+            url: "https://lr.example/products/sello",
+          },
+          {
+            "@type": "ListItem",
+            name: "Anillo flor",
+            position: 2,
+            url: "https://lr.example/products/flor",
+          },
+        ],
+        numberOfItems: 2,
+      },
+      name: "Anillos",
+      url: rings.url,
+    });
+  });
+
+  test("lists nothing for a page without articles", () => {
+    expect(
+      collectionPage({
+        breadcrumb: [],
+        description: "",
+        items: [],
+        locale: "en",
+        name: "Rings",
+        url: "https://lr.example/en/anillos",
+      }).mainEntity
+    ).toEqual({ "@type": "ItemList", itemListElement: [], numberOfItems: 0 });
   });
 });
 

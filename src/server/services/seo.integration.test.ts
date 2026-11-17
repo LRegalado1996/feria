@@ -125,6 +125,18 @@ async function setup() {
     `pulseras-${tag}`,
     `Pulseras ${tag}`
   );
+  // Anillos in a group, Aros in another: a group is listed when one of
+  // its categories holds a published article (FER-043).
+  const group = await makeCategory(storeId, `bijou-${tag}`, `Bijou ${tag}`);
+  const otherGroup = await makeCategory(storeId, `otro-${tag}`, `Otro ${tag}`);
+  await db
+    .update(category)
+    .set({ parentId: group.id })
+    .where(eq(category.id, rings.id));
+  await db
+    .update(category)
+    .set({ parentId: otherGroup.id })
+    .where(eq(category.id, earrings.id));
   const published = await makeArticle(storeId, rings.id, `Anillo sello ${tag}`);
   const drafts = [
     await makeArticle(storeId, rings.id, `Anillo borrador ${tag}`, {
@@ -136,7 +148,8 @@ async function setup() {
   ];
 
   return {
-    categories: [rings, earrings, bracelets],
+    categories: [rings, earrings, bracelets, group, otherGroup],
+    group,
     drafts,
     published,
     rings,
@@ -199,14 +212,47 @@ describe("what search engines and assistants are told about", () => {
     expect(articles[0]?.priceAmount).toBe(69_000);
   });
 
-  test("lists the categories that hold a published article, by name, never one with only drafts or none", async () => {
-    const { categories, rings, storeId, tag } = await setup();
+  test("lists the categories that hold a published article, by name at their pages, and a group holding one, never one with only drafts or none", async () => {
+    const { categories, group, rings, storeId, tag } = await setup();
     const ownSlugs = new Set(categories.map((row) => row.slug));
 
     expect(
       (await listIndexableCategories(db, { locale: "en", storeId })).filter(
         (row) => ownSlugs.has(row.slug)
       )
-    ).toEqual([{ name: `Anillos ${tag}`, slug: rings.slug }]);
+    ).toEqual([
+      // All at place 0: in the order they were made.
+      {
+        name: `Anillos ${tag}`,
+        path: `/${group.slug}/${rings.slug}`,
+        slug: rings.slug,
+        updatedAt: expect.any(Date),
+      },
+      {
+        name: `Bijou ${tag}`,
+        path: `/${group.slug}`,
+        slug: group.slug,
+        updatedAt: expect.any(Date),
+      },
+    ]);
+  });
+
+  test("dates a category by the latest write to its row or its texts", async () => {
+    const { rings, storeId } = await setup();
+    const listed = async () =>
+      (await listIndexableCategories(db, { locale: "es", storeId })).find(
+        (row) => row.slug === rings.slug
+      )?.updatedAt;
+    const before = await listed();
+    const edited = new Date("2099-01-01T00:00:00.000Z");
+
+    // A page text edited later than anything else the category holds.
+    await db
+      .update(categoryTranslation)
+      .set({ seoTitle: "Anillos dorados", updatedAt: edited })
+      .where(eq(categoryTranslation.categoryId, rings.id));
+
+    expect(before).toBeInstanceOf(Date);
+    expect(await listed()).toEqual(edited);
   });
 });

@@ -16,14 +16,20 @@ import {
 import { StoreRelatedRow } from "@/app/_components/molecules/store-related-row";
 import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { Dictionary } from "@/content";
-import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import type { Currency } from "@/lib/utils/format";
 
 /** An article as its page shows it. */
 export interface StoreArticleData {
-  category: { name: string; slug: string } | null;
+  /** Its category, under its group when it has one (FER-043). */
+  category: {
+    group: { name: string; path: string } | null;
+    name: string;
+    path: string;
+    slug: string;
+  } | null;
   currencyCode: Currency;
   description: string;
   id: number;
@@ -101,14 +107,12 @@ function StoreArticle({
   related,
   whatsappHref,
 }: StoreArticleProps) {
-  const catalog = localizePath("/products", locale);
+  const catalog = localizePath(ALL_ARTICLES_PATH, locale);
   const inCategory = article.category
-    ? catalogHref(locale, {
-        ...EMPTY_CATALOG_QUERY,
-        category: article.category.slug,
-      })
+    ? localizePath(article.category.path, locale)
     : null;
-  const path = localizePath(`/products/${article.slug}`, locale);
+  const group = article.category?.group ?? null;
+  const path = localizePath(articlePath(article.slug), locale);
   const labels = { card: copy.articleCard, price: copy.price };
   const paragraphs = paragraphsOf(article.description);
   const relatedCard = (item: StoreRelatedArticle) => ({
@@ -117,7 +121,7 @@ function StoreArticle({
         amount={item.priceAmount}
         currency={item.currencyCode}
         headingLevel="h3"
-        href={localizePath(`/products/${item.slug}`, locale)}
+        href={localizePath(articlePath(item.slug), locale)}
         image={item.cover ? { alt: item.cover.alt, src: item.cover.url } : null}
         labels={labels}
         locale={locale}
@@ -153,6 +157,19 @@ function StoreArticle({
                   {copy.article.catalog}
                 </Link>
               </li>
+              {group ? (
+                <>
+                  <li aria-hidden="true">/</li>
+                  <li>
+                    <Link
+                      className={CRUMB_CLASS}
+                      href={localizePath(group.path, locale)}
+                    >
+                      {group.name}
+                    </Link>
+                  </li>
+                </>
+              ) : null}
               {article.category && inCategory ? (
                 <>
                   <li aria-hidden="true">/</li>

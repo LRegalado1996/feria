@@ -11,10 +11,15 @@ import {
 import type { Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 
-/** A category as the catalog lists it. */
+/**
+ * A category as the catalog lists it: a group's categories right after it,
+ * one level in (`depth`, FER-043), each with its page's address.
+ */
 export interface CatalogCategory {
+  depth: 0 | 1;
   lang: string;
   name: string;
+  path: string;
   slug: string;
 }
 
@@ -40,6 +45,11 @@ export interface StoreCatalogFiltersProps {
   /** Unique on the page: it prefixes the ids that name each group. */
   idPrefix: string;
   locale: Locale;
+  /**
+   * A category was chosen: it leads to another page (FER-043), so the
+   * panel around the choices closes as it is followed.
+   */
+  onCategoryChoice?: () => void;
   query: CatalogQuery;
 }
 
@@ -55,6 +65,7 @@ interface ChoiceProps {
   count?: number;
   href: string;
   lang?: string;
+  onFollow?: () => void;
   /** The value's own color, checked as `#rrggbb` when it was saved. */
   swatchColor?: string | null;
 }
@@ -70,6 +81,7 @@ function Choice({
   count,
   href,
   lang,
+  onFollow,
   swatchColor = null,
 }: ChoiceProps) {
   return (
@@ -80,6 +92,7 @@ function Choice({
       data-slot="store-catalog-choice"
       href={href}
       lang={lang}
+      onClick={onFollow}
       scroll={false}
     >
       {/* The box shows the state the link's `aria-current` states. */}
@@ -124,6 +137,7 @@ function StoreCatalogFilters({
   filters,
   idPrefix,
   locale,
+  onCategoryChoice,
   query,
 }: StoreCatalogFiltersProps) {
   const href = (next: CatalogQuery) => catalogHref(locale, next);
@@ -143,22 +157,29 @@ function StoreCatalogFilters({
               <Choice
                 chosen={query.category === null}
                 href={href({ ...query, category: null })}
+                onFollow={onCategoryChoice}
               >
                 {copy.allCategories}
               </Choice>
             </li>
             {categories.map((category) => {
-              const chosen = query.category === category.slug;
+              const chosen = query.category?.slug === category.slug;
 
               return (
-                <li key={category.slug}>
+                <li
+                  className={category.depth === 1 ? "pl-8" : undefined}
+                  key={category.slug}
+                >
                   <Choice
                     chosen={chosen}
                     href={href({
                       ...query,
-                      category: chosen ? null : category.slug,
+                      category: chosen
+                        ? null
+                        : { path: category.path, slug: category.slug },
                     })}
                     lang={category.lang}
+                    onFollow={onCategoryChoice}
                   >
                     {category.name}
                   </Choice>
