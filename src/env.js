@@ -32,9 +32,11 @@ export const env = createEnv({
     // is closed behind the coming-soon page and everything else is open.
     // `true` in production opens the store; `false` closes any environment.
     STOREFRONT_LAUNCHED: z.enum(["true", "false"]).optional(),
-    // Vercel Blob (article, banner and logo images). Production has its own
-    // store; qa, previews and local runs share a second one. Optional until
-    // the upload pipeline reads it (FER-011).
+    // Vercel Blob (uploaded images, FER-011). Production has its own store;
+    // qa, previews and local runs share a second one, each in its own folder.
+    // Unset, nothing can be uploaded (the token request answers 500) and no
+    // file is ever deleted; `next.config.ts` reads it at build for the host
+    // `next/image` may serve.
     BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
     // Vercel AI Gateway. Deployments authenticate with the OIDC token Vercel
     // injects (`VERCEL_OIDC_TOKEN`, refreshed locally by `vercel env pull`),

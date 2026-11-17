@@ -96,6 +96,7 @@ describe("API docs route", () => {
       ["/admin/products/{id}/images/order", ["put"]],
       ["/admin/products/{id}/filter-values", ["put"]],
       ["/store", ["get", "put"]],
+      ["/admin/uploads/token", ["post"]],
     ]);
   });
 

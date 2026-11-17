@@ -25,6 +25,13 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 - `src/proxy.ts` stamps request ids on `/api`. If it ever redirects, it does so on session-cookie presence only, with a 307; pages and procedures do the real checks.
 - Test authorization by calling the procedure as a less-privileged user. A missing ownership check found in review is fixed in the same PR.
 
+## Uploads (FER-011)
+
+- **Files never pass through a function.** The browser sends a photo straight to Vercel Blob with a client token from `upload.createToken`, an `adminProcedure`: session, then the limits, then the login re-read. The server picks the pathname (`<namespace>/<purpose>/<uuid>.<ext>`) and signs the declared type (JPEG, PNG or WebP) and size into the token, so the store refuses another file; the token lapses after 10 minutes and never overwrites.
+- **A stored address is the server's to trust.** A form that saves an uploaded image sends `uploadedImageSchema` (address, width, height), and the procedure checks the address with `isOwnBlobUrl(url, { ...blobStore, purpose })` (`src/lib/blob/paths.ts`) before writing it: HTTPS, this deployment's Blob host and folder, the purpose's folder, a UUID name, no query. `next/image` serves that host only (`next.config.ts`).
+- **Only own files are deleted.** `deleteBlobs` and the orphan cleanup act on this deployment's folder alone (qa, previews and local runs share a store), and the cleanup reads every column in `IMAGE_URL_COLUMNS` (`src/server/services/upload.ts`) before deleting: a new image column joins that list in the same change, or its files are deleted as orphans.
+- **The read-write token stays on the server** (`BLOB_READ_WRITE_TOKEN`, never `NEXT_PUBLIC_`); the browser only ever holds a client token for one file.
+
 ## Encode for every sink
 
 - **`href` from the database:** the store's links reach an `href`. They are validated when they are stored, by the schema: a link is `https://` only, never `javascript:`, carries no user name, and a social link stays on its own site. The colors in a `style` attribute are constants of the theme file (`src/styles/theme.ts`), never data.
