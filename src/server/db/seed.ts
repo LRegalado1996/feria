@@ -5,7 +5,7 @@ import type { DatabaseClient } from "@/server/db";
 import { user } from "@/server/db/schema";
 import { addMissingStoreTexts, findStore } from "@/server/services/store";
 
-import { seedCatalog } from "./seed-catalog";
+import { seedCatalog, seedCatalogPages } from "./seed-catalog";
 
 interface SeedAccount {
   email: string;
@@ -132,9 +132,14 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
   });
   // In one transaction: a seed that fails half-way leaves no half catalog,
   // and the next run (which skips a store that has categories) starts over.
-  const createdArticles = await db.transaction(
-    async (tx) => await seedCatalog(tx, store.id)
+  // The catalog's pages (FER-043) come after it, and also reach a catalog
+  // seeded before them.
+  const { catalogPages, createdArticles } = await db.transaction(
+    async (tx) => ({
+      createdArticles: await seedCatalog(tx, store.id),
+      catalogPages: await seedCatalogPages(tx, store.id),
+    })
   );
 
-  return { createdAccounts, createdArticles, createdStoreTexts };
+  return { catalogPages, createdAccounts, createdArticles, createdStoreTexts };
 }

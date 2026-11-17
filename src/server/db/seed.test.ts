@@ -19,11 +19,18 @@ const { createAccount } = vi.hoisted(() => ({
 
 vi.mock("@/server/better-auth/accounts", () => ({ createAccount }));
 
-const { seedCatalog } = vi.hoisted(() => ({
+const PAGES = { covers: 7, grouped: 4, groups: 1 };
+
+const { seedCatalog, seedCatalogPages } = vi.hoisted(() => ({
   seedCatalog: vi.fn(async (_tx: unknown, _storeId: number) => 11),
+  seedCatalogPages: vi.fn(async (_tx: unknown, _storeId: number) => ({
+    covers: 7,
+    grouped: 4,
+    groups: 1,
+  })),
 }));
 
-vi.mock("./seed-catalog", () => ({ seedCatalog }));
+vi.mock("./seed-catalog", () => ({ seedCatalog, seedCatalogPages }));
 
 const LOCAL_URL = "postgresql://feria:secret@localhost:5432/feria";
 const REMOTE_URL =
@@ -88,6 +95,7 @@ describe("seed", () => {
       const { run } = setup();
 
       await expect(run(nodeEnv)).resolves.toEqual({
+        catalogPages: PAGES,
         createdAccounts: ["test@example.com"],
         createdArticles: 11,
         createdStoreTexts: ["es", "en"],
@@ -132,6 +140,7 @@ describe("seed", () => {
     const { db, run } = setup({ databaseUrl: REMOTE_URL });
 
     await expect(run("development")).resolves.toEqual({
+      catalogPages: PAGES,
       createdAccounts: [],
       createdArticles: 11,
       createdStoreTexts: ["es", "en"],
@@ -169,6 +178,11 @@ describe("seed", () => {
     await run("development");
 
     expect(seedCatalog).toHaveBeenCalledExactlyOnceWith(tx, STORE_ID);
+    // The pages after the catalog they are about, in the same transaction.
+    expect(seedCatalogPages).toHaveBeenCalledExactlyOnceWith(tx, STORE_ID);
+    expect(seedCatalog.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      seedCatalogPages.mock.invocationCallOrder[0] ?? 0
+    );
   });
 
   test("refuses a database without the store's row, writing nothing", async () => {
@@ -180,6 +194,7 @@ describe("seed", () => {
     expect(createAccount).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(seedCatalog).not.toHaveBeenCalled();
+    expect(seedCatalogPages).not.toHaveBeenCalled();
   });
 
   test("the seed's login is the documented one", () => {

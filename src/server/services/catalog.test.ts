@@ -17,6 +17,8 @@ import {
 import {
   createProduct,
   deleteProduct,
+  getAllArticlesCover,
+  getCategoryPage,
   getPublishedProduct,
   getPublishedProductRef,
   listCartProducts,
@@ -39,6 +41,7 @@ interface ReadConfig {
   columns?: Record<string, boolean>;
   orderBy?: unknown;
   where: unknown;
+  with?: Record<string, unknown>;
 }
 
 function setup() {
@@ -201,6 +204,7 @@ describe("listCategories", () => {
     db.query.category.findMany.mockResolvedValue([
       {
         id: 1,
+        parentId: null,
         position: 0,
         slug: "collares",
         translations: [
@@ -210,19 +214,51 @@ describe("listCategories", () => {
       },
       {
         id: 2,
+        parentId: 1,
         position: 1,
         slug: "aros",
         translations: [{ locale: "es", name: "Aros" }],
       },
-      { id: 3, position: 2, slug: "sin-nombre", translations: [] },
+      {
+        id: 3,
+        // A group the list does not hold leaves the category at the top.
+        parentId: 99,
+        position: 2,
+        slug: "sin-nombre",
+        translations: [],
+      },
     ]);
 
     await expect(
       listCategories(db as never, { locale: "en", storeId: STORE_ID })
     ).resolves.toEqual([
-      { id: 1, lang: "en", name: "Necklaces", position: 0, slug: "collares" },
-      { id: 2, lang: "es", name: "Aros", position: 1, slug: "aros" },
-      { id: 3, lang: "en", name: "", position: 2, slug: "sin-nombre" },
+      {
+        id: 1,
+        lang: "en",
+        name: "Necklaces",
+        parentId: null,
+        path: "/collares",
+        position: 0,
+        slug: "collares",
+      },
+      {
+        id: 2,
+        lang: "es",
+        name: "Aros",
+        parentId: 1,
+        path: "/collares/aros",
+        position: 1,
+        slug: "aros",
+      },
+      {
+        id: 3,
+        lang: "en",
+        name: "",
+        parentId: 99,
+        path: "/sin-nombre",
+        position: 2,
+        slug: "sin-nombre",
+      },
     ]);
     const config = configOf(db.query.category.findMany);
     expect(renderQuery(config.where)).toEqual({
@@ -232,6 +268,221 @@ describe("listCategories", () => {
     expect(renderOrderBy(config.orderBy)).toBe(
       '"category"."position" asc, "category"."id" asc'
     );
+  });
+});
+
+/** A category's row as `getCategoryPage` reads it, a group with no cover. */
+function makePageRow(overrides: Record<string, unknown> = {}) {
+  return {
+    children: [
+      {
+        slug: "anillos",
+        translations: [
+          { locale: "es", name: "Anillos" },
+          { locale: "en", name: "Rings" },
+        ],
+      },
+      { slug: "aros", translations: [{ locale: "es", name: "Aros" }] },
+    ],
+    coverHeight: null,
+    coverPhoneHeight: null,
+    coverPhoneUrl: null,
+    coverPhoneWidth: null,
+    coverUrl: null,
+    coverWidth: null,
+    id: 6,
+    parent: null,
+    slug: "bijouterie",
+    translations: [
+      {
+        coverAlt: null,
+        locale: "es",
+        name: "Bijouterie",
+        seoDescription: null,
+        seoTitle: null,
+      },
+      {
+        coverAlt: null,
+        locale: "en",
+        name: "Jewelry",
+        seoDescription: "Jewelry from the fair",
+        seoTitle: "Jewelry at LR Market",
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe("getCategoryPage", () => {
+  test("reads a group's page in the asked language: its categories under it, its texts, no cover", async () => {
+    const { configOf, db } = setup();
+    db.query.category.findFirst.mockResolvedValue(makePageRow());
+
+    await expect(
+      getCategoryPage(db as never, {
+        locale: "en",
+        slug: "bijouterie",
+        storeId: STORE_ID,
+      })
+    ).resolves.toEqual({
+      children: [
+        {
+          lang: "en",
+          name: "Rings",
+          path: "/bijouterie/anillos",
+          slug: "anillos",
+        },
+        { lang: "es", name: "Aros", path: "/bijouterie/aros", slug: "aros" },
+      ],
+      cover: null,
+      id: 6,
+      lang: "en",
+      name: "Jewelry",
+      parent: null,
+      path: "/bijouterie",
+      seoDescription: "Jewelry from the fair",
+      seoTitle: "Jewelry at LR Market",
+      slug: "bijouterie",
+    });
+    const config = configOf(db.query.category.findFirst);
+    expect(renderQuery(config.where)).toEqual({
+      params: [STORE_ID, "bijouterie"],
+      sql: '("category"."storeId" = $1 and "category"."slug" = $2)',
+    });
+  });
+
+  test("reads a category in a group with its cover, its group's name and its own alt text", async () => {
+    const { db } = setup();
+    db.query.category.findFirst.mockResolvedValue(
+      makePageRow({
+        children: [],
+        coverHeight: 800,
+        coverPhoneHeight: 1200,
+        coverPhoneUrl: "/seed/ring-1.jpg",
+        coverPhoneWidth: 1200,
+        coverUrl: "/seed/ring-2.jpg",
+        coverWidth: 1200,
+        id: 3,
+        parent: {
+          slug: "bijouterie",
+          translations: [{ locale: "es", name: "Bijouterie" }],
+        },
+        slug: "anillos",
+        translations: [
+          {
+            coverAlt: "Anillo sello dorado",
+            locale: "es",
+            name: "Anillos",
+            seoDescription: null,
+            seoTitle: null,
+          },
+        ],
+      })
+    );
+
+    await expect(
+      getCategoryPage(db as never, {
+        locale: "es",
+        slug: "anillos",
+        storeId: STORE_ID,
+      })
+    ).resolves.toMatchObject({
+      children: [],
+      cover: {
+        alt: "Anillo sello dorado",
+        computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+        phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
+      },
+      name: "Anillos",
+      parent: {
+        lang: "es",
+        name: "Bijouterie",
+        path: "/bijouterie",
+        slug: "bijouterie",
+      },
+      path: "/bijouterie/anillos",
+      seoDescription: null,
+      seoTitle: null,
+    });
+  });
+
+  test("answers null for a slug the store has no category at", async () => {
+    const { db } = setup();
+
+    await expect(
+      getCategoryPage(db as never, {
+        locale: "es",
+        slug: "anillos",
+        storeId: STORE_ID,
+      })
+    ).resolves.toBeNull();
+  });
+});
+
+describe("getAllArticlesCover", () => {
+  const STORE_ROW = {
+    catalogCoverHeight: 800,
+    catalogCoverPhoneHeight: null,
+    catalogCoverPhoneUrl: null,
+    catalogCoverPhoneWidth: null,
+    catalogCoverUrl: "/seed/ring-3.jpg",
+    catalogCoverWidth: 1200,
+    translations: [
+      { catalogCoverAlt: "Anillo con piedras", locale: "es" },
+      { catalogCoverAlt: null, locale: "en" },
+    ],
+  };
+
+  test.each([
+    ["es", "Anillo con piedras"],
+    // The English row has no alt text: the page's name describes it.
+    ["en", "All articles"],
+  ] as const)(
+    "describes the store's cover in %s as %j",
+    async (locale, alt) => {
+      const { configOf, db } = setup();
+      db.query.store.findFirst.mockResolvedValue(STORE_ROW);
+
+      await expect(
+        getAllArticlesCover(db as never, {
+          fallbackAlt: "All articles",
+          locale,
+          storeId: STORE_ID,
+        })
+      ).resolves.toEqual({
+        alt,
+        computer: { height: 800, url: "/seed/ring-3.jpg", width: 1200 },
+        phone: null,
+      });
+      expect(renderQuery(configOf(db.query.store.findFirst).where)).toEqual({
+        params: [STORE_ID],
+        sql: '"store"."id" = $1',
+      });
+    }
+  );
+
+  test.each([
+    ["no store", undefined],
+    [
+      "a store without a cover",
+      {
+        ...STORE_ROW,
+        catalogCoverHeight: null,
+        catalogCoverUrl: null,
+        catalogCoverWidth: null,
+      },
+    ],
+  ])("answers null for %s", async (_case, row) => {
+    const { db } = setup();
+    db.query.store.findFirst.mockResolvedValue(row);
+
+    await expect(
+      getAllArticlesCover(db as never, {
+        fallbackAlt: "Todos",
+        locale: "es",
+        storeId: STORE_ID,
+      })
+    ).resolves.toBeNull();
   });
 });
 
@@ -291,6 +542,7 @@ describe("listPublishedProducts", () => {
         STORE_ID,
         "published",
         "collares",
+        "collares",
         "en",
         "es",
         "en",
@@ -299,13 +551,17 @@ describe("listPublishedProducts", () => {
         "2026-11-01T00:00:00.000Z",
         40,
       ],
+      // The category, or a group holding it (FER-043): a group's page
+      // lists every article in it.
       sql:
-        '("product"."storeId" = $1 and "product"."status" = $2 and "category"."slug" = $3 and ' +
+        '("product"."storeId" = $1 and "product"."status" = $2 and ("category"."slug" = $3 or ' +
+        'exists (select 1 from "category" as "category_group" where ("category_group"."id" = "category"."parentId" and ' +
+        '"category_group"."storeId" = "category"."storeId" and "category_group"."slug" = $4))) and ' +
         'exists (select 1 from "product_translation" as "shown" where ("shown"."productId" = "product"."id" and ' +
-        '("shown"."locale" = $4 or ("shown"."locale" = $5 and not exists (select 1 from "product_translation" as "own" ' +
-        'where ("own"."productId" = "product"."id" and "own"."locale" = $6)))) and ' +
-        '(unaccent("shown"."title") ilike unaccent($7) or unaccent("shown"."description") ilike unaccent($8)))) and ' +
-        '("product"."publishedAt", "product"."id") < ($9::timestamptz, $10::int))',
+        '("shown"."locale" = $5 or ("shown"."locale" = $6 and not exists (select 1 from "product_translation" as "own" ' +
+        'where ("own"."productId" = "product"."id" and "own"."locale" = $7)))) and ' +
+        '(unaccent("shown"."title") ilike unaccent($8) or unaccent("shown"."description") ilike unaccent($9)))) and ' +
+        '("product"."publishedAt", "product"."id") < ($10::timestamptz, $11::int))',
     });
   });
 
@@ -672,7 +928,12 @@ describe("getPublishedProduct", () => {
     db.query.product.findFirst.mockResolvedValue(detailRow());
 
     await expect(get(db)).resolves.toEqual({
-      category: { name: "Necklaces", slug: "collares" },
+      category: {
+        group: null,
+        name: "Necklaces",
+        path: "/collares",
+        slug: "collares",
+      },
       categoryId: 9,
       currencyCode: "USD",
       description: "Handmade",
@@ -737,6 +998,44 @@ describe("getPublishedProduct", () => {
 
     await expect(get(db)).resolves.toMatchObject({
       category: { name: "", slug: "collares" },
+    });
+  });
+
+  test("places a category in a group under it, named in the asked language (FER-043)", async () => {
+    const { configOf, db } = setup();
+    db.query.product.findFirst.mockResolvedValue(
+      detailRow({
+        category: {
+          parent: {
+            slug: "bijouterie",
+            translations: [
+              { locale: "es", name: "Bijouterie" },
+              { locale: "en", name: "Jewelry" },
+            ],
+          },
+          slug: "anillos",
+          translations: [{ locale: "en", name: "Rings" }],
+        },
+      })
+    );
+
+    await expect(get(db)).resolves.toMatchObject({
+      category: {
+        group: { name: "Jewelry", path: "/bijouterie" },
+        name: "Rings",
+        path: "/bijouterie/anillos",
+        slug: "anillos",
+      },
+    });
+    expect(configOf(db.query.product.findFirst).with?.category).toEqual({
+      columns: { slug: true },
+      with: {
+        parent: {
+          columns: { slug: true },
+          with: { translations: { columns: { locale: true, name: true } } },
+        },
+        translations: { columns: { locale: true, name: true } },
+      },
     });
   });
 });

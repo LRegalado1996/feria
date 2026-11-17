@@ -9,6 +9,8 @@ import {
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
+  getAllArticlesCover,
+  getCategoryPage,
   getPublishedProduct,
   listCategories,
   listRelatedProducts,
@@ -101,6 +103,58 @@ export async function readCategories(store: { id: number }, locale: Locale) {
   cacheTag(catalogTag(store.id));
 
   return await listCategories(db, { locale, storeId: store.id });
+}
+
+/**
+ * A category's page (FER-043) at `slug` in `locale`: its names, its group,
+ * its categories, its texts and its cover, or `null`. Cached with the
+ * catalog, so every category write drops it. An address that can never be
+ * a category's is answered before the cache, like an article's.
+ */
+export async function readCategoryPage(
+  store: { id: number },
+  slug: string,
+  locale: Locale
+) {
+  const parsed = catalogSlugSchema.safeParse(slug);
+
+  if (!parsed.success || parsed.data !== slug) {
+    return null;
+  }
+
+  return await readCachedCategoryPage(store, slug, locale);
+}
+
+async function readCachedCategoryPage(
+  store: { id: number },
+  slug: string,
+  locale: Locale
+) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await getCategoryPage(db, { locale, slug, storeId: store.id });
+}
+
+/**
+ * The cover of the page of all the store's articles (FER-043), cached with
+ * the catalog; a store edit drops the tag too (`invalidateCatalogCache`).
+ */
+export async function readAllArticlesCover(
+  store: { id: number },
+  locale: Locale,
+  fallbackAlt: string
+) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await getAllArticlesCover(db, {
+    fallbackAlt,
+    locale,
+    storeId: store.id,
+  });
 }
 
 /**
