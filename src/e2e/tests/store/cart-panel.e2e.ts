@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import {
   type DbFixture,
@@ -75,6 +75,18 @@ async function liveAddButton(page: Page) {
   return add;
 }
 
+/** The animation each element runs, read from its computed style. */
+async function animationsOf(targets: Locator[]) {
+  return await Promise.all(
+    targets.map(
+      async (target) =>
+        await target.evaluate(
+          (element) => getComputedStyle(element).animationName
+        )
+    )
+  );
+}
+
 test.describe("Cart panel", () => {
   test("adding from the article page opens the panel with that line, marked, and says so", async ({
     db,
@@ -105,19 +117,13 @@ test.describe("Cart panel", () => {
     await expect(panel.getByTestId("store-cart-panel-count")).toHaveText("(1)");
     // It slid in, its count bumped, and the line rose under a fading wash.
     expect(
-      await page.evaluate(() =>
-        [
-          '[data-testid="store-cart-panel"]',
-          '[data-testid="dialog-overlay"]',
-          '[data-testid="store-cart-panel-count"]',
-          "[data-just-added] > div",
-          '[data-slot="store-cart-line-wash"]',
-        ].map((selector) => {
-          const element = document.querySelector(selector);
-
-          return element ? getComputedStyle(element).animationName : null;
-        })
-      )
+      await animationsOf([
+        panel,
+        page.getByTestId("dialog-overlay").filter({ visible: true }),
+        panel.getByTestId("store-cart-panel-count"),
+        line.getByTestId("store-cart-line-body"),
+        line.getByTestId("store-cart-line-wash"),
+      ])
     ).toEqual([
       "store-panel-in",
       "store-scrim-in",
@@ -374,23 +380,15 @@ test.describe("Cart panel", () => {
     const panel = storePage.getCartPanel();
     const line = storePage.getCartPanelLine("Collar dorado");
     await expect(line).toHaveAttribute("data-just-added", "");
-    const animations = await page.evaluate(() =>
-      [
-        '[data-testid="store-cart-panel"]',
-        '[data-testid="dialog-overlay"]',
-        '[data-testid="store-cart-panel-count"]',
-        "[data-just-added] > div",
-      ].map((selector) => {
-        const element = document.querySelector(selector);
-
-        return element ? getComputedStyle(element).animationName : null;
-      })
-    );
+    const animations = await animationsOf([
+      panel,
+      page.getByTestId("dialog-overlay").filter({ visible: true }),
+      panel.getByTestId("store-cart-panel-count"),
+      line.getByTestId("store-cart-line-body"),
+    ]);
     expect(animations).toEqual(["none", "none", "none", "none"]);
     // The wash is not drawn at all.
-    await expect(
-      panel.locator('[data-slot="store-cart-line-wash"]')
-    ).toBeHidden();
+    await expect(line.getByTestId("store-cart-line-wash")).toBeHidden();
   });
 
   test("with scripts off, the header's cart leads to the checkout page", async ({

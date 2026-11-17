@@ -9,6 +9,7 @@ import {
   uniquePhone,
   uniqueTag,
 } from "../../fixtures";
+import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
@@ -109,9 +110,8 @@ async function addBothArticles(
 
 /** Opens the side panel from the checkout's "Editar el carrito". */
 async function editCart(page: Page) {
-  await page.getByTestId("store-checkout-edit").click();
   const panel = new StorePage(page).getCartPanel();
-  await expect(panel).toBeVisible();
+  await clickUntilVisible(page.getByTestId("store-checkout-edit"), panel);
 
   return panel;
 }
@@ -410,8 +410,11 @@ test.describe("Cart and checkout", () => {
     await expect(page.getByTestId("store-checkout-total")).toHaveText(
       "TotalUYU 2,400"
     );
-    await page.getByRole("button", { name: "Edit the cart" }).click();
     const panel = new StorePage(page).getCartPanel();
+    await clickUntilVisible(
+      page.getByRole("button", { name: "Edit the cart" }),
+      panel
+    );
     await expect(
       page.getByRole("dialog", { name: "Your cart, 2 units" })
     ).toBeVisible();
