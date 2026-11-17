@@ -138,7 +138,11 @@ describe("StoreFooter", () => {
     const shop = within(
       within(footer).getByRole("navigation", { name: "Shop" })
     );
-    expect(shop.getAllByRole("link")).toHaveLength(1);
+    expect(
+      shop
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")])
+    ).toEqual([["Catalog", "/en/products"]]);
   });
 
   test.each([

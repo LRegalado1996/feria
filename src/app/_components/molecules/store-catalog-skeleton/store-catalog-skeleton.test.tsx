@@ -28,14 +28,24 @@ describe("StoreCatalogSkeleton", () => {
     expect(skeleton).toHaveAttribute("data-slot", "store-catalog-skeleton");
   });
 
-  test("mirrors the page: a centered head, the bar, and two rows of four square tiles on a computer", () => {
+  test("mirrors the page: a centered head, the bar, and two rows of four cards on a computer, each a square tile with a name and a price under it", () => {
     const { part } = setup();
 
     expect(part("head")).toHaveClass("items-center");
     expect(part("bar")).toHaveClass("justify-between");
     const grid = part("grid");
     expect(grid).toHaveClass("grid-cols-2", "md:grid-cols-4");
-    expect(grid?.children).toHaveLength(8);
-    expect(grid?.querySelectorAll(".aspect-square")).toHaveLength(8);
+    // Each card's placeholders, top to bottom, all in the tile's grey.
+    expect(
+      [...(grid?.children ?? [])].map((card) =>
+        [...card.children].map((placeholder) => placeholder.className)
+      )
+    ).toEqual(
+      Array.from({ length: 8 }, () => [
+        "aspect-square bg-store-surface",
+        "mt-1 h-3 w-3/4 bg-store-surface",
+        "h-3 w-1/3 bg-store-surface",
+      ])
+    );
   });
 });

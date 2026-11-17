@@ -94,16 +94,40 @@ describe("StoreCoverCarousel", () => {
   });
 
   test.each([
-    ["es", "Portada", "Ver la portada 2", "Pausar la portada"],
-    ["en", "Cover", "Show cover 2", "Pause the cover"],
+    [
+      "es",
+      "Portada",
+      "de",
+      "Comprar ahora",
+      "Ver la portada 2",
+      "Pausar la portada",
+    ],
+    ["en", "Cover", "of", "Shop now", "Show cover 2", "Pause the cover"],
   ] as const)(
-    "in %s, several banners are one carousel named %j, with a dot for each and a pause button",
-    (locale, name, second, pauseName) => {
+    "in %s, several banners are one carousel named %j, a slide each, with a dot for each and a pause button",
+    (locale, name, of, shopNow, second, pauseName) => {
       setup({ locale });
 
       const cover = screen.getByRole("region", { name });
-      expect(within(cover).getAllByRole("group")).toHaveLength(3);
-      expect(within(cover).getAllByRole("link")).toHaveLength(3);
+      // Each slide's name, then its banner's words (its title, then the
+      // call to shop) and where the banner leads.
+      expect(
+        within(cover)
+          .getAllByRole("group")
+          .map((slide) => {
+            const banner = within(slide).getByRole("link");
+
+            return [
+              slide.getAttribute("aria-label"),
+              banner.textContent,
+              banner.getAttribute("href"),
+            ];
+          })
+      ).toEqual([
+        [`1 ${of} 3`, `Portada 1${shopNow}`, "/products?category=c0"],
+        [`2 ${of} 3`, `Portada 2${shopNow}`, "/products?category=c1"],
+        [`3 ${of} 3`, `Portada 3${shopNow}`, "/products?category=c2"],
+      ]);
       expect(
         within(cover).getByRole("button", { name: second })
       ).not.toHaveAttribute("aria-current");
@@ -124,7 +148,7 @@ describe("StoreCoverCarousel", () => {
       stopOnMouseEnter: false,
     });
     expect(useEmblaCarousel).toHaveBeenCalledWith({ loop: true }, [plugin]);
-    expect(plugin.play).toHaveBeenCalledOnce();
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
     expect(plugin.stop).not.toHaveBeenCalled();
   });
 
@@ -153,11 +177,11 @@ describe("StoreCoverCarousel", () => {
     // A click alone: no pointer over it, no focus in it, to hold it too.
     fireEvent.click(required(pause()));
     expect(pause()).toHaveAttribute("aria-pressed", "true");
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
 
     fireEvent.click(required(pause()));
     expect(pause()).toHaveAttribute("aria-pressed", "false");
-    expect(plugin.play).toHaveBeenCalledOnce();
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("once paused, leaving it with the pointer or the keyboard keeps it paused", () => {
@@ -180,10 +204,10 @@ describe("StoreCoverCarousel", () => {
     plugin.play.mockClear();
 
     fireEvent.mouseEnter(area);
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
 
     fireEvent.mouseLeave(area);
-    expect(plugin.play).toHaveBeenCalledOnce();
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("holds still while focus is inside it, even as it moves from control to control", () => {
@@ -192,12 +216,12 @@ describe("StoreCoverCarousel", () => {
     plugin.play.mockClear();
 
     fireEvent.focus(required(first));
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
     fireEvent.blur(required(first), { relatedTarget: second });
     expect(plugin.play).not.toHaveBeenCalled();
 
     fireEvent.blur(required(second), { relatedTarget: document.body });
-    expect(plugin.play).toHaveBeenCalledOnce();
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("holds still while a finger drags it", () => {
@@ -207,12 +231,12 @@ describe("StoreCoverCarousel", () => {
     act(() => {
       embla.emit("pointerDown");
     });
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
 
     act(() => {
       embla.emit("pointerUp");
     });
-    expect(plugin.play).toHaveBeenCalledOnce();
+    expect(plugin.play).toHaveBeenCalledExactlyOnceWith();
   });
 
   // Embla measures again on a resize, and starts its plugins anew, stopped.
@@ -257,7 +281,7 @@ describe("StoreCoverCarousel", () => {
     const { pause, track } = setup({ reduced: true });
 
     expect(plugin.play).not.toHaveBeenCalled();
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
     expect(pause()).toBeNull();
     expect(track()).toHaveAttribute("aria-live", "polite");
   });
@@ -270,7 +294,7 @@ describe("StoreCoverCarousel", () => {
       motion.set(true);
     });
 
-    expect(plugin.stop).toHaveBeenCalledOnce();
+    expect(plugin.stop).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("before Embla is ready, asks the plugin for nothing", () => {

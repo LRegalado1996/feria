@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import type { ComponentProps } from "react";
+import { describe, expect, test, vi } from "vitest";
 
 import { type CatalogQuery, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import type { Locale } from "@/lib/i18n/config";
@@ -10,6 +11,21 @@ import {
   type CatalogFilter,
   StoreCatalogFilters,
 } from "./store-catalog-filters";
+
+// Whether a link lets Next scroll to the top of the page leaves no trace in
+// the anchor it renders: this stand-in writes the `scroll` it was handed on
+// its anchor, which is otherwise the same.
+vi.mock("next/link", () => ({
+  default: ({
+    children,
+    scroll,
+    ...props
+  }: ComponentProps<"a"> & { scroll?: boolean }) => (
+    <a data-link-scroll={String(scroll)} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 function makeQuery(overrides: Partial<CatalogQuery> = {}): CatalogQuery {
   return { ...EMPTY_CATALOG_QUERY, ...overrides };
@@ -227,7 +243,7 @@ describe("StoreCatalogFilters", () => {
     );
   });
 
-  test("each choice is a row a thumb can tap, that keeps the page where it is", () => {
+  test("each choice is a row a thumb can tap", () => {
     setup();
 
     const choice = screen.getByRole("link", { name: "Collares" });
@@ -235,6 +251,25 @@ describe("StoreCatalogFilters", () => {
       "min-h-11",
       "focus-visible:outline-store-foreground"
     );
+  });
+
+  test("every choice, a category or a filter's value, keeps the page where it is instead of scrolling to its top", () => {
+    const { root } = setup();
+
+    expect(
+      [
+        ...(root?.querySelectorAll<HTMLElement>(
+          '[data-slot="store-catalog-choice"]'
+        ) ?? []),
+      ].map((choice) => [choice.textContent, choice.dataset.linkScroll])
+    ).toEqual([
+      ["Todas", "false"],
+      ["Collares", "false"],
+      ["Rings", "false"],
+      ["Dorado4", "false"],
+      ["Plateado1", "false"],
+      ["M3", "false"],
+    ]);
   });
 
   test("keeps a caller's class", () => {

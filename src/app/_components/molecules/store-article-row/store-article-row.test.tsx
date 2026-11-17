@@ -114,7 +114,8 @@ describe("StoreArticleRow", () => {
 
     await user.click(required(arrow()));
     await user.click(required(arrow()));
-    expect(embla.fake.scrollNext).toHaveBeenCalledTimes(2);
+    // Each a glide (`false`): motion is allowed here.
+    expect(embla.fake.scrollNext.mock.calls).toEqual([[false], [false]]);
     expect(arrow()).toHaveAccessibleName("Volver al principio de Novedades");
 
     await user.click(required(arrow()));
