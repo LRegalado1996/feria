@@ -18,11 +18,11 @@ When enabled, the shopper receives a code by WhatsApp after placing the order an
 
 ## Part 2: implementation
 
-- A platform feature flag, plus a switch per store. Off means the confirmation page shows only the banner, exactly as before.
+- A feature flag, plus a switch in the store's settings. Off means the confirmation page shows only the banner, exactly as before.
 - Table `phone_verification`. On order creation, when enabled, generate a six-digit code, store only its hash with a ten-minute expiry, and send it through a provider interface (one real implementation, one fake for tests and local work).
 - The confirmation page shows the code form, a resend button with a cooldown, and a clear result.
 - A correct code sets `customer_order.phoneVerifiedAt`. The admin's "phone confirmed" flag reads from it.
-- Limits: attempts per code, resends per order, sends per phone per day, and a daily spend cap for the platform.
+- Limits: attempts per code, resends per order, sends per phone per day, and a daily spend cap.
 - A failed send is logged and reported; the shopper still sees their order confirmed.
 
 ## Acceptance criteria

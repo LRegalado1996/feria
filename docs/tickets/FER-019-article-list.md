@@ -3,15 +3,15 @@
 - **Milestone:** M3 Admin
 - **Priority:** P0
 - **Status:** todo
-- **Depends on:** FER-017
+- **Depends on:** FER-017, FER-040
 
 ## Goal
 
-A store member finds any article quickly and makes the common changes without opening it.
+An admin finds any article quickly and makes the common changes without opening it.
 
 ## Scope
 
-- List with cover, title, category, price, status and availability; cards on mobile, a table on desktop.
+- At `/admin/products`, in the admin shell and cards of [FER-040](FER-040-admin-redesign.md). List with cover, title, category, price, status and availability; cards on mobile, a table on desktop.
 - Search by title, filters by category, status, availability and the store's own filters (FER-033), all in the URL.
 - "Share this selection": with a category or filter applied, one button copies the matching storefront link or opens WhatsApp with it, so the owner answers "what do you have in purple?" in two taps.
 - Bulk edit: select several articles and add or remove a filter value, for tagging the existing catalog quickly.

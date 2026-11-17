@@ -3,7 +3,7 @@
 - **Milestone:** M3 Admin
 - **Priority:** P0
 - **Status:** todo
-- **Depends on:** FER-011, FER-016, FER-033
+- **Depends on:** FER-011, FER-016, FER-033, FER-040
 
 ## Goal
 
@@ -11,14 +11,14 @@ Loading an article is the product's showpiece: photos in, a published article ou
 
 ## Scope
 
-- Step 1, photos: a large drop zone, camera or gallery on mobile, three photos suggested and more allowed. Thumbnails appear at once with upload progress; drag to reorder; the first is the cover; remove and retry per photo.
+- Step 1, photos: a large drop zone, camera or gallery on mobile, three photos suggested and more allowed. Thumbnails appear at once with upload progress; drag to reorder; the wizard asks which one is the main photo, the one the storefront's cards show (Lucas uploads it already cut out, its background removed by hand, so it sits on the grey tile; the wizard only accepts the photos, 2026-11-16); remove and retry per photo.
 - Step 2, details: title, category, price, description, availability, and the store's filters (FER-033) as tappable chips: colors with their swatch, several allowed, and "add a new value" without leaving the wizard. Spanish first, with English one tab away. SEO title and description sit in a collapsed "search and sharing" section with a live preview of the Google result and the share card.
-- Step 3, review: a live preview of the article card and the article page in the store's theme, then "publish" or "save as draft".
+- Step 3, review: a live preview of the article card on its grey tile and of the article page, as [FER-039](FER-039-storefront-redesign.md) draws them, then "publish" or "save as draft".
 - A slot in step 2 for the "fill with AI" button delivered by FER-018.
 - The draft is created as soon as the first photo uploads and saved on every change, so nothing is lost if the phone locks or the tab closes.
 - The same screens edit an existing article.
 - After publishing: a success state with "view in store", "copy link" and "load another".
-- Motion in the Volt spirit: steps slide, thumbnails settle, the publish moment has a small celebration. All of it honors reduced motion.
+- Built in the admin shell and cards of [FER-040](FER-040-admin-redesign.md). Steps slide, thumbnails settle, the publish moment has a small celebration. All of it honors reduced motion.
 
 ## Acceptance criteria
 

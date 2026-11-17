@@ -13,6 +13,7 @@ The template's demo is gone and the catalog is the reference implementation the 
 
 - Delete the `post` table (with a migration), service, router, schemas, hooks, components and e2e specs.
 - Replace the "Good examples to follow" list in `AGENTS.md` with catalog files: a router, a service, a procedure test, a form, a hook.
+- `/` stops showing the demo's sign-in and feed and redirects to the store (carried from FER-013); [FER-038](FER-038-single-store.md), next in the stack, makes `/` the store's home.
 - Update `README.md`, `docs/agents/` and the seed so nothing mentions posts.
 
 ## Acceptance criteria

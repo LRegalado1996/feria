@@ -7,7 +7,7 @@
 
 ## Goal
 
-We know which articles people look at, per store and per day, without slowing the storefront or collecting personal data.
+We know which articles people look at, per day, without slowing the storefront or collecting personal data.
 
 ## Scope
 
