@@ -154,6 +154,10 @@ function setup({
         "099 123 456"
       );
       await user.click(screen.getByTestId("store-checkout-submit"));
+      // Valid, it asks first (FER-050): confirmed, it is sent.
+      await user.click(
+        await screen.findByTestId("store-checkout-confirm-submit")
+      );
     },
     /** What each line says it orders: how many, at what price. */
     quantities: () =>
@@ -562,6 +566,10 @@ describe("StoreCheckout", () => {
           "099 123 456"
         );
         await user.click(screen.getByTestId("store-checkout-submit"));
+        // Valid, it asks first (FER-050): confirmed, it is sent.
+        await user.click(
+          await screen.findByTestId("store-checkout-confirm-submit")
+        );
       },
     ],
   ])(
@@ -696,6 +704,9 @@ describe("StoreCheckout", () => {
       expect(submit()).toBeEnabled();
     });
     await user.click(submit());
+    await user.click(
+      await screen.findByTestId("store-checkout-confirm-submit")
+    );
 
     await waitFor(() => {
       expect(push).toHaveBeenCalledExactlyOnceWith(`/en/orders/${TOKEN}`);
@@ -813,6 +824,10 @@ describe("StoreCheckout", () => {
       "099 123 456"
     );
     await user.click(screen.getByTestId("store-checkout-submit"));
+    // Valid, it asks first (FER-050): confirmed, it is sent.
+    await user.click(
+      await screen.findByTestId("store-checkout-confirm-submit")
+    );
 
     await waitFor(() => {
       expect(cartProducts.mock.calls).toEqual([

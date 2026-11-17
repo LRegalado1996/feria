@@ -1,5 +1,11 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
@@ -12,7 +18,10 @@ import { createI18nWrapper, DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
-import { StoreCheckoutForm } from "./store-checkout-form";
+import {
+  StoreCheckoutForm,
+  type StoreCheckoutFormProps,
+} from "./store-checkout-form";
 
 vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
@@ -49,6 +58,8 @@ const SERVER_FAILURE = {
   status: 500,
 } as const;
 
+type Total = StoreCheckoutFormProps["total"];
+
 interface SetupOptions {
   answers?: Answer[];
   blockedReason?: string | null;
@@ -56,6 +67,7 @@ interface SetupOptions {
   locale?: Locale;
   /** What the first `onPlaced` throws, as a page that fails to move on. */
   placedFailure?: Error;
+  total?: Total;
 }
 
 function setup({
@@ -64,6 +76,7 @@ function setup({
   items = makeItems(),
   locale = "en",
   placedFailure,
+  total = { amount: 330_000, currency: "UYU" },
 }: SetupOptions = {}) {
   // Every body the server received, in order: the spy on what was sent.
   const received: unknown[] = [];
@@ -104,18 +117,30 @@ function setup({
   const onStale = vi.fn(() => undefined);
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
-  const form = (current: Items) => (
+  const form = (
+    current: Items,
+    blocked: string | null = blockedReason,
+    currentTotal: Total = total
+  ) => (
     <StoreCheckoutForm
-      blockedReason={blockedReason}
+      blockedReason={blocked}
       className="custom"
       items={current}
       onPlaced={onPlaced}
       onStale={onStale}
+      total={currentTotal}
     />
   );
   const { rerender } = renderWithI18n(form(items), { locale, wrapper });
 
   const submit = () => screen.getByTestId("store-checkout-submit");
+  /** The confirmation, open: a dialog named by its title. */
+  const dialog = () =>
+    screen.getByRole("dialog", {
+      name: DICTIONARIES[locale].storefront.cart.confirm.title,
+    });
+  const confirmButton = () =>
+    screen.getByTestId("store-checkout-confirm-submit");
 
   return {
     fill: async ({
@@ -148,11 +173,27 @@ function setup({
           ? body.requestKey
           : null
       ),
-    rerender: (next: Items) => {
-      rerender(form(next));
+    /** Submits the form: valid, it opens the confirmation, nothing more. */
+    ask: async () => {
+      await user.click(submit());
     },
+    /** "Confirmar pedido" in the open confirmation. */
+    confirm: async () => {
+      await user.click(confirmButton());
+    },
+    confirmButton,
+    dialog,
+    /** The confirmation, or `null` when none is open. */
+    queryDialog: () => screen.queryByTestId("store-checkout-confirm"),
+    rerender: (next: Items, blocked?: string | null, nextTotal?: Total) => {
+      rerender(form(next, blocked, nextTotal));
+    },
+    /** Submits and confirms: the whole way to an order. */
     send: async () => {
       await user.click(submit());
+      await user.click(
+        await screen.findByTestId("store-checkout-confirm-submit")
+      );
     },
     submit,
     user,
@@ -213,11 +254,11 @@ describe("StoreCheckoutForm", () => {
   });
 
   test("speaks Spanish on a Spanish page", async () => {
-    const { send } = setup({ locale: "es" });
+    const { ask } = setup({ locale: "es" });
 
     expect(screen.getByRole("textbox", { name: "Tu nombre" })).toBeVisible();
     expect(screen.getByRole("textbox", { name: "Tu celular" })).toBeVisible();
-    await send();
+    await ask();
 
     expect(await screen.findByText("Escribí tu nombre.")).toBeVisible();
     expect(
@@ -225,11 +266,11 @@ describe("StoreCheckoutForm", () => {
     ).toBeVisible();
   });
 
-  test("says what is missing and sends nothing", async () => {
-    const { fill, received, send } = setup();
+  test("says what is missing, opens no confirmation and sends nothing", async () => {
+    const { ask, fill, queryDialog, received } = setup();
 
     await fill({ name: "   ", phone: "24001234" });
-    await send();
+    await ask();
 
     expect(await screen.findByText("Write your name.")).toBeVisible();
     expect(
@@ -244,6 +285,7 @@ describe("StoreCheckoutForm", () => {
       "role",
       "alert"
     );
+    expect(queryDialog()).toBeNull();
     expect(received).toEqual([]);
   });
 
@@ -492,42 +534,269 @@ describe("StoreCheckoutForm", () => {
     expect(second).not.toBe(first);
   });
 
-  test("holds the button while the order is sent, saying so, and keeps its focus", async () => {
-    const { fill, received, send, submit, user } = setup({
-      answers: ["hang"],
-    });
+  test("holds the confirmation while the order is sent, saying so, keeping its focus, and nothing closes it", async () => {
+    const { confirmButton, dialog, fill, received, send, submit, user } = setup(
+      { answers: ["hang"] }
+    );
 
     expect(submit()).toHaveAttribute("aria-disabled", "false");
     await fill();
     await send();
 
     await waitFor(() => {
-      expect(submit()).toHaveTextContent("Sending the order…");
+      expect(confirmButton()).toHaveTextContent("Sending the order…");
     });
-    expect(submit()).toHaveAttribute("aria-disabled", "true");
-    expect(submit()).toBeEnabled();
-    expect(submit()).toHaveFocus();
-    await user.click(submit());
+    expect(confirmButton()).toHaveAttribute("aria-disabled", "true");
+    expect(confirmButton()).toBeEnabled();
+    expect(confirmButton()).toHaveFocus();
+    // The order is on its way: it cannot be taken back.
+    expect(
+      within(dialog()).getByRole("button", { name: "Go back" })
+    ).toHaveAttribute("aria-disabled", "true");
+    await user.click(confirmButton());
+    await user.click(within(dialog()).getByRole("button", { name: "Go back" }));
+    await user.keyboard("{Escape}");
+    expect(dialog()).toBeVisible();
     expect(received).toEqual([
       expect.objectContaining({ customerPhone: "099 123 456" }),
     ]);
   });
 
-  test("two taps at once send one order", async () => {
-    const { fill, onPlaced, received, submit } = setup({
+  test("two taps at once on Confirm order send one order", async () => {
+    const { ask, confirmButton, fill, onPlaced, received } = setup({
       answers: ["ok", "ok"],
     });
 
     await fill();
+    await ask();
     // Both land before React renders "sending".
-    fireEvent.click(submit());
-    fireEvent.click(submit());
+    fireEvent.click(confirmButton());
+    fireEvent.click(confirmButton());
 
     await waitFor(() => {
       expect(onPlaced.mock.calls).toEqual([[TOKEN, makeItems()]]);
     });
     expect(received).toEqual([expect.objectContaining({ items: makeItems() })]);
   });
+
+  test.each([
+    [
+      "en",
+      "Confirm your order?",
+      ["Units", "3"],
+      ["Total", "UYU\u00A03,300"],
+      "Name",
+      "Mobile",
+      "Confirm order",
+      "Go back",
+    ],
+    [
+      "es",
+      "¿Confirmás el pedido?",
+      ["Unidades", "3"],
+      ["Total", "$\u00A03.300"],
+      "Nombre",
+      "Celular",
+      "Confirmar pedido",
+      "Volver",
+    ],
+  ] as const)(
+    "in %s, a valid submit sends nothing yet: it asks %j, summing up the units, the total, the name and the mobile typed",
+    async (locale, title, units, total, name, phone, confirm, back) => {
+      const { ask, dialog, fill, received } = setup({ locale });
+
+      await fill({ name: "Ana Pérez", phone: "099 123 456" });
+      await ask();
+
+      expect(dialog()).toHaveAccessibleName(title);
+      expect(dialog()).toHaveAccessibleDescription(
+        DICTIONARIES[locale].storefront.cart.confirm.description
+      );
+      const rows = within(screen.getByTestId("store-checkout-confirm-summary"))
+        .getAllByRole("term")
+        .map((term) => [
+          term.textContent,
+          term.nextElementSibling?.textContent,
+        ]);
+      expect(rows).toEqual([
+        units,
+        total,
+        [name, "Ana Pérez"],
+        [phone, "099 123 456"],
+      ]);
+      expect(
+        within(dialog())
+          .getAllByRole("button")
+          .map((button) => button.textContent)
+      ).toEqual([confirm, back]);
+      expect(received).toEqual([]);
+    }
+  );
+
+  test("the summary counts every unit of every line, and leaves the total out before the prices", async () => {
+    const { ask, fill } = setup({
+      items: makeItems([
+        { productId: 4, quantity: 2 },
+        { productId: 9, quantity: 5 },
+      ]),
+      total: null,
+    });
+
+    await fill();
+    await ask();
+
+    expect(
+      screen.getByTestId("store-checkout-confirm-units")
+    ).toHaveTextContent(/^Units7$/u);
+    expect(screen.queryByTestId("store-checkout-confirm-total")).toBeNull();
+  });
+
+  test("before confirming, the summary follows the cart; once sent, it holds what was sent", async () => {
+    const { ask, confirm, confirmButton, fill, received, rerender } = setup({
+      answers: ["hang"],
+    });
+    const units = () => screen.getByTestId("store-checkout-confirm-units");
+    const totalRow = () => screen.getByTestId("store-checkout-confirm-total");
+
+    await fill();
+    await ask();
+    // Another tab adds a unit while the dialog asks: that is what is sent.
+    rerender(
+      makeItems([
+        { productId: 4, quantity: 3 },
+        { productId: 9, quantity: 1 },
+      ]),
+      null,
+      { amount: 450_000, currency: "UYU" }
+    );
+    expect(units()).toHaveTextContent(/^Units4$/u);
+    expect(totalRow()).toHaveTextContent(/^TotalUYU 4,500$/u);
+
+    await confirm();
+    await waitFor(() => {
+      expect(confirmButton()).toHaveTextContent("Sending the order…");
+    });
+    // On its way, the cart changes again: the summary is still the order.
+    rerender(makeItems([{ productId: 4, quantity: 9 }]), null, {
+      amount: 1_080_000,
+      currency: "UYU",
+    });
+
+    expect(units()).toHaveTextContent(/^Units4$/u);
+    expect(totalRow()).toHaveTextContent(/^TotalUYU 4,500$/u);
+    expect(received).toEqual([
+      expect.objectContaining({
+        items: [
+          { productId: 4, quantity: 3 },
+          { productId: 9, quantity: 1 },
+        ],
+      }),
+    ]);
+  });
+
+  test("starts focus on Go back, the choice that sends nothing", async () => {
+    const { ask, fill } = setup();
+
+    await fill();
+    await ask();
+
+    expect(screen.getByRole("button", { name: "Go back" })).toHaveFocus();
+  });
+
+  test.each([
+    ["Go back", "click"],
+    ["Escape", "escape"],
+  ] as const)(
+    "%s closes the confirmation, keeps everything typed, sends nothing and gives focus back to the submit button",
+    async (_case, how) => {
+      const { ask, dialog, fill, queryDialog, received, submit, user } =
+        setup();
+
+      await fill({
+        name: "Ana Pérez",
+        note: "Sin bolsa",
+        phone: "099 123 456",
+      });
+      await ask();
+      await (how === "click"
+        ? user.click(within(dialog()).getByRole("button", { name: "Go back" }))
+        : user.keyboard("{Escape}"));
+
+      await waitFor(() => {
+        expect(queryDialog()).toBeNull();
+      });
+      expect(submit()).toHaveFocus();
+      expect(screen.getByRole("textbox", { name: "Your name" })).toHaveValue(
+        "Ana Pérez"
+      );
+      expect(screen.getByRole("textbox", { name: "Your mobile" })).toHaveValue(
+        "099 123 456"
+      );
+      expect(
+        screen.getByRole("textbox", { name: "Note for the store (optional)" })
+      ).toHaveValue("Sin bolsa");
+      expect(received).toEqual([]);
+    }
+  );
+
+  test("asked again after going back, it confirms the details typed since", async () => {
+    const { ask, confirm, dialog, fill, received, user } = setup();
+
+    await fill({ name: "Ana" });
+    await ask();
+    await user.click(within(dialog()).getByRole("button", { name: "Go back" }));
+    await fill({ name: "Ana Pérez", phone: "099 765 432" });
+    await ask();
+    expect(screen.getByTestId("store-checkout-confirm-name")).toHaveTextContent(
+      /^NameAna Pérez$/u
+    );
+    await confirm();
+
+    await waitFor(() => {
+      expect(received).toEqual([
+        expect.objectContaining({
+          customerName: "Ana Pérez",
+          customerPhone: "099 765 432",
+        }),
+      ]);
+    });
+  });
+
+  test.each(["Confirm order", "Go back"] as const)(
+    "a cart held while the confirmation is open: %s closes it, sends nothing and gives focus to the form's title, the button being disabled",
+    async (how) => {
+      const {
+        ask,
+        confirm,
+        dialog,
+        fill,
+        queryDialog,
+        received,
+        rerender,
+        submit,
+        user,
+      } = setup();
+
+      await fill();
+      await ask();
+      rerender(makeItems(), "Bringing today's prices…");
+      await (how === "Confirm order"
+        ? confirm()
+        : user.click(
+            within(dialog()).getByRole("button", { name: "Go back" })
+          ));
+
+      await waitFor(() => {
+        expect(queryDialog()).toBeNull();
+      });
+      expect(submit()).toBeDisabled();
+      expect(submit()).toHaveAccessibleDescription("Bringing today's prices…");
+      expect(
+        screen.getByRole("heading", { level: 2, name: "Your details" })
+      ).toHaveFocus();
+      expect(received).toEqual([]);
+    }
+  );
 
   test.each([
     ["en", "customerName", "The name can be up to 80 characters.", 81],
@@ -537,7 +806,7 @@ describe("StoreCheckoutForm", () => {
   ] as const)(
     "in %s, a %s past its length says %j and sends nothing",
     async (locale, field, message, length) => {
-      const { fill, received, send } = setup({ locale });
+      const { ask, fill, queryDialog, received } = setup({ locale });
       const copy = DICTIONARIES[locale].storefront.cart.checkout;
 
       await fill();
@@ -549,9 +818,10 @@ describe("StoreCheckoutForm", () => {
         }),
         { target: { value: "x".repeat(length) } }
       );
-      await send();
+      await ask();
 
       expect(await screen.findByText(message)).toBeVisible();
+      expect(queryDialog()).toBeNull();
       expect(received).toEqual([]);
     }
   );
@@ -656,14 +926,15 @@ describe("StoreCheckoutForm", () => {
     });
   });
 
-  test("after a failure keeps the button's focus, and the next submit is sent and clears it", async () => {
-    const { fill, onPlaced, received, send, submit } = setup({
+  test("after a failure closes the confirmation and gives the button its focus, and the next submit is sent and clears it", async () => {
+    const { fill, onPlaced, queryDialog, received, send, submit } = setup({
       answers: ["network", "ok"],
     });
 
     await fill();
     await send();
     await screen.findByRole("alert");
+    expect(queryDialog()).toBeNull();
     expect(submit()).toHaveFocus();
     expect(submit()).toHaveAttribute("aria-disabled", "false");
     await send();
@@ -699,6 +970,7 @@ describe("StoreCheckoutForm before hydration", () => {
           items={makeItems()}
           onPlaced={() => undefined}
           onStale={() => undefined}
+          total={null}
         />
       </Providers>,
       { clientNowMs: 1000, serverNowMs: 0 }

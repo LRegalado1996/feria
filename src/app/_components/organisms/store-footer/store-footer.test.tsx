@@ -114,47 +114,80 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["three blocks, without social links", makeStore(), 2],
+    [
+      "three blocks, without social links",
+      makeStore(),
+      ["store-footer-brand", "store-footer-shop", "store-footer-help"],
+    ],
     [
       "four blocks, with them",
       makeStore({ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }),
-      3,
+      [
+        "store-footer-brand",
+        "store-footer-shop",
+        "store-footer-help",
+        "store-footer-follow",
+      ],
     ],
   ])(
-    "with %s, spreads them across the whole width from lg up, the story's measure held",
-    (_case, store, columns) => {
+    "with %s, stacks them below lg and spreads them across the whole width from lg up, the story's measure held",
+    (_case, store, order) => {
       const { footer } = setup({ store });
 
-      // One row from lg up, first block on the left edge, last on the
-      // right, even gaps between however many there are.
-      const blocks = required(
-        footer.querySelector('[data-slot="store-footer-blocks"]')
-      );
+      // A column below lg; one row from lg up, first block on the left
+      // edge, last on the right, even gaps between however many there are.
+      const blocks = within(footer).getByTestId("store-footer-blocks");
       expect(blocks).toHaveClass(
         "flex",
         "flex-col",
         "lg:flex-row",
-        "lg:justify-between"
+        "lg:justify-between",
+        "lg:gap-x-10"
       );
-      expect(blocks.firstElementChild).toBe(
-        within(footer).getByTestId("store-footer-brand")
-      );
-      // The columns join that row (`contents`); below lg they share a row
-      // of their own, two side by side on a phone, spread on a tablet.
-      const columnsBox = required(blocks.lastElementChild);
-      expect(columnsBox).toHaveClass(
-        "grid",
-        "grid-cols-2",
-        "md:flex",
-        "md:justify-between",
-        "lg:contents"
-      );
-      expect(columnsBox.children).toHaveLength(columns);
+      // Every block is the row's own child, in the reading order: nothing
+      // pairs two of them on a phone any more (FER-050).
+      expect(
+        [...blocks.children]
+          .filter((block) => block instanceof HTMLElement)
+          .map((block) => block.dataset.testid)
+      ).toEqual(order);
+      for (const block of blocks.children) {
+        // Below lg: room around each and a hairline over all but the
+        // first; from lg up, none of it, as the row had.
+        expect(block).toHaveClass(
+          "py-8",
+          "border-t",
+          "border-store-background/15",
+          "first:border-t-0",
+          "first:pt-0",
+          "last:pb-0",
+          "lg:border-t-0",
+          "lg:py-0"
+        );
+      }
       // About 48 characters a line, the signature under it.
       expect(within(footer).getByTestId("store-footer-story")).toHaveClass(
         "max-w-[40ch]",
         "text-sm"
       );
+    }
+  );
+
+  test.each([
+    ["store-footer-shop", makeStore()],
+    ["store-footer-follow", makeStore({ instagramUrl: INSTAGRAM })],
+  ])(
+    "below lg, %s puts its title on its own line and its links side by side on one line under it, one under the other from lg up",
+    (testId, store) => {
+      const { footer } = setup({ store });
+
+      const block = within(footer).getByTestId(testId);
+      const [heading, list] = [...block.children];
+      expect(required(heading).tagName).toBe("H2");
+      expect(required(list).tagName).toBe("UL");
+      // A wrapping row below lg (one line at 320 px with the store's three
+      // links), a plain list from lg up.
+      expect(list).toHaveClass("flex", "flex-wrap", "gap-x-6", "lg:block");
     }
   );
 

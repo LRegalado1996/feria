@@ -193,12 +193,19 @@ function StoreHeader({
             label={copy.menu}
           >
             <nav aria-label={copy.navigation}>
+              {/* The way home is the brand (FER-050): the full logo,
+                  centered, with room under it before the links. */}
+              <div className="flex justify-center pb-8">
+                <Link
+                  aria-label={interpolate(copy.menuLogo, { brand: BRAND_NAME })}
+                  className="flex min-h-11 items-center focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+                  data-testid="store-mobile-menu-home"
+                  href={home}
+                >
+                  <StoreLogo aria-hidden="true" className="h-16" />
+                </Link>
+              </div>
               <ul className="flex flex-col">
-                <li>
-                  <Link className={MENU_LINK_CLASS} href={home}>
-                    {copy.home}
-                  </Link>
-                </li>
                 <li>
                   <Link
                     aria-current={catalogCurrent}
@@ -219,7 +226,8 @@ function StoreHeader({
                 ) : null}
               </ul>
             </nav>
-            <StoreLocaleToggle className="self-start px-0" />
+            {/* Last, in the panel's bottom-left corner (FER-050). */}
+            <StoreLocaleToggle className="mt-auto self-start px-0" />
           </StoreMobileMenu>
           <nav aria-label={copy.navigation} className="hidden min-w-0 xl:block">
             <ul className="flex items-center gap-4.5">

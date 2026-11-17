@@ -14,6 +14,7 @@ import {
   FormItem,
   useFormField,
 } from "@/app/_components/molecules/form";
+import { StoreCheckoutConfirm } from "@/app/_components/molecules/store-checkout-confirm";
 import {
   checkoutErrorMessage,
   checkoutFailure,
@@ -34,6 +35,7 @@ import {
   ORDER_PHONE_MAX_LENGTH,
 } from "@/lib/schemas/order";
 import { cn } from "@/lib/utils";
+import type { Currency } from "@/lib/utils/format";
 import { normalizePhone } from "@/lib/utils/phone";
 
 export interface StoreCheckoutFormProps {
@@ -49,6 +51,11 @@ export interface StoreCheckoutFormProps {
   ) => void;
   /** An article changed under the cart: read the articles again. */
   onStale: () => void;
+  /**
+   * What the cart comes to at the shop's prices now, for the confirmation's
+   * summary; `null` before them.
+   */
+  total: { amount: number; currency: Currency } | null;
 }
 
 // Square, like the tiles: only buttons are pills. `text-base`, so a phone
@@ -94,12 +101,20 @@ function StoreField({
   );
 }
 
+/** How many units a cart holds, every line's quantity added up. */
+function unitsOf(items: StoreCheckoutFormProps["items"]) {
+  return items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
 /**
  * The checkout (FER-026): name, mobile and an optional note, then the order.
- * One submit is one order: the button is off while it is sent, and the same
- * cart and phone sent again (a lost answer, a double tap that got through)
- * carry the same request key, so the server answers the order it already
- * took. Any change to the cart or the phone makes it a new request.
+ * A valid submit sends nothing yet: it asks first, in a dialog that sums the
+ * order up (FER-050), and only "Confirmar pedido" sends it; "Volver" leaves
+ * the form as it was. One confirmation is one order: it holds while the
+ * order is sent, and the same cart and phone sent again (a lost answer, a
+ * double tap that got through) carry the same request key, so the server
+ * answers the order it already took. Any change to the cart or the phone
+ * makes it a new request.
  */
 function StoreCheckoutForm({
   blockedReason,
@@ -107,6 +122,7 @@ function StoreCheckoutForm({
   items,
   onPlaced,
   onStale,
+  total,
 }: StoreCheckoutFormProps) {
   const { storefront } = useDictionary();
   const copy = storefront.cart;
@@ -125,9 +141,30 @@ function StoreCheckoutForm({
   // Set the moment a submit starts, before React re-renders: a second tap
   // that lands first is dropped here, since the button stays enabled.
   const inFlight = useRef(false);
+  // What a valid submit read, while the dialog asks to confirm it.
+  const [confirming, setConfirming] = useState<CheckoutValues | null>(null);
+  // What the order on its way holds, once confirmed: the dialog, still open
+  // while it is sent, sums that up, never the cart another tab changes
+  // meanwhile. Before that it reads the cart as it is now, which is what
+  // "Confirmar pedido" sends.
+  const [sent, setSent] = useState<{
+    total: StoreCheckoutFormProps["total"];
+    units: number;
+  } | null>(null);
+  const submitButton = useRef<HTMLButtonElement>(null);
+  // Where the confirmation hands focus back when the cart was held while it
+  // was open: the button is disabled by then, and cannot take it.
+  const title = useRef<HTMLHeadingElement>(null);
 
-  const onSubmit = async (values: CheckoutValues) => {
+  const placeOrder = async (values: CheckoutValues) => {
     if (inFlight.current) {
+      return;
+    }
+
+    // The cart can be held while the dialog is open (its prices read
+    // again): the dialog closes, and the reason shows under the button.
+    if (blockedReason !== null) {
+      setConfirming(null);
       return;
     }
 
@@ -135,6 +172,7 @@ function StoreCheckoutForm({
     setFailure(null);
     // What this submit orders, whatever the cart becomes while it is sent.
     const ordered = items;
+    setSent({ total, units: unitsOf(ordered) });
     let placed: Awaited<ReturnType<typeof createOrder.mutateAsync>>;
 
     // Only the order itself is guarded here: whatever throws before it is
@@ -168,6 +206,8 @@ function StoreCheckoutForm({
       setFailure(checkoutErrorMessage(error, copy.errors));
       // Free for a retry; after a success the page moves on instead.
       inFlight.current = false;
+      setConfirming(null);
+      setSent(null);
       return;
     }
 
@@ -178,6 +218,8 @@ function StoreCheckoutForm({
       // button sent again answers this same order instead of a second one.
       reportError(error, { action: "Checkout.show_order" });
       inFlight.current = false;
+      setConfirming(null);
+      setSent(null);
       return;
     }
 
@@ -191,8 +233,12 @@ function StoreCheckoutForm({
       data-slot="store-checkout-form"
     >
       <h2
-        className="font-display store-display-section leading-display font-extrabold uppercase"
+        // Focused only by the code, never by a tab or a click; a keyboard
+        // user who lands here still sees the ring the fields draw.
+        className="font-display store-display-section leading-display font-extrabold uppercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
         id="store-checkout-title"
+        ref={title}
+        tabIndex={-1}
       >
         {copy.checkout.title}
       </h2>
@@ -201,7 +247,11 @@ function StoreCheckoutForm({
           className="flex flex-col gap-4"
           noValidate
           onSubmit={(event) => {
-            void form.handleSubmit(onSubmit)(event);
+            // Valid, it asks before anything is sent; invalid, the fields
+            // say why and nothing opens.
+            void form.handleSubmit((values) => {
+              setConfirming(values);
+            })(event);
           }}
         >
           <FormField
@@ -297,6 +347,7 @@ function StoreCheckoutForm({
             aria-disabled={sending}
             data-testid="store-checkout-submit"
             disabled={!hydrated || blockedReason !== null}
+            ref={submitButton}
             size="lg"
             type="submit"
           >
@@ -304,6 +355,24 @@ function StoreCheckoutForm({
           </StoreButton>
         </form>
       </Form>
+      {/* Outside the form: its buttons must never submit it. */}
+      <StoreCheckoutConfirm
+        name={confirming?.customerName ?? ""}
+        onBack={() => {
+          setConfirming(null);
+        }}
+        onConfirm={() => {
+          if (confirming) {
+            void placeOrder(confirming);
+          }
+        }}
+        open={confirming !== null}
+        phone={confirming?.customerPhone ?? ""}
+        returnFocus={blockedReason === null ? submitButton : title}
+        sending={sending}
+        total={sent ? sent.total : total}
+        units={sent ? sent.units : unitsOf(items)}
+      />
     </section>
   );
 }

@@ -353,6 +353,9 @@ test.describe("Header", () => {
     expect(gap).toBeGreaterThanOrEqual(0);
     expect(gap).toBeLessThanOrEqual(8);
     expect(chevron?.width).toBeLessThanOrEqual(12);
+    // The hand on hover, like the links beside it (FER-050).
+    await toggle.hover();
+    await expect(toggle).toHaveCSS("cursor", "pointer");
 
     await clickUntilVisible(toggle, chains);
     await toggle.click();

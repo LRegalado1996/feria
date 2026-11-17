@@ -74,6 +74,8 @@ describe("StoreNavGroup", () => {
     expect(chevron).toHaveClass("size-3");
     expect(chevron).toHaveAttribute("aria-hidden", "true");
     expect(toggle).toHaveClass("gap-1.5", "min-h-11");
+    // The hand on hover, like the header's links beside it (FER-050).
+    expect(toggle).toHaveClass("cursor-pointer");
     expect(
       within(required(toggle.closest('[data-slot="store-nav-group"]')))
         .getAllByRole("button")
@@ -119,7 +121,7 @@ describe("StoreNavGroup", () => {
     const { links, list, toggle } = setup({ variant: "menu" });
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveClass("size-11");
+    expect(toggle).toHaveClass("size-11", "cursor-pointer");
     expect(links()).toEqual([["Bijouterie", "/bijouterie"]]);
     expect(
       within(required(list()))

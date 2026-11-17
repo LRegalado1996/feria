@@ -605,19 +605,21 @@ describe("StoreCatalog", () => {
     ).toHaveAttribute("data-slot", "store-catalog-bar");
   });
 
-  test("lists the articles as cards in a grid of two columns, four from a tablet up", () => {
+  test("lists the articles as cards in a grid of one column on a phone, two from sm (a tablet), four from lg (a computer)", () => {
     const { titles } = setup();
 
     expect(titles()).toEqual(["Artículo 1", "Artículo 2"]);
-    expect(screen.getByTestId("store-catalog-grid")).toHaveClass(
-      "grid-cols-2",
-      "md:grid-cols-4"
-    );
+    const grid = screen.getByTestId("store-catalog-grid");
+    expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-2", "lg:grid-cols-4");
+    // One column below `sm`: nothing sets two there (FER-050).
+    expect(grid).not.toHaveClass("grid-cols-2");
+    // The photo asks for the whole width on a phone, half from `sm`.
     expect(
-      within(screen.getByTestId("store-catalog-grid")).getByRole("img", {
-        name: "Foto del artículo 1",
-      })
-    ).toHaveAttribute("sizes", "(min-width: 768px) 25vw, 50vw");
+      within(grid).getByRole("img", { name: "Foto del artículo 1" })
+    ).toHaveAttribute(
+      "sizes",
+      "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+    );
   });
 
   test("a card is a link with nothing to add, available or sold out; a sold-out one says so", () => {

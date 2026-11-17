@@ -127,7 +127,7 @@ test.describe("Order management", () => {
       page,
       ORDER_CREATE,
       async () => {
-        await page.getByTestId("store-checkout-submit").click();
+        await new StorePage(page).submitAndConfirmOrder();
       },
       {
         input: { customerName: "Josefina Núñez", customerPhone: phone.local },

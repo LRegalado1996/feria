@@ -43,6 +43,20 @@ const LINK_CLASS =
   "inline-flex min-h-11 items-center gap-2.5 text-sm wrap-anywhere text-store-background hover:text-store-accent focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
 
 /**
+ * One of the footer's blocks. Below `lg` they stack, each with room above
+ * and below and a hairline over all but the first (FER-050); from `lg` up
+ * they share one row with nothing of that, as before.
+ */
+const BLOCK_CLASS =
+  "border-t border-store-background/15 py-8 first:border-t-0 first:pt-0 last:pb-0 lg:border-t-0 lg:py-0";
+
+/**
+ * A block's links: side by side on one line below `lg`, wrapping only when
+ * they cannot fit (FER-050); one under the other from `lg` up.
+ */
+const LIST_CLASS = "flex flex-wrap gap-x-6 lg:block";
+
+/**
  * Every page of the store ends here (FER-021, FER-039): dark, with the
  * accent for its headings. The full logo and, under it, Pepe's own story
  * of the stall, signed (FER-044); the shop's links (the catalog, then each
@@ -87,16 +101,19 @@ function StoreFooter({
       data-testid="store-footer"
     >
       {/* Spread across the whole width from `lg` up, after the reference
-          store's footer: the story against the left edge, the last column
+          store's footer: the story against the left edge, the last block
           against the right, even gaps between however many blocks the
           store has (three without social links, four with them). Below
-          `lg` the story takes its own row and the columns share the next. */}
+          `lg` the blocks stack, one under the other, each with room and a
+          hairline between it and the next, as the reference's phone footer
+          does, so they read as separate things (FER-050). */}
       <div
-        className="flex flex-col gap-y-8 lg:flex-row lg:items-start lg:justify-between lg:gap-x-10"
+        className="flex flex-col lg:flex-row lg:items-start lg:justify-between lg:gap-x-10"
         data-slot="store-footer-blocks"
+        data-testid="store-footer-blocks"
       >
         <div
-          className="min-w-0 lg:shrink-0"
+          className={cn(BLOCK_CLASS, "min-w-0 lg:shrink-0")}
           data-slot="store-footer-story"
           data-testid="store-footer-brand"
         >
@@ -121,91 +138,92 @@ function StoreFooter({
             </figcaption>
           </figure>
         </div>
-        {/* Two side by side on a phone (the follow links under them),
-            spread along one row on a tablet, and from `lg` up part of the
-            footer's own row (`contents`), so the gaps stay even. */}
-        <div
-          className="grid grid-cols-2 gap-x-4 gap-y-7 md:flex md:justify-between md:gap-x-10 lg:contents"
-          data-slot="store-footer-columns"
+        <nav
+          aria-labelledby="store-footer-shop"
+          className={BLOCK_CLASS}
+          data-testid="store-footer-shop"
         >
-          <nav aria-labelledby="store-footer-shop">
-            <h2 className={HEADING_CLASS} id="store-footer-shop">
-              {copy.shop}
-            </h2>
-            <ul>
-              <li>
+          <h2 className={HEADING_CLASS} id="store-footer-shop">
+            {copy.shop}
+          </h2>
+          <ul className={LIST_CLASS}>
+            <li>
+              <Link
+                className={LINK_CLASS}
+                href={localizePath(ALL_ARTICLES_PATH, locale)}
+              >
+                {copy.catalog}
+              </Link>
+            </li>
+            {/* What the header's line lists: a group's categories are on
+                its page and in the header's list, not here (FER-044). */}
+            {catalogNavigation(categories).map((entry) => (
+              <li key={entry.slug}>
                 <Link
                   className={LINK_CLASS}
-                  href={localizePath(ALL_ARTICLES_PATH, locale)}
+                  href={localizePath(entry.path, locale)}
+                  lang={entry.lang}
                 >
-                  {copy.catalog}
+                  {entry.name}
                 </Link>
               </li>
-              {/* What the header's line lists: a group's categories are on
-                its page and in the header's list, not here (FER-044). */}
-              {catalogNavigation(categories).map((entry) => (
-                <li key={entry.slug}>
-                  <Link
+            ))}
+          </ul>
+        </nav>
+        <section
+          aria-labelledby="store-footer-help"
+          className={BLOCK_CLASS}
+          data-testid="store-footer-help"
+        >
+          <h2 className={HEADING_CLASS} id="store-footer-help">
+            {copy.help}
+          </h2>
+          <p className="max-w-xs text-sm text-store-contrast-muted">
+            {copy.howToOrder}
+          </p>
+          {store.whatsappNumber ? (
+            <a
+              className={cn(LINK_CLASS, "mt-2")}
+              data-testid="store-footer-whatsapp"
+              // wa.me takes the number as digits only.
+              href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
+              {copy.whatsapp}
+              <span className="sr-only"> {copy.newTab}</span>
+            </a>
+          ) : null}
+        </section>
+        {socials.length > 0 ? (
+          <section
+            aria-labelledby="store-footer-follow"
+            className={BLOCK_CLASS}
+            data-testid="store-footer-follow"
+          >
+            <h2 className={HEADING_CLASS} id="store-footer-follow">
+              {copy.follow}
+            </h2>
+            <ul className={LIST_CLASS}>
+              {socials.map(({ Icon, href, key, label }) => (
+                <li key={key}>
+                  <a
                     className={LINK_CLASS}
-                    href={localizePath(entry.path, locale)}
-                    lang={entry.lang}
+                    data-testid={`store-footer-${key}`}
+                    href={href}
+                    rel="noopener noreferrer"
+                    target="_blank"
                   >
-                    {entry.name}
-                  </Link>
+                    <Icon aria-hidden="true" className="size-5 shrink-0" />
+                    {label}
+                    <span className="sr-only"> {copy.newTab}</span>
+                  </a>
                 </li>
               ))}
             </ul>
-          </nav>
-          <section aria-labelledby="store-footer-help">
-            <h2 className={HEADING_CLASS} id="store-footer-help">
-              {copy.help}
-            </h2>
-            <p className="max-w-xs text-sm text-store-contrast-muted">
-              {copy.howToOrder}
-            </p>
-            {store.whatsappNumber ? (
-              <a
-                className={cn(LINK_CLASS, "mt-2")}
-                data-testid="store-footer-whatsapp"
-                // wa.me takes the number as digits only.
-                href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
-                {copy.whatsapp}
-                <span className="sr-only"> {copy.newTab}</span>
-              </a>
-            ) : null}
           </section>
-          {socials.length > 0 ? (
-            <section
-              aria-labelledby="store-footer-follow"
-              className="col-span-2 md:col-span-1"
-            >
-              <h2 className={HEADING_CLASS} id="store-footer-follow">
-                {copy.follow}
-              </h2>
-              <ul>
-                {socials.map(({ Icon, href, key, label }) => (
-                  <li key={key}>
-                    <a
-                      className={LINK_CLASS}
-                      data-testid={`store-footer-${key}`}
-                      href={href}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      <Icon aria-hidden="true" className="size-5 shrink-0" />
-                      {label}
-                      <span className="sr-only"> {copy.newTab}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </div>
+        ) : null}
       </div>
       <div className="mt-11 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-store-background/15 pt-3 text-sm text-store-contrast-muted">
         <p>{interpolate(copy.copyright, { store: store.name })}</p>

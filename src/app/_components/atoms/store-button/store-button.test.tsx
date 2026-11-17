@@ -31,6 +31,8 @@ describe("StoreButton", () => {
     expect(button).toHaveClass(
       "rounded-full",
       "min-h-11",
+      // The hand on hover, like a link's (FER-050).
+      "cursor-pointer",
       "font-display",
       "uppercase",
       "bg-store-foreground",
