@@ -18,12 +18,13 @@ import { categoryPath } from "@/lib/catalog/paths";
 import { RELATED_FILL_BELOW, RELATED_POOL_SIZE } from "@/lib/catalog/related";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
-import type {
-  CreateProductValues,
-  ListProductsValues,
-  ProductCursor,
-  ProductSort,
-  UpdateProductValues,
+import {
+  type CreateProductValues,
+  DEFAULT_PRODUCT_SORT,
+  type ListProductsValues,
+  type ProductCursor,
+  type ProductSort,
+  type UpdateProductValues,
 } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { firstFreeSlug, slugify } from "@/lib/utils/slugify";
@@ -304,11 +305,18 @@ function carriesOneOf(valueIds: number[]): SQL {
  */
 function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
   if (cursor.sort === sort) {
+    if (sort === "position" && cursor.position !== undefined) {
+      return sql`(${product.position}, ${product.id}) > (${cursor.position}::int, ${cursor.id}::int)`;
+    }
+
     if (sort === "newest" && cursor.publishedAt !== undefined) {
       return sql`(${product.publishedAt}, ${product.id}) < (${cursor.publishedAt}::timestamptz, ${cursor.id}::int)`;
     }
 
-    if (sort !== "newest" && cursor.priceAmount !== undefined) {
+    if (
+      (sort === "price_asc" || sort === "price_desc") &&
+      cursor.priceAmount !== undefined
+    ) {
       return sort === "price_asc"
         ? sql`(${product.priceAmount}, ${product.id}) > (${cursor.priceAmount}::int, ${cursor.id}::int)`
         : sql`(${product.priceAmount}, ${product.id}) < (${cursor.priceAmount}::int, ${cursor.id}::int)`;
@@ -322,6 +330,10 @@ function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
 
 /** `sort`'s order, ending in the id so a page never repeats or skips a row. */
 function orderOf(sort: ProductSort) {
+  if (sort === "position") {
+    return [asc(product.position), asc(product.id)];
+  }
+
   if (sort === "price_asc") {
     return [asc(product.priceAmount), asc(product.id)];
   }
@@ -446,10 +458,10 @@ export async function listCartProducts(
 }
 
 /**
- * One page of a store's published articles, newest first or by price,
- * narrowed by category, search and filters. Keyset pagination on the sort's
- * key and the id: a row inserted while the visitor scrolls never shifts the
- * next page.
+ * One page of a store's published articles, in the store's own order (the
+ * default, FER-044), newest first or by price, narrowed by category, search
+ * and filters. Keyset pagination on the sort's key and the id: a row
+ * inserted while the visitor scrolls never shifts the next page.
  */
 export async function listPublishedProducts(
   db: DatabaseClient,
@@ -460,7 +472,7 @@ export async function listPublishedProducts(
     limit,
     locale,
     q,
-    sort = "newest",
+    sort = DEFAULT_PRODUCT_SORT,
     storeId,
     valueGroups = [],
   }: StoreScope &
@@ -474,6 +486,7 @@ export async function listPublishedProducts(
   const page = await db
     .select({
       id: product.id,
+      position: product.position,
       priceAmount: product.priceAmount,
       publishedAt: product.publishedAt,
     })
@@ -513,12 +526,21 @@ export async function listPublishedProducts(
 /** The cursor after `row` in `sort`'s order, carrying that sort and its key. */
 function cursorAt(
   row:
-    | { id: number; priceAmount: number | null; publishedAt: Date | null }
+    | {
+        id: number;
+        position: number;
+        priceAmount: number | null;
+        publishedAt: Date | null;
+      }
     | undefined,
   sort: ProductSort
 ): ProductCursor | null {
   if (!row) {
     return null;
+  }
+
+  if (sort === "position") {
+    return { id: row.id, position: row.position, sort };
   }
 
   if (sort === "newest") {

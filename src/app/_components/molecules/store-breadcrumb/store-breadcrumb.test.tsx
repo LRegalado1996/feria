@@ -51,8 +51,9 @@ test("marks the page itself as current, in the language its name is in", () => {
 test("draws an arrow between steps that a screen reader does not read", () => {
   const { trail } = setup();
 
+  // The house and two arrows, none of them read.
   const arrows = trail.querySelectorAll("svg");
-  expect(arrows).toHaveLength(2);
+  expect(arrows).toHaveLength(3);
   for (const arrow of arrows) {
     expect(arrow).toHaveAttribute("aria-hidden", "true");
   }
@@ -66,6 +67,22 @@ test("its links are 44 px targets with a visible focus ring, and it takes a clas
   }
   expect(trail).toHaveClass("custom");
   expect(trail).toHaveAttribute("data-slot", "store-breadcrumb");
+});
+
+test("draws the home as a house named by its word, a 44 px square (FER-044)", () => {
+  const { trail } = setup();
+
+  const home = within(trail).getByRole("link", { name: "Inicio" });
+  expect(home).toBe(within(trail).getByTestId("store-breadcrumb-home"));
+  expect(home).toHaveAttribute("href", "/");
+  // Only the house shows; the word is for a screen reader.
+  expect(home.querySelector("svg")).toHaveClass("lucide-house");
+  expect(within(home).getByText("Inicio")).toHaveClass("sr-only");
+  expect(home).toHaveClass("min-h-11", "min-w-11");
+  // The other steps keep their words.
+  expect(
+    within(trail).getByRole("link", { name: "Bijouterie" }).querySelector("svg")
+  ).toBeNull();
 });
 
 test("keeps every step when two share a name, as a group and its category can", () => {

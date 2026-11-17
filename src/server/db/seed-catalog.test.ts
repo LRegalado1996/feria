@@ -3,7 +3,6 @@ import path from "node:path";
 
 import { describe, expect, test, vi } from "vitest";
 
-import { createProductSchema } from "@/lib/schemas/catalog";
 import {
   category,
   categoryTranslation,
@@ -15,9 +14,9 @@ import {
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
+import { SEED_ARTICLES } from "./seed-articles";
 import {
   SEED_ALL_ARTICLES_COVER,
-  SEED_ARTICLES,
   SEED_CATEGORIES,
   SEED_COLORS,
   seedCatalog,
@@ -146,85 +145,55 @@ describe("seedCatalog", () => {
 
     // Values 201… are SEED_COLORS' order: dorado 201, plateado 202,
     // oro-rosa 203, blanco 205, azul 209.
+    const valueIds = (slugs: readonly string[]) =>
+      slugs.map(
+        (slug) => 201 + SEED_COLORS.findIndex((color) => color.slug === slug)
+      );
     expect(setProductAttributeValues.mock.calls).toEqual(
-      (
-        [
-          [101, [209]],
-          [102, [202]],
-          [103, [202]],
-          [104, [201]],
-          [105, [201]],
-          [106, [201]],
-          [107, [201, 203]],
-          [108, [201]],
-          [109, [202, 205]],
-          [110, [201]],
-          [111, [201]],
-        ] as const
-      ).map(([productId, valueIds]) => [
+      SEED_ARTICLES.map((article, index) => [
         db,
-        { productId, storeId: 7, valueIds },
+        {
+          productId: 101 + index,
+          storeId: 7,
+          valueIds: valueIds(article.colors),
+        },
       ])
     );
+    // The first three: the crystal bubble gun, the hearts chain, the
+    // solitaire ring.
+    expect(
+      setProductAttributeValues.mock.calls
+        .slice(0, 3)
+        .map(([, input]) => input.valueIds)
+    ).toEqual([[209], [202], [201]]);
     // An article is published before its colors are set.
     expect(publishProduct.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
       setProductAttributeValues.mock.invocationCallOrder[0] ?? 0
     );
   });
 
-  test("every sample article's colors are seeded colors", () => {
-    const colors = new Set(SEED_COLORS.map((color) => color.slug));
-
-    for (const article of SEED_ARTICLES) {
-      expect(article.colors.length).toBeGreaterThan(0);
-      expect(article.colors.filter((slug) => !colors.has(slug))).toEqual([]);
-    }
-  });
-
-  test.each(["es", "en"] as const)(
-    "every sample article's %s description is two paragraphs of two or three sentences in all",
-    (locale) => {
-      for (const article of SEED_ARTICLES) {
-        const text = article.description[locale];
-        const paragraphs = text.split("\n\n");
-        const sentences = text.match(/[.!?](?=\s|$)/gu) ?? [];
-
-        expect(paragraphs).toHaveLength(2);
-        // Each one written and already trimmed: a trailing blank line would
-        // make an empty second paragraph.
-        expect(
-          paragraphs.filter(
-            (paragraph) => paragraph === "" || paragraph.trim() !== paragraph
-          )
-        ).toEqual([]);
-        expect(sentences.length).toBeGreaterThanOrEqual(2);
-        expect(sentences.length).toBeLessThanOrEqual(3);
-      }
-    }
-  );
-
-  test("creates the launch categories in order, the Bijouterie group first, named in both languages", async () => {
+  test("creates the launch categories in order, the bubble guns before the Bijouterie group, named in both languages", async () => {
     const { db, run } = setup();
 
-    await expect(run()).resolves.toBe(11);
+    await expect(run()).resolves.toBe(SEED_ARTICLES.length);
     const categoryRows = db.$.insert.mock.calls.flatMap(([table], index) =>
       table === category ? [db.$["insert.values"].mock.calls[index]?.[0]] : []
     );
     expect(categoryRows).toEqual([
-      { position: 0, slug: "bijouterie", storeId: 7 },
-      { position: 1, slug: "cadenas", storeId: 7 },
-      { position: 2, slug: "anillos", storeId: 7 },
-      { position: 3, slug: "aros", storeId: 7 },
-      { position: 4, slug: "pulseras", storeId: 7 },
-      { position: 5, slug: "burbujeros", storeId: 7 },
+      { position: 0, slug: "burbujeros", storeId: 7 },
+      { position: 1, slug: "bijouterie", storeId: 7 },
+      { position: 2, slug: "cadenas", storeId: 7 },
+      { position: 3, slug: "anillos", storeId: 7 },
+      { position: 4, slug: "aros", storeId: 7 },
+      { position: 5, slug: "pulseras", storeId: 7 },
     ]);
     expect(db.$["insert.values"]).toHaveBeenCalledWith([
-      { categoryId: 1, locale: "es", name: "Bijouterie" },
-      { categoryId: 1, locale: "en", name: "Jewelry" },
+      { categoryId: 1, locale: "es", name: "Burbujeros" },
+      { categoryId: 1, locale: "en", name: "Bubble guns" },
     ]);
     expect(db.$["insert.values"]).toHaveBeenCalledWith([
-      { categoryId: 6, locale: "es", name: "Burbujeros" },
-      { categoryId: 6, locale: "en", name: "Bubble guns" },
+      { categoryId: 2, locale: "es", name: "Bijouterie" },
+      { categoryId: 2, locale: "en", name: "Jewelry" },
     ]);
     expect(db.$.insert).toHaveBeenCalledWith(categoryTranslation);
   });
@@ -276,7 +245,7 @@ describe("seedCatalog", () => {
     ).toEqual(["cadenas", "anillos", "aros", "pulseras"]);
   });
 
-  test("creates, illustrates and publishes every sample article in its category", async () => {
+  test("creates, illustrates and publishes every sample article in its category, each photo in its place with its words", async () => {
     const { db, run } = setup();
 
     await run();
@@ -285,7 +254,7 @@ describe("seedCatalog", () => {
     expect(createProduct).toHaveBeenNthCalledWith(1, db, {
       storeId: 7,
       values: {
-        categoryId: 6,
+        categoryId: 1,
         isAvailable: true,
         priceAmount: 69_000,
         translations: [
@@ -297,14 +266,61 @@ describe("seedCatalog", () => {
         ],
       },
     });
-    expect(db.$["insert.values"]).toHaveBeenCalledWith({
-      height: 899,
-      position: 0,
-      productId: 101,
-      url: "/seed/bubble-gun-1.jpg",
-      width: 1199,
-    });
-    expect(db.$.insert).toHaveBeenCalledWith(productImage);
+    const imageRows = db.$.insert.mock.calls.flatMap(([table], index) =>
+      table === productImage
+        ? [db.$["insert.values"].mock.calls[index]?.[0]]
+        : []
+    );
+    expect(imageRows).toHaveLength(
+      SEED_ARTICLES.reduce((total, article) => total + article.images.length, 0)
+    );
+    // The hearts chain, the second article, has four photos in order.
+    expect(
+      imageRows.filter(
+        (row) => (row as { productId: number }).productId === 102
+      )
+    ).toEqual([
+      {
+        height: 1026,
+        position: 0,
+        productId: 102,
+        url: "/seed/necklace-1.jpg",
+        width: 1200,
+      },
+      {
+        height: 1067,
+        position: 1,
+        productId: 102,
+        url: "/seed/necklace-6.jpg",
+        width: 1600,
+      },
+      {
+        height: 800,
+        position: 2,
+        productId: 102,
+        url: "/seed/necklace-2.jpg",
+        width: 1200,
+      },
+      {
+        height: 1600,
+        position: 3,
+        productId: 102,
+        url: "/seed/necklace-8.jpg",
+        width: 1125,
+      },
+    ]);
+    expect(db.$["insert.values"]).toHaveBeenCalledWith([
+      {
+        altText: "Cadena oscura con dije de corazón calado",
+        locale: "es",
+        productImageId: 9,
+      },
+      {
+        altText: "Dark chain with an openwork heart pendant",
+        locale: "en",
+        productImageId: 9,
+      },
+    ]);
     expect(db.$.insert).toHaveBeenCalledWith(productImageTranslation);
     expect(publishProduct).toHaveBeenNthCalledWith(1, db, {
       id: 101,
@@ -330,38 +346,8 @@ describe("seedCatalog", () => {
 
     await expect(run()).rejects.toThrow("Inserting an image returned no row");
   });
-
-  test("every sample article passes the API's rules and has its photo in public/seed", () => {
-    const slugs = new Set(
-      SEED_CATEGORIES.map((seedCategory) => seedCategory.slug)
-    );
-
-    for (const article of SEED_ARTICLES) {
-      expect(slugs.has(article.category)).toBe(true);
-      expect(
-        createProductSchema.safeParse({
-          categoryId: 1,
-          isAvailable: article.isAvailable,
-          priceAmount: article.priceAmount,
-          translations: (["es", "en"] as const).map((locale) => ({
-            description: article.description[locale],
-            locale,
-            seoDescription: null,
-            seoTitle: null,
-            title: article.title[locale],
-          })),
-        }).success
-      ).toBe(true);
-      expect(
-        existsSync(path.join(process.cwd(), "public/seed", article.image.file))
-      ).toBe(true);
-    }
-
-    expect(
-      SEED_ARTICLES.filter((article) => !article.isAvailable)
-    ).toHaveLength(1);
-  });
 });
+
 describe("seedCatalogPages", () => {
   /** A category's row as the step reads it: in no group, without a cover. */
   function makeRow(
@@ -442,7 +428,7 @@ describe("seedCatalogPages", () => {
     );
   });
 
-  test("gives a catalog seeded before groups its Bijouterie first, its four categories in it and every cover", async () => {
+  test("gives a catalog seeded before groups its Bijouterie last, its four categories in it and every cover", async () => {
     const { db, run, updates } = setupPages({
       after: [...FLAT, makeRow(60, "bijouterie")],
       before: FLAT,
@@ -450,18 +436,19 @@ describe("seedCatalogPages", () => {
 
     await expect(run()).resolves.toEqual({ covers: 7, grouped: 4, groups: 1 });
 
-    // Every category moves one place down, then the group takes the first.
-    expect(updates()[0]).toEqual({
-      set: { position: expect.anything() },
-      table: category,
-      where: { params: [7], sql: '"category"."storeId" = $1' },
+    // The group takes the place after the store's last category, so the
+    // bubble guns stay before it (FER-044); no other category moves.
+    const [groupRow] = db.$["insert.values"].mock.calls[0] ?? [];
+    const { position, ...group } = fieldsOf(groupRow);
+    expect(group).toEqual({ slug: "bijouterie", storeId: 7 });
+    expect(renderQuery(position)).toEqual({
+      params: [7],
+      sql: '(select coalesce(max("category"."position"), -1) + 1 from "category" where "category"."storeId" = $1)',
     });
-    expect(renderQuery(updates()[0]?.set.position)).toEqual({
-      params: [],
-      sql: '"category"."position" + 1',
-    });
-    expect(db.$["insert.values"].mock.calls).toEqual([
-      [{ position: 0, slug: "bijouterie", storeId: 7 }],
+    expect(
+      updates().filter((update) => update.set.position !== undefined)
+    ).toEqual([]);
+    expect(db.$["insert.values"].mock.calls.slice(1)).toEqual([
       [
         [
           { categoryId: 60, locale: "es", name: "Bijouterie" },

@@ -9,10 +9,29 @@ export const CATALOG_SLUG_MAX_LENGTH = 80;
 
 export const PRODUCT_STATUSES = ["draft", "published"] as const;
 
-/** The catalog's orders (FER-023): newest first, or by price either way. */
-export const PRODUCT_SORTS = ["newest", "price_asc", "price_desc"] as const;
+/**
+ * The catalog's orders, as its menu lists them: the store's own (FER-044),
+ * the default; by price either way; newest first (FER-023).
+ */
+export const PRODUCT_SORTS = [
+  "position",
+  "price_asc",
+  "price_desc",
+  "newest",
+] as const;
 
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
+/** The order a catalog address without `?sort=` shows: the store's own. */
+export const DEFAULT_PRODUCT_SORT: ProductSort = "position";
+
+/** The column each order's cursor carries, besides the id. */
+export const PRODUCT_SORT_KEYS = {
+  newest: "publishedAt",
+  position: "position",
+  price_asc: "priceAmount",
+  price_desc: "priceAmount",
+} as const satisfies Record<ProductSort, string>;
 
 export const PRODUCT_TITLE_MAX_LENGTH = 120;
 export const PRODUCT_DESCRIPTION_MAX_LENGTH = 4000;
@@ -52,24 +71,25 @@ const publicCatalogSchema = z.object({ locale: localeSchema });
 
 export const listCategoriesSchema = publicCatalogSchema;
 
+// Empty text is refused before coercion: `Number("")` is 0.
+const cursorIntegerSchema = z
+  .union([z.number(), z.string().trim().min(1).transform(Number)])
+  .pipe(z.number().int().min(0).max(INT4_MAX));
+
 /**
  * The keyset cursor of the public list: the sort that made it and the last
- * row's key in that sort, whole (`publishedAt` or `priceAmount`, then `id` to
- * break ties), so a page never repeats or skips a row while others are
- * inserted. Both price orders share a key, so the sort itself is what tells
- * a cursor from one apart from the other.
+ * row's key in that sort, whole (`position`, `publishedAt` or `priceAmount`,
+ * then `id` to break ties), so a page never repeats or skips a row while
+ * others are inserted. Both price orders share a key, so the sort itself is
+ * what tells a cursor from one apart from the other.
  */
 export const productCursorSchema = z
   .object({
     id: idSchema,
     sort: z.enum(PRODUCT_SORTS),
-    // The key of that sort: `publishedAt` for the newest first,
-    // `priceAmount` for a price order. Only that one.
-    // Empty text is refused before coercion: `Number("")` is a price of 0.
-    priceAmount: z
-      .union([z.number(), z.string().trim().min(1).transform(Number)])
-      .pipe(z.number().int().min(0).max(INT4_MAX))
-      .optional(),
+    // The key of that sort (`PRODUCT_SORT_KEYS`), and only that one.
+    position: cursorIntegerSchema.optional(),
+    priceAmount: cursorIntegerSchema.optional(),
     // Postgres has no year 0, so a cursor from it would fail in the database.
     publishedAt: z.iso
       .datetime({ offset: true })
@@ -80,9 +100,11 @@ export const productCursorSchema = z
   })
   .refine(
     (cursor) =>
-      cursor.sort === "newest"
-        ? cursor.publishedAt !== undefined && cursor.priceAmount === undefined
-        : cursor.priceAmount !== undefined && cursor.publishedAt === undefined,
+      (["position", "priceAmount", "publishedAt"] as const).every(
+        (key) =>
+          (cursor[key] !== undefined) ===
+          (PRODUCT_SORT_KEYS[cursor.sort] === key)
+      ),
     "A cursor carries its sort's key, and only it"
   );
 
@@ -108,7 +130,7 @@ export const listProductsSchema = publicCatalogSchema.extend({
   // alternatives, different filters narrow each other.
   filters: catalogFiltersSchema.optional(),
   cursor: productCursorSchema.optional(),
-  sort: z.enum(PRODUCT_SORTS).default("newest"),
+  sort: z.enum(PRODUCT_SORTS).default(DEFAULT_PRODUCT_SORT),
   limit: z.coerce
     .number()
     .int()

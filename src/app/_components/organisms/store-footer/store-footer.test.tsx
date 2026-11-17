@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES } from "@/test/i18n";
+import { required } from "@/test/required";
 
 import { CREDIT_URL, StoreFooter, type StoreFooterProps } from "./store-footer";
 
@@ -53,12 +54,10 @@ function setup({
   categories = CATEGORIES,
   locale = "en",
   store = makeStore(),
-  tagline = null,
 }: {
   categories?: StoreFooterProps["categories"];
   locale?: Locale;
   store?: Store;
-  tagline?: StoreFooterProps["tagline"];
 } = {}) {
   render(
     <StoreFooter
@@ -67,7 +66,6 @@ function setup({
       copy={DICTIONARIES[locale].storefront.shell}
       locale={locale}
       store={store}
-      tagline={tagline}
     />
   );
   const footer = screen.getByTestId("store-footer");
@@ -115,6 +113,51 @@ describe("StoreFooter", () => {
     expect(outside()).toEqual(expected);
   });
 
+  test.each([
+    ["three blocks, without social links", makeStore(), 2],
+    [
+      "four blocks, with them",
+      makeStore({ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }),
+      3,
+    ],
+  ])(
+    "with %s, spreads them across the whole width from lg up, the story's measure held",
+    (_case, store, columns) => {
+      const { footer } = setup({ store });
+
+      // One row from lg up, first block on the left edge, last on the
+      // right, even gaps between however many there are.
+      const blocks = required(
+        footer.querySelector('[data-slot="store-footer-blocks"]')
+      );
+      expect(blocks).toHaveClass(
+        "flex",
+        "flex-col",
+        "lg:flex-row",
+        "lg:justify-between"
+      );
+      expect(blocks.firstElementChild).toBe(
+        within(footer).getByTestId("store-footer-brand")
+      );
+      // The columns join that row (`contents`); below lg they share a row
+      // of their own, two side by side on a phone, spread on a tablet.
+      const columnsBox = required(blocks.lastElementChild);
+      expect(columnsBox).toHaveClass(
+        "grid",
+        "grid-cols-2",
+        "md:flex",
+        "md:justify-between",
+        "lg:contents"
+      );
+      expect(columnsBox.children).toHaveLength(columns);
+      // About 48 characters a line, the signature under it.
+      expect(within(footer).getByTestId("store-footer-story")).toHaveClass(
+        "max-w-[40ch]",
+        "text-sm"
+      );
+    }
+  );
+
   test("leaves out the follow section when the store has no social link", () => {
     const { footer } = setup({ store: makeStore({ whatsappNumber: "+1" }) });
 
@@ -124,10 +167,10 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["en", "Shop", "All articles", "/en"],
-    ["es", "Tienda", "Todos los artículos", ""],
+    ["en", "Shop", "Catalog", "/en"],
+    ["es", "Tienda", "Catálogo", ""],
   ] as const)(
-    "in %s, the %s links lead to all articles and to each page, a group's categories after it, one step in",
+    "in %s, the %s links lead to the catalog, then each group and each category in none, in the store's order, never a group's categories",
     (locale, heading, catalog, prefix) => {
       const { footer } = setup({ locale });
 
@@ -140,18 +183,17 @@ describe("StoreFooter", () => {
           .map((item) => [
             item.textContent,
             item.querySelector("a")?.getAttribute("href"),
-            item.className,
           ])
       ).toEqual([
-        [catalog, `${prefix}/productos`, ""],
-        ["Bijouterie", `${prefix}/bijouterie`, ""],
-        ["Anillos", `${prefix}/bijouterie/anillos`, "pl-4"],
-        ["Aros", `${prefix}/aros`, ""],
+        [catalog, `${prefix}/productos`],
+        ["Bijouterie", `${prefix}/bijouterie`],
+        ["Aros", `${prefix}/aros`],
       ]);
-      expect(shop.getByRole("link", { name: "Anillos" })).toHaveAttribute(
+      expect(shop.getByRole("link", { name: "Bijouterie" })).toHaveAttribute(
         "lang",
         "es"
       );
+      expect(shop.queryByRole("link", { name: "Anillos" })).toBeNull();
     }
   );
 
@@ -165,7 +207,7 @@ describe("StoreFooter", () => {
       shop
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")])
-    ).toEqual([["All articles", "/en/productos"]]);
+    ).toEqual([["Catalog", "/en/productos"]]);
   });
 
   test.each([
@@ -265,22 +307,34 @@ describe("StoreFooter", () => {
     ]);
   });
 
-  test("shows the tagline in the language it is written in", () => {
-    const { footer } = setup({
-      tagline: { lang: "es", text: "Joyas hechas a mano" },
-    });
+  test.each([
+    [
+      "es",
+      "Hace más de 20 años que mi familia arma su puesto en la feria navideña.",
+      "pasá por el puesto 86 o pedí desde acá.",
+    ],
+    [
+      "en",
+      "For more than 20 years my family has set up its stall at the Christmas fair.",
+      "come by stall 86 or order from here.",
+    ],
+  ] as const)(
+    "in %s, tells Pepe's story under the logo, signed, as a quote with its author",
+    (locale, opening, closing) => {
+      const { footer } = setup({ locale });
 
-    expect(within(footer).getByText("Joyas hechas a mano")).toHaveAttribute(
-      "lang",
-      "es"
-    );
-  });
-
-  test("shows no tagline when the store has none", () => {
-    const { footer } = setup();
-
-    expect(footer.querySelector("p[lang]")).toBeNull();
-  });
+      const story = within(footer).getByTestId("store-footer-story");
+      expect(story.tagName).toBe("FIGURE");
+      const quote = required(story.querySelector("blockquote"));
+      expect(quote.textContent?.startsWith(opening)).toBe(true);
+      expect(quote.textContent?.endsWith(closing)).toBe(true);
+      expect(story.querySelector("figcaption")).toHaveTextContent(/^Pepe$/u);
+      // Right under the logo, before the shop's links.
+      const logo = within(footer).getAllByRole("link")[0];
+      expect(logo?.querySelector('[data-slot="store-logo"]')).not.toBeNull();
+      expect(logo?.nextElementSibling).toBe(story);
+    }
+  );
 
   test.each([
     ["en", "Store footer", "Made by Lucas Regalado (opens in a new tab)"],

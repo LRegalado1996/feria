@@ -21,6 +21,7 @@ function setup() {
       </a>
       {/* The header puts each group in the menu like this. */}
       <StoreNavGroup
+        allLabel="See all"
         group={{
           current: false,
           href: "/bijouterie",

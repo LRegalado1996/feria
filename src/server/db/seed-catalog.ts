@@ -17,6 +17,8 @@ import {
 import { createProduct, publishProduct } from "@/server/services/catalog";
 import { lockStoreCategories } from "@/server/services/category";
 
+import { SEED_ARTICLES, SEED_PHOTOS } from "./seed-articles";
+
 interface SeedImage {
   /** A photo in `public/seed/`. */
   file: string;
@@ -44,25 +46,6 @@ interface SeedCategory {
   slug: string;
 }
 
-interface SeedArticle {
-  /** The category's slug. */
-  category: string;
-  /** The slugs of the colors it carries (FER-033). */
-  colors: string[];
-  /** Two short paragraphs, split by a blank line: what it is, then how to wear it. */
-  description: { en: string; es: string };
-  image: {
-    alt: { en: string; es: string };
-    file: string;
-    height: number;
-    width: number;
-  };
-  isAvailable: boolean;
-  /** In minor units of the store's currency (pesos for Lucas's store). */
-  priceAmount: number;
-  title: { en: string; es: string };
-}
-
 /**
  * The Color filter of Lucas's store (FER-033), the colors Lucas chose on
  * 2026-11-14, each with the swatch shown beside its name.
@@ -81,17 +64,31 @@ export const SEED_COLORS = [
 
 /**
  * The launch categories of Lucas's store, in their order (FER-010): the
- * Bijouterie group first, with its four categories, then the bubble guns,
- * which are in no group (Lucas, 2026-11-17, FER-043). Each with the cover
- * of its page, from the photos in `public/seed/`, until uploads exist
- * (FER-011).
+ * bubble guns, in no group, then the Bijouterie group with its four
+ * categories, so the header reads "Catálogo", "Burbujeros", "Bijouterie"
+ * (Lucas, 2026-11-18, FER-044; the groups FER-043). The order is the
+ * categories' positions, which the admin changes. Each with the cover of
+ * its page, from the photos in `public/seed/`.
  */
 export const SEED_CATEGORIES: SeedCategory[] = [
   {
     cover: {
       alt: {
+        en: "Clear bubble gun with bubbles behind it",
+        es: "Burbujero transparente con burbujas detrás",
+      },
+      computer: { file: "bubble-gun-1.jpg", height: 899, width: 1199 },
+      phone: null,
+    },
+    en: "Bubble guns",
+    es: "Burbujeros",
+    slug: "burbujeros",
+  },
+  {
+    cover: {
+      alt: {
         en: "Silver chain with a bright pendant",
-        es: "Cadena de plata con dije brillante",
+        es: "Cadena plateada con dije brillante",
       },
       computer: { file: "necklace-2.jpg", height: 800, width: 1200 },
       phone: { file: "necklace-2-phone.jpg", height: 800, width: 800 },
@@ -104,7 +101,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     cover: {
       alt: {
         en: "Silver chain with heart charms",
-        es: "Cadena de plata con dijes de corazón",
+        es: "Cadena plateada con dijes de corazón",
       },
       computer: { file: "necklace-1.jpg", height: 1026, width: 1200 },
       phone: null,
@@ -146,19 +143,6 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     es: "Pulseras",
     group: "bijouterie",
     slug: "pulseras",
-  },
-  {
-    cover: {
-      alt: {
-        en: "Clear bubble gun with bubbles behind it",
-        es: "Burbujero transparente con burbujas detrás",
-      },
-      computer: { file: "bubble-gun-1.jpg", height: 899, width: 1199 },
-      phone: null,
-    },
-    en: "Bubble guns",
-    es: "Burbujeros",
-    slug: "burbujeros",
   },
 ];
 
@@ -203,222 +187,6 @@ function categoryCover(cover: SeedCover) {
     coverWidth: computer.width,
   };
 }
-
-/**
- * Sample articles with the photos in `public/seed/` (credits in
- * `docs/brand/seed-photos.md`), one of them unavailable so that state has a
- * row to show. Prices are invented.
- */
-export const SEED_ARTICLES: SeedArticle[] = [
-  {
-    colors: ["azul"],
-    category: "burbujeros",
-    description: {
-      en: "A clear bubble gun that shoots a stream of bubbles at the press of a trigger.\n\nIt runs on batteries and comes with bubble liquid to start right away. Made for the park, a birthday or a sunny day at the fair.",
-      es: "Un burbujero transparente que lanza una lluvia de burbujas con solo apretar el gatillo.\n\nFunciona a pilas y viene con líquido para empezar a jugar. Ideal para la plaza, un cumpleaños o un día de sol en la feria.",
-    },
-    image: {
-      alt: {
-        en: "Clear bubble gun with bubbles behind it",
-        es: "Burbujero transparente con burbujas detrás",
-      },
-      file: "bubble-gun-1.jpg",
-      height: 899,
-      width: 1199,
-    },
-    isAvailable: true,
-    priceAmount: 69_000,
-    title: { en: "Crystal bubble gun", es: "Burbujero cristal" },
-  },
-  {
-    colors: ["plateado"],
-    category: "cadenas",
-    description: {
-      en: "A fine silver chain with small heart charms spread along it.\n\nIts length adjusts, so you can wear it close to the neck or a little lower. It looks good on its own or layered with a shorter chain.",
-      es: "Una cadena fina de plata con pequeños dijes de corazón repartidos a lo largo.\n\nEl largo se regula, así que la podés usar pegada al cuello o un poco más abajo. Queda linda sola o combinada con otra cadena más corta.",
-    },
-    image: {
-      alt: {
-        en: "Silver chain with heart charms",
-        es: "Cadena de plata con dijes de corazón",
-      },
-      file: "necklace-1.jpg",
-      height: 1026,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 89_000,
-    title: { en: "Hearts chain", es: "Cadena corazones" },
-  },
-  {
-    colors: ["plateado"],
-    category: "cadenas",
-    description: {
-      en: "A silver box chain with a bright pendant at its center.\n\nIt comes in a gift box, ready to give. It suits a plain tee or an open neckline, by day or at night.",
-      es: "Una cadena de plata tipo veneciana con un dije brillante al centro.\n\nViene en caja de regalo, lista para dar. Va bien con una remera lisa o con un escote abierto, de día o de noche.",
-    },
-    image: {
-      alt: {
-        en: "Silver chain with a bright pendant",
-        es: "Cadena de plata con dije brillante",
-      },
-      file: "necklace-2.jpg",
-      height: 800,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 119_000,
-    title: { en: "Shine pendant", es: "Dije brillo" },
-  },
-  {
-    colors: ["dorado"],
-    category: "cadenas",
-    description: {
-      en: "A gold-plated rope chain with a crown pendant.\n\nThe twisted rope weave gives it body and shine. Wear it on its own, over your clothes, so the pendant shows.",
-      es: "Una cadena tipo soga con baño de oro y un dije de corona.\n\nEl tejido en soga le da cuerpo y brillo. Usala sola, por fuera de la ropa, para que el dije se luzca.",
-    },
-    image: {
-      alt: {
-        en: "Gold rope chain with a crown pendant",
-        es: "Cadena dorada tipo soga con dije de corona",
-      },
-      file: "necklace-3.jpg",
-      height: 1200,
-      width: 801,
-    },
-    isAvailable: false,
-    priceAmount: 149_000,
-    title: { en: "Crown chain", es: "Cadena corona" },
-  },
-  {
-    colors: ["dorado"],
-    category: "anillos",
-    description: {
-      en: "A gold-plated ring with an emerald-cut stone.\n\nThe rectangular stone, held by four prongs, takes center stage. For a special day, or to lift an everyday outfit.",
-      es: "Un anillo con baño de oro y una piedra de talle esmeralda.\n\nLa piedra rectangular, sostenida por cuatro garras, es la protagonista. Para un día especial o para darle un toque a lo de todos los días.",
-    },
-    image: {
-      alt: {
-        en: "Gold ring with a clear stone",
-        es: "Anillo dorado con piedra transparente",
-      },
-      file: "ring-1.jpg",
-      height: 1200,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 99_000,
-    title: { en: "Solitaire ring", es: "Anillo solitario" },
-  },
-  {
-    colors: ["dorado"],
-    category: "anillos",
-    description: {
-      en: "A gold-plated signet ring with a raised medallion.\n\nIts wide face stands out on the hand. Wear it on the little or ring finger, alone or with thin rings.",
-      es: "Un anillo sello con baño de oro y un medallón en relieve.\n\nTiene un frente ancho que se nota en la mano. Se usa en el meñique o en el anular, solo o junto a anillos finos.",
-    },
-    image: {
-      alt: { en: "Gold signet ring", es: "Anillo sello dorado" },
-      file: "ring-2.jpg",
-      height: 800,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 79_000,
-    title: { en: "Signet ring", es: "Anillo sello" },
-  },
-  {
-    colors: ["dorado", "oro-rosa"],
-    category: "anillos",
-    description: {
-      en: "A gold-plated ring with pink stones clustered into a flower.\n\nTogether the stones make a large, bright face. It goes well with gold and pink tones.",
-      es: "Un anillo con baño de oro y piedras rosadas agrupadas en forma de flor.\n\nLas piedras juntas forman un frente grande y luminoso. Combina con tonos dorados y rosados.",
-    },
-    image: {
-      alt: {
-        en: "Gold ring with pink stones",
-        es: "Anillo dorado con piedras rosadas",
-      },
-      file: "ring-3.jpg",
-      height: 800,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 109_050,
-    title: { en: "Pink flower ring", es: "Anillo flor rosa" },
-  },
-  {
-    colors: ["dorado"],
-    category: "aros",
-    description: {
-      en: "Small gold-plated stud earrings.\n\nThey are discreet and comfortable, for every day. They pair with any other earring if you have more than one piercing.",
-      es: "Aros pequeños abotonados, con baño de oro.\n\nSon discretos y cómodos, para usar todos los días. Combinan con cualquier otro aro si tenés más de una perforación.",
-    },
-    image: {
-      alt: { en: "Gold stud earrings", es: "Aros dorados pequeños" },
-      file: "earrings-1.jpg",
-      height: 1200,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 49_000,
-    title: { en: "Gold studs", es: "Aros abotonados" },
-  },
-  {
-    colors: ["plateado", "blanco"],
-    category: "aros",
-    description: {
-      en: "Earrings of crystals shaped like a wreath of leaves.\n\nThe crystals catch the light with every move. Made for a night out, a party or an event.",
-      es: "Aros de cristales en forma de corona de hojas.\n\nLos cristales reflejan la luz con cada movimiento. Pensados para salir, una fiesta o un evento.",
-    },
-    image: {
-      alt: { en: "Crystal wreath earrings", es: "Aros de cristales" },
-      file: "earrings-2.jpg",
-      height: 1200,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 89_000,
-    title: { en: "Crystal wreath earrings", es: "Aros corona de cristal" },
-  },
-  {
-    colors: ["dorado"],
-    category: "pulseras",
-    description: {
-      en: "A fine gold-plated bracelet with an ID tag at its center.\n\nThe tag is plain, ready to engrave with a name, a date or an initial. A personal gift for someone special.",
-      es: "Una pulsera fina con baño de oro y una chapita al centro.\n\nLa chapita es lisa, para grabarle un nombre, una fecha o una inicial. Un regalo personal para alguien especial.",
-    },
-    image: {
-      alt: {
-        en: "Fine gold bracelet with an ID tag",
-        es: "Pulsera dorada fina con chapita",
-      },
-      file: "bracelet-1.jpg",
-      height: 1200,
-      width: 800,
-    },
-    isAvailable: true,
-    priceAmount: 69_000,
-    title: { en: "ID bracelet", es: "Pulsera chapita" },
-  },
-  {
-    colors: ["dorado"],
-    category: "pulseras",
-    description: {
-      en: "A pair of gold-plated bangles.\n\nWear them together, so they chime as you move, or one on each wrist. They add shine to any outfit.",
-      es: "Un par de esclavas con baño de oro.\n\nSe pueden usar juntas, para que suenen al moverse, o una en cada muñeca. Suman brillo a cualquier conjunto.",
-    },
-    image: {
-      alt: { en: "Two gold bangles", es: "Dos esclavas doradas" },
-      file: "bracelet-2.jpg",
-      height: 1200,
-      width: 1200,
-    },
-    isAvailable: true,
-    priceAmount: 129_000,
-    title: { en: "Bangle pair", es: "Par de esclavas" },
-  },
-];
 
 /**
  * Lucas's launch categories and sample articles, published, in `storeId`.
@@ -489,25 +257,29 @@ export async function seedCatalog(
         })),
       },
     });
-    const [image] = await tx
-      .insert(productImage)
-      .values({
-        height: article.image.height,
-        position: 0,
-        productId: created.id,
-        url: `/seed/${article.image.file}`,
-        width: article.image.width,
-      })
-      .returning({ id: productImage.id });
+    for (const [position, file] of article.images.entries()) {
+      const photo = SEED_PHOTOS[file];
+      const [image] = await tx
+        .insert(productImage)
+        .values({
+          height: photo.height,
+          position,
+          productId: created.id,
+          url: `/seed/${file}`,
+          width: photo.width,
+        })
+        .returning({ id: productImage.id });
 
-    if (!image) {
-      throw new Error("Inserting an image returned no row");
+      if (!image) {
+        throw new Error("Inserting an image returned no row");
+      }
+
+      await tx.insert(productImageTranslation).values([
+        { altText: photo.alt.es, locale: "es", productImageId: image.id },
+        { altText: photo.alt.en, locale: "en", productImageId: image.id },
+      ]);
     }
 
-    await tx.insert(productImageTranslation).values([
-      { altText: article.image.alt.es, locale: "es", productImageId: image.id },
-      { altText: article.image.alt.en, locale: "en", productImageId: image.id },
-    ]);
     await publishProduct(tx, { id: created.id, storeId });
     await setProductAttributeValues(tx, {
       productId: created.id,
@@ -524,7 +296,7 @@ export async function seedCatalog(
 
 /**
  * Lucas's catalog pages (FER-043) on a store seeded before or after them:
- * the Bijouterie group, first in the list, when the store has none and has
+ * the Bijouterie group, last in the list, when the store has none and has
  * one of its categories; each seeded category not yet in a group put in
  * its own; and the covers and their alt texts that are still empty, the
  * store's for the page of all articles included. Whatever the store already
@@ -558,14 +330,15 @@ export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
     );
 
     if (!present.has(seedGroup.slug) && holdsOne) {
-      // First in the list: every other category moves one place down.
-      await tx
-        .update(category)
-        .set({ position: sql`${category.position} + 1` })
-        .where(eq(category.storeId, storeId));
+      // Last in the list, as Lucas orders them (FER-044): after the bubble
+      // guns, the one category in no group.
       const [row] = await tx
         .insert(category)
-        .values({ position: 0, slug: seedGroup.slug, storeId })
+        .values({
+          position: sql`(select coalesce(max(${category.position}), -1) + 1 from ${category} where ${category.storeId} = ${storeId})`,
+          slug: seedGroup.slug,
+          storeId,
+        })
         .returning({ id: category.id });
 
       if (!row) {

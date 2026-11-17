@@ -52,14 +52,23 @@ test("shows the computer's image everywhere when there is no phone image", () =>
   expect(image.getAttribute("src")).toContain(encodeURIComponent(COMPUTER.url));
 });
 
-test("is fetched first, never lazily, as wide as the screen, filling a box that keeps its place", () => {
+test("is fetched first, never lazily, as wide as the window and nearly as tall, filling a box that keeps its place", () => {
   const { image, root } = setup();
 
   expect(image).toHaveAttribute("fetchpriority", "high");
   expect(image).toHaveAttribute("loading", "eager");
   expect(image).toHaveAttribute("sizes", "100vw");
   expect(image).toHaveClass("object-cover", "size-full");
-  expect(root).toHaveClass("aspect-square", "md:aspect-3/1", "custom");
+  // The window's height less the frame and a hint of the first row
+  // (FER-044, design.md § Storefront), never under 20rem.
+  expect(root).toHaveClass(
+    "w-full",
+    "h-[calc(100svh-17.5rem)]",
+    "md:h-[calc(100svh-20rem)]",
+    "min-h-80",
+    "custom"
+  );
+  expect(root.className).not.toMatch(/aspect-/u);
 });
 
 test("puts the page's title over the photo, above the one shade the storefront allows", () => {

@@ -99,7 +99,7 @@ test("gives the one store its texts in both languages and its sample catalog, on
       ["es", "en"],
       [],
     ]);
-    expect([first.createdArticles, second.createdArticles]).toEqual([11, 0]);
+    expect([first.createdArticles, second.createdArticles]).toEqual([49, 0]);
     const seeded = await tx.query.store.findFirst({
       columns: { name: true },
       where: eq(store.id, storeId),
@@ -109,7 +109,11 @@ test("gives the one store its texts in both languages and its sample catalog, on
           orderBy: category.position,
           with: { parent: { columns: { slug: true } } },
         },
-        products: { columns: { status: true } },
+        products: {
+          columns: { position: true, slug: true, status: true },
+          orderBy: product.position,
+          with: { images: { columns: { id: true } } },
+        },
         translations: {
           columns: { locale: true },
           orderBy: storeTranslation.locale,
@@ -117,20 +121,43 @@ test("gives the one store its texts in both languages and its sample catalog, on
       },
     });
     expect(seeded?.name).toBe(before?.name);
-    // Bijouterie first, holding four; the bubble guns in no group (FER-043).
+    // The bubble guns first, in no group; then Bijouterie, holding four
+    // (FER-043), so the header reads them in Lucas's order (FER-044).
     expect(
       seeded?.categories.map(({ parent, slug }) => [slug, parent?.slug ?? null])
     ).toEqual([
+      ["burbujeros", null],
       ["bijouterie", null],
       ["cadenas", "bijouterie"],
       ["anillos", "bijouterie"],
       ["aros", "bijouterie"],
       ["pulseras", "bijouterie"],
-      ["burbujeros", null],
     ]);
-    expect(seeded?.products.map(({ status }) => status)).toEqual(
-      Array.from({ length: 11 }, () => "published")
+    const products = seeded?.products ?? [];
+    expect(products.map(({ status }) => status)).toEqual(
+      Array.from({ length: 49 }, () => "published")
     );
+    // Numbered in the order they were made, which mixes the categories.
+    expect(products.slice(0, 5).map(({ slug }) => slug)).toEqual([
+      "burbujero-cristal",
+      "cadena-corazones",
+      "anillo-solitario",
+      "aros-abotonados",
+      "par-de-esclavas",
+    ]);
+    expect(
+      products
+        .filter(({ images }) => images.length >= 4)
+        .map(({ slug }) => slug)
+    ).toEqual([
+      "cadena-corazones",
+      "par-de-esclavas",
+      "burbujero-pez",
+      "anillo-halo",
+      "aros-argolla-gruesa",
+      "pulsera-eslabones",
+      "cadena-con-chapita",
+    ]);
     expect(seeded?.translations.map(({ locale }) => locale)).toEqual([
       "es",
       "en",
@@ -148,9 +175,9 @@ test("gives the one store its texts in both languages and its sample catalog, on
 });
 
 // A database seeded before FER-043 has its five categories in no group and
-// no covers: the next seed gives it the group and the covers, and keeps
-// every article where it was.
-test("gives a catalog seeded before groups its Bijouterie, first, and its covers", async () => {
+// no covers: the next seed gives it the group, last (FER-044), and the
+// covers, and keeps every article where it was.
+test("gives a catalog seeded before groups its Bijouterie, last, and its covers", async () => {
   const run = db.transaction(async (tx) => {
     const storeId = await theStoreId(tx);
     await emptyStore(tx, storeId);
@@ -173,6 +200,20 @@ test("gives a catalog seeded before groups its Bijouterie, first, and its covers
       .where(
         and(eq(category.storeId, storeId), eq(category.slug, "bijouterie"))
       );
+    // The earlier seed's order: the four jewelry categories, then the
+    // bubble guns.
+    for (const [position, slug] of [
+      "cadenas",
+      "anillos",
+      "aros",
+      "pulseras",
+      "burbujeros",
+    ].entries()) {
+      await tx
+        .update(category)
+        .set({ position })
+        .where(and(eq(category.storeId, storeId), eq(category.slug, slug)));
+    }
     await tx
       .update(store)
       .set({
@@ -201,17 +242,17 @@ test("gives a catalog seeded before groups its Bijouterie, first, and its covers
         coverUrl,
       ])
     ).toEqual([
-      ["bijouterie", null, "/seed/necklace-2.jpg"],
       ["cadenas", "bijouterie", "/seed/necklace-1.jpg"],
       ["anillos", "bijouterie", "/seed/ring-2.jpg"],
       ["aros", "bijouterie", "/seed/earrings-2.jpg"],
       ["pulseras", "bijouterie", "/seed/bracelet-2.jpg"],
       ["burbujeros", null, "/seed/bubble-gun-1.jpg"],
+      ["bijouterie", null, "/seed/necklace-2.jpg"],
     ]);
-    // The group takes the first place and every other moves one down; the
-    // place the deleted group left (1) stays empty: only the order counts.
+    // The group takes the place after the last; no other category moves,
+    // so the header reads the bubble guns, then Bijouterie.
     expect(categories.map(({ position }) => position)).toEqual([
-      0, 2, 3, 4, 5, 6,
+      0, 1, 2, 3, 4, 5,
     ]);
     const [cover] = await tx
       .select({ url: store.catalogCoverUrl })

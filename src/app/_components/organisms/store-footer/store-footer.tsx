@@ -5,8 +5,8 @@ import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
 import {
+  catalogNavigation,
   type NavigationCategory,
-  navigationOrder,
 } from "@/lib/catalog/navigation";
 import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
@@ -19,8 +19,8 @@ export const CREDIT_URL = "https://lucasregalado.com";
 
 export interface StoreFooterProps {
   /**
-   * The store's categories, in their order, for the shop's links: a
-   * group's categories right after it, one step in (FER-043).
+   * The store's categories, in their order, for the shop's links: the
+   * groups and the categories in none, as the header lists them (FER-044).
    */
   categories: readonly NavigationCategory[];
   className?: string;
@@ -32,8 +32,6 @@ export interface StoreFooterProps {
     tiktokUrl: string | null;
     whatsappNumber: string | null;
   };
-  /** The store's tagline in the page's language, with the language it is in. */
-  tagline: { lang: string; text: string } | null;
 }
 
 const HEADING_CLASS =
@@ -46,10 +44,11 @@ const LINK_CLASS =
 
 /**
  * Every page of the store ends here (FER-021, FER-039): dark, with the
- * accent for its headings. The full logo and the store's tagline; the shop's
- * links (the catalog and each category); help (how to order, and a WhatsApp
- * chat when the store has it); Instagram and TikTok when it has them; and
- * a quiet credit to Lucas Regalado.
+ * accent for its headings. The full logo and, under it, Pepe's own story
+ * of the stall, signed (FER-044); the shop's links (the catalog, then each
+ * group and each category in none, in the header's order); help (how to
+ * order, and a WhatsApp chat when the store has it); Instagram and TikTok
+ * when it has them; and a quiet credit to Lucas Regalado.
  */
 function StoreFooter({
   categories,
@@ -57,7 +56,6 @@ function StoreFooter({
   copy,
   locale,
   store,
-  tagline,
 }: StoreFooterProps) {
   const socials = [
     store.instagramUrl
@@ -88,8 +86,20 @@ function StoreFooter({
       data-slot="store-footer"
       data-testid="store-footer"
     >
-      <div className="grid grid-cols-2 gap-x-4 gap-y-7 md:grid-cols-[1.3fr_1fr_1fr_1fr] md:gap-8">
-        <div className="col-span-2 md:col-span-1">
+      {/* Spread across the whole width from `lg` up, after the reference
+          store's footer: the story against the left edge, the last column
+          against the right, even gaps between however many blocks the
+          store has (three without social links, four with them). Below
+          `lg` the story takes its own row and the columns share the next. */}
+      <div
+        className="flex flex-col gap-y-8 lg:flex-row lg:items-start lg:justify-between lg:gap-x-10"
+        data-slot="store-footer-blocks"
+      >
+        <div
+          className="min-w-0 lg:shrink-0"
+          data-slot="store-footer-story"
+          data-testid="store-footer-brand"
+        >
           <Link
             aria-label={interpolate(copy.logo, { brand: BRAND_NAME })}
             className="inline-flex focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
@@ -97,93 +107,105 @@ function StoreFooter({
           >
             <StoreLogo aria-hidden="true" className="h-15.5" />
           </Link>
-          {tagline ? (
-            <p
-              className="mt-3.5 max-w-xs text-sm wrap-anywhere text-store-contrast-muted"
-              lang={tagline.lang}
-            >
-              {tagline.text}
-            </p>
-          ) : null}
-        </div>
-        <nav aria-labelledby="store-footer-shop">
-          <h2 className={HEADING_CLASS} id="store-footer-shop">
-            {copy.shop}
-          </h2>
-          <ul>
-            <li>
-              <Link
-                className={LINK_CLASS}
-                href={localizePath(ALL_ARTICLES_PATH, locale)}
-              >
-                {copy.catalog}
-              </Link>
-            </li>
-            {navigationOrder(categories).map((category) => (
-              <li
-                className={category.depth === 1 ? "pl-4" : undefined}
-                key={category.slug}
-              >
-                <Link
-                  className={LINK_CLASS}
-                  href={localizePath(category.path, locale)}
-                  lang={category.lang}
-                >
-                  {category.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <section aria-labelledby="store-footer-help">
-          <h2 className={HEADING_CLASS} id="store-footer-help">
-            {copy.help}
-          </h2>
-          <p className="max-w-xs text-sm text-store-contrast-muted">
-            {copy.howToOrder}
-          </p>
-          {store.whatsappNumber ? (
-            <a
-              className={cn(LINK_CLASS, "mt-2")}
-              data-testid="store-footer-whatsapp"
-              // wa.me takes the number as digits only.
-              href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
-              {copy.whatsapp}
-              <span className="sr-only"> {copy.newTab}</span>
-            </a>
-          ) : null}
-        </section>
-        {socials.length > 0 ? (
-          <section
-            aria-labelledby="store-footer-follow"
-            className="col-span-2 md:col-span-1"
+          {/* A quote with its author: the stall's story in Pepe's words,
+              held to about 48 characters a line so it reads as a story. */}
+          <figure
+            className="mt-4 max-w-[40ch] text-sm"
+            data-testid="store-footer-story"
           >
-            <h2 className={HEADING_CLASS} id="store-footer-follow">
-              {copy.follow}
+            <blockquote className="text-store-contrast-muted">
+              <p>{copy.story.text}</p>
+            </blockquote>
+            <figcaption className="mt-2.5 font-display text-xs leading-none font-extrabold text-store-accent uppercase">
+              {copy.story.signature}
+            </figcaption>
+          </figure>
+        </div>
+        {/* Two side by side on a phone (the follow links under them),
+            spread along one row on a tablet, and from `lg` up part of the
+            footer's own row (`contents`), so the gaps stay even. */}
+        <div
+          className="grid grid-cols-2 gap-x-4 gap-y-7 md:flex md:justify-between md:gap-x-10 lg:contents"
+          data-slot="store-footer-columns"
+        >
+          <nav aria-labelledby="store-footer-shop">
+            <h2 className={HEADING_CLASS} id="store-footer-shop">
+              {copy.shop}
             </h2>
             <ul>
-              {socials.map(({ Icon, href, key, label }) => (
-                <li key={key}>
-                  <a
+              <li>
+                <Link
+                  className={LINK_CLASS}
+                  href={localizePath(ALL_ARTICLES_PATH, locale)}
+                >
+                  {copy.catalog}
+                </Link>
+              </li>
+              {/* What the header's line lists: a group's categories are on
+                its page and in the header's list, not here (FER-044). */}
+              {catalogNavigation(categories).map((entry) => (
+                <li key={entry.slug}>
+                  <Link
                     className={LINK_CLASS}
-                    data-testid={`store-footer-${key}`}
-                    href={href}
-                    rel="noopener noreferrer"
-                    target="_blank"
+                    href={localizePath(entry.path, locale)}
+                    lang={entry.lang}
                   >
-                    <Icon aria-hidden="true" className="size-5 shrink-0" />
-                    {label}
-                    <span className="sr-only"> {copy.newTab}</span>
-                  </a>
+                    {entry.name}
+                  </Link>
                 </li>
               ))}
             </ul>
+          </nav>
+          <section aria-labelledby="store-footer-help">
+            <h2 className={HEADING_CLASS} id="store-footer-help">
+              {copy.help}
+            </h2>
+            <p className="max-w-xs text-sm text-store-contrast-muted">
+              {copy.howToOrder}
+            </p>
+            {store.whatsappNumber ? (
+              <a
+                className={cn(LINK_CLASS, "mt-2")}
+                data-testid="store-footer-whatsapp"
+                // wa.me takes the number as digits only.
+                href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
+                {copy.whatsapp}
+                <span className="sr-only"> {copy.newTab}</span>
+              </a>
+            ) : null}
           </section>
-        ) : null}
+          {socials.length > 0 ? (
+            <section
+              aria-labelledby="store-footer-follow"
+              className="col-span-2 md:col-span-1"
+            >
+              <h2 className={HEADING_CLASS} id="store-footer-follow">
+                {copy.follow}
+              </h2>
+              <ul>
+                {socials.map(({ Icon, href, key, label }) => (
+                  <li key={key}>
+                    <a
+                      className={LINK_CLASS}
+                      data-testid={`store-footer-${key}`}
+                      href={href}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      <Icon aria-hidden="true" className="size-5 shrink-0" />
+                      {label}
+                      <span className="sr-only"> {copy.newTab}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       </div>
       <div className="mt-11 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-store-background/15 pt-3 text-sm text-store-contrast-muted">
         <p>{interpolate(copy.copyright, { store: store.name })}</p>

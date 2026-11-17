@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  DEFAULT_PRODUCT_SORT,
   PRODUCT_SORTS,
   productCursorSchema,
   catalogFiltersSchema,
@@ -145,11 +146,11 @@ describe("listProductsSchema", () => {
       limit: 24,
       locale: "es",
       q: undefined,
-      sort: "newest",
+      sort: "position",
     });
   });
 
-  test.each(["newest", "price_asc", "price_desc"])(
+  test.each(["position", "newest", "price_asc", "price_desc"])(
     "a sort of %j is accepted as itself",
     (sort) => {
       expect(
@@ -170,8 +171,14 @@ describe("listProductsSchema", () => {
     ).toBe(false);
   });
 
-  test("offers the newest first and both price orders, in that order", () => {
-    expect(PRODUCT_SORTS).toEqual(["newest", "price_asc", "price_desc"]);
+  test("offers the store's order, both price orders and the newest first, in that order", () => {
+    expect(PRODUCT_SORTS).toEqual([
+      "position",
+      "price_asc",
+      "price_desc",
+      "newest",
+    ]);
+    expect(DEFAULT_PRODUCT_SORT).toBe("position");
   });
 
   test.each([
@@ -983,6 +990,28 @@ describe("productCursorSchema", () => {
   const ASC = { sort: "price_asc" };
 
   test.each<[string, Record<string, unknown>, boolean]>([
+    ["the store's order's key", { position: 12, sort: "position" }, true],
+    ["a position of 0", { position: 0, sort: "position" }, true],
+    ["a negative position", { position: -1, sort: "position" }, false],
+    [
+      "a position past int4",
+      { position: 2_147_483_648, sort: "position" },
+      false,
+    ],
+    ["an empty position", { position: "", sort: "position" }, false],
+    ["neither key, the store's order", { sort: "position" }, false],
+    [
+      "the store's order with a price",
+      { priceAmount: 69_000, sort: "position" },
+      false,
+    ],
+    [
+      "both keys, the store's order",
+      { position: 12, priceAmount: 69_000, sort: "position" },
+      false,
+    ],
+    ["by price with a position", { ...ASC, position: 12 }, false],
+    ["newest with a position", { ...NEWEST, position: 12 }, false],
     ["the newest order's key", NEWEST, true],
     ["a price order's key", { ...ASC, priceAmount: 69_000 }, true],
     [
@@ -1021,8 +1050,13 @@ describe("productCursorSchema", () => {
   });
 
   test.each(PRODUCT_SORTS)("keeps the sort %s it was made by", (sort) => {
-    const key =
-      sort === "newest" ? { publishedAt: PUBLISHED } : { priceAmount: 500 };
+    const keys = {
+      newest: { publishedAt: PUBLISHED },
+      position: { position: 7 },
+      price_asc: { priceAmount: 500 },
+      price_desc: { priceAmount: 500 },
+    };
+    const key = keys[sort];
 
     expect(productCursorSchema.parse({ id: 3, sort, ...key })).toEqual({
       id: 3,

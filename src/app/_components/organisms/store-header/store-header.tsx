@@ -28,7 +28,7 @@ export const STORE_MAIN_ID = "store-main";
 export type StoreHeaderCategory = NavigationCategory;
 
 /**
- * The header's line on a computer holds "Todos los artículos" and up to
+ * The header's line on a computer holds "Catálogo" and up to
  * five of the navigation's entries (a group counts once), while their names
  * fit beside the logo; the menu and the footer list every one of them.
  */
@@ -122,6 +122,7 @@ function CategoryLinks({
     <li key={entry.slug}>
       {entry.children.length > 0 ? (
         <StoreNavGroup
+          allLabel={copy.groupAll}
           group={link(entry)}
           items={entry.children.map(link)}
           toggleLabel={interpolate(copy.groupToggle, { name: entry.name })}
@@ -156,7 +157,7 @@ function Categories(props: Parameters<typeof CategoryLinks>[0]) {
 }
 /**
  * Every page of the store starts here (FER-021, FER-039): dark and sticky,
- * the links on the left ("Todos los artículos", then the store's categories
+ * the links on the left ("Catálogo", then the store's categories
  * and groups, FER-043), the full
  * logo in the middle leading home, then the language, the search and the
  * cart. On a phone and a tablet the links move into a menu, opened from the

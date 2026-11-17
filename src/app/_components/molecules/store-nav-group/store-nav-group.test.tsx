@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 
+import { collectHydrationErrors } from "@/test/hydration";
 import { required } from "@/test/required";
 
 import { StoreNavGroup, type StoreNavGroupProps } from "./store-nav-group";
@@ -10,35 +11,43 @@ function makeLink(name: string, href: string, current = false) {
   return { current, href, lang: "es", name };
 }
 
-function setup({
+/** The group as the header hands it over, the visitor on `current`. */
+function groupProps({
   current,
   variant = "bar",
 }: {
   /** The page the visitor is on, among the group's links. */
   current?: string;
   variant?: StoreNavGroupProps["variant"];
-} = {}) {
-  const items = [
-    makeLink("Cadenas", "/bijouterie/cadenas"),
-    makeLink("Anillos", "/bijouterie/anillos"),
-  ].map((item) => ({ ...item, current: item.href === current }));
+} = {}): StoreNavGroupProps {
+  return {
+    allLabel: "Ver todo",
+    group: makeLink("Bijouterie", "/bijouterie", current === "/bijouterie"),
+    items: [
+      makeLink("Cadenas", "/bijouterie/cadenas"),
+      makeLink("Anillos", "/bijouterie/anillos"),
+    ].map((item) => ({ ...item, current: item.href === current })),
+    toggleLabel: "Bijouterie: sus categorías",
+    variant,
+  };
+}
+
+function setup(options: Parameters<typeof groupProps>[0] = {}) {
+  const props = groupProps(options);
   render(
     <div>
-      <StoreNavGroup
-        group={makeLink("Bijouterie", "/bijouterie", current === "/bijouterie")}
-        items={items}
-        toggleLabel="Bijouterie: sus categorías"
-        variant={variant}
-      />
+      <StoreNavGroup {...props} />
       <button type="button">Fuera</button>
     </div>
   );
+  // On the line the control is named by its words; in the menu the button
+  // beside the name says whose categories it shows.
   const toggle = screen.getByRole("button", {
-    name: "Bijouterie: sus categorías",
+    name: props.variant === "bar" ? "Bijouterie" : props.toggleLabel,
   });
 
   return {
-    /** The group's categories, while they can be seen. */
+    /** The links that can be seen, in order. */
     links: () =>
       screen
         .queryAllByRole("link")
@@ -53,47 +62,105 @@ function setup({
 }
 
 describe("StoreNavGroup", () => {
-  test("is the group's name, a link to its page, and a closed button whose list holds its categories in the HTML", () => {
+  test("on the header's line, is one closed button, its name with the chevron tight inside it, whose list holds the group's page and its categories in the HTML", () => {
     const { links, list, toggle } = setup();
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveTextContent(/^Bijouterie$/u);
+    // One control: the chevron is the button's own, small, beside the word.
+    const chevron = required(
+      toggle.querySelector('[data-slot="store-nav-group-chevron"]')
+    );
+    expect(chevron).toHaveClass("size-3");
+    expect(chevron).toHaveAttribute("aria-hidden", "true");
+    expect(toggle).toHaveClass("gap-1.5", "min-h-11");
+    expect(
+      within(required(toggle.closest('[data-slot="store-nav-group"]')))
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+    ).toEqual(["Bijouterie"]);
     expect(list()).toHaveAttribute("hidden");
     // In the document for a crawler, out of the reading order until opened.
     expect(
       within(required(list()))
         .getAllByRole("link", { hidden: true })
-        .map((link) => link.getAttribute("href"))
-    ).toEqual(["/bijouterie/cadenas", "/bijouterie/anillos"]);
-    expect(links()).toEqual([["Bijouterie", "/bijouterie"]]);
+        .map((link) => [link.textContent, link.getAttribute("href")])
+    ).toEqual([
+      ["Ver todo", "/bijouterie"],
+      ["Cadenas", "/bijouterie/cadenas"],
+      ["Anillos", "/bijouterie/anillos"],
+    ]);
+    expect(links()).toEqual([]);
   });
 
-  test("opens and closes its categories from its button", async () => {
+  test("on the header's line, is a link to the group's page until React owns it, then the button, with no mismatch", () => {
+    const { clientHtml, errors, serverHtml } = collectHydrationErrors(
+      <StoreNavGroup {...groupProps()} />,
+      { clientNowMs: 1000, serverNowMs: 0 }
+    );
+    const server = document.createElement("div");
+    server.innerHTML = serverHtml;
+    const client = document.createElement("div");
+    client.innerHTML = clientHtml;
+    const control = (root: HTMLElement) =>
+      required(root.querySelector('[data-slot="store-nav-group-toggle"]'));
+
+    expect(errors).toEqual([]);
+    expect(control(server).tagName).toBe("A");
+    expect(control(server)).toHaveAttribute("href", "/bijouterie");
+    expect(control(server)).toHaveTextContent(/^Bijouterie$/u);
+    expect(control(client).tagName).toBe("BUTTON");
+    expect(control(client)).toHaveAttribute("aria-expanded", "false");
+    // The same box either way: nothing moves when React takes over.
+    expect(control(client).className).toBe(control(server).className);
+  });
+
+  test("in the phone's menu, is the group's name, a link to its page, and a 44 px button beside it", () => {
+    const { links, list, toggle } = setup({ variant: "menu" });
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveClass("size-11");
+    expect(links()).toEqual([["Bijouterie", "/bijouterie"]]);
+    expect(
+      within(required(list()))
+        .getAllByRole("link", { hidden: true })
+        .map((link) => link.getAttribute("href"))
+    ).toEqual(["/bijouterie/cadenas", "/bijouterie/anillos"]);
+  });
+
+  test("opens and closes its list from its button", async () => {
     const { links, toggle, user } = setup();
 
     await user.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(links()).toEqual([
-      ["Bijouterie", "/bijouterie"],
+      ["Ver todo", "/bijouterie"],
       ["Cadenas", "/bijouterie/cadenas"],
       ["Anillos", "/bijouterie/anillos"],
     ]);
+    expect(
+      required(toggle.querySelector('[data-slot="store-nav-group-chevron"]'))
+    ).toHaveClass("rotate-180");
 
     await user.click(toggle);
 
     expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 
-  test.each(["bar", "menu"] as const)(
+  test.each([
+    ["bar", "Ver todo"],
+    ["menu", "Cadenas"],
+  ] as const)(
     "in the %s, opens from the keyboard and Escape closes it, handing focus back to its button",
-    async (variant) => {
+    async (variant, first) => {
       const { toggle, user } = setup({ variant });
 
       toggle.focus();
       await user.keyboard("{Enter}");
       await user.tab();
 
-      expect(screen.getByRole("link", { name: "Cadenas" })).toHaveFocus();
+      expect(screen.getByRole("link", { name: first })).toHaveFocus();
 
       await user.keyboard("{Escape}");
 
@@ -106,7 +173,8 @@ describe("StoreNavGroup", () => {
     const { toggle, user } = setup();
 
     await user.click(toggle);
-    // The button, its two categories, then out of the group.
+    // The button, its three links, then out of the group.
+    await user.tab();
     await user.tab();
     await user.tab();
     expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -153,7 +221,7 @@ describe("StoreNavGroup", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
-  test("following one of its categories closes it", async () => {
+  test("following one of its links closes it", async () => {
     const { toggle, user } = setup();
 
     await user.click(toggle);
@@ -163,30 +231,46 @@ describe("StoreNavGroup", () => {
   });
 
   test.each([
-    ["the group's page", "/bijouterie", "Bijouterie"],
-    ["one of its categories", "/bijouterie/anillos", "Anillos"],
-  ])("marks %s as the current page", async (_case, current, name) => {
-    const { toggle, user } = setup({ current });
+    ["the group's page", "bar", "/bijouterie", "Ver todo"],
+    ["one of its categories", "bar", "/bijouterie/anillos", "Anillos"],
+    ["the group's page", "menu", "/bijouterie", "Bijouterie"],
+  ] as const)(
+    "marks %s as the current page, in the %s",
+    async (_case, variant, current, name) => {
+      const { toggle, user } = setup({ current, variant });
 
-    await user.click(toggle);
+      await user.click(toggle);
 
-    expect(
-      screen
-        .getAllByRole("link")
-        .filter((link) => link.getAttribute("aria-current") === "page")
-        .map((link) => link.textContent)
-    ).toEqual([name]);
-  });
+      expect(
+        screen
+          .getAllByRole("link")
+          .filter((link) => link.getAttribute("aria-current") === "page")
+          .map((link) => link.textContent)
+      ).toEqual([name]);
+    }
+  );
+
+  test.each([
+    ["on the group's page", "/bijouterie", "true"],
+    ["on one of its categories", "/bijouterie/cadenas", "true"],
+    ["elsewhere", "/burbujeros", "false"],
+  ])(
+    "on the header's line, underlines its control %s",
+    (_case, current, marked) => {
+      const { toggle } = setup({ current });
+
+      expect(toggle).toHaveAttribute("data-current", marked);
+    }
+  );
 
   test.each(["bar", "menu"] as const)(
-    "in the %s, its button and its links are 44 px targets",
+    "in the %s, its links are 44 px targets",
     async (variant) => {
       const { toggle, user } = setup({ variant });
 
       await user.click(toggle);
 
-      expect(toggle).toHaveClass("size-11");
-      for (const link of screen.getAllByRole("link").slice(0, 3)) {
+      for (const link of screen.getAllByRole("link")) {
         expect(link.className).toMatch(/min-h-1[13]/u);
       }
       expect(toggle.closest('[data-slot="store-nav-group"]')).toHaveAttribute(

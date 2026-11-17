@@ -507,7 +507,7 @@ describe("listPublishedProducts", () => {
     });
   }
 
-  test("filters by the store and the published status, newest first, asking one row past the page", async () => {
+  test("filters by the store and the published status, in the store's order, asking one row past the page", async () => {
     const { db } = setup();
 
     await expect(list(db)).resolves.toEqual({ items: [], nextCursor: null });
@@ -523,7 +523,7 @@ describe("listPublishedProducts", () => {
     });
     expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(product);
     expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
-      '"product"."publishedAt" desc, "product"."id" desc'
+      '"product"."position" asc, "product"."id" asc'
     );
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(3);
     // An empty page asks no card query.
@@ -542,6 +542,7 @@ describe("listPublishedProducts", () => {
       },
       locale: "en",
       q: String.raw`50%_off\x`,
+      sort: "newest",
     });
 
     expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
@@ -595,6 +596,7 @@ describe("listPublishedProducts", () => {
         publishedAt: "2026-11-01T00:00:00.000Z",
         sort: "newest",
       },
+      sort: "newest",
       valueGroups: [[21, 22], [31]],
     });
 
@@ -623,7 +625,8 @@ describe("listPublishedProducts", () => {
     '("product"."storeId" = $1 and "product"."status" = $2 and ';
 
   test.each([
-    [undefined, '"product"."publishedAt" desc, "product"."id" desc'],
+    [undefined, '"product"."position" asc, "product"."id" asc'],
+    ["position", '"product"."position" asc, "product"."id" asc'],
     ["newest", '"product"."publishedAt" desc, "product"."id" desc'],
     ["price_asc", '"product"."priceAmount" asc, "product"."id" asc'],
     ["price_desc", '"product"."priceAmount" desc, "product"."id" desc'],
@@ -637,6 +640,7 @@ describe("listPublishedProducts", () => {
     expect(db.$.select.mock.calls[0]).toEqual([
       {
         id: product.id,
+        position: product.position,
         priceAmount: product.priceAmount,
         publishedAt: product.publishedAt,
       },
@@ -644,6 +648,12 @@ describe("listPublishedProducts", () => {
   });
 
   test.each([
+    [
+      "position",
+      { id: 40, position: 12, sort: "position" },
+      '("product"."position", "product"."id") > ($3::int, $4::int))',
+      12,
+    ],
     [
       "newest",
       { id: 40, publishedAt: "2026-11-01T00:00:00.000Z", sort: "newest" },
@@ -677,6 +687,11 @@ describe("listPublishedProducts", () => {
   );
 
   test.each([
+    ["position", { id: 40, priceAmount: 69_000, sort: "price_asc" }],
+    ["price_asc", { id: 40, position: 12, sort: "position" }],
+    ["newest", { id: 40, position: 12, sort: "position" }],
+    // Its own sort without that sort's key is no cursor of it.
+    ["position", { id: 40, priceAmount: 12, sort: "position" }],
     ["newest", { id: 40, priceAmount: 69_000, sort: "price_asc" }],
     [
       "price_asc",
@@ -712,13 +727,22 @@ describe("listPublishedProducts", () => {
   /** Three page rows for a page of two: the second is the cursor's row. */
   function pageRows(second: Record<string, unknown>) {
     return [
-      { id: 5, priceAmount: 50_000, publishedAt: PUBLISHED_AT },
-      { id: 4, priceAmount: 60_000, publishedAt: PUBLISHED_AT, ...second },
-      { id: 3, priceAmount: 70_000, publishedAt: PUBLISHED_AT },
+      { id: 5, position: 1, priceAmount: 50_000, publishedAt: PUBLISHED_AT },
+      {
+        id: 4,
+        position: 2,
+        priceAmount: 60_000,
+        publishedAt: PUBLISHED_AT,
+        ...second,
+      },
+      { id: 3, position: 3, priceAmount: 70_000, publishedAt: PUBLISHED_AT },
     ];
   }
 
   test.each([
+    ["position", {}, { id: 4, position: 2, sort: "position" }],
+    // The first place a reorder can give (FER-019) is a place too.
+    ["position", { position: 0 }, { id: 4, position: 0, sort: "position" }],
     [
       "newest",
       {},
@@ -787,7 +811,7 @@ describe("listPublishedProducts", () => {
     ]);
     db.query.product.findMany.mockResolvedValue([cardRow(5), cardRow(4)]);
 
-    await expect(list(db)).resolves.toEqual({
+    await expect(list(db, { sort: "newest" })).resolves.toEqual({
       items: [card(5), card(4)],
       nextCursor: {
         id: 4,

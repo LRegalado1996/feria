@@ -5,6 +5,10 @@ import {
   CATALOG_FILTERS_MAX,
   CATALOG_SLUG_MAX_LENGTH,
   CATALOG_SLUG_PATTERN,
+  DEFAULT_PRODUCT_SORT,
+  type ProductCursor,
+  productCursorSchema,
+  PRODUCT_SORT_KEYS,
   PRODUCT_SORTS,
   type ProductSort,
   RESERVED_ATTRIBUTE_SLUGS,
@@ -38,7 +42,7 @@ export const EMPTY_CATALOG_QUERY: CatalogQuery = {
   category: null,
   filters: [],
   q: null,
-  sort: "newest",
+  sort: DEFAULT_PRODUCT_SORT,
 };
 
 function isSlug(value: string) {
@@ -85,16 +89,65 @@ export function readCatalogQuery(
     category,
     filters,
     q: q === "" ? null : q,
-    sort: PRODUCT_SORTS.find((known) => known === sort) ?? "newest",
+    sort: PRODUCT_SORTS.find((known) => known === sort) ?? DEFAULT_PRODUCT_SORT,
   };
+}
+
+/** A cursor in a link: the sort's key, a dot and the id (`120.48`). */
+const CURSOR_PARAM_PATTERN = /^(\d{1,15})\.(\d{1,10})$/u;
+
+/**
+ * A cursor as the "Cargar más" link carries it (`?cursor=`, FER-044): the
+ * key of its sort, a date as its milliseconds, then the id. The sort is the
+ * address's own `sort`, so it is not repeated.
+ */
+export function cursorParam(cursor: ProductCursor): string {
+  const key =
+    cursor.sort === "newest"
+      ? Date.parse(cursor.publishedAt ?? "")
+      : (cursor.position ?? cursor.priceAmount);
+
+  return `${key}.${cursor.id}`;
+}
+
+/**
+ * The page a link starts at (`?cursor=`, FER-044), read as the address's
+ * sort's cursor; anything malformed, or a key that sort cannot have, is the
+ * first page rather than a refused request.
+ */
+export function readCatalogCursor(
+  raw: RawSearchParams,
+  sort: ProductSort
+): ProductCursor | null {
+  const match = CURSOR_PARAM_PATTERN.exec(single(raw.cursor) ?? "");
+
+  if (!match) {
+    return null;
+  }
+
+  const [, key = "", id = ""] = match;
+  const column = PRODUCT_SORT_KEYS[sort];
+  const parsed = productCursorSchema.safeParse({
+    id,
+    sort,
+    [column]:
+      column === "publishedAt" ? new Date(Number(key)).toISOString() : key,
+  });
+
+  return parsed.success ? parsed.data : null;
 }
 
 /**
  * The catalog address for `query`: its page (FER-043), then the query string
  * in a stable order (filters as given, search, sort), leaving out what is
- * the default, so the same selection is always the same link.
+ * the default, so the same selection is always the same link. With a
+ * `cursor`, the page of articles after it (FER-044), last.
  */
-export function catalogHref(locale: Locale, query: CatalogQuery): string {
+export function catalogHref(
+  locale: Locale,
+  query: CatalogQuery,
+  cursor?: ProductCursor
+): string {
   const params = new URLSearchParams();
 
   for (const filter of query.filters) {
@@ -105,8 +158,12 @@ export function catalogHref(locale: Locale, query: CatalogQuery): string {
     params.set("q", query.q);
   }
 
-  if (query.sort !== "newest") {
+  if (query.sort !== DEFAULT_PRODUCT_SORT) {
     params.set("sort", query.sort);
+  }
+
+  if (cursor) {
+    params.set("cursor", cursorParam(cursor));
   }
 
   const path = localizePath(query.category?.path ?? ALL_ARTICLES_PATH, locale);

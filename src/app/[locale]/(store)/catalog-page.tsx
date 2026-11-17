@@ -15,6 +15,7 @@ import {
   knownOnly,
   type RawSearchParams,
   rawSearchParams,
+  readCatalogCursor,
   readCatalogQuery,
   searchOf,
 } from "@/lib/catalog/query";
@@ -23,6 +24,7 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { caller } from "@/lib/orpc/server";
+import { DEFAULT_PRODUCT_SORT } from "@/lib/schemas/catalog";
 import { absoluteUrl } from "@/lib/seo/origin";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import { breadcrumbList, collectionPage } from "@/lib/seo/structured-data";
@@ -125,15 +127,18 @@ const loadCatalogPage = cache(
       caller.catalog.categories({ locale }),
       caller.catalog.filters({ locale }),
     ]);
+    const raw = rawSearchParams(new URLSearchParams(search));
     const query = knownOnly(
-      readCatalogQuery(
-        rawSearchParams(new URLSearchParams(search)),
-        page ? { path: page.path, slug: page.slug } : null
-      ),
+      readCatalogQuery(raw, page ? { path: page.path, slug: page.slug } : null),
       filters
     );
+    // The "Cargar más" link's page (FER-044): what a visitor without the
+    // script, or a crawler, opens; a cursor that does not read is the
+    // first page.
+    const startCursor = readCatalogCursor(raw, query.sort);
     const firstPage = await caller.catalog.products({
       category: page?.slug,
+      cursor: startCursor ?? undefined,
       filters: query.filters,
       locale,
       q: query.q ?? undefined,
@@ -182,6 +187,7 @@ const loadCatalogPage = cache(
       page,
       query,
       selection,
+      startCursor,
       store,
     };
   }
@@ -189,7 +195,7 @@ const loadCatalogPage = cache(
 
 /** The page's address in each language, its selection kept, sort aside. */
 function alternatesOf(locale: Locale, query: CatalogQuery) {
-  const canonical = { ...query, q: null, sort: "newest" as const };
+  const canonical = { ...query, q: null, sort: DEFAULT_PRODUCT_SORT };
 
   return {
     canonical: catalogHref(locale, canonical),
@@ -283,8 +289,12 @@ export async function catalogMetadata(
       title: ownTitle ?? shared,
       type: "website",
     },
-    // A search result is not a page of its own for a search engine.
-    ...(query.q ? { robots: { follow: true, index: false } } : {}),
+    // A search result is not a page of its own for a search engine, nor is
+    // a later page of a list (FER-044): its articles move as the store
+    // orders them, and each has its own page. Its links are followed.
+    ...(query.q || loaded.startCursor
+      ? { robots: { follow: true, index: false } }
+      : {}),
     title: { absolute: ownTitle ?? storeTitle(title, store.name) },
   };
 }
@@ -301,7 +311,7 @@ export async function CatalogPageView(props: CatalogPageProps) {
   const loaded = await resolve(props);
   const { copy, firstPage, heading, locale, page, query, store } = loaded;
   const canonical = absoluteUrl(
-    catalogHref(locale, { ...query, q: null, sort: "newest" })
+    catalogHref(locale, { ...query, q: null, sort: DEFAULT_PRODUCT_SORT })
   );
   const { storefront } = getDictionary(locale);
 
@@ -347,11 +357,11 @@ export async function CatalogPageView(props: CatalogPageProps) {
             slug: category.slug,
           }))}
           cover={loaded.cover}
-          description={loaded.description}
           filters={loaded.filters}
           firstPage={firstPage}
           heading={heading}
           query={query}
+          startCursor={loaded.startCursor}
         />
       </main>
       <StorePageFooter

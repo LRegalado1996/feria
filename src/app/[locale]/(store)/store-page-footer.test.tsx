@@ -38,13 +38,12 @@ vi.mock("@/app/_components/organisms/store-footer", () => ({
     copy,
     locale,
     store,
-    tagline,
   }: StoreFooterProps) => (
     <footer className={className} data-testid="footer">
       {[
         store.name,
         copy.footer,
-        tagline ? `${tagline.lang}: ${tagline.text}` : "no tagline",
+        copy.story.signature,
         locale,
         categories.map((category) => category.name).join(","),
       ].join(" | ")}
@@ -78,45 +77,21 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
 
 describe("StorePageFooter", () => {
   test.each([
-    ["es", "Pie de la tienda", "es: Joyas en la feria"],
-    ["en", "Store footer", "en: Jewelry at the fair"],
+    ["es", "Pie de la tienda"],
+    ["en", "Store footer"],
   ] as const)(
-    "in %s, hands the footer the store, the page's words, its tagline and its categories in that language",
-    async (locale, footer, tagline) => {
+    "in %s, hands the footer the store, the page's words (Pepe's story among them) and its categories in that language",
+    async (locale, footer) => {
       const store = makeStore();
 
       render(await StorePageFooter({ locale, store }));
 
       expect(screen.getByTestId("footer")).toHaveTextContent(
-        `LR Market | ${footer} | ${tagline} | ${locale} | anillos-${locale}`
+        `LR Market | ${footer} | Pepe | ${locale} | anillos-${locale}`
       );
       expect(readCategories).toHaveBeenLastCalledWith(store, locale);
     }
   );
-
-  test("hands the Spanish tagline, marked as Spanish, to an English page of a store written only in Spanish", async () => {
-    render(
-      await StorePageFooter({
-        locale: "en",
-        store: makeStore({ translations: [SPANISH] }),
-      })
-    );
-
-    expect(screen.getByTestId("footer")).toHaveTextContent(
-      "es: Joyas en la feria"
-    );
-  });
-
-  test("hands no tagline when the store has no texts", async () => {
-    render(
-      await StorePageFooter({
-        locale: "es",
-        store: makeStore({ translations: [] }),
-      })
-    );
-
-    expect(screen.getByTestId("footer")).toHaveTextContent("no tagline");
-  });
 
   test("lists the categories a page read itself, as of now, instead of the cached ones (FER-043)", async () => {
     render(

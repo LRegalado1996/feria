@@ -317,7 +317,8 @@ describe("public catalog", () => {
       );
     }
 
-    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
+    const newest = { category: chains.slug, limit: 2, sort: "newest" } as const;
+    const pageOne = await list(storeId, newest);
     // Two more published between the visitor's pages land before the cursor.
     await makeArticle(storeId, {
       categoryId: chains.id,
@@ -328,14 +329,12 @@ describe("public catalog", () => {
       title: `Nueva 2 ${tag}`,
     });
     const pageTwo = await list(storeId, {
-      category: chains.slug,
+      ...newest,
       cursor: pageOne.nextCursor ?? undefined,
-      limit: 2,
     });
     const pageThree = await list(storeId, {
-      category: chains.slug,
+      ...newest,
       cursor: pageTwo.nextCursor ?? undefined,
-      limit: 2,
     });
 
     const seen = [...pageOne.items, ...pageTwo.items, ...pageThree.items].map(
@@ -343,6 +342,97 @@ describe("public catalog", () => {
     );
     expect(seen).toEqual(first);
     expect(pageThree.nextCursor).toBeNull();
+  });
+
+  test("lists in the store's own order by default, a new article last, across pages without a repeat (FER-044)", async () => {
+    const { chains, storeId, tag } = await setup();
+    const made: { id: number; slug: string }[] = [];
+
+    for (const title of ["Primera", "Segunda", "Tercera"]) {
+      made.push(
+        await makeArticle(storeId, {
+          categoryId: chains.id,
+          title: `${title} ${tag}`,
+        })
+      );
+    }
+
+    // Each published as it was made: the newest first would read Primera
+    // last, so only the store's order reads it first.
+    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
+    // Added while the visitor reads page one: it goes after every other.
+    const added = await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Cuarta ${tag}`,
+    });
+    const pageTwo = await list(storeId, {
+      category: chains.slug,
+      cursor: pageOne.nextCursor ?? undefined,
+      limit: 2,
+    });
+    const [second] = made.slice(1, 2);
+    const positions = await db
+      .select({ id: product.id, position: product.position })
+      .from(product)
+      .where(
+        inArray(
+          product.id,
+          [...made, added].map((row) => row.id)
+        )
+      );
+    const positionOf = new Map(positions.map((row) => [row.id, row.position]));
+
+    expect(
+      [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
+    ).toEqual([...made, added].map((row) => row.slug));
+    expect(pageOne.nextCursor).toEqual({
+      id: second?.id,
+      position: positionOf.get(second?.id ?? 0),
+      sort: "position",
+    });
+    expect(pageTwo.nextCursor).toBeNull();
+    // Each later one numbered after the one before.
+    const numbers = [...made, added].map((row) => positionOf.get(row.id) ?? 0);
+    expect(
+      numbers.every(
+        (value, index) => index === 0 || value > (numbers[index - 1] ?? value)
+      )
+    ).toBe(true);
+  });
+
+  test("ties in the store's order are broken by id, never repeating a row", async () => {
+    const { chains, storeId, tag } = await setup();
+    const made: { id: number; slug: string }[] = [];
+
+    for (const title of ["A", "B", "C"]) {
+      made.push(
+        await makeArticle(storeId, {
+          categoryId: chains.id,
+          title: `Empate ${title} ${tag}`,
+        })
+      );
+    }
+
+    // One place for all three, as a reorder could leave them.
+    await db
+      .update(product)
+      .set({ position: 7 })
+      .where(
+        inArray(
+          product.id,
+          made.map((row) => row.id)
+        )
+      );
+    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
+    const pageTwo = await list(storeId, {
+      category: chains.slug,
+      cursor: pageOne.nextCursor ?? undefined,
+      limit: 2,
+    });
+
+    expect(
+      [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
+    ).toEqual(made.map((row) => row.slug));
   });
 
   test.each([
@@ -399,7 +489,11 @@ describe("public catalog", () => {
     const { chains, storeId, tag } = await setup();
     await makeArticle(storeId, { categoryId: chains.id, title: `Uno ${tag}` });
     await makeArticle(storeId, { categoryId: chains.id, title: `Dos ${tag}` });
-    const newest = await list(storeId, { category: chains.slug, limit: 1 });
+    const newest = await list(storeId, {
+      category: chains.slug,
+      limit: 1,
+      sort: "newest",
+    });
 
     await expect(
       list(storeId, {

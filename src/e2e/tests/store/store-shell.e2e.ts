@@ -39,9 +39,10 @@ test.describe("Storefront shell", () => {
     const nav = header.getByRole("navigation", {
       name: "Secciones de la tienda",
     });
-    await expect(
-      nav.getByRole("link", { name: "Todos los artículos" })
-    ).toHaveAttribute("href", "/productos");
+    await expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "href",
+      "/productos"
+    );
 
     // The first Tab of the page reaches the skip link, which moves focus to
     // the page's content.
@@ -160,7 +161,9 @@ test.describe("Storefront shell", () => {
       await toggle.click();
 
       await expect(page).toHaveURL("/en?ref=qr");
-      await expect(storePage.getFooter()).toContainText(STORE_TEXTS.en.tagline);
+      await expect(storePage.getFooter()).toContainText(
+        "For more than 20 years my family has set up its stall"
+      );
       await storePage.expectDocumentLanguage("en");
       await reachToggle("Menu");
       await expect(toggle).toHaveAccessibleName("Español");
@@ -195,9 +198,7 @@ test.describe("Storefront shell", () => {
         x: 0,
         y: 0,
       });
-      await expect(
-        menu.getByRole("link", { name: "Todos los artículos" })
-      ).toBeVisible();
+      await expect(menu.getByRole("link", { name: "Catálogo" })).toBeVisible();
       await expect(menu.getByRole("link", { name: "English" })).toBeVisible();
       await menu.getByRole("button", { name: "Cerrar el menú" }).click();
       await expectDialogRemoved(page, menu);
@@ -209,14 +210,23 @@ test.describe("Storefront shell", () => {
     });
   });
 
-  test("the footer shows only the links the store has, and the credit", async ({
+  test("the footer tells Pepe's story, shows only the links the store has, and the credit", async ({
     page,
   }) => {
     const storePage = new StorePage(page);
     await storePage.goto();
     const footer = storePage.getFooter();
 
-    await expect(footer).toContainText(STORE_TEXTS.es.tagline);
+    // Under the logo, the stall's story, signed (FER-044); not the tagline.
+    const story = footer.getByTestId("store-footer-story");
+    await expect(story).toContainText(
+      "Hace más de 20 años que mi familia arma su puesto en la feria navideña."
+    );
+    await expect(story).toContainText(
+      "pasá por el puesto 86 o pedí desde acá."
+    );
+    await expect(story.getByText("Pepe", { exact: true })).toBeVisible();
+    await expect(footer).not.toContainText(STORE_TEXTS.es.tagline);
     await expect(
       footer.getByRole("link", { name: `Instagram de ${STORE_SETTINGS.name}` })
     ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);
@@ -232,6 +242,56 @@ test.describe("Storefront shell", () => {
       footer.getByRole("link", { name: "Hecho por Lucas Regalado" })
     ).toHaveAttribute("href", "https://lucasregalado.com");
   });
+
+  for (const width of [1440, 2000]) {
+    test(`at ${width} px, the footer's blocks span its whole width, the first on the left edge, the last on the right, with even gaps`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ height: 900, width });
+      const storePage = new StorePage(page);
+      await storePage.goto();
+      const footer = storePage.getFooter();
+      await footer.scrollIntoViewIfNeeded();
+      // The run's store has Instagram: four blocks (FER-044).
+      const boxes = await Promise.all(
+        [
+          footer.getByTestId("store-footer-brand"),
+          footer.getByRole("navigation", { name: "Tienda" }),
+          footer.getByRole("region", { name: "Ayuda" }),
+          footer.getByRole("region", { name: "Seguinos" }),
+        ].map(async (block) => await block.boundingBox())
+      );
+      const credit = await footer
+        .getByRole("link", { name: /Hecho por Lucas Regalado/u })
+        .boundingBox();
+      const left = boxes[0]?.x ?? 0;
+      const last = boxes.at(-1);
+
+      // The page's margin on both sides: 28 px from md up.
+      expect(left).toBe(28);
+      expect(Math.round((last?.x ?? 0) + (last?.width ?? 0))).toBe(width - 28);
+      // The bottom row keeps its place: the credit on the right edge.
+      expect(Math.round((credit?.x ?? 0) + (credit?.width ?? 0))).toBe(
+        width - 28
+      );
+      const gaps = boxes
+        .slice(1)
+        .map(
+          (box, index) =>
+            (box?.x ?? 0) -
+            ((boxes[index]?.x ?? 0) + (boxes[index]?.width ?? 0))
+        );
+      for (const gap of gaps) {
+        expect(Math.abs(gap - (gaps[0] ?? 0))).toBeLessThanOrEqual(1);
+      }
+      // All on one row.
+      expect(new Set(boxes.map((box) => Math.round(box?.y ?? 0))).size).toBe(1);
+      // The story's measure is held, however wide the window.
+      expect(
+        (await footer.getByTestId("store-footer-story").boundingBox())?.width
+      ).toBeLessThanOrEqual(400);
+    });
+  }
 
   test("the cart button says how many units the browser's one cart holds", async ({
     page,
