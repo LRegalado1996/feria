@@ -3,11 +3,11 @@
 - **Milestone:** M0 Foundation
 - **Priority:** P2
 - **Status:** todo
-- **Depends on:** FER-043
+- **Depends on:** FER-043, FER-011
 
 ## Goal
 
-`docs/agents/testing.md` asks every test that needs state to take all of it from a `setup()` it calls first. Unit tests do; several integration files do not: their tests read the store and create their rows through helpers on their first lines (`theStoreId`, `uniqueTag`, `add`, `makeStore`). CodeRabbit flagged the FER-043 tests of `src/server/services/category.integration.test.ts` on PR #56; the same file's FER-016 tests, and `catalog`, `store`, `seed` and `better-auth/auth` integration files, are written the same way. Converting one part of a file would leave it in two styles.
+`docs/agents/testing.md` asks every test that needs state to take all of it from a `setup()` it calls first. Unit tests do; several integration files do not: their tests read the store and create their rows through helpers on their first lines (`theStoreId`, `uniqueTag`, `add`, `makeStore`). CodeRabbit flagged the FER-043 tests of `src/server/services/category.integration.test.ts` on PR #56 and FER-011's `src/server/services/upload.integration.test.ts` on PR #57; the same file's FER-016 tests, and `catalog`, `store`, `seed` and `better-auth/auth` integration files, are written the same way. Converting one part of a file would leave it in two styles.
 
 ## Scope
 
