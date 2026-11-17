@@ -199,3 +199,59 @@ test.describe("Category management", () => {
     ).toHaveText(["Inicio", `Bijou ${tag}`, `Anillos ${tag}`]);
   });
 });
+
+// FER-051: every icon-only button of a row says what it does on hover and
+// on focus, the same words as its name.
+test.describe("Category row tooltips", () => {
+  // Moving up or down depends on the row's place in the list every spec
+  // shares, so those two are the unit test's (`category-manager.test.tsx`).
+  test("each icon button shows its name in a tooltip on hover and on keyboard focus", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup(
+      { db, page },
+      { categories: [{ name: "Aros", slug: "aros" }] }
+    );
+    const row = page.getByTestId(`category-row-aros-${tag}`);
+    // The tooltip left behind fades out while the next one opens: each is
+    // found by its words.
+    const tooltip = (name: string) =>
+      page.getByRole("tooltip").filter({ hasText: name });
+    const names = [
+      `Arrastrar para ordenar: Aros ${tag}`,
+      `Página y grupo: Aros ${tag}`,
+      `Renombrar: Aros ${tag}`,
+      `Eliminar: Aros ${tag}`,
+    ];
+
+    for (const name of names) {
+      const button = row.getByRole("button", { name });
+      // A hover before React owns the row shows nothing: hovered again
+      // until it does, each try bounded.
+      await expect(async () => {
+        await page.mouse.move(0, 0);
+        await button.hover();
+        await expect(tooltip(name)).toHaveCount(1, { timeout: 2000 });
+      }).toPass();
+    }
+
+    // From the keyboard, on a fresh page no pointer has touched: a tooltip
+    // a hover opened can still be leaving, and would close the one focus
+    // opens. Tab from "Página y grupo" lands on "Renombrar", whose tooltip
+    // shows without a pointer. Focused before React owns the row, nothing
+    // shows: focused again until it does, each try bounded.
+    await page.reload();
+    const rename = row.getByRole("button", { name: `Renombrar: Aros ${tag}` });
+    await expect(async () => {
+      await row
+        .getByRole("button", { name: `Página y grupo: Aros ${tag}` })
+        .focus();
+      await page.keyboard.press("Tab");
+      await expect(rename).toBeFocused({ timeout: 2000 });
+      await expect(tooltip(`Renombrar: Aros ${tag}`)).toHaveCount(1, {
+        timeout: 2000,
+      });
+    }).toPass();
+  });
+});

@@ -252,6 +252,76 @@ describe("CategoryManager", () => {
     ]);
   });
 
+  test.each([
+    "Drag to reorder: Aros",
+    "Move up: Aros",
+    "Move down: Aros",
+    "Page and group: Aros",
+    "Rename: Aros",
+    "Delete: Aros",
+  ])(
+    "the icon button %s says what it does in a tooltip on hover",
+    async (name) => {
+      const { row, user } = setup();
+      await shown();
+      const button = within(row("aros")).getByRole("button", { name });
+
+      expect(screen.queryByRole("tooltip")).toBeNull();
+      await user.hover(button);
+
+      expect(await screen.findByRole("tooltip")).toHaveTextContent(name);
+      expect(button).toHaveAccessibleName(name);
+    }
+  );
+
+  test("a tooltip shows on keyboard focus too, the button keeping its name", async () => {
+    const { row, user } = setup();
+    await shown();
+    const rename = within(row("aros")).getByRole("button", {
+      name: "Rename: Aros",
+    });
+
+    act(() => {
+      within(row("aros"))
+        .getByRole("button", { name: "Page and group: Aros" })
+        .focus();
+    });
+    await user.tab();
+
+    expect(rename).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Rename: Aros"
+    );
+  });
+
+  test("a disabled icon button still explains itself on hover", async () => {
+    const { row, user } = setup();
+    await shown();
+    const up = within(row("collares")).getByRole("button", {
+      name: "Move up: Collares",
+    });
+
+    expect(up).toBeDisabled();
+    await user.hover(required(up.parentElement));
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Move up: Collares"
+    );
+  });
+
+  test("in Spanish, the tooltips speak Spanish", async () => {
+    const { row, user } = setup({ locale: "es" });
+    await shown();
+
+    await user.hover(
+      within(row("aros")).getByRole("button", { name: "Eliminar: Aros" })
+    );
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Eliminar: Aros"
+    );
+  });
+
   test("heads the screen with its title and its main action, which takes focus to the add form", async () => {
     const { user } = setup();
     await shown();
