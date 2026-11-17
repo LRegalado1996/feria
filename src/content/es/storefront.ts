@@ -52,6 +52,18 @@ export const storefront = {
       submitting: "Enviando el pedido…",
       title: "Tus datos",
     },
+    // The dialog that asks before the order is sent (FER-050).
+    confirm: {
+      back: "Volver",
+      confirm: "Confirmar pedido",
+      description:
+        "Revisá que esté todo bien: te escribimos a ese celular por WhatsApp.",
+      name: "Nombre",
+      phone: "Celular",
+      title: "¿Confirmás el pedido?",
+      total: "Total",
+      units: "Unidades",
+    },
     decrease: "Una unidad menos de {title}",
     empty: "Tu carrito está vacío.",
     errors: {

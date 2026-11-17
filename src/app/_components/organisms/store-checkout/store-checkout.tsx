@@ -170,6 +170,7 @@ function CheckoutBody() {
         onStale={() => {
           cart.refetch();
         }}
+        total={cart.total}
       />
     </div>
   );

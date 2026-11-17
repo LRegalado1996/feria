@@ -274,7 +274,7 @@ test.describe("Cart panel", () => {
       page,
       ORDER_CREATE,
       async () => {
-        await page.getByTestId("store-checkout-submit").click();
+        await new StorePage(page).submitAndConfirmOrder();
       },
       { input: { customerName: "Ana Prueba", customerPhone: phone.local } }
     );

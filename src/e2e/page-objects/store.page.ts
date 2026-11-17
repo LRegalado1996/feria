@@ -82,6 +82,34 @@ export class StorePage extends BasePage {
     await expectDialogRemoved(this.page, panel);
   }
 
+  /** The checkout's confirmation (FER-050), while it is open. */
+  getCheckoutConfirm(): Locator {
+    return this.getByTestId("store-checkout-confirm").filter({ visible: true });
+  }
+
+  /**
+   * Submits the checkout's form, which asks first (FER-050), and waits for
+   * the confirmation it opens.
+   */
+  async askToConfirmOrder(): Promise<Locator> {
+    await this.getByTestId("store-checkout-submit")
+      .filter({ visible: true })
+      .click();
+    const dialog = this.getCheckoutConfirm();
+    await expect(dialog).toBeVisible();
+
+    return dialog;
+  }
+
+  /**
+   * Submits the checkout and confirms the order in the dialog: the whole
+   * way to an order. Wrap it in `completeRpcAction`.
+   */
+  async submitAndConfirmOrder(): Promise<void> {
+    const dialog = await this.askToConfirmOrder();
+    await dialog.getByTestId("store-checkout-confirm-submit").click();
+  }
+
   /**
    * The lime line above the header (FER-039): the fair and the stall until
    * FER-020, the whole notice from `lg` up and a short one on a phone.
