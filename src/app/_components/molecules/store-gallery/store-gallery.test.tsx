@@ -129,7 +129,8 @@ describe("StoreGallery", () => {
     await user.click(required(arrow()));
     expect(status()).toHaveTextContent("Foto 2 de 3");
     await user.click(required(arrow()));
-    expect(embla.fake.scrollNext).toHaveBeenCalledTimes(2);
+    // Each a glide (`false`): motion is allowed here.
+    expect(embla.fake.scrollNext.mock.calls).toEqual([[false], [false]]);
     expect(arrow()).toHaveAccessibleName("Volver a la primera foto");
 
     await user.click(required(arrow()));

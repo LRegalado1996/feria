@@ -161,13 +161,12 @@ test.describe("Languages, signed out", () => {
 
       try {
         const page = await context.newPage();
-        // Without scripts nothing changes after the load event, which
-        // `goto` waits for: the whole response is in. The home's content
-        // is in it, though not always in place: React streams a finished
-        // part of the page apart from the shell once both pass its chunk
-        // budget (12,800 bytes), and only a script moves it in.
         await page.goto(path);
-        await expect(page.getByTestId("store-home")).toBeAttached();
+        // Visible, not only attached: a boundary's content that React
+        // streams apart from the first response sits in a `<div hidden>`
+        // that only a script reveals, so this crawler would never see it
+        // (docs/agents/nextjs.md § Store pages).
+        await new StorePage(page).waitForLoad();
 
         await expectAlternates(page, origin, { path, scope: "head " });
       } finally {
@@ -269,6 +268,50 @@ test.describe("Languages, signed in", () => {
       await expect(page).toHaveURL(`/admin/products${QUERY}`);
       await expect(admin.heading()).toHaveText("Artículos");
       await admin.expectDocumentLanguage("es");
+    });
+  }
+
+  // Next hides the page it leaves and shows it again, state and all, both
+  // on Back and on a link back to it (the Next guide "Preserving UI state").
+  for (const { name, comeBack } of [
+    {
+      name: "Back",
+      comeBack: async (_admin: AdminPage, page: Page) => {
+        await page.goBack();
+      },
+    },
+    {
+      name: "the pill",
+      comeBack: async (admin: AdminPage) => {
+        await expect(admin.localeToggle()).toHaveAttribute(
+          "href",
+          "/admin/products"
+        );
+        await admin.localeToggle().click();
+      },
+    },
+  ]) {
+    test(`the Spanish page shown again by ${name} rests on Spanish and switches again`, async ({
+      authenticatedPage: page,
+    }) => {
+      const admin = new AdminPage(page);
+      await page.goto("/admin/products");
+      await admin.waitForLoad();
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
+
+      await comeBack(admin, page);
+
+      await expect(page).toHaveURL("/admin/products");
+      await expect(admin.heading()).toHaveText("Artículos");
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
     });
   }
 

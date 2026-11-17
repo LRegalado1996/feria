@@ -412,7 +412,7 @@ describe("category writes under two writers", () => {
 const BLOB_STORE = {
   host: "integration.public.blob.vercel-storage.com",
   namespace: "local",
-  token: "vercel_blob_rw_Integration_s3cretPart",
+  token: "vercel_blob_rw_Integration_synthetic",
 } as const;
 
 /** An address of an upload for covers that no other call gave. */
@@ -787,6 +787,7 @@ async function overlappingPages(
 
     return result;
   });
+  // A first writer that fails never signals: its failure ends the wait.
   await Promise.race([locked.promise, first]);
   const second = setPage(storeId, values[1]);
 
@@ -794,6 +795,9 @@ async function overlappingPages(
     await waitUntilBlocked();
   } finally {
     held.resolve(undefined);
+    // On every path, before a failed wait is thrown: both writers end
+    // before the file's cleanup runs, and neither failure goes unseen.
+    await Promise.allSettled([first, second]);
   }
 
   return await Promise.allSettled([first, second]);

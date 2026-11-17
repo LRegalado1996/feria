@@ -104,5 +104,12 @@ describe("isOwnBlobUrl", () => {
 
   test("checks the purpose's folder when one is given", () => {
     expect(isOwnBlobUrl(ownUrl(), { ...scope, purpose: "cover" })).toBe(true);
+    // Shaped like an upload, but in another purpose's folder.
+    expect(
+      isOwnBlobUrl(ownUrl(`qa/avatar/${ID}.webp`), {
+        ...scope,
+        purpose: "cover",
+      })
+    ).toBe(false);
   });
 });

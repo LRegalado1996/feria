@@ -12,7 +12,7 @@ describe("blobStoreHost", () => {
     ["no token", undefined, null],
     ["an empty token", "", null],
     ["a client token", "vercel_blob_client_AbC123xyz_s3cret", null],
-    ["a token without its secret", "vercel_blob_rw_AbC123xyz", null],
+    ["a token without its secret", "vercel_blob_rw_Synthetic", null],
     ["a store id with a dot", "vercel_blob_rw_evil.com_s3cret", null],
   ])("%s gives %s", (_case, token, host) => {
     expect(blobStoreHost(token)).toBe(host);

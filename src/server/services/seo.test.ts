@@ -184,24 +184,53 @@ describe("listIndexableArticles", () => {
 describe("listIndexableCategories", () => {
   test("reads the store's categories with a published article, in them or in a category of theirs, in their order, by name, at their pages", async () => {
     const { db } = setup();
+    const at = (day: number) => new Date(Date.UTC(2026, 10, day, 12));
     db.$["select.orderBy"].mockResolvedValue([
-      { id: 1, parentSlug: "bijouterie", slug: "anillos" },
-      { id: 2, parentSlug: null, slug: "aros" },
-      { id: 3, parentSlug: null, slug: "sin-nombre" },
+      { id: 1, parentSlug: "bijouterie", slug: "anillos", updatedAt: at(10) },
+      { id: 2, parentSlug: null, slug: "aros", updatedAt: at(12) },
+      { id: 3, parentSlug: null, slug: "sin-nombre", updatedAt: at(11) },
     ]);
     answerTexts(db, [
-      { categoryId: 1, locale: "es", name: "Anillos" },
-      { categoryId: 1, locale: "en", name: "Rings" },
-      { categoryId: 2, locale: "es", name: "Aros" },
+      { categoryId: 1, locale: "es", name: "Anillos", updatedAt: at(10) },
+      { categoryId: 1, locale: "en", name: "Rings", updatedAt: at(14) },
+      { categoryId: 2, locale: "es", name: "Aros", updatedAt: at(9) },
     ]);
 
-    // In the asked language, else the one it has, else by its slug.
+    // In the asked language, else the one it has, else by its slug; changed
+    // when its row or its texts in either language last were.
     await expect(
       listIndexableCategories(db as never, { locale: "en", storeId: STORE_ID })
     ).resolves.toEqual([
-      { name: "Rings", path: "/bijouterie/anillos", slug: "anillos" },
-      { name: "Aros", path: "/aros", slug: "aros" },
-      { name: "sin-nombre", path: "/sin-nombre", slug: "sin-nombre" },
+      {
+        name: "Rings",
+        path: "/bijouterie/anillos",
+        slug: "anillos",
+        updatedAt: at(14),
+      },
+      { name: "Aros", path: "/aros", slug: "aros", updatedAt: at(12) },
+      {
+        name: "sin-nombre",
+        path: "/sin-nombre",
+        slug: "sin-nombre",
+        updatedAt: at(11),
+      },
+    ]);
+    expect(db.$.select.mock.calls).toEqual([
+      [
+        expect.objectContaining({
+          id: category.id,
+          slug: category.slug,
+          updatedAt: category.updatedAt,
+        }),
+      ],
+      [
+        {
+          categoryId: categoryTranslation.categoryId,
+          locale: categoryTranslation.locale,
+          name: categoryTranslation.name,
+          updatedAt: categoryTranslation.updatedAt,
+        },
+      ],
     ]);
 
     expect(db.$["select.from"].mock.calls).toEqual([

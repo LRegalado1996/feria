@@ -17,7 +17,7 @@ import { uploadRouter } from "./upload";
 // reaches the real store.
 vi.mock("@/env", () => ({
   env: {
-    BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_Integration_s3cretPart",
+    BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_Integration_synthetic",
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: "test",
   },

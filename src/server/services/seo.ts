@@ -109,7 +109,10 @@ export type IndexableArticle = Awaited<
  * A store's categories in their order, named in `locale` (else the language
  * they have), each with its page's address (FER-043), only those with a
  * published article, in themselves or, for a group, in one of its
- * categories: a link to an empty listing tells an assistant nothing.
+ * categories: a link to an empty listing tells an assistant nothing. Each
+ * says when its own page last changed (`updatedAt`): the latest write to
+ * its row or to its texts in either language, which the sitemap dates the
+ * page by.
  */
 export async function listIndexableCategories(
   db: DatabaseClient,
@@ -122,6 +125,7 @@ export async function listIndexableCategories(
       id: category.id,
       parentSlug: group.slug,
       slug: category.slug,
+      updatedAt: category.updatedAt,
     })
     .from(category)
     .leftJoin(
@@ -149,6 +153,7 @@ export async function listIndexableCategories(
       categoryId: categoryTranslation.categoryId,
       locale: categoryTranslation.locale,
       name: categoryTranslation.name,
+      updatedAt: categoryTranslation.updatedAt,
     })
     .from(categoryTranslation)
     .where(
@@ -158,13 +163,19 @@ export async function listIndexableCategories(
       )
     );
 
-  return rows.map(({ id, parentSlug, slug }) => ({
-    name:
-      pickTranslation(
-        names.filter((name) => name.categoryId === id),
-        locale
-      )?.name ?? slug,
-    path: categoryPath({ parentSlug, slug }),
-    slug,
-  }));
+  return rows.map(({ id, parentSlug, slug, updatedAt }) => {
+    const own = names.filter((name) => name.categoryId === id);
+
+    return {
+      name: pickTranslation(own, locale)?.name ?? slug,
+      path: categoryPath({ parentSlug, slug }),
+      slug,
+      updatedAt: new Date(
+        Math.max(
+          updatedAt.getTime(),
+          ...own.map((name) => name.updatedAt.getTime())
+        )
+      ),
+    };
+  });
 }

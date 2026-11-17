@@ -56,6 +56,8 @@ function setup({
     pause: () => within(band).getByRole("button"),
     picture: screen.getByTestId("store-article-band-picture"),
     streamers: () => all("store-article-band-streamer"),
+    /** The sway inside each streamer: a second animation of its own. */
+    sways: () => all("store-article-band-sway"),
     user: userEvent.setup(),
   };
 }
@@ -179,11 +181,18 @@ describe("StoreArticleBand", () => {
   });
 
   test("off screen it holds still, with every piece paused where it is", () => {
-    const { band, icons } = setup({ visible: false });
+    const { band, icons, streamers, sways } = setup({ visible: false });
 
     expect(band).toHaveAttribute("data-running", "false");
-    for (const icon of icons()) {
-      expect(icon).toHaveClass("motion-safe:animate-store-twinkle", HELD);
+    for (const [pieces, animation] of [
+      [streamers(), "motion-safe:animate-store-stream"],
+      [sways(), "motion-safe:animate-store-sway"],
+      [icons(), "motion-safe:animate-store-twinkle"],
+    ] as const) {
+      expect(pieces.length).toBeGreaterThan(0);
+      for (const piece of pieces) {
+        expect(piece).toHaveClass(animation, HELD);
+      }
     }
   });
 
@@ -204,15 +213,24 @@ describe("StoreArticleBand", () => {
   });
 
   test("under reduced motion nothing is animated and the button, with nothing to pause, is not shown", () => {
-    const { icons, pause, streamers } = setup();
+    const { icons, pause, picture, streamers, sways } = setup();
+    const animations = (piece: Element) =>
+      [...piece.classList].filter((name) => name.includes("animate-"));
+    // Every animated piece of the picture, found by its classes, not by
+    // its kind: a streamer, the sway inside it, an icon.
+    const animated = [...picture.querySelectorAll("*")].filter(
+      (piece) => animations(piece).length > 0
+    );
 
+    expect(new Set(animated)).toEqual(
+      new Set([...streamers(), ...sways(), ...icons()])
+    );
+    expect(animated).toHaveLength(12 + 12 + 14);
     // Every animation only where motion is welcome; still, the streamers
     // rest around the greeting.
-    for (const piece of [...streamers(), ...icons()]) {
-      expect(
-        [...piece.classList].filter((name) => name.includes("animate-"))
-      ).toEqual(
-        [...piece.classList].filter((name) =>
+    for (const piece of animated) {
+      expect(animations(piece)).toEqual(
+        animations(piece).filter((name) =>
           name.startsWith("motion-safe:animate-")
         )
       );
