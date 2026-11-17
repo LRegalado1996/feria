@@ -595,9 +595,29 @@ describe("catalogMetadata", () => {
     await expect(metadata()).resolves.toMatchObject({
       alternates: { canonical: "/bijouterie/anillos?color=dorado" },
       description: "Anillos · Dorado · «sello», en LR Market.",
-      openGraph: { title: "Anillos · Dorado" },
+      // The share card carries no search, in its words either.
+      openGraph: {
+        description: "Anillos · Dorado, en LR Market.",
+        title: "Anillos · Dorado",
+      },
       robots: { follow: true, index: false },
       title: { absolute: "Anillos · Dorado · «sello» · LR Market" },
+    });
+  });
+
+  test("shares a page searched without a filter with the page's own words", async () => {
+    const { metadata } = setup({
+      category: "anillos",
+      group: "bijouterie",
+      search: { q: "sello" },
+    });
+
+    await expect(metadata()).resolves.toMatchObject({
+      description: "Anillos · «sello», en LR Market.",
+      openGraph: {
+        description: "Anillos de la feria, de plata y dorados.",
+        title: "Anillos",
+      },
     });
   });
 
