@@ -40,16 +40,17 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M2 Core domain
 
-| ID                                             | Title                                              | Priority | Status |
-| ---------------------------------------------- | -------------------------------------------------- | -------- | ------ |
-| [FER-008](FER-008-store-domain-and-theming.md) | Store domain, routing by path and theming          | P0       | done   |
-| [FER-009](FER-009-roles-and-access.md)         | Roles, memberships and closed sign-up              | P0       | done   |
-| [FER-010](FER-010-catalog-domain.md)           | Catalog domain: categories, articles, translations | P0       | done   |
-| [FER-011](FER-011-image-uploads.md)            | Image upload pipeline                              | P0       | todo   |
-| [FER-012](FER-012-remove-post-demo.md)         | Remove the posts demo                              | P1       | done   |
-| [FER-033](FER-033-article-filters.md)          | Article filters: color and other attributes        | P0       | done   |
-| [FER-038](FER-038-single-store.md)             | One store, one admin role                          | P0       | done   |
-| [FER-041](FER-041-drop-unread-schema.md)       | Drop what nothing reads any more                   | P2       | todo   |
+| ID                                                 | Title                                              | Priority | Status |
+| -------------------------------------------------- | -------------------------------------------------- | -------- | ------ |
+| [FER-008](FER-008-store-domain-and-theming.md)     | Store domain, routing by path and theming          | P0       | done   |
+| [FER-009](FER-009-roles-and-access.md)             | Roles, memberships and closed sign-up              | P0       | done   |
+| [FER-010](FER-010-catalog-domain.md)               | Catalog domain: categories, articles, translations | P0       | done   |
+| [FER-011](FER-011-image-uploads.md)                | Image upload pipeline                              | P0       | todo   |
+| [FER-012](FER-012-remove-post-demo.md)             | Remove the posts demo                              | P1       | done   |
+| [FER-033](FER-033-article-filters.md)              | Article filters: color and other attributes        | P0       | done   |
+| [FER-038](FER-038-single-store.md)                 | One store, one admin role                          | P0       | done   |
+| [FER-041](FER-041-drop-unread-schema.md)           | Drop what nothing reads any more                   | P2       | todo   |
+| [FER-048](FER-048-reserved-category-slug-check.md) | The database refuses a category on a reserved path | P2       | todo   |
 
 ### M3 Admin
 
@@ -112,7 +113,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 038 → 041
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
-039 → 042 → 043 → 046, 047
+039 → 042 → 043 → 046, 047, 048
 024 → 029 → 030
 everything P0 → 031 → 032
 ```
