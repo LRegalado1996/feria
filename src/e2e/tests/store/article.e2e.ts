@@ -151,6 +151,8 @@ test.describe("Article page", () => {
           .getByTestId("store-article")
           // Intl puts a no-break space between the sign and the amount.
           .getByText(/^\$\s990$/u)
+          // The article's own comes first; a suggestion below may cost the same.
+          .first()
           .boundingBox(),
       ]);
       // One row: side by side, the same height and top.
@@ -181,18 +183,25 @@ test.describe("Article page", () => {
         slug: `cadenas-${tag}`,
       }),
     ]);
+    // A price publishes a seeded article; without one it is a draft.
     const article = await db.seed.createArticle({
       categoryId: rings.id,
+      priceAmount: 90_000,
       title: `Anillo ${tag}`,
     });
     const sameTitles = [`Anillo uno ${tag}`, `Anillo dos ${tag}`];
     for (const title of sameTitles) {
-      await db.seed.createArticle({ categoryId: rings.id, title });
+      await db.seed.createArticle({
+        categoryId: rings.id,
+        priceAmount: 50_000,
+        title,
+      });
     }
     // Enough of the rest of the store to fill the row, whatever else is in it.
     for (let index = 0; index < 6; index += 1) {
       await db.seed.createArticle({
         categoryId: chains.id,
+        priceAmount: 70_000,
         title: `Cadena ${index} ${tag}`,
       });
     }
