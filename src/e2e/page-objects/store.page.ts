@@ -52,6 +52,20 @@ export class StorePage extends BasePage {
     });
   }
 
+  /**
+   * The language pill, the header's from a tablet up or the phone menu's
+   * once it is open; after a switch the page left behind stays mounted,
+   * hidden, with a pill of its own.
+   */
+  getLocaleToggle(): Locator {
+    return this.getByTestId("locale-toggle").filter({ visible: true });
+  }
+
+  /** The pill's thumb: `data-side` says which language it sits under. */
+  getLocaleToggleThumb(): Locator {
+    return this.getLocaleToggle().getByTestId("locale-toggle-thumb");
+  }
+
   /** The header's search icon, which opens the search panel. */
   getSearchButton(): Locator {
     return this.getByTestId("store-search-button").filter({ visible: true });

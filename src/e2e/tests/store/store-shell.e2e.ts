@@ -56,27 +56,55 @@ test.describe("Storefront shell", () => {
     ).toHaveAttribute("href", "/");
   });
 
-  test("the language toggle leads to the same page in English, and back", async ({
-    page,
-  }) => {
-    const storePage = new StorePage(page);
-    await storePage.goto();
+  for (const { name, viewport } of [
+    { name: "a computer", viewport: { height: 900, width: 1440 } },
+    // On a phone the pill is in the menu.
+    { name: "a phone", viewport: { height: 844, width: 390 } },
+  ]) {
+    test(`on ${name}, the language pill leads to the same page in English with its query, and back`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const storePage = new StorePage(page);
+      const reachToggle = async (menuName: string) => {
+        if (viewport.width < 768) {
+          await clickUntilVisible(
+            storePage.getMenuButton(menuName),
+            storePage.getMobileMenu()
+          );
+        }
+      };
+      await page.goto("/?ref=qr");
+      await storePage.waitForLoad();
+      await reachToggle("Menú");
 
-    const toggle = storePage.getSiteHeader().getByRole("link", {
-      name: "English",
-    });
-    // React reads the URL before the link carries it (src/e2e/AGENTS.md).
-    await expect(toggle).toHaveAttribute("href", "/en");
-    await toggle.click();
+      const toggle = storePage.getLocaleToggle();
+      // React reads the URL before the link carries it (src/e2e/AGENTS.md).
+      await expect(toggle).toHaveAttribute("href", "/en?ref=qr");
+      await expect(toggle).toHaveAccessibleName("English");
+      await expect(toggle).toHaveAttribute("lang", "en");
+      await expect(storePage.getLocaleToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await toggle.click();
 
-    await expect(page).toHaveURL("/en");
-    await expect(storePage.getFooter()).toContainText(STORE_TEXTS.en.tagline);
-    await storePage.expectDocumentLanguage("en");
-    const back = storePage.getSiteHeader().getByRole("link", {
-      name: "Español",
+      await expect(page).toHaveURL("/en?ref=qr");
+      await expect(storePage.getFooter()).toContainText(STORE_TEXTS.en.tagline);
+      await storePage.expectDocumentLanguage("en");
+      await reachToggle("Menu");
+      await expect(toggle).toHaveAccessibleName("Español");
+      await expect(storePage.getLocaleToggleThumb()).toHaveAttribute(
+        "data-side",
+        "end"
+      );
+      await expect(toggle).toHaveAttribute("href", "/?ref=qr");
+      await toggle.click();
+
+      await expect(page).toHaveURL("/?ref=qr");
+      await storePage.expectDocumentLanguage("es");
     });
-    await expect(back).toHaveAttribute("href", "/");
-  });
+  }
 
   test.describe("on a phone", () => {
     test.use({ viewport: { height: 812, width: 375 } });

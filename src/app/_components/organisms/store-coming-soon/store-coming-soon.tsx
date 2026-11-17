@@ -34,7 +34,7 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
           {/* The full logo, the brand on every storefront page (FER-039). */}
           <StoreLogo className="h-14 md:h-16" variant="full" />
         </StoreBubbles>
-        <StoreLocaleToggle className="relative z-10" tone="contrast" />
+        <StoreLocaleToggle className="relative z-10" />
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">
