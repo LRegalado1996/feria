@@ -281,6 +281,16 @@ function CategoryPageForm({
                           setUploading((was) => ({ ...was, coverPhone: busy }));
                         }}
                         onChange={(image) => {
+                          // A phone photo needs a computer one: one that
+                          // lands after the computer photo was removed is
+                          // dropped, as the shut field could not remove it.
+                          if (
+                            image !== null &&
+                            form.getValues("cover") === null
+                          ) {
+                            return;
+                          }
+
                           field.onChange(image);
                         }}
                         purpose="cover"

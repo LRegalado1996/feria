@@ -466,6 +466,35 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("a phone photo that lands after the computer photo was removed is dropped", async () => {
+    const { choose, finishUpload, onSave, photo, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    await finishUpload();
+    await waitFor(() => {
+      expect(within(phone).getByRole("status")).toHaveTextContent(
+        "Photo uploaded."
+      );
+    });
+
+    expect(within(phone).queryByRole("img")).toBeNull();
+    await save();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: null, coverPhone: null })
+      );
+    });
+  });
+
   test("cancels without saving", async () => {
     const { onCancel, onSave, user } = setup();
 
