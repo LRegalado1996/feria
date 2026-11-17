@@ -117,14 +117,18 @@ function setup({
   const onStale = vi.fn(() => undefined);
   const wrapper = createQueryWrapper();
   const user = userEvent.setup();
-  const form = (current: Items, blocked: string | null = blockedReason) => (
+  const form = (
+    current: Items,
+    blocked: string | null = blockedReason,
+    currentTotal: Total = total
+  ) => (
     <StoreCheckoutForm
       blockedReason={blocked}
       className="custom"
       items={current}
       onPlaced={onPlaced}
       onStale={onStale}
-      total={total}
+      total={currentTotal}
     />
   );
   const { rerender } = renderWithI18n(form(items), { locale, wrapper });
@@ -181,8 +185,8 @@ function setup({
     dialog,
     /** The confirmation, or `null` when none is open. */
     queryDialog: () => screen.queryByTestId("store-checkout-confirm"),
-    rerender: (next: Items, blocked?: string | null) => {
-      rerender(form(next, blocked));
+    rerender: (next: Items, blocked?: string | null, nextTotal?: Total) => {
+      rerender(form(next, blocked, nextTotal));
     },
     /** Submits and confirms: the whole way to an order. */
     send: async () => {
@@ -645,6 +649,49 @@ describe("StoreCheckoutForm", () => {
       screen.getByTestId("store-checkout-confirm-units")
     ).toHaveTextContent(/^Units7$/u);
     expect(screen.queryByTestId("store-checkout-confirm-total")).toBeNull();
+  });
+
+  test("before confirming, the summary follows the cart; once sent, it holds what was sent", async () => {
+    const { ask, confirm, confirmButton, fill, received, rerender } = setup({
+      answers: ["hang"],
+    });
+    const units = () => screen.getByTestId("store-checkout-confirm-units");
+    const totalRow = () => screen.getByTestId("store-checkout-confirm-total");
+
+    await fill();
+    await ask();
+    // Another tab adds a unit while the dialog asks: that is what is sent.
+    rerender(
+      makeItems([
+        { productId: 4, quantity: 3 },
+        { productId: 9, quantity: 1 },
+      ]),
+      null,
+      { amount: 450_000, currency: "UYU" }
+    );
+    expect(units()).toHaveTextContent(/^Units4$/u);
+    expect(totalRow()).toHaveTextContent(/^TotalUYU 4,500$/u);
+
+    await confirm();
+    await waitFor(() => {
+      expect(confirmButton()).toHaveTextContent("Sending the order…");
+    });
+    // On its way, the cart changes again: the summary is still the order.
+    rerender(makeItems([{ productId: 4, quantity: 9 }]), null, {
+      amount: 1_080_000,
+      currency: "UYU",
+    });
+
+    expect(units()).toHaveTextContent(/^Units4$/u);
+    expect(totalRow()).toHaveTextContent(/^TotalUYU 4,500$/u);
+    expect(received).toEqual([
+      expect.objectContaining({
+        items: [
+          { productId: 4, quantity: 3 },
+          { productId: 9, quantity: 1 },
+        ],
+      }),
+    ]);
   });
 
   test("starts focus on Go back, the choice that sends nothing", async () => {
