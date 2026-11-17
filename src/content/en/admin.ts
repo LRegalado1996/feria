@@ -140,6 +140,29 @@ export const admin: Dictionary["admin"] = {
     },
     values: "Values of “{name}”",
   },
+  imageUpload: {
+    cancel: "Cancel",
+    cancelled: "Upload cancelled.",
+    choose: "Choose a photo",
+    named: "{action}: {label}",
+    errors: {
+      failed:
+        "The photo could not be uploaded. Check the connection and retry.",
+      tooLarge:
+        "The photo is still too heavy after shrinking it. Try another one.",
+      unreadable: "We could not read this photo. Try a JPEG, PNG or WebP one.",
+    },
+    hint: "JPEG, PNG or WebP. We shrink it before uploading so it travels fast.",
+    preparing: "Preparing the photo…",
+    preview: "Preview: {label}",
+    progress: "Upload progress: {label}",
+    remove: "Remove photo",
+    removed: "Photo removed.",
+    replace: "Change photo",
+    retry: "Retry",
+    uploaded: "Photo uploaded.",
+    uploading: "Uploading the photo… {percent}",
+  },
   metadata: {
     title: "Admin",
   },

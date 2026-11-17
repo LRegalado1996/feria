@@ -141,6 +141,31 @@ export const admin = {
     },
     values: "Valores de «{name}»",
   },
+  imageUpload: {
+    cancel: "Cancelar",
+    cancelled: "Subida cancelada.",
+    choose: "Elegir foto",
+    // An action's name with the field's, so two uploaders on one screen
+    // read apart ("Elegir foto: Foto para computadora").
+    named: "{action}: {label}",
+    errors: {
+      failed: "No se pudo subir la foto. Revisá la conexión y reintentá.",
+      tooLarge:
+        "La foto sigue siendo demasiado pesada después de reducirla. Probá con otra.",
+      unreadable:
+        "No pudimos leer esta foto. Probá con una en JPEG, PNG o WebP.",
+    },
+    hint: "JPEG, PNG o WebP. La achicamos antes de subirla para que viaje rápido.",
+    preparing: "Preparando la foto…",
+    preview: "Vista previa: {label}",
+    progress: "Progreso de la subida: {label}",
+    remove: "Quitar foto",
+    removed: "Foto quitada.",
+    replace: "Cambiar foto",
+    retry: "Reintentar",
+    uploaded: "Foto subida.",
+    uploading: "Subiendo la foto… {percent}",
+  },
   metadata: {
     title: "Panel",
   },
