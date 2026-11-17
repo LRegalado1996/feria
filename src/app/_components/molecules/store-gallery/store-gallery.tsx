@@ -34,7 +34,9 @@ export interface StoreGalleryProps {
 /**
  * The round arrow, the counter a screen reader hears, and the zoom of the
  * photo in view: what moves the gallery besides a finger, a mouse, a
- * trackpad and the arrow keys.
+ * trackpad and the arrow keys. The gallery goes round, so the arrow always
+ * leads on; it leads back to the first photo only where Embla could not
+ * loop. One photo has nothing to move: no arrow, no counter.
  */
 function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
   const copy = useDictionary().storefront.article;
@@ -131,10 +133,10 @@ function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
 }
 
 /**
- * An article's photos (FER-024, FER-039): large, on the grey tile, in a
- * carousel that a finger or a mouse drags, a trackpad swipes, the arrow
- * keys step through and the round arrow pages; the photo in view opens full
- * screen, where the phone's own pinch zooms. The first photo loads first;
+ * An article's photos (FER-024, FER-039, FER-045): large, on the grey
+ * tile, in a carousel that goes round, which a finger or a mouse drags, a
+ * trackpad swipes, the arrow keys step through and the round arrow pages;
+ * the photo in view opens full screen, where the phone's own pinch zooms. The first photo loads first;
  * every photo is in the server's HTML, so it is read without the script.
  */
 function StoreGallery({ className, images, title }: StoreGalleryProps) {
@@ -162,7 +164,11 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
       className={cn("min-w-0", className)}
       data-slot="store-gallery"
       data-testid="store-gallery"
-      opts={{ align: "start", containScroll: "trimSnaps" }}
+      // Round and round (FER-045, like landonorris.store's): past the last
+      // photo comes the first again, and before the first the last. Embla
+      // gives up the loop when the photos cannot fill the view around it,
+      // and one photo never moves.
+      opts={{ align: "start", loop: true }}
     >
       <CarouselContent className="-ml-1.5">
         {images.map((image, position) => (

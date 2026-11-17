@@ -7,7 +7,8 @@ type Listener = (api: EmblaApi) => void;
 /**
  * A stand-in for Embla's API, which measures a layout happy-dom does not
  * have. It rests on `snaps` places and moves between them as the real one
- * does (one step, never past either end), telling its listeners; `emit()`
+ * does (one step, never past either end, or round past them with `loop`),
+ * telling its listeners; `emit()`
  * fires any other event (a drag starting, `reInit`). Mock the hook with it:
  *
  *   vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
@@ -17,10 +18,13 @@ type Listener = (api: EmblaApi) => void;
  * `plugins` is what `api.plugins()` answers, by name (`{ autoplay }`).
  */
 export function createFakeEmbla({
+  loop = false,
   plugins = {},
   selected = 0,
   snaps = 3,
 }: {
+  /** Goes round, as Embla's `loop` does when the slides can. */
+  loop?: boolean;
   plugins?: Record<string, unknown>;
   selected?: number;
   snaps?: number;
@@ -30,8 +34,9 @@ export function createFakeEmbla({
   const state = { selected, snaps };
 
   const fake = {
-    canScrollNext: () => state.selected < state.snaps - 1,
-    canScrollPrev: () => state.selected > 0,
+    canScrollNext: () =>
+      loop ? state.snaps > 1 : state.selected < state.snaps - 1,
+    canScrollPrev: () => (loop ? state.snaps > 1 : state.selected > 0),
     off: (event: string, listener: Listener) => {
       listeners.get(event)?.delete(listener);
 
@@ -63,7 +68,9 @@ export function createFakeEmbla({
   };
 
   const move = (index: number) => {
-    state.selected = Math.min(Math.max(index, 0), state.snaps - 1);
+    state.selected = loop
+      ? (index + state.snaps) % state.snaps
+      : Math.min(Math.max(index, 0), state.snaps - 1);
     emit("select");
   };
 
