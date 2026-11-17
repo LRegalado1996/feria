@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { put } from "@vercel/blob/client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { reportError } from "@/lib/errors/client";
 import { orpc } from "@/lib/orpc/client";
@@ -38,19 +38,36 @@ interface Attempt {
  * the browser, asks the server for a client token (an admin's only), then
  * sends the file with its progress. `retry()` sends the same prepared file
  * again with a fresh token after a failure; `cancel()` stops it wherever it
- * is. A finished upload is handed to `onUploaded` with its size in pixels,
- * for the form to save. A failure is reported once, here; a file the browser
- * cannot read is the user's to change, not a defect.
+ * is, and so does leaving the form. A finished upload is handed to
+ * `onUploaded` with its size in pixels, for the form to save, and
+ * `onBusyChange` hears when a photo is on its way and when it no longer
+ * is, for the form to wait. A failure is reported once, here; a file the
+ * browser cannot read is the user's to change, not a defect.
  */
 export function useImageUpload({
+  onBusyChange,
   onUploaded,
   purpose,
 }: {
+  /** Told when a photo starts being prepared or sent, and when it stops. */
+  onBusyChange?: (busy: boolean) => void;
   onUploaded: (image: UploadedImage) => void;
   purpose: ImagePurpose;
 }) {
   const [state, setState] = useState<ImageUploadState>({ status: "idle" });
   const current = useRef<Attempt | null>(null);
+  const busy = useRef(false);
+  // Every change of state goes through here, so the form hears of a photo
+  // on its way as it happens, not on a later render.
+  const update = (next: ImageUploadState) => {
+    setState(next);
+    const nowBusy = next.status === "preparing" || next.status === "uploading";
+
+    if (nowBusy !== busy.current) {
+      busy.current = nowBusy;
+      onBusyChange?.(nowBusy);
+    }
+  };
   const tokenRequest = useMutation({
     ...orpc.upload.createToken.mutationOptions(),
     // Reported below with the upload's own action, once.
@@ -60,14 +77,24 @@ export function useImageUpload({
   const isCurrent = (attempt: Attempt) =>
     current.current === attempt && !attempt.controller.signal.aborted;
 
+  // Leaving the form stops its upload: a token that arrives later sends
+  // nothing, and a transfer under way is aborted, handing nothing over.
+  useEffect(
+    () => () => {
+      current.current?.controller.abort();
+      current.current = null;
+    },
+    []
+  );
+
   async function send(attempt: Attempt, prepared: PreparedImage) {
     if (prepared.blob.size > IMAGE_PURPOSE_MAX_BYTES[purpose]) {
-      setState({ reason: "tooLarge", status: "failed" });
+      update({ reason: "tooLarge", status: "failed" });
 
       return;
     }
 
-    setState({ percent: 0, status: "uploading" });
+    update({ percent: 0, status: "uploading" });
     const { pathname, token } = await tokenRequest.mutateAsync({
       contentType: prepared.contentType,
       purpose,
@@ -78,23 +105,29 @@ export function useImageUpload({
       return;
     }
 
+    // The SDK can report progress after the transfer settled, resolved or
+    // failed: once it has, a report would take the photo back to
+    // "uploading", hiding Retry and keeping the form's Save shut.
+    let settled = false;
     const uploaded = await put(pathname, prepared.blob, {
       abortSignal: attempt.controller.signal,
       access: "public",
       contentType: prepared.contentType,
       onUploadProgress: ({ percentage }) => {
-        if (isCurrent(attempt)) {
-          setState({ percent: percentage, status: "uploading" });
+        if (!settled && isCurrent(attempt)) {
+          update({ percent: percentage, status: "uploading" });
         }
       },
       token,
+    }).finally(() => {
+      settled = true;
     });
 
     if (!isCurrent(attempt)) {
       return;
     }
 
-    setState({ status: "done" });
+    update({ status: "done" });
     onUploaded({
       height: prepared.height,
       url: uploaded.url,
@@ -107,7 +140,7 @@ export function useImageUpload({
       let { prepared } = attempt;
 
       if (!prepared) {
-        setState({ status: "preparing" });
+        update({ status: "preparing" });
         prepared = await prepareImage(attempt.file);
         attempt.prepared = prepared;
       }
@@ -122,7 +155,7 @@ export function useImageUpload({
       }
 
       if (error instanceof UnreadableImageError) {
-        setState({ reason: "unreadable", status: "failed" });
+        update({ reason: "unreadable", status: "failed" });
 
         return;
       }
@@ -131,7 +164,7 @@ export function useImageUpload({
         action: "Upload.upload_image",
         context: { prepared: attempt.prepared !== null, purpose },
       });
-      setState({ reason: "failed", status: "failed" });
+      update({ reason: "failed", status: "failed" });
     }
   }
 
@@ -152,7 +185,7 @@ export function useImageUpload({
 
       if (attempt && !attempt.controller.signal.aborted) {
         attempt.controller.abort();
-        setState({ status: "cancelled" });
+        update({ status: "cancelled" });
       }
     },
     retry: () => {

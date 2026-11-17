@@ -31,6 +31,7 @@ const ORIGIN = "https://lrmarket.example";
 const STORE_UPDATED = new Date("2026-11-10T10:00:00.000Z");
 const RING_UPDATED = new Date("2026-11-12T10:00:00.000Z");
 const CHAIN_UPDATED = new Date("2026-11-11T10:00:00.000Z");
+const RINGS_PAGE_UPDATED = new Date("2026-11-13T10:00:00.000Z");
 
 /** One page in both languages, as the sitemap lists it. */
 function pair(spanish: string, english: string, lastModified: Date) {
@@ -48,14 +49,29 @@ function setup({
     { slug: "cadena", updatedAt: CHAIN_UPDATED },
   ],
   categories = [
-    { name: "Bijouterie", path: "/bijouterie", slug: "bijouterie" },
-    { name: "Anillos", path: "/bijouterie/anillos", slug: "anillos" },
+    {
+      name: "Bijouterie",
+      path: "/bijouterie",
+      slug: "bijouterie",
+      updatedAt: STORE_UPDATED,
+    },
+    {
+      name: "Anillos",
+      path: "/bijouterie/anillos",
+      slug: "anillos",
+      updatedAt: RINGS_PAGE_UPDATED,
+    },
   ],
   launched = true,
   store = { id: 7, updatedAt: STORE_UPDATED },
 }: {
   articles?: { slug: string; updatedAt: Date }[];
-  categories?: { name: string; path: string; slug: string }[];
+  categories?: {
+    name: string;
+    path: string;
+    slug: string;
+    updatedAt: Date;
+  }[];
   launched?: boolean;
   store?: { id: number; updatedAt: Date } | null;
 } = {}) {
@@ -74,9 +90,14 @@ describe("sitemap", () => {
       ...pair("/", "/en", STORE_UPDATED),
       // The catalog changed when its newest article did.
       ...pair("/productos", "/en/productos", RING_UPDATED),
-      // A page's address is the same in both languages (FER-043).
+      // A page's address is the same in both languages (FER-043). It
+      // changed with the catalog, or later with its own texts.
       ...pair("/bijouterie", "/en/bijouterie", RING_UPDATED),
-      ...pair("/bijouterie/anillos", "/en/bijouterie/anillos", RING_UPDATED),
+      ...pair(
+        "/bijouterie/anillos",
+        "/en/bijouterie/anillos",
+        RINGS_PAGE_UPDATED
+      ),
       ...pair(
         "/productos/anillo-sello",
         "/en/productos/anillo-sello",

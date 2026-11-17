@@ -198,6 +198,23 @@ describe("seedCatalog", () => {
     expect(db.$.insert).toHaveBeenCalledWith(categoryTranslation);
   });
 
+  test("every seeded phone image is its computer photo cropped, which the cover's one alt text describes", () => {
+    const covers = [
+      SEED_ALL_ARTICLES_COVER,
+      ...SEED_CATEGORIES.map((entry) => entry.cover),
+    ];
+
+    expect(
+      covers.flatMap((cover) =>
+        cover.phone &&
+        cover.phone.file !==
+          cover.computer.file.replace(/\.jpg$/u, "-phone.jpg")
+          ? [[cover.computer.file, cover.phone.file]]
+          : []
+      )
+    ).toEqual([]);
+  });
+
   test("every seeded cover is a photo in public/seed, and every group is listed before its categories", () => {
     const slugs = SEED_CATEGORIES.map((entry) => entry.slug);
     const files = [
@@ -209,8 +226,8 @@ describe("seedCatalog", () => {
       )
     );
 
-    // Eleven photos: seven computer images and four phone ones.
-    expect(files).toHaveLength(11);
+    // Ten photos: seven computer images and three phone ones.
+    expect(files).toHaveLength(10);
     expect(
       files.filter(
         (file) => !existsSync(path.join(process.cwd(), "public/seed", file))
@@ -397,6 +414,20 @@ describe("seedCatalogPages", () => {
     makeRow(5, "pulseras"),
   ];
 
+  test("takes the store's category lock before it reads a category", async () => {
+    const { db, run } = setupPages({ before: FLAT });
+
+    await run();
+
+    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
+      params: ["category:7"],
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+    });
+    expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      db.$["select.where"].mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
   test("gives a catalog seeded before groups its Bijouterie last, its four categories in it and every cover", async () => {
     const { db, run, updates } = setupPages({
       after: [...FLAT, makeRow(60, "bijouterie")],
@@ -441,9 +472,9 @@ describe("seedCatalogPages", () => {
     expect(updates()).toContainEqual({
       set: {
         coverHeight: 800,
-        coverPhoneHeight: 1200,
-        coverPhoneUrl: "/seed/ring-1.jpg",
-        coverPhoneWidth: 1200,
+        coverPhoneHeight: 800,
+        coverPhoneUrl: "/seed/ring-2-phone.jpg",
+        coverPhoneWidth: 800,
         coverUrl: "/seed/ring-2.jpg",
         coverWidth: 1200,
       },
@@ -464,9 +495,9 @@ describe("seedCatalogPages", () => {
     expect(updates()).toContainEqual({
       set: {
         catalogCoverHeight: 800,
-        catalogCoverPhoneHeight: 1200,
-        catalogCoverPhoneUrl: "/seed/earrings-1.jpg",
-        catalogCoverPhoneWidth: 1200,
+        catalogCoverPhoneHeight: 800,
+        catalogCoverPhoneUrl: "/seed/ring-3-phone.jpg",
+        catalogCoverPhoneWidth: 800,
         catalogCoverUrl: "/seed/ring-3.jpg",
         catalogCoverWidth: 1200,
       },

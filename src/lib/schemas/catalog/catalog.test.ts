@@ -469,21 +469,40 @@ describe("updateCategoryPageSchema's cover (FER-011)", () => {
     width: 2400,
   };
 
+  // What is kept, not only that it parses: a field the schema did not know
+  // would be stripped, and the case would still pass on `success` alone.
   test.each([
-    ["an uploaded image", { cover: image }, true],
-    ["none, to remove it", { cover: null, coverPhone: null }, true],
-    ["left out, to keep it", {}, true],
-    ["a phone image only", { coverPhone: image }, true],
-    ["a seed's local path", { cover: { ...image, url: "/seed/a.jpg" } }, false],
+    ["an uploaded image", { cover: image }, { cover: image }],
     [
-      "an image wider than uploads make",
-      { cover: { ...image, width: 2401 } },
-      false,
+      "none, to remove it",
+      { cover: null, coverPhone: null },
+      { cover: null, coverPhone: null },
     ],
-  ])("%s is accepted: %s", (_case, overrides, accepted) => {
+    ["left out, to keep it", {}, {}],
+    ["a phone image only", { coverPhone: image }, { coverPhone: image }],
+  ])("takes %s", (_case, overrides, kept) => {
+    const parsed = updateCategoryPageSchema.parse(makePageInput(overrides));
+
+    expect({ cover: parsed.cover, coverPhone: parsed.coverPhone }).toEqual({
+      cover: undefined,
+      coverPhone: undefined,
+      ...kept,
+    });
+    expect(Object.hasOwn(parsed, "cover")).toBe("cover" in kept);
+    expect(Object.hasOwn(parsed, "coverPhone")).toBe("coverPhone" in kept);
+  });
+
+  test.each([
+    ["a seed's local path", { cover: { ...image, url: "/seed/a.jpg" } }],
+    ["an image wider than uploads make", { cover: { ...image, width: 2401 } }],
+    [
+      "a phone image wider than uploads make",
+      { coverPhone: { ...image, width: 2401 } },
+    ],
+  ])("refuses %s", (_case, overrides) => {
     expect(
       updateCategoryPageSchema.safeParse(makePageInput(overrides)).success
-    ).toBe(accepted);
+    ).toBe(false);
   });
 });
 
@@ -543,13 +562,14 @@ describe("updateCategoryPageSchema", () => {
 });
 
 describe("createCategoryPageFormSchema", () => {
-  const schema = createCategoryPageFormSchema({
+  const MESSAGES = {
     altTooLong: "Alt too long",
     descriptionTooLong: "Description too long",
     titleTooLong: "Title too long",
-  });
-  const messagesOf = (input: unknown) =>
-    schema
+  };
+  const schema = createCategoryPageFormSchema(MESSAGES, { english: true });
+  const messagesOf = (input: unknown, english = true) =>
+    createCategoryPageFormSchema(MESSAGES, { english })
       .safeParse(input)
       .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
   const form = (overrides: Record<string, unknown> = {}) =>
@@ -593,6 +613,17 @@ describe("createCategoryPageFormSchema", () => {
         })
       ).success
     ).toBe(accepted);
+  });
+
+  // Without an English name the English texts are shut and sent as none:
+  // what they still hold cannot block the save, the Spanish limits still do.
+  test.each([
+    [{ seoTitleEn: "x".repeat(71) }, undefined],
+    [{ seoDescriptionEn: "x".repeat(161) }, undefined],
+    [{ coverAltEn: "x".repeat(201) }, undefined],
+    [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
+  ])("without English, %j shows %j", (overrides, expected) => {
+    expect(messagesOf(form(overrides), false)).toEqual(expected);
   });
 });
 

@@ -291,7 +291,7 @@ test.describe("Catalog pages", () => {
     expect(unknown.status()).toBe(404);
   });
 
-  test("on a phone, the menu's group unfolds to its categories, each leading to its page", async ({
+  test("on a phone, the menu's group unfolds to its categories, folds on Escape, and each leads to its page", async ({
     db,
     page,
   }) => {
@@ -310,7 +310,15 @@ test.describe("Catalog pages", () => {
       menu.getByRole("link", { name: `Anillos ${tag}` })
     ).toHaveCount(0);
     await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
 
+    // Escape there folds the categories back, and the menu stays open.
+    await page.keyboard.press("Escape");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(toggle).toBeFocused();
+    await expect(menu).toBeVisible();
+
+    await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await menu.getByRole("link", { name: `Anillos ${tag}` }).click();
 

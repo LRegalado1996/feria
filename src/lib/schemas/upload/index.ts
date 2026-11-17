@@ -72,11 +72,13 @@ const imageSideSchema = z.number().int().min(1).max(IMAGE_MAX_SIDE);
  * An uploaded image as a form sends it to be stored: its address in the
  * Blob store and its size in pixels, so a page reserves its space before it
  * loads. The server also checks the address is one of its own uploads for
- * the purpose (`isOwnBlobUrl`); the schema only bounds the shape.
+ * the purpose (`isOwnBlobUrl`); the schema only bounds the shape, and keeps
+ * the address as a URL writes it (`HTTPS://Store9…` is `https://store9…`),
+ * the form the orphan cleanup reads.
  */
 export const uploadedImageSchema = z.object({
   height: imageSideSchema,
-  url: z.url({ protocol: /^https$/ }).max(500),
+  url: z.url({ normalize: true, protocol: /^https$/ }).max(500),
   width: imageSideSchema,
 });
 
