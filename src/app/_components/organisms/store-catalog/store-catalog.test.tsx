@@ -483,8 +483,11 @@ describe("StoreCatalog", () => {
     const trigger = screen.getByRole("button", { name: "Filtrar" });
     await user.click(trigger);
     const panel = screen.getByTestId("store-catalog-panel");
+    const dorado = within(panel).getByRole("link", { name: /^Dorado/u });
+    // The address the router follows, so the selection below is the link's.
+    expect(dorado).toHaveAttribute("href", "/productos?color=dorado");
 
-    await user.click(within(panel).getByRole("link", { name: /^Dorado/u }));
+    await user.click(dorado);
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
 
     // The router renders the catalog again for the address it followed.

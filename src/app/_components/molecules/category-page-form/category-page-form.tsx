@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, useFormState, useWatch } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -96,6 +96,10 @@ function CategoryPageForm({
   const copy = admin.categories.page;
   const [failed, setFailed] = useState(false);
   const hasEnglish = category.nameEn !== null;
+  // The cover the form opened with: a save sends an image only when the form
+  // changed it from this one. The list read again can bring another cover
+  // (saved from another tab) that the form never showed.
+  const loaded = useRef(category.cover);
   const form = useForm<CategoryPageFormValues>({
     defaultValues: {
       cover: category.cover.computer,
@@ -108,27 +112,41 @@ function CategoryPageForm({
       seoTitleEn: category.seoTitleEn ?? "",
       seoTitleEs: category.seoTitleEs ?? "",
     },
+    // Built on every render: a rename can take the English name away while
+    // the form is open, and the English texts' limits go with it.
     resolver: zodResolver(
-      createCategoryPageFormSchema(admin.categories.errors)
+      createCategoryPageFormSchema(admin.categories.errors, {
+        english: hasEnglish,
+      })
     ),
   });
   const { isSubmitting } = useFormState({ control: form.control });
   const hasCover = useWatch({ control: form.control, name: "cover" }) !== null;
+  // A photo still on its way is not in the form yet: a save now would leave
+  // it out. Save waits for it; its own cancel and the form's Cancel do not.
+  const [uploading, setUploading] = useState({
+    cover: false,
+    coverPhone: false,
+  });
+  const waiting = uploading.cover || uploading.coverPhone;
 
   const submit = async (values: CategoryPageFormValues) => {
     setFailed(false);
     const english = (text: string) => (hasEnglish ? orNull(text) : null);
     const result = await onSave({
-      cover: sameImage(values.cover, category.cover.computer)
+      cover: sameImage(values.cover, loaded.current.computer)
         ? undefined
         : values.cover,
       coverAltEn: english(values.coverAltEn),
       coverAltEs: orNull(values.coverAltEs),
-      coverPhone: sameImage(values.coverPhone, category.cover.phone)
+      coverPhone: sameImage(values.coverPhone, loaded.current.phone)
         ? undefined
         : values.coverPhone,
       id: category.id,
-      parentId: values.parentId === "" ? null : Number(values.parentId),
+      // A category that became a group while the form was open (another
+      // joined it) is in none, whatever the shut select still holds.
+      parentId:
+        isGroup || values.parentId === "" ? null : Number(values.parentId),
       seoDescriptionEn: english(values.seoDescriptionEn),
       seoDescriptionEs: orNull(values.seoDescriptionEs),
       seoTitleEn: english(values.seoTitleEn),
@@ -165,6 +183,7 @@ function CategoryPageForm({
                     {...field}
                     className={SELECT_CLASS}
                     disabled={isGroup}
+                    value={isGroup ? "" : field.value}
                   >
                     <option value="">{copy.groupNone}</option>
                     {groups.map((group) => (
@@ -229,6 +248,9 @@ function CategoryPageForm({
                     <FormControl>
                       <ImageUploader
                         label={copy.coverComputer}
+                        onBusyChange={(busy) => {
+                          setUploading((was) => ({ ...was, cover: busy }));
+                        }}
                         onChange={(image) => {
                           field.onChange(image);
 
@@ -259,7 +281,20 @@ function CategoryPageForm({
                         }
                         disabled={!hasCover}
                         label={copy.coverPhone}
+                        onBusyChange={(busy) => {
+                          setUploading((was) => ({ ...was, coverPhone: busy }));
+                        }}
                         onChange={(image) => {
+                          // A phone photo needs a computer one: one that
+                          // lands after the computer photo was removed is
+                          // dropped, as the shut field could not remove it.
+                          if (
+                            image !== null &&
+                            form.getValues("cover") === null
+                          ) {
+                            return;
+                          }
+
                           field.onChange(image);
                         }}
                         purpose="cover"
@@ -305,7 +340,7 @@ function CategoryPageForm({
           </section>
         </fieldset>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={isSubmitting} type="submit">
+          <Button disabled={isSubmitting || waiting} type="submit">
             {isSubmitting ? copy.pending : copy.submit}
           </Button>
           <Button

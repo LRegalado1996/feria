@@ -21,6 +21,8 @@ export type ImageUploaderProps = Omit<
   description?: string;
   /** What the photo is for, shown above it and naming every control. */
   label: string;
+  /** Told when a photo starts being prepared or sent, and when it stops. */
+  onBusyChange?: (busy: boolean) => void;
   /** The uploaded image to save, or `null` once removed. */
   onChange: (image: UploadedImage | null) => void;
   /** Decides the store's folder and size cap (`IMAGE_PURPOSES`). */
@@ -44,7 +46,9 @@ function ImageUploader({
   "aria-describedby": describedBy,
   className,
   description,
+  disabled,
   label,
+  onBusyChange,
   onChange,
   purpose,
   sizes = "(min-width: 768px) 24rem, 100vw",
@@ -59,6 +63,7 @@ function ImageUploader({
   const input = useRef<HTMLInputElement>(null);
   const [removed, setRemoved] = useState(false);
   const { cancel, retry, start, state } = useImageUpload({
+    onBusyChange,
     onUploaded: onChange,
     purpose,
   });
@@ -91,6 +96,9 @@ function ImageUploader({
       data-status={state.status}
       data-testid="image-uploader"
       {...props}
+      // A photo on its way keeps its cancel even once the field is shut:
+      // nothing else could stop it, and the form waits for it.
+      disabled={disabled === true && !busy}
     >
       <legend className="mb-2 text-sm font-medium">{label}</legend>
       <p className="text-xs text-muted-foreground" id={hintId}>
@@ -149,6 +157,8 @@ function ImageUploader({
               <Button
                 aria-label={named(copy.retry)}
                 onClick={() => {
+                  // A retry is a new try: a removal made meantime is not news.
+                  setRemoved(false);
                   retry();
                 }}
                 type="button"

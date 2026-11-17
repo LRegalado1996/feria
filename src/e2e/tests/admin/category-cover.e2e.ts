@@ -177,6 +177,43 @@ test.describe("Category cover upload", () => {
     }
   });
 
+  test("Save waits while the photo is on its way, and Cancel does not", async ({
+    db,
+    page,
+  }) => {
+    const { name, tag } = await setup({ db, page });
+    let arrive = (): void => undefined;
+    const arrived = new Promise<void>((resolve) => {
+      arrive = resolve;
+    });
+    // The store holds the upload until the test lets it through.
+    await page.route("https://vercel.com/api/blob/**", async (route) => {
+      await arrived;
+      await route.fallback();
+    });
+    const row = page.getByTestId(`category-row-anillos-${tag}`);
+    const form = page.getByTestId("category-page-form");
+    await clickUntilVisible(
+      row.getByRole("button", { name: `Página y grupo: ${name}` }),
+      form
+    );
+    const computer = form.getByRole("group", { name: "Foto para computadora" });
+    const save = form.getByRole("button", { name: "Guardar la página" });
+
+    await computer.getByTestId("image-uploader-input").setInputFiles(PHOTO);
+
+    await expect(computer).toHaveAttribute("aria-busy", "true");
+    await expect(save).toBeDisabled();
+    await expect(
+      form.getByRole("button", { exact: true, name: "Cancelar" })
+    ).toBeEnabled();
+
+    arrive();
+
+    await expect(computer.getByRole("status")).toHaveText("Foto subida.");
+    await expect(save).toBeEnabled();
+  });
+
   test("a failed upload says so and is retried with the same photo", async ({
     db,
     page,

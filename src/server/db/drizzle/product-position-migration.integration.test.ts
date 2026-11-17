@@ -13,7 +13,7 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// Migration 0015 (FER-044) gives every article a place in the store's own
+// Migration 0016 (FER-044) gives every article a place in the store's own
 // order and numbers the ones already there: a backfill, so it must converge
 // when replayed (docs/agents/database.md § Migrations). Each test recreates
 // the state the migration met inside a transaction it rolls back: Postgres
@@ -21,7 +21,7 @@ vi.mock("@/env", () => ({
 // left as it was.
 
 const MIGRATION = readFileSync(
-  new URL("0015_lucky_shotgun.sql", import.meta.url),
+  new URL("0016_cynical_orphan.sql", import.meta.url),
   "utf-8"
 );
 
@@ -36,7 +36,7 @@ async function applyMigration(tx: DatabaseClient) {
   }
 }
 
-/** The state before 0015: no place, no sequence, no index. */
+/** The state before 0016: no place, no sequence, no index. */
 async function dropPositions(tx: DatabaseClient) {
   await tx.execute(sql`alter table "product" drop column "position"`);
   await tx.execute(sql`drop sequence "product_position_seq"`);
@@ -107,7 +107,7 @@ async function rolledBack(scenario: (tx: DatabaseClient) => Promise<void>) {
   await expect(run).rejects.toThrow(ROLLED_BACK);
 }
 
-describe("migration 0015: the articles' own order", () => {
+describe("migration 0016: the articles' own order", () => {
   test("numbers the articles in the order they were created, puts a new one last, and converges when replayed", async () => {
     await rolledBack(async (tx) => {
       await dropPositions(tx);

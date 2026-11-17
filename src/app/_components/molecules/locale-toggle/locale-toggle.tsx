@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { type MouseEvent, Suspense, useId, useState } from "react";
+import {
+  type MouseEvent,
+  Suspense,
+  useId,
+  useLayoutEffect,
+  useState,
+} from "react";
 
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { usePrefersReducedMotion } from "@/lib/hooks/ui";
@@ -123,6 +129,16 @@ function LocaleLink({
   // address, not a flag: once the page has switched, this toggle leads
   // elsewhere and the thumb rests under the new current language again.
   const [leavingFor, setLeavingFor] = useState<string | null>(null);
+  // Next hides the page it leaves instead of unmounting it, and shows it
+  // again, state and all, on Back or on the switch back: the pending switch
+  // is forgotten as the page hides, or the thumb would still rest under the
+  // language it left for and every press would read as a second one.
+  useLayoutEffect(
+    () => () => {
+      setLeavingFor(null);
+    },
+    []
+  );
   const shown = leavingFor === href ? target : current;
   const look: Partial<PillClasses> = tone === "app" ? APP_TONE : {};
 

@@ -69,6 +69,9 @@ function makeArticle(overrides: Record<string, unknown> = {}) {
  */
 function setup({ error }: { error?: Error } = {}) {
   const article = makeArticle();
+  const categories = [
+    { id: 3, lang: "en", name: "Rings", position: 0, slug: "anillos" },
+  ];
   const related = {
     others: [],
     same: [makeArticle({ id: 12, slug: "anillo" })],
@@ -79,9 +82,13 @@ function setup({ error }: { error?: Error } = {}) {
     getPublishedProduct.mockRejectedValue(error);
   }
   listRelatedPool.mockResolvedValue(related);
+  listCategories.mockResolvedValue(categories);
 
   return {
     article,
+    categories,
+    readCategories: async (locale: Locale = "es") =>
+      await readCategories(makeStore(), locale),
     readArticle: async ({
       locale = "es",
       slug = "cadena",
@@ -184,12 +191,9 @@ describe("readRelatedArticles", () => {
 
 describe("readCategories", () => {
   test("lists the store's categories in that language", async () => {
-    const categories = [
-      { id: 3, lang: "en", name: "Rings", position: 0, slug: "anillos" },
-    ];
-    listCategories.mockResolvedValue(categories);
+    const { categories, readCategories: read } = setup();
 
-    await expect(readCategories({ id: 7 }, "en")).resolves.toBe(categories);
+    await expect(read("en")).resolves.toBe(categories);
 
     expect(listCategories).toHaveBeenCalledExactlyOnceWith(db, {
       locale: "en",
@@ -255,7 +259,11 @@ describe("cached reads", () => {
       async ({ readRelated }: ReturnType<typeof setup>) =>
         await readRelated({ categoryId: null, id: 11 }),
     ],
-    ["the categories", async () => await readCategories({ id: 7 }, "es")],
+    [
+      "the categories",
+      async ({ readCategories: read }: ReturnType<typeof setup>) =>
+        await read(),
+    ],
     [
       "a category's page",
       async () => await readCategoryPage({ id: 7 }, "anillos", "es"),

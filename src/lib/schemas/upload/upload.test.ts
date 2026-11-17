@@ -90,4 +90,14 @@ describe("uploadedImageSchema", () => {
       accepted
     );
   });
+
+  test("keeps an address with its scheme and host in capitals as a URL writes it", () => {
+    expect(
+      uploadedImageSchema.parse(
+        makeImage({
+          url: "HTTPS://Store9.public.blob.vercel-storage.com/qa/cover/a.webp",
+        })
+      ).url
+    ).toBe("https://store9.public.blob.vercel-storage.com/qa/cover/a.webp");
+  });
 });
