@@ -44,24 +44,35 @@ function setup({
     async (_values: unknown) => await Promise.resolve(saves)
   );
   const onCancel = vi.fn<() => void>();
-  renderWithI18n(
+  const form = (props: {
+    category: CategoryPageFormCategory;
+    isGroup: boolean;
+  }) => (
     <CategoryPageForm
-      category={category}
+      {...props}
       groups={[
         { id: 6, name: "Bijouterie" },
         { id: 1, name: "Burbujeros" },
       ]}
-      isGroup={isGroup}
       onCancel={onCancel}
       onSave={onSave}
-    />,
-    { locale }
+    />
   );
+  const { rerender } = renderWithI18n(form({ category, isGroup }), {
+    locale,
+  });
 
   return {
     field: (name: string) => screen.getByRole("textbox", { name }),
     onCancel,
     onSave,
+    /** The list read again while the form stays open, as the admin's row does. */
+    reread: (props: {
+      category: CategoryPageFormCategory;
+      isGroup: boolean;
+    }) => {
+      rerender(form(props));
+    },
     user: userEvent.setup(),
   };
 }
@@ -174,6 +185,23 @@ describe("CategoryPageForm", () => {
         expect.objectContaining({ seoTitleEn: null })
       );
     });
+  });
+
+  test("saves once a rename took the English name away, whatever its shut English texts still hold", async () => {
+    const { field, onSave, reread, user } = setup();
+    await user.click(field("Title for search engines in English"));
+    await user.paste("x".repeat(71));
+
+    reread({ category: makeCategory({ nameEn: null }), isGroup: false });
+    expect(field("Title for search engines in English")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ seoTitleEn: null })
+      );
+    });
+    expect(screen.queryByText("Use up to 70 characters.")).toBeNull();
   });
 
   test("says a failed save under the form and keeps what was typed", async () => {

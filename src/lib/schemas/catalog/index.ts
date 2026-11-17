@@ -308,18 +308,24 @@ interface CategoryPageFormMessages {
 /**
  * The category's page form (FER-043), its messages in the page's language.
  * The group is the `<select>`'s value: `""` for none, else the group's id.
+ * Without an English name (`english: false`) the English texts are shut
+ * and sent as none, so what they still hold is not held to their limits:
+ * a draft over one could not be shortened, and would block the save.
  */
 export function createCategoryPageFormSchema(
-  messages: CategoryPageFormMessages
+  messages: CategoryPageFormMessages,
+  { english }: { english: boolean }
 ) {
   const text = (max: number, message: string) =>
     z.string().trim().max(max, message);
+  const englishText = (max: number, message: string) =>
+    english ? text(max, message) : z.string();
 
   return z.object({
-    coverAltEn: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
+    coverAltEn: englishText(COVER_ALT_MAX_LENGTH, messages.altTooLong),
     coverAltEs: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
     parentId: z.string().regex(/^\d*$/u),
-    seoDescriptionEn: text(
+    seoDescriptionEn: englishText(
       CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
       messages.descriptionTooLong
     ),
@@ -327,7 +333,10 @@ export function createCategoryPageFormSchema(
       CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
       messages.descriptionTooLong
     ),
-    seoTitleEn: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
+    seoTitleEn: englishText(
+      CATEGORY_SEO_TITLE_MAX_LENGTH,
+      messages.titleTooLong
+    ),
     seoTitleEs: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
   });
 }

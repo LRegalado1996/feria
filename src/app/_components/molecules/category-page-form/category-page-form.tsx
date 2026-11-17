@@ -133,8 +133,12 @@ function CategoryPageForm({
       seoTitleEn: category.seoTitleEn ?? "",
       seoTitleEs: category.seoTitleEs ?? "",
     },
+    // Built on every render: a rename can take the English name away while
+    // the form is open, and the English texts' limits go with it.
     resolver: zodResolver(
-      createCategoryPageFormSchema(admin.categories.errors)
+      createCategoryPageFormSchema(admin.categories.errors, {
+        english: hasEnglish,
+      })
     ),
   });
   const { isSubmitting } = useFormState({ control: form.control });

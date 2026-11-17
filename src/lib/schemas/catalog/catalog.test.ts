@@ -511,13 +511,14 @@ describe("updateCategoryPageSchema", () => {
 });
 
 describe("createCategoryPageFormSchema", () => {
-  const schema = createCategoryPageFormSchema({
+  const MESSAGES = {
     altTooLong: "Alt too long",
     descriptionTooLong: "Description too long",
     titleTooLong: "Title too long",
-  });
-  const messagesOf = (input: unknown) =>
-    schema
+  };
+  const schema = createCategoryPageFormSchema(MESSAGES, { english: true });
+  const messagesOf = (input: unknown, english = true) =>
+    createCategoryPageFormSchema(MESSAGES, { english })
       .safeParse(input)
       .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
   const form = (overrides: Record<string, unknown> = {}) =>
@@ -537,6 +538,17 @@ describe("createCategoryPageFormSchema", () => {
 
   test("refuses a group that is not an id", () => {
     expect(schema.safeParse(form({ parentId: "abc" })).success).toBe(false);
+  });
+
+  // Without an English name the English texts are shut and sent as none:
+  // what they still hold cannot block the save, the Spanish limits still do.
+  test.each([
+    [{ seoTitleEn: "x".repeat(71) }, undefined],
+    [{ seoDescriptionEn: "x".repeat(161) }, undefined],
+    [{ coverAltEn: "x".repeat(201) }, undefined],
+    [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
+  ])("without English, %j shows %j", (overrides, expected) => {
+    expect(messagesOf(form(overrides), false)).toEqual(expected);
   });
 });
 
