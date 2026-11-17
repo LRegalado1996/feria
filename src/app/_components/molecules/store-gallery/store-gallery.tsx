@@ -71,7 +71,11 @@ function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
               <ArrowLeft aria-hidden="true" />
             )}
           </StoreButton>
-          <output aria-live="polite" className="sr-only">
+          <output
+            aria-live="polite"
+            className="sr-only"
+            data-testid="store-gallery-position"
+          >
             {interpolate(copy.galleryPosition, {
               current: selectedIndex + 1,
               total: images.length,

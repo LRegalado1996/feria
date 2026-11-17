@@ -106,11 +106,17 @@ export function useCartLines(locale: Locale) {
   // A failed read: the prices shown, if any, are not the shop's word now.
   if (products.isError) {
     hold = "refresh";
-  } else if (products.isFetching || loadingLines || stale) {
+  } else if (
+    products.isFetching ||
+    products.fetchStatus === "paused" ||
+    loadingLines ||
+    stale
+  ) {
     // A refresh on its way (back to the tab, an article that changed under
     // the order, a line added and still pending): the order waits for the
     // shop's word. So does a read that has not started: offline, the query
-    // waits without fetching, and the shop has said nothing about this list.
+    // waits without fetching (`paused`), whether or not the shop said
+    // something about this list before.
     hold = "loading";
   } else if (
     lines.some((line) => line.flag === "gone" || line.flag === "unavailable")
