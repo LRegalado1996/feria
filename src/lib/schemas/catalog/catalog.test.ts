@@ -627,7 +627,12 @@ describe("createCategoryPageFormSchema", () => {
     ["false", false],
     [undefined, false],
   ])("holds the header choice %j: %s", (showInHeader, accepted) => {
-    expect(schema.safeParse(form({ showInHeader })).success).toBe(accepted);
+    const parsed = schema.safeParse(form({ showInHeader }));
+
+    // Accepted, the choice comes out as it went in, never another value.
+    expect(parsed.success ? parsed.data.showInHeader : "refused").toBe(
+      accepted ? showInHeader : "refused"
+    );
   });
 
   test.each([

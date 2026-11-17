@@ -89,12 +89,18 @@ function setup({ error }: { error?: Error } = {}) {
   } else {
     getPublishedProduct.mockRejectedValue(error);
   }
+  const counts = [{ categoryId: 3, count: 4 }];
+  const cards = [{ id: 11, title: "Ring" }];
   listRelatedPool.mockResolvedValue(related);
   listCategories.mockResolvedValue(categories);
+  countPublishedByCategory.mockResolvedValue(counts);
+  listCategoryArticles.mockResolvedValue(cards);
 
   return {
     article,
+    cards,
     categories,
+    counts,
     readCategories: async (locale: Locale = "es") =>
       await readCategories(makeStore(), locale),
     readArticle: async ({
@@ -212,8 +218,7 @@ describe("readCategories", () => {
 
 describe("readCategoryCounts", () => {
   test("counts the store's published articles per category", async () => {
-    const counts = [{ categoryId: 3, count: 4 }];
-    countPublishedByCategory.mockResolvedValue(counts);
+    const { counts } = setup();
 
     await expect(readCategoryCounts({ id: 7 })).resolves.toBe(counts);
     expect(countPublishedByCategory).toHaveBeenCalledExactlyOnceWith(db, {
@@ -224,8 +229,7 @@ describe("readCategoryCounts", () => {
 
 describe("readCategoryArticles", () => {
   test("lists a category's articles in that language and the store's currency", async () => {
-    const cards = [{ id: 11, title: "Ring" }];
-    listCategoryArticles.mockResolvedValue(cards);
+    const { cards } = setup();
 
     await expect(readCategoryArticles(makeStore(), 3, "en")).resolves.toBe(
       cards

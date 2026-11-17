@@ -85,7 +85,7 @@ async function openOrder(
 
 /** The stepper on screen: the computer's or the phone's. */
 function stepper(page: Page) {
-  return page.locator('[data-slot="order-stepper"]').filter({ visible: true });
+  return page.getByTestId("order-stepper").filter({ visible: true });
 }
 
 test.describe("The order stepper", () => {
@@ -199,7 +199,7 @@ test.describe("The order stepper", () => {
       Math.abs((box?.x ?? 0) + (box?.width ?? 0) / 2 - width / 2)
     ).toBeLessThan(2);
     await expect(
-      page.locator('[data-slot="store-article-band"]').filter({ visible: true })
+      page.getByTestId("store-article-band").filter({ visible: true })
     ).toContainText("¡Felices Fiestas!");
   });
 

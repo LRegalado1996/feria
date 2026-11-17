@@ -676,7 +676,7 @@ describe("OrderDetail's stepper", () => {
         name: "Order status: Delivered",
       })
     ).toBeInTheDocument();
-    expect(get).toHaveBeenCalledTimes(2);
+    expect(get.mock.calls).toEqual([[{ id: 42 }], [{ id: 42 }]]);
     expect(reportError).not.toHaveBeenCalled();
   });
 });
