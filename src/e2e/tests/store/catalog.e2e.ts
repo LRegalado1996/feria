@@ -284,6 +284,13 @@ test.describe("Catalog", () => {
   }) => {
     const { tag } = await setup({ db });
     await seedMany({ count: 25, db, tag });
+    // Only the link loads here: with the observer live, the scroll that
+    // brings the link into view could start the next page first, and a
+    // press while a page loads asks for nothing (and moves no focus).
+    await page.addInitScript(() => {
+      // An observer that watches nothing never reports.
+      IntersectionObserver.prototype.observe = () => undefined;
+    });
 
     await page.goto(`/productos?q=${tag}&sort=price_desc`);
     await expect(titles(page).first()).toHaveText("Collar dorado");
@@ -437,19 +444,21 @@ test.describe("Catalog", () => {
 
     try {
       const page = await context.newPage();
-      await page.goto(`/productos?q=${tag}`);
+      // A category's page, with no search: a search is kept out of the
+      // index by itself, so only a page without one shows the later
+      // page's own rule.
+      await page.goto(`/varios-${tag}`);
       await expect(titles(page)).toHaveCount(24);
-      await expect(titles(page).first()).toHaveText("Collar dorado");
+      await expect(titles(page).first()).toHaveText("Extra 0");
+      await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
 
       await page.getByRole("link", { name: "Cargar más" }).click();
 
-      // The page after the first: the last five, in the store's order.
+      // The page after the first: the last one, in the store's order.
       await expect(page).toHaveURL(
-        new RegExp(`/productos\\?q=${tag}&cursor=\\d+\\.\\d+$`, "u")
+        new RegExp(`/varios-${tag}\\?cursor=\\d+\\.\\d+$`, "u")
       );
-      await expect(titles(page)).toHaveText(
-        [20, 21, 22, 23, 24].map((index) => `Extra ${index}`)
-      );
+      await expect(titles(page)).toHaveText(["Extra 24"]);
       await expect(page.getByRole("link", { name: "Cargar más" })).toHaveCount(
         0
       );
