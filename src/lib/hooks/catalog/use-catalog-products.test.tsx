@@ -49,7 +49,7 @@ function makePage(
 
 const QUERY: CatalogQuery = {
   ...EMPTY_CATALOG_QUERY,
-  category: "collares",
+  category: { path: "/collares", slug: "collares" },
   filters: [{ attribute: "color", values: ["dorado"] }],
   q: "perla",
   sort: "price_asc",

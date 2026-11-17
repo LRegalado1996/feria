@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreIntro } from "@/app/_components/organisms/store-intro";
 import { getDictionary } from "@/content";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
@@ -74,12 +75,12 @@ export default async function StoreHome({ params }: StoreHomeProps) {
     <StoreFrame
       copy={storefront.shell}
       locale={locale}
-      {...shellOf(store, locale)}
+      {...await shellOf(store, locale)}
     >
       <main data-slot="store-home" data-testid="store-home">
         <StoreIntro
           browse={{
-            href: localizePath("/products", locale),
+            href: localizePath(ALL_ARTICLES_PATH, locale),
             label: storefront.home.browse,
           }}
           name={store.name}

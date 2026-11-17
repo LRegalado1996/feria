@@ -6,10 +6,16 @@ import { StoreSkipLink } from "@/app/_components/atoms/store-skip-link";
 import { StoreCartButton } from "@/app/_components/molecules/store-cart-button";
 import { StoreLocaleToggle } from "@/app/_components/molecules/store-locale-toggle";
 import { StoreMobileMenu } from "@/app/_components/molecules/store-mobile-menu";
+import { StoreNavGroup } from "@/app/_components/molecules/store-nav-group";
 import { StoreSearchPanel } from "@/app/_components/molecules/store-search-panel";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
-import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
+import {
+  catalogNavigation,
+  type NavigationCategory,
+  type NavigationEntry,
+} from "@/lib/catalog/navigation";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
@@ -18,33 +24,36 @@ import { cn } from "@/lib/utils";
 /** Where the page's main content starts, for the skip link. */
 export const STORE_MAIN_ID = "store-main";
 
-/** A category as the header links to it. */
-export interface StoreHeaderCategory {
-  /** The language its name is in, when it may differ from the page's. */
-  lang: string;
-  name: string;
-  slug: string;
-}
+/** A category as the header links to it: its group and its page. */
+export type StoreHeaderCategory = NavigationCategory;
 
 /**
- * The header's line on a computer holds "Catálogo" and up to five
- * categories, while their names fit beside the logo; the menu and the
- * footer list every one of them.
+ * The header's line on a computer holds "Todos los artículos" and up to
+ * five of the navigation's entries (a group counts once), while their names
+ * fit beside the logo; the menu and the footer list every one of them.
  */
 export const BAR_CATEGORIES_MAX = 5;
 const BAR_CHARACTERS_MAX = 44;
 
 export interface StoreHeaderProps {
   /**
-   * The store's categories, in their order. A promise: on a page read per
-   * request they stream in after the rest of the header, which is in the
-   * page's static shell. Without it the header links to the catalog alone.
+   * The store's categories, in their order, each with its group (FER-043).
+   * Read already (a page that read the store before anything is sent: its
+   * links are in the first response, for a crawler that runs no script), or
+   * a promise (a page read per request whose header stays in its static
+   * shell: they stream in). Without it the header links to all articles
+   * alone.
    */
-  categories?: Promise<readonly StoreHeaderCategory[]>;
+  categories?:
+    | Promise<readonly StoreHeaderCategory[]>
+    | readonly StoreHeaderCategory[];
   className?: string;
   copy: Dictionary["storefront"]["shell"];
-  /** The page is the catalog: its link says so (`aria-current`). */
-  current?: "catalog";
+  /**
+   * The page's own address, unlocalized (`/productos`,
+   * `/bijouterie/anillos`): its link says so (`aria-current`).
+   */
+  currentPath?: string;
   locale: Locale;
 }
 
@@ -54,62 +63,101 @@ const BAR_LINK_CLASS =
 const MENU_LINK_CLASS =
   "flex min-h-13 items-center border-b border-store-background/15 font-display text-lg font-extrabold wrap-anywhere text-store-accent uppercase aria-[current=page]:underline aria-[current=page]:underline-offset-6 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
 
-/** The categories the line has room for, in the store's order. */
+/** The entries the line has room for, in the store's order. */
 function fitting(
-  categories: readonly StoreHeaderCategory[],
+  entries: readonly NavigationEntry[],
   used: number
-): StoreHeaderCategory[] {
-  const shown: StoreHeaderCategory[] = [];
+): NavigationEntry[] {
+  const shown: NavigationEntry[] = [];
   let length = used;
 
-  for (const category of categories.slice(0, BAR_CATEGORIES_MAX)) {
-    length += category.name.length;
+  for (const entry of entries.slice(0, BAR_CATEGORIES_MAX)) {
+    length += entry.name.length;
 
     if (length > BAR_CHARACTERS_MAX) {
       break;
     }
 
-    shown.push(category);
+    shown.push(entry);
   }
 
   return shown;
 }
 
-/** The categories as list items of links to the catalog filtered by each. */
+/**
+ * The navigation's entries as list items (FER-043): a category in no group
+ * is a link to its page; a group is its name, a link to its page, and a
+ * button that shows its categories.
+ */
 function CategoryLinks({
   categories,
+  copy,
+  currentPath,
   fit,
-  linkClassName,
   locale,
+  variant,
 }: {
-  categories: Promise<readonly StoreHeaderCategory[]>;
-  /** How many characters the line already holds; omitted, every category. */
+  categories:
+    | Promise<readonly StoreHeaderCategory[]>
+    | readonly StoreHeaderCategory[];
+  copy: Dictionary["storefront"]["shell"];
+  currentPath: string | undefined;
+  /** How many characters the line already holds; omitted, every entry. */
   fit?: number;
-  linkClassName: string;
   locale: Locale;
+  variant: "bar" | "menu";
 }) {
-  const all = use(categories);
+  const all = catalogNavigation(
+    "then" in categories ? use(categories) : categories
+  );
   const shown = fit === undefined ? all : fitting(all, fit);
+  const link = (entry: NavigationCategory) => ({
+    current: entry.path === currentPath,
+    href: localizePath(entry.path, locale),
+    lang: entry.lang,
+    name: entry.name,
+  });
 
-  return shown.map((category) => (
-    <li key={category.slug}>
-      <Link
-        className={linkClassName}
-        href={catalogHref(locale, {
-          ...EMPTY_CATALOG_QUERY,
-          category: category.slug,
-        })}
-        lang={category.lang}
-      >
-        {category.name}
-      </Link>
+  return shown.map((entry) => (
+    <li key={entry.slug}>
+      {entry.children.length > 0 ? (
+        <StoreNavGroup
+          group={link(entry)}
+          items={entry.children.map(link)}
+          toggleLabel={interpolate(copy.groupToggle, { name: entry.name })}
+          variant={variant}
+        />
+      ) : (
+        <Link
+          aria-current={entry.path === currentPath ? "page" : undefined}
+          className={variant === "bar" ? BAR_LINK_CLASS : MENU_LINK_CLASS}
+          href={localizePath(entry.path, locale)}
+          lang={entry.lang}
+        >
+          {entry.name}
+        </Link>
+      )}
     </li>
   ));
 }
 
 /**
+ * The header's categories: in place when they were read already, behind a
+ * boundary of their own while they stream in.
+ */
+function Categories(props: Parameters<typeof CategoryLinks>[0]) {
+  return "then" in props.categories ? (
+    <Suspense fallback={null}>
+      <CategoryLinks {...props} />
+    </Suspense>
+  ) : (
+    <CategoryLinks {...props} />
+  );
+}
+/**
  * Every page of the store starts here (FER-021, FER-039): dark and sticky,
- * the links on the left ("Catálogo" and the store's categories), the full
+ * the links on the left ("Todos los artículos", then the store's categories
+ * and groups, FER-043), the full
  * logo in the middle leading home, then the language, the search and the
  * cart. On a phone and a tablet the links move into a menu, opened from the
  * left. Rendered by the server; only the menu, the search, the language link
@@ -119,12 +167,12 @@ function StoreHeader({
   categories,
   className,
   copy,
-  current,
+  currentPath,
   locale,
 }: StoreHeaderProps) {
   const home = localizePath("/", locale);
-  const catalog = localizePath("/products", locale);
-  const catalogCurrent = current === "catalog" ? "page" : undefined;
+  const catalog = localizePath(ALL_ARTICLES_PATH, locale);
+  const catalogCurrent = currentPath === ALL_ARTICLES_PATH ? "page" : undefined;
 
   return (
     <header
@@ -160,13 +208,13 @@ function StoreHeader({
                   </Link>
                 </li>
                 {categories ? (
-                  <Suspense fallback={null}>
-                    <CategoryLinks
-                      categories={categories}
-                      linkClassName={MENU_LINK_CLASS}
-                      locale={locale}
-                    />
-                  </Suspense>
+                  <Categories
+                    categories={categories}
+                    copy={copy}
+                    currentPath={currentPath}
+                    locale={locale}
+                    variant="menu"
+                  />
                 ) : null}
               </ul>
             </nav>
@@ -184,14 +232,14 @@ function StoreHeader({
                 </Link>
               </li>
               {categories ? (
-                <Suspense fallback={null}>
-                  <CategoryLinks
-                    categories={categories}
-                    fit={copy.catalog.length}
-                    linkClassName={BAR_LINK_CLASS}
-                    locale={locale}
-                  />
-                </Suspense>
+                <Categories
+                  categories={categories}
+                  copy={copy}
+                  currentPath={currentPath}
+                  fit={copy.catalog.length}
+                  locale={locale}
+                  variant="bar"
+                />
               ) : null}
             </ul>
           </nav>

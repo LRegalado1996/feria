@@ -520,7 +520,11 @@ describe("updateCategoryPage", () => {
   function setupPage({
     english = true,
     holds = false,
-    own = { 5: null, 6: null } as Record<number, number | null>,
+    own = { 5: null, 6: null },
+  }: {
+    english?: boolean;
+    holds?: boolean;
+    own?: Record<number, number | null>;
   } = {}) {
     const { db } = setup();
     db.$["select.where"].mockImplementation(async (where: unknown) => {

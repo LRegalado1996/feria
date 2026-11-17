@@ -96,7 +96,7 @@ export const admin: Dictionary["admin"] = {
       title: "Delete the value?",
     },
     description:
-      "Filters help your customers find what they want, by color for example. Each filter has its own link: /products?color=dorado.",
+      "Filters help your customers find what they want, by color for example. Each filter has its own link: /productos?color=dorado.",
     edit: {
       action: "Rename filter: {name}",
       cancel: "Cancel",

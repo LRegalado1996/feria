@@ -1,0 +1,75 @@
+import { render, screen, within } from "@testing-library/react";
+import { expect, test } from "vitest";
+
+import type { CatalogCover } from "@/lib/catalog/cover";
+import { required } from "@/test/required";
+
+import { StoreCatalogCover } from "./store-catalog-cover";
+
+const COMPUTER = { height: 800, url: "/seed/ring-2.jpg", width: 1200 };
+const PHONE = { height: 1200, url: "/seed/ring-1.jpg", width: 1000 };
+
+function setup(cover: Partial<CatalogCover> = {}) {
+  render(
+    <StoreCatalogCover
+      className="custom"
+      cover={{
+        alt: "Anillo sello",
+        computer: COMPUTER,
+        phone: PHONE,
+        ...cover,
+      }}
+    >
+      <h1>Anillos</h1>
+    </StoreCatalogCover>
+  );
+  const root = screen.getByTestId("store-catalog-cover");
+
+  return {
+    image: within(root).getByRole("img", { name: "Anillo sello" }),
+    root,
+    sources: () => [...root.querySelectorAll("source")],
+  };
+}
+
+test("shows the phone's image below md and the computer's from md up", () => {
+  const { image, sources } = setup();
+
+  const [source] = sources();
+  expect(sources()).toHaveLength(1);
+  expect(required(source).getAttribute("media")).toBe("(min-width: 768px)");
+  expect(required(source).getAttribute("srcset")).toContain(
+    encodeURIComponent(COMPUTER.url)
+  );
+  expect(image.getAttribute("src")).toContain(encodeURIComponent(PHONE.url));
+  expect(image.getAttribute("srcset")).toContain(encodeURIComponent(PHONE.url));
+});
+
+test("shows the computer's image everywhere when there is no phone image", () => {
+  const { image, sources } = setup({ phone: null });
+
+  expect(sources()).toEqual([]);
+  expect(image.getAttribute("src")).toContain(encodeURIComponent(COMPUTER.url));
+});
+
+test("is fetched first, never lazily, as wide as the screen, filling a box that keeps its place", () => {
+  const { image, root } = setup();
+
+  expect(image).toHaveAttribute("fetchpriority", "high");
+  expect(image).toHaveAttribute("loading", "eager");
+  expect(image).toHaveAttribute("sizes", "100vw");
+  expect(image).toHaveClass("object-cover", "size-full");
+  expect(root).toHaveClass("aspect-4/5", "md:aspect-12/5", "custom");
+});
+
+test("puts the page's title over the photo, above the one shade the storefront allows", () => {
+  const { root } = setup();
+
+  expect(within(root).getByRole("heading", { level: 1 })).toHaveTextContent(
+    "Anillos"
+  );
+  expect(root.querySelector('[aria-hidden="true"]')).toHaveClass(
+    "bg-linear-to-t",
+    "from-store-foreground/75"
+  );
+});

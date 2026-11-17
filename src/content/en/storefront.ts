@@ -8,7 +8,7 @@ export const storefront: Dictionary["storefront"] = {
     askWhatsapp: "Ask on WhatsApp",
     askWhatsappText: "Hi! I'm writing about “{title}”: {url}",
     breadcrumb: "Breadcrumb",
-    catalog: "Catalog",
+    catalog: "All articles",
     decrease: "One unit less",
     gallery: "Photos of {title}",
     galleryNext: "Next photo",
@@ -87,6 +87,12 @@ export const storefront: Dictionary["storefront"] = {
       "The cart already holds {max} different articles, the most it takes.",
     categories: "Categories",
     allCategories: "All",
+    breadcrumb: "Breadcrumb",
+    categoryDescription:
+      "Shop {name} at {store}. See the prices and order online.",
+    groupDescription:
+      "Shop {name} at {store}: {categories}. See the prices and order online.",
+    home: "Home",
     clear: "Clear",
     clearAll: "Clear all",
     closeFilters: "Close the filters",
@@ -119,7 +125,7 @@ export const storefront: Dictionary["storefront"] = {
       price_asc: "Price: low to high",
       price_desc: "Price: high to low",
     },
-    title: "Catalog",
+    title: "All articles",
   },
   home: {
     browse: "See the catalog",
@@ -164,8 +170,9 @@ export const storefront: Dictionary["storefront"] = {
     cartCount: "Cart, {count} items",
     cartCountOne: "Cart, 1 item",
     cartEmpty: "Cart, empty",
-    catalog: "Catalog",
+    catalog: "All articles",
     closeMenu: "Close the menu",
+    groupToggle: "{name}: its categories",
     copyright: "© {store}",
     credit: "Made by Lucas Regalado",
     error: {

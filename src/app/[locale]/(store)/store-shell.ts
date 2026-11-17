@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 
 import type { StoreAnnouncement } from "@/app/_components/organisms/store-frame";
+import type { StoreHeaderProps } from "@/app/_components/organisms/store-header";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readCategories } from "@/server/cache/catalog";
@@ -10,7 +11,7 @@ import type { PublicStore } from "@/server/services/store";
 /** What the frame of a page shows from the store (`organisms/store-frame`). */
 export interface StoreShell {
   announcement: Promise<StoreAnnouncement | null>;
-  categories: Promise<readonly { lang: string; name: string; slug: string }[]>;
+  categories: StoreHeaderProps["categories"];
 }
 
 /**
@@ -72,12 +73,18 @@ export function streamedShell(locale: Locale): StoreShell {
 
 /**
  * The frame of a page that already read the store: an article, whose static
- * page reads only cached data, and the home and an order, which wait for
- * their reads before anything is sent.
+ * page reads only cached data, and the home, an order and a catalog page,
+ * which wait for their reads before anything is sent. The categories are
+ * read here, before the page renders, so the header's links sit behind no
+ * boundary and are in the first response, for a crawler that runs no
+ * script (FER-043).
  */
-export function shellOf(store: PublicStore, locale: Locale): StoreShell {
+export async function shellOf(
+  store: PublicStore,
+  locale: Locale
+): Promise<StoreShell> {
   return {
     announcement: Promise.resolve(announcementOf(store, locale)),
-    categories: readCategories(store, locale),
+    categories: await readCategories(store, locale),
   };
 }

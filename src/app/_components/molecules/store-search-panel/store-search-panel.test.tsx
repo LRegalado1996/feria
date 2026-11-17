@@ -50,8 +50,8 @@ describe("StoreSearchPanel", () => {
   });
 
   test.each([
-    ["es", "Buscar artículos", "Buscá lo que quieras", "/products"],
-    ["en", "Search articles", "Search for anything", "/en/products"],
+    ["es", "Buscar artículos", "Buscá lo que quieras", "/productos"],
+    ["en", "Search articles", "Search for anything", "/en/productos"],
   ] as const)(
     "in %s opens a dark panel with one field, %j, focused, that searches the catalog at %s",
     async (locale, label, placeholder, action) => {
@@ -84,7 +84,7 @@ describe("StoreSearchPanel", () => {
     await user.type(within(dialog).getByRole("searchbox"), "  anillo dorado ");
     await user.keyboard("{Enter}");
 
-    expect(push).toHaveBeenCalledExactlyOnceWith("/products?q=anillo+dorado");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/productos?q=anillo+dorado");
     await waitFor(() => {
       expect(panel()).toBeNull();
     });
@@ -99,7 +99,7 @@ describe("StoreSearchPanel", () => {
     await user.type(within(dialog).getByRole("searchbox"), "ring");
     await user.click(within(dialog).getByRole("button", { name: "Search" }));
 
-    expect(push).toHaveBeenCalledExactlyOnceWith("/en/products?q=ring");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/en/productos?q=ring");
   });
 
   test("an empty search opens the whole catalog", async () => {
@@ -110,7 +110,7 @@ describe("StoreSearchPanel", () => {
     await user.type(within(dialog).getByRole("searchbox"), "   ");
     await user.keyboard("{Enter}");
 
-    expect(push).toHaveBeenCalledExactlyOnceWith("/products");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/productos");
   });
 
   test("Escape closes it and gives focus back to the icon", async () => {
@@ -163,7 +163,7 @@ describe("StoreSearchPanel", () => {
     expect(close).toHaveAttribute("popovertarget", plain.id);
     expect(close).toHaveAttribute("popovertargetaction", "hide");
     const form = required(plain.querySelector("form"));
-    expect(form).toHaveAttribute("action", "/products");
+    expect(form).toHaveAttribute("action", "/productos");
     expect(form).toHaveAttribute("method", "get");
     const field = required(plain.querySelector("input"));
     expect(field).toHaveAttribute("name", "q");
@@ -183,7 +183,7 @@ describe("StoreSearchPanel", () => {
     expect(plain).toHaveAttribute("popover", "auto");
     expect(
       within(plain).getByTestId("store-search-plain-form")
-    ).toHaveAttribute("action", "/en/products");
+    ).toHaveAttribute("action", "/en/productos");
     // A visitor who opened it before React took over still searches: the
     // browser submits it, no router push.
     fireEvent.submit(within(plain).getByTestId("store-search-plain-form"));

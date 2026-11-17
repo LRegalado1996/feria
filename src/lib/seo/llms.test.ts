@@ -46,7 +46,7 @@ function build(overrides: Partial<StoreLlmsInput> = {}) {
 
   return buildStoreLlms({
     articles: [makeArticle()],
-    categories: [{ name: "Anillos", slug: "anillos" }],
+    categories: [{ name: "Anillos", path: "/bijouterie/anillos" }],
     copy: (locale === "es" ? es : en).seo.llms,
     currencyCode: "UYU",
     locale,
@@ -68,7 +68,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Categorías",
         "",
-        `- [Anillos](${ORIGIN}/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/bijouterie/anillos)`,
         "",
         "## Artículos",
         "",
@@ -76,7 +76,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [Catálogo completo](${ORIGIN}/productos)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
@@ -94,7 +94,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Categories",
         "",
-        `- [Anillos](${ORIGIN}/en/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/en/bijouterie/anillos)`,
         "",
         "## Articles",
         "",
@@ -102,7 +102,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Full catalog](${ORIGIN}/en/productos)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -151,7 +151,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Full catalog](${ORIGIN}/en/productos)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -171,7 +171,7 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [Catálogo completo](${ORIGIN}/productos)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
@@ -186,13 +186,13 @@ describe("buildStoreLlms", () => {
             titles: [{ locale: "es", title: "Aros [edición]\n limitada" }],
           }),
         ],
-        categories: [{ name: "Aros \\ dijes", slug: "aros" }],
+        categories: [{ name: "Aros \\ dijes", path: "/aros" }],
       })
     ).toContain(
       `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/products/anillo-sello)`
     );
     expect(
-      build({ categories: [{ name: "Aros \\ dijes", slug: "aros" }] })
+      build({ categories: [{ name: "Aros \\ dijes", path: "/aros" }] })
     ).toContain(String.raw`- [Aros \\ dijes](`);
   });
 

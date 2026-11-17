@@ -385,7 +385,12 @@ describe("ArticlePage", () => {
   test("describes the article, its trail and the store, with the brand's logo, as structured data", async () => {
     const { show } = setup({
       article: makeArticle({
-        category: { name: "Anillos", slug: "anillos" },
+        category: {
+          group: { name: "Bijouterie", path: "/bijouterie" },
+          name: "Anillos",
+          path: "/bijouterie/anillos",
+          slug: "anillos",
+        },
         categoryId: 5,
         images: [
           {
@@ -449,21 +454,27 @@ describe("ArticlePage", () => {
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/products`,
-            name: "Catálogo",
+            item: `${ORIGIN}/productos`,
+            name: "Todos los artículos",
             position: 2,
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/products?category=anillos`,
-            name: "Anillos",
+            item: `${ORIGIN}/bijouterie`,
+            name: "Bijouterie",
             position: 3,
+          },
+          {
+            "@type": "ListItem",
+            item: `${ORIGIN}/bijouterie/anillos`,
+            name: "Anillos",
+            position: 4,
           },
           {
             "@type": "ListItem",
             item: url,
             name: "Anillo de plata",
-            position: 4,
+            position: 5,
           },
         ],
       },
@@ -515,8 +526,8 @@ describe("ArticlePage", () => {
           },
           {
             "@type": "ListItem",
-            item: `${ORIGIN}/en/products`,
-            name: "Catalog",
+            item: `${ORIGIN}/en/productos`,
+            name: "All articles",
             position: 2,
           },
           {

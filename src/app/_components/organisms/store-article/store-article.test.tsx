@@ -26,7 +26,12 @@ function makeArticle(
   overrides: Partial<StoreArticleData> = {}
 ): StoreArticleData {
   return {
-    category: { name: "Collares", slug: "collares" },
+    category: {
+      group: null,
+      name: "Collares",
+      path: "/collares",
+      slug: "collares",
+    },
     currencyCode: "UYU",
     description: "Perlas de río\nhechas a mano.",
     id: 42,
@@ -116,15 +121,34 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup();
 
     expect(breadcrumb()).toEqual([
-      ["Catálogo", "/products"],
-      ["Collares", "/products?category=collares"],
+      ["Todos los artículos", "/productos"],
+      ["Collares", "/collares"],
+    ]);
+  });
+
+  test("leads back through the group of the article's category (FER-043)", () => {
+    const { breadcrumb } = setup({
+      article: makeArticle({
+        category: {
+          group: { name: "Bijouterie", path: "/bijouterie" },
+          name: "Anillos",
+          path: "/bijouterie/anillos",
+          slug: "anillos",
+        },
+      }),
+    });
+
+    expect(breadcrumb()).toEqual([
+      ["Todos los artículos", "/productos"],
+      ["Bijouterie", "/bijouterie"],
+      ["Anillos", "/bijouterie/anillos"],
     ]);
   });
 
   test("leads back without a category when the article has none", () => {
     const { breadcrumb } = setup({ article: makeArticle({ category: null }) });
 
-    expect(breadcrumb()).toEqual([["Catálogo", "/products"]]);
+    expect(breadcrumb()).toEqual([["Todos los artículos", "/productos"]]);
   });
 
   test("names the article in a heading marked with its language, and shows its price and photos", () => {
@@ -255,10 +279,10 @@ describe("StoreArticle", () => {
   test.each([
     [
       "its category",
-      { name: "Collares", slug: "collares" },
-      "/products?category=collares",
+      { group: null, name: "Collares", path: "/collares", slug: "collares" },
+      "/collares",
     ],
-    ["the catalog, for an article with no category", null, "/products"],
+    ["all articles, for an article with no category", null, "/productos"],
   ] as const)(
     "the related row's “Ver todo” leads to %s",
     (_case, category, href) => {
@@ -295,8 +319,8 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup({ locale: "en" });
 
     expect(breadcrumb()).toEqual([
-      ["Catalog", "/en/products"],
-      ["Collares", "/en/products?category=collares"],
+      ["All articles", "/en/productos"],
+      ["Collares", "/en/collares"],
     ]);
     expect(screen.getByRole("link", { name: "Artículo 7" })).toHaveAttribute(
       "href",

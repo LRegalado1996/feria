@@ -37,6 +37,7 @@ export const design = {
       bubbles: "Burbujeros",
       chains: "Cadenas",
       earrings: "Aros",
+      jewelry: "Bijouterie",
       rings: "Anillos",
     },
     chips: {

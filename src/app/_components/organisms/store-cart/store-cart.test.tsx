@@ -337,8 +337,8 @@ describe("StoreCart", () => {
   });
 
   test.each([
-    ["en", "Your cart is empty.", "Keep browsing", "/en/products"],
-    ["es", "Tu carrito está vacío.", "Seguir mirando", "/products"],
+    ["en", "Your cart is empty.", "Keep browsing", "/en/productos"],
+    ["es", "Tu carrito está vacío.", "Seguir mirando", "/productos"],
   ] as const)(
     "in %s, an empty cart says %j and links to the catalog",
     async (locale, text, link, href) => {

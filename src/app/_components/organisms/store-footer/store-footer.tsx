@@ -4,7 +4,11 @@ import Link from "next/link";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import type { Dictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
-import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
+import {
+  type NavigationCategory,
+  navigationOrder,
+} from "@/lib/catalog/navigation";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
@@ -14,8 +18,11 @@ import { cn } from "@/lib/utils";
 export const CREDIT_URL = "https://lucasregalado.com";
 
 export interface StoreFooterProps {
-  /** The store's categories, in their order, for the shop's links. */
-  categories: readonly { lang: string; name: string; slug: string }[];
+  /**
+   * The store's categories, in their order, for the shop's links: a
+   * group's categories right after it, one step in (FER-043).
+   */
+  categories: readonly NavigationCategory[];
   className?: string;
   copy: Dictionary["storefront"]["shell"];
   locale: Locale;
@@ -107,19 +114,19 @@ function StoreFooter({
             <li>
               <Link
                 className={LINK_CLASS}
-                href={localizePath("/products", locale)}
+                href={localizePath(ALL_ARTICLES_PATH, locale)}
               >
                 {copy.catalog}
               </Link>
             </li>
-            {categories.map((category) => (
-              <li key={category.slug}>
+            {navigationOrder(categories).map((category) => (
+              <li
+                className={category.depth === 1 ? "pl-4" : undefined}
+                key={category.slug}
+              >
                 <Link
                   className={LINK_CLASS}
-                  href={catalogHref(locale, {
-                    ...EMPTY_CATALOG_QUERY,
-                    category: category.slug,
-                  })}
+                  href={localizePath(category.path, locale)}
                   lang={category.lang}
                 >
                   {category.name}

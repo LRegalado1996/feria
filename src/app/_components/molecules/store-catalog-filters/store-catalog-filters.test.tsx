@@ -32,8 +32,20 @@ function makeQuery(overrides: Partial<CatalogQuery> = {}): CatalogQuery {
 }
 
 const CATEGORIES: CatalogCategory[] = [
-  { lang: "es", name: "Collares", slug: "collares" },
-  { lang: "en", name: "Rings", slug: "anillos" },
+  {
+    depth: 0,
+    lang: "es",
+    name: "Collares",
+    path: "/collares",
+    slug: "collares",
+  },
+  {
+    depth: 1,
+    lang: "en",
+    name: "Rings",
+    path: "/collares/anillos",
+    slug: "anillos",
+  },
 ];
 
 function makeValue(
@@ -116,9 +128,9 @@ describe("StoreCatalogFilters", () => {
 
     const nav = screen.getByRole("navigation", { name: "Categorías" });
     expect(choicesIn(nav)).toEqual([
-      ["Todas", "/products?sort=price_asc", "true"],
-      ["Collares", "/products?category=collares&sort=price_asc", null],
-      ["Rings", "/products?category=anillos&sort=price_asc", null],
+      ["Todas", "/productos?sort=price_asc", "true"],
+      ["Collares", "/collares?sort=price_asc", null],
+      ["Rings", "/collares/anillos?sort=price_asc", null],
     ]);
     expect(within(nav).getByRole("link", { name: "Rings" })).toHaveAttribute(
       "lang",
@@ -129,15 +141,30 @@ describe("StoreCatalogFilters", () => {
   test("marks the chosen category, whose link takes it out again", () => {
     const { choicesIn } = setup({
       locale: "en",
-      query: makeQuery({ category: "collares" }),
+      query: makeQuery({ category: { path: "/collares", slug: "collares" } }),
     });
 
     expect(
       choicesIn(screen.getByRole("navigation", { name: "Categories" }))
     ).toEqual([
-      ["All", "/en/products", null],
-      ["Collares", "/en/products", "true"],
-      ["Rings", "/en/products?category=anillos", null],
+      ["All", "/en/productos", null],
+      ["Collares", "/en/productos", "true"],
+      ["Rings", "/en/collares/anillos", null],
+    ]);
+  });
+
+  test("sets a group's categories one step in, under it (FER-043)", () => {
+    setup();
+    const nav = screen.getByRole("navigation", { name: "Categorías" });
+
+    expect(
+      within(nav)
+        .getAllByRole("listitem")
+        .map((item) => [item.textContent, item.className])
+    ).toEqual([
+      ["Todas", ""],
+      ["Collares", ""],
+      ["Rings", "pl-8"],
     ]);
   });
 
@@ -156,11 +183,11 @@ describe("StoreCatalogFilters", () => {
     });
 
     expect(choicesIn(group("panel-color"))).toEqual([
-      ["Dorado4", "/products", "true"],
-      ["Plateado1", "/products?color=dorado,plateado", null],
+      ["Dorado4", "/productos", "true"],
+      ["Plateado1", "/productos?color=dorado,plateado", null],
     ]);
     expect(choicesIn(group("panel-talle"))).toEqual([
-      ["M3", "/products?color=dorado&talle=m", null],
+      ["M3", "/productos?color=dorado&talle=m", null],
     ]);
     expect(screen.getByRole("list", { name: "Color" }).closest("div")).toBe(
       group("panel-color")

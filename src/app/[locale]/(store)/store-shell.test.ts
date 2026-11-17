@@ -110,16 +110,18 @@ describe("streamedShell", () => {
 });
 
 describe("shellOf", () => {
-  test("from a store already read, its tagline and its cached categories", async () => {
+  test("from a store already read, its tagline and its cached categories, read before it answers", async () => {
     const store = makeStore();
 
-    const shell = shellOf(store, "es");
+    const shell = await shellOf(store, "es");
 
     await expect(shell.announcement).resolves.toEqual({
       lang: "es",
       text: SPANISH.tagline,
     });
-    await expect(shell.categories).resolves.toEqual([
+    // The list itself, not a promise of it: the header renders it in place,
+    // behind no boundary, in the first response (FER-043).
+    expect(shell.categories).toEqual([
       { lang: "es", name: "anillos-es", slug: "anillos" },
     ]);
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "es");

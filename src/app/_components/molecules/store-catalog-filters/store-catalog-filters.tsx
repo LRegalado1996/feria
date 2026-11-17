@@ -11,10 +11,15 @@ import {
 import type { Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 
-/** A category as the catalog lists it. */
+/**
+ * A category as the catalog lists it: a group's categories right after it,
+ * one level in (`depth`, FER-043), each with its page's address.
+ */
 export interface CatalogCategory {
+  depth: 0 | 1;
   lang: string;
   name: string;
+  path: string;
   slug: string;
 }
 
@@ -148,15 +153,20 @@ function StoreCatalogFilters({
               </Choice>
             </li>
             {categories.map((category) => {
-              const chosen = query.category === category.slug;
+              const chosen = query.category?.slug === category.slug;
 
               return (
-                <li key={category.slug}>
+                <li
+                  className={category.depth === 1 ? "pl-8" : undefined}
+                  key={category.slug}
+                >
                   <Choice
                     chosen={chosen}
                     href={href({
                       ...query,
-                      category: chosen ? null : category.slug,
+                      category: chosen
+                        ? null
+                        : { path: category.path, slug: category.slug },
                     })}
                     lang={category.lang}
                   >

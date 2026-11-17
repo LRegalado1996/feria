@@ -10,7 +10,6 @@ import {
   STORE_MAIN_ID,
   StoreHeader,
   type StoreHeaderCategory,
-  type StoreHeaderProps,
 } from "./store-header";
 
 vi.mock("next/navigation", () => ({
@@ -19,32 +18,56 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-/** The seed's five categories. */
+function makeCategory(
+  id: number,
+  name: string,
+  slug: string,
+  group: { id: number; slug: string } | null = null
+): StoreHeaderCategory {
+  return {
+    id,
+    lang: "es",
+    name,
+    parentId: group?.id ?? null,
+    path: group ? `/${group.slug}/${slug}` : `/${slug}`,
+    slug,
+  };
+}
+
+const BIJOUTERIE = { id: 6, slug: "bijouterie" };
+
+/** The seed's catalog (FER-043): Bijouterie holding four, then the bubbles. */
 const CATEGORIES: StoreHeaderCategory[] = [
-  { lang: "es", name: "Burbujeros", slug: "burbujeros" },
-  { lang: "es", name: "Cadenas", slug: "cadenas" },
-  { lang: "es", name: "Anillos", slug: "anillos" },
-  { lang: "es", name: "Aros", slug: "aros" },
-  { lang: "es", name: "Pulseras", slug: "pulseras" },
+  makeCategory(6, "Bijouterie", "bijouterie"),
+  makeCategory(2, "Cadenas", "cadenas", BIJOUTERIE),
+  makeCategory(3, "Anillos", "anillos", BIJOUTERIE),
+  makeCategory(4, "Aros", "aros", BIJOUTERIE),
+  makeCategory(5, "Pulseras", "pulseras", BIJOUTERIE),
+  makeCategory(1, "Burbujeros", "burbujeros"),
 ];
 
 async function setup({
   categories,
-  current,
+  currentPath,
   locale = "en",
+  streamed = true,
 }: {
   categories?: readonly StoreHeaderCategory[];
-  current?: StoreHeaderProps["current"];
+  currentPath?: string;
   locale?: Locale;
+  /** Handed as a promise (a page read per request), else read already. */
+  streamed?: boolean;
 } = {}) {
   // Resolved inside act, as a stream would deliver them.
   await act(async () => {
     renderWithI18n(
       <StoreHeader
-        categories={categories ? Promise.resolve(categories) : undefined}
+        categories={
+          categories && streamed ? Promise.resolve(categories) : categories
+        }
         className="custom"
         copy={DICTIONARIES[locale].storefront.shell}
-        current={current}
+        currentPath={currentPath}
         locale={locale}
       />,
       { locale }
@@ -115,10 +138,10 @@ describe("StoreHeader", () => {
   });
 
   test.each([
-    ["en", "Catalog", "/en/products"],
-    ["es", "Catálogo", "/products"],
+    ["en", "All articles", "/en/productos"],
+    ["es", "Todos los artículos", "/productos"],
   ] as const)(
-    "in %s, without its categories, its line links to the catalog alone",
+    "in %s, without its categories, its line links to all articles alone",
     async (locale, name, href) => {
       const { barElement } = await setup({ locale });
 
@@ -126,84 +149,148 @@ describe("StoreHeader", () => {
     }
   );
 
-  test("its line links to the catalog, then to each category the line has room for", async () => {
-    const { bar, barElement } = await setup({
+  test.each([
+    ["streamed in", true],
+    ["read already, in the first response", false],
+  ])(
+    "its line links to all articles, the group and the category in none, %s",
+    async (_case, streamed) => {
+      const { bar, barElement } = await setup({
+        categories: CATEGORIES,
+        locale: "es",
+        streamed,
+      });
+
+      // The group's categories wait behind its button, out of the reading
+      // order until it opens.
+      expect(linksOf(barElement())).toEqual([
+        ["Todos los artículos", "/productos"],
+        ["Bijouterie", "/bijouterie"],
+        ["Burbujeros", "/burbujeros"],
+      ]);
+      expect(
+        bar().getByRole("button", { name: "Bijouterie: sus categorías" })
+      ).toHaveAttribute("aria-expanded", "false");
+      expect(bar().getByRole("link", { name: "Burbujeros" })).toHaveAttribute(
+        "lang",
+        "es"
+      );
+    }
+  );
+
+  test("opens the group's categories from its button, each at its page under the group", async () => {
+    const { bar, barElement, user } = await setup({
       categories: CATEGORIES,
       locale: "es",
     });
 
-    expect(linksOf(barElement())).toEqual([
-      ["Catálogo", "/products"],
-      ["Burbujeros", "/products?category=burbujeros"],
-      ["Cadenas", "/products?category=cadenas"],
-      ["Anillos", "/products?category=anillos"],
-      ["Aros", "/products?category=aros"],
-      ["Pulseras", "/products?category=pulseras"],
-    ]);
-    expect(bar().getByRole("link", { name: "Anillos" })).toHaveAttribute(
-      "lang",
-      "es"
+    await user.click(
+      bar().getByRole("button", { name: "Bijouterie: sus categorías" })
     );
+
+    expect(linksOf(barElement())).toEqual([
+      ["Todos los artículos", "/productos"],
+      ["Bijouterie", "/bijouterie"],
+      ["Cadenas", "/bijouterie/cadenas"],
+      ["Anillos", "/bijouterie/anillos"],
+      ["Aros", "/bijouterie/aros"],
+      ["Pulseras", "/bijouterie/pulseras"],
+      ["Burbujeros", "/burbujeros"],
+    ]);
   });
 
-  test("in English its category links lead to the English catalog", async () => {
+  test("in English its links lead to the English pages, on the Spanish paths", async () => {
     const { bar } = await setup({
-      categories: [{ lang: "en", name: "Rings", slug: "anillos" }],
+      categories: [{ ...makeCategory(3, "Rings", "anillos"), lang: "en" }],
     });
 
     expect(bar().getByRole("link", { name: "Rings" })).toHaveAttribute(
       "href",
-      "/en/products?category=anillos"
+      "/en/anillos"
     );
   });
 
-  test(`holds at most ${BAR_CATEGORIES_MAX} categories on its line`, async () => {
-    const many = Array.from({ length: BAR_CATEGORIES_MAX + 1 }, (_, index) => ({
-      lang: "es",
-      name: `C${index}`,
-      slug: `c${index}`,
-    }));
+  test(`holds at most ${BAR_CATEGORIES_MAX} entries on its line`, async () => {
+    const many = Array.from({ length: BAR_CATEGORIES_MAX + 1 }, (_, index) =>
+      makeCategory(index + 1, `C${index}`, `c${index}`)
+    );
     const { bar } = await setup({ categories: many, locale: "es" });
 
-    // "Catálogo" and the first five.
+    // "Todos los artículos" and the first five.
     expect(bar().getAllByRole("link")).toHaveLength(BAR_CATEGORIES_MAX + 1);
     expect(
       bar().queryByRole("link", { name: `C${BAR_CATEGORIES_MAX}` })
     ).toBeNull();
   });
 
-  test("stops at the first category whose name would not fit on the line", async () => {
+  test("stops at the first entry whose name would not fit on the line", async () => {
     const { barElement } = await setup({
       categories: [
-        { lang: "es", name: "Collares de perlas", slug: "collares" },
-        { lang: "es", name: "Pistolas de burbujas", slug: "pistolas" },
-        { lang: "es", name: "Aros", slug: "aros" },
+        makeCategory(1, "Collares de perlas", "collares"),
+        makeCategory(2, "Pistolas de burbujas", "pistolas"),
+        makeCategory(3, "Aros", "aros"),
       ],
       locale: "es",
     });
 
-    // "Catálogo" (8) + 18 + 20 = 46 letters, past the 44 the line holds.
+    // "Todos los artículos" (19) + 18 + 20 = 57 letters, past the 44 the
+    // line holds; 19 + 18 = 37 fits.
     expect(linksOf(barElement()).map(([name]) => name)).toEqual([
-      "Catálogo",
+      "Todos los artículos",
       "Collares de perlas",
     ]);
   });
 
-  test("marks the catalog's link as the current page on the catalog", async () => {
-    const { bar } = await setup({ current: "catalog", locale: "es" });
+  test.each([
+    ["all articles", "/productos", "Todos los artículos"],
+    ["a category in no group", "/burbujeros", "Burbujeros"],
+    ["a group", "/bijouterie", "Bijouterie"],
+  ])(
+    "marks %s's link as the current page on it, and nothing else",
+    async (_case, currentPath, name) => {
+      const { bar } = await setup({
+        categories: CATEGORIES,
+        currentPath,
+        locale: "es",
+      });
 
-    expect(bar().getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      expect(
+        bar()
+          .getAllByRole("link")
+          .filter((link) => link.getAttribute("aria-current") === "page")
+          .map((link) => link.textContent)
+      ).toEqual([name]);
+    }
+  );
+
+  test("marks a group's category as the current page inside the group", async () => {
+    const { bar, user } = await setup({
+      categories: CATEGORIES,
+      currentPath: "/bijouterie/anillos",
+      locale: "es",
+    });
+
+    await user.click(
+      bar().getByRole("button", { name: "Bijouterie: sus categorías" })
+    );
+
+    expect(bar().getByRole("link", { name: "Anillos" })).toHaveAttribute(
       "aria-current",
       "page"
+    );
+    expect(bar().getByRole("link", { name: "Bijouterie" })).not.toHaveAttribute(
+      "aria-current"
     );
   });
 
   test("marks nothing as current elsewhere", async () => {
-    const { bar } = await setup({ locale: "es" });
+    const { bar } = await setup({ categories: CATEGORIES, locale: "es" });
 
-    expect(bar().getByRole("link", { name: "Catálogo" })).not.toHaveAttribute(
-      "aria-current"
-    );
+    expect(
+      bar()
+        .getAllByRole("link")
+        .filter((link) => link.hasAttribute("aria-current"))
+    ).toEqual([]);
   });
 
   test("its links are the accent on the moss, in the display face", async () => {
@@ -235,46 +322,53 @@ describe("StoreHeader", () => {
     ).toHaveAttribute("href", "/en");
   });
 
-  test("on a phone, the menu holds home, the catalog, every category and the language", async () => {
-    const many = [
-      ...CATEGORIES,
-      { lang: "es", name: "Relojes", slug: "relojes" },
-    ];
+  test("on a phone, the menu holds home, all articles, the same entries and the language, the group unfolding to its categories", async () => {
     const { dialog, user } = await setup({
-      categories: many,
-      current: "catalog",
+      categories: CATEGORIES,
+      currentPath: "/productos",
       locale: "es",
     });
 
     await user.click(screen.getByRole("button", { name: "Menú" }));
 
-    const menu = within(screen.getByRole("dialog", { name: "Menú" }));
+    const menu = within(dialog());
     expect(linksOf(dialog())).toEqual([
       ["Inicio", "/"],
-      ["Catálogo", "/products"],
-      ["Burbujeros", "/products?category=burbujeros"],
-      ["Cadenas", "/products?category=cadenas"],
-      ["Anillos", "/products?category=anillos"],
-      ["Aros", "/products?category=aros"],
-      ["Pulseras", "/products?category=pulseras"],
-      ["Relojes", "/products?category=relojes"],
+      ["Todos los artículos", "/productos"],
+      ["Bijouterie", "/bijouterie"],
+      ["Burbujeros", "/burbujeros"],
       ["English", "/en"],
     ]);
-    expect(menu.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
-      "aria-current",
-      "page"
+    expect(
+      menu.getByRole("link", { name: "Todos los artículos" })
+    ).toHaveAttribute("aria-current", "page");
+
+    await user.click(
+      menu.getByRole("button", { name: "Bijouterie: sus categorías" })
     );
+
+    expect(linksOf(dialog()).map(([name]) => name)).toEqual([
+      "Inicio",
+      "Todos los artículos",
+      "Bijouterie",
+      "Cadenas",
+      "Anillos",
+      "Aros",
+      "Pulseras",
+      "Burbujeros",
+      "English",
+    ]);
     expect(menu.getByRole("button", { name: "Cerrar el menú" })).toBeVisible();
   });
 
-  test("on a phone without categories, the menu holds home, the catalog and the language", async () => {
+  test("on a phone without categories, the menu holds home, all articles and the language", async () => {
     const { dialog, user } = await setup({ locale: "es" });
 
     await user.click(screen.getByRole("button", { name: "Menú" }));
 
     expect(linksOf(dialog()).map(([name]) => name)).toEqual([
       "Inicio",
-      "Catálogo",
+      "Todos los artículos",
       "English",
     ]);
   });
