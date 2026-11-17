@@ -109,7 +109,8 @@ describe("StoreArticleRow", () => {
     const { arrow, embla, user } = setup();
 
     expect(arrow()).toHaveAccessibleName("Ver más de Novedades");
-    expect(arrow()).toHaveAttribute("data-variant", "primary");
+    // Lime on any photo: the accent, not the ink of the main buttons.
+    expect(arrow()).toHaveAttribute("data-variant", "accent");
     expect(arrow()).toHaveClass("rounded-full", "size-13");
 
     await user.click(required(arrow()));

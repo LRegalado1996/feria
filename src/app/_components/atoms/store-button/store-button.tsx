@@ -11,8 +11,13 @@ const storeButtonVariants = cva(
   {
     variants: {
       variant: {
-        // The one action of a view: the foreground on the accent, 14:1.
+        // The one action of a view (add to cart, place the order): the
+        // accent on the ink, 14:1, like landonorris.store; moss on hover.
         primary:
+          "bg-store-foreground text-store-accent hover:bg-store-contrast focus-visible:outline-store-foreground",
+        // A round arrow over a photo (a row, the gallery): the ink on the
+        // accent, 14:1, so it reads on any photo.
+        accent:
           "bg-store-accent text-store-foreground hover:brightness-95 focus-visible:outline-store-foreground",
         // The second action: an outline in the foreground on the page.
         outline:

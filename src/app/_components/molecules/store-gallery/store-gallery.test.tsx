@@ -94,6 +94,8 @@ describe("StoreGallery", () => {
     const { arrow, embla, status, user } = setup();
 
     expect(arrow()).toHaveAccessibleName("Foto siguiente");
+    // Lime on any photo: the accent, not the ink of the main buttons.
+    expect(arrow()).toHaveAttribute("data-variant", "accent");
     expect(status()).toHaveTextContent("Foto 1 de 3");
 
     await user.click(required(arrow()));

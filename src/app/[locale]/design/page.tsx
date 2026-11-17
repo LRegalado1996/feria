@@ -288,7 +288,11 @@ export default async function DesignPage({ params }: DesignPageProps) {
           <StoreButton size="lg">{sample.buttons.primary}</StoreButton>
           <StoreButton variant="outline">{sample.buttons.outline}</StoreButton>
           <StoreButton variant="ghost">{sample.buttons.ghost}</StoreButton>
-          <StoreButton aria-label={sample.buttons.primary} size="icon-lg">
+          <StoreButton
+            aria-label={sample.buttons.primary}
+            size="icon-lg"
+            variant="accent"
+          >
             <ArrowRight aria-hidden="true" />
           </StoreButton>
         </div>

@@ -65,6 +65,7 @@ function RowArrow({ title }: { title: string }) {
           }
         }}
         size="icon-lg"
+        variant="accent"
       >
         {canScrollNext ? (
           <ArrowRight aria-hidden="true" />

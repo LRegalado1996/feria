@@ -61,6 +61,7 @@ function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
               }
             }}
             size="icon-lg"
+            variant="accent"
           >
             {canScrollNext ? (
               <ArrowRight aria-hidden="true" />
