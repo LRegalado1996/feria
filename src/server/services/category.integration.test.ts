@@ -465,7 +465,25 @@ describe("category groups and pages (FER-043)", () => {
     expect(await groupsOf(storeId, [rings.id])).toEqual([[rings.id, null]]);
   });
 
-  test("the database refuses a category as its own group, and a group of another store's", async () => {
+  // A second store cannot be made (`store_single_row`), so the group's key
+  // is checked by its definition: it pairs the store with the group, which
+  // a key on `parentId` alone would not.
+  test("the group's key takes the store with the group, so a group is always of the same store", async () => {
+    const result = await db.execute<{ definition: string }>(sql`
+      select pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conname = 'category_store_parent_fk'
+    `);
+
+    expect(result.rows).toEqual([
+      {
+        definition:
+          'FOREIGN KEY ("storeId", "parentId") REFERENCES category("storeId", id)',
+      },
+    ]);
+  });
+
+  test("the database refuses a category as its own group, and a group the store does not have", async () => {
     const storeId = await theStoreId(db);
     const tag = uniqueTag();
     const rings = await add(storeId, `Anillos ${tag}`);
