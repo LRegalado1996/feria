@@ -33,10 +33,12 @@ function makeImage(overrides: Partial<UploadedImage> = {}): UploadedImage {
 }
 
 function setup({
+  disabled = false,
   locale = "en",
   state = { status: "idle" },
   value = null,
 }: {
+  disabled?: boolean;
   locale?: Locale;
   state?: ImageUploadState;
   value?: UploadedImage | null;
@@ -54,6 +56,7 @@ function setup({
   renderWithI18n(
     <ImageUploader
       aria-describedby="form-error"
+      disabled={disabled}
       label={LABEL}
       onBusyChange={onBusyChange}
       onChange={onChange}
@@ -150,6 +153,22 @@ describe("ImageUploader", () => {
       })
     ).not.toHaveAttribute("value");
     expect(within(group).getByRole("status")).toHaveTextContent(copy.preparing);
+  });
+
+  test("once shut, keeps its cancel while a photo is on its way", () => {
+    const { copy, named } = setup({
+      disabled: true,
+      state: { percent: 42, status: "uploading" },
+    });
+
+    expect(named(copy.cancel)).toBeEnabled();
+  });
+
+  test("once shut and at rest, shuts its choice", () => {
+    const { copy, named } = setup({ disabled: true });
+
+    // A control in a shut fieldset is disabled, whatever its own attribute.
+    expect(named(copy.choose)).toBeDisabled();
   });
 
   test("a failed upload says so in an alert and offers a retry", async () => {

@@ -46,6 +46,7 @@ function ImageUploader({
   "aria-describedby": describedBy,
   className,
   description,
+  disabled,
   label,
   onBusyChange,
   onChange,
@@ -95,6 +96,9 @@ function ImageUploader({
       data-status={state.status}
       data-testid="image-uploader"
       {...props}
+      // A photo on its way keeps its cancel even once the field is shut:
+      // nothing else could stop it, and the form waits for it.
+      disabled={disabled === true && !busy}
     >
       <legend className="mb-2 text-sm font-medium">{label}</legend>
       <p className="text-xs text-muted-foreground" id={hintId}>

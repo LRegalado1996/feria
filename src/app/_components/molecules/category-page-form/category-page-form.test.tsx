@@ -521,6 +521,38 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("a phone upload left without its computer photo can still be cancelled, and Save opens", async () => {
+    const { choose, photo, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    const cancel = await within(phone).findByRole("button", {
+      name: "Cancel: Phone photo (optional)",
+    });
+    expect(cancel).toBeEnabled();
+    expect(saveButton).toBeDisabled();
+
+    await user.click(cancel);
+
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    expect(
+      within(phone).getByRole("button", {
+        name: "Choose a photo: Phone photo (optional)",
+      })
+    ).toBeDisabled();
+  });
+
   test("cancels without saving", async () => {
     const { onCancel, onSave, user } = setup();
 
