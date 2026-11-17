@@ -17,6 +17,7 @@ Loading an article is the product's showpiece: photos in, a published article ou
 - A slot in step 2 for the "fill with AI" button delivered by FER-018.
 - The draft is created as soon as the first photo uploads and saved on every change, so nothing is lost if the phone locks or the tab closes.
 - The same screens edit an existing article.
+- A new article takes the last place in the store's own order, the catalog's default ([FER-044](FER-044-catalog-round.md)): the database's default for `product.position` already gives it the next number, so the wizard sends no position.
 - After publishing: a success state with "view in store", "copy link" and "load another".
 - Built in the admin shell and cards of [FER-040](FER-040-admin-redesign.md). Steps slide, thumbnails settle, the publish moment has a small celebration. All of it honors reduced motion.
 

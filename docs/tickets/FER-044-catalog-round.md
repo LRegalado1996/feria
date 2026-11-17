@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-043, FER-011 (stacked after them)
 
 ## Goal
@@ -52,7 +52,28 @@ Asked by Lucas on 2026-11-18, after reviewing the store by hand; the decisions b
 
 ## Decisions
 
+- **The default order's name in the menu is "Destacados" ("Featured")**, as the reference store's "Featured". Chosen, the button reads only "Ordenar por" and no item is marked. The address never writes it (`?sort=position` is read, never written), so the plain address is the store's order.
+- **A new article's place comes from a database sequence** (`product_position_seq`, the column's default), not `max() + 1`: two articles added at once never share a place, and every writer (the service, the seed, a test, the build a deploy replaces, which names no position) gets one. Migration 0015 is expand only: it numbers the articles already there per store in the order they were created (`createdAt`, then `id`), after any already placed, starts the sequence after the last, then sets the default and `NOT NULL`. The list orders by (`position`, `id`) and its cursor carries both; a reorder (FER-019) may give two articles one place, the id still breaks the tie.
+- **The filter count counts the filters' values only.** A category is a page of its own since FER-043, and a search is not a choice of the panel, so neither counts: `/bijouterie/anillos` reads "Filtrar", `?color=dorado,plateado` "Filtrar (2)".
+- **The cover's height is the window's less what must still show** (`svh`): 17.5rem on a phone, 20rem from `md` up, never under 20rem. At 390×844 that is 564 px of photo and about 70 px of the first row in the first view; at 1440×900, 580 px and about 90 px. `design.md` records them.
+- **The page size stays 24.** The next page starts loading when the grid's end is 800 px below the window, about two rows of cards on a phone, so it is usually there before the shopper reaches the last row.
+- **A later page is `?cursor=`, the sort's key, a dot and the id** (`120000.48`; a date as its milliseconds). It is what "Cargar más" leads to without the script; it is `noindex, follow`, its canonical the list's first page, because its articles move as the store orders them and each has its own page. A cursor that does not read is the first page.
+- **On the header's line the group is a link before the script runs and a button after**, in the same box: the link leads to the group's page, the way in without the script; the button's list starts with that page ("Ver todo") since the control no longer leads there. The phone menu keeps its row, the name a link and a 44 px button beside it: the room it takes there is the menu's.
+- **The seed** holds 49 articles (7 bubble toys, 9 chains, 12 rings, 11 earrings, 10 bracelets), created one category after another in turn, so the default order mixes them. Its 39 photos are fewer than its articles: a size or pack variant, or a piece another photo also shows, reuses one, and seven articles (the bangle pair and the halo ring among them) have four or five. The descriptions say a tone or a finish ("de tono dorado", "estilo perla"), never a material: the photos are stock photos, so the earlier "baño de oro" and "de plata" went too.
+- **The seed fills an empty catalog only, as before.** A database seeded before keeps its eleven articles and its order, Bijouterie first: the categories screen (`/admin/categories`) reorders them, or a fresh database gets everything. A catalog seeded before groups gets its Bijouterie last, after the bubble guns.
+- **The footer's story in English:** "For more than 20 years my family has set up its stall at the Christmas fair. I started out helping my parents, and for about 10 years now I have had my own. We have sold a bit of everything: shoes, clothes, toys, perfumes. This year we are bringing jewelry and bubble guns: come by stall 86 or order from here." Signed "Pepe".
+- **The article page's trail still says "Todos los artículos"** (`storefront.article.catalog`): the article page belongs to the branch working on it in parallel, which can rename it to "Catálogo" there.
+
 ## Outcome
+
+- **Data** (migration 0015, expand only): `product.position`, its default the next number of `product_position_seq` (int4), backfilled in creation order, with the index (`storeId`, `status`, `position`, `id`); its integration test replays it, keeps a place already set and puts a new article last.
+- **Catalog API:** `position` is the default sort (`DEFAULT_PRODUCT_SORT`), the menu's order the default, both prices and the newest; its keyset cursor carries the place and the id. `readCatalogCursor` and `cursorParam` read and write a cursor in an address.
+- **Header:** "Catálogo" ("Catalog") for the page of all articles; the line reads the groups and the categories in no group in their positions' order; `molecules/store-nav-group` on the line is one control, the name with a 12 px chevron, a link before the script runs and a disclosure button after, its list starting with "Ver todo".
+- **Catalog pages:** the cover is full-bleed and nearly a screen tall; the trail is under it and starts at a house named "Inicio"; no description paragraph and no share button (the description still feeds the metadata and the JSON-LD); "Filtrar (2)" with its whole name for a screen reader, and no pills; the sort's default reads "Ordenar por"; the grid loads its next page by itself near its end, says each page in a polite `output`, stops at the end; "Cargar más" is a real link to `?cursor=`, loaded in place with the script.
+- **Footer:** Pepe's story under the logo, signed; "Tienda" lists the catalog and the header's entries only.
+- **Seed:** 49 articles with three-paragraph descriptions in both languages, seven with four or five photos; 28 more photos in `public/seed/` (26 from Unsplash, 2 from Pexels), credited in `docs/brand/seed-photos.md`; the bubble guns before the Bijouterie group.
+- **E2E:** `tests/store/catalog.e2e.ts` (the default order follows the positions and marks nothing, "Filtrar (2)" with no pills, the pages loading by themselves with the footer in reach, "Cargar más" without the script, no description or share button), `tests/store/catalog-pages.e2e.ts` (the cover edge to edge under the header, its height and the first row in sight at 1440×900 and 390×844, the trail's house, the header's one control by keyboard and without the script, the header's and the footer's order following the positions), and the shell, filters and settings specs on the new words.
+- **Docs:** `design.md` § Storefront, `docs/agents/nextjs.md`, `docs/project/data-model.md`, `docs/project/overview.md`, `docs/brand/seed-photos.md`, `README.md`, [FER-017](FER-017-article-wizard.md) and [FER-019](FER-019-article-list.md).
 
 ## Reporting
 
