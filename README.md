@@ -76,7 +76,7 @@ You need Docker (Docker Desktop or OrbStack), the Node version in [`.nvmrc`](.nv
 
 ```bash
 pnpm wt:provision   # installs dependencies and writes this worktree's .env; starts no containers
-pnpm db:seed        # starts this worktree's Postgres, migrates it (which creates the store, LR Market), adds its texts, the sample catalog (five categories, eleven articles and a Color filter) and one login: test@example.com, password123
+pnpm db:seed        # starts this worktree's Postgres, migrates it (which creates the store, LR Market), adds its texts, the sample catalog (Burbujeros, then Bijouterie with its four categories, 49 articles and a Color filter) and one login: test@example.com, password123
 pnpm db:create-superadmin  # the first login of a fresh database (qa, production): reads SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD, refused once any login exists
 pnpm dev            # next dev on this worktree's own port
 pnpm wt:ports       # prints that port, the Postgres port and the app URL (it is not 3000)
