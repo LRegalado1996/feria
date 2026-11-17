@@ -235,6 +235,20 @@ describe("StoreArticleCard", () => {
     ).toHaveTextContent("Nothing to see");
   });
 
+  test.each([
+    ["auto", false],
+    ["two", true],
+  ] as const)(
+    "with nameLines %s, keeps two lines for the name: %s",
+    (nameLines, kept) => {
+      const { card } = setup({ nameLines });
+      const heading = within(card).getByRole("heading");
+
+      expect(heading.classList.contains("line-clamp-2")).toBe(kept);
+      expect(heading.classList.contains("min-h-[2lh]")).toBe(kept);
+    }
+  );
+
   test("is one link and nothing else to press: adding to the cart is on the article's page", () => {
     const { card, link } = setup();
 

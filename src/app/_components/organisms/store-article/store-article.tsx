@@ -8,11 +8,11 @@ import {
   StoreArticleCard,
 } from "@/app/_components/molecules/store-article-card";
 import { StoreArticlePurchase } from "@/app/_components/molecules/store-article-purchase";
-import { StoreArticleRow } from "@/app/_components/molecules/store-article-row";
 import {
   StoreGallery,
   type StoreGalleryImage,
 } from "@/app/_components/molecules/store-gallery";
+import { StoreRelatedRow } from "@/app/_components/molecules/store-related-row";
 import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { Dictionary } from "@/content";
 import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
@@ -51,9 +51,35 @@ export interface StoreArticleProps {
   article: StoreArticleData;
   copy: Dictionary["storefront"];
   locale: Locale;
-  related: StoreRelatedArticle[];
+  /**
+   * What "También te puede gustar" picks from: the article's category, and
+   * the rest of the store when the category is small (FER-039).
+   */
+  related: {
+    others: readonly StoreRelatedArticle[];
+    same: readonly StoreRelatedArticle[];
+  };
   /** The store's chat with the article pre-written, when it has WhatsApp. */
   whatsappHref: string | null;
+}
+
+/**
+ * A description's paragraphs: split on blank lines, each trimmed, none
+ * empty, keyed by their words and how often those came before.
+ */
+function paragraphsOf(description: string): { key: string; text: string }[] {
+  const seen = new Map<string, number>();
+
+  return description
+    .split(/\n\s*\n/u)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== "")
+    .map((text) => {
+      const count = seen.get(text) ?? 0;
+      seen.set(text, count + 1);
+
+      return { key: `${count}:${text}`, text };
+    });
 }
 
 const CRUMB_CLASS =
@@ -83,6 +109,28 @@ function StoreArticle({
     : null;
   const path = localizePath(`/products/${article.slug}`, locale);
   const labels = { card: copy.articleCard, price: copy.price };
+  const paragraphs = paragraphsOf(article.description);
+  const relatedCard = (item: StoreRelatedArticle) => ({
+    content: (
+      <StoreArticleCard
+        amount={item.priceAmount}
+        currency={item.currencyCode}
+        headingLevel="h3"
+        href={localizePath(`/products/${item.slug}`, locale)}
+        image={item.cover ? { alt: item.cover.alt, src: item.cover.url } : null}
+        labels={labels}
+        locale={locale}
+        name={item.title}
+        nameLang={item.lang}
+        // The browser may swap the cards once it draws its own pick: two
+        // lines each keep the row's height.
+        nameLines="two"
+        sizes={STORE_CARD_SIZES.row}
+        unavailable={!item.isAvailable}
+      />
+    ),
+    id: String(item.id),
+  });
 
   return (
     <div
@@ -125,28 +173,35 @@ function StoreArticle({
           {article.isAvailable ? (
             <StorePriceTag
               amount={article.priceAmount}
-              className="mt-3.5"
+              className="mt-1.5"
               currency={article.currencyCode}
               labels={copy.price}
               locale={locale}
               size="lg"
             />
           ) : (
-            <p className="mt-3.5 text-xl text-store-muted">
+            <p className="mt-1.5 text-xl text-store-muted">
               {copy.article.unavailable}
             </p>
           )}
-          {article.description ? (
-            <p
-              className="mt-4.5 max-w-prose text-base whitespace-pre-line text-store-foreground"
+          {paragraphs.length > 0 ? (
+            // The whole description, its paragraphs kept: a blank line
+            // starts a new one, a single line break stays inside it.
+            <div
+              className="mt-4 flex max-w-prose flex-col gap-3 text-base text-store-foreground"
+              data-testid="store-article-description"
               lang={article.lang}
             >
-              {article.description}
-            </p>
+              {paragraphs.map((paragraph) => (
+                <p className="whitespace-pre-line" key={paragraph.key}>
+                  {paragraph.text}
+                </p>
+              ))}
+            </div>
           ) : null}
           {article.isAvailable ? (
             <StoreArticlePurchase
-              className="mt-6.5"
+              className="mt-6"
               priceAmount={article.priceAmount}
               productId={article.id}
             />
@@ -172,34 +227,12 @@ function StoreArticle({
           </div>
         </div>
       </div>
-      {related.length > 0 ? (
-        <StoreArticleRow
-          items={related.map((item) => ({
-            content: (
-              <StoreArticleCard
-                amount={item.priceAmount}
-                currency={item.currencyCode}
-                headingLevel="h3"
-                href={localizePath(`/products/${item.slug}`, locale)}
-                image={
-                  item.cover
-                    ? { alt: item.cover.alt, src: item.cover.url }
-                    : null
-                }
-                labels={labels}
-                locale={locale}
-                name={item.title}
-                nameLang={item.lang}
-                sizes={STORE_CARD_SIZES.row}
-                unavailable={!item.isAvailable}
-              />
-            ),
-            id: String(item.id),
-          }))}
-          title={copy.article.related}
-          viewAllHref={inCategory ?? catalog}
-        />
-      ) : null}
+      <StoreRelatedRow
+        others={related.others.map(relatedCard)}
+        same={related.same.map(relatedCard)}
+        title={copy.article.related}
+        viewAllHref={inCategory ?? catalog}
+      />
     </div>
   );
 }

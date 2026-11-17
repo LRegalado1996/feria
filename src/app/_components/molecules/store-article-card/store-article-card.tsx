@@ -33,6 +33,13 @@ export type StoreArticleCardProps = Pick<
   };
   name: string;
   /**
+   * `two` keeps the name's height at two lines, clamping a longer one: for a
+   * row whose cards change after they are first shown (the suggestions
+   * under an article), so the row does not grow or shrink. `auto`, the
+   * default, lets the name take the lines it needs.
+   */
+  nameLines?: "auto" | "two";
+  /**
    * The language the name is in, when it may differ from the page's (an
    * article with no English title on an English page): set on the name
    * only, never on the card's interface text.
@@ -78,6 +85,7 @@ function StoreArticleCard({
   locale,
   name,
   nameLang,
+  nameLines = "auto",
   previousAmount = null,
   sizes = STORE_CARD_SIZES.grid,
   unavailable = false,
@@ -127,6 +135,7 @@ function StoreArticleCard({
       <Heading
         className={cn(
           "mt-3 mb-1 font-display text-xs leading-tight font-extrabold wrap-anywhere uppercase group-hover:underline group-hover:underline-offset-4",
+          nameLines === "two" && "line-clamp-2 min-h-[2lh]",
           unavailable && "text-store-muted"
         )}
       >

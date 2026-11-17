@@ -125,7 +125,7 @@
 }
 
 @utility store-display-article {
-  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.25rem);
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
 }
 
 @utility store-display-section {

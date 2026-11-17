@@ -2,16 +2,13 @@ import { ORPCError } from "@orpc/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import type { Locale } from "@/lib/i18n/config";
-import {
-  catalogSlugSchema,
-  RELATED_PRODUCTS_DEFAULT,
-} from "@/lib/schemas/catalog";
+import { catalogSlugSchema } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
   getPublishedProduct,
   listCategories,
-  listRelatedProducts,
+  listRelatedPool,
 } from "@/server/services/catalog";
 
 /** Every cached read of one store's published articles. */
@@ -69,7 +66,11 @@ async function readCachedArticle(
   }
 }
 
-/** The articles shown beside one, cached with the store's catalog. */
+/**
+ * What the suggestions under an article are picked from (its category, and
+ * the rest of the store when the category is small), cached with the
+ * store's catalog. The browser draws from it per visit (FER-039).
+ */
 export async function readRelatedArticles(
   store: { currencyCode: Currency; id: number },
   article: { categoryId: number | null; id: number },
@@ -79,10 +80,9 @@ export async function readRelatedArticles(
   cacheLife("hours");
   cacheTag(catalogTag(store.id));
 
-  return await listRelatedProducts(db, {
+  return await listRelatedPool(db, {
     categoryId: article.categoryId,
     currencyCode: store.currencyCode,
-    limit: RELATED_PRODUCTS_DEFAULT,
     locale,
     productId: article.id,
     storeId: store.id,

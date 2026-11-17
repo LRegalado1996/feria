@@ -113,6 +113,102 @@ test.describe("Article page", () => {
     );
   });
 
+  for (const width of [375, 1440]) {
+    test(`at ${width} px, the price under the name, the whole description, then the quantity beside the ink button on one row`, async ({
+      db,
+      page,
+    }) => {
+      await page.setViewportSize({ height: 900, width });
+      const tag = uniqueTag();
+      const rings = await db.seed.createCategory({
+        nameEs: `Anillos ${tag}`,
+        slug: `anillos-${tag}`,
+      });
+      const article = await db.seed.createArticle({
+        categoryId: rings.id,
+        description:
+          "Un anillo con baño de oro.\n\nSe usa solo o con anillos finos. Queda bien de día y de noche.",
+        priceAmount: 99_000,
+        title: "Anillo de prueba",
+      });
+      await page.goto(`/products/${article.slug}`);
+
+      const name = page.getByRole("heading", { level: 1 });
+      await expect(name).toHaveText("Anillo de prueba");
+      const description = page.getByTestId("store-article-description");
+      await expect(description.getByRole("paragraph")).toHaveText([
+        "Un anillo con baño de oro.",
+        "Se usa solo o con anillos finos. Queda bien de día y de noche.",
+      ]);
+      const row = page.getByTestId("store-article-purchase-row");
+      const add = row.getByRole("button", { name: "Agregar al carrito" });
+      const quantity = row.getByRole("group", { name: "Cantidad" });
+      const [addBox, quantityBox, nameBox, priceBox] = await Promise.all([
+        add.boundingBox(),
+        quantity.boundingBox(),
+        name.boundingBox(),
+        page
+          .getByTestId("store-article")
+          // Intl puts a no-break space between the sign and the amount.
+          .getByText(/^\$\s990$/u)
+          .boundingBox(),
+      ]);
+      // One row: side by side, the same height and top.
+      expect(addBox?.y).toBe(quantityBox?.y);
+      expect((addBox?.x ?? 0) > (quantityBox?.x ?? 0)).toBe(true);
+      // The price right under the name.
+      expect(
+        (priceBox?.y ?? 0) - ((nameBox?.y ?? 0) + (nameBox?.height ?? 0))
+      ).toBeLessThan(16);
+      // The ink with the lime (FER-039).
+      await expect(add).toHaveCSS("background-color", "rgb(21, 22, 15)");
+      await expect(add).toHaveCSS("color", "rgb(200, 243, 29)");
+    });
+  }
+
+  test("“También te puede gustar” suggests its category's other articles, never itself, and fills a small category from the rest", async ({
+    db,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const [rings, chains] = await Promise.all([
+      db.seed.createCategory({
+        nameEs: `Anillos ${tag}`,
+        slug: `anillos-${tag}`,
+      }),
+      db.seed.createCategory({
+        nameEs: `Cadenas ${tag}`,
+        slug: `cadenas-${tag}`,
+      }),
+    ]);
+    const article = await db.seed.createArticle({
+      categoryId: rings.id,
+      title: `Anillo ${tag}`,
+    });
+    const sameTitles = [`Anillo uno ${tag}`, `Anillo dos ${tag}`];
+    for (const title of sameTitles) {
+      await db.seed.createArticle({ categoryId: rings.id, title });
+    }
+    // Enough of the rest of the store to fill the row, whatever else is in it.
+    for (let index = 0; index < 6; index += 1) {
+      await db.seed.createArticle({
+        categoryId: chains.id,
+        title: `Cadena ${index} ${tag}`,
+      });
+    }
+
+    await page.goto(`/products/${article.slug}`);
+    const row = page.getByRole("region", { name: "También te puede gustar" });
+    const names = row.getByRole("heading", { level: 3 });
+
+    await expect(names).toHaveCount(8);
+    const shown = await names.allTextContents();
+    expect(shown).toEqual(expect.arrayContaining(sameTitles));
+    expect(shown).not.toContain(`Anillo ${tag}`);
+    // The category's own come first, whatever the draw.
+    expect(new Set(shown.slice(0, 2))).toEqual(new Set(sameTitles));
+  });
+
   test("a sold-out article stays visible, cannot be added, and offers the store's WhatsApp with the article written", async ({
     db,
     page,
