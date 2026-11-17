@@ -414,10 +414,28 @@ describe("StoreCartLine", () => {
 
     const wash = line().firstElementChild;
     expect(wash).toHaveAttribute("data-slot", "store-cart-line-wash");
-    expect(wash?.nextElementSibling).not.toBe(placeholder);
+    // The same line takes the rise's class, which starts the animation;
+    // drawing it anew would drop the focus of a control inside it.
+    expect(wash?.nextElementSibling).toBe(placeholder);
     expect(wash?.nextElementSibling).toHaveClass(
       "motion-safe:animate-store-rise"
     );
+  });
+
+  test("a control focused while the article is on its way keeps the focus once it arrives", () => {
+    const { refresh } = setup({
+      flag: "pending",
+      justAdded: true,
+      product: null,
+    });
+    const remove = screen.getByRole("button", { name: /^Remove / });
+    remove.focus();
+
+    refresh({ flag: null, product: makeProduct() });
+
+    expect(remove).toBeInTheDocument();
+    expect(remove).toHaveFocus();
+    expect(remove).toHaveAccessibleName("Remove Collar de perlas");
   });
 
   test.each([
