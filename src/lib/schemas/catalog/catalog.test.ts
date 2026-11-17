@@ -455,6 +455,31 @@ function makePageInput(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe("updateCategoryPageSchema's cover (FER-011)", () => {
+  const image = {
+    height: 800,
+    url: "https://store9.public.blob.vercel-storage.com/qa/cover/a.webp",
+    width: 2400,
+  };
+
+  test.each([
+    ["an uploaded image", { cover: image }, true],
+    ["none, to remove it", { cover: null, coverPhone: null }, true],
+    ["left out, to keep it", {}, true],
+    ["a phone image only", { coverPhone: image }, true],
+    ["a seed's local path", { cover: { ...image, url: "/seed/a.jpg" } }, false],
+    [
+      "an image wider than uploads make",
+      { cover: { ...image, width: 2401 } },
+      false,
+    ],
+  ])("%s is accepted: %s", (_case, overrides, accepted) => {
+    expect(
+      updateCategoryPageSchema.safeParse(makePageInput(overrides)).success
+    ).toBe(accepted);
+  });
+});
+
 describe("updateCategoryPageSchema", () => {
   test("reads blank texts as none, so the page writes its own", () => {
     expect(
@@ -521,7 +546,13 @@ describe("createCategoryPageFormSchema", () => {
       .safeParse(input)
       .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
   const form = (overrides: Record<string, unknown> = {}) =>
-    makePageInput({ id: undefined, parentId: "", ...overrides });
+    makePageInput({
+      cover: null,
+      coverPhone: null,
+      id: undefined,
+      parentId: "",
+      ...overrides,
+    });
 
   test.each([
     [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
@@ -537,6 +568,24 @@ describe("createCategoryPageFormSchema", () => {
 
   test("refuses a group that is not an id", () => {
     expect(schema.safeParse(form({ parentId: "abc" })).success).toBe(false);
+  });
+
+  test.each([
+    [
+      "a cover from before uploads, kept as it is",
+      { url: "/seed/a.jpg" },
+      true,
+    ],
+    ["an image with no size", { width: 0 }, false],
+    ["an image with no address", { url: "" }, false],
+  ])("holds %s: %s", (_case, overrides, accepted) => {
+    expect(
+      schema.safeParse(
+        form({
+          cover: { height: 800, url: "/seed/b.jpg", width: 1200, ...overrides },
+        })
+      ).success
+    ).toBe(accepted);
   });
 });
 

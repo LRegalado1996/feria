@@ -164,6 +164,10 @@ export default defineConfig({
             // Open unless a spec's header says otherwise, whatever the
             // developer's `.env` holds.
             STOREFRONT_LAUNCHED: "true",
+            // A Blob token of the right shape, so the server signs upload
+            // tokens (FER-011). Specs answer the browser's uploads
+            // themselves (`page.route`): nothing reaches a real store.
+            BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_E2eStore_e2eNotASecret",
           },
         },
 });

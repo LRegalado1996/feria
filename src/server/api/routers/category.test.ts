@@ -14,7 +14,14 @@ import { categoryRouter } from "./category";
 
 // The handle `withAdmin` hands its write: distinct from the client, so a
 // write that went through the outer client instead would be caught.
-const { TX } = vi.hoisted(() => ({
+const { BLOB_STORE, OLD_COVER, TX } = vi.hoisted(() => ({
+  BLOB_STORE: {
+    host: "store9.public.blob.vercel-storage.com",
+    namespace: "qa",
+    token: "vercel_blob_rw_Store9_s3cretPart",
+  },
+  OLD_COVER:
+    "https://store9.public.blob.vercel-storage.com/qa/cover/11111111-1111-4111-8111-111111111111.webp",
   TX: { handle: "the write's transaction" },
 }));
 
@@ -24,7 +31,12 @@ const services = vi.hoisted(() => ({
     position: 2,
     slug: "collares",
   })),
-  deleteCategory: vi.fn(async () => ({ id: 12, movedArticles: 3 })),
+  deleteCategory: vi.fn(async () => ({
+    discardedImageUrls: [OLD_COVER],
+    id: 12,
+    movedArticles: 3,
+  })),
+  discardBlobs: vi.fn<(db: unknown, urls: readonly string[]) => void>(),
   findAdminStore: vi.fn(),
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   listStoreCategories: vi.fn(async () => [
@@ -39,7 +51,12 @@ const services = vi.hoisted(() => ({
   ]),
   renameCategory: vi.fn(async () => ({ id: 13, slug: "collares" })),
   reorderCategories: vi.fn(async () => ({ ids: [3, 1, 2] })),
-  updateCategoryPage: vi.fn(async () => ({ id: 5, parentId: 6 })),
+  readBlobStore: vi.fn(() => BLOB_STORE),
+  updateCategoryPage: vi.fn(async () => ({
+    discardedImageUrls: [OLD_COVER],
+    id: 5,
+    parentId: 6,
+  })),
   withAdmin: vi.fn(
     async (
       _db: unknown,
@@ -56,6 +73,12 @@ vi.mock("@/server/services/category", () => ({
   renameCategory: services.renameCategory,
   reorderCategories: services.reorderCategories,
   updateCategoryPage: services.updateCategoryPage,
+}));
+
+// The files' deletion after the response is `blob-store.test.ts`'s.
+vi.mock("@/server/api/utils/blob-store", () => ({
+  discardBlobs: services.discardBlobs,
+  readBlobStore: services.readBlobStore,
 }));
 
 vi.mock("@/server/services/access", () => ({
@@ -208,6 +231,7 @@ describe("category router", () => {
       expect.any(Function)
     );
     expect(services.updateCategoryPage).toHaveBeenCalledExactlyOnceWith(TX, {
+      blobStore: BLOB_STORE,
       storeId: 7,
       values: {
         coverAltEn: null,
@@ -222,6 +246,75 @@ describe("category router", () => {
     });
     // A group changes the header, the pages' addresses and their texts.
     expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
+    // The replaced cover's file goes once the write committed.
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
+      OLD_COVER,
+    ]);
+    expect(services.discardBlobs.mock.invocationCallOrder[0]).toBeGreaterThan(
+      services.invalidateCatalogCache.mock.invocationCallOrder[0] ?? Infinity
+    );
+  });
+
+  test("passes a new cover through to the service, and a refused one deletes no file", async () => {
+    const { run } = setup();
+    const cover = {
+      height: 800,
+      url: "https://store9.public.blob.vercel-storage.com/qa/cover/0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e.webp",
+      width: 2400,
+    };
+    services.updateCategoryPage.mockRejectedValueOnce(
+      Object.assign(
+        new Error("A cover image must be one uploaded to this store"),
+        {
+          code: "BAD_REQUEST",
+        }
+      )
+    );
+
+    await expect(
+      run("updatePage", {
+        cover,
+        coverAltEn: "",
+        coverAltEs: "",
+        coverPhone: null,
+        id: 5,
+        parentId: null,
+        seoDescriptionEn: "",
+        seoDescriptionEs: "",
+        seoTitleEn: "",
+        seoTitleEs: "",
+      })
+    ).rejects.toMatchObject({
+      message: "A cover image must be one uploaded to this store",
+    });
+    expect(services.updateCategoryPage).toHaveBeenCalledExactlyOnceWith(TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values: expect.objectContaining({ cover, coverPhone: null }),
+    });
+    expect(services.discardBlobs).not.toHaveBeenCalled();
+  });
+
+  test("refuses a cover that is not an HTTPS address before any write", async () => {
+    const { run } = setup();
+
+    await expect(
+      run("updatePage", {
+        cover: { height: 800, url: "javascript-free:nope", width: 2400 },
+        coverAltEn: "",
+        coverAltEs: "",
+        id: 5,
+        parentId: null,
+        seoDescriptionEn: "",
+        seoDescriptionEs: "",
+        seoTitleEn: "",
+        seoTitleEs: "",
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
+    expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
   test("reorders within the store, then drops its cached catalog", async () => {
@@ -263,6 +356,10 @@ describe("category router", () => {
       storeId: 7,
     });
     expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
+    // Its cover's files go with it, once the deletion committed.
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
+      OLD_COVER,
+    ]);
   });
 
   test.each([

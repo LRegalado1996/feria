@@ -14,7 +14,7 @@ import {
   UPLOAD_TOKEN_TTL_MS,
 } from "@/lib/schemas/upload";
 import type { DatabaseClient } from "@/server/db";
-import { productImage } from "@/server/db/schema";
+import { category, productImage, store } from "@/server/db/schema";
 
 /**
  * The Blob store a deployment writes to: its read-write token (server only),
@@ -33,7 +33,13 @@ export interface BlobStore {
  * consumer adds its column in the same change (`upload.test.ts` fails on a
  * column of the schema named like one and missing here).
  */
-export const IMAGE_URL_COLUMNS = [productImage.url] as const;
+export const IMAGE_URL_COLUMNS = [
+  productImage.url,
+  category.coverUrl,
+  category.coverPhoneUrl,
+  store.catalogCoverUrl,
+  store.catalogCoverPhoneUrl,
+] as const;
 
 /**
  * A client token for one upload (FER-011): the browser sends the file
@@ -67,21 +73,32 @@ export async function issueUploadToken(
 }
 
 /**
- * Deletes the files among `urls` that this deployment uploaded, and only
- * those: a seed's local path or another store's address is left alone.
- * Answers the addresses it deleted.
+ * Deletes the files among `urls` that this deployment uploaded and that no
+ * row names any more, and only those: a seed's local path, another store's
+ * address, or a file another row still shows is left alone. Read after the
+ * write that dropped them committed. Answers the addresses it deleted.
  */
 export async function deleteBlobs(
+  db: DatabaseClient,
   blobStore: BlobStore,
   urls: readonly string[]
 ): Promise<string[]> {
   const own = [...new Set(urls)].filter((url) => isOwnBlobUrl(url, blobStore));
 
-  if (own.length > 0) {
-    await del(own, { token: blobStore.token });
+  if (own.length === 0) {
+    return [];
   }
 
-  return own;
+  const referenced = await listReferencedPathnames(db, blobStore);
+  const unused = own.filter(
+    (url) => !referenced.has(new URL(url).pathname.slice(1))
+  );
+
+  if (unused.length > 0) {
+    await del(unused, { token: blobStore.token });
+  }
+
+  return unused;
 }
 
 /**
@@ -105,7 +122,8 @@ async function listReferencedPathnames(
       .where(like(column, pattern));
 
     for (const { url } of rows) {
-      if (isOwnBlobUrl(url, blobStore)) {
+      // The LIKE leaves no NULL; the check is for the column's type.
+      if (url !== null && isOwnBlobUrl(url, blobStore)) {
         referenced.add(new URL(url).pathname.slice(1));
       }
     }

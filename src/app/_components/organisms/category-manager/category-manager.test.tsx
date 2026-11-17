@@ -1163,7 +1163,7 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
     );
   });
 
-  test("previews the cover, the phone using the computer's photo, with the note that uploading comes with FER-011", async () => {
+  test("shows the cover in its upload fields, the phone one empty, with its description", async () => {
     const { row, user } = setup({ list: GROUPED });
     await shown();
 
@@ -1175,12 +1175,18 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
 
     const cover = screen.getByRole("region", { name: "Cover" });
     expect(
-      within(cover).getByRole("img", { name: "Dos esclavas" })
+      within(cover).getByRole("img", { name: "Preview: Computer photo" })
     ).toBeVisible();
-    expect(cover).toHaveTextContent("A phone shows the same photo.");
-    expect(cover).toHaveTextContent(
-      "Soon you will be able to upload and change the cover here (FER-011)."
+    expect(
+      within(cover).getByRole("group", { name: "Phone photo (optional)" })
+    ).toHaveAccessibleDescription(
+      "Square works best. Without one, a phone shows the computer photo."
     );
+    expect(
+      within(cover).getByRole("button", {
+        name: "Change photo: Computer photo",
+      })
+    ).toBeEnabled();
     expect(
       within(cover).getByRole("textbox", {
         name: "Cover description in Spanish",
@@ -1188,7 +1194,7 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
     ).toHaveValue("Dos esclavas");
   });
 
-  test("says a category has no cover yet, and asks for no description of one", async () => {
+  test("offers to upload a cover where there is none, and asks for no description of one", async () => {
     const { row, user } = setup({ list: GROUPED });
     await shown();
 
@@ -1197,9 +1203,14 @@ describe("CategoryManager: groups and pages (FER-043)", () => {
     );
 
     const cover = screen.getByRole("region", { name: "Cover" });
-    expect(cover).toHaveTextContent(
-      "This category has no cover yet: its page shows its title alone."
-    );
+    expect(
+      within(cover).getByRole("button", {
+        name: "Choose a photo: Computer photo",
+      })
+    ).toBeEnabled();
+    expect(
+      within(cover).getByRole("group", { name: "Phone photo (optional)" })
+    ).toHaveAccessibleDescription("Choose the computer photo first.");
     expect(within(cover).queryByRole("textbox")).toBeNull();
     expect(
       screen.getByRole("textbox", {

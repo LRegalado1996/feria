@@ -3,9 +3,9 @@ import { describe, expect, test, vi } from "vitest";
 import { discardBlobs, readBlobStore, requireBlobStore } from "./blob-store";
 
 const mocks = vi.hoisted(() => ({
-  deleteBlobs: vi.fn(async (_store: unknown, urls: readonly string[]) => [
-    ...urls,
-  ]),
+  deleteBlobs: vi.fn(
+    async (_db: unknown, _store: unknown, urls: readonly string[]) => [...urls]
+  ),
   env: { BLOB_READ_WRITE_TOKEN: undefined as string | undefined },
   keepAlivePastResponse: vi.fn(
     (_work: Promise<unknown>, _options: { action: string }) => undefined
@@ -26,6 +26,7 @@ const STORE = {
   namespace: "qa",
   token: TOKEN,
 };
+const DB = { handle: "the app database" };
 const URL_A = `https://${STORE.host}/qa/cover/a.webp`;
 
 function setup({ token }: { token?: string } = {}) {
@@ -75,9 +76,11 @@ describe("discardBlobs", () => {
   test("deletes the addresses after the response, under its action", async () => {
     setup({ token: TOKEN });
 
-    discardBlobs([URL_A]);
+    discardBlobs(DB as never, [URL_A]);
 
-    expect(mocks.deleteBlobs).toHaveBeenCalledExactlyOnceWith(STORE, [URL_A]);
+    expect(mocks.deleteBlobs).toHaveBeenCalledExactlyOnceWith(DB, STORE, [
+      URL_A,
+    ]);
     expect(mocks.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
       expect.any(Promise),
       { action: "Upload.discard_blobs" }
@@ -93,7 +96,7 @@ describe("discardBlobs", () => {
   ])("does nothing when %s", (_case, token, urls) => {
     setup({ token });
 
-    discardBlobs(urls);
+    discardBlobs(DB as never, urls);
 
     expect(mocks.deleteBlobs).not.toHaveBeenCalled();
     expect(mocks.keepAlivePastResponse).not.toHaveBeenCalled();

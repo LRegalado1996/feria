@@ -6,7 +6,7 @@ import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, test, vi } from "vitest";
 
 import * as schema from "@/server/db/schema";
-import { productImage } from "@/server/db/schema";
+import { category, productImage, store } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -94,13 +94,28 @@ describe("issueUploadToken", () => {
 });
 
 describe("deleteBlobs", () => {
+  /** The rows name `stored` in every image column the query reads. */
+  function setupDelete({ stored = [] as string[] } = {}) {
+    const db = createMockDatabase();
+    db.$["select.where"].mockResolvedValue(stored.map((url) => ({ url })));
+
+    return { db };
+  }
+
   test("deletes this deployment's files once each, never anybody else's", async () => {
+    const { db } = setupDelete();
     const own = `https://${HOST}/${makePathname()}`;
     const other = `https://other.public.blob.vercel-storage.com/${makePathname()}`;
     const production = `https://${HOST}/${makePathname("production")}`;
 
     await expect(
-      deleteBlobs(STORE, [own, "/seed/ring.jpg", own, other, production])
+      deleteBlobs(db as never, STORE, [
+        own,
+        "/seed/ring.jpg",
+        own,
+        other,
+        production,
+      ])
     ).resolves.toEqual([own]);
 
     expect(blob.del).toHaveBeenCalledExactlyOnceWith([own], {
@@ -108,9 +123,39 @@ describe("deleteBlobs", () => {
     });
   });
 
-  test("calls nothing when none of them is its own", async () => {
-    await expect(deleteBlobs(STORE, ["/seed/ring.jpg"])).resolves.toEqual([]);
+  test("keeps a file another row still shows", async () => {
+    const shared = `https://${HOST}/${makePathname()}`;
+    const unused = `https://${HOST}/${makePathname()}`;
+    const { db } = setupDelete({ stored: [shared] });
 
+    await expect(
+      deleteBlobs(db as never, STORE, [shared, unused])
+    ).resolves.toEqual([unused]);
+
+    expect(blob.del).toHaveBeenCalledExactlyOnceWith([unused], {
+      token: STORE.token,
+    });
+  });
+
+  test("deletes nothing when every file is still shown", async () => {
+    const shared = `https://${HOST}/${makePathname()}`;
+    const { db } = setupDelete({ stored: [shared] });
+
+    await expect(deleteBlobs(db as never, STORE, [shared])).resolves.toEqual(
+      []
+    );
+
+    expect(blob.del).not.toHaveBeenCalled();
+  });
+
+  test("reads and calls nothing when none of them is its own", async () => {
+    const { db } = setupDelete();
+
+    await expect(
+      deleteBlobs(db as never, STORE, ["/seed/ring.jpg"])
+    ).resolves.toEqual([]);
+
+    expect(db.$.select).not.toHaveBeenCalled();
     expect(blob.del).not.toHaveBeenCalled();
   });
 });
@@ -188,15 +233,27 @@ describe("cleanUpOrphanBlobs", () => {
 
     await cleanUpOrphanBlobs(db as never, STORE, { olderThan: OLDER_THAN });
 
-    expect(db.$["select.from"].mock.calls).toEqual([[productImage]]);
+    expect(db.$["select.from"].mock.calls).toEqual([
+      [productImage],
+      [category],
+      [category],
+      [store],
+      [store],
+    ]);
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
-    ).toEqual([
-      {
+    ).toEqual(
+      [
+        '"product_image"."url"',
+        '"category"."coverUrl"',
+        '"category"."coverPhoneUrl"',
+        '"store"."catalogCoverUrl"',
+        '"store"."catalogCoverPhoneUrl"',
+      ].map((column) => ({
         params: ["https://%/qa/%"],
-        sql: '"product_image"."url" like $1',
-      },
-    ]);
+        sql: `${column} like $1`,
+      }))
+    );
   });
 
   test("deletes in batches of 100", async () => {
@@ -239,16 +296,28 @@ describe("IMAGE_URL_COLUMNS", () => {
         Object.values<Column>(getTableColumns(table))
           .filter(
             (column) =>
-              /image_?url$/i.test(column.name) ||
+              /(?:image|cover)(?:_?phone)?_?url$/i.test(column.name) ||
               (getTableName(table).endsWith("image") && column.name === "url")
           )
           .map((column) => `${getTableName(table)}.${column.name}`)
       );
 
+    // The scan finds the article photos and both catalog covers (FER-043).
+    expect(new Set(imageColumns)).toEqual(
+      new Set([
+        "category.coverPhoneUrl",
+        "category.coverUrl",
+        "product_image.url",
+        "store.catalogCoverPhoneUrl",
+        "store.catalogCoverUrl",
+      ])
+    );
     expect(
-      IMAGE_URL_COLUMNS.map(
-        (column) => `${getTableName(column.table)}.${column.name}`
+      new Set(
+        IMAGE_URL_COLUMNS.map(
+          (column) => `${getTableName(column.table)}.${column.name}`
+        )
       )
-    ).toEqual(imageColumns);
+    ).toEqual(new Set(imageColumns));
   });
 });

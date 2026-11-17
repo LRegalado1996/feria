@@ -65,13 +65,13 @@ export const admin: Dictionary["admin"] = {
       cover: "Cover",
       coverAltEn: "Cover description in English",
       coverAltEs: "Cover description in Spanish",
-      coverComputer: "On a computer",
-      coverNone:
-        "This category has no cover yet: its page shows its title alone.",
-      coverPhone: "On a phone",
-      coverPhoneSame: "A phone shows the same photo.",
-      coverUpload:
-        "Soon you will be able to upload and change the cover here (FER-011).",
+      coverComputer: "Computer photo",
+      coverHint:
+        "It shows full width at the top of the page, with the title over it. Without a photo the page shows its title alone. It is kept when you press Save.",
+      coverPhone: "Phone photo (optional)",
+      coverPhoneHint:
+        "Square works best. Without one, a phone shows the computer photo.",
+      coverPhoneNeedsComputer: "Choose the computer photo first.",
       englishNeedsName:
         "To write the English texts, first give the category an English name.",
       group: "Group",

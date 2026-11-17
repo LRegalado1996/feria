@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { LOCALES } from "@/lib/i18n/config";
+import { uploadedImageSchema } from "@/lib/schemas/upload";
 
 /** A category's or an article's address segment: what `slugify` produces. */
 export const CATALOG_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -281,11 +282,16 @@ export const RESERVED_CATEGORY_SLUGS = [
 /**
  * A category's page (FER-043): the group it belongs to, or none, and its
  * texts for search engines and its cover's description, in both languages.
- * An empty text is `null`: the page writes its own from the names.
+ * An empty text is `null`: the page writes its own from the names. The
+ * cover's two images (FER-011) are each an uploaded image, `null` to remove
+ * it, or left out to keep the one stored: what a form that did not touch
+ * them sends, and a tab older than uploads.
  */
 export const updateCategoryPageSchema = z.object({
+  cover: uploadedImageSchema.nullable().optional(),
   coverAltEn: optionalText(COVER_ALT_MAX_LENGTH),
   coverAltEs: optionalText(COVER_ALT_MAX_LENGTH),
+  coverPhone: uploadedImageSchema.nullable().optional(),
   id: idSchema,
   parentId: bodyIdSchema.nullable(),
   seoDescriptionEn: optionalText(CATEGORY_SEO_DESCRIPTION_MAX_LENGTH),
@@ -313,9 +319,21 @@ export function createCategoryPageFormSchema(
   const text = (max: number, message: string) =>
     z.string().trim().max(max, message);
 
+  // An image as the form holds it: one stored before uploads (a seed's
+  // `/seed/...` path) is shown and kept as it is, so only its shape counts.
+  const image = z
+    .object({
+      height: z.number().int().positive(),
+      url: z.string().min(1),
+      width: z.number().int().positive(),
+    })
+    .nullable();
+
   return z.object({
+    cover: image,
     coverAltEn: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
     coverAltEs: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
+    coverPhone: image,
     parentId: z.string().regex(/^\d*$/u),
     seoDescriptionEn: text(
       CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,

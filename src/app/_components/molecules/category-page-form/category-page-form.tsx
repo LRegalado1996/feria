@@ -1,9 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import Image from "next/image";
 import { useState } from "react";
-import { useForm, useFormState } from "react-hook-form";
+import { useForm, useFormState, useWatch } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Input } from "@/app/_components/atoms/input";
@@ -16,6 +15,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/app/_components/molecules/form";
+import { ImageUploader } from "@/app/_components/molecules/image-uploader";
 import type { CoverImage } from "@/lib/catalog/cover";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -68,47 +68,21 @@ function orNull(text: string) {
   return text === "" ? null : text;
 }
 
-/** One of the cover's images as a small preview, or what stands for it. */
-function CoverPreview({
-  alt,
-  image,
-  label,
-  missing,
-}: {
-  alt: string;
-  image: CoverImage | null;
-  label: string;
-  missing: string;
-}) {
-  return (
-    <figure className="flex min-w-0 flex-col gap-1.5">
-      <figcaption className="text-xs text-muted-foreground">{label}</figcaption>
-      {image ? (
-        <Image
-          alt={alt}
-          className="h-28 w-full rounded-md border object-cover"
-          height={image.height}
-          sizes="(min-width: 768px) 16rem, 50vw"
-          src={image.url}
-          width={image.width}
-        />
-      ) : (
-        <p className="flex h-28 items-center rounded-md border border-dashed px-3 text-xs text-muted-foreground">
-          {missing}
-        </p>
-      )}
-    </figure>
-  );
+/** Whether the form still holds the image the category had. */
+function sameImage(image: CoverImage | null, stored: CoverImage | null) {
+  return image?.url === stored?.url;
 }
 
 /**
  * A category's page (FER-043): the group it is in (a native select of the
  * categories in no group, "No group" first), its title and description for
  * search engines in both languages (empty: the page writes its own), and
- * its cover, shown as it is with a note that uploading it comes with
- * FER-011, with the cover's description in both languages. The English
- * texts wait for an English name, which their row needs. A failure keeps
- * everything typed and says so under the form.
+ * its cover: a computer photo and an optional phone one, each uploaded with
+ * `ImageUploader` (FER-011) and saved with the rest, and the cover's
+ * description in both languages. A phone photo needs a computer one, so
+ * removing the computer photo removes both. Only an image that changed is
+ * sent. The English texts wait for an English name, which their row needs.
+ * A failure keeps everything typed and says so under the form.
  */
 function CategoryPageForm({
   category,
@@ -122,11 +96,12 @@ function CategoryPageForm({
   const copy = admin.categories.page;
   const [failed, setFailed] = useState(false);
   const hasEnglish = category.nameEn !== null;
-  const hasCover = category.cover.computer !== null;
   const form = useForm<CategoryPageFormValues>({
     defaultValues: {
+      cover: category.cover.computer,
       coverAltEn: category.coverAltEn ?? "",
       coverAltEs: category.coverAltEs ?? "",
+      coverPhone: category.cover.phone,
       parentId: category.parentId === null ? "" : String(category.parentId),
       seoDescriptionEn: category.seoDescriptionEn ?? "",
       seoDescriptionEs: category.seoDescriptionEs ?? "",
@@ -138,13 +113,20 @@ function CategoryPageForm({
     ),
   });
   const { isSubmitting } = useFormState({ control: form.control });
+  const hasCover = useWatch({ control: form.control, name: "cover" }) !== null;
 
   const submit = async (values: CategoryPageFormValues) => {
     setFailed(false);
     const english = (text: string) => (hasEnglish ? orNull(text) : null);
     const result = await onSave({
+      cover: sameImage(values.cover, category.cover.computer)
+        ? undefined
+        : values.cover,
       coverAltEn: english(values.coverAltEn),
       coverAltEs: orNull(values.coverAltEs),
+      coverPhone: sameImage(values.coverPhone, category.cover.phone)
+        ? undefined
+        : values.coverPhone,
       id: category.id,
       parentId: values.parentId === "" ? null : Number(values.parentId),
       seoDescriptionEn: english(values.seoDescriptionEn),
@@ -237,25 +219,59 @@ function CategoryPageForm({
             >
               {copy.cover}
             </h3>
-            {hasCover ? (
-              <div className="grid grid-cols-2 gap-3 md:max-w-lg">
-                <CoverPreview
-                  alt={category.coverAltEs ?? category.nameEs}
-                  image={category.cover.computer}
-                  label={copy.coverComputer}
-                  missing={copy.coverNone}
-                />
-                <CoverPreview
-                  alt={category.coverAltEs ?? category.nameEs}
-                  image={category.cover.phone}
-                  label={copy.coverPhone}
-                  missing={copy.coverPhoneSame}
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{copy.coverNone}</p>
-            )}
-            <p className="text-xs text-muted-foreground">{copy.coverUpload}</p>
+            <p className="text-xs text-muted-foreground">{copy.coverHint}</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="cover"
+                render={({ field }) => (
+                  <FormItem className="min-w-0">
+                    <FormControl>
+                      <ImageUploader
+                        label={copy.coverComputer}
+                        onChange={(image) => {
+                          field.onChange(image);
+
+                          if (image === null) {
+                            form.setValue("coverPhone", null);
+                          }
+                        }}
+                        purpose="cover"
+                        sizes="(min-width: 768px) 20rem, 100vw"
+                        value={field.value}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="coverPhone"
+                render={({ field }) => (
+                  <FormItem className="min-w-0">
+                    <FormControl>
+                      <ImageUploader
+                        description={
+                          hasCover
+                            ? copy.coverPhoneHint
+                            : copy.coverPhoneNeedsComputer
+                        }
+                        disabled={!hasCover}
+                        label={copy.coverPhone}
+                        onChange={(image) => {
+                          field.onChange(image);
+                        }}
+                        purpose="cover"
+                        sizes="(min-width: 768px) 20rem, 100vw"
+                        value={field.value}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             {hasCover ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {(

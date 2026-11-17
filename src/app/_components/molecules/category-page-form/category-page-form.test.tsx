@@ -4,11 +4,38 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
+import { createOrpcHandler, server } from "@/test/msw";
+import { createQueryWrapper } from "@/test/setup-helpers";
 
 import {
   CategoryPageForm,
   type CategoryPageFormCategory,
 } from "./category-page-form";
+
+vi.mock("@/lib/orpc/client", async () => {
+  const { orpcClientMock } = await import("@/test/mocks/orpc-client");
+  return orpcClientMock;
+});
+
+// The upload runs for real but for its two edges: the browser's canvas and
+// the Blob store are doubles (`use-image-upload.test.tsx` has the rest).
+const blob = vi.hoisted(() => ({
+  prepareImage: vi.fn(),
+  put: vi.fn(),
+}));
+
+vi.mock("@vercel/blob/client", () => ({ put: blob.put }));
+vi.mock("@/lib/upload/prepare-image", () => ({
+  prepareImage: blob.prepareImage,
+  UnreadableImageError: class extends Error {},
+}));
+
+const UPLOADED =
+  "https://store9.public.blob.vercel-storage.com/local/cover/0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e.webp";
+const STORED = {
+  computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+  phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
+};
 
 function makeCategory(
   overrides: Partial<CategoryPageFormCategory> = {}
@@ -44,6 +71,20 @@ function setup({
     async (_values: unknown) => await Promise.resolve(saves)
   );
   const onCancel = vi.fn<() => void>();
+  server.use(
+    createOrpcHandler("upload.createToken", () => ({
+      pathname: "local/cover/0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e.webp",
+      token: "vercel_blob_client_Store9_signed",
+    }))
+  );
+  blob.prepareImage.mockResolvedValue({
+    blob: new Blob(["webp"], { type: "image/webp" }),
+    contentType: "image/webp",
+    height: 800,
+    width: 2400,
+  });
+  blob.put.mockResolvedValue({ url: UPLOADED });
+  const wrapper = createQueryWrapper();
   renderWithI18n(
     <CategoryPageForm
       category={category}
@@ -55,14 +96,32 @@ function setup({
       onCancel={onCancel}
       onSave={onSave}
     />,
-    { locale }
+    { locale, wrapper }
   );
+  const user = userEvent.setup();
+  const photo = (name: string) => screen.getByRole("group", { name });
 
   return {
     field: (name: string) => screen.getByRole("textbox", { name }),
+    photo,
+    save: async () => {
+      await user.click(screen.getByRole("button", { name: "Save the page" }));
+    },
+    /** Chooses a file in the photo field `name` and waits for its upload. */
+    upload: async (name: string) => {
+      await user.upload(
+        within(photo(name)).getByTestId("image-uploader-input"),
+        new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
+      );
+      await waitFor(() => {
+        expect(within(photo(name)).getByRole("status")).toHaveTextContent(
+          "Photo uploaded."
+        );
+      });
+    },
     onCancel,
     onSave,
-    user: userEvent.setup(),
+    user,
   };
 }
 
@@ -163,30 +222,97 @@ describe("CategoryPageForm", () => {
     expect(field("Title for search engines in Spanish")).toHaveValue("Anillos");
   });
 
-  test("shows both cover images with their own description, and asks for the description in both languages", () => {
-    setup({
-      category: makeCategory({
-        cover: {
-          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
-          phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
-        },
-        coverAltEs: "Anillo sello",
-      }),
+  test("shows the stored cover in its two fields, and asks for its description in both languages", () => {
+    const { photo } = setup({
+      category: makeCategory({ cover: STORED, coverAltEs: "Anillo sello" }),
     });
 
-    const cover = screen.getByRole("region", { name: "Cover" });
     expect(
-      within(cover)
-        .getAllByRole("img", { name: "Anillo sello" })
-        .map(
-          (image) =>
-            image.closest("figure")?.querySelector("figcaption")?.textContent
-        )
-    ).toEqual(["On a computer", "On a phone"]);
-    expect(
-      within(cover).getByRole("textbox", {
-        name: "Cover description in English",
+      within(photo("Computer photo")).getByRole("img", {
+        name: "Preview: Computer photo",
       })
+    ).toHaveAttribute("width", "1200");
+    expect(
+      within(photo("Phone photo (optional)")).getByRole("img", {
+        name: "Preview: Phone photo (optional)",
+      })
+    ).toHaveAttribute("height", "1200");
+    expect(
+      screen.getByRole("textbox", { name: "Cover description in English" })
+    ).toBeEnabled();
+  });
+
+  test("sends an uploaded computer photo with the page, and leaves the untouched phone one out", async () => {
+    const { onSave, save, upload } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await upload("Computer photo");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: { height: 800, url: UPLOADED, width: 2400 },
+          coverPhone: undefined,
+        })
+      );
+    });
+  });
+
+  test("an untouched cover is not sent at all", async () => {
+    const { onSave, save } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: undefined, coverPhone: undefined })
+      );
+    });
+  });
+
+  test("removing the computer photo removes the phone one too, and sends both as none", async () => {
+    const { onSave, photo, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: null, coverPhone: null })
+      );
+    });
+    expect(photo("Phone photo (optional)")).toHaveAccessibleDescription(
+      "Choose the computer photo first."
+    );
+  });
+
+  test("the phone photo waits for a computer one", async () => {
+    const { photo, upload } = setup();
+    const choosePhone = () =>
+      within(photo("Phone photo (optional)")).getByRole("button", {
+        name: "Choose a photo: Phone photo (optional)",
+      });
+
+    expect(choosePhone()).toBeDisabled();
+    expect(
+      screen.queryByRole("textbox", { name: "Cover description in Spanish" })
+    ).toBeNull();
+
+    await upload("Computer photo");
+
+    expect(choosePhone()).toBeEnabled();
+    expect(
+      screen.getByRole("textbox", { name: "Cover description in Spanish" })
     ).toBeEnabled();
   });
 
@@ -209,8 +335,6 @@ describe("CategoryPageForm", () => {
     );
     expect(
       screen.getByRole("form", { name: "Página de «Anillos»" })
-    ).toHaveTextContent(
-      "Esta categoría todavía no tiene portada: su página muestra solo el título."
-    );
+    ).toHaveTextContent("Primero elegí la foto para computadora.");
   });
 });

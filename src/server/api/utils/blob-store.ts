@@ -2,6 +2,7 @@ import { env } from "@/env";
 import { blobStoreHost } from "@/lib/blob/host";
 import { blobNamespace } from "@/lib/blob/paths";
 import { keepAlivePastResponse } from "@/server/api/utils/keep-alive-past-response";
+import type { DatabaseClient } from "@/server/db";
 import { type BlobStore, deleteBlobs } from "@/server/services/upload";
 
 /**
@@ -40,16 +41,20 @@ export function requireBlobStore(): BlobStore {
  * Deletes the files of rows a write just removed, once it committed, after
  * the response: the write never waits on the Blob store or fails for it. A
  * deletion that fails is reported, and the file it left is an orphan the
- * scheduled cleanup removes (`cleanUpOrphanBlobs`).
+ * scheduled cleanup removes (`cleanUpOrphanBlobs`). A file another row
+ * still shows is kept (`deleteBlobs`).
  */
-export function discardBlobs(urls: readonly string[]): void {
+export function discardBlobs(
+  db: DatabaseClient,
+  urls: readonly string[]
+): void {
   const blobStore = readBlobStore();
 
   if (!blobStore || urls.length === 0) {
     return;
   }
 
-  keepAlivePastResponse(deleteBlobs(blobStore, urls), {
+  keepAlivePastResponse(deleteBlobs(db, blobStore, urls), {
     action: "Upload.discard_blobs",
   });
 }

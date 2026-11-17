@@ -6,6 +6,7 @@ import {
   updateCategoryPageSchema,
 } from "@/lib/schemas/catalog";
 import { adminProcedure } from "@/server/api/orpc";
+import { discardBlobs, readBlobStore } from "@/server/api/utils/blob-store";
 import { writeToCatalog } from "@/server/api/utils/write-to-store";
 import {
   createCategory,
@@ -79,19 +80,26 @@ export const categoryRouter = {
 
   updatePage: adminProcedure
     .input(updateCategoryPageSchema)
-    .handler(
-      async ({ context, input }) =>
-        await writeToCatalog(
-          context,
-          async (tx, storeId) =>
-            await updateCategoryPage(tx, { storeId, values: input })
-        )
-    )
+    .handler(async ({ context, input }) => {
+      const { discardedImageUrls, ...page } = await writeToCatalog(
+        context,
+        async (tx, storeId) =>
+          await updateCategoryPage(tx, {
+            blobStore: readBlobStore(),
+            storeId,
+            values: input,
+          })
+      );
+      // A replaced or removed cover's files go once it is saved (FER-011).
+      discardBlobs(context.db, discardedImageUrls);
+
+      return page;
+    })
     .route({
       method: "PUT",
       path: "/admin/categories/{id}/page",
       summary:
-        "Set a category's group, its texts for search engines and its cover's description",
+        "Set a category's group, its texts for search engines and its cover",
       tags: ["categories"],
     }),
 
@@ -114,18 +122,21 @@ export const categoryRouter = {
 
   delete: adminProcedure
     .input(deleteCategorySchema)
-    .handler(
-      async ({ context, input }) =>
-        await writeToCatalog(
-          context,
-          async (tx, storeId) =>
-            await deleteCategory(tx, {
-              id: input.id,
-              moveToId: input.moveToId,
-              storeId,
-            })
-        )
-    )
+    .handler(async ({ context, input }) => {
+      const { discardedImageUrls, ...deleted } = await writeToCatalog(
+        context,
+        async (tx, storeId) =>
+          await deleteCategory(tx, {
+            id: input.id,
+            moveToId: input.moveToId,
+            storeId,
+          })
+      );
+      // Its cover's files go with it (FER-011).
+      discardBlobs(context.db, discardedImageUrls);
+
+      return deleted;
+    })
     .route({
       method: "DELETE",
       path: "/admin/categories/{id}",

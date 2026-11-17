@@ -66,13 +66,13 @@ export const admin = {
       cover: "Portada",
       coverAltEn: "Descripción de la portada en inglés",
       coverAltEs: "Descripción de la portada en español",
-      coverComputer: "En la computadora",
-      coverNone:
-        "Esta categoría todavía no tiene portada: su página muestra solo el título.",
-      coverPhone: "En el celular",
-      coverPhoneSame: "En el celular se ve la misma foto.",
-      coverUpload:
-        "Muy pronto vas a poder subir y cambiar la portada desde acá (FER-011).",
+      coverComputer: "Foto para computadora",
+      coverHint:
+        "Se ve a todo lo ancho arriba de la página, con el título encima. Sin foto, la página muestra solo el título. Se guarda con «Guardar».",
+      coverPhone: "Foto para celular (opcional)",
+      coverPhoneHint:
+        "Cuadrada queda mejor. Si no subís una, el celular muestra la de computadora.",
+      coverPhoneNeedsComputer: "Primero elegí la foto para computadora.",
       englishNeedsName:
         "Para escribir los textos en inglés, primero ponele un nombre en inglés a la categoría.",
       group: "Grupo",

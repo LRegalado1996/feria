@@ -131,7 +131,7 @@ export const productRouter = {
           await deleteProduct(tx, { id: input.id, storeId })
       );
       // Its photos' files go once the rows are gone for good (FER-011).
-      discardBlobs(imageUrls);
+      discardBlobs(context.db, imageUrls);
 
       return { id };
     })

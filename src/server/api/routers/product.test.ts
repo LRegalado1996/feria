@@ -28,7 +28,7 @@ const services = vi.hoisted(() => ({
     id: 12,
     imageUrls: ["https://store9.public.blob.vercel-storage.com/a.webp"],
   })),
-  discardBlobs: vi.fn<(urls: readonly string[]) => void>(),
+  discardBlobs: vi.fn<(db: unknown, urls: readonly string[]) => void>(),
   findAdminStore: vi.fn(),
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   publishProduct: vi.fn(async () => ({
@@ -234,11 +234,11 @@ describe("product router", () => {
   );
 
   test("delete hands the deleted article's image addresses to the files' deletion, after the write", async () => {
-    const { run } = setup();
+    const { db, run } = setup();
 
     await run("delete", { id: 5 });
 
-    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith([
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
       "https://store9.public.blob.vercel-storage.com/a.webp",
     ]);
     expect(services.discardBlobs.mock.invocationCallOrder[0]).toBeGreaterThan(
