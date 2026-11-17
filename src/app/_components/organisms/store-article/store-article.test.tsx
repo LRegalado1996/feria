@@ -331,6 +331,32 @@ describe("StoreArticle", () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  test.each([
+    ["es", "Feria Paseo Prado", "También te puede gustar"],
+    ["en", "Paseo Prado Fair", "You may also like"],
+  ] as const)(
+    "in %s, separates the article from its suggestions with the moss band, for the eye only",
+    (locale, word, related) => {
+      const { page } = setup({ locale });
+
+      const band = within(page).getByTestId("store-article-band");
+      expect(band).toHaveAttribute("aria-hidden", "true");
+      expect(band).toHaveTextContent(word);
+      expect(
+        band.compareDocumentPosition(
+          screen.getByRole("region", { name: related })
+        )
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        band.compareDocumentPosition(
+          screen.getByRole("button", {
+            name: locale === "es" ? "Agregar al carrito" : "Add to cart",
+          })
+        )
+      ).toBe(Node.DOCUMENT_POSITION_PRECEDING);
+    }
+  );
+
   test("shows no related section when there are none", () => {
     setup({ related: { others: [], same: [] } });
 

@@ -26,6 +26,20 @@
   --animate-store-bubble: store-bubble var(--store-bubble-duration, 3s)
     cubic-bezier(0.22, 1, 0.36, 1) var(--store-bubble-delay, 0s) both;
 
+  /* The article's band (FER-039): one slow drift, then still. Each line
+     sets where it starts and ends, and the band its duration. */
+  --animate-store-drift: store-drift 4.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes store-drift {
+    from {
+      transform: translateX(var(--store-drift-from, 0));
+    }
+
+    to {
+      transform: translateX(var(--store-drift-to, 0));
+    }
+  }
+
   /* The track holds two copies of its content, so half its width is one lap. */
   @keyframes store-marquee {
     to {
@@ -122,6 +136,12 @@
 
 @utility store-display-page {
   font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.875rem);
+}
+
+/* Letters drawn as a lime outline, hollow: the article band's second line. */
+@utility store-text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--store-accent);
 }
 
 @utility store-display-article {

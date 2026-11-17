@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import { StorePriceTag } from "@/app/_components/atoms/store-price-tag";
+import { StoreArticleBand } from "@/app/_components/molecules/store-article-band";
 import {
   STORE_CARD_SIZES,
   StoreArticleCard,
@@ -89,8 +90,8 @@ const CRUMB_CLASS =
  * An article's page (FER-024, FER-039). On a computer its name, price,
  * description, quantity and "Agregar al carrito" sit in a column on the
  * left while its photos scroll sideways on the right; on a phone the photos
- * come first. Then a question by WhatsApp, the share button, and the
- * articles beside it in a row. All of it is in the server's HTML, so a
+ * come first. Then a question by WhatsApp, the share button, a decorative
+ * moss band, and the articles beside it in a row. All of it is in the server's HTML, so a
  * search engine or an assistant reads it without running the script.
  */
 function StoreArticle({
@@ -227,6 +228,15 @@ function StoreArticle({
           </div>
         </div>
       </div>
+      <StoreArticleBand
+        words={[
+          copy.article.band.brand,
+          copy.article.band.bubbles,
+          copy.article.band.bijou,
+          copy.article.band.fair,
+          copy.article.band.stall,
+        ]}
+      />
       <StoreRelatedRow
         others={related.others.map(relatedCard)}
         same={related.same.map(relatedCard)}

@@ -211,6 +211,18 @@ test.describe("Article page", () => {
     const names = row.getByRole("heading", { level: 3 });
 
     await expect(names).toHaveCount(8);
+    // The moss band sits between the article and the row, for the eye only.
+    const band = page.getByTestId("store-article-band");
+    await expect(band).toHaveAttribute("aria-hidden", "true");
+    const [bandBox, rowBox, addBox] = await Promise.all([
+      band.boundingBox(),
+      row.boundingBox(),
+      page.getByRole("button", { name: "Agregar al carrito" }).boundingBox(),
+    ]);
+    expect((bandBox?.y ?? 0) > (addBox?.y ?? 0)).toBe(true);
+    expect((rowBox?.y ?? 0) >= (bandBox?.y ?? 0) + (bandBox?.height ?? 0)).toBe(
+      true
+    );
     const shown = await names.allTextContents();
     expect(shown).toEqual(expect.arrayContaining(sameTitles));
     expect(shown).not.toContain(`Anillo ${tag}`);
