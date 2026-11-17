@@ -292,6 +292,7 @@ describe("category router", () => {
         seoTitleEs: "",
       })
     ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
       message: "A cover image must be one uploaded to this store",
     });
     expect(services.updateCategoryPage).toHaveBeenCalledExactlyOnceWith(TX, {
