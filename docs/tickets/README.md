@@ -19,15 +19,15 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M0 Foundation
 
-| ID                                            | Title                                          | Priority | Status      |
-| --------------------------------------------- | ---------------------------------------------- | -------- | ----------- |
-| [FER-001](FER-001-bootstrap-from-template.md) | Bootstrap the repo from the template           | P0       | done        |
-| [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done        |
-| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | done        |
-| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done        |
-| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | done        |
-| [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | in progress |
-| [FER-036](FER-036-slack-apps.md)              | GitHub and Vercel apps post to Slack           | P2       | todo        |
+| ID                                            | Title                                          | Priority | Status |
+| --------------------------------------------- | ---------------------------------------------- | -------- | ------ |
+| [FER-001](FER-001-bootstrap-from-template.md) | Bootstrap the repo from the template           | P0       | done   |
+| [FER-002](FER-002-vercel-neon-blob.md)        | Vercel project, Neon database and Blob storage | P0       | done   |
+| [FER-003](FER-003-ci-and-previews.md)         | CI, preview deployments and error reporting    | P0       | done   |
+| [FER-004](FER-004-i18n-foundation.md)         | Spanish and English with a toggle              | P0       | done   |
+| [FER-005](FER-005-design-system.md)           | Storefront design system                       | P0       | done   |
+| [FER-034](FER-034-coming-soon-page.md)        | Coming-soon page on production                 | P0       | done   |
+| [FER-036](FER-036-slack-apps.md)              | GitHub and Vercel apps post to Slack           | P2       | todo   |
 
 ### M1 Brand
 
@@ -51,34 +51,34 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M3 Admin
 
-| ID                                                    | Title                                              | Priority | Status      |
-| ----------------------------------------------------- | -------------------------------------------------- | -------- | ----------- |
-| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done        |
-| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | in progress |
-| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | todo        |
-| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo        |
-| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done        |
-| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | todo        |
-| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
-| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo        |
-| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo        |
-| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done        |
+| ID                                                    | Title                                              | Priority | Status |
+| ----------------------------------------------------- | -------------------------------------------------- | -------- | ------ |
+| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done   |
+| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | done   |
+| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | todo   |
+| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo   |
+| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done   |
+| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | todo   |
+| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo   |
+| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo   |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo   |
+| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done   |
 
 ### M4 Storefront and orders
 
-| ID                                                   | Title                                            | Priority | Status      |
-| ---------------------------------------------------- | ------------------------------------------------ | -------- | ----------- |
-| [FER-021](FER-021-storefront-shell.md)               | Storefront shell                                 | P0       | in progress |
-| [FER-022](FER-022-home-view.md)                      | Home view                                        | P0       | todo        |
-| [FER-023](FER-023-catalog-view.md)                   | Catalog view                                     | P0       | done        |
-| [FER-024](FER-024-article-view-and-seo.md)           | Article view and SEO                             | P0       | in progress |
-| [FER-025](FER-025-order-domain.md)                   | Order domain                                     | P0       | done        |
-| [FER-026](FER-026-cart-and-checkout.md)              | Cart and checkout                                | P0       | in progress |
-| [FER-027](FER-027-order-management.md)               | Order management in the admin                    | P0       | done        |
-| [FER-028](FER-028-whatsapp-phone-verification.md)    | Phone verification by WhatsApp code              | P2       | todo        |
-| [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                              | P0       | done        |
-| [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script  | P1       | superseded  |
-| [FER-043](FER-043-category-groups-and-pages.md)      | Category groups and a page of their own for each | P0       | in progress |
+| ID                                                   | Title                                            | Priority | Status     |
+| ---------------------------------------------------- | ------------------------------------------------ | -------- | ---------- |
+| [FER-021](FER-021-storefront-shell.md)               | Storefront shell                                 | P0       | done       |
+| [FER-022](FER-022-home-view.md)                      | Home view                                        | P0       | todo       |
+| [FER-023](FER-023-catalog-view.md)                   | Catalog view                                     | P0       | done       |
+| [FER-024](FER-024-article-view-and-seo.md)           | Article view and SEO                             | P0       | done       |
+| [FER-025](FER-025-order-domain.md)                   | Order domain                                     | P0       | done       |
+| [FER-026](FER-026-cart-and-checkout.md)              | Cart and checkout                                | P0       | done       |
+| [FER-027](FER-027-order-management.md)               | Order management in the admin                    | P0       | done       |
+| [FER-028](FER-028-whatsapp-phone-verification.md)    | Phone verification by WhatsApp code              | P2       | todo       |
+| [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                              | P0       | done       |
+| [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script  | P1       | superseded |
+| [FER-043](FER-043-category-groups-and-pages.md)      | Category groups and a page of their own for each | P0       | done       |
 
 ### M5 Metrics
 

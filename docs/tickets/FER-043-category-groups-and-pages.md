@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-039 (stacked after it)
 - **Absorbs:** [FER-042](FER-042-catalog-for-html-only-crawlers.md)
 
@@ -32,7 +32,7 @@ Decided by Lucas on 2026-11-17; the cover was added the same day.
 
 - The header shows "Todos los artículos", "Bijouterie" with its four categories in a dropdown, and "Burbujeros", from the database; the phone menu shows the same structure. The dropdown opens and closes with the keyboard, Escape hands focus back to its button, and its targets are 44 px.
 - In `/admin/categories` a category can join a group and leave it, a group cannot join another group, and a category's SEO texts can be set in both languages; the covers are previewed with the FER-011 note.
-- `/productos`, `/bijouterie`, `/bijouterie/anillos` and `/burbujeros` (and `/en/…`) answer 200 with their articles; an unknown one answers a real 404; a category asked for under the wrong group, or without its group, is sent permanently to its address.
+- `/productos`, `/bijouterie`, `/bijouterie/anillos` and `/burbujeros` (and `/en/…`) answer 200 with their articles; an unknown one answers the not-found page (a real 404 for a crawler that runs no script; see Decisions); a category asked for under the wrong group, or without its group, is sent permanently to its address (a 308 for such a crawler).
 - `/products?category=anillos&color=dorado` answers a permanent redirect to `/bijouterie/anillos?color=dorado`, and `/products` to `/productos`.
 - As Bingbot with scripts off, a category page shows its articles, its breadcrumb and its footer.
 - Each catalog page has its own title, description, canonical and `hreflang`, JSON-LD `CollectionPage`, `ItemList` and `BreadcrumbList`, and is listed in the sitemap and in `llms.txt`.
@@ -42,6 +42,23 @@ Decided by Lucas on 2026-11-17; the cover was added the same day.
 ## Decisions
 
 - **The path segment is not translated:** `/en/productos`, `/en/bijouterie/anillos`. `docs/agents/i18n.md` makes the prefix the only difference between the two languages of a page: the proxy only adds or strips `/en`, the language link leads to the same path in the other language, and a category has one slug. Translated paths would need a slug per language, a path map in the proxy and a language link that translates paths; the repo has none of it.
+
+- **The articles' own address stays `/products/{slug}`**: only the catalog moves, which keeps every shared article link and the article's static page as they are. `/products` itself is now a route handler for the old catalog address.
+- **A category's slug is never an address the site already answers** (`RESERVED_CATEGORY_SLUGS`: `cart`, `productos`, `en`, `admin`…): a category named "Cart" gets `/cart-2`.
+- **A group may hold articles of its own** (an article moved into it when a category is deleted, say); its page lists them with its categories'. Deleting a group leaves its categories in no group.
+- **"Bijouterie" in English is "Jewelry"** in the seed: the name is data, editable in the admin.
+- **The catalog pages read per request, before anything is sent** (as the home does since FER-039), rather than as static pages like an article's, so the filters, the search and the sort keep a server-rendered first page with its own title. The cost: a browser waits for the page instead of seeing a shell first; and an unknown address of one or two segments (`/relojes`, `/bijouterie/relojes`) reaches the dynamic catalog route, whose shell Next serves first, so a browser gets the not-found page (`noindex`) with a 200 and a category asked outside its group is redirected in the browser. A crawler that runs no script gets the whole render: a real 404 or 308. `/admin/{unknown}` got a catch-all of its own to keep its real 404.
+- **A category choice in the filter panel closes it**: a category is now another page, and the page left behind stays mounted and hidden, so the panel leaves at once, without an exit animation.
+
+## Outcome
+
+- **Data** (migration `0013`, expand only): `category.parentId` (the group, (`storeId`, `parentId`) → (`storeId`, `id`), never itself), the cover's six columns on `category` and, as `catalogCover…`, on `store`; `category_translation.seoTitle`, `seoDescription`, `coverAlt`; `store_translation.catalogCoverAlt`; checks keep each image whole and its texts within their limits.
+- **Services and API:** `updateCategoryPage` (group one level deep, decided under the store's category lock, with a two-writer test; English texts need an English name) behind `category.updatePage`; a rename now upserts its names; `listCategories` gives each category's path, `getCategoryPage` and `getAllArticlesCover` (cached with the catalog) read a page; a group's listing holds its categories' articles; the sitemap and `llms.txt` list every group and category page with a published article.
+- **Seed:** `seedCatalogPages` gives LR Market Bijouterie (first) with Cadenas, Anillos, Aros and Pulseras, Burbujeros alone, and every cover from `public/seed/`, also on a database seeded before.
+- **Storefront:** `/productos`, `/[group]` and `/[group]/[category]` render `(store)/catalog-page.tsx`: the breadcrumb (`molecules/store-breadcrumb`), the cover (`molecules/store-catalog-cover`: `<picture>` art direction, square on a phone, 3:1 on a computer, fetched first), the admin's texts or ones written from `src/content`, canonical and `hreflang`, JSON-LD `CollectionPage` (with its `ItemList`) and `BreadcrumbList`, the cover as share card. The header and the phone menu are built from the data (`molecules/store-nav-group`). `/products?category=` answers a 308. The catalog's skeleton is gone with its boundary.
+- **Admin:** each row of `/admin/categories` says its group, and opens its page (`molecules/category-page-form`): group, texts for search engines in both languages, cover preview and its description.
+- **E2E:** `tests/store/catalog-pages.e2e.ts` (Bingbot with scripts off on a category page; a group's page, its title, description, canonical, `hreflang` and JSON-LD; the cover and `h1` at 1440 and 390 px; the redirects; the phone menu's group; the header's dropdown by keyboard on `/design`), a group set in `tests/admin/categories.e2e.ts`; the other specs follow the new addresses.
+- **Docs:** `docs/project/overview.md`, `docs/project/data-model.md`, `docs/agents/nextjs.md`, `docs/agents/i18n.md`, `design.md`, `src/e2e/AGENTS.md`.
 
 ## Reporting
 
