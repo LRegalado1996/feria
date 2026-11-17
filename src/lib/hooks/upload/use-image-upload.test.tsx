@@ -122,8 +122,9 @@ function setup({
       })
   );
   const onUploaded = vi.fn<(image: UploadedImage) => void>();
+  const onBusyChange = vi.fn<(busy: boolean) => void>();
   const { result, unmount } = renderHook(
-    () => useImageUpload({ onUploaded, purpose: "cover" }),
+    () => useImageUpload({ onBusyChange, onUploaded, purpose: "cover" }),
     { wrapper: createQueryWrapper() }
   );
   const file = new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" });
@@ -140,6 +141,7 @@ function setup({
     giveToken: () => {
       releaseToken();
     },
+    onBusyChange,
     onUploaded,
     result,
     tokenRequests,
@@ -337,6 +339,40 @@ describe("useImageUpload", () => {
     expect(onUploaded).not.toHaveBeenCalled();
     expect(result.current.state).toEqual({ status: "cancelled" });
   });
+
+  test.each([
+    ["finishes", "done"],
+    ["fails", "failed"],
+    ["is cancelled", "cancelled"],
+  ] as const)(
+    "says a photo is on its way once, and no longer once it %s",
+    async (_end, status) => {
+      const { file, onBusyChange, result, upload } = setup();
+      act(() => {
+        result.current.start(file);
+      });
+      const sending = await upload();
+      act(() => {
+        sending.options.onUploadProgress({ percentage: 42 });
+      });
+      expect(onBusyChange.mock.calls).toEqual([[true]]);
+
+      act(() => {
+        if (status === "done") {
+          sending.finish();
+        } else if (status === "failed") {
+          sending.fail(new Error("network"));
+        } else {
+          result.current.cancel();
+        }
+      });
+
+      await waitFor(() => {
+        expect(result.current.state.status).toBe(status);
+      });
+      expect(onBusyChange.mock.calls).toEqual([[true], [false]]);
+    }
+  );
 
   test("leaving the form while the token is on its way sends nothing", async () => {
     const { file, giveToken, onUploaded, result, tokenRequests, unmount } =

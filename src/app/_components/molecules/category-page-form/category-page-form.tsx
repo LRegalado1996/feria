@@ -118,6 +118,13 @@ function CategoryPageForm({
   });
   const { isSubmitting } = useFormState({ control: form.control });
   const hasCover = useWatch({ control: form.control, name: "cover" }) !== null;
+  // A photo still on its way is not in the form yet: a save now would leave
+  // it out. Save waits for it; its own cancel and the form's Cancel do not.
+  const [uploading, setUploading] = useState({
+    cover: false,
+    coverPhone: false,
+  });
+  const waiting = uploading.cover || uploading.coverPhone;
 
   const submit = async (values: CategoryPageFormValues) => {
     setFailed(false);
@@ -237,6 +244,9 @@ function CategoryPageForm({
                     <FormControl>
                       <ImageUploader
                         label={copy.coverComputer}
+                        onBusyChange={(busy) => {
+                          setUploading((was) => ({ ...was, cover: busy }));
+                        }}
                         onChange={(image) => {
                           field.onChange(image);
 
@@ -267,6 +277,9 @@ function CategoryPageForm({
                         }
                         disabled={!hasCover}
                         label={copy.coverPhone}
+                        onBusyChange={(busy) => {
+                          setUploading((was) => ({ ...was, coverPhone: busy }));
+                        }}
                         onChange={(image) => {
                           field.onChange(image);
                         }}
@@ -313,7 +326,7 @@ function CategoryPageForm({
           </section>
         </fieldset>
         <div className="flex flex-wrap gap-2">
-          <Button disabled={isSubmitting} type="submit">
+          <Button disabled={isSubmitting || waiting} type="submit">
             {isSubmitting ? copy.pending : copy.submit}
           </Button>
           <Button

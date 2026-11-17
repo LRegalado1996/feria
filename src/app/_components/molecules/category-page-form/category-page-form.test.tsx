@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
@@ -58,11 +58,14 @@ function makeCategory(
 
 function setup({
   category = makeCategory(),
+  holdsUpload = false,
   isGroup = false,
   locale = "en",
   saves = "saved",
 }: {
   category?: CategoryPageFormCategory;
+  /** The store keeps each upload open until `finishUpload()`. */
+  holdsUpload?: boolean;
   isGroup?: boolean;
   locale?: Locale;
   saves?: "failed" | "saved";
@@ -83,7 +86,21 @@ function setup({
     height: 800,
     width: 2400,
   });
-  blob.put.mockResolvedValue({ url: UPLOADED });
+  const held: (() => void)[] = [];
+  blob.put.mockImplementation(
+    async () =>
+      await new Promise((resolve) => {
+        const finish = () => {
+          resolve({ url: UPLOADED });
+        };
+
+        if (holdsUpload) {
+          held.push(finish);
+        } else {
+          finish();
+        }
+      })
+  );
   const wrapper = createQueryWrapper();
   const form = (props: {
     category: CategoryPageFormCategory;
@@ -106,18 +123,33 @@ function setup({
   const user = userEvent.setup();
   const photo = (name: string) => screen.getByRole("group", { name });
 
+  /** Chooses a file in the photo field `name`, without waiting for it. */
+  const choose = async (name: string) => {
+    await user.upload(
+      within(photo(name)).getByTestId("image-uploader-input"),
+      new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
+    );
+  };
+
   return {
+    choose,
     field: (name: string) => screen.getByRole("textbox", { name }),
+    /** The store ends the upload it holds open, once it was sent. */
+    finishUpload: async () => {
+      await waitFor(() => {
+        expect(held).toHaveLength(1);
+      });
+      act(() => {
+        held.shift()?.();
+      });
+    },
     photo,
     save: async () => {
       await user.click(screen.getByRole("button", { name: "Save the page" }));
     },
     /** Chooses a file in the photo field `name` and waits for its upload. */
     upload: async (name: string) => {
-      await user.upload(
-        within(photo(name)).getByTestId("image-uploader-input"),
-        new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
-      );
+      await choose(name);
       await waitFor(() => {
         expect(within(photo(name)).getByRole("status")).toHaveTextContent(
           "Photo uploaded."
@@ -403,6 +435,35 @@ describe("CategoryPageForm", () => {
     expect(
       screen.getByRole("textbox", { name: "Cover description in Spanish" })
     ).toBeEnabled();
+  });
+
+  test("Save waits for a photo still on its way, Cancel does not, and the photo goes with the page", async () => {
+    const { choose, finishUpload, onSave, save } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Computer photo");
+
+    await waitFor(() => {
+      expect(saveButton).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+
+    await finishUpload();
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: { height: 800, url: UPLOADED, width: 2400 },
+        })
+      );
+    });
   });
 
   test("cancels without saving", async () => {

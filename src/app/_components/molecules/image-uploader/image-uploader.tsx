@@ -21,6 +21,8 @@ export type ImageUploaderProps = Omit<
   description?: string;
   /** What the photo is for, shown above it and naming every control. */
   label: string;
+  /** Told when a photo starts being prepared or sent, and when it stops. */
+  onBusyChange?: (busy: boolean) => void;
   /** The uploaded image to save, or `null` once removed. */
   onChange: (image: UploadedImage | null) => void;
   /** Decides the store's folder and size cap (`IMAGE_PURPOSES`). */
@@ -45,6 +47,7 @@ function ImageUploader({
   className,
   description,
   label,
+  onBusyChange,
   onChange,
   purpose,
   sizes = "(min-width: 768px) 24rem, 100vw",
@@ -59,6 +62,7 @@ function ImageUploader({
   const input = useRef<HTMLInputElement>(null);
   const [removed, setRemoved] = useState(false);
   const { cancel, retry, start, state } = useImageUpload({
+    onBusyChange,
     onUploaded: onChange,
     purpose,
   });

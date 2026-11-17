@@ -43,6 +43,7 @@ function setup({
 } = {}) {
   const copy = DICTIONARIES[locale].admin.imageUpload;
   const onChange = vi.fn((_image: UploadedImage | null) => undefined);
+  const onBusyChange = vi.fn((_busy: boolean) => undefined);
   hook.useImageUpload.mockReturnValue({
     cancel: hook.cancel,
     retry: hook.retry,
@@ -54,6 +55,7 @@ function setup({
     <ImageUploader
       aria-describedby="form-error"
       label={LABEL}
+      onBusyChange={onBusyChange}
       onChange={onChange}
       purpose="cover"
       value={value}
@@ -64,12 +66,12 @@ function setup({
   const named = (action: string) =>
     within(group).getByRole("button", { name: `${action}: ${LABEL}` });
 
-  return { copy, group, named, onChange, user };
+  return { copy, group, named, onBusyChange, onChange, user };
 }
 
 describe("ImageUploader", () => {
   test("offers to choose a photo, the formats under its label, and hands the hook the purpose and the form's setter", () => {
-    const { copy, group, named, onChange } = setup();
+    const { copy, group, named, onBusyChange, onChange } = setup();
 
     expect(group).toHaveAccessibleDescription(copy.hint);
     expect(group).toHaveAttribute(
@@ -80,6 +82,7 @@ describe("ImageUploader", () => {
     expect(within(group).queryByRole("progressbar")).toBeNull();
     expect(within(group).queryByRole("img")).toBeNull();
     expect(hook.useImageUpload).toHaveBeenCalledWith({
+      onBusyChange,
       onUploaded: onChange,
       purpose: "cover",
     });
