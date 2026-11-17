@@ -233,8 +233,9 @@ function StoreCheckoutForm({
       data-slot="store-checkout-form"
     >
       <h2
-        // Focused only by the code, never by a tab or a click.
-        className="font-display store-display-section leading-display font-extrabold uppercase focus-visible:outline-none"
+        // Focused only by the code, never by a tab or a click; a keyboard
+        // user who lands here still sees the ring the fields draw.
+        className="font-display store-display-section leading-display font-extrabold uppercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
         id="store-checkout-title"
         ref={title}
         tabIndex={-1}
