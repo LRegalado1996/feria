@@ -21,31 +21,29 @@ export type StoreAnnouncementBarProps = Omit<ComponentProps<"div">, "lang"> & {
 
 /**
  * The notice, and its phone version when there is one: the whole notice is
- * always in the HTML, hidden to the eye below `lg`; the short one is for
- * the eye only.
+ * always in the HTML, and with a phone version it is hidden to the eye
+ * below `lg`; the short one is for the eye only.
  */
 function Words({ children, short }: { children: ReactNode; short?: string }) {
-  if (!short) {
-    return children;
-  }
-
   return (
     <>
       <span
-        className="max-lg:sr-only"
+        className={short ? "max-lg:sr-only" : undefined}
         data-slot="store-announcement-bar-full"
         data-testid="store-announcement-bar-full"
       >
         {children}
       </span>
-      <span
-        aria-hidden="true"
-        className="lg:hidden"
-        data-slot="store-announcement-bar-short"
-        data-testid="store-announcement-bar-short"
-      >
-        {short}
-      </span>
+      {short ? (
+        <span
+          aria-hidden="true"
+          className="lg:hidden"
+          data-slot="store-announcement-bar-short"
+          data-testid="store-announcement-bar-short"
+        >
+          {short}
+        </span>
+      ) : null}
     </>
   );
 }

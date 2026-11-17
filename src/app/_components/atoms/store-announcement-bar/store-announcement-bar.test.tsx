@@ -69,7 +69,7 @@ describe("StoreAnnouncementBar", () => {
     expect(line?.children).toHaveLength(2);
   });
 
-  test("without a phone's version, is the notice alone", () => {
+  test("without a phone's version, is the notice alone, shown at every width", () => {
     const { bar } = setup();
 
     expect(
@@ -77,7 +77,7 @@ describe("StoreAnnouncementBar", () => {
     ).toBeNull();
     expect(
       bar.querySelector('[data-slot="store-announcement-bar-full"]')
-    ).toBeNull();
+    ).not.toHaveClass("max-lg:sr-only");
   });
 
   test("keeps a caller's class", () => {

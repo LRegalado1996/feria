@@ -80,8 +80,18 @@ test.describe("Storefront shell", () => {
       const storePage = new StorePage(page);
 
       for (const [locale, open] of [
-        ["es", () => storePage.goto()],
-        ["en", () => storePage.gotoEnglish()],
+        [
+          "es",
+          async () => {
+            await storePage.goto();
+          },
+        ],
+        [
+          "en",
+          async () => {
+            await storePage.gotoEnglish();
+          },
+        ],
       ] as const) {
         await open();
         const texts = ANNOUNCEMENT[locale];
