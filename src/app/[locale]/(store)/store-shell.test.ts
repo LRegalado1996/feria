@@ -60,6 +60,27 @@ const ANNOUNCEMENT = {
   },
 } as const;
 
+/**
+ * The store `readStore` answers, or none when its row is `missing` (a
+ * database whose migrations have not run); `held` keeps the request from
+ * arriving until `arrive()`.
+ */
+function setup({
+  held = false,
+  missing = false,
+}: { held?: boolean; missing?: boolean } = {}) {
+  const store = makeStore();
+  readStore.mockResolvedValue(missing ? null : store);
+  const request = held ? holdRequest(connection) : null;
+
+  return {
+    arrive: () => {
+      request?.arrive();
+    },
+    store,
+  };
+}
+
 describe("announcementOf", () => {
   test.each(["es", "en"] as const)(
     "says the fair and the stall in %s, the page's language, with a phone's version, not the store's tagline",
@@ -76,9 +97,7 @@ describe("announcementOf", () => {
 
 describe("streamedShell", () => {
   test("reads the store only once a request is there, then its categories; the bar needs no read", async () => {
-    const store = makeStore();
-    readStore.mockResolvedValue(store);
-    const request = holdRequest(connection);
+    const { arrive, store } = setup({ held: true });
 
     const shell = streamedShell("en");
     await settle();
@@ -86,10 +105,13 @@ describe("streamedShell", () => {
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
     expect(readCategories).not.toHaveBeenCalled();
+    // The bar's words are there while the request is still held.
+    await expect(
+      Promise.race([shell.announcement, settle().then(() => "still waiting")])
+    ).resolves.toEqual(ANNOUNCEMENT.en);
 
-    request.arrive();
+    arrive();
 
-    await expect(shell.announcement).resolves.toEqual(ANNOUNCEMENT.en);
     await expect(shell.categories).resolves.toEqual([
       { lang: "en", name: "anillos-en", slug: "anillos" },
     ]);
@@ -98,7 +120,7 @@ describe("streamedShell", () => {
   });
 
   test("shows the bar but no category before the store's row exists", async () => {
-    readStore.mockResolvedValue(null);
+    setup({ missing: true });
 
     const shell = streamedShell("es");
 
@@ -110,7 +132,7 @@ describe("streamedShell", () => {
 
 describe("shellOf", () => {
   test("from a store already read, the fixed announcement and its cached categories", async () => {
-    const store = makeStore();
+    const { store } = setup();
 
     const shell = shellOf(store, "es");
 

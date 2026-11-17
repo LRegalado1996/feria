@@ -72,14 +72,30 @@ export class StorePage extends BasePage {
    * version shown (the whole notice from `lg` up, the short one below).
    */
   async announcementLines(): Promise<number> {
-    return await this.getAnnouncementBar().evaluate((bar) => {
-      const shown = [...bar.querySelectorAll("span")].find(
-        (span) => span.getClientRects().length > 0 && span.offsetWidth > 1
+    // Each version's lines, none when it is not drawn: hidden, or
+    // `sr-only`, one pixel wide.
+    const linesOf = async (version: Locator) =>
+      await version.evaluateAll((elements) =>
+        elements.flatMap((element) =>
+          element instanceof HTMLElement &&
+          element.getClientRects().length > 0 &&
+          element.offsetWidth > 1
+            ? [
+                new Set(
+                  [...element.getClientRects()].map((rect) =>
+                    Math.round(rect.top)
+                  )
+                ).size,
+              ]
+            : []
+        )
       );
-      const rects = shown ? [...shown.getClientRects()] : [];
+    const shown = [
+      ...(await linesOf(this.getAnnouncementFull())),
+      ...(await linesOf(this.getAnnouncementShort())),
+    ];
 
-      return new Set(rects.map((rect) => Math.round(rect.top))).size;
-    });
+    return shown[0] ?? 0;
   }
 
   /**
