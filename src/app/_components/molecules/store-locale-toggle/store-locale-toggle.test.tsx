@@ -73,7 +73,8 @@ describe("StoreLocaleToggle", () => {
       "border-store-accent",
       "bg-store-accent",
       "data-[state=on]:text-store-foreground",
-      "data-[state=off]:text-store-accent",
+      // Small text: the accent is promised only 3:1 on the contrast color.
+      "data-[state=off]:text-store-background",
       "group-focus-visible:outline-store-accent",
     ],
   ] as const)(

@@ -11,10 +11,13 @@ export interface StoreLocaleToggleProps {
 }
 
 // The pill in the store's palette: a hairline capsule, the thumb filled under
-// the current language, the other code in the capsule's color.
+// the current language, the other code in the block's text color. On a
+// contrast block that is the background, never the accent: the palette
+// promises the accent only 3:1 there, enough for a display heading but not
+// for a 12 px code (design.md § Storefront).
 const TONES = {
   contrast: {
-    code: "data-[state=off]:text-store-accent data-[state=on]:text-store-foreground",
+    code: "data-[state=off]:text-store-background data-[state=on]:text-store-foreground",
     thumb: "bg-store-accent",
     track:
       "border border-store-accent group-hover:bg-store-accent/15 group-focus-visible:outline-store-accent",
