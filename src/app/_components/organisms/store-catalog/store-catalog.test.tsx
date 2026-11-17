@@ -493,7 +493,7 @@ describe("StoreCatalog", () => {
     ).toHaveAttribute("sizes", "(min-width: 768px) 25vw, 50vw");
   });
 
-  test("an available card has an add button, a sold-out one says so instead", () => {
+  test("a card is a link with nothing to add, available or sold out; a sold-out one says so", () => {
     setup();
 
     const grid = within(screen.getByTestId("store-catalog-grid"));
@@ -505,17 +505,13 @@ describe("StoreCatalog", () => {
     // The name's language is on its link; the card keeps the page's.
     expect(link).toHaveAttribute("lang", "es");
     expect(first?.closest("li")).not.toHaveAttribute("lang");
-    expect(
-      within(first ?? document.body).getByRole("button", {
-        name: "Agregar al carrito: Artículo 1",
-      })
-    ).toBeVisible();
+    expect(within(first ?? document.body).queryByRole("button")).toBeNull();
     expect(within(second ?? document.body).queryByRole("button")).toBeNull();
     expect(second).toHaveTextContent("Agotado");
     expect(first).not.toHaveTextContent("Agotado");
   });
 
-  test("in English, links the cards to the English pages and names the button in English", () => {
+  test("in English, links the cards to the English pages and says sold out in English", () => {
     setup({ locale: "en" });
 
     const grid = within(screen.getByTestId("store-catalog-grid"));
@@ -523,9 +519,6 @@ describe("StoreCatalog", () => {
       "href",
       "/en/products/articulo-1"
     );
-    expect(
-      grid.getByRole("button", { name: "Add to cart: Artículo 1" })
-    ).toBeVisible();
     expect(grid.getByText("Sold out")).toBeVisible();
   });
 

@@ -76,8 +76,6 @@ export const storefront = {
     unitPrice: "{price} c/u",
   },
   catalog: {
-    addToCart: "Agregar al carrito: {name}",
-    addToCartShort: "Agregar",
     addFailed: "No pudimos agregarlo. Probá de nuevo.",
     added: "Agregado al carrito.",
     atMax: "Ya tenés {max} de este artículo, el máximo por pedido.",

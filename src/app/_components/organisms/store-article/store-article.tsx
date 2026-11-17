@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import { StorePriceTag } from "@/app/_components/atoms/store-price-tag";
-import { StoreAddToCartButton } from "@/app/_components/molecules/store-add-to-cart-button";
 import {
   STORE_CARD_SIZES,
   StoreArticleCard,
@@ -178,15 +177,6 @@ function StoreArticle({
           items={related.map((item) => ({
             content: (
               <StoreArticleCard
-                action={
-                  item.isAvailable ? (
-                    <StoreAddToCartButton
-                      name={item.title}
-                      priceAmount={item.priceAmount}
-                      productId={item.id}
-                    />
-                  ) : undefined
-                }
                 amount={item.priceAmount}
                 currency={item.currencyCode}
                 headingLevel="h3"

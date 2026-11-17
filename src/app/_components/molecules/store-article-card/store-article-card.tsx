@@ -1,7 +1,6 @@
 import { ImageOff } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
 
 import { StoreBadge } from "@/app/_components/atoms/store-badge";
 import {
@@ -15,11 +14,6 @@ export type StoreArticleCardProps = Pick<
   StorePriceTagProps,
   "amount" | "currency" | "locale" | "previousAmount"
 > & {
-  /**
-   * A control under the price (add to cart): drawn above the card's
-   * stretched link, so it is its own tab stop and its own click.
-   */
-  action?: ReactNode;
   className?: string;
   /** The heading level the card's name takes in the page's outline. */
   headingLevel?: "h2" | "h3";
@@ -73,7 +67,6 @@ export const STORE_CARD_SIZES = {
  * card, so there is one tab stop and no interactive element inside another.
  */
 function StoreArticleCard({
-  action,
   amount,
   className,
   currency,
@@ -162,7 +155,6 @@ function StoreArticleCard({
           previousAmount={previousAmount}
         />
       )}
-      {action ? <div className="relative z-10 mt-3">{action}</div> : null}
     </article>
   );
 }

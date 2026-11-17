@@ -265,21 +265,26 @@ test.describe("Catalog", () => {
     await expect(titles(page).last()).toHaveText("Extra 0");
   });
 
-  test("adds an available article to the cart from the grid, in the browser's one cart; a sold-out one has no button", async ({
+  test("a card is one link to its article, with nothing to add; the article's page adds to the browser's one cart", async ({
     db,
     page,
   }) => {
     const { goldNecklace, tag } = await setup({ db });
     await page.goto(`/products?q=${tag}`);
     const storePage = new StorePage(page);
+    const grid = page.getByTestId("store-catalog-grid");
+    await expect(titles(page).first()).toBeVisible();
+    // No card carries a button, an available one or a sold-out one.
+    await expect(grid.getByRole("button")).toHaveCount(0);
+
+    await grid.getByRole("link", { name: /Collar dorado/u }).click();
+    await expect(page).toHaveURL(`/products/${goldNecklace.slug}`);
     // Enabled only once React owns it; a retried click would add twice.
     const add = page.getByRole("button", {
-      name: "Agregar al carrito: Collar dorado",
+      exact: true,
+      name: "Agregar al carrito",
     });
     await expect(add).toBeEnabled();
-    await expect(
-      page.getByRole("button", { name: "Agregar al carrito: Pulsera violeta" })
-    ).toHaveCount(0);
     await add.click();
 
     await expect(page.getByText("Agregado al carrito.")).toBeVisible();

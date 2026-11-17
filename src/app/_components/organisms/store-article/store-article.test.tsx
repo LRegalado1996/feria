@@ -226,7 +226,7 @@ describe("StoreArticle", () => {
     expect(page.querySelector(".whitespace-pre-line")).toBeNull();
   });
 
-  test("lists the related articles as cards, an add button only for the available", () => {
+  test("lists the related articles as cards, links with nothing to add: adding is on each one's page", () => {
     setup();
 
     const section = screen.getByRole("region", {
@@ -239,11 +239,7 @@ describe("StoreArticle", () => {
     expect(
       within(available ?? section).getByRole("heading", { level: 3 })
     ).toHaveTextContent(/^Artículo 7$/u);
-    expect(
-      within(available ?? section).getByRole("button", {
-        name: "Agregar al carrito: Artículo 7",
-      })
-    ).toBeVisible();
+    expect(within(available ?? section).queryByRole("button")).toBeNull();
     expect(
       within(available ?? section).getByRole("img", { name: "Foto 7" })
     ).toBeVisible();

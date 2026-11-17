@@ -78,35 +78,29 @@ function cartLine(page: Page, title: string) {
 }
 
 /**
- * Adds the necklace from its category in the catalog and the bracelet from
- * its own page.
+ * Adds the necklace and the bracelet, each from its own page: a card in the
+ * catalog is a link to the article, and adding happens there (FER-039).
  */
 async function addBothArticles(
   page: Page,
-  { braceletSlug, category }: { braceletSlug: string; category: string }
+  { braceletSlug, necklaceSlug }: { braceletSlug: string; necklaceSlug: string }
 ) {
   const storePage = new StorePage(page);
-  await page.goto(`/products?category=${category}`);
-  const addNecklace = page.getByRole("button", {
-    name: "Agregar al carrito: Collar dorado",
-  });
-  // Enabled only once React owns it; a retried click would add twice.
-  await expect(addNecklace).toBeEnabled();
-  await addNecklace.click();
-  await expect(storePage.getCartButton()).toHaveAccessibleName(
-    "Carrito, 1 unidad"
-  );
 
-  await page.goto(`/products/${braceletSlug}`);
-  const addBracelet = page.getByRole("button", {
-    exact: true,
-    name: "Agregar al carrito",
-  });
-  await expect(addBracelet).toBeEnabled();
-  await addBracelet.click();
-  await expect(storePage.getCartButton()).toHaveAccessibleName(
-    "Carrito, 2 unidades"
-  );
+  for (const [slug, units] of [
+    [necklaceSlug, "Carrito, 1 unidad"],
+    [braceletSlug, "Carrito, 2 unidades"],
+  ] as const) {
+    await page.goto(`/products/${slug}`);
+    const add = page.getByRole("button", {
+      exact: true,
+      name: "Agregar al carrito",
+    });
+    // Enabled only once React owns it; a retried click would add twice.
+    await expect(add).toBeEnabled();
+    await add.click();
+    await expect(storePage.getCartButton()).toHaveAccessibleName(units);
+  }
 }
 
 /** Fills the checkout once React owns the form. */
@@ -125,11 +119,11 @@ test.describe("Cart and checkout", () => {
     db,
     page,
   }) => {
-    const { bracelet, jewels, orders, phone } = await setup({ db });
+    const { bracelet, necklace, orders, phone } = await setup({ db });
     const storePage = new StorePage(page);
     await addBothArticles(page, {
       braceletSlug: bracelet.slug,
-      category: jewels.slug,
+      necklaceSlug: necklace.slug,
     });
 
     await storePage.getCartButton().click();

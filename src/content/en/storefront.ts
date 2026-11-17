@@ -78,8 +78,6 @@ export const storefront: Dictionary["storefront"] = {
     unitPrice: "{price} each",
   },
   catalog: {
-    addToCart: "Add to cart: {name}",
-    addToCartShort: "Add",
     addFailed: "We could not add it. Try again.",
     added: "Added to cart.",
     atMax: "You already have {max} of this article, the most an order takes.",
