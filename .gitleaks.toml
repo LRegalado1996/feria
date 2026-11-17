@@ -18,3 +18,25 @@ description = "Allow synthetic fixture values in tests; they are in history"
 condition = "AND"
 paths = ['''\.test\.tsx?$''']
 regexes = ['''^synthetic-''']
+
+[[allowlists]]
+description = "FER-011: made-up Blob tokens and cron secret that upload tests wrote in these three commits before following the synthetic- rule. The branch tip replaced them; pushed history keeps them, so exactly these values, in these files and commits, stay allowed"
+condition = "AND"
+commits = [
+  "3f94a07d333f161b9b8bb0809dfc3b4e581dc146",
+  "2ea9b2da15f142a423ac4fd7dd1ba8972ca899db",
+  "43c052d5477b325acaee35e8b0039985470d545d",
+]
+paths = [
+  '''^src/lib/blob/host\.test\.ts$''',
+  '''^src/server/services/upload\.integration\.test\.ts$''',
+  '''^src/server/api/routers/upload\.integration\.test\.ts$''',
+  '''^src/app/api/cron/clean-up-blobs/route\.integration\.test\.ts$''',
+  '''^src/server/services/category\.integration\.test\.ts$''',
+]
+regexes = [
+  '''^vercel_blob_rw_AbC123xyz$''',
+  '''^vercel_blob_rw_Integration_s3cret$''',
+  '''^vercel_blob_rw_Integration_s3cretPart$''',
+  '''^integration-cron-secret-0123456789$''',
+]
