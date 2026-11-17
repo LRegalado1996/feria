@@ -101,6 +101,11 @@ function StoreField({
   );
 }
 
+/** How many units a cart holds, every line's quantity added up. */
+function unitsOf(items: StoreCheckoutFormProps["items"]) {
+  return items.reduce((sum, item) => sum + item.quantity, 0);
+}
+
 /**
  * The checkout (FER-026): name, mobile and an optional note, then the order.
  * A valid submit sends nothing yet: it asks first, in a dialog that sums the
@@ -138,6 +143,14 @@ function StoreCheckoutForm({
   const inFlight = useRef(false);
   // What a valid submit read, while the dialog asks to confirm it.
   const [confirming, setConfirming] = useState<CheckoutValues | null>(null);
+  // What the order on its way holds, once confirmed: the dialog, still open
+  // while it is sent, sums that up, never the cart another tab changes
+  // meanwhile. Before that it reads the cart as it is now, which is what
+  // "Confirmar pedido" sends.
+  const [sent, setSent] = useState<{
+    total: StoreCheckoutFormProps["total"];
+    units: number;
+  } | null>(null);
   const submitButton = useRef<HTMLButtonElement>(null);
 
   const placeOrder = async (values: CheckoutValues) => {
@@ -156,6 +169,7 @@ function StoreCheckoutForm({
     setFailure(null);
     // What this submit orders, whatever the cart becomes while it is sent.
     const ordered = items;
+    setSent({ total, units: unitsOf(ordered) });
     let placed: Awaited<ReturnType<typeof createOrder.mutateAsync>>;
 
     // Only the order itself is guarded here: whatever throws before it is
@@ -190,6 +204,7 @@ function StoreCheckoutForm({
       // Free for a retry; after a success the page moves on instead.
       inFlight.current = false;
       setConfirming(null);
+      setSent(null);
       return;
     }
 
@@ -201,6 +216,7 @@ function StoreCheckoutForm({
       reportError(error, { action: "Checkout.show_order" });
       inFlight.current = false;
       setConfirming(null);
+      setSent(null);
       return;
     }
 
@@ -347,8 +363,8 @@ function StoreCheckoutForm({
         phone={confirming?.customerPhone ?? ""}
         returnFocus={submitButton}
         sending={sending}
-        total={total}
-        units={items.reduce((sum, item) => sum + item.quantity, 0)}
+        total={sent ? sent.total : total}
+        units={sent ? sent.units : unitsOf(items)}
       />
     </section>
   );

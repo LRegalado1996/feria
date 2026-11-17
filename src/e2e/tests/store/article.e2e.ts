@@ -45,7 +45,7 @@ test.describe("Article page", () => {
     await page.goto(`/productos/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
     // Said to a screen reader, out of sight.
-    const position = gallery.locator("output");
+    const position = gallery.getByTestId("store-gallery-position");
     await expect(position).toHaveText("Foto 1 de 3");
 
     await clickUntilVisible(
@@ -126,7 +126,7 @@ test.describe("Article page", () => {
     await expect(
       gallery.getByRole("button", { name: "Foto siguiente" })
     ).toHaveCount(0);
-    await expect(gallery.locator("output")).toHaveCount(0);
+    await expect(gallery.getByTestId("store-gallery-position")).toHaveCount(0);
   });
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {

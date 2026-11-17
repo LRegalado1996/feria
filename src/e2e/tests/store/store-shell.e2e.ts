@@ -318,36 +318,35 @@ test.describe("Storefront shell", () => {
         { gap: 65, rule: "1px" },
       ]);
 
-      // The shop's title on its own line, its links on the next: a link
-      // starts a new line only when it would not fit after the one before
-      // it. Every spec's categories are listed, so how many fit varies.
-      const title = await boxOf(shop.getByRole("heading", { name: "Tienda" }));
-      const links = await Promise.all(
-        (await shop.getByRole("link").all()).map(boxOf)
-      );
-      expect(links[0]?.y ?? 0).toBeGreaterThanOrEqual(title.y + title.height);
-      for (const [index, link] of links.slice(1).entries()) {
-        const before = links[index];
-        if (before && link.y !== before.y) {
-          expect(before.x + before.width + 24 + link.width).toBeGreaterThan(
-            390 - 16
-          );
+      // The shop's title on its own line, its links on the next, side by
+      // side: a link starts a new line only when it would not fit after the
+      // one before it. Every spec's categories are listed, so how many fit,
+      // and which one comes after which, varies: the rule holds for each.
+      const expectSideBySide = async () => {
+        const title = await boxOf(
+          shop.getByRole("heading", { name: "Tienda" })
+        );
+        const edge = await boxOf(shop);
+        const links = await Promise.all(
+          (await shop.getByRole("link").all()).map(boxOf)
+        );
+        expect(links[0]?.y ?? 0).toBeGreaterThanOrEqual(title.y + title.height);
+        for (const [index, link] of links.slice(1).entries()) {
+          const before = links[index];
+          if (before && link.y === before.y) {
+            expect(link.x).toBeGreaterThanOrEqual(before.x + before.width + 24);
+          } else if (before) {
+            expect(before.x + before.width + 24 + link.width).toBeGreaterThan(
+              edge.x + edge.width
+            );
+          }
         }
-      }
+      };
+      await expectSideBySide();
 
-      // Wider, still stacked: "Catálogo" and the next link side by side,
-      // where the names (each ending in a long tag) have room.
+      // Wider, still stacked, the links still side by side.
       await page.setViewportSize({ height: 1024, width: 768 });
-      const [first, second] = await Promise.all(
-        [
-          shop.getByRole("link", { exact: true, name: "Catálogo" }),
-          shop.getByRole("link").nth(1),
-        ].map(boxOf)
-      );
-      expect(second?.y).toBe(first?.y);
-      expect(second?.x ?? 0).toBeGreaterThanOrEqual(
-        (first?.x ?? 0) + (first?.width ?? 0) + 24
-      );
+      await expectSideBySide();
     });
   });
   test("the footer tells Pepe's story, shows only the links the store has, and the credit", async ({

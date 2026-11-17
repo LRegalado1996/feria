@@ -365,6 +365,7 @@ function StoreCartLine(props: StoreCartLineProps) {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 -z-10 bg-store-accent/30 motion-safe:animate-store-wash motion-reduce:hidden"
           data-slot="store-cart-line-wash"
+          data-testid="store-cart-line-wash"
         />
       ) : null}
       {summary ? (
@@ -393,11 +394,12 @@ function StoreCartLine(props: StoreCartLineProps) {
         <div
           className={cn(
             "grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-3",
+            // The class comes with the article, so the rise starts with
+            // what the line shows; the line itself is never drawn anew,
+            // which would drop the focus of a control inside it.
             justAdded && "motion-safe:animate-store-rise"
           )}
-          // A line whose article arrives is drawn anew, so the rise starts
-          // with what it shows, not with the placeholder.
-          key={product ? "article" : "placeholder"}
+          data-testid="store-cart-line-body"
         >
           <Tile
             blocked={blocked}
