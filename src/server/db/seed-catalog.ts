@@ -574,6 +574,11 @@ export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
   const existing = await rows();
   const idOf = new Map(existing.map((row) => [row.slug, row.id]));
   const isGroup = new Set(existing.map((row) => row.parentId));
+  // A group in a group itself would make three levels: such a group takes
+  // no category, one level only, as the service holds it.
+  const inAGroup = new Set(
+    existing.flatMap((row) => (row.parentId === null ? [] : [row.id]))
+  );
 
   for (const seedCategory of SEED_CATEGORIES) {
     const row = existing.find((entry) => entry.slug === seedCategory.slug);
@@ -586,6 +591,7 @@ export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
     if (
       groupId !== undefined &&
       groupId !== null &&
+      !inAGroup.has(groupId) &&
       row.parentId === null &&
       !isGroup.has(row.id)
     ) {
