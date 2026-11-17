@@ -37,6 +37,9 @@ export const admin: Dictionary["admin"] = {
       load: "We could not load the categories.",
       nameRequired: "Write the name in Spanish.",
       nameTooLong: "Use up to 60 characters.",
+      altTooLong: "Use up to 200 characters.",
+      descriptionTooLong: "Use up to 160 characters.",
+      titleTooLong: "Use up to 70 characters.",
     },
     fields: {
       nameEn: "Name in English (optional)",
@@ -56,10 +59,45 @@ export const admin: Dictionary["admin"] = {
       stayed: "“{name}” stayed where it was.",
       up: "Move up: {name}",
     },
+    page: {
+      action: "Page and group: {name}",
+      cancel: "Cancel",
+      cover: "Cover",
+      coverAltEn: "Cover description in English",
+      coverAltEs: "Cover description in Spanish",
+      coverComputer: "On a computer",
+      coverNone:
+        "This category has no cover yet: its page shows its title alone.",
+      coverPhone: "On a phone",
+      coverPhoneSame: "A phone shows the same photo.",
+      coverUpload:
+        "Soon you will be able to upload and change the cover here (FER-011).",
+      englishNeedsName:
+        "To write the English texts, first give the category an English name.",
+      group: "Group",
+      groupHint:
+        "A group gathers categories in the store's menu, like Bijouterie with Chains and Rings. Its page shows all their articles.",
+      groupIsGroup:
+        "This category is a group: it holds categories, so it cannot join another.",
+      groupNone: "No group",
+      holds: "Group of {count} categories",
+      holdsOne: "Group of 1 category",
+      inGroup: "In {group}",
+      pending: "Saving…",
+      seoDescriptionEn: "Description for search engines in English",
+      seoDescriptionEs: "Description for search engines in Spanish",
+      seoHint:
+        "Left empty, they are written from the category's and the store's names.",
+      seoTitleEn: "Title for search engines in English",
+      seoTitleEs: "Title for search engines in Spanish",
+      submit: "Save the page",
+      title: "Page of “{name}”",
+    },
     title: "Categories",
     toasts: {
       created: "Category added.",
       deleted: "Category deleted.",
+      pageSaved: "Page saved.",
       renamed: "Category renamed.",
     },
   },
