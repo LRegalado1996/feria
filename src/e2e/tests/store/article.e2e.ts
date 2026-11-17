@@ -161,6 +161,21 @@ test.describe("Article page", () => {
     );
   });
 
+  test("offers no share button: the page is shared from the browser (FER-045)", async ({
+    db,
+    page,
+  }) => {
+    const { article } = await setup({ db });
+    await page.goto(`/productos/${article.slug}`);
+
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Anillo de plata" })
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Compartir" })).toHaveCount(
+      0
+    );
+  });
+
   for (const width of [375, 1440]) {
     test(`at ${width} px, the price under the name, the whole description, then the quantity beside the ink button on one row`, async ({
       db,

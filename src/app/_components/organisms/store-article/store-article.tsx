@@ -14,7 +14,6 @@ import {
   type StoreGalleryImage,
 } from "@/app/_components/molecules/store-gallery";
 import { StoreRelatedRow } from "@/app/_components/molecules/store-related-row";
-import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { Dictionary } from "@/content";
 import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
@@ -96,8 +95,8 @@ const CRUMB_CLASS =
  * An article's page (FER-024, FER-039). On a computer its name, price,
  * description, quantity and "Agregar al carrito" sit in a column on the
  * left while its photos scroll sideways on the right; on a phone the photos
- * come first. Then a question by WhatsApp, the share button, a decorative
- * moss band, and the articles beside it in a row. All of it is in the server's HTML, so a
+ * come first. Then a question by WhatsApp, a festive moss band, and the
+ * articles beside it in a row. All of it is in the server's HTML, so a
  * search engine or an assistant reads it without running the script.
  */
 function StoreArticle({
@@ -112,7 +111,6 @@ function StoreArticle({
     ? localizePath(article.category.path, locale)
     : null;
   const group = article.category?.group ?? null;
-  const path = localizePath(articlePath(article.slug), locale);
   const labels = { card: copy.articleCard, price: copy.price };
   const paragraphs = paragraphsOf(article.description);
   const relatedCard = (item: StoreRelatedArticle) => ({
@@ -227,23 +225,20 @@ function StoreArticle({
           ) : (
             <p className="mt-6.5 text-base">{copy.article.unavailableBody}</p>
           )}
-          <div className="mt-5 flex flex-wrap items-start gap-2.5">
-            {whatsappHref ? (
-              <StoreButton asChild variant="outline">
-                <a
-                  data-testid="store-article-whatsapp"
-                  href={whatsappHref}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  <MessageCircle aria-hidden="true" />
-                  {copy.article.askWhatsapp}
-                  <span className="sr-only"> {copy.shell.newTab}</span>
-                </a>
-              </StoreButton>
-            ) : null}
-            <StoreShareButton path={path} title={article.title} />
-          </div>
+          {whatsappHref ? (
+            <StoreButton asChild className="mt-5 self-start" variant="outline">
+              <a
+                data-testid="store-article-whatsapp"
+                href={whatsappHref}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <MessageCircle aria-hidden="true" />
+                {copy.article.askWhatsapp}
+                <span className="sr-only"> {copy.shell.newTab}</span>
+              </a>
+            </StoreButton>
+          ) : null}
         </div>
       </div>
       <StoreArticleBand

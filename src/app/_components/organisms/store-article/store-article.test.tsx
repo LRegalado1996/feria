@@ -130,8 +130,6 @@ function setup({
 }
 
 afterEach(() => {
-  Reflect.deleteProperty(navigator, "share");
-  Reflect.deleteProperty(navigator, "clipboard");
   localStorage.clear();
 });
 
@@ -232,25 +230,15 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["es", "Compartir", "http://localhost:3000/productos/collar-de-perlas"],
-    ["en", "Share", "http://localhost:3000/en/productos/collar-de-perlas"],
+    ["es", "Compartir"],
+    ["en", "Share"],
   ] as const)(
-    "in %s, shares the article's own address",
-    async (locale, name, url) => {
-      const { user } = setup({ locale });
-      const writeText = vi.fn(async (_text: string) => {});
-      Object.defineProperty(navigator, "share", {
-        configurable: true,
-        value: undefined,
-      });
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: { writeText },
-      });
+    "in %s, offers no %j button: the article's page is not shared from itself (FER-045)",
+    (locale, name) => {
+      const { page } = setup({ locale });
 
-      await user.click(screen.getByRole("button", { name }));
-
-      expect(writeText).toHaveBeenCalledExactlyOnceWith(url);
+      expect(within(page).queryByRole("button", { name })).toBeNull();
+      expect(page.querySelector('[data-slot="store-share-button"]')).toBeNull();
     }
   );
 
