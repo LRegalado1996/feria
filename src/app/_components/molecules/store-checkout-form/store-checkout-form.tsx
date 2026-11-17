@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import {
   Form,
   FormControl,
@@ -50,8 +51,10 @@ export interface StoreCheckoutFormProps {
   onStale: () => void;
 }
 
+// Square, like the tiles: only buttons are pills. `text-base`, so a phone
+// does not zoom into the field.
 const FIELD_CLASS =
-  "w-full border-2 border-store-contrast bg-store-background px-3 text-base text-store-foreground placeholder:text-store-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground aria-invalid:border-dashed";
+  "w-full border-2 border-store-foreground bg-store-background px-3 text-base text-store-foreground placeholder:text-store-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground aria-invalid:border-dashed";
 
 /** A field's label, hint and error, in the store's palette. */
 function StoreField({
@@ -188,7 +191,7 @@ function StoreCheckoutForm({
       data-slot="store-checkout-form"
     >
       <h2
-        className="font-display text-3xl leading-none tracking-display uppercase"
+        className="font-display store-display-section leading-display font-extrabold uppercase"
         id="store-checkout-title"
       >
         {copy.checkout.title}
@@ -266,7 +269,7 @@ function StoreCheckoutForm({
           />
           {failure ? (
             <p
-              className="flex items-start gap-2 border-2 border-store-contrast p-3 text-sm font-semibold"
+              className="flex items-start gap-2 border-2 border-store-foreground p-3 text-sm font-semibold"
               data-testid="store-checkout-error"
               role="alert"
             >
@@ -282,21 +285,23 @@ function StoreCheckoutForm({
               {blockedReason}
             </p>
           ) : null}
-          <button
+          <StoreButton
             aria-describedby={
               blockedReason ? "store-checkout-blocked" : undefined
             }
-            className="inline-flex min-h-14 w-full items-center justify-center bg-store-contrast px-6 text-base font-semibold text-store-background hover:bg-store-accent hover:text-store-foreground focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-wait aria-disabled:opacity-70"
+            // While it is sent the shopper waits, which is not "refused".
+            className="w-full aria-disabled:cursor-wait aria-disabled:opacity-70"
             // `aria-disabled` while sending, not `disabled`: a button that
             // disables itself under the finger drops focus, and a failed
             // order leaves the shopper nowhere to retry from.
             aria-disabled={sending}
             data-testid="store-checkout-submit"
             disabled={!hydrated || blockedReason !== null}
+            size="lg"
             type="submit"
           >
             {sending ? copy.checkout.submitting : copy.checkout.submit}
-          </button>
+          </StoreButton>
         </form>
       </Form>
     </section>

@@ -12,17 +12,19 @@ Instagram and TikTok: `lrmarket` on both, chosen by Lucas on 2026-11-14 and link
 
 A price tag holding the monogram **LR**, with **MARKET** under it. Generic on purpose: it says "a shop", not "bubble guns". The letters are drawn, not set in a font, so a file looks the same on any machine.
 
-| Version                     | Use it                                                              | Files in `public/brand/` |
-| --------------------------- | ------------------------------------------------------------------- | ------------------------ |
-| Full logo (tag, LR, MARKET) | 96 px tall and up: share cards, signs, posts, the admin (FER-040)   | `lr-market-logo*.svg`    |
-| Mark (tag, LR)              | Under 96 px, down to 24 px: site header, tab icon, home-screen icon | `lr-market-mark*.svg`    |
+| Version                     | Use it                                                                                         | Files in `public/brand/` |
+| --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------ |
+| Full logo (tag, LR, MARKET) | Everywhere the brand shows: the site's header and footer, the admin, share cards, signs, posts | `lr-market-logo*.svg`    |
+| Mark (tag, LR)              | Only where the full logo cannot fit: the browser tab icon and the home-screen icon             | `lr-market-mark*.svg`    |
+
+Decided by Lucas on 2026-11-16 ([FER-039](../tickets/FER-039-storefront-redesign.md)): the full logo is the brand's face, even small.
 
 Each version comes in four colorways:
 
 | Colorway             | File suffix        | Tag            | Letters       | Goes on                             |
 | -------------------- | ------------------ | -------------- | ------------- | ----------------------------------- |
-| Accent (the default) | none               | Volt `#c8f31d` | Ink `#111312` | Ink, chalk, white, photos           |
-| Contrast             | `-contrast`        | Ink            | Volt          | Chalk, white                        |
+| Accent (the default) | none               | Volt `#c8f31d` | Ink `#15160f` | Ink, moss, white, photos            |
+| Contrast             | `-contrast`        | Ink            | Volt          | White, the grey tile                |
 | One color, light     | `-one-color-light` | Ink            | cut out       | Any light background, one-ink print |
 | One color, dark      | `-one-color-dark`  | White          | cut out       | Any dark background                 |
 
@@ -30,7 +32,7 @@ In the one-color files the letters are holes: whatever is behind the logo shows 
 
 **Clear space.** Leave a quarter of the logo's height free on every side. Nothing enters it: no text, no edge of the page, no other logo.
 
-**Minimum size.** The mark, 24 px tall. The full logo, 96 px tall; below that MARKET cannot be read, so use the mark.
+**Sizes.** The full logo, 40 px tall at the least: the site's header on a phone (40 px), on a computer (50 px), its footer (62 px). The mark, 24 px tall at the least, as an icon only.
 
 **Do**
 
@@ -52,32 +54,35 @@ The drawing lives once, in `src/lib/brand/logo.ts`. Everything else is made from
 
 - `atoms/store-logo` renders it in the store tokens (`variant="full" | "mark"`, `tone="accent" | "contrast"`); the caller sets the height.
 - `pnpm brand:assets` writes the eight files in `public/brand/`. A unit test fails while a file and the code disagree, so run it after changing the drawing or a color.
-- `src/app/icon.tsx` (tab icon, 32 px), `src/app/apple-icon.tsx` (home screen, 180 px) and `src/app/[locale]/opengraph-image.tsx` (share card, 1200 × 630) render PNGs from the same drawing.
+- `src/app/icon.tsx` (tab icon, 32 px, the mark), `src/app/apple-icon.tsx` (home screen, 180 px, the mark on moss) and `src/app/[locale]/opengraph-image.tsx` (share card, 1200 × 630, the full logo on moss) render PNGs from the same drawing.
 - `STORE_THEME` (`src/styles/theme.ts`) is the palette, the one place it is set (FER-038): the root layout writes it into the `--store-*` CSS variables, and those files and images, which cannot read CSS, import it. Its test holds every pair the storefront sets text in to WCAG AA.
 
 ## Colors
 
-| Name  | Hex       | Token                                | Role                                    |
-| ----- | --------- | ------------------------------------ | --------------------------------------- |
-| Chalk | `#f2f3f0` | `store-background`                   | The page                                |
-| White | `#ffffff` | `store-surface`                      | Cards, photo backgrounds                |
-| Ink   | `#111312` | `store-foreground`, `store-contrast` | Text (16.7:1 on chalk), inverted bands  |
-| Volt  | `#c8f31d` | `store-accent`                       | The one loud color; ink on it is 14.5:1 |
+Chosen by Lucas on 2026-11-16 (FER-039): a white page, articles on a light grey tile, a moss header and footer, and Volt.
 
-Small supporting text is a gray mixed from ink and chalk (`store-muted`, about `#5a5f5b`, 5.9:1 on chalk).
+| Name  | Hex       | Token              | Role                                                                                 |
+| ----- | --------- | ------------------ | ------------------------------------------------------------------------------------ |
+| White | `#ffffff` | `store-background` | The page                                                                             |
+| Tile  | `#f3f3f2` | `store-surface`    | Behind every article's photo, quiet fills                                            |
+| Ink   | `#15160f` | `store-foreground` | Text: 18.2:1 on white                                                                |
+| Moss  | `#262a1d` | `store-contrast`   | The header, the footer, the search panel; white on it is 14.7:1                      |
+| Volt  | `#c8f31d` | `store-accent`     | The one loud color: the bar, the main button; ink on it is 14.1:1, it on moss 11.4:1 |
 
-- Volt is a fill, or large text on ink. Never text on chalk or white: it cannot be read there.
+Small supporting text is a gray mixed from ink and white (`store-muted`, about `#60615c`, 6.3:1 on white).
+
+- Volt is a fill, or text on moss (the header's links, the footer's headings). Never text on white or the tile: it cannot be read there.
 - One accent, the same all year. There is no festive palette: the fair is said with words and photos, not with a second color.
-- No gradients, glows or glass.
+- No gradients, glows or glass. A banner's photo takes a shade rising from its bottom so its white words read: legibility, not decoration.
 
 ## Type
 
-| Face  | Use                                      | Rules                                                     |
-| ----- | ---------------------------------------- | --------------------------------------------------------- |
-| Anton | Headlines, prices, article names, badges | Always uppercase and tight; never a sentence of body copy |
-| Geist | Everything else                          | Sentence case; 400 to 700                                 |
+| Face    | Use                                                     | Rules                                                                                |
+| ------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Anybody | Headings, article names, navigation, buttons and labels | Variable, at 135% width and weight 800, always uppercase; never body copy or a price |
+| Geist   | Prices and body copy                                    | Sentence case; 400 to 700                                                            |
 
-Both are free Google fonts, loaded by the site through `next/font`.
+Both are free Google fonts, loaded by the site through `next/font`. Anybody was chosen by Lucas on 2026-11-16 over Archivo, Mona Sans and Unbounded, and over weight 900; it replaced Anton, a condensed face.
 
 ## Voice
 
@@ -99,4 +104,4 @@ Direct and close, like the person behind the stall. Short sentences. Say what to
 | See you at the fair.                       | Don't miss our AMAZING deals!!!               |
 | Price drop.                                | Unbeatable limited-time opportunity.          |
 
-In both: headlines in Anton are uppercase by the typeface, so write them in sentence case and let the style do it. No exclamation chains, no emoji in the interface, prices always with their currency.
+In both: headings in Anybody are uppercase by the style, so write them in sentence case and let the style do it. No exclamation chains, no emoji in the interface, prices always with their currency.

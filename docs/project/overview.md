@@ -69,7 +69,7 @@ Every signed-in login is an admin and reaches all of it.
 Each amendment is made in the ticket named, in the same PR as the code that needs it.
 
 - **"One product language per app"** (`design.md`) becomes "Spanish default, English toggle" ([FER-004](../tickets/FER-004-i18n-foundation.md)).
-- **Design hard rejects and type scale** (`design.md`) are written for a calm back-office app. The admin keeps them. The storefront gets its own section with the Volt language: uppercase display type, fluid sizes, a marquee ([FER-005](../tickets/FER-005-design-system.md)).
+- **Design hard rejects and type scale** (`design.md`) are written for a calm back-office app. The admin keeps them. The storefront gets its own section: wide uppercase display type, fluid sizes, pill buttons, carousels and a cover that moves on its own ([FER-005](../tickets/FER-005-design-system.md), [FER-039](../tickets/FER-039-storefront-redesign.md)).
 - **Raw color literals** stay banned in components. The store's colors are named variables in one theme file ([FER-038](../tickets/FER-038-single-store.md)).
 - **Public sign-up** is removed; logins are created by an admin ([FER-009](../tickets/FER-009-roles-and-access.md)).
 - **No JSON columns** stays. Translations are `*_translation` tables keyed by entity and locale.

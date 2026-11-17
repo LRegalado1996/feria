@@ -5,10 +5,7 @@ import {
   reorderCategoriesSchema,
 } from "@/lib/schemas/catalog";
 import { adminProcedure } from "@/server/api/orpc";
-import {
-  writeToCatalog,
-  writeToStore,
-} from "@/server/api/utils/write-to-store";
+import { writeToCatalog } from "@/server/api/utils/write-to-store";
 import {
   createCategory,
   deleteCategory,
@@ -20,7 +17,9 @@ import {
 /**
  * The store's categories (FER-016), for the admin: every query is on the
  * store `adminProcedure` puts in the context, and every write re-checks the
- * caller's login inside its transaction.
+ * caller's login inside its transaction. Every write drops the cached
+ * catalog: each store page's header and footer list the categories in their
+ * order (FER-039), an article's static page included.
  */
 export const categoryRouter = {
   list: adminProcedure
@@ -39,7 +38,7 @@ export const categoryRouter = {
     .input(createCategorySchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await createCategory(tx, {
@@ -80,7 +79,7 @@ export const categoryRouter = {
     .input(reorderCategoriesSchema)
     .handler(
       async ({ context, input }) =>
-        await writeToStore(
+        await writeToCatalog(
           context,
           async (tx, storeId) =>
             await reorderCategories(tx, { ids: input.ids, storeId })

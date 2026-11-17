@@ -1,36 +1,25 @@
-import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-const storeBadgeVariants = cva(
-  "inline-flex items-center px-3 py-1.5 font-display text-lg leading-none font-normal tracking-display uppercase",
-  {
-    variants: {
-      tone: {
-        // Foreground on the accent: 14.5:1 with the default palette.
-        accent: "bg-store-accent text-store-foreground",
-        // Background on the contrast color: 16.7:1 with the default palette.
-        contrast: "bg-store-contrast text-store-background",
-      },
-    },
-    defaultVariants: { tone: "accent" },
-  }
-);
+export type StoreBadgeProps = ComponentProps<"span">;
 
-export type StoreBadgeProps = ComponentProps<"span"> &
-  VariantProps<typeof storeBadgeVariants>;
-
-/** A short notice on an article ("New", "Price drop"), in the display face. */
-function StoreBadge({ className, tone = "accent", ...props }: StoreBadgeProps) {
+/**
+ * A short notice on an article's tile ("Nuevo"), in the display face: the
+ * page's white with the foreground on it, 18:1, so it reads on the grey tile
+ * and on a photo alike.
+ */
+function StoreBadge({ className, ...props }: StoreBadgeProps) {
   return (
     <span
-      className={cn(storeBadgeVariants({ tone }), className)}
+      className={cn(
+        "inline-flex items-center bg-store-background px-2 py-1.5 font-display text-xs leading-none font-extrabold text-store-foreground uppercase",
+        className
+      )}
       data-slot="store-badge"
-      data-tone={tone}
       {...props}
     />
   );
 }
 
-export { StoreBadge, storeBadgeVariants };
+export { StoreBadge };

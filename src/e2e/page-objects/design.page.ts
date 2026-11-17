@@ -20,18 +20,48 @@ export class DesignPage extends BasePage {
 
   getSection(
     name:
+      | "banner"
       | "bubbles"
+      | "buttons"
       | "cards"
       | "chips"
       | "count-up"
+      | "cover"
       | "link"
       | "logo"
       | "marquee"
+      | "palette"
       | "price"
       | "reveal"
       | "type"
   ): Locator {
     return this.getByTestId(`design-${name}`);
+  }
+
+  /** The row of sample articles: a carousel named after its heading. */
+  getRow(): Locator {
+    return this.getSection("cards").getByRole("region", { name: "Novedades" });
+  }
+
+  /**
+   * How far the row's first card sits from the row's left edge, in whole
+   * pixels: 0 at its start, below 0 once it moved on. Embla moves the track
+   * with a transform, so the card's box tells, not a scroll position; the
+   * card, not its slide, whose box holds the gap before it.
+   */
+  async firstCardOffset(): Promise<number> {
+    const row = this.getRow();
+    const [frame, card] = await Promise.all([
+      row.boundingBox(),
+      row.getByRole("article").first().boundingBox(),
+    ]);
+
+    return Math.round((card?.x ?? 0) - (frame?.x ?? 0));
+  }
+
+  /** The cover: banners that move on their own. */
+  getCover(): Locator {
+    return this.getSection("cover").getByRole("region", { name: "Portada" });
   }
 
   /** The first marquee's pause toggle (there is one per band). */
@@ -46,17 +76,6 @@ export class DesignPage extends BasePage {
     return this.getSection("marquee")
       .getByTestId("store-marquee-track")
       .first();
-  }
-
-  getSliderTrack(): Locator {
-    return this.getSection("cards").getByRole("region", {
-      name: "Artículos de muestra",
-    });
-  }
-
-  getSliderPosition(): Locator {
-    // Hidden from assistive technology, so it has no role to find it by.
-    return this.getSection("cards").getByText(/^\d+ \/ 6$/);
   }
 
   getReveal(): Locator {

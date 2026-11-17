@@ -1,6 +1,7 @@
 import { CircleCheck, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import type { Dictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -31,6 +32,10 @@ export interface StoreOrderProps {
   whatsappHref: string | null;
 }
 
+/** A small heading in the display face, between hairlines' sections. */
+const LABEL_CLASS =
+  "font-display text-sm leading-tight font-extrabold uppercase";
+
 /**
  * A placed order's page (FER-026): that it was received, the code to say at
  * the stall, what was ordered and for how much, what happens next and where
@@ -49,23 +54,25 @@ function StoreOrder({
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-store-foreground md:py-12",
+        "mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-store-foreground md:px-7 md:py-14",
         className
       )}
       data-slot="store-order"
     >
       <div
-        className="flex flex-col gap-4 bg-store-contrast p-6 text-store-background"
+        className="flex flex-col gap-5 bg-store-contrast p-6 text-store-background md:p-10"
         data-testid="store-order-banner"
       >
-        <p className="flex items-center gap-2 text-lg font-semibold">
+        <p className="flex items-center gap-2 text-base font-semibold text-store-accent">
           <CircleCheck aria-hidden="true" className="size-6 shrink-0" />
           {labels.received}
         </p>
-        <h1 className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">{labels.code}</span>
+        <h1 className="flex flex-col gap-2">
+          <span className="text-sm text-store-contrast-muted">
+            {labels.code}
+          </span>
           <span
-            className="font-display store-display-section leading-display tracking-display uppercase"
+            className="font-display store-display-page leading-display font-extrabold uppercase"
             data-testid="store-order-code"
           >
             {order.code}
@@ -75,26 +82,26 @@ function StoreOrder({
       <p className="text-base">
         {interpolate(labels.next, { phone: order.customerPhone })}
       </p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 border-y-2 border-store-line py-4">
-        <dt className="text-sm font-semibold">{labels.status}</dt>
+      <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 border-y border-store-line py-4">
+        <dt className={LABEL_CLASS}>{labels.status}</dt>
         <dd data-status={order.status} data-testid="store-order-status">
           {labels.statuses[order.status]}
         </dd>
       </dl>
       <section
         aria-labelledby="store-order-items"
-        className="flex flex-col gap-3"
+        className="flex flex-col gap-4"
       >
         <h2
-          className="font-display text-3xl leading-none tracking-display uppercase"
+          className="font-display store-display-section leading-display font-extrabold uppercase"
           id="store-order-items"
         >
           {labels.items}
         </h2>
-        <ul className="border-t-2 border-store-line">
+        <ul className="border-t border-store-line">
           {order.items.map((item) => (
             <li
-              className="flex items-baseline justify-between gap-4 border-b-2 border-store-line py-3"
+              className="flex items-baseline justify-between gap-4 border-b border-store-line py-3"
               // One line per article in an order, and its texts never
               // change afterwards: they make a stable key.
               key={`${item.title}|${item.quantity}|${item.unitPriceAmount}`}
@@ -116,40 +123,34 @@ function StoreOrder({
           ))}
         </ul>
         <p
-          className="flex items-baseline justify-between gap-4 font-display text-3xl leading-none tracking-display uppercase tabular-nums"
+          className="flex items-baseline justify-between gap-4"
           data-testid="store-order-total"
         >
-          <span>{labels.total}</span>
-          <span>
+          <span className={LABEL_CLASS}>{labels.total}</span>
+          <span className="text-xl font-semibold tabular-nums">
             {formatPrice(order.totalAmount, order.currencyCode, locale)}
           </span>
         </p>
       </section>
       {order.note ? (
-        <section className="flex flex-col gap-1">
-          <h2 className="text-sm font-semibold">{labels.note}</h2>
+        <section className="flex flex-col gap-2">
+          <h2 className={LABEL_CLASS}>{labels.note}</h2>
           <p className="whitespace-pre-line">{order.note}</p>
         </section>
       ) : null}
-      <div className="flex flex-col gap-3 sm:flex-row">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         {whatsappHref ? (
-          <a
-            className="inline-flex min-h-12 items-center justify-center gap-2 border-2 border-store-contrast px-5 font-semibold hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
-            href={whatsappHref}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            <MessageCircle aria-hidden="true" className="size-5" />
-            {labels.contactStore}
-            <span className="sr-only"> {newTabLabel}</span>
-          </a>
+          <StoreButton asChild size="lg" variant="outline">
+            <a href={whatsappHref} rel="noopener noreferrer" target="_blank">
+              <MessageCircle aria-hidden="true" />
+              {labels.contactStore}
+              <span className="sr-only"> {newTabLabel}</span>
+            </a>
+          </StoreButton>
         ) : null}
-        <Link
-          className="inline-flex min-h-12 items-center justify-center px-5 font-semibold underline underline-offset-4 hover:no-underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
-          href={catalogHref}
-        >
-          {labels.keepShopping}
-        </Link>
+        <StoreButton asChild size="lg">
+          <Link href={catalogHref}>{labels.keepShopping}</Link>
+        </StoreButton>
       </div>
     </div>
   );

@@ -2,21 +2,24 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreIntro } from "@/app/_components/organisms/store-intro";
+import { getDictionary } from "@/content";
 import { buildAlternates } from "@/lib/i18n/metadata";
+import { localizePath } from "@/lib/i18n/paths";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { storeMetadata } from "@/lib/seo/store-metadata";
 import { readStore } from "@/server/cache/store";
 
 import { StorePageFooter } from "./store-page-footer";
+import { shellOf } from "./store-shell";
 
 // The home waits for the store before anything is sent, by design: a crawler
 // that runs no script must find it in the HTML, and React writes a boundary's
 // content in place only while the first response stays under 12,800 bytes,
-// which the header and the home together pass (docs/agents/nextjs.md § Store
-// pages). This tells Next's instant-navigation check that the wait is
-// intended.
+// which the frame alone nearly fills (docs/agents/nextjs.md § Store pages).
+// This tells Next's instant-navigation check that the wait is intended.
 export const instant = false;
 
 interface StoreHomeProps {
@@ -65,15 +68,25 @@ export default async function StoreHome({ params }: StoreHomeProps) {
     notFound();
   }
 
+  const { storefront } = getDictionary(locale);
+
   return (
-    <>
+    <StoreFrame
+      copy={storefront.shell}
+      locale={locale}
+      {...shellOf(store, locale)}
+    >
       <main data-slot="store-home" data-testid="store-home">
         <StoreIntro
+          browse={{
+            href: localizePath("/products", locale),
+            label: storefront.home.browse,
+          }}
           name={store.name}
           text={pickTranslation(store.translations, locale)}
         />
       </main>
       <StorePageFooter locale={locale} store={store} />
-    </>
+    </StoreFrame>
   );
 }

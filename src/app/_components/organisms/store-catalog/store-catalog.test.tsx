@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -17,11 +17,6 @@ import { stubIntersectionObserver } from "@/test/intersection-observer";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 
 import { StoreCatalog } from "./store-catalog";
-
-const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
-
-// The search navigates with the router; it has its own tests.
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
 vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
@@ -164,6 +159,7 @@ function setup({
   const catalog = (next: CatalogQuery, page: CatalogPage) => (
     <StoreCatalog
       categories={CATEGORIES}
+      description="Todos los artículos de LR Market."
       filters={FILTERS}
       firstPage={page}
       heading="Collares"
@@ -200,6 +196,17 @@ function setup({
   };
 }
 
+/** The links of the open sort menu, as name, address and whether current. */
+function sortItems() {
+  return within(screen.getByRole("menu"))
+    .getAllByRole("menuitem")
+    .map((item) => [
+      item.textContent,
+      item.getAttribute("href"),
+      item.getAttribute("aria-current"),
+    ]);
+}
+
 afterEach(() => {
   localStorage.clear();
   Reflect.deleteProperty(navigator, "share");
@@ -207,31 +214,42 @@ afterEach(() => {
 });
 
 describe("StoreCatalog", () => {
-  test("is headed by the selection's name, with the share button beside it", () => {
+  test("is headed, centered, by the selection's name and one line about it, with the share button", () => {
     setup();
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Collares$/u
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent(/^Collares$/u);
+    expect(heading).toHaveClass("font-display", "store-display-page");
+    expect(heading.parentElement).toHaveClass("items-center", "text-center");
+    expect(heading.nextElementSibling).toHaveTextContent(
+      /^Todos los artículos de LR Market\.$/u
     );
     expect(screen.getByRole("button", { name: "Compartir" })).toBeVisible();
-    expect(
-      screen.getByRole("searchbox", { name: "Buscar artículos" })
-    ).toBeVisible();
   });
 
-  test("offers the three sorts as links, the current one marked, keeping the selection", () => {
-    setup({ query: CHOSEN });
+  test.each([
+    ["es", "Ordenar por: Más nuevos"],
+    ["en", "Sort by: Newest"],
+  ] as const)(
+    "in %s, names the sort's button after the current sort: %j",
+    (locale, name) => {
+      setup({ locale });
 
-    const sorts = within(screen.getByRole("navigation", { name: "Ordenar" }));
-    expect(
-      sorts
-        .getAllByRole("link")
-        .map((link) => [
-          link.textContent,
-          link.getAttribute("href"),
-          link.getAttribute("aria-current"),
-        ])
-    ).toEqual([
+      expect(screen.getByRole("button", { name })).toHaveAttribute(
+        "aria-haspopup",
+        "menu"
+      );
+    }
+  );
+
+  test("opens the three sorts as links, the current one marked, keeping the selection", async () => {
+    const { user } = setup({ query: CHOSEN });
+
+    await user.click(
+      screen.getByRole("button", { name: "Ordenar por: Precio: menor a mayor" })
+    );
+
+    expect(sortItems()).toEqual([
       ["Más nuevos", "/products?category=collares&color=dorado&q=perla", null],
       [
         "Precio: menor a mayor",
@@ -244,19 +262,41 @@ describe("StoreCatalog", () => {
         null,
       ],
     ]);
+    // Only the current one carries the tick.
+    const [newest, cheapest] = within(screen.getByRole("menu")).getAllByRole(
+      "menuitem"
+    );
+    expect(newest?.querySelector("svg")).toBeNull();
+    expect(cheapest?.querySelector("svg")).not.toBeNull();
   });
 
-  test("in English, names the sorts in English and marks the newest by default", () => {
-    setup({ locale: "en" });
+  test("in English, names the sorts in English and marks the newest by default", async () => {
+    const { user } = setup({ locale: "en" });
 
-    const sorts = within(screen.getByRole("navigation", { name: "Sort" }));
-    expect(sorts.getByRole("link", { name: "Newest" })).toHaveAttribute(
-      "aria-current",
-      "true"
-    );
-    expect(
-      sorts.getByRole("link", { name: "Price: low to high" })
-    ).toHaveAttribute("href", "/en/products?sort=price_asc");
+    await user.click(screen.getByRole("button", { name: "Sort by: Newest" }));
+
+    expect(sortItems()).toEqual([
+      ["Newest", "/en/products", "true"],
+      ["Price: low to high", "/en/products?sort=price_asc", null],
+      ["Price: high to low", "/en/products?sort=price_desc", null],
+    ]);
+  });
+
+  test("the sort's menu opens from the keyboard and Escape closes it, handing focus back", async () => {
+    const { user } = setup();
+    const trigger = screen.getByRole("button", {
+      name: "Ordenar por: Más nuevos",
+    });
+    trigger.focus();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("menu")).toBeVisible();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+    expect(trigger).toHaveFocus();
   });
 
   test("shares the selection's own link", async () => {
@@ -278,66 +318,125 @@ describe("StoreCatalog", () => {
     );
   });
 
-  test("starts the search afresh when another choice changes, not when only the search does", () => {
-    const { navigate } = setup({ query: makeQuery({ q: "perla" }) });
-    const field = screen.getByRole("searchbox", { name: "Buscar artículos" });
-
-    navigate(makeQuery({ q: "perla fina" }));
-    expect(screen.getByRole("searchbox", { name: "Buscar artículos" })).toBe(
-      field
-    );
-
-    navigate(makeQuery({ category: "aros", q: "perla fina" }));
-    expect(
-      screen.getByRole("searchbox", { name: "Buscar artículos" })
-    ).not.toBe(field);
-  });
-
-  test("on a phone, opens its choices in a sheet, closed by either of its buttons", async () => {
+  test("opens its choices in a panel named Filtrar, closed by its close button", async () => {
     const { user } = setup();
+    const trigger = screen.getByRole("button", { name: "Filtrar" });
 
-    await user.click(screen.getByRole("button", { name: "Filtros" }));
-    const sheet = screen.getByRole("dialog", { name: "Filtros" });
+    await user.click(trigger);
+    const panel = screen.getByRole("dialog", { name: "Filtrar" });
+    expect(panel).toBe(screen.getByTestId("store-catalog-panel"));
     expect(
-      within(sheet).getByRole("navigation", { name: "Categorías" })
+      within(panel).getByRole("navigation", { name: "Categorías" })
     ).toBeVisible();
+    // Focus is trapped inside, on its first control.
+    expect(
+      within(panel).getByRole("button", { name: "Cerrar los filtros" })
+    ).toHaveFocus();
+
     await user.click(
-      within(sheet).getByRole("button", { name: "Cerrar los filtros" })
+      within(panel).getByRole("button", { name: "Cerrar los filtros" })
     );
     await waitFor(() => {
-      expect(screen.queryByTestId("store-catalog-sheet")).toBeNull();
+      expect(screen.queryByTestId("store-catalog-panel")).toBeNull();
     });
+    expect(trigger).toHaveFocus();
+  });
 
-    await user.click(screen.getByRole("button", { name: "Filtros" }));
+  test("the panel's show-results button closes it, and Escape does too", async () => {
+    const { user } = setup();
+    const trigger = screen.getByRole("button", { name: "Filtrar" });
+
+    await user.click(trigger);
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Ver resultados",
       })
     );
     await waitFor(() => {
-      expect(screen.queryByTestId("store-catalog-sheet")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
-  });
 
-  test("following a choice in the sheet closes it; a click elsewhere in it does not", async () => {
-    const { user } = setup();
-    await user.click(screen.getByRole("button", { name: "Filtros" }));
-    const sheet = screen.getByTestId("store-catalog-sheet");
-
-    await user.click(within(sheet).getByRole("heading", { name: "Color" }));
-    expect(screen.getByTestId("store-catalog-sheet")).toBe(sheet);
-
-    await user.click(within(sheet).getByRole("link", { name: "Aros" }));
-
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
     await waitFor(() => {
-      expect(screen.queryByTestId("store-catalog-sheet")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
+    expect(trigger).toHaveFocus();
   });
 
-  test("the sheet's button counts the chosen choices", () => {
+  test("the panel is a sheet from the bottom on a phone and a drawer from the left from a tablet up, over a scrim", async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole("button", { name: "Filtrar" }));
+
+    const panel = screen.getByTestId("store-catalog-panel");
+    expect(panel).toHaveClass(
+      "bottom-0",
+      "h-[86dvh]",
+      "rounded-t-2xl",
+      "md:inset-y-0",
+      "md:max-w-100",
+      "md:rounded-none"
+    );
+    expect(panel).toHaveAttribute("data-slot", "dialog-content");
+    expect(screen.getByTestId("dialog-overlay")).toHaveClass(
+      "bg-store-foreground/50"
+    );
+  });
+
+  test("following a choice in the panel leaves it open, and the new selection shows in it", async () => {
+    const { navigate, user } = setup();
+    const trigger = screen.getByRole("button", { name: "Filtrar" });
+    await user.click(trigger);
+    const panel = screen.getByTestId("store-catalog-panel");
+    const aros = within(panel).getByRole("link", { name: "Aros" });
+    // The address the router follows, so the selection below is the link's.
+    expect(aros).toHaveAttribute("href", "/products?category=aros");
+
+    await user.click(aros);
+    expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
+
+    // The router renders the catalog again for the address it followed.
+    navigate(makeQuery({ category: "aros" }));
+
+    expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
+    expect(within(panel).getByRole("link", { name: "Aros" })).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
+    // Behind the open panel (hidden from a screen reader while it is open),
+    // its button already counts the new choice.
+    expect(trigger).toHaveTextContent(/^Filtrar \(1\)$/u);
+  });
+
+  test("the panel offers to clear what is chosen, keeping the sort, only when something is", async () => {
+    const chosen = setup({ query: CHOSEN });
+    await chosen.user.click(
+      screen.getByRole("button", { name: "Filtrar (2)" })
+    );
+
+    expect(
+      within(screen.getByRole("dialog")).getByRole("link", { name: "Limpiar" })
+    ).toHaveAttribute("href", "/products?sort=price_asc");
+  });
+
+  test("the panel has nothing to clear with nothing chosen", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Filtrar" }));
+
+    expect(
+      within(screen.getByRole("dialog")).queryByRole("link", {
+        name: "Limpiar",
+      })
+    ).toBeNull();
+  });
+
+  test("the panel's button counts the chosen category and filter values, not the search", () => {
     setup({ query: CHOSEN });
 
-    expect(screen.getByRole("button", { name: "Filtros (3)" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Filtrar (2)" })
+    ).toBeInTheDocument();
   });
 
   test("shows each choice as a chip that leads to the selection without it, and a clear-all", () => {
@@ -379,13 +478,27 @@ describe("StoreCatalog", () => {
     expect(
       screen.queryByRole("heading", { name: "Filtros elegidos" })
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Filtros" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Filtrar" })).toBeVisible();
   });
 
-  test("lists the articles as cards: an add button for the available, sold out for the rest", () => {
+  test("lists the articles as cards in a grid of two columns, four from a tablet up", () => {
     const { titles } = setup();
 
     expect(titles()).toEqual(["Artículo 1", "Artículo 2"]);
+    expect(screen.getByTestId("store-catalog-grid")).toHaveClass(
+      "grid-cols-2",
+      "md:grid-cols-4"
+    );
+    expect(
+      within(screen.getByTestId("store-catalog-grid")).getByRole("img", {
+        name: "Foto del artículo 1",
+      })
+    ).toHaveAttribute("sizes", "(min-width: 768px) 25vw, 50vw");
+  });
+
+  test("a card is a link with nothing to add, available or sold out; a sold-out one says so", () => {
+    setup();
+
     const grid = within(screen.getByTestId("store-catalog-grid"));
     const [first, second] = grid.getAllByRole("article");
     const link = within(first ?? document.body).getByRole("link", {
@@ -395,22 +508,13 @@ describe("StoreCatalog", () => {
     // The name's language is on its link; the card keeps the page's.
     expect(link).toHaveAttribute("lang", "es");
     expect(first?.closest("li")).not.toHaveAttribute("lang");
-    expect(
-      within(first ?? document.body).getByRole("button", {
-        name: "Agregar al carrito: Artículo 1",
-      })
-    ).toBeVisible();
+    expect(within(first ?? document.body).queryByRole("button")).toBeNull();
     expect(within(second ?? document.body).queryByRole("button")).toBeNull();
     expect(second).toHaveTextContent("Agotado");
     expect(first).not.toHaveTextContent("Agotado");
-    expect(
-      within(first ?? document.body).getByRole("img", {
-        name: "Foto del artículo 1",
-      })
-    ).toBeVisible();
   });
 
-  test("in English, links the cards to the English pages and names the button in English", () => {
+  test("in English, links the cards to the English pages and says sold out in English", () => {
     setup({ locale: "en" });
 
     const grid = within(screen.getByTestId("store-catalog-grid"));
@@ -418,9 +522,6 @@ describe("StoreCatalog", () => {
       "href",
       "/en/products/articulo-1"
     );
-    expect(
-      grid.getByRole("button", { name: "Add to cart: Artículo 1" })
-    ).toBeVisible();
     expect(grid.getByText("Sold out")).toBeVisible();
   });
 
@@ -456,9 +557,11 @@ describe("StoreCatalog", () => {
     expect(empty).toHaveTextContent(
       "Probá con otra búsqueda o quitá algún filtro."
     );
-    expect(
-      within(empty).getByRole("link", { name: "Ver todo el catálogo" })
-    ).toHaveAttribute("href", "/products?sort=price_asc");
+    const way = within(empty).getByRole("link", {
+      name: "Ver todo el catálogo",
+    });
+    expect(way).toHaveAttribute("href", "/products?sort=price_asc");
+    expect(way).toHaveAttribute("data-slot", "store-button");
   });
 
   test("shows no load more when there is no next page", () => {
@@ -544,22 +647,24 @@ describe("StoreCatalog", () => {
     expect(screen.getByRole("button", { name: "Cargar más" })).toHaveFocus();
   });
 
-  test("leaves focus on the search when it was taken there while a page asked for with the button loaded", async () => {
+  test("leaves focus where the shopper took it while a page asked for with the button loaded", async () => {
     const { release, titles, user } = setup({
       firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
       next: "held",
     });
     await user.click(screen.getByRole("button", { name: "Cargar más" }));
     await screen.findByRole("button", { name: "Cargando…" });
-    const search = screen.getByRole("searchbox", { name: "Buscar artículos" });
+    const share = screen.getByRole("button", { name: "Compartir" });
 
-    await user.click(search);
+    act(() => {
+      share.focus();
+    });
     release();
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
     });
-    expect(search).toHaveFocus();
+    expect(share).toHaveFocus();
   });
 
   test("moves focus to the retry when a page asked for with the button fails", async () => {
@@ -596,15 +701,15 @@ describe("StoreCatalog", () => {
     const { observers, titles } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
     });
-    const search = screen.getByRole("searchbox", { name: "Buscar artículos" });
-    search.focus();
+    const share = screen.getByRole("button", { name: "Compartir" });
+    share.focus();
 
     observers.active()?.emit(true);
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 3"]);
     });
-    expect(search).toHaveFocus();
+    expect(share).toHaveFocus();
   });
 
   test("loads the next page when the end of the grid scrolls into view", async () => {

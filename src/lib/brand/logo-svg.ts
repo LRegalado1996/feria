@@ -54,8 +54,8 @@ const TWO_COLOR_FILLS = {
 } as const;
 
 const ONE_COLOR_INKS = {
-  // Named for the background the file goes on.
-  "one-color-dark": STORE_THEME.surface,
+  // Named for the background the file goes on: white on a dark one.
+  "one-color-dark": STORE_THEME.background,
   "one-color-light": STORE_THEME.foreground,
 } as const;
 

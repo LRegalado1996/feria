@@ -2,15 +2,13 @@ import { ORPCError } from "@orpc/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import type { Locale } from "@/lib/i18n/config";
-import {
-  catalogSlugSchema,
-  RELATED_PRODUCTS_DEFAULT,
-} from "@/lib/schemas/catalog";
+import { catalogSlugSchema } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
   getPublishedProduct,
-  listRelatedProducts,
+  listCategories,
+  listRelatedPool,
 } from "@/server/services/catalog";
 
 /** Every cached read of one store's published articles. */
@@ -68,7 +66,11 @@ async function readCachedArticle(
   }
 }
 
-/** The articles shown beside one, cached with the store's catalog. */
+/**
+ * What the suggestions under an article are picked from (its category, and
+ * the rest of the store when the category is small), cached with the
+ * store's catalog. The browser draws from it per visit (FER-039).
+ */
 export async function readRelatedArticles(
   store: { currencyCode: Currency; id: number },
   article: { categoryId: number | null; id: number },
@@ -78,10 +80,9 @@ export async function readRelatedArticles(
   cacheLife("hours");
   cacheTag(catalogTag(store.id));
 
-  return await listRelatedProducts(db, {
+  return await listRelatedPool(db, {
     categoryId: article.categoryId,
     currencyCode: store.currencyCode,
-    limit: RELATED_PRODUCTS_DEFAULT,
     locale,
     productId: article.id,
     storeId: store.id,
@@ -89,10 +90,24 @@ export async function readRelatedArticles(
 }
 
 /**
+ * The store's categories in their order, named in `locale`, cached with its
+ * catalog (FER-039): the header and the footer of every store page list
+ * them, an article's static page included, so adding, renaming, reordering
+ * or deleting one drops the tag.
+ */
+export async function readCategories(store: { id: number }, locale: Locale) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await listCategories(db, { locale, storeId: store.id });
+}
+
+/**
  * Drops what is cached about a store's articles after a write that changes
  * what a visitor sees: an article's texts, price, photos, availability or
- * publication, a category's name, the store's currency. `expire: 0` serves
- * nothing stale.
+ * publication, a category (its name, its place, a new or a deleted one), the
+ * store's currency. `expire: 0` serves nothing stale.
  */
 export function invalidateCatalogCache(storeId: number): void {
   revalidateTag(catalogTag(storeId), { expire: 0 });

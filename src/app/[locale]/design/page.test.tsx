@@ -1,7 +1,9 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
+import useEmblaCarousel from "embla-carousel-react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
+import { createFakeEmbla } from "@/test/embla";
 import { renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
 import { stubReducedMotion } from "@/test/reduced-motion";
@@ -17,7 +19,8 @@ const { notFound } = vi.hoisted(() => ({
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
 
-// The gallery's header holds the language link, which reads the URL.
+// The gallery's header holds the language link and the search, which read
+// the URL and the router.
 vi.mock("next/navigation", () => ({
   notFound,
   usePathname: () => "/design",
@@ -25,8 +28,14 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+// The row and the cover measure a layout happy-dom does not have.
+vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
+vi.mock("embla-carousel-autoplay", () => ({
+  default: vi.fn(() => ({ name: "autoplay", play: vi.fn(), stop: vi.fn() })),
+}));
+
 // Intl separates a currency from its amount with a no-break space.
-const NBSP = "\u00A0";
+const NBSP = " ";
 
 // Every variable the gate reads, cleared, so the machine running the test
 // cannot leak its own Vercel environment in.
@@ -53,8 +62,21 @@ async function setup({
   stubEnvironment(env);
   stubIntersectionObserver();
   stubReducedMotion(false);
+  // One stand-in for both carousels: a new one each render would never
+  // settle, as Embla's own API is the same object for a carousel's life.
+  vi.mocked(useEmblaCarousel).mockReturnValue(
+    createFakeEmbla({
+      plugins: { autoplay: { play: vi.fn(), stop: vi.fn() } },
+      snaps: 3,
+    }).hook
+  );
+  const page = await DesignPage({ params: makeParams(locale) });
 
-  renderWithI18n(await DesignPage({ params: makeParams(locale) }), { locale });
+  // Awaited: the sample header's categories resolve as a stream would.
+  await act(async () => {
+    renderWithI18n(page, { locale });
+    await Promise.resolve();
+  });
 
   return { page: screen.getByTestId("design-page") };
 }
@@ -100,16 +122,20 @@ describe("DesignPage", () => {
       "Design system",
       [
         "Logo",
+        "Colors",
         "Headings",
-        "Chips and badges",
+        "Buttons",
+        "Chips and labels",
         "Price",
         "Arrow link",
         "Count-up",
-        "Article card and slider",
+        "Row of articles",
+        "Banner",
+        "Moving cover",
         "Marquee band",
         "Bubbles",
         "Reveal on scroll",
-        "Every store's header and footer",
+        "Bar, header and footer",
       ],
     ],
     [
@@ -117,16 +143,20 @@ describe("DesignPage", () => {
       "Sistema de diseño",
       [
         "Logo",
+        "Colores",
         "Titulares",
-        "Chips y avisos",
+        "Botones",
+        "Chips y etiquetas",
         "Precio",
         "Enlace con flecha",
         "Número que cuenta",
-        "Tarjeta de artículo y carrusel",
+        "Fila de artículos",
+        "Banner",
+        "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",
         "Aparición al bajar",
-        "Encabezado y pie de cada tienda",
+        "Barra, encabezado y pie",
       ],
     ],
   ] as const)(
@@ -140,12 +170,13 @@ describe("DesignPage", () => {
       expect(
         within(page)
           .getAllByRole("heading", { level: 2 })
+          .filter((heading) => !heading.closest('[data-slot="store-footer"]'))
           .map((heading) => heading.textContent)
       ).toEqual(sections);
     }
   );
 
-  test("shows the logo on the surface and on the contrast color, in both tones, and the mark at 48 and 24 px", async () => {
+  test("shows the full logo on the tile and on the moss, in both tones, at the sizes the store uses, and the mark alone", async () => {
     await setup();
 
     const logos = within(screen.getByTestId("design-logo")).getAllByRole(
@@ -158,18 +189,47 @@ describe("DesignPage", () => {
         logo.dataset.variant,
         logo.dataset.tone,
         logo.parentElement?.className.match(/bg-store-\w+/)?.[0],
-        logo.getAttribute("class")?.match(/\bh-\d+/)?.[0],
+        logo.getAttribute("class")?.match(/\bh-[\d.]+/)?.[0],
       ])
     ).toEqual([
       ["full", "accent", "bg-store-surface", "h-32"],
       ["full", "accent", "bg-store-contrast", "h-32"],
       ["full", "contrast", "bg-store-surface", "h-32"],
-      ["mark", "accent", "bg-store-surface", "h-12"],
-      ["mark", "accent", "bg-store-surface", "h-6"],
-      ["mark", "contrast", "bg-store-surface", "h-12"],
-      ["mark", "contrast", "bg-store-surface", "h-6"],
+      ["full", "accent", "bg-store-contrast", "h-10"],
+      ["full", "accent", "bg-store-contrast", "h-12.5"],
+      ["full", "accent", "bg-store-contrast", "h-15.5"],
+      ["mark", "accent", "bg-store-contrast", "h-8"],
     ]);
   });
+
+  test.each([
+    ["en", "White: the page"],
+    ["es", "Blanco: la página"],
+  ] as const)(
+    "in %s, shows the five colors and the three derived, each named by its token",
+    async (locale, background) => {
+      await setup({ locale });
+      const palette = screen.getByTestId("design-palette");
+
+      expect(
+        within(palette)
+          .getAllByRole("listitem")
+          .map((item) => item.querySelector(".font-mono")?.textContent)
+      ).toEqual([
+        "store-background",
+        "store-surface",
+        "store-foreground",
+        "store-contrast",
+        "store-accent",
+        "store-muted",
+        "store-line",
+      ]);
+      expect(within(palette).getByText(background)).toBeVisible();
+      expect(
+        within(palette).getAllByRole("listitem")[3]?.firstElementChild
+      ).toHaveClass("bg-store-contrast");
+    }
+  );
 
   test("paints the storefront canvas, not the admin's", async () => {
     const { page } = await setup();
@@ -190,12 +250,33 @@ describe("DesignPage", () => {
     ).toHaveClass("text-store-accent");
   });
 
-  test("shows the filter chips as links, the first one current", async () => {
+  test("shows every kind of button: the pills, the round arrow, and those on the moss", async () => {
     await setup();
-
-    const chips = within(screen.getByTestId("design-chips")).getAllByRole(
-      "link"
+    const buttons = within(screen.getByTestId("design-buttons")).getAllByRole(
+      "button"
     );
+
+    expect(
+      buttons.map((button) => [
+        button.getAttribute("aria-label") ?? button.textContent,
+        button.dataset.variant,
+        button.dataset.size,
+      ])
+    ).toEqual([
+      ["Add to cart", "primary", "lg"],
+      ["See the catalog", "outline", "md"],
+      ["Clear", "ghost", "md"],
+      ["Add to cart", "accent", "icon-lg"],
+      ["On the moss", "contrast", "md"],
+      ["Search the store", "contrast", "icon"],
+    ]);
+  });
+
+  test("shows the filter chips as links, the first one current, and the new label on the tile", async () => {
+    await setup();
+    const section = screen.getByTestId("design-chips");
+
+    const chips = within(section).getAllByRole("link");
     expect(chips.map((chip) => chip.textContent)).toEqual([
       "All",
       "Necklaces",
@@ -208,23 +289,9 @@ describe("DesignPage", () => {
       null,
       null,
     ]);
-    expect(chips[0]).toHaveAttribute("data-selected", "true");
-    expect(chips[1]).toHaveAttribute("data-selected", "false");
-  });
-
-  test.each([
-    ["en", ["New", "Price drop"]],
-    ["es", ["Nuevo", "Bajó de precio"]],
-  ] as const)("in %s, shows both badges", async (locale, badges) => {
-    await setup({ locale });
-
     expect(
-      [
-        ...screen
-          .getByTestId("design-chips")
-          .querySelectorAll('[data-slot="store-badge"]'),
-      ].map((badge) => badge.textContent)
-    ).toEqual(badges);
+      section.querySelector('[data-slot="store-badge"]')
+    ).toHaveTextContent(/^New$/u);
   });
 
   test.each([
@@ -257,7 +324,7 @@ describe("DesignPage", () => {
         ].map((tag) => tag.dataset.size)
       ).toEqual(["lg", "sm", "sm"]);
       expect(
-        section.querySelector('[data-slot="store-price-tag-previous"]')
+        section.querySelector('[data-slot="store-price-tag-previous"] .sr-only')
           ?.textContent
       ).toBe(previous);
     }
@@ -274,10 +341,6 @@ describe("DesignPage", () => {
       "default",
       "contrast",
     ]);
-    expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "#cards",
-      "#cards",
-    ]);
   });
 
   test("shows the count-up at its final figure, with its label", async () => {
@@ -290,10 +353,11 @@ describe("DesignPage", () => {
     expect(within(section).getByText("sample articles")).toBeInTheDocument();
   });
 
-  test("shows six sample articles in the slider, one new and one reduced among them", async () => {
+  test("shows six sample articles in a row, on the seed's photos, one new, one reduced and one sold out", async () => {
     await setup();
     const section = screen.getByTestId("design-cards");
-    const cards = within(section).getAllByRole("article");
+    const row = within(section).getByRole("region", { name: "Just arrived" });
+    const cards = within(row).getAllByRole("article");
 
     expect(
       cards.map((card) => within(card).getByRole("link").textContent)
@@ -310,30 +374,53 @@ describe("DesignPage", () => {
         (card) =>
           card.querySelector('[data-slot="store-badge"]')?.textContent ?? null
       )
-    ).toEqual(["New", "Price drop", null, null, null, "New"]);
-    expect(
-      cards.map(
-        (card) =>
-          card.querySelector('[data-slot="store-price-tag-amount"]')
-            ?.textContent
-      )
-    ).toEqual([
+    ).toEqual(["New", null, null, null, null, "New"]);
+    expect(cards.map((card) => card.querySelector("p")?.textContent)).toEqual([
       `UYU${NBSP}1,290`,
-      `UYU${NBSP}890`,
+      `UYU${NBSP}1,290Was UYU${NBSP}1,290UYU${NBSP}890`,
       `UYU${NBSP}450`,
       `USD${NBSP}12.50`,
-      `UYU${NBSP}390`,
+      "Sold out",
       `UYU${NBSP}1,590`,
     ]);
+    expect(cards[0]?.querySelector("img")?.getAttribute("src")).toContain(
+      "necklace-1.jpg"
+    );
     expect(
-      within(section).getByRole("region", { name: "Sample articles" })
-    ).toBeInTheDocument();
+      within(section).getByRole("link", { name: "See all: Just arrived" })
+    ).toHaveAttribute("href", "#cards");
+  });
+
+  test("shows a banner, and the cover of three banners that moves on its own with a pause", async () => {
+    await setup();
+
     expect(
-      within(section).getByRole("heading", { name: "Just arrived" })
-    ).toHaveAttribute("data-size", "section");
+      within(screen.getByTestId("design-banner")).getByRole("link", {
+        name: "Earrings for every day Shop now",
+      })
+    ).toHaveAttribute("href", "#cover");
+    const cover = within(screen.getByTestId("design-cover")).getByRole(
+      "region",
+      { name: "Cover" }
+    );
+    // Each banner's words (its title, then the call to shop) and where it
+    // leads, slide by slide.
     expect(
-      section.querySelector('[data-slot="store-slider-position"]')?.textContent
-    ).toBe("1 / 6");
+      within(cover)
+        .getAllByRole("group")
+        .map((slide) => {
+          const banner = within(slide).getByRole("link");
+
+          return [banner.textContent, banner.getAttribute("href")];
+        })
+    ).toEqual([
+      ["Bubbles for the whole fairShop now", "#cover"],
+      ["Earrings for every dayShop now", "#cover"],
+      ["Rings that shineShop now", "#cover"],
+    ]);
+    expect(
+      within(cover).getByRole("button", { name: "Pause the cover" })
+    ).toHaveAttribute("aria-pressed", "false");
   });
 
   test("shows the marquee in both tones", async () => {
@@ -344,18 +431,11 @@ describe("DesignPage", () => {
         ...screen
           .getByTestId("design-marquee")
           .querySelectorAll<HTMLElement>('[data-slot="store-marquee"]'),
-      ].map((marquee) => [
-        marquee.dataset.tone,
-        marquee.querySelector('[data-slot="store-marquee-track"]')
-          ?.firstElementChild?.textContent,
-      ])
-    ).toEqual([
-      ["contrast", "LR MarketJewelry and bubble gunsChristmas fair"],
-      ["accent", "LR MarketJewelry and bubble gunsChristmas fair"],
-    ]);
+      ].map((marquee) => marquee.dataset.tone)
+    ).toEqual(["contrast", "accent"]);
   });
 
-  test("shows the bubbles blown from the logo, on a contrast block that holds the burst", async () => {
+  test("shows the bubbles blown from the full logo, on a contrast block that holds the burst", async () => {
     await setup();
 
     const section = screen.getByTestId("design-bubbles");
@@ -364,27 +444,44 @@ describe("DesignPage", () => {
     });
 
     expect(button.parentElement).toHaveClass("relative", "bg-store-contrast");
-    expect(
-      button.parentElement?.querySelector('[data-slot="store-bubbles-layer"]')
-    ).toBeInTheDocument();
+    expect(button.querySelector('[data-slot="store-logo"]')).toHaveAttribute(
+      "data-variant",
+      "full"
+    );
   });
 
-  test("shows every store's header and footer, not sticky, with every footer link", async () => {
+  test("shows the bar, the header with sample categories, not sticky, and the footer with every link", async () => {
     const { page } = await setup({ locale: "es" });
-    const shell = within(page).getByTestId("design-shell");
+    const shell = within(within(page).getByTestId("design-shell"));
 
-    expect(within(shell).getByTestId("store-header")).toHaveClass("static");
+    expect(shell.getByTestId("store-announcement-bar")).toHaveTextContent(
+      "Encontranos en la feria · del 5/12 al 5/1"
+    );
+    expect(shell.getByTestId("store-header")).toHaveClass("static");
+    expect(
+      within(shell.getByRole("navigation", { name: "Secciones de la tienda" }))
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+    ).toEqual([
+      "Catálogo",
+      "Burbujeros",
+      "Cadenas",
+      "Anillos",
+      "Aros",
+      "Pulseras",
+    ]);
     // Its skip link leads to the gallery's own content.
     expect(page).toHaveAttribute("id", "store-main");
     expect(page).toHaveAttribute("tabindex", "-1");
     expect(
-      within(within(shell).getByTestId("store-footer"))
+      within(shell.getByTestId("store-footer"))
         .getAllByRole("link")
         .map((link) => link.getAttribute("href"))
+        .filter((href) => href?.startsWith("https://"))
     ).toEqual([
+      "https://wa.me/59899000000",
       "https://www.instagram.com/lrmarket",
       "https://www.tiktok.com/@lrmarket",
-      "https://wa.me/59899000000",
       "https://lucasregalado.com",
     ]);
   });

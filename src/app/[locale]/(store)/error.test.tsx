@@ -10,6 +10,13 @@ import StoreError from "./error";
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
+// The frame's header reads the router (its search and language link).
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/products",
+  useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 function setup({ locale = "en" }: { locale?: Locale } = {}) {
   const error = new Error("render failed");
   const retry = vi.fn<() => void>();
@@ -21,6 +28,15 @@ function setup({ locale = "en" }: { locale?: Locale } = {}) {
 }
 
 describe("StoreError", () => {
+  test("replaces the page with one in the store's frame, under its header", () => {
+    setup();
+
+    expect(screen.getByTestId("store-header")).toBeVisible();
+    expect(screen.getByTestId("store-main")).toContainElement(
+      screen.getByRole("heading", { level: 1 })
+    );
+  });
+
   test("reports the failure once, with its action", () => {
     const { error, view } = setup();
 

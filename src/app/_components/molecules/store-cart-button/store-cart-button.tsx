@@ -35,7 +35,8 @@ function StoreCartButton({ className }: StoreCartButtonProps) {
     <Link
       aria-label={label}
       className={cn(
-        "relative inline-flex size-11 items-center justify-center text-store-foreground hover:bg-store-surface focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground",
+        // On the header's moss: the accent, 11:1, like the header's links.
+        "relative inline-flex size-11 items-center justify-center rounded-full text-store-accent hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent",
         className
       )}
       data-slot="store-cart-button"
@@ -46,7 +47,7 @@ function StoreCartButton({ className }: StoreCartButtonProps) {
       {count > 0 ? (
         <span
           aria-hidden="true"
-          className="absolute top-0.5 right-0.5 flex min-w-5 items-center justify-center bg-store-accent px-1 font-display text-xs leading-none tracking-display text-store-foreground tabular-nums"
+          className="absolute top-1 right-0.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-store-accent px-1 text-xs leading-none font-bold text-store-foreground tabular-nums"
           data-testid="store-cart-count"
         >
           {count}

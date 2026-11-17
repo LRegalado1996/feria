@@ -10,6 +10,7 @@ import {
   uniqueTag,
 } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
+import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
 
 // FER-023. Each test seeds a catalog of its own in the one store every spec
@@ -91,11 +92,30 @@ async function setup({ db }: { db: DbFixture["db"] }) {
   };
 }
 
-/** The titles the grid shows, in order. */
+/**
+ * The titles the grid shows, in order. Hidden ones too: while the filter
+ * panel is open it hides the page behind it from assistive technology, and
+ * the grid is still what the address shows.
+ */
 function titles(page: Page) {
   return page.getByTestId("store-catalog-grid").getByRole("heading", {
+    includeHidden: true,
     level: 2,
   });
+}
+
+/**
+ * The filter panel, opened from its button ("Filtrar", with how many choices
+ * are on): the first press may land before React owns the button.
+ */
+async function openFilters(page: Page) {
+  const panel = page.getByRole("dialog", { name: "Filtrar" });
+  await clickUntilVisible(
+    page.getByRole("button", { name: /^Filtrar/u }),
+    panel
+  );
+
+  return panel;
 }
 
 test.describe("Catalog", () => {
@@ -111,24 +131,28 @@ test.describe("Catalog", () => {
       "Pulsera dorada",
       "Pulsera violeta",
     ]);
-    const sidebar = page.getByTestId("store-catalog");
+    const panel = await openFilters(page);
 
-    await sidebar
-      .getByRole("link", { name: `Collares ${tag}` })
-      .first()
-      .click();
+    await panel.getByRole("link", { name: `Collares ${tag}` }).click();
     await expect(page).toHaveURL(
       new RegExp(`\\?category=${necklaces.slug}$`, "u")
     );
     await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
-    await sidebar
+    // The panel stays open for the next choice, the one taken marked in it.
+    await expect(panel).toBeVisible();
+    await expect(
+      panel.getByRole("link", { name: `Collares ${tag}` })
+    ).toHaveAttribute("aria-current", "true");
+    await panel
       .getByRole("link", { name: new RegExp(`^Dorado ${tag}`, "u") })
-      .first()
       .click();
     await expect(page).toHaveURL(
       new RegExp(`\\?category=${necklaces.slug}&${color}=dorado$`, "u")
     );
     await expect(titles(page)).toHaveText(["Collar dorado"]);
+    await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Ver resultados" }).click();
+    await expectDialogRemoved(page, panel);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       `Collares ${tag} · Dorado ${tag}`
     );
@@ -178,42 +202,41 @@ test.describe("Catalog", () => {
     );
   });
 
-  test("search follows the typing without losing focus, and the back button restores the earlier selection", async ({
+  test("sorts from its menu of links, keeping the selection in the address", async ({
     db,
     page,
   }) => {
-    const { color, necklaces, tag } = await setup({ db });
-    await page.goto(`/products?${color}=violeta`);
+    const { tag } = await setup({ db });
+    await page.goto(`/products?q=${tag}`);
     await expect(titles(page)).toHaveText([
+      "Collar dorado",
       "Collar violeta",
+      "Pulsera dorada",
       "Pulsera violeta",
     ]);
-    const search = page.getByRole("searchbox", { name: "Buscar artículos" });
+    const menu = page.getByRole("menu");
 
-    // Filled until React owns the field: a fill before hydration is lost.
-    await expect(async () => {
-      await search.fill("");
-      await search.fill("pulsera");
-      await expect(page).toHaveURL(/q=/u, { timeout: 2000 });
-    }).toPass();
-    await expect(page).toHaveURL(
-      new RegExp(`\\?${color}=violeta&q=pulsera$`, "u")
+    await clickUntilVisible(
+      page.getByRole("button", { name: "Ordenar por: Más nuevos" }),
+      menu
     );
-    await expect(titles(page)).toHaveText(["Pulsera violeta"]);
-    await expect(search).toBeFocused();
+    await expect(
+      menu.getByRole("menuitem", { name: "Más nuevos" })
+    ).toHaveAttribute("aria-current", "true");
+    await menu.getByRole("menuitem", { name: "Precio: menor a mayor" }).click();
 
-    await page
-      .getByTestId("store-catalog")
-      .getByRole("link", { name: `Collares ${tag}` })
-      .first()
-      .click();
-    await expect(page).toHaveURL(new RegExp(`category=${necklaces.slug}`, "u"));
-    await page.goBack();
     await expect(page).toHaveURL(
-      new RegExp(`\\?${color}=violeta&q=pulsera$`, "u")
+      new RegExp(`\\?q=${tag}&sort=price_asc$`, "u")
     );
-    await expect(search).toHaveValue("pulsera");
-    await expect(titles(page)).toHaveText(["Pulsera violeta"]);
+    await expect(titles(page)).toHaveText([
+      "Pulsera dorada",
+      "Pulsera violeta",
+      "Collar violeta",
+      "Collar dorado",
+    ]);
+    await expect(
+      page.getByRole("button", { name: "Ordenar por: Precio: menor a mayor" })
+    ).toBeVisible();
   });
 
   test("sorts by price and loads the next page", async ({ db, page }) => {
@@ -242,21 +265,26 @@ test.describe("Catalog", () => {
     await expect(titles(page).last()).toHaveText("Extra 0");
   });
 
-  test("adds an available article to the cart from the grid, in the browser's one cart; a sold-out one has no button", async ({
+  test("a card is one link to its article, with nothing to add; the article's page adds to the browser's one cart", async ({
     db,
     page,
   }) => {
     const { goldNecklace, tag } = await setup({ db });
     await page.goto(`/products?q=${tag}`);
     const storePage = new StorePage(page);
+    const grid = page.getByTestId("store-catalog-grid");
+    await expect(titles(page).first()).toBeVisible();
+    // No card carries a button, an available one or a sold-out one.
+    await expect(grid.getByRole("button")).toHaveCount(0);
+
+    await grid.getByRole("link", { name: /Collar dorado/u }).click();
+    await expect(page).toHaveURL(`/products/${goldNecklace.slug}`);
     // Enabled only once React owns it; a retried click would add twice.
     const add = page.getByRole("button", {
-      name: "Agregar al carrito: Collar dorado",
+      exact: true,
+      name: "Agregar al carrito",
     });
     await expect(add).toBeEnabled();
-    await expect(
-      page.getByRole("button", { name: "Agregar al carrito: Pulsera violeta" })
-    ).toHaveCount(0);
     await add.click();
 
     await expect(page.getByText("Agregado al carrito.")).toBeVisible();

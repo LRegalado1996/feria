@@ -4,6 +4,7 @@ import { CircleAlert, ImageOff, Minus, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { StoreButton } from "@/app/_components/atoms/store-button";
 import type { CartProduct } from "@/lib/hooks/cart";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -30,13 +31,15 @@ export interface StoreCartLineProps {
   seenPriceAmount: number | undefined;
 }
 
-const STEP_CLASS =
-  "inline-flex size-11 items-center justify-center border-2 border-store-contrast text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground aria-disabled:opacity-40";
+/** The article's name, as a card sets it: the display face, small. */
+const NAME_CLASS =
+  "font-display text-xs leading-tight font-extrabold wrap-anywhere uppercase";
 
 /**
- * One article in the cart (FER-026): its photo, name and price as the shop
- * has them now, what changed since it was added, its quantity and a way to
- * take it out. A line that is gone or sold out can only be taken out.
+ * One article in the cart (FER-026): its photo on the grey tile, name and
+ * price as the shop has them now, what changed since it was added, its
+ * quantity in a pill and a way to take it out. A line that is gone or sold
+ * out can only be taken out.
  */
 function StoreCartLine({
   className,
@@ -71,20 +74,23 @@ function StoreCartLine({
   return (
     <li
       className={cn(
-        "grid grid-cols-[4.5rem_1fr] gap-x-3 gap-y-2 border-b-2 border-store-line py-4",
+        "grid grid-cols-[5rem_1fr] gap-x-4 gap-y-3 border-b border-store-line py-5",
         className
       )}
       data-flag={flag ?? undefined}
       data-slot="store-cart-line"
       data-testid="store-cart-line"
     >
-      <div className="relative row-span-2 size-18 bg-store-line">
+      <div
+        className="relative row-span-2 size-20 bg-store-surface"
+        data-slot="store-cart-line-tile"
+      >
         {product?.cover ? (
           <Image
             alt=""
             className={cn("object-cover", blocked && "opacity-50")}
             fill
-            sizes="72px"
+            sizes="80px"
             src={product.cover.url}
           />
         ) : (
@@ -94,17 +100,20 @@ function StoreCartLine({
           />
         )}
       </div>
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1.5">
         {product ? (
           <Link
-            className="font-semibold text-store-foreground underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+            className={cn(
+              NAME_CLASS,
+              "self-start text-store-foreground underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+            )}
             href={localizePath(`/products/${product.slug}`, locale)}
             lang={product.lang}
           >
             {product.title}
           </Link>
         ) : (
-          <p className="font-semibold text-store-muted">{title}</p>
+          <p className={cn(NAME_CLASS, "text-store-muted")}>{title}</p>
         )}
         {product && !blocked ? (
           <p className="text-sm text-store-muted tabular-nums">
@@ -141,62 +150,67 @@ function StoreCartLine({
         {blocked ? (
           <span />
         ) : (
-          <fieldset className="flex items-center">
+          // A pill around the two steps and the count, as the article's
+          // page draws it.
+          <fieldset className="inline-flex items-center rounded-full border-2 border-store-foreground">
             <legend className="sr-only">
               {interpolate(copy.quantity, { title })}
             </legend>
             {/* `aria-disabled`, not `disabled`: a button that disables
                 itself under the finger drops keyboard focus. */}
-            <button
+            <StoreButton
               aria-disabled={quantity <= 1}
-              className={STEP_CLASS}
               onClick={() => {
                 if (quantity > 1) {
                   onQuantity(quantity - 1);
                 }
               }}
+              size="icon"
               type="button"
+              variant="ghost"
             >
               <Minus aria-hidden="true" className="size-4" />
               <span className="sr-only">
                 {interpolate(copy.decrease, { title })}
               </span>
-            </button>
+            </StoreButton>
             <output
               aria-live="polite"
-              className="inline-flex h-11 min-w-11 items-center justify-center border-y-2 border-store-contrast font-display text-xl leading-none tracking-display tabular-nums"
+              className="inline-flex h-11 min-w-8 items-center justify-center text-base font-semibold tabular-nums"
               data-testid="store-cart-quantity"
             >
               {quantity}
             </output>
-            <button
+            <StoreButton
               aria-disabled={quantity >= CART_QUANTITY_MAX}
-              className={STEP_CLASS}
               onClick={() => {
                 if (quantity < CART_QUANTITY_MAX) {
                   onQuantity(quantity + 1);
                 }
               }}
+              size="icon"
               type="button"
+              variant="ghost"
             >
               <Plus aria-hidden="true" className="size-4" />
               <span className="sr-only">
                 {interpolate(copy.increase, { title })}
               </span>
-            </button>
+            </StoreButton>
           </fieldset>
         )}
-        <button
-          className="inline-flex size-11 shrink-0 items-center justify-center text-store-foreground hover:bg-store-contrast hover:text-store-background focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
+        <StoreButton
           data-cart-remove=""
           onClick={() => {
             onQuantity(0);
           }}
+          size="icon"
           type="button"
+          variant="ghost"
         >
           <Trash2 aria-hidden="true" className="size-4" />
           <span className="sr-only">{interpolate(copy.remove, { title })}</span>
-        </button>
+        </StoreButton>
       </div>
     </li>
   );

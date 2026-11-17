@@ -13,7 +13,7 @@ import {
 
 const BRAND_DIRECTORY = path.join(process.cwd(), "public/brand");
 const ACCENT = "#c8f31d";
-const INK = "#111312";
+const INK = "#15160f";
 const PAPER = "#ffffff";
 const TAG = `<path d="${LOGO_TAG_PATH}"`;
 

@@ -88,6 +88,42 @@ describe("StoreCartLine", () => {
     expect(line().querySelector("img")).toHaveAttribute("alt", "");
   });
 
+  test("sets the photo on the grey tile, the name in the display face and the quantity in a pill", () => {
+    const { line } = setup();
+
+    expect(
+      line().querySelector('[data-slot="store-cart-line-tile"]')
+    ).toHaveClass("size-20", "bg-store-surface");
+    expect(screen.getByRole("link", { name: "Collar de perlas" })).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "uppercase"
+    );
+    expect(
+      screen.getByRole("group", { name: "Quantity of Collar de perlas" })
+    ).toHaveClass("rounded-full", "border-2", "border-store-foreground");
+    // The steps and the remove are the store's round buttons.
+    for (const name of [
+      "One unit less of Collar de perlas",
+      "One unit more of Collar de perlas",
+      "Remove Collar de perlas",
+    ]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toHaveAttribute("data-slot", "store-button");
+      expect(button).toHaveAttribute("data-size", "icon");
+      expect(button).toHaveAttribute("type", "button");
+    }
+  });
+
+  test("names a line with no article in the display face, muted", () => {
+    setup({ flag: "gone", product: null });
+
+    expect(screen.getByText("Article no longer for sale")).toHaveClass(
+      "font-display",
+      "text-store-muted"
+    );
+  });
+
   test.each([
     ["en", "/en/products/collar-de-perlas"],
     ["es", "/products/collar-de-perlas"],

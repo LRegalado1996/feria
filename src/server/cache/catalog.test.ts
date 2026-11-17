@@ -8,6 +8,7 @@ import { db } from "@/server/db";
 
 import {
   invalidateCatalogCache,
+  readCategories,
   readPublishedArticle,
   readRelatedArticles,
 } from "./catalog";
@@ -20,10 +21,13 @@ const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
 
 // The queries are `src/server/services/catalog.test.ts`'s: here only what the
 // cache layer adds around them.
-const { getPublishedProduct, listRelatedProducts } = vi.hoisted(() => ({
-  getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  listRelatedProducts: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-}));
+const { getPublishedProduct, listCategories, listRelatedPool } = vi.hoisted(
+  () => ({
+    getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+    listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+    listRelatedPool: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  })
+);
 
 // Next's cache only exists inside a Next render. Outside it `"use cache"` is
 // a plain string, so the function under test runs on every call.
@@ -31,7 +35,8 @@ vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
 
 vi.mock("@/server/services/catalog", () => ({
   getPublishedProduct,
-  listRelatedProducts,
+  listCategories,
+  listRelatedPool,
 }));
 
 function makeStore(): { currencyCode: Currency; id: number } {
@@ -54,16 +59,26 @@ function makeArticle(overrides: Record<string, unknown> = {}) {
  */
 function setup({ error }: { error?: Error } = {}) {
   const article = makeArticle();
-  const related = [makeArticle({ id: 12, slug: "anillo" })];
+  const categories = [
+    { id: 3, lang: "en", name: "Rings", position: 0, slug: "anillos" },
+  ];
+  const related = {
+    others: [],
+    same: [makeArticle({ id: 12, slug: "anillo" })],
+  };
   if (error === undefined) {
     getPublishedProduct.mockResolvedValue(article);
   } else {
     getPublishedProduct.mockRejectedValue(error);
   }
-  listRelatedProducts.mockResolvedValue(related);
+  listRelatedPool.mockResolvedValue(related);
+  listCategories.mockResolvedValue(categories);
 
   return {
     article,
+    categories,
+    readCategories: async (locale: Locale = "es") =>
+      await readCategories(makeStore(), locale),
     readArticle: async ({
       locale = "es",
       slug = "cadena",
@@ -147,19 +162,31 @@ describe("readPublishedArticle", () => {
 });
 
 describe("readRelatedArticles", () => {
-  test("lists up to four articles beside this one, from its category, in that language and currency", async () => {
+  test("hands over the pool to pick the suggestions from, by its category, in that language and currency", async () => {
     const { readRelated, related } = setup();
 
     await expect(readRelated({ categoryId: 3, id: 11 }, "en")).resolves.toBe(
       related
     );
 
-    expect(listRelatedProducts).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(listRelatedPool).toHaveBeenCalledExactlyOnceWith(db, {
       categoryId: 3,
       currencyCode: "USD",
-      limit: 4,
       locale: "en",
       productId: 11,
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategories", () => {
+  test("lists the store's categories in that language", async () => {
+    const { categories, readCategories: read } = setup();
+
+    await expect(read("en")).resolves.toBe(categories);
+
+    expect(listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
       storeId: 7,
     });
   });
@@ -175,6 +202,11 @@ describe("cached reads", () => {
       "the articles beside it",
       async ({ readRelated }: ReturnType<typeof setup>) =>
         await readRelated({ categoryId: null, id: 11 }),
+    ],
+    [
+      "the categories",
+      async ({ readCategories: read }: ReturnType<typeof setup>) =>
+        await read(),
     ],
   ])(
     "tag %s with the store's catalog and keep it for hours",

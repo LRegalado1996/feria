@@ -1,1 +1,5 @@
-export { StorePriceTag, type StorePriceTagProps } from "./store-price-tag";
+export {
+  StorePriceTag,
+  type StorePriceTagProps,
+  storePriceTagVariants,
+} from "./store-price-tag";

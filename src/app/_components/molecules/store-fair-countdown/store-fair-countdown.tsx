@@ -40,7 +40,7 @@ async function StoreFairCountdown({
       data-testid="fair-countdown"
     >
       <StoreCountUp
-        className="font-display store-display-figure leading-display font-normal tracking-display text-store-accent"
+        className="font-display store-display-figure leading-display font-extrabold text-store-accent"
         value={days}
       />
       <span className="pb-2 text-base font-medium">

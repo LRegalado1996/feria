@@ -2,6 +2,11 @@ import type { Dictionary } from "@/content/es";
 
 export const common: Dictionary["common"] = {
   cancel: "Cancel",
+  carousel: {
+    roleDescription: "carousel",
+    slide: "{current} of {total}",
+    slideRoleDescription: "slide",
+  },
   closeDialog: "Close dialog",
   delete: "Delete",
   deleteRow: "Delete: {row}",

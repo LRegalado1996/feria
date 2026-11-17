@@ -37,29 +37,35 @@ async function setup(
 }
 
 test.describe("Article page", () => {
-  test("the gallery steps, jumps to a thumbnail and opens a photo full screen", async ({
+  test("the gallery's round arrow steps through the photos and back, and the one in view opens full screen", async ({
     db,
     page,
   }) => {
     const { article } = await setup({ db });
     await page.goto(`/products/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
-    await expect(gallery.getByText("Foto 1 de 3")).toBeVisible();
+    // Said to a screen reader, out of sight.
+    const position = gallery.locator("output");
+    await expect(position).toHaveText("Foto 1 de 3");
 
     await clickUntilVisible(
       gallery.getByRole("button", { name: "Foto siguiente" }),
       gallery.getByText("Foto 2 de 3")
     );
-    const track = gallery.getByTestId("store-gallery-track");
-    // The photo in view, by its place on the track.
-    const inView = async () =>
-      await track.evaluate((element) =>
-        Math.round(element.scrollLeft / element.clientWidth)
-      );
-    await expect.poll(inView).toBe(1);
-    await gallery.getByRole("button", { name: "Ver la foto 3" }).click();
-    await expect(gallery.getByText("Foto 3 de 3")).toBeVisible();
-    await expect.poll(inView).toBe(2);
+    // Every slide is named by its place; the photo in view sits at the left
+    // edge of the gallery (the slide's own box holds the gap before it).
+    const slide = (place: number) =>
+      gallery.getByRole("group", { name: `${place} de 3` });
+    const leftEdge = async (place: number) => {
+      const [box, frame] = await Promise.all([
+        slide(place).getByRole("img").boundingBox(),
+        gallery.boundingBox(),
+      ]);
+      return Math.round((box?.x ?? -1) - (frame?.x ?? 0));
+    };
+    await expect.poll(async () => await leftEdge(2)).toBe(0);
+    await gallery.getByRole("button", { name: "Foto siguiente" }).click();
+    await expect(position).toHaveText("Foto 3 de 3");
 
     // Every photo shares the article's alt text: the zoom is told apart by
     // its source, which next/image passes on as `url=`.
@@ -69,7 +75,7 @@ test.describe("Article page", () => {
         ? null
         : new URL(src, page.url()).searchParams.get("url");
     };
-    const third = await source(track.getByRole("img").nth(2));
+    const third = await source(slide(3).getByRole("img"));
     expect(third).toBe("/seed/ring-3.jpg");
     const zoom = page.getByTestId("store-gallery-zoom");
     await gallery.getByRole("button", { name: "Ampliar la foto" }).click();
@@ -79,6 +85,12 @@ test.describe("Article page", () => {
       .toBe(third);
     await zoom.getByRole("button", { name: "Cerrar la foto ampliada" }).click();
     await expectDialogRemoved(page, zoom);
+
+    // At the last photo the arrow leads back to the first.
+    await gallery
+      .getByRole("button", { name: "Volver a la primera foto" })
+      .click();
+    await expect(position).toHaveText("Foto 1 de 3");
   });
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {
@@ -99,6 +111,177 @@ test.describe("Article page", () => {
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, 3 unidades"
     );
+  });
+
+  for (const width of [375, 1440]) {
+    test(`at ${width} px, the price under the name, the whole description, then the quantity beside the ink button on one row`, async ({
+      db,
+      page,
+    }) => {
+      await page.setViewportSize({ height: 900, width });
+      const tag = uniqueTag();
+      const rings = await db.seed.createCategory({
+        nameEs: `Anillos ${tag}`,
+        slug: `anillos-${tag}`,
+      });
+      const article = await db.seed.createArticle({
+        categoryId: rings.id,
+        description:
+          "Un anillo con baño de oro.\n\nSe usa solo o con anillos finos. Queda bien de día y de noche.",
+        priceAmount: 99_000,
+        title: "Anillo de prueba",
+      });
+      await page.goto(`/products/${article.slug}`);
+
+      const name = page.getByRole("heading", { level: 1 });
+      await expect(name).toHaveText("Anillo de prueba");
+      const description = page.getByTestId("store-article-description");
+      await expect(description.getByRole("paragraph")).toHaveText([
+        "Un anillo con baño de oro.",
+        "Se usa solo o con anillos finos. Queda bien de día y de noche.",
+      ]);
+      const row = page.getByTestId("store-article-purchase-row");
+      const add = row.getByRole("button", { name: "Agregar al carrito" });
+      const quantity = row.getByRole("group", { name: "Cantidad" });
+      const [addBox, quantityBox, nameBox, priceBox] = await Promise.all([
+        add.boundingBox(),
+        quantity.boundingBox(),
+        name.boundingBox(),
+        page
+          .getByTestId("store-article")
+          // Intl puts a no-break space between the sign and the amount.
+          .getByText(/^\$\s990$/u)
+          // The article's own comes first; a suggestion below may cost the same.
+          .first()
+          .boundingBox(),
+      ]);
+      // One row: side by side, the same height and top.
+      expect(addBox?.y).toBe(quantityBox?.y);
+      expect((addBox?.x ?? 0) > (quantityBox?.x ?? 0)).toBe(true);
+      // The price right under the name: below its bottom, by less than 16 px.
+      expect(nameBox).not.toBeNull();
+      expect(priceBox).not.toBeNull();
+      const gap =
+        (priceBox?.y ?? 0) - ((nameBox?.y ?? 0) + (nameBox?.height ?? 0));
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThan(16);
+      // The ink with the lime (FER-039).
+      await expect(add).toHaveCSS("background-color", "rgb(21, 22, 15)");
+      await expect(add).toHaveCSS("color", "rgb(200, 243, 29)");
+    });
+  }
+
+  test("“También te puede gustar” suggests its category's other articles, never itself, and fills a small category from the rest", async ({
+    db,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const [rings, chains] = await Promise.all([
+      db.seed.createCategory({
+        nameEs: `Anillos ${tag}`,
+        slug: `anillos-${tag}`,
+      }),
+      db.seed.createCategory({
+        nameEs: `Cadenas ${tag}`,
+        slug: `cadenas-${tag}`,
+      }),
+    ]);
+    // A price publishes a seeded article; without one it is a draft.
+    const article = await db.seed.createArticle({
+      categoryId: rings.id,
+      priceAmount: 90_000,
+      title: `Anillo ${tag}`,
+    });
+    const sameTitles = [`Anillo uno ${tag}`, `Anillo dos ${tag}`];
+    for (const title of sameTitles) {
+      await db.seed.createArticle({
+        categoryId: rings.id,
+        priceAmount: 50_000,
+        title,
+      });
+    }
+    // Enough of the rest of the store to fill the row, whatever else is in it.
+    for (let index = 0; index < 6; index += 1) {
+      await db.seed.createArticle({
+        categoryId: chains.id,
+        priceAmount: 70_000,
+        title: `Cadena ${index} ${tag}`,
+      });
+    }
+
+    await page.goto(`/products/${article.slug}`);
+    const row = page.getByRole("region", { name: "También te puede gustar" });
+    const names = row.getByRole("heading", { level: 3 });
+
+    await expect(names).toHaveCount(8);
+    // The festive band sits between the article and the row; its picture is
+    // for the eye only.
+    const band = page.getByTestId("store-article-band");
+    await expect(
+      band.getByTestId("store-article-band-picture")
+    ).toHaveAttribute("aria-hidden", "true");
+    const [bandBox, rowBox, addBox] = await Promise.all([
+      band.boundingBox(),
+      row.boundingBox(),
+      page.getByRole("button", { name: "Agregar al carrito" }).boundingBox(),
+    ]);
+    expect((bandBox?.y ?? 0) > (addBox?.y ?? 0)).toBe(true);
+    expect((rowBox?.y ?? 0) >= (bandBox?.y ?? 0) + (bandBox?.height ?? 0)).toBe(
+      true
+    );
+    const shown = await names.allTextContents();
+    expect(shown).toEqual(expect.arrayContaining(sameTitles));
+    expect(shown).not.toContain(`Anillo ${tag}`);
+    // The category's own come first, whatever the draw.
+    expect(new Set(shown.slice(0, 2))).toEqual(new Set(sameTitles));
+  });
+
+  test("the festive band moves while it is on screen, and its pause button holds every piece still", async ({
+    db,
+    page,
+  }) => {
+    const { article } = await setup({ db });
+    await page.goto(`/products/${article.slug}`);
+    const band = page.getByTestId("store-article-band");
+    await band.scrollIntoViewIfNeeded();
+    await expect(band).toHaveAttribute("data-running", "true");
+    const pause = band.getByRole("button", { name: "Pausar la animación" });
+    // Every animated piece, each read on its own: the streamers, the sway
+    // inside each one and the icons.
+    const pieces = [
+      band.getByTestId("store-article-band-streamer"),
+      band.getByTestId("store-article-band-sway"),
+      band.getByTestId("store-article-band-icon"),
+    ];
+    const playStates = async () =>
+      (
+        await Promise.all(
+          pieces.map(
+            async (piece) =>
+              await piece.evaluateAll((elements) =>
+                elements.map(
+                  (element) => getComputedStyle(element).animationPlayState
+                )
+              )
+          )
+        )
+      ).flat();
+    const everyPiece = (state: string) =>
+      Array.from({ length: 12 + 12 + 14 }, () => state);
+    // Running is only set once React owns the band: one click is enough,
+    // and a second would start it again.
+    await expect.poll(playStates).toEqual(everyPiece("running"));
+
+    await pause.click();
+
+    await expect(pause).toHaveAttribute("aria-pressed", "true");
+    await expect(band).toHaveAttribute("data-running", "false");
+    // Paused where it is, so nothing jumps.
+    await expect.poll(playStates).toEqual(everyPiece("paused"));
+
+    await pause.click();
+    await expect(band).toHaveAttribute("data-running", "true");
+    await expect.poll(playStates).toEqual(everyPiece("running"));
   });
 
   test("a sold-out article stays visible, cannot be added, and offers the store's WhatsApp with the article written", async ({

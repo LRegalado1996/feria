@@ -9,14 +9,15 @@
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
   /*
-   * Storefront only (design.md § Storefront). The display face is condensed
-   * and always set uppercase and tight, so its fallbacks are condensed too.
+   * Storefront only (design.md § Storefront). The display face is Anybody at
+   * 135% of its width, set extra bold and uppercase (`font-display
+   * font-extrabold uppercase`); its fallbacks are wide and heavy too. The
+   * width rides on the family, so every use of the face is the same width.
    */
   --font-display:
-    var(--font-anton), Impact, "Arial Narrow Bold", "Arial Narrow", sans-serif;
-  --leading-display: 0.92;
-  --tracking-display: 0.01em;
-  --tracking-eyebrow: 0.08em;
+    var(--font-anybody), "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --font-display--font-variation-settings: "wdth" 135;
+  --leading-display: 1.05;
 
   --animate-store-marquee: store-marquee var(--store-marquee-duration, 30s)
     linear infinite;
@@ -24,6 +25,57 @@
   /* One bubble of a burst; the bubble sets its own drift, time and delay. */
   --animate-store-bubble: store-bubble var(--store-bubble-duration, 3s)
     cubic-bezier(0.22, 1, 0.36, 1) var(--store-bubble-delay, 0s) both;
+
+  /* The article's festive band (FER-039): three waves of streamers fall
+     through it at three speeds, swaying like paper, and its icons twinkle.
+     Each piece sets its own duration and delay inline (a custom property
+     here would resolve on the root, the same for every piece); the band
+     pauses them all. */
+  --animate-store-stream: store-stream 10s linear infinite;
+  --animate-store-sway: store-sway 2.4s ease-in-out infinite alternate;
+  --animate-store-twinkle: store-twinkle 3.6s ease-in-out infinite;
+
+  /* A column the band's height, from just above the band to below it, at
+     one steady speed (the theme value is `linear`; only the transform's
+     ends are set, so the stops below change the opacity alone). Over the
+     greeting, a third to two thirds down, it fades back; it starts and ends
+     out of sight, so the loop has no seam. */
+  @keyframes store-stream {
+    from {
+      transform: translateY(-12%);
+    }
+
+    38%,
+    72% {
+      opacity: 1;
+    }
+
+    48%,
+    62% {
+      opacity: 0.25;
+    }
+
+    to {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes store-sway {
+    from {
+      transform: translateX(-5px) rotate(calc(var(--store-turn, 0deg) - 16deg));
+    }
+
+    to {
+      transform: translateX(5px) rotate(calc(var(--store-turn, 0deg) + 16deg));
+    }
+  }
+
+  @keyframes store-twinkle {
+    50% {
+      opacity: 0.5;
+      transform: scale(0.82);
+    }
+  }
 
   /* The track holds two copies of its content, so half its width is one lap. */
   @keyframes store-marquee {
@@ -105,31 +157,39 @@
 }
 
 /*
- * Storefront type roles. Fluid sizes are utilities of their own rather than
- * `text-*` theme keys: tailwind-merge reads an unknown `text-…` class as a
- * color and would drop the real color next to it.
+ * Storefront type roles for the display face, from a phone to a wide screen
+ * (design.md § Storefront). Fluid sizes are utilities of their own rather
+ * than `text-*` theme keys: tailwind-merge reads an unknown `text-…` class as
+ * a color and would drop the real color next to it. Labels in the display
+ * face (navigation, buttons, card names) use `text-xs` and `text-sm`.
  */
 @utility store-display-hero {
-  font-size: clamp(3.4rem, 12vw, 9.5rem);
+  font-size: clamp(2.25rem, 1.2rem + 5vw, 5.5rem);
+}
+
+@utility store-display-banner {
+  font-size: clamp(1.75rem, 1rem + 3.4vw, 3.375rem);
+}
+
+@utility store-display-page {
+  font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.875rem);
+}
+
+@utility store-display-article {
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.75rem);
 }
 
 @utility store-display-section {
-  font-size: clamp(2.6rem, 7vw, 5.5rem);
+  font-size: clamp(1.125rem, 0.85rem + 1.2vw, 1.75rem);
 }
 
-@utility store-display-title {
-  font-size: clamp(1.5rem, 1.1rem + 1vw, 1.75rem);
+/* The search panel's one field: never under 16 px, so iOS does not zoom. */
+@utility store-display-search {
+  font-size: clamp(1rem, 0.4rem + 2.6vw, 2.5rem);
 }
 
 @utility store-display-figure {
-  font-size: clamp(5.5rem, 4.5rem + 4vw, 6rem);
-}
-
-@utility store-eyebrow {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
+  font-size: clamp(3rem, 2.4rem + 3vw, 4.5rem);
 }
 
 :root {
@@ -187,19 +247,19 @@
  * there, from the values the theme file wrote.
  */
 [data-store-palette] {
-  /* Small text on the background: 5.9:1 with the default palette. */
+  /* Small text on the page (6.3:1) and on the tile (5.6:1). */
   --store-muted: color-mix(
     in srgb,
     var(--store-foreground) 68%,
     var(--store-background)
   );
-  /* Small text on a contrast block: 9.6:1 with the default palette. */
+  /* Small text on a contrast block: 8.7:1. */
   --store-contrast-muted: color-mix(
     in srgb,
     var(--store-background) 74%,
     var(--store-contrast)
   );
-  /* Hairlines and the surface behind a photo that has not loaded. */
+  /* Hairlines between groups and rows; never a fill behind text. */
   --store-line: color-mix(
     in srgb,
     var(--store-foreground) 11%,

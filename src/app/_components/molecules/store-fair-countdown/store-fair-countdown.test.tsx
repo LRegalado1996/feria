@@ -60,7 +60,13 @@ describe("StoreFairCountdown", () => {
       expect(connection).toHaveBeenCalledExactlyOnceWith();
       expect(figure).toBe("21");
       expect(label).toBe(expected);
-      expect(count).toHaveClass("font-display", "text-store-accent");
+      expect(count).toHaveClass(
+        "font-display",
+        "font-extrabold",
+        "store-display-figure",
+        "text-store-accent"
+      );
+      expect(count).not.toHaveClass("tracking-display");
       expect(countdown).toHaveAttribute("data-slot", "store-fair-countdown");
       expect(countdown).toHaveClass("min-h-24", "flex");
     }

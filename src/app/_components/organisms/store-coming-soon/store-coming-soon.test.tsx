@@ -80,15 +80,16 @@ describe("StoreComingSoon", () => {
     );
   });
 
-  test("the logo's mark blows bubbles: it is a button, with a first burst already in the page", () => {
+  test("the full logo blows bubbles: it is a button, with a first burst already in the page", () => {
     const { page } = setup();
     const button = within(page).getByRole("button", {
       name: "LR Market: make bubbles",
     });
     const logo = button.querySelector('[data-slot="store-logo"]');
 
-    expect(logo).toHaveAttribute("data-variant", "mark");
-    expect(logo).toHaveClass("h-12");
+    // The tag with LR and MARKET: the mark alone is only the tab's icon.
+    expect(logo).toHaveAttribute("data-variant", "full");
+    expect(logo).toHaveClass("h-14", "md:h-16");
     expect(
       page.querySelectorAll('[data-slot="store-bubble"]').length
     ).toBeGreaterThan(0);
@@ -116,7 +117,7 @@ describe("StoreComingSoon", () => {
     }
   );
 
-  test("offers the other language, readable on the contrast canvas", () => {
+  test("offers the other language, in the accent that reads on the contrast canvas", () => {
     const { page } = setup({ locale: "es" });
     const toggle = within(page).getByRole("link", { name: "English" });
 

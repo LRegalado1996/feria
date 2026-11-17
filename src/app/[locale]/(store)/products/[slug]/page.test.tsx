@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { StoreArticleProps } from "@/app/_components/organisms/store-article";
@@ -14,27 +15,37 @@ import ArticlePage, {
   instant,
 } from "./page";
 
-const { articleProps, readPublishedArticle, readRelated, readStore } =
-  vi.hoisted(() => ({
-    articleProps: vi.fn<(props: StoreArticleProps) => void>(),
-    readPublishedArticle:
-      vi.fn<
-        (
-          store: PublicStore,
-          slug: string,
-          locale: Locale
-        ) => Promise<PublishedProduct | null>
-      >(),
-    readRelated:
-      vi.fn<
-        (
-          store: PublicStore,
-          article: PublishedProduct,
-          locale: Locale
-        ) => Promise<ProductCard[]>
-      >(),
-    readStore: vi.fn<() => Promise<PublicStore | null>>(),
-  }));
+const {
+  articleProps,
+  frameProps,
+  readPublishedArticle,
+  readRelated,
+  readStore,
+  shellOf,
+} = vi.hoisted(() => ({
+  articleProps: vi.fn<(props: StoreArticleProps) => void>(),
+  frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
+  shellOf: vi.fn((store: { name: string }, locale: string) => ({
+    shellOf: `${store.name} ${locale}`,
+  })),
+  readPublishedArticle:
+    vi.fn<
+      (
+        store: PublicStore,
+        slug: string,
+        locale: Locale
+      ) => Promise<PublishedProduct | null>
+    >(),
+  readRelated:
+    vi.fn<
+      (
+        store: PublicStore,
+        article: PublishedProduct,
+        locale: Locale
+      ) => Promise<ProductCard[]>
+    >(),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+}));
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
@@ -51,6 +62,20 @@ vi.mock("@/app/_components/organisms/store-article", () => ({
   StoreArticle: (props: StoreArticleProps) => {
     articleProps(props);
     return <div data-testid="store-article">{props.article.title}</div>;
+  },
+}));
+
+// The frame's parts have their own tests (`store-shell.test.ts`).
+vi.mock("../../store-shell", () => ({ shellOf }));
+
+// The frame has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-frame", () => ({
+  StoreFrame: ({
+    children,
+    ...props
+  }: Record<string, unknown> & { children: ReactNode }) => {
+    frameProps(props);
+    return <div data-testid="store-frame">{children}</div>;
   },
 }));
 
@@ -297,6 +322,21 @@ describe("ArticlePage", () => {
       );
     }
   );
+
+  test("sits in the store's frame, made from the store and the cached reads, in the page's language", async () => {
+    const { show } = setup({ locale: "en" });
+
+    await show();
+
+    expect(screen.getByTestId("store-frame")).toContainElement(
+      screen.getByTestId("store-article")
+    );
+    expect(frameProps).toHaveBeenCalledExactlyOnceWith({
+      copy: DICTIONARIES.en.storefront.shell,
+      locale: "en",
+      shellOf: "Sample Store en",
+    });
+  });
 
   test("ends with the store's footer, after the article, in the page's language", async () => {
     const { show } = setup({ locale: "en" });

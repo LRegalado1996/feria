@@ -79,7 +79,7 @@ function StoreMarquee({
     >
       <div
         className={cn(
-          "flex w-max font-display text-2xl leading-none font-normal tracking-display uppercase motion-safe:animate-store-marquee motion-reduce:w-full md:text-4xl",
+          "flex w-max font-display text-lg leading-none font-extrabold uppercase motion-safe:animate-store-marquee motion-reduce:w-full md:text-2xl",
           // Important: the `animation` shorthand of the class above resets the
           // play state, and it comes later in the stylesheet.
           paused && "[animation-play-state:paused]!"

@@ -12,9 +12,8 @@ const GLOBALS_CSS = readFileSync(
   "utf-8"
 );
 
-/** WCAG 2.x AA: 4.5:1 for text, 3:1 for large text. */
+/** WCAG 2.x AA for text of any size: the storefront sets small text on every pair. */
 const AA_TEXT = 4.5;
-const AA_LARGE_TEXT = 3;
 
 /**
  * The three colors CSS derives from the five with `color-mix()`: how much of
@@ -42,56 +41,43 @@ const CONTRAST_RULES = [
     "the text on the background",
     STORE_THEME.foreground,
     STORE_THEME.background,
-    AA_TEXT,
   ],
   [
-    "the text on the surface",
+    "the text on the tile behind a photo",
     STORE_THEME.foreground,
     STORE_THEME.surface,
-    AA_TEXT,
   ],
   [
-    "the text on the accent",
+    "the text on the accent (the bar, a round arrow)",
     STORE_THEME.foreground,
     STORE_THEME.accent,
-    AA_TEXT,
   ],
   [
-    "the background as text on the contrast",
+    "the accent as text on the ink (the main button)",
+    STORE_THEME.accent,
+    STORE_THEME.foreground,
+  ],
+  [
+    "the background as text on the contrast (the search field, the footer)",
     STORE_THEME.background,
     STORE_THEME.contrast,
-    AA_TEXT,
   ],
-  // Display headings only, which are large text.
+  // Small text: the header's links, the footer's headings, the icons.
   [
-    "the accent as a heading on the contrast",
+    "the accent as text on the contrast",
     STORE_THEME.accent,
     STORE_THEME.contrast,
-    AA_LARGE_TEXT,
   ],
   [
     "the small muted text on the background",
     derived("muted"),
     STORE_THEME.background,
-    AA_TEXT,
   ],
-  [
-    "the small muted text on the surface",
-    derived("muted"),
-    STORE_THEME.surface,
-    AA_TEXT,
-  ],
-  [
-    "the small muted text on the placeholder behind a missing photo",
-    derived("muted"),
-    derived("line"),
-    AA_TEXT,
-  ],
+  ["the small muted text on the tile", derived("muted"), STORE_THEME.surface],
   [
     "the small muted text on the contrast",
     derived("contrast-muted"),
     STORE_THEME.contrast,
-    AA_TEXT,
   ],
 ] as const;
 
@@ -111,9 +97,9 @@ describe("STORE_THEME", () => {
   });
 
   test.each(CONTRAST_RULES)(
-    "%s is readable: %s on %s reaches %s:1",
-    (_label, text, behind, minimum) => {
-      expect(contrastRatio(text, behind)).toBeGreaterThanOrEqual(minimum);
+    "%s is readable: %s on %s reaches 4.5:1",
+    (_label, text, behind) => {
+      expect(contrastRatio(text, behind)).toBeGreaterThanOrEqual(AA_TEXT);
     }
   );
 

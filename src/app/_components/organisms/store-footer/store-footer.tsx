@@ -1,13 +1,24 @@
+import { Camera, MessageCircle, Music2 } from "lucide-react";
+import Link from "next/link";
+
+import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import type { Dictionary } from "@/content";
+import { BRAND_NAME } from "@/lib/brand/logo";
+import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
+import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { localizePath } from "@/lib/i18n/paths";
 import { cn } from "@/lib/utils";
 
 /** Where the credit leads: Lucas's own site, as he chose on 2026-11-14. */
 export const CREDIT_URL = "https://lucasregalado.com";
 
 export interface StoreFooterProps {
+  /** The store's categories, in their order, for the shop's links. */
+  categories: readonly { lang: string; name: string; slug: string }[];
   className?: string;
   copy: Dictionary["storefront"]["shell"];
+  locale: Locale;
   store: {
     instagramUrl: string | null;
     name: string;
@@ -18,20 +29,33 @@ export interface StoreFooterProps {
   tagline: { lang: string; text: string } | null;
 }
 
-// `wrap-anywhere`: a label carries the store's name, up to 80 characters
+const HEADING_CLASS =
+  "mb-3.5 font-display text-xs font-extrabold text-store-accent uppercase";
+
+// `wrap-anywhere`: a label can carry the store's name, up to 80 characters
 // with no space to break at.
 const LINK_CLASS =
-  "inline-flex min-h-11 items-center font-semibold wrap-anywhere underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
+  "inline-flex min-h-11 items-center gap-2.5 text-sm wrap-anywhere text-store-background hover:text-store-accent focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent";
 
 /**
- * Every page of a store ends here (FER-021): its tagline, its Instagram and
- * TikTok and a WhatsApp chat, each only when the store has it, and a quiet
- * credit to Lucas Regalado.
+ * Every page of the store ends here (FER-021, FER-039): dark, with the
+ * accent for its headings. The full logo and the store's tagline; the shop's
+ * links (the catalog and each category); help (how to order, and a WhatsApp
+ * chat when the store has it); Instagram and TikTok when it has them; and
+ * a quiet credit to Lucas Regalado.
  */
-function StoreFooter({ className, copy, store, tagline }: StoreFooterProps) {
-  const links = [
+function StoreFooter({
+  categories,
+  className,
+  copy,
+  locale,
+  store,
+  tagline,
+}: StoreFooterProps) {
+  const socials = [
     store.instagramUrl
       ? {
+          Icon: Camera,
           href: store.instagramUrl,
           key: "instagram",
           label: interpolate(copy.instagram, { store: store.name }),
@@ -39,17 +63,10 @@ function StoreFooter({ className, copy, store, tagline }: StoreFooterProps) {
       : null,
     store.tiktokUrl
       ? {
+          Icon: Music2,
           href: store.tiktokUrl,
           key: "tiktok",
           label: interpolate(copy.tiktok, { store: store.name }),
-        }
-      : null,
-    store.whatsappNumber
-      ? {
-          // wa.me takes the number as digits only.
-          href: `https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`,
-          key: "whatsapp",
-          label: copy.whatsapp,
         }
       : null,
   ].filter((link) => link !== null);
@@ -57,39 +74,114 @@ function StoreFooter({ className, copy, store, tagline }: StoreFooterProps) {
   return (
     <footer
       aria-label={copy.footer}
-      className={cn("bg-store-contrast text-store-background", className)}
+      className={cn(
+        "bg-store-contrast px-4 pt-10 pb-6 text-store-background md:px-7 md:pt-14 md:pb-7",
+        className
+      )}
       data-slot="store-footer"
       data-testid="store-footer"
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-12">
-        {tagline ? (
-          <p
-            className="font-display text-4xl leading-display tracking-display wrap-anywhere text-store-accent uppercase"
-            lang={tagline.lang}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-7 md:grid-cols-[1.3fr_1fr_1fr_1fr] md:gap-8">
+        <div className="col-span-2 md:col-span-1">
+          <Link
+            aria-label={interpolate(copy.logo, { brand: BRAND_NAME })}
+            className="inline-flex focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+            href={localizePath("/", locale)}
           >
-            {tagline.text}
-          </p>
-        ) : null}
-        {links.length > 0 ? (
-          <ul className="flex flex-wrap gap-x-6 gap-y-2">
-            {links.map((link) => (
-              <li key={link.key}>
-                <a
+            <StoreLogo aria-hidden="true" className="h-15.5" />
+          </Link>
+          {tagline ? (
+            <p
+              className="mt-3.5 max-w-xs text-sm wrap-anywhere text-store-contrast-muted"
+              lang={tagline.lang}
+            >
+              {tagline.text}
+            </p>
+          ) : null}
+        </div>
+        <nav aria-labelledby="store-footer-shop">
+          <h2 className={HEADING_CLASS} id="store-footer-shop">
+            {copy.shop}
+          </h2>
+          <ul>
+            <li>
+              <Link
+                className={LINK_CLASS}
+                href={localizePath("/products", locale)}
+              >
+                {copy.catalog}
+              </Link>
+            </li>
+            {categories.map((category) => (
+              <li key={category.slug}>
+                <Link
                   className={LINK_CLASS}
-                  data-testid={`store-footer-${link.key}`}
-                  href={link.href}
-                  rel="noopener noreferrer"
-                  target="_blank"
+                  href={catalogHref(locale, {
+                    ...EMPTY_CATALOG_QUERY,
+                    category: category.slug,
+                  })}
+                  lang={category.lang}
                 >
-                  {link.label}
-                  <span className="sr-only"> {copy.newTab}</span>
-                </a>
+                  {category.name}
+                </Link>
               </li>
             ))}
           </ul>
+        </nav>
+        <section aria-labelledby="store-footer-help">
+          <h2 className={HEADING_CLASS} id="store-footer-help">
+            {copy.help}
+          </h2>
+          <p className="max-w-xs text-sm text-store-contrast-muted">
+            {copy.howToOrder}
+          </p>
+          {store.whatsappNumber ? (
+            <a
+              className={cn(LINK_CLASS, "mt-2")}
+              data-testid="store-footer-whatsapp"
+              // wa.me takes the number as digits only.
+              href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
+              {copy.whatsapp}
+              <span className="sr-only"> {copy.newTab}</span>
+            </a>
+          ) : null}
+        </section>
+        {socials.length > 0 ? (
+          <section
+            aria-labelledby="store-footer-follow"
+            className="col-span-2 md:col-span-1"
+          >
+            <h2 className={HEADING_CLASS} id="store-footer-follow">
+              {copy.follow}
+            </h2>
+            <ul>
+              {socials.map(({ Icon, href, key, label }) => (
+                <li key={key}>
+                  <a
+                    className={LINK_CLASS}
+                    data-testid={`store-footer-${key}`}
+                    href={href}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <Icon aria-hidden="true" className="size-5 shrink-0" />
+                    {label}
+                    <span className="sr-only"> {copy.newTab}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
+      </div>
+      <div className="mt-11 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-store-background/15 pt-3 text-sm text-store-contrast-muted">
+        <p>{interpolate(copy.copyright, { store: store.name })}</p>
         <a
-          className="inline-flex min-h-11 items-center self-start text-sm text-store-contrast-muted underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+          className="inline-flex min-h-11 items-center underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
           data-testid="store-footer-credit"
           href={CREDIT_URL}
           rel="noopener noreferrer"

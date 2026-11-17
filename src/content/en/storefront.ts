@@ -2,6 +2,10 @@ import type { Dictionary } from "@/content/es";
 
 export const storefront: Dictionary["storefront"] = {
   article: {
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "Happy Holidays!",
+    bandPause: "Pause the animation",
     addedCapped:
       "Added {added}: with them you have {max}, the most an order takes.",
     addToCart: "Add to cart",
@@ -13,8 +17,7 @@ export const storefront: Dictionary["storefront"] = {
     gallery: "Photos of {title}",
     galleryNext: "Next photo",
     galleryPosition: "Photo {current} of {total}",
-    galleryPrevious: "Previous photo",
-    galleryShow: "Show photo {current}",
+    galleryRestart: "Back to the first photo",
     home: "Home",
     increase: "One unit more",
     quantity: "Quantity",
@@ -24,6 +27,14 @@ export const storefront: Dictionary["storefront"] = {
       "You cannot add it to the cart now. Write to us and we will tell you when it is back.",
     zoom: "Enlarge the photo",
     zoomClose: "Close the enlarged photo",
+  },
+  articleCard: {
+    badgeNew: "New",
+    noImage: "No photo",
+    unavailable: "Sold out",
+  },
+  banner: {
+    shopNow: "Shop now",
   },
   cart: {
     checkout: {
@@ -71,8 +82,6 @@ export const storefront: Dictionary["storefront"] = {
     unitPrice: "{price} each",
   },
   catalog: {
-    addToCart: "Add to cart: {name}",
-    addToCartShort: "Add",
     addFailed: "We could not add it. Try again.",
     added: "Added to cart.",
     atMax: "You already have {max} of this article, the most an order takes.",
@@ -80,6 +89,7 @@ export const storefront: Dictionary["storefront"] = {
       "The cart already holds {max} different articles, the most it takes.",
     categories: "Categories",
     allCategories: "All",
+    clear: "Clear",
     clearAll: "Clear all",
     closeFilters: "Close the filters",
     description: "Every article of {store}.",
@@ -87,8 +97,8 @@ export const storefront: Dictionary["storefront"] = {
       body: "Come back soon: the store is loading its catalog.",
       title: "No articles yet",
     },
+    filter: "Filter",
     filteredDescription: "{selection}, at {store}.",
-    filters: "Filters",
     loadFailed: "We could not load more articles.",
     loadMore: "Load more",
     loading: "Loading…",
@@ -99,8 +109,6 @@ export const storefront: Dictionary["storefront"] = {
     },
     remove: "Remove: {name}",
     retry: "Try again",
-    search: "Search articles",
-    searchPlaceholder: "Search…",
     searchResult: "“{q}”",
     selected: "Chosen filters",
     share: "Share",
@@ -108,18 +116,20 @@ export const storefront: Dictionary["storefront"] = {
     shareFailed: "We could not copy the link.",
     showResults: "See results",
     sort: {
-      label: "Sort",
+      label: "Sort by:",
       newest: "Newest",
       price_asc: "Price: low to high",
       price_desc: "Price: high to low",
     },
     title: "Catalog",
   },
-  articleCard: {
-    badgeNew: "New",
-    badgeSale: "Price drop",
-    noImage: "No photo",
-    unavailable: "Sold out",
+  home: {
+    browse: "See the catalog",
+  },
+  cover: {
+    goTo: "Show cover {current}",
+    label: "Cover",
+    pause: "Pause the cover",
   },
   marquee: {
     pause: "Pause the moving band",
@@ -146,21 +156,39 @@ export const storefront: Dictionary["storefront"] = {
   price: {
     previous: "Was {price}",
   },
+  row: {
+    next: "See more of {title}",
+    restart: "Back to the start of {title}",
+    viewAll: "See all",
+    viewAllOf: "See all: {title}",
+  },
   shell: {
+    // The bar above the header until FER-020 lets the store write its own.
+    // The short one is for a phone, where the whole one would not fit.
+    announcement: {
+      full: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
+      short: "Paseo Prado Fair · Stall 86",
+    },
     cartCount: "Cart, {count} items",
     cartCountOne: "Cart, 1 item",
     cartEmpty: "Cart, empty",
     catalog: "Catalog",
     closeMenu: "Close the menu",
+    copyright: "© {store}",
     credit: "Made by Lucas Regalado",
     error: {
       body: "Something failed while showing this page. Try again; if it keeps happening, write to us.",
       retry: "Try again",
       title: "We could not show this page",
     },
+    follow: "Follow us",
     footer: "Store footer",
+    help: "Help",
     home: "Home",
+    howToOrder:
+      "Pick what you like, add it to the cart and leave your name: we write to you to arrange the delivery.",
     instagram: "{store} on Instagram",
+    logo: "{brand}, go to the home page",
     menu: "Menu",
     navigation: "Store sections",
     newTab: "(opens in a new tab)",
@@ -170,15 +198,13 @@ export const storefront: Dictionary["storefront"] = {
       title: "We could not find this page",
     },
     search: "Search the store",
-    searchPlaceholder: "Search…",
+    searchClose: "Close the search",
+    searchField: "Search articles",
+    searchPlaceholder: "Search for anything",
     searchSubmit: "Search",
+    shop: "Shop",
     skipToContent: "Skip to content",
     tiktok: "{store} on TikTok",
     whatsapp: "Write to us on WhatsApp",
-  },
-  slider: {
-    next: "Next",
-    position: "{current} / {total}",
-    previous: "Previous",
   },
 };

@@ -19,8 +19,8 @@ export interface StoreComingSoonProps {
 
 /**
  * The whole coming-soon screen: what every storefront address leads to until
- * the store opens. One composition for a phone and a wide screen: the
- * headline scales, nothing is rearranged.
+ * the store opens, on the store's moss with its full logo. One composition
+ * for a phone and a wide screen: the headline scales, nothing is rearranged.
  */
 function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
   return (
@@ -31,9 +31,10 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
     >
       <header className="flex items-center justify-between gap-4 p-4 md:px-8">
         <StoreBubbles label={comingSoon.bubbles}>
-          <StoreLogo className="h-12" variant="mark" />
+          {/* The full logo, the brand on every storefront page (FER-039). */}
+          <StoreLogo className="h-14 md:h-16" variant="full" />
         </StoreBubbles>
-        <StoreLocaleToggle className="relative z-10" tone="contrast" />
+        <StoreLocaleToggle className="relative z-10" />
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">

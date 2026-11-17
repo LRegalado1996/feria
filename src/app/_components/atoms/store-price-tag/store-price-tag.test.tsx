@@ -3,7 +3,11 @@ import { describe, expect, test, vi } from "vitest";
 
 import { DICTIONARIES } from "@/test/i18n";
 
-import { StorePriceTag, type StorePriceTagProps } from "./store-price-tag";
+import {
+  StorePriceTag,
+  type StorePriceTagProps,
+  storePriceTagVariants,
+} from "./store-price-tag";
 
 // `server-only` throws on import outside a React Server Components build.
 vi.mock("server-only", () => ({}));
@@ -24,10 +28,15 @@ function setup(props: Partial<StorePriceTagProps> = {}) {
     />
   );
   const tag = container.querySelector('[data-slot="store-price-tag"]');
+  const previous = tag?.querySelector('[data-slot="store-price-tag-previous"]');
 
   return {
     amount: tag?.querySelector('[data-slot="store-price-tag-amount"]'),
-    previous: tag?.querySelector('[data-slot="store-price-tag-previous"]'),
+    previous,
+    /** What a screen reader hears for the struck price. */
+    previousSpoken: previous?.querySelector(".sr-only")?.textContent,
+    /** What the eye reads, struck through. */
+    previousShown: previous?.querySelector('[aria-hidden="true"]')?.textContent,
     tag,
   };
 }
@@ -41,37 +50,41 @@ describe("StorePriceTag", () => {
   ] as const)(
     "in %s, %s %i minor units read %j",
     (locale, currency, amount, text) => {
-      const { amount: block } = setup({ amount, currency, locale });
+      const { amount: shown } = setup({ amount, currency, locale });
 
-      expect(block?.textContent).toBe(text);
+      expect(shown?.textContent).toBe(text);
     }
   );
 
-  test("a regular price sits on the contrast color, alone", () => {
+  test("a regular price is the amount alone, in the foreground, in regular type", () => {
     const { amount, previous, tag } = setup();
 
     expect(tag).toHaveAttribute("data-sale", "false");
-    expect(amount).toHaveClass("bg-store-contrast", "text-store-background");
-    expect(amount).not.toHaveClass("bg-store-accent");
+    expect(tag).toHaveClass("text-store-foreground", "tabular-nums");
+    expect(tag).not.toHaveClass("font-display");
+    expect(tag?.textContent).toBe(amount?.textContent);
     expect(previous).toBeNull();
   });
 
   test.each([
-    ["en", `Was UYU${NBSP}1,290`],
-    ["es", `Antes $${NBSP}1.290`],
+    ["en", `UYU${NBSP}1,290`, `Was UYU${NBSP}1,290`],
+    ["es", `$${NBSP}1.290`, `Antes $${NBSP}1.290`],
   ] as const)(
-    "in %s, a reduced price takes the accent and shows %j struck through",
-    (locale, text) => {
-      const { amount, previous, tag } = setup({
+    "in %s, a reduced price comes after %j struck through, which is read as %j",
+    (locale, shown, spoken) => {
+      const { amount, previous, previousShown, previousSpoken, tag } = setup({
         locale,
         previousAmount: 129_000,
       });
 
       expect(tag).toHaveAttribute("data-sale", "true");
-      expect(amount).toHaveClass("bg-store-accent", "text-store-foreground");
-      expect(amount).not.toHaveClass("bg-store-contrast");
       expect(previous?.tagName).toBe("S");
-      expect(previous?.textContent).toBe(text);
+      expect(previous).toHaveClass("text-store-muted");
+      expect(previousShown).toBe(shown);
+      expect(previousSpoken).toBe(spoken);
+      // The price it had first, then the price it has.
+      expect(tag?.firstElementChild).toBe(previous);
+      expect(tag?.lastElementChild).toBe(amount);
     }
   );
 
@@ -81,28 +94,27 @@ describe("StorePriceTag", () => {
   ])(
     "a previous price %s the current one is not a deal",
     (_label, previousAmount) => {
-      const { amount, previous, tag } = setup({ previousAmount });
+      const { previous, tag } = setup({ previousAmount });
 
       expect(tag).toHaveAttribute("data-sale", "false");
-      expect(amount).toHaveClass("bg-store-contrast");
       expect(previous).toBeNull();
     }
   );
 
   test("one minor unit above the current price is already a deal", () => {
-    const { previous, tag } = setup({ previousAmount: 89_001 });
+    const { previousSpoken, tag } = setup({ previousAmount: 89_001 });
 
     expect(tag).toHaveAttribute("data-sale", "true");
-    expect(previous?.textContent).toBe(`Was UYU${NBSP}890.01`);
+    expect(previousSpoken).toBe(`Was UYU${NBSP}890.01`);
   });
 
   test("says the previous price with the words it is given", () => {
-    const { previous } = setup({
+    const { previousSpoken } = setup({
       labels: { previous: "Before: {price}" },
       previousAmount: 129_000,
     });
 
-    expect(previous?.textContent).toBe(`Before: UYU${NBSP}1,290`);
+    expect(previousSpoken).toBe(`Before: UYU${NBSP}1,290`);
   });
 
   test("a null previous price is a regular price", () => {
@@ -113,21 +125,24 @@ describe("StorePriceTag", () => {
   });
 
   test.each([
-    ["sm", "text-2xl", "text-4xl"],
-    ["lg", "text-4xl", "text-2xl"],
+    ["sm", "text-sm", "text-xl"],
+    ["lg", "text-xl", "text-sm"],
   ] as const)("the %s size carries %s", (size, expected, other) => {
-    const { amount, tag } = setup({ size });
+    const { tag } = setup({ size });
 
     expect(tag).toHaveAttribute("data-size", size);
-    expect(amount).toHaveClass(expected);
-    expect(amount).not.toHaveClass(other);
+    expect(tag).toHaveClass(expected);
+    expect(tag).not.toHaveClass(other);
   });
 
   test("is small by default and keeps a caller's class", () => {
-    const { amount, tag } = setup({ className: "mt-2" });
+    const { tag } = setup({ className: "mt-2" });
 
     expect(tag).toHaveAttribute("data-size", "sm");
-    expect(tag).toHaveClass("mt-2", "flex");
-    expect(amount).toHaveClass("text-2xl");
+    expect(tag).toHaveClass("mt-2", "flex", "text-sm");
+  });
+
+  test("exposes its sizes", () => {
+    expect(storePriceTagVariants({ size: "lg" })).toContain("text-xl");
   });
 });

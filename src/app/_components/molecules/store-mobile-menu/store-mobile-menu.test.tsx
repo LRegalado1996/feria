@@ -66,8 +66,8 @@ describe("StoreMobileMenu", () => {
     });
   });
 
-  test("closes on Escape", async () => {
-    const { open, panel, user } = setup();
+  test("closes on Escape and gives focus back to the menu button", async () => {
+    const { open, panel, trigger, user } = setup();
     await open();
 
     await user.keyboard("{Escape}");
@@ -75,6 +75,26 @@ describe("StoreMobileMenu", () => {
     await waitFor(() => {
       expect(panel()).toBeNull();
     });
+    expect(trigger()).toHaveFocus();
+  });
+
+  test("is a moss panel that covers a phone's screen and slides in from the left on a tablet", async () => {
+    const { open, panel, trigger } = setup();
+    // Read before it opens: an open modal hides the rest of the page.
+    expect(trigger()).toHaveAttribute("data-variant", "contrast");
+    await open();
+
+    expect(panel()).toHaveClass(
+      "bg-store-contrast",
+      "fixed",
+      "inset-y-0",
+      "left-0",
+      "w-full",
+      "sm:max-w-sm"
+    );
+    expect(screen.getByTestId("dialog-overlay")).toHaveClass(
+      "bg-store-foreground/50"
+    );
   });
 
   test.each([

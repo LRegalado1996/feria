@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, Suspense } from "react";
 
+import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreOrder } from "@/app/_components/organisms/store-order";
 import { getDictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
@@ -15,6 +16,7 @@ import { storeTitle } from "@/lib/seo/store-metadata";
 import { readStore } from "@/server/cache/store";
 
 import { StorePageFooter } from "../../store-page-footer";
+import { shellOf } from "../../store-shell";
 
 // The order's status changes after it is placed, so the page is read per
 // request; it waits on the order before anything is sent, by design.
@@ -116,8 +118,14 @@ async function OrderResolver({ params }: OrderPageProps) {
   const { order, store } = found;
   const { storefront } = getDictionary(locale);
 
+  // Its frame too waits for the read: the language is in the same params
+  // as the token, which nothing may await outside this boundary.
   return (
-    <>
+    <StoreFrame
+      copy={storefront.shell}
+      locale={locale}
+      {...shellOf(store, locale)}
+    >
       <main data-testid="store-order-page">
         <StoreOrder
           catalogHref={localizePath("/products", locale)}
@@ -129,6 +137,6 @@ async function OrderResolver({ params }: OrderPageProps) {
         />
       </main>
       <StorePageFooter locale={locale} store={store} />
-    </>
+    </StoreFrame>
   );
 }

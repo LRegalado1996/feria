@@ -11,7 +11,7 @@ export const contentType = "image/png";
 export default function AppleIcon() {
   return renderLogoImage({
     ...size,
-    background: STORE_THEME.foreground,
+    background: STORE_THEME.contrast,
     colorway: "accent",
     logoWidth: 132,
     variant: "mark",

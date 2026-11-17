@@ -134,7 +134,7 @@ describe("category router", () => {
     expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
-  test("creates the category in the store, a blank English name as none", async () => {
+  test("creates the category in the store, a blank English name as none, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
     await expect(
@@ -153,8 +153,9 @@ describe("category router", () => {
       storeId: 7,
       values: { nameEn: null, nameEs: "Collares" },
     });
-    // A new category holds no article yet: no article page names it.
-    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
+    // Every store page's header and footer list the categories, an
+    // article's static page included (FER-039).
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test("renames by id within the store, then drops its cached catalog", async () => {
@@ -181,7 +182,7 @@ describe("category router", () => {
     expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
-  test("reorders within the store", async () => {
+  test("reorders within the store, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
     await expect(run("reorder", { ids: [3, 1, 2] })).resolves.toEqual({
@@ -197,8 +198,8 @@ describe("category router", () => {
       ids: [3, 1, 2],
       storeId: 7,
     });
-    // The order of categories is not on an article page.
-    expect(services.invalidateCatalogCache).not.toHaveBeenCalled();
+    // The header and the footer list the categories in this order.
+    expect(services.invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
   test("deletes by id within the store, with where its articles move, then drops its cached catalog", async () => {

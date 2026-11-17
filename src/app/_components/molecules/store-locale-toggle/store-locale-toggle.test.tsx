@@ -4,10 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
 
-import {
-  StoreLocaleToggle,
-  type StoreLocaleToggleProps,
-} from "./store-locale-toggle";
+import { StoreLocaleToggle } from "./store-locale-toggle";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/products",
@@ -15,13 +12,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("q=aros"),
 }));
 
-function setup({
-  locale = "es",
-  tone,
-}: { locale?: Locale; tone?: StoreLocaleToggleProps["tone"] } = {}) {
-  renderWithI18n(<StoreLocaleToggle className="self-start" tone={tone} />, {
-    locale,
-  });
+function setup({ locale = "es" }: { locale?: Locale } = {}) {
+  renderWithI18n(<StoreLocaleToggle className="self-start" />, { locale });
 
   const link = screen.getByRole("link");
   const part = (slot: string) =>
@@ -59,37 +51,20 @@ describe("StoreLocaleToggle", () => {
     expect(thumb()).not.toHaveClass("bg-foreground");
   });
 
-  test.each([
-    [
-      undefined,
-      "border-store-foreground",
-      "bg-store-foreground",
-      "data-[state=on]:text-store-background",
-      "data-[state=off]:text-store-foreground",
-      "group-focus-visible:outline-store-foreground",
-    ],
-    [
-      "contrast",
-      "border-store-accent",
-      "bg-store-accent",
-      "data-[state=on]:text-store-foreground",
-      // Small text: the accent is promised only 3:1 on the contrast color.
-      "data-[state=off]:text-store-background",
-      "group-focus-visible:outline-store-accent",
-    ],
-  ] as const)(
-    "with tone %s, a hairline capsule, a filled thumb and the codes read on each",
-    (tone, hairline, fill, onThumb, offThumb, focus) => {
-      const { code, thumb, track } = setup({ tone });
+  test("on the moss: a lime hairline capsule, a lime thumb with its code in ink, the other code in lime", () => {
+    const { code, thumb, track } = setup();
 
-      expect(track()).toHaveClass(
-        "border",
-        hairline,
-        "group-focus-visible:outline-3",
-        focus
-      );
-      expect(thumb()).toHaveClass(fill);
-      expect(code()).toHaveClass(onThumb, offThumb);
-    }
-  );
+    expect(track()).toHaveClass(
+      "border",
+      "border-store-accent",
+      "group-focus-visible:outline-3",
+      "group-focus-visible:outline-store-accent"
+    );
+    expect(thumb()).toHaveClass("bg-store-accent");
+    expect(code()).toHaveClass(
+      "font-display",
+      "data-[state=on]:text-store-foreground",
+      "data-[state=off]:text-store-accent"
+    );
+  });
 });

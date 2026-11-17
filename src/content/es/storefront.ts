@@ -1,5 +1,9 @@
 export const storefront = {
   article: {
+    // The moss band between the article and its suggestions, for the
+    // holidays: decoration, hidden from screen readers.
+    bandGreeting: "¡Felices Fiestas!",
+    bandPause: "Pausar la animación",
     addedCapped:
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
@@ -11,8 +15,7 @@ export const storefront = {
     gallery: "Fotos de {title}",
     galleryNext: "Foto siguiente",
     galleryPosition: "Foto {current} de {total}",
-    galleryPrevious: "Foto anterior",
-    galleryShow: "Ver la foto {current}",
+    galleryRestart: "Volver a la primera foto",
     home: "Inicio",
     increase: "Una unidad más",
     quantity: "Cantidad",
@@ -22,6 +25,14 @@ export const storefront = {
       "No lo podés agregar al carrito ahora. Escribinos y te avisamos cuando vuelva.",
     zoom: "Ampliar la foto",
     zoomClose: "Cerrar la foto ampliada",
+  },
+  articleCard: {
+    badgeNew: "Nuevo",
+    noImage: "Sin foto",
+    unavailable: "Agotado",
+  },
+  banner: {
+    shopNow: "Comprar ahora",
   },
   cart: {
     checkout: {
@@ -69,14 +80,13 @@ export const storefront = {
     unitPrice: "{price} c/u",
   },
   catalog: {
-    addToCart: "Agregar al carrito: {name}",
-    addToCartShort: "Agregar",
     addFailed: "No pudimos agregarlo. Probá de nuevo.",
     added: "Agregado al carrito.",
     atMax: "Ya tenés {max} de este artículo, el máximo por pedido.",
     cartFull: "El carrito ya tiene {max} artículos distintos, el máximo.",
     categories: "Categorías",
     allCategories: "Todas",
+    clear: "Limpiar",
     clearAll: "Limpiar todo",
     closeFilters: "Cerrar los filtros",
     description: "Todos los artículos de {store}.",
@@ -84,8 +94,8 @@ export const storefront = {
       body: "Volvé pronto: la tienda está cargando su catálogo.",
       title: "Todavía no hay artículos",
     },
+    filter: "Filtrar",
     filteredDescription: "{selection}, en {store}.",
-    filters: "Filtros",
     loadFailed: "No pudimos cargar más artículos.",
     loadMore: "Cargar más",
     loading: "Cargando…",
@@ -96,8 +106,6 @@ export const storefront = {
     },
     remove: "Quitar: {name}",
     retry: "Probar de nuevo",
-    search: "Buscar artículos",
-    searchPlaceholder: "Buscar…",
     searchResult: "«{q}»",
     selected: "Filtros elegidos",
     share: "Compartir",
@@ -105,18 +113,21 @@ export const storefront = {
     shareFailed: "No pudimos copiar el enlace.",
     showResults: "Ver resultados",
     sort: {
-      label: "Ordenar",
+      // Before the current sort on its button: "Ordenar por: Más nuevos".
+      label: "Ordenar por:",
       newest: "Más nuevos",
       price_asc: "Precio: menor a mayor",
       price_desc: "Precio: mayor a menor",
     },
     title: "Catálogo",
   },
-  articleCard: {
-    badgeNew: "Nuevo",
-    badgeSale: "Bajó de precio",
-    noImage: "Sin foto",
-    unavailable: "Agotado",
+  home: {
+    browse: "Ver el catálogo",
+  },
+  cover: {
+    goTo: "Ver la portada {current}",
+    label: "Portada",
+    pause: "Pausar la portada",
   },
   marquee: {
     pause: "Pausar la banda en movimiento",
@@ -143,21 +154,39 @@ export const storefront = {
   price: {
     previous: "Antes {price}",
   },
+  row: {
+    next: "Ver más de {title}",
+    restart: "Volver al principio de {title}",
+    viewAll: "Ver todo",
+    viewAllOf: "Ver todo: {title}",
+  },
   shell: {
+    // The bar above the header until FER-020 lets the store write its own.
+    // The short one is for a phone, where the whole one would not fit.
+    announcement: {
+      full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+      short: "Feria Paseo Prado · Puesto 86",
+    },
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
     catalog: "Catálogo",
     closeMenu: "Cerrar el menú",
+    copyright: "© {store}",
     credit: "Hecho por Lucas Regalado",
     error: {
       body: "Algo falló al mostrar esta página. Probá de nuevo; si sigue pasando, escribinos.",
       retry: "Probar de nuevo",
       title: "No pudimos mostrar esta página",
     },
+    follow: "Seguinos",
     footer: "Pie de la tienda",
+    help: "Ayuda",
     home: "Inicio",
+    howToOrder:
+      "Elegí lo que te guste, agregalo al carrito y dejá tu nombre: te escribimos para coordinar la entrega.",
     instagram: "Instagram de {store}",
+    logo: "{brand}, ir al inicio",
     menu: "Menú",
     navigation: "Secciones de la tienda",
     newTab: "(se abre en otra pestaña)",
@@ -167,15 +196,13 @@ export const storefront = {
       title: "No encontramos esta página",
     },
     search: "Buscar en la tienda",
-    searchPlaceholder: "Buscar…",
+    searchClose: "Cerrar la búsqueda",
+    searchField: "Buscar artículos",
+    searchPlaceholder: "Buscá lo que quieras",
     searchSubmit: "Buscar",
+    shop: "Tienda",
     skipToContent: "Saltar al contenido",
     tiktok: "TikTok de {store}",
     whatsapp: "Escribinos por WhatsApp",
-  },
-  slider: {
-    next: "Siguiente",
-    position: "{current} / {total}",
-    previous: "Anterior",
   },
 };

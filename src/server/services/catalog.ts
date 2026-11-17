@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   inArray,
+  isNull,
   ne,
   or,
   type SQL,
@@ -12,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { RELATED_FILL_BELOW, RELATED_POOL_SIZE } from "@/lib/catalog/related";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import type {
@@ -514,6 +516,78 @@ export async function listRelatedProducts(
     locale,
   });
 }
+
+/**
+ * What the article's page picks its suggestions from (FER-039,
+ * `src/lib/catalog/related.ts`): up to `RELATED_POOL_SIZE` other published
+ * articles of its category, newest first, and, only when the category has
+ * fewer than `RELATED_FILL_BELOW` of them, up to as many from the rest of
+ * the store (outside the category, or in none). The article is never in it.
+ */
+export async function listRelatedPool(
+  db: DatabaseClient,
+  {
+    categoryId,
+    currencyCode,
+    locale,
+    productId,
+    storeId,
+  }: StoreScope & {
+    categoryId: number | null;
+    currencyCode: Currency;
+    locale: Locale;
+    productId: number;
+  }
+) {
+  const others = and(
+    eq(product.storeId, storeId),
+    eq(product.status, "published"),
+    ne(product.id, productId)
+  );
+  const idsWhere = async (where: SQL | undefined) =>
+    (
+      await db
+        .select({ id: product.id })
+        .from(product)
+        .where(where)
+        .orderBy(desc(product.publishedAt), desc(product.id))
+        .limit(RELATED_POOL_SIZE)
+    ).map((row) => row.id);
+
+  const sameIds =
+    categoryId === null
+      ? []
+      : await idsWhere(and(others, eq(product.categoryId, categoryId)));
+  const restIds =
+    sameIds.length >= RELATED_FILL_BELOW
+      ? []
+      : await idsWhere(
+          categoryId === null
+            ? others
+            : and(
+                others,
+                or(
+                  isNull(product.categoryId),
+                  ne(product.categoryId, categoryId)
+                )
+              )
+        );
+  const inCategory = new Set(sameIds);
+  const cards = await loadCards(db, {
+    currencyCode,
+    // An article moved out of the category between the two reads is in
+    // both: it stays where the first one found it, once.
+    ids: [...sameIds, ...restIds.filter((id) => !inCategory.has(id))],
+    locale,
+  });
+
+  return {
+    others: cards.filter((card) => !inCategory.has(card.id)),
+    same: cards.filter((card) => inCategory.has(card.id)),
+  };
+}
+
+export type RelatedPoolCards = Awaited<ReturnType<typeof listRelatedPool>>;
 
 // ── Store-scoped writes ──────────────────────────────────────────────────
 
