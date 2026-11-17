@@ -103,6 +103,21 @@ vi.mock("@/server/better-auth", () => ({
 const STORE = { id: 7 };
 const USER_ID = "test-user-id";
 
+/** A category's page as the admin's form sends it: every text valid. */
+function makePageInput(overrides: Record<string, unknown> = {}) {
+  return {
+    coverAltEn: "",
+    coverAltEs: " Anillo sello ",
+    id: "5",
+    parentId: 6,
+    seoDescriptionEn: "  ",
+    seoDescriptionEs: "Anillos de la feria",
+    seoTitleEn: "Rings",
+    seoTitleEs: "",
+    ...overrides,
+  };
+}
+
 /**
  * A signed-in admin working on the store (or a login the database no longer
  * has, or nobody).
@@ -212,18 +227,10 @@ describe("category router", () => {
   test("sets a category's page by id within the store, blank texts as none, then drops its cached catalog", async () => {
     const { db, run } = setup();
 
-    await expect(
-      run("updatePage", {
-        coverAltEn: "",
-        coverAltEs: " Anillo sello ",
-        id: "5",
-        parentId: 6,
-        seoDescriptionEn: "  ",
-        seoDescriptionEs: "Anillos de la feria",
-        seoTitleEn: "Rings",
-        seoTitleEs: "",
-      })
-    ).resolves.toEqual({ id: 5, parentId: 6 });
+    await expect(run("updatePage", makePageInput())).resolves.toEqual({
+      id: 5,
+      parentId: 6,
+    });
 
     expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
@@ -400,7 +407,8 @@ describe("category router", () => {
     ["create", { nameEn: null, nameEs: "  " }],
     ["reorder", { ids: [1, 1] }],
     ["delete", { id: 5, moveToId: "6" }],
-    ["updatePage", { id: 5, parentId: "6" }],
+    // Valid but for the group sent as text, so only its rule refuses it.
+    ["updatePage", makePageInput({ parentId: "6" })],
   ] as const)(
     "refuses invalid %s input before reading the login",
     async (name, input) => {

@@ -484,13 +484,18 @@ function CategoryRow({
               <ArrowDown aria-hidden="true" className="size-4" />
             </Button>
             <Button
+              // While a save is on its way the page stays as it is: closing and
+              // reopening it would let that save close a newer editor. Only
+              // `aria-disabled`, so the button can take focus back the moment
+              // the save ends, before the list re-renders it (design.md).
+              aria-disabled={updatePage.isPending || undefined}
               aria-expanded={paging}
               aria-label={interpolate(copy.page.action, { name: row.nameEs })}
-              // While a save is on its way the page stays as it is: closing and
-              // reopening it would let that save close a newer editor.
-              disabled={updatePage.isPending}
+              className="aria-disabled:opacity-50"
               onClick={() => {
-                setPaging((was) => !was);
+                if (!updatePage.isPending) {
+                  setPaging((was) => !was);
+                }
               }}
               ref={pageButton}
               size="icon"

@@ -226,8 +226,33 @@ describe("what search engines and assistants are told about", () => {
         name: `Anillos ${tag}`,
         path: `/${group.slug}/${rings.slug}`,
         slug: rings.slug,
+        updatedAt: expect.any(Date),
       },
-      { name: `Bijou ${tag}`, path: `/${group.slug}`, slug: group.slug },
+      {
+        name: `Bijou ${tag}`,
+        path: `/${group.slug}`,
+        slug: group.slug,
+        updatedAt: expect.any(Date),
+      },
     ]);
+  });
+
+  test("dates a category by the latest write to its row or its texts", async () => {
+    const { rings, storeId } = await setup();
+    const listed = async () =>
+      (await listIndexableCategories(db, { locale: "es", storeId })).find(
+        (row) => row.slug === rings.slug
+      )?.updatedAt;
+    const before = await listed();
+    const edited = new Date("2099-01-01T00:00:00.000Z");
+
+    // A page text edited later than anything else the category holds.
+    await db
+      .update(categoryTranslation)
+      .set({ seoTitle: "Anillos dorados", updatedAt: edited })
+      .where(eq(categoryTranslation.categoryId, rings.id));
+
+    expect(before).toBeInstanceOf(Date);
+    expect(await listed()).toEqual(edited);
   });
 });

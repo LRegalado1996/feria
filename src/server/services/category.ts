@@ -118,10 +118,11 @@ export type StoreCategory = Awaited<
 
 /**
  * Every write to a store's categories takes this lock first, held to the end
- * of its transaction: the duplicate-name check, the slug and the next
- * position are then decided by one writer at a time.
+ * of its transaction: the duplicate-name check, the slug, the next position
+ * and the groups are then decided by one writer at a time. The seed takes it
+ * too (`seedCatalogPages`).
  */
-async function lockStoreCategories(tx: DatabaseClient, storeId: number) {
+export async function lockStoreCategories(tx: DatabaseClient, storeId: number) {
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`category:${storeId}`}))`
   );

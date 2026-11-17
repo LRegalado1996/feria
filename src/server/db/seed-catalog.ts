@@ -15,6 +15,7 @@ import {
   setProductAttributeValues,
 } from "@/server/services/attribute";
 import { createProduct, publishProduct } from "@/server/services/catalog";
+import { lockStoreCategories } from "@/server/services/category";
 
 interface SeedImage {
   /** A photo in `public/seed/`. */
@@ -23,6 +24,11 @@ interface SeedImage {
   width: number;
 }
 
+/**
+ * A page's cover: one alt text for both images, so the phone's is the
+ * computer's photo cropped for a phone (`<photo>-phone.jpg`), never another
+ * picture; without one a phone shows the computer's.
+ */
 interface SeedCover {
   alt: { en: string; es: string };
   computer: SeedImage;
@@ -88,7 +94,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
         es: "Cadena de plata con dije brillante",
       },
       computer: { file: "necklace-2.jpg", height: 800, width: 1200 },
-      phone: { file: "necklace-3.jpg", height: 1200, width: 801 },
+      phone: { file: "necklace-2-phone.jpg", height: 800, width: 800 },
     },
     en: "Jewelry",
     es: "Bijouterie",
@@ -112,7 +118,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     cover: {
       alt: { en: "Gold signet ring", es: "Anillo sello dorado" },
       computer: { file: "ring-2.jpg", height: 800, width: 1200 },
-      phone: { file: "ring-1.jpg", height: 1200, width: 1200 },
+      phone: { file: "ring-2-phone.jpg", height: 800, width: 800 },
     },
     en: "Rings",
     es: "Anillos",
@@ -134,7 +140,7 @@ export const SEED_CATEGORIES: SeedCategory[] = [
     cover: {
       alt: { en: "Two gold bangles", es: "Dos esclavas doradas" },
       computer: { file: "bracelet-2.jpg", height: 1200, width: 1200 },
-      phone: { file: "bracelet-1.jpg", height: 1200, width: 800 },
+      phone: null,
     },
     en: "Bracelets",
     es: "Pulseras",
@@ -163,7 +169,7 @@ export const SEED_ALL_ARTICLES_COVER: SeedCover = {
     es: "Anillo dorado con piedras rosadas",
   },
   computer: { file: "ring-3.jpg", height: 800, width: 1200 },
-  phone: { file: "earrings-1.jpg", height: 1200, width: 1200 },
+  phone: { file: "ring-3-phone.jpg", height: 800, width: 800 },
 };
 
 /** A cover's columns, as the `category` and `store` tables name them. */
@@ -525,6 +531,9 @@ export async function seedCatalog(
  * has is left alone, so it is safe to run again. Returns what it changed.
  */
 export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
+  // Under the admin's category lock: a group moved while this reads the
+  // groups could otherwise take a category into a group inside a group.
+  await lockStoreCategories(tx, storeId);
   const changes = { covers: 0, grouped: 0, groups: 0 };
   const rows = async () =>
     await tx

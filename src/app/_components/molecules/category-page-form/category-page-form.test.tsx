@@ -85,19 +85,24 @@ function setup({
   });
   blob.put.mockResolvedValue({ url: UPLOADED });
   const wrapper = createQueryWrapper();
-  renderWithI18n(
+  const form = (props: {
+    category: CategoryPageFormCategory;
+    isGroup: boolean;
+  }) => (
     <CategoryPageForm
-      category={category}
+      {...props}
       groups={[
         { id: 6, name: "Bijouterie" },
         { id: 1, name: "Burbujeros" },
       ]}
-      isGroup={isGroup}
       onCancel={onCancel}
       onSave={onSave}
-    />,
-    { locale, wrapper }
+    />
   );
+  const { rerender } = renderWithI18n(form({ category, isGroup }), {
+    locale,
+    wrapper,
+  });
   const user = userEvent.setup();
   const photo = (name: string) => screen.getByRole("group", { name });
 
@@ -121,6 +126,13 @@ function setup({
     },
     onCancel,
     onSave,
+    /** The list read again while the form stays open, as the admin's row does. */
+    reread: (props: {
+      category: CategoryPageFormCategory;
+      isGroup: boolean;
+    }) => {
+      rerender(form(props));
+    },
     user,
   };
 }
@@ -205,10 +217,18 @@ describe("CategoryPageForm", () => {
       161,
       "Use up to 160 characters.",
     ],
+    ["Cover description in Spanish", 201, "Use up to 200 characters."],
   ])(
     "refuses a %s of %i characters under its field, sending nothing",
     async (name, length, message) => {
-      const { field, onSave, user } = setup();
+      const { field, onSave, user } = setup({
+        category: makeCategory({
+          cover: {
+            computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+            phone: null,
+          },
+        }),
+      });
 
       await user.click(field(name));
       await user.paste("x".repeat(length));
@@ -233,6 +253,23 @@ describe("CategoryPageForm", () => {
         expect.objectContaining({ seoTitleEn: null })
       );
     });
+  });
+
+  test("saves once a rename took the English name away, whatever its shut English texts still hold", async () => {
+    const { field, onSave, reread, user } = setup();
+    await user.click(field("Title for search engines in English"));
+    await user.paste("x".repeat(71));
+
+    reread({ category: makeCategory({ nameEn: null }), isGroup: false });
+    expect(field("Title for search engines in English")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ seoTitleEn: null })
+      );
+    });
+    expect(screen.queryByText("Use up to 70 characters.")).toBeNull();
   });
 
   test("says a failed save under the form and keeps what was typed", async () => {
@@ -375,6 +412,23 @@ describe("CategoryPageForm", () => {
 
     expect(onCancel).toHaveBeenCalledExactlyOnceWith();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("sends no group once another category joined this one while it was open", async () => {
+    const { onSave, reread, user } = setup();
+    const group = screen.getByRole("combobox", { name: "Group" });
+    await user.selectOptions(group, "Bijouterie");
+
+    reread({ category: makeCategory(), isGroup: true });
+    expect(group).toBeDisabled();
+    expect(group).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Save the page" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ parentId: null })
+      );
+    });
   });
 
   test("keeps a group's own group shut, in Spanish too", () => {

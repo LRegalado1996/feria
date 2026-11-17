@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 
 import { StoreBreadcrumb } from "./store-breadcrumb";
 
@@ -66,4 +66,38 @@ test("its links are 44 px targets with a visible focus ring, and it takes a clas
   }
   expect(trail).toHaveClass("custom");
   expect(trail).toHaveAttribute("data-slot", "store-breadcrumb");
+});
+
+test("keeps every step when two share a name, as a group and its category can", () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  const { rerender } = render(
+    <StoreBreadcrumb
+      items={[
+        { href: "/", name: "Inicio" },
+        { href: "/bijouterie", name: "Bijouterie" },
+        { name: "Bijouterie" },
+      ]}
+      label="Ruta"
+    />
+  );
+
+  rerender(
+    <StoreBreadcrumb
+      items={[
+        { href: "/", name: "Inicio" },
+        { href: "/bijouterie", name: "Bijouterie" },
+        { name: "Anillos" },
+      ]}
+      label="Ruta"
+    />
+  );
+
+  expect(
+    within(screen.getByRole("navigation", { name: "Ruta" }))
+      .getAllByRole("listitem")
+      .map((item) => item.textContent)
+  ).toEqual(["Inicio", "Bijouterie", "Anillos"]);
+  // React says so when two siblings share a key.
+  expect(error).not.toHaveBeenCalled();
+  error.mockRestore();
 });

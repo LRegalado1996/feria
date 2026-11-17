@@ -36,7 +36,12 @@ function StoreBreadcrumb({ className, items, label }: StoreBreadcrumbProps) {
     >
       <ol className="flex flex-wrap items-center gap-x-1 text-sm">
         {items.map((item, index) => (
-          <li className="flex min-w-0 items-center gap-x-1" key={item.name}>
+          // A step's address is its own; a group and its category, or the
+          // home and a category, may share a name. The page itself has none.
+          <li
+            className="flex min-w-0 items-center gap-x-1"
+            key={item.href ?? "current"}
+          >
             {index > 0 ? (
               <ChevronRight
                 aria-hidden="true"

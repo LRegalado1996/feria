@@ -19,6 +19,7 @@ import {
   COVER_ALT_MAX_LENGTH,
   PRODUCT_STATUSES,
   RESERVED_ATTRIBUTE_SLUGS,
+  RESERVED_CATEGORY_SLUGS,
   SWATCH_COLOR_PATTERN,
 } from "@/lib/schemas/catalog";
 
@@ -39,6 +40,9 @@ const timestamps = {
 // A CHECK takes no bound parameters: the pattern is written into the SQL as
 // a literal, from the module the zod schemas read, and holds no quote.
 const slugPattern = sql.raw(`'${CATALOG_SLUG_PATTERN.source}'`);
+const reservedCategorySlugs = sql.raw(
+  RESERVED_CATEGORY_SLUGS.map((slug) => `'${slug}'`).join(", ")
+);
 
 export const productStatusEnum = pgEnum("product_status", PRODUCT_STATUSES);
 
@@ -79,6 +83,12 @@ export const category = pgTable(
     // another store cannot be attached, whatever the code above asks.
     unique("category_store_id_unique").on(table.storeId, table.id),
     check("category_slug_format", sql`${table.slug} ~ ${slugPattern}`),
+    // The slug is the page's address: never a path the site already answers
+    // (`RESERVED_CATEGORY_SLUGS`), whoever writes the row.
+    check(
+      "category_slug_not_reserved",
+      sql`${table.slug} NOT IN (${reservedCategorySlugs})`
+    ),
     // The group is a category of the same store. NO ACTION: deleting a
     // group first takes its categories out of it (`deleteCategory`), and
     // deleting the store still cascades through all of them together.

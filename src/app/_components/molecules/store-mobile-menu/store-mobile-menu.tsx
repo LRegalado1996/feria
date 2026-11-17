@@ -20,7 +20,8 @@ export interface StoreMobileMenuProps {
  * covers a phone's screen, or slides in from the left on a tablet, over a
  * scrim. A modal dialog: focus stays inside, Escape or the close button
  * closes it, focus returns to the menu button, and following a link inside
- * closes it too. Rendered in place, in the header.
+ * closes it too. Escape within a group's open list of categories closes
+ * that list first. Rendered in place, in the header.
  */
 function StoreMobileMenu({
   children,
@@ -53,6 +54,18 @@ function StoreMobileMenu({
         className="fixed inset-y-0 left-0 z-50 flex w-full flex-col overflow-y-auto bg-store-contrast text-store-background outline-none sm:max-w-sm"
         data-slot="dialog-content"
         data-testid="store-mobile-menu"
+        // Escape inside a group whose categories are open closes that list
+        // only (`StoreNavGroup` gives focus back to its button), not the menu.
+        onEscapeKeyDown={(event) => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest(
+              '[data-slot="store-nav-group"][data-state="open"]'
+            )
+          ) {
+            event.preventDefault();
+          }
+        }}
         onClickCapture={(event) => {
           if (event.target instanceof Element && event.target.closest("a")) {
             setOpen(false);

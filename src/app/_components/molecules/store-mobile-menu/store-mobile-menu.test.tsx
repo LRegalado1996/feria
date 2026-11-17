@@ -2,6 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 
+import { StoreNavGroup } from "@/app/_components/molecules/store-nav-group";
+
 import { StoreMobileMenu } from "./store-mobile-menu";
 
 function setup() {
@@ -17,6 +19,25 @@ function setup() {
       <a href="#home">
         <span>Home</span>
       </a>
+      {/* The header puts each group in the menu like this. */}
+      <StoreNavGroup
+        group={{
+          current: false,
+          href: "/bijouterie",
+          lang: "es",
+          name: "Bijouterie",
+        }}
+        items={[
+          {
+            current: false,
+            href: "/bijouterie/anillos",
+            lang: "es",
+            name: "Anillos",
+          },
+        ]}
+        toggleLabel="Bijouterie's categories"
+        variant="menu"
+      />
     </StoreMobileMenu>
   );
 
@@ -69,6 +90,32 @@ describe("StoreMobileMenu", () => {
   test("closes on Escape and gives focus back to the menu button", async () => {
     const { open, panel, trigger, user } = setup();
     await open();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(panel()).toBeNull();
+    });
+    expect(trigger()).toHaveFocus();
+  });
+
+  test("on Escape inside a group's open categories, closes them and stays open; a second Escape closes the menu", async () => {
+    const { open, panel, trigger, user } = setup();
+    const dialog = await open();
+    const toggle = dialog.getByRole("button", {
+      name: "Bijouterie's categories",
+    });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    // Into the list: Escape is pressed from one of its categories.
+    await user.tab();
+    expect(dialog.getByRole("link", { name: "Anillos" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+    expect(panel()).not.toBeNull();
 
     await user.keyboard("{Escape}");
 

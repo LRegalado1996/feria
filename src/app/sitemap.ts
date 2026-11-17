@@ -72,9 +72,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...entries(origin, "/", store.updatedAt),
     ...entries(origin, ALL_ARTICLES_PATH, catalogChanged),
-    // Every group and category page with a published article (FER-043).
+    // Every group and category page with a published article (FER-043),
+    // changed with the catalog or with its own texts.
     ...categories.flatMap((category) =>
-      entries(origin, category.path, catalogChanged)
+      entries(
+        origin,
+        category.path,
+        latest([catalogChanged, category.updatedAt])
+      )
     ),
     ...articles.flatMap((article) =>
       entries(origin, articlePath(article.slug), article.updatedAt)
