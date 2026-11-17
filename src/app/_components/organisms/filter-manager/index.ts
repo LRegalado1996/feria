@@ -1,1 +1,1 @@
-export { FilterManager, type FilterManagerProps } from "./filter-manager";
+export { FilterManager } from "./filter-manager";

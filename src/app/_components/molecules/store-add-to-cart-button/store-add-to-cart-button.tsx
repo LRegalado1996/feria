@@ -17,7 +17,6 @@ export interface StoreAddToCartButtonProps {
   /** The price the card shows, so the cart can say if it changes. */
   priceAmount: number;
   productId: number;
-  storeSlug: string;
 }
 
 /**
@@ -31,10 +30,9 @@ function StoreAddToCartButton({
   name,
   priceAmount,
   productId,
-  storeSlug,
 }: StoreAddToCartButtonProps) {
   const copy = useDictionary().storefront.catalog;
-  const { add } = useCart(storeSlug);
+  const { add } = useCart();
   // The count changes the text even when the message repeats, so a second
   // "Added" is announced like the first.
   const [status, setStatus] = useState({ count: 0, text: "" });

@@ -33,10 +33,6 @@ import type { client } from "@/lib/orpc/client";
 type StoreAttribute = Awaited<ReturnType<typeof client.attribute.list>>[number];
 type StoreAttributeValue = StoreAttribute["values"][number];
 
-export interface FilterManagerProps {
-  storeSlug: string;
-}
-
 /** A failed save, as the form shows it: a taken name, or anything else. */
 function toFormResult(error: unknown, action: string): AttributeFormResult {
   if (error instanceof ORPCError && error.code === "CONFLICT") {
@@ -98,18 +94,18 @@ function closeEditor(
   button.current?.focus();
 }
 /**
- * A store's filters on one screen (FER-033): add a filter, then its values
+ * The store's filters on one screen (FER-033): add a filter, then its values
  * inline, each with an optional swatch and the number of articles that carry
  * it; rename, reorder with the buttons, and delete. Deleting asks first, and
  * a value in use says how many articles lose it.
  */
-function FilterManager({ storeSlug }: FilterManagerProps) {
+function FilterManager() {
   const { admin, common } = useDictionary();
   const copy = admin.filters;
-  const attributes = useStoreAttributes(storeSlug);
-  const create = useCreateAttribute(storeSlug);
-  const reorder = useReorderAttributes(storeSlug);
-  const reorderValues = useReorderAttributeValues(storeSlug);
+  const attributes = useStoreAttributes();
+  const create = useCreateAttribute();
+  const reorder = useReorderAttributes();
+  const reorderValues = useReorderAttributeValues();
   const [announcement, setAnnouncement] = useState("");
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -164,7 +160,7 @@ function FilterManager({ storeSlug }: FilterManagerProps) {
         <AttributeForm
           onSave={async ({ nameEn, nameEs }) => {
             try {
-              await create.mutateAsync({ nameEn, nameEs, storeSlug });
+              await create.mutateAsync({ nameEn, nameEs });
               toast.success(copy.toasts.created);
               return "saved";
             } catch (error) {
@@ -225,14 +221,11 @@ function FilterManager({ storeSlug }: FilterManagerProps) {
                 );
 
                 if (ids) {
-                  announceMove(
-                    async () => await reorder.mutateAsync({ ids, storeSlug }),
-                    {
-                      name: row.nameEs,
-                      position: index + offset,
-                      total: rows.length,
-                    }
-                  );
+                  announceMove(async () => await reorder.mutateAsync({ ids }), {
+                    name: row.nameEs,
+                    position: index + offset,
+                    total: rows.length,
+                  });
                 }
               }}
               onMoveValue={(value, from, to) => {
@@ -248,7 +241,6 @@ function FilterManager({ storeSlug }: FilterManagerProps) {
                       await reorderValues.mutateAsync({
                         attributeId: row.id,
                         ids,
-                        storeSlug,
                       }),
                     {
                       name: value.nameEs,
@@ -259,7 +251,6 @@ function FilterManager({ storeSlug }: FilterManagerProps) {
                 }
               }}
               row={row}
-              storeSlug={storeSlug}
               titleRef={titleRef}
             />
           ))}
@@ -276,7 +267,6 @@ interface FilterCardProps {
   onMove: (offset: number) => void;
   onMoveValue: (value: StoreAttributeValue, from: number, to: number) => void;
   row: StoreAttribute;
-  storeSlug: string;
   /** Where focus goes once the filter is deleted. */
   titleRef: RefObject<HTMLHeadingElement | null>;
 }
@@ -288,14 +278,13 @@ function FilterCard({
   onMove,
   onMoveValue,
   row,
-  storeSlug,
   titleRef,
 }: FilterCardProps) {
   const { admin } = useDictionary();
   const copy = admin.filters;
-  const rename = useRenameAttribute(storeSlug);
-  const remove = useDeleteAttribute(storeSlug);
-  const createValue = useCreateAttributeValue(storeSlug);
+  const rename = useRenameAttribute();
+  const remove = useDeleteAttribute();
+  const createValue = useCreateAttributeValue();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -321,7 +310,6 @@ function FilterCard({
                 id: row.id,
                 nameEn,
                 nameEs,
-                storeSlug,
               });
               closeEditor(setEditing, editButton);
               toast.success(copy.toasts.renamed);
@@ -415,7 +403,6 @@ function FilterCard({
               onMove={(offset) => {
                 onMoveValue(value, index, index + offset);
               }}
-              storeSlug={storeSlug}
               value={value}
             />
           ))}
@@ -432,7 +419,6 @@ function FilterCard({
               await createValue.mutateAsync({
                 ...values,
                 attributeId: row.id,
-                storeSlug,
               });
               toast.success(copy.toasts.valueCreated);
               return "saved";
@@ -459,7 +445,7 @@ function FilterCard({
             try {
               // Awaited here: the list read after the deletion unmounts this
               // card, and TanStack runs no per-call callback once unmounted.
-              await remove.mutateAsync({ id: row.id, storeSlug });
+              await remove.mutateAsync({ id: row.id });
               deleted.current = true;
               setDeleting(false);
               toast.success(copy.toasts.deleted);
@@ -487,7 +473,6 @@ interface ValueRowProps {
   focusTargets: RefObject<HTMLHeadingElement | null>[];
   last: boolean;
   onMove: (offset: number) => void;
-  storeSlug: string;
   value: StoreAttributeValue;
 }
 
@@ -497,13 +482,12 @@ function ValueRow({
   focusTargets,
   last,
   onMove,
-  storeSlug,
   value,
 }: ValueRowProps) {
   const { admin } = useDictionary();
   const copy = admin.filters;
-  const update = useUpdateAttributeValue(storeSlug);
-  const remove = useDeleteAttributeValue(storeSlug);
+  const update = useUpdateAttributeValue();
+  const remove = useDeleteAttributeValue();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleted = useRef(false);
@@ -524,7 +508,7 @@ function ValueRow({
           }}
           onSave={async (values) => {
             try {
-              await update.mutateAsync({ ...values, id: value.id, storeSlug });
+              await update.mutateAsync({ ...values, id: value.id });
               closeEditor(setEditing, editButton);
               toast.success(copy.toasts.valueUpdated);
               return "saved";
@@ -645,7 +629,6 @@ function ValueRow({
             try {
               const { removedFromArticles } = await remove.mutateAsync({
                 id: value.id,
-                storeSlug,
               });
               deleted.current = true;
               setDeleting(false);

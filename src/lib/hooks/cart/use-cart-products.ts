@@ -16,16 +16,12 @@ export type CartProduct = Awaited<
 export function useCartProducts({
   ids,
   locale,
-  storeSlug,
 }: {
   ids: number[];
   locale: Locale;
-  storeSlug: string;
 }) {
   return useQuery({
-    ...orpc.catalog.cartProducts.queryOptions({
-      input: { ids, locale, storeSlug },
-    }),
+    ...orpc.catalog.cartProducts.queryOptions({ input: { ids, locale } }),
     enabled: ids.length > 0,
     placeholderData: keepPreviousData,
     // Always the shop's word: a price seen a minute ago may be stale.

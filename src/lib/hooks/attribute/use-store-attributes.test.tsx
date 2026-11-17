@@ -52,7 +52,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
       : createOrpcHandler("attribute.list", list)
   );
   const wrapper = createQueryWrapper();
-  const { result } = renderHook(() => useStoreAttributes("lr-market"), {
+  const { result } = renderHook(() => useStoreAttributes(), {
     wrapper,
   });
 
@@ -66,21 +66,16 @@ describe("useStoreAttributes", () => {
     await waitFor(() => {
       expect(result.current.data).toEqual(ROWS);
     });
-    expect(list).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
-    expect(queryClient.getQueryData(storeAttributesKey("lr-market"))).toEqual(
-      ROWS
-    );
+    expect(list).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(queryClient.getQueryData(storeAttributesKey())).toEqual(ROWS);
   });
 
-  test("keys each store's list apart", () => {
-    expect(storeAttributesKey("lr-market")).toEqual([
+  test("keys the list under its procedure, with no store in the input", () => {
+    expect(storeAttributesKey()).toEqual([
       "attribute",
       "list",
-      { input: { storeSlug: "lr-market" } },
+      { input: undefined },
     ]);
-    expect(storeAttributesKey("tienda-demo")).not.toEqual(
-      storeAttributesKey("lr-market")
-    );
   });
 
   test("answers a refused read as an error, never as an empty list", async () => {

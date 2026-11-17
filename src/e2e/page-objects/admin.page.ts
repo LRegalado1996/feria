@@ -22,13 +22,25 @@ export class AdminPage extends BasePage {
       .filter({ visible: true });
   }
 
-  storeNavigation(): Locator {
-    return this.page.getByRole("navigation", { name: "Secciones del panel" });
+  /**
+   * The admin's one list of sections, the same for every login (FER-038).
+   * After a navigation the page left behind stays mounted, hidden, with a
+   * navigation of its own: the visible one is the one a user reads.
+   */
+  navigation(): Locator {
+    return this.page
+      .getByRole("navigation", { name: "Secciones del panel" })
+      .filter({ visible: true });
   }
 
-  platformNavigation(): Locator {
-    return this.page.getByRole("navigation", {
-      name: "Secciones de la plataforma",
+  /**
+   * A section's link in the navigation, by its label. The orders' link adds
+   * how many are still to pack to its name, so the name is matched from its
+   * start.
+   */
+  sectionLink(label: string): Locator {
+    return this.navigation().getByRole("link", {
+      name: new RegExp(`^${label}`, "u"),
     });
   }
 

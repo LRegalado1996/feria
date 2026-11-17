@@ -174,15 +174,10 @@ function setup({
   }
 
   const user = userEvent.setup();
-  renderWithI18n(
-    <OrderDetail
-      from={from}
-      id={42}
-      renderedAt={RENDERED_AT}
-      storeSlug="lr-market"
-    />,
-    { locale, wrapper: Providers }
-  );
+  renderWithI18n(<OrderDetail from={from} id={42} renderedAt={RENDERED_AT} />, {
+    locale,
+    wrapper: Providers,
+  });
 
   return {
     changeStatus,
@@ -219,10 +214,9 @@ describe("OrderDetail", () => {
     );
     expect(
       screen.getByRole("link", { name: "Back to orders" })
-    ).toHaveAttribute("href", "/en/admin/lr-market/orders");
+    ).toHaveAttribute("href", "/en/admin/orders");
     expect(get).toHaveBeenCalledExactlyOnceWith({
       id: 42,
-      storeSlug: "lr-market",
     });
   });
 
@@ -375,16 +369,12 @@ describe("OrderDetail", () => {
 
     expect(
       await screen.findByRole("link", { name: "Back to orders" })
-    ).toHaveAttribute(
-      "href",
-      "/en/admin/lr-market/orders?status=received&q=ana"
-    );
+    ).toHaveAttribute("href", "/en/admin/orders?status=received&q=ana");
   });
 
   test("opening an order that arrived takes its New mark off the list", async () => {
-    recordOrderList("lr-market", {}, [[]], RENDERED_AT);
+    recordOrderList({}, [[]], RENDERED_AT);
     recordOrderList(
-      "lr-market",
       {},
       [
         [
@@ -404,12 +394,12 @@ describe("OrderDetail", () => {
       ],
       RENDERED_AT
     );
-    expect([...freshArrivals("lr-market").keys()]).toEqual([42, 7]);
+    expect([...freshArrivals().keys()]).toEqual([42, 7]);
 
     setup();
     await screen.findByTestId("order-detail");
 
-    expect([...freshArrivals("lr-market").keys()]).toEqual([7]);
+    expect([...freshArrivals().keys()]).toEqual([7]);
   });
 
   test("speaks Spanish", async () => {
@@ -433,7 +423,7 @@ describe("OrderDetail", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Volver a pedidos" })
-    ).toHaveAttribute("href", "/admin/lr-market/orders");
+    ).toHaveAttribute("href", "/admin/orders");
     expect(screen.getByTestId("order-total")).toHaveTextContent(
       /^Total\$ 1\.590,50$/u
     );
@@ -450,7 +440,6 @@ describe("OrderDetail", () => {
     expect(changeStatus).toHaveBeenCalledExactlyOnceWith({
       id: 42,
       status: "delivered",
-      storeSlug: "lr-market",
     });
     expect(
       await screen.findByRole("button", { name: "Back to packed" })

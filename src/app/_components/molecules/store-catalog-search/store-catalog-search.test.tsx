@@ -28,11 +28,7 @@ function setup({
 }: { locale?: Locale; query?: CatalogQuery } = {}) {
   vi.useFakeTimers();
   const view = renderWithI18n(
-    <StoreCatalogSearch
-      className="custom"
-      query={query}
-      storeSlug="lr-market"
-    />,
+    <StoreCatalogSearch className="custom" query={query} />,
     { locale }
   );
   const field = () =>
@@ -65,13 +61,7 @@ function setup({
       view.unmount();
     },
     rerender: (next: CatalogQuery) => {
-      view.rerender(
-        <StoreCatalogSearch
-          className="custom"
-          query={next}
-          storeSlug="lr-market"
-        />
-      );
+      view.rerender(<StoreCatalogSearch className="custom" query={next} />);
     },
   };
 }
@@ -89,7 +79,7 @@ describe("StoreCatalogSearch", () => {
     advance(1);
 
     expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?category=collares&color=dorado,plateado&q=perla&sort=price_asc",
+      "/products?category=collares&color=dorado,plateado&q=perla&sort=price_asc",
       { scroll: false }
     );
   });
@@ -113,10 +103,9 @@ describe("StoreCatalogSearch", () => {
     type(" aro ");
     advance(SEARCH_DEBOUNCE_MS);
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/en/lr-market/products?q=aro",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/en/products?q=aro", {
+      scroll: false,
+    });
   });
 
   test("a search cleared to blank takes q out of the address", () => {
@@ -127,10 +116,9 @@ describe("StoreCatalogSearch", () => {
     type("   ");
     advance(SEARCH_DEBOUNCE_MS);
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?category=aros",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/products?category=aros", {
+      scroll: false,
+    });
   });
 
   test("submitting searches at once, and the pending wait sends nothing more", () => {
@@ -139,17 +127,15 @@ describe("StoreCatalogSearch", () => {
     type("aro");
     fireEvent.submit(form());
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?q=aro",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/products?q=aro", {
+      scroll: false,
+    });
 
     advance(SEARCH_DEBOUNCE_MS);
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?q=aro",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/products?q=aro", {
+      scroll: false,
+    });
   });
 
   test("submitting with nothing pending searches what the field holds", () => {
@@ -157,10 +143,9 @@ describe("StoreCatalogSearch", () => {
 
     fireEvent.submit(form());
 
-    expect(replace).toHaveBeenCalledExactlyOnceWith(
-      "/lr-market/products?q=perla",
-      { scroll: false }
-    );
+    expect(replace).toHaveBeenCalledExactlyOnceWith("/products?q=perla", {
+      scroll: false,
+    });
   });
 
   test("keeps focus and what was typed when the address catches up with it", () => {
@@ -244,7 +229,7 @@ describe("StoreCatalogSearch", () => {
   test("before the script runs, the form itself carries the rest of the selection", () => {
     const { field, form } = setup();
 
-    expect(form()).toHaveAttribute("action", "/lr-market/products");
+    expect(form()).toHaveAttribute("action", "/products");
     expect(
       [...form().querySelectorAll('input[type="hidden"]')].map((input) => [
         input.getAttribute("name"),
@@ -262,7 +247,7 @@ describe("StoreCatalogSearch", () => {
   test("carries nothing extra for the whole catalog, newest first", () => {
     const { form } = setup({ locale: "en", query: makeQuery() });
 
-    expect(form()).toHaveAttribute("action", "/en/lr-market/products");
+    expect(form()).toHaveAttribute("action", "/en/products");
     expect(form().querySelectorAll('input[type="hidden"]')).toHaveLength(0);
   });
 });

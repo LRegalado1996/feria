@@ -63,8 +63,13 @@ const ANALYTICS =
   '<div data-testid="vercel-analytics"></div><div data-testid="vercel-speed-insights"></div>';
 const SHELL_END = "</body></html>";
 
+// The store's colors from the theme file, on <body>, where CSS derives the
+// muted ones from them.
+const THEMED_BODY =
+  '<body data-store-palette="" style="--store-accent:#c8f31d;--store-background:#f2f3f0;--store-contrast:#111312;--store-foreground:#111312;--store-surface:#ffffff">';
+
 function shellStart(locale: "en" | "es") {
-  return `<html class="font-geist-test font-anton-test" lang="${locale}"><head></head><body><div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
+  return `<html class="font-geist-test font-anton-test" lang="${locale}"><head></head>${THEMED_BODY}<div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;
 }
 
 async function makeParams(locale: string) {
@@ -84,7 +89,7 @@ async function setup({ locale = "es", vercel = "" } = {}) {
 
 describe("RootLayout", () => {
   test.each(["es", "en"] as const)(
-    "renders the %s document: its lang, then the marker and the providers in that language",
+    "renders the %s document: its lang, the store's colors on its body, then the marker and the providers in that language",
     async (locale) => {
       const html = await setup({ locale });
 

@@ -1,8 +1,14 @@
-import { randomInt } from "node:crypto";
-
 import type { Page } from "@playwright/test";
 
-import { expect, IGNORE_HTTPS_ERRORS, requireBaseURL, test } from "../fixtures";
+import {
+  expect,
+  IGNORE_HTTPS_ERRORS,
+  requireBaseURL,
+  test,
+  uniquePhone,
+  uniqueTag,
+} from "../fixtures";
+import { placeOrder } from "../fixtures/place-order";
 import { AdminSignInPage } from "../page-objects/admin-sign-in.page";
 
 // React reports a hydration mismatch through `onRecoverableError`, which its
@@ -35,39 +41,35 @@ function collectHydrationErrors(page: Page): string[] {
 // navigation, so every case starts with `goto`. Deliberately not
 // `networkidle`: the assertions on hydrated behaviour below are the gate.
 test.describe("Hydration", () => {
+  // Signed in as the worker's user: every login is an admin (FER-038).
   test("the orders list hydrates without a React mismatch", async ({
+    authenticatedPage: page,
     db,
-    superadminPage: page,
   }) => {
-    const store = await db.seed.createStore({ name: "Hydration Store" });
-    const jewels = await db.seed.createCategory(store.id, {
-      nameEs: "Joyas",
-      position: 0,
-      slug: "joyas",
+    const tag = uniqueTag();
+    const jewels = await db.seed.createCategory({
+      nameEs: `Joyas ${tag}`,
+      slug: `joyas-${tag}`,
     });
-    const ring = await db.seed.createArticle(store.id, jewels.id, "Anillo", {
+    const ring = await db.seed.createArticle({
+      categoryId: jewels.id,
       priceAmount: 50_000,
+      title: "Anillo",
     });
     // Seconds old when the list renders: its relative time ("hace unos
     // segundos") is the text that differed between the server and the
-    // browser. A phone of its own, since the hourly limit counts by phone.
-    const placed = await page.request.post("/api/orpc/order/create", {
-      data: {
-        json: {
-          customerName: "Ana",
-          customerPhone: `+5989${String(randomInt(10_000_000)).padStart(7, "0")}`,
-          items: [{ productId: ring.id, quantity: 1 }],
-          locale: "es",
-          requestKey: crypto.randomUUID(),
-          storeSlug: store.slug,
-        },
-      },
+    // browser. A phone of its own, since the hourly limit counts by phone,
+    // and the list searched by it: other specs' orders can fill its first
+    // page.
+    const phone = uniquePhone();
+    const order = await placeOrder(page.request, {
+      customerName: "Ana",
+      customerPhone: phone.international,
+      productId: ring.id,
     });
-    expect(placed.status()).toBe(200);
-    const { json: order } = (await placed.json()) as { json: { code: string } };
     const errors = collectHydrationErrors(page);
 
-    await page.goto(`/admin/${store.slug}/orders`, {
+    await page.goto(`/admin/orders?q=${phone.national}`, {
       waitUntil: "domcontentloaded",
     });
 

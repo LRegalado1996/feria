@@ -1,30 +1,17 @@
-import { ORPCError } from "@orpc/server";
-
-import { protectedProcedure } from "@/server/api/orpc";
-import { getAdminProfile } from "@/server/services/access";
+import { adminProcedure } from "@/server/api/orpc";
 
 /**
- * What the admin's pages decide with (FER-013). The role is read from the
- * database, never the session's copy: a demoted superadmin loses the platform
- * area on the next page, not when their cookie expires.
+ * Who is signed in, for the admin's pages (FER-013). Every login is an admin
+ * (FER-038); the login is re-read from the database by `adminProcedure`, so a
+ * session that outlived its user is UNAUTHORIZED here too.
  */
 export const adminRouter = {
-  me: protectedProcedure
-    .handler(async ({ context }) => {
-      const { id, name } = context.session.user;
-      const profile = await getAdminProfile(context.db, id);
-
-      if (profile === null) {
-        // The session outlived its user.
-        throw new ORPCError("UNAUTHORIZED");
-      }
-
-      return { name, ...profile };
-    })
+  me: adminProcedure
+    .handler(({ context }) => ({ name: context.session.user.name }))
     .route({
       method: "GET",
       path: "/admin/me",
-      summary: "The signed-in login, its role and the stores it may work on",
+      summary: "The signed-in login",
       tags: ["admin"],
     }),
 };

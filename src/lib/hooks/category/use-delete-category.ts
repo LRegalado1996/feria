@@ -5,7 +5,7 @@ import { orpc } from "@/lib/orpc/client";
 import { storeCategoriesKey } from "./use-store-categories";
 
 /** Deletes a category (moving its articles), then reads the list again. */
-export function useDeleteCategory(storeSlug: string) {
+export function useDeleteCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -17,7 +17,7 @@ export function useDeleteCategory(storeSlug: string) {
     // they go.
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: storeCategoriesKey(storeSlug),
+        queryKey: storeCategoriesKey(),
       });
     },
   });

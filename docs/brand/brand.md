@@ -53,7 +53,7 @@ The drawing lives once, in `src/lib/brand/logo.ts`. Everything else is made from
 - `atoms/store-logo` renders it in the store tokens (`variant="full" | "mark"`, `tone="accent" | "contrast"`); the caller sets the height.
 - `pnpm brand:assets` writes the eight files in `public/brand/`. A unit test fails while a file and the code disagree, so run it after changing the drawing or a color.
 - `src/app/icon.tsx` (tab icon, 32 px), `src/app/apple-icon.tsx` (home screen, 180 px) and `src/app/[locale]/opengraph-image.tsx` (share card, 1200 × 630) render PNGs from the same drawing.
-- `STORE_PALETTE` (`src/styles/store-palette.ts`) holds the palette for those files and images, which cannot read CSS; a test holds each value to its `--store-*` token in `src/styles/globals.css`.
+- `STORE_THEME` (`src/styles/theme.ts`) is the palette, the one place it is set (FER-038): the root layout writes it into the `--store-*` CSS variables, and those files and images, which cannot read CSS, import it. Its test holds every pair the storefront sets text in to WCAG AA.
 
 ## Colors
 

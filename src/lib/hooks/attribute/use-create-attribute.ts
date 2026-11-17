@@ -5,7 +5,7 @@ import { orpc } from "@/lib/orpc/client";
 import { storeAttributesKey } from "./use-store-attributes";
 
 /** Adds a filter, then reads the list again: the slug is the server's. */
-export function useCreateAttribute(storeSlug: string) {
+export function useCreateAttribute() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -14,7 +14,7 @@ export function useCreateAttribute(storeSlug: string) {
     meta: { suppressGlobalErrorReport: true },
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: storeAttributesKey(storeSlug),
+        queryKey: storeAttributesKey(),
       });
     },
   });

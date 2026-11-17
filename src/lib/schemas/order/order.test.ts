@@ -10,7 +10,6 @@ import {
   ORDER_MOVES,
   ORDER_SEARCH_MAX_LENGTH,
   ORDER_STATUSES,
-  orderCountsSchema,
 } from ".";
 
 const REQUEST_KEY = "11111111-1111-4111-8111-111111111111";
@@ -28,7 +27,6 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     locale: "es",
     note: "",
     requestKey: REQUEST_KEY,
-    storeSlug: "lr-market",
     ...overrides,
   };
 }
@@ -66,6 +64,8 @@ describe("createOrderSchema", () => {
     ["an item's price", { items: [makeItem({ unitPriceAmount: 1 })] }],
     ["the order's total", { totalAmount: 1 }],
     ["a field it does not name", { storeId: 7 }],
+    // The site is one store: an order names none (FER-038).
+    ["a store's address", { storeSlug: "lr-market" }],
   ])("refuses %s as tampering, never trims it", (_what, overrides) => {
     const result = createOrderSchema.safeParse(makeOrder(overrides));
 
@@ -91,7 +91,6 @@ describe("createOrderSchema", () => {
       locale: "es",
       note: null,
       requestKey: REQUEST_KEY,
-      storeSlug: "lr-market",
     });
   });
 
@@ -223,9 +222,7 @@ describe("getOrderByTokenSchema", () => {
     ["a padding =", `${"a".repeat(42)}=`, false],
     ["empty", "", false],
   ])("a token of %s is accepted: %s", (_case, token, accepted) => {
-    expect(
-      getOrderByTokenSchema.safeParse({ storeSlug: "lr-market", token }).success
-    ).toBe(accepted);
+    expect(getOrderByTokenSchema.safeParse({ token }).success).toBe(accepted);
   });
 });
 
@@ -235,16 +232,12 @@ describe("listOrdersSchema", () => {
       listOrdersSchema.parse({
         cursor: { createdAt: "2026-11-15T10:00:00.000Z", id: "7" },
         status: "packed",
-        storeSlug: "lr-market",
       })
     ).toEqual({
       cursor: { createdAt: new Date("2026-11-15T10:00:00.000Z"), id: 7 },
       status: "packed",
-      storeSlug: "lr-market",
     });
-    expect(listOrdersSchema.parse({ storeSlug: "lr-market" })).toEqual({
-      storeSlug: "lr-market",
-    });
+    expect(listOrdersSchema.parse({})).toEqual({});
   });
 
   test.each([
@@ -254,10 +247,7 @@ describe("listOrdersSchema", () => {
     [{ cursor: { createdAt: "2026-11-15T10:00:00.000Z" } }, false],
     [{ status: "undeliverable" }, true],
   ])("%j is accepted: %s", (overrides, accepted) => {
-    expect(
-      listOrdersSchema.safeParse({ storeSlug: "lr-market", ...overrides })
-        .success
-    ).toBe(accepted);
+    expect(listOrdersSchema.safeParse(overrides).success).toBe(accepted);
   });
 
   test.each([
@@ -266,10 +256,7 @@ describe("listOrdersSchema", () => {
     ["", undefined],
     ["   ", undefined],
   ])("reads the search %j as %j", (q, expected) => {
-    expect(listOrdersSchema.parse({ q, storeSlug: "lr-market" })).toEqual({
-      q: expected,
-      storeSlug: "lr-market",
-    });
+    expect(listOrdersSchema.parse({ q })).toEqual({ q: expected });
   });
 
   test("takes a search of 80 characters, trimmed first, and refuses 81", () => {
@@ -277,22 +264,11 @@ describe("listOrdersSchema", () => {
     expect(
       listOrdersSchema.parse({
         q: ` ${"a".repeat(80)} `,
-        storeSlug: "lr-market",
       }).q
     ).toBe("a".repeat(80));
-    expect(
-      listOrdersSchema.safeParse({ q: "a".repeat(81), storeSlug: "lr-market" })
-        .success
-    ).toBe(false);
-  });
-});
-
-describe("orderCountsSchema", () => {
-  test("takes the store and nothing else", () => {
-    expect(
-      orderCountsSchema.parse({ status: "packed", storeSlug: "lr-market" })
-    ).toEqual({ storeSlug: "lr-market" });
-    expect(orderCountsSchema.safeParse({}).success).toBe(false);
+    expect(listOrdersSchema.safeParse({ q: "a".repeat(81) }).success).toBe(
+      false
+    );
   });
 });
 
@@ -305,11 +281,10 @@ describe("getOrderSchema and changeOrderStatusSchema", () => {
     ["", false],
   ])("an id of %j is accepted: %s", (id, accepted) => {
     expect([
-      getOrderSchema.safeParse({ id, storeSlug: "lr-market" }).success,
+      getOrderSchema.safeParse({ id }).success,
       changeOrderStatusSchema.safeParse({
         id,
         status: "packed",
-        storeSlug: "lr-market",
       }).success,
     ]).toEqual([accepted, accepted]);
   });
@@ -323,7 +298,6 @@ describe("getOrderSchema and changeOrderStatusSchema", () => {
       changeOrderStatusSchema.safeParse({
         id: 5,
         status,
-        storeSlug: "lr-market",
       }).success
     ).toBe(accepted);
   });

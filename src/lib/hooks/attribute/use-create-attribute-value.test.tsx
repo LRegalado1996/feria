@@ -16,7 +16,6 @@ const INPUT = {
   attributeId: 7,
   nameEn: "Gold",
   nameEs: "Dorado",
-  storeSlug: "lr-market",
   swatchColor: "#d4af37",
 };
 
@@ -35,7 +34,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useCreateAttributeValue("lr-market"), {
+  const { result } = renderHook(() => useCreateAttributeValue(), {
     wrapper,
   });
   const metas = () =>
@@ -55,7 +54,7 @@ describe("useCreateAttributeValue", () => {
 
     expect(procedure).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
   });
 
@@ -68,7 +67,7 @@ describe("useCreateAttributeValue", () => {
     });
 
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });

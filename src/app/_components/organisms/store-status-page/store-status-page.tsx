@@ -13,8 +13,8 @@ export interface StoreStatusPageProps {
 }
 
 /**
- * A page that could not show what was asked (FER-021), inside the store's
- * header and footer: what happened, in the store's type, and the way out.
+ * A page that could not show what was asked (FER-021), under the store's
+ * header: what happened, in the store's type, and the way out.
  */
 function StoreStatusPage({
   action,

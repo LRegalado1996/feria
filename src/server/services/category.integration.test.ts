@@ -1,13 +1,10 @@
-import { randomUUID } from "node:crypto";
-
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { createStoreSchema } from "@/lib/schemas/store";
 import { db } from "@/server/db";
-import { product, store } from "@/server/db/schema";
+import { category, product } from "@/server/db/schema";
 import { createProduct } from "@/server/services/catalog";
-import { createStore } from "@/server/services/store";
+import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
   createCategory,
@@ -24,51 +21,36 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// Deleting a store cascades to its categories, articles and texts.
-const createdStoreIds: number[] = [];
+// The store is shared (`theStoreId`): what this file created is deleted by
+// id after each test, the articles first, since a category that still has
+// one cannot be deleted. Deleting a category takes its names with it.
+const created = { categoryIds: [] as number[], productIds: [] as number[] };
 
 afterEach(async () => {
-  await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
+  await db
+    .delete(product)
+    .where(inArray(product.id, created.productIds.splice(0)));
+  await db
+    .delete(category)
+    .where(inArray(category.id, created.categoryIds.splice(0)));
 });
-
-async function makeStore() {
-  const row = await createStore(
-    db,
-    createStoreSchema.parse({
-      colorAccent: "#c8f31d",
-      colorBackground: "#f2f3f0",
-      colorContrast: "#111312",
-      colorForeground: "#111312",
-      colorSurface: "#ffffff",
-      currencyCode: "UYU",
-      instagramUrl: null,
-      isActive: true,
-      isDefault: false,
-      logoUrl: null,
-      name: "Category Test",
-      slug: `category-${randomUUID().slice(0, 8)}`,
-      tiktokUrl: null,
-      translations: [],
-      whatsappNumber: null,
-    })
-  );
-  createdStoreIds.push(row.id);
-
-  return row;
-}
 
 const add = async (
   storeId: number,
   nameEs: string,
   nameEn: string | null = null
-) =>
-  await db.transaction(
+) => {
+  const row = await db.transaction(
     async (tx) =>
       await createCategory(tx, { storeId, values: { nameEn, nameEs } })
   );
+  created.categoryIds.push(row.id);
+
+  return row;
+};
 
 async function addArticle(storeId: number, categoryId: number, title: string) {
-  return await createProduct(db, {
+  const row = await createProduct(db, {
     storeId,
     values: {
       categoryId,
@@ -85,76 +67,103 @@ async function addArticle(storeId: number, categoryId: number, title: string) {
       ],
     },
   });
+  created.productIds.push(row.id);
+
+  return row;
+}
+
+/** The last place in the store's list now, -1 for none. */
+async function lastPosition(storeId: number) {
+  return Math.max(
+    -1,
+    ...(await listStoreCategories(db, { storeId })).map((row) => row.position)
+  );
 }
 
 describe("category management", () => {
   test("adds categories at the end, slugs from the Spanish name, English optional", async () => {
-    const shop = await makeStore();
-    await add(shop.id, "Collares Dorados", "Gold necklaces");
-    await add(shop.id, "Anillos");
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const last = await lastPosition(storeId);
+    const gold = await add(
+      storeId,
+      `Collares Dorados ${tag}`,
+      "Gold necklaces"
+    );
+    const rings = await add(storeId, `Anillos ${tag}`);
 
-    expect(await listStoreCategories(db, { storeId: shop.id })).toMatchObject([
+    expect(
+      onlyIds(await listStoreCategories(db, { storeId }), [gold.id, rings.id])
+    ).toMatchObject([
       {
         nameEn: "Gold necklaces",
-        nameEs: "Collares Dorados",
-        position: 0,
+        nameEs: `Collares Dorados ${tag}`,
+        position: last + 1,
         productCount: 0,
-        slug: "collares-dorados",
+        slug: `collares-dorados-${tag}`,
       },
       {
         nameEn: null,
-        nameEs: "Anillos",
-        position: 1,
+        nameEs: `Anillos ${tag}`,
+        position: last + 2,
         productCount: 0,
-        slug: "anillos",
+        slug: `anillos-${tag}`,
       },
     ]);
   });
 
-  test("refuses a Spanish name the store already has, whatever its case or accents, but not another store's", async () => {
-    const [shop, other] = [await makeStore(), await makeStore()];
-    await add(shop.id, "Pulseras");
+  test("refuses a Spanish name the store already has, whatever its case or accents, and takes another", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    await add(storeId, `Pulseras ${tag}`);
     const duplicate = {
       code: "CONFLICT",
       message: "Another category of this store already has that name",
     };
 
-    await expect(add(shop.id, "pulseras")).rejects.toMatchObject(duplicate);
-    await expect(add(shop.id, "PULSERÁS")).rejects.toMatchObject(duplicate);
-    await expect(add(other.id, "Pulseras")).resolves.toMatchObject({
-      slug: "pulseras",
+    await expect(add(storeId, `pulseras ${tag}`)).rejects.toMatchObject(
+      duplicate
+    );
+    await expect(
+      add(storeId, `PULSERÁS ${tag.toUpperCase()}`)
+    ).rejects.toMatchObject(duplicate);
+    await expect(add(storeId, `Pulseras finas ${tag}`)).resolves.toMatchObject({
+      slug: `pulseras-finas-${tag}`,
     });
   });
 
   test("renaming keeps the slug and the place, and refuses another category's name", async () => {
-    const shop = await makeStore();
-    const rings = await add(shop.id, "Anillos");
-    await add(shop.id, "Aros");
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const rings = await add(storeId, `Anillos ${tag}`);
+    await add(storeId, `Aros ${tag}`);
 
     await db.transaction(
       async (tx) =>
         await renameCategory(tx, {
           id: rings.id,
-          storeId: shop.id,
-          values: { nameEn: "Rings", nameEs: "Anillos de plata" },
+          storeId,
+          values: { nameEn: "Rings", nameEs: `Anillos de plata ${tag}` },
         })
     );
     expect(
-      (await listStoreCategories(db, { storeId: shop.id }))[0]
-    ).toMatchObject({
-      nameEn: "Rings",
-      nameEs: "Anillos de plata",
-      position: 0,
-      slug: "anillos",
-    });
+      onlyIds(await listStoreCategories(db, { storeId }), [rings.id])
+    ).toMatchObject([
+      {
+        nameEn: "Rings",
+        nameEs: `Anillos de plata ${tag}`,
+        position: rings.position,
+        slug: `anillos-${tag}`,
+      },
+    ]);
 
     await expect(
       db.transaction(
         async (tx) =>
           await renameCategory(tx, {
             id: rings.id,
-            storeId: shop.id,
-            values: { nameEn: null, nameEs: "aros" },
+            storeId,
+            values: { nameEn: null, nameEs: `aros ${tag}` },
           })
       )
     ).rejects.toMatchObject({
@@ -163,35 +172,39 @@ describe("category management", () => {
     });
   });
 
-  test("reorders all categories at once, and refuses a partial or foreign list", async () => {
-    const [shop, other] = [await makeStore(), await makeStore()];
-    const a = await add(shop.id, "A");
-    const b = await add(shop.id, "B");
-    const c = await add(shop.id, "C");
-    const foreign = await add(other.id, "Z");
-
+  test("reorders all categories at once, and refuses a partial list or one with an id the store does not have", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const a = await add(storeId, `A ${tag}`);
+    const b = await add(storeId, `B ${tag}`);
+    const c = await add(storeId, `C ${tag}`);
+    const gone = await add(storeId, `Gone ${tag}`);
     await db.transaction(
       async (tx) =>
-        await reorderCategories(tx, {
-          ids: [c.id, a.id, b.id],
-          storeId: shop.id,
-        })
+        await deleteCategory(tx, { id: gone.id, moveToId: null, storeId })
     );
-    expect(
-      (await listStoreCategories(db, { storeId: shop.id })).map(
-        (row) => row.nameEs
-      )
-    ).toEqual(["C", "A", "B"]);
+    const rest = (await listStoreCategories(db, { storeId }))
+      .map((row) => row.id)
+      .filter((id) => ![a.id, b.id, c.id].includes(id));
+    const reorder = async (ids: number[]) =>
+      await db.transaction(
+        async (tx) => await reorderCategories(tx, { ids, storeId })
+      );
 
+    await reorder([c.id, a.id, b.id, ...rest]);
+    expect(
+      (await listStoreCategories(db, { storeId }))
+        .slice(0, 3)
+        .map((row) => row.nameEs)
+    ).toEqual([`C ${tag}`, `A ${tag}`, `B ${tag}`]);
+
+    // The second list is as long as the store's: only the id it holds in
+    // place of `c`, one the store no longer has, can refuse it.
     for (const ids of [
-      [a.id, b.id],
-      [a.id, b.id, foreign.id],
+      [a.id, b.id, ...rest],
+      [a.id, b.id, gone.id, ...rest],
     ]) {
-      await expect(
-        db.transaction(
-          async (tx) => await reorderCategories(tx, { ids, storeId: shop.id })
-        )
-      ).rejects.toMatchObject({
+      await expect(reorder(ids)).rejects.toMatchObject({
         code: "BAD_REQUEST",
         message: "Give every category of the store, once each",
       });
@@ -199,22 +212,20 @@ describe("category management", () => {
   });
 
   test("deleting a category with articles moves them first, and refuses without a destination", async () => {
-    const shop = await makeStore();
-    const chains = await add(shop.id, "Cadenas");
-    const rings = await add(shop.id, "Anillos");
-    const article = await addArticle(shop.id, chains.id, "Cadena");
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const chains = await add(storeId, `Cadenas ${tag}`);
+    const rings = await add(storeId, `Anillos ${tag}`);
+    const article = await addArticle(storeId, chains.id, `Cadena ${tag}`);
     const remove = async (moveToId: number | null) =>
       await db.transaction(
         async (tx) =>
-          await deleteCategory(tx, {
-            id: chains.id,
-            moveToId,
-            storeId: shop.id,
-          })
+          await deleteCategory(tx, { id: chains.id, moveToId, storeId })
       );
 
     expect(
-      (await listStoreCategories(db, { storeId: shop.id }))[0]?.productCount
+      onlyIds(await listStoreCategories(db, { storeId }), [chains.id])[0]
+        ?.productCount
     ).toBe(1);
     await expect(remove(null)).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -234,46 +245,44 @@ describe("category management", () => {
         ?.categoryId
     ).toBe(rings.id);
     expect(
-      (await listStoreCategories(db, { storeId: shop.id })).map(
-        (row) => row.nameEs
-      )
-    ).toEqual(["Anillos"]);
+      onlyIds(await listStoreCategories(db, { storeId }), [
+        chains.id,
+        rings.id,
+      ]).map((row) => row.nameEs)
+    ).toEqual([`Anillos ${tag}`]);
   });
 
-  test("another store's category is NOT_FOUND as a target or a destination", async () => {
-    const [shop, other] = [await makeStore(), await makeStore()];
-    const own = await add(shop.id, "Cadenas");
-    const foreign = await add(other.id, "Anillos");
-    await addArticle(shop.id, own.id, "Cadena");
+  test("a category the store no longer has is NOT_FOUND as a target or a destination", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const own = await add(storeId, `Cadenas ${tag}`);
+    const gone = await add(storeId, `Viejas ${tag}`);
+    await db.transaction(
+      async (tx) =>
+        await deleteCategory(tx, { id: gone.id, moveToId: null, storeId })
+    );
+    await addArticle(storeId, own.id, `Cadena ${tag}`);
     const notFound = { code: "NOT_FOUND", message: "Category not found" };
 
     await expect(
       db.transaction(
         async (tx) =>
-          await deleteCategory(tx, {
-            id: foreign.id,
-            moveToId: null,
-            storeId: shop.id,
-          })
+          await deleteCategory(tx, { id: gone.id, moveToId: null, storeId })
       )
     ).rejects.toMatchObject(notFound);
     await expect(
       db.transaction(
         async (tx) =>
-          await deleteCategory(tx, {
-            id: own.id,
-            moveToId: foreign.id,
-            storeId: shop.id,
-          })
+          await deleteCategory(tx, { id: own.id, moveToId: gone.id, storeId })
       )
     ).rejects.toMatchObject(notFound);
     await expect(
       db.transaction(
         async (tx) =>
           await renameCategory(tx, {
-            id: foreign.id,
-            storeId: shop.id,
-            values: { nameEn: null, nameEs: "Robado" },
+            id: gone.id,
+            storeId,
+            values: { nameEn: null, nameEs: `Robado ${tag}` },
           })
       )
     ).rejects.toMatchObject(notFound);
@@ -309,21 +318,21 @@ async function waitUntilBlocked() {
 }
 
 /**
- * Two creations in one store, the second started while the first holds the
+ * Two creations in the store, the second started while the first holds the
  * store's category lock: it waits, then decides on what the first wrote.
  */
 async function overlappingCreations(storeId: number, names: [string, string]) {
   const held = deferred();
   const locked = deferred();
   const first = db.transaction(async (tx) => {
-    const created = await createCategory(tx, {
+    const row = await createCategory(tx, {
       storeId,
       values: { nameEn: null, nameEs: names[0] },
     });
     locked.resolve(undefined);
     await held.promise;
 
-    return created;
+    return row;
   });
   // A first writer that fails never signals: its failure ends the wait.
   await Promise.race([locked.promise, first]);
@@ -339,6 +348,14 @@ async function overlappingCreations(storeId: number, names: [string, string]) {
     await waitUntilBlocked();
   } finally {
     held.resolve(undefined);
+
+    // On every path, before a failed wait is thrown: a second writer that
+    // never waited still runs, and both may commit a category to clean up.
+    for (const result of await Promise.allSettled([first, second])) {
+      if (result.status === "fulfilled") {
+        created.categoryIds.push(result.value.id);
+      }
+    }
   }
 
   return await Promise.allSettled([first, second]);
@@ -346,11 +363,12 @@ async function overlappingCreations(storeId: number, names: [string, string]) {
 
 describe("category writes under two writers", () => {
   test("the same name created twice at once ends in one category and one CONFLICT", async () => {
-    const shop = await makeStore();
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
 
-    const [first, second] = await overlappingCreations(shop.id, [
-      "Collares",
-      "collares",
+    const [first, second] = await overlappingCreations(storeId, [
+      `Collares ${tag}`,
+      `collares ${tag}`,
     ]);
 
     expect(first.status).toBe("fulfilled");
@@ -362,25 +380,25 @@ describe("category writes under two writers", () => {
       status: "rejected",
     });
     expect(
-      (await listStoreCategories(db, { storeId: shop.id })).map(
-        (row) => row.nameEs
-      )
-    ).toEqual(["Collares"]);
+      (await listStoreCategories(db, { storeId }))
+        .filter((row) => row.nameEs.toLowerCase() === `collares ${tag}`)
+        .map((row) => row.nameEs)
+    ).toEqual([`Collares ${tag}`]);
   });
 
   test("two different names created at once get their own places", async () => {
-    const shop = await makeStore();
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const last = await lastPosition(storeId);
 
-    await overlappingCreations(shop.id, ["Collares", "Pulseras"]);
+    const [first, second] = await overlappingCreations(storeId, [
+      `Collares ${tag}`,
+      `Pulseras ${tag}`,
+    ]);
 
-    expect(
-      (await listStoreCategories(db, { storeId: shop.id })).map((row) => [
-        row.nameEs,
-        row.position,
-      ])
-    ).toEqual([
-      ["Collares", 0],
-      ["Pulseras", 1],
+    expect([first, second]).toMatchObject([
+      { status: "fulfilled", value: { position: last + 1 } },
+      { status: "fulfilled", value: { position: last + 2 } },
     ]);
   });
 });

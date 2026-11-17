@@ -1,32 +1,39 @@
-import { describe, expect, test } from "vitest";
+import { describe, test, expect } from "vitest";
 
 import {
-  isPlatformSection,
-  isStoreSection,
-  platformSectionPath,
+  ADMIN_LANDING_SECTION,
+  ADMIN_SECTIONS,
+  adminSectionPath,
+  isAdminSection,
   safeReturnPath,
   signInPath,
-  storeSectionPath,
 } from "./paths";
 
 describe("admin paths", () => {
   test.each([
-    ["es", "/admin/lr-market/products"],
-    ["en", "/en/admin/lr-market/products"],
-  ] as const)("a store section in %s is %s", (locale, path) => {
-    expect(storeSectionPath("lr-market", "products", locale)).toBe(path);
+    ["es", "/admin/products"],
+    ["en", "/en/admin/products"],
+  ] as const)("a section in %s is %s, with no store in it", (locale, path) => {
+    expect(adminSectionPath("products", locale)).toBe(path);
   });
 
-  test.each([
-    ["es", "/admin/platform/stores"],
-    ["en", "/en/admin/platform/stores"],
-  ] as const)("a platform section in %s is %s", (locale, path) => {
-    expect(platformSectionPath("stores", locale)).toBe(path);
+  test("lists one set of sections, in the navigation's order, and opens on the orders", () => {
+    expect(ADMIN_SECTIONS).toEqual([
+      "products",
+      "categories",
+      "filters",
+      "orders",
+      "home",
+      "settings",
+      "users",
+      "metrics",
+    ]);
+    expect(ADMIN_LANDING_SECTION).toBe("orders");
   });
 
   test("the sign-in page carries where to come back, encoded", () => {
-    expect(signInPath("/en/admin/lr-market/orders?x=1", "en")).toBe(
-      "/en/admin/sign-in?next=%2Fen%2Fadmin%2Flr-market%2Forders%3Fx%3D1"
+    expect(signInPath("/en/admin/orders?x=1", "en")).toBe(
+      "/en/admin/sign-in?next=%2Fen%2Fadmin%2Forders%3Fx%3D1"
     );
   });
 
@@ -34,40 +41,28 @@ describe("admin paths", () => {
     ["products", true],
     ["filters", true],
     ["users", true],
-    ["metrics", false],
-    ["", false],
-  ])("%j is a store section: %s", (value, expected) => {
-    expect(isStoreSection(value)).toBe(expected);
-  });
-
-  test.each([
     ["metrics", true],
-    ["products", false],
-  ])("%j is a platform section: %s", (value, expected) => {
-    expect(isPlatformSection(value)).toBe(expected);
+    ["platform", false],
+    ["stores", false],
+    ["", false],
+  ])("%j is an admin section: %s", (value, expected) => {
+    expect(isAdminSection(value)).toBe(expected);
   });
 });
 
 describe("safeReturnPath", () => {
   test.each([
-    ["/admin/lr-market/products", "/admin/lr-market/products"],
+    ["/admin/products", "/admin/products"],
     ["/admin", "/admin"],
-    [
-      "/admin/lr-market/orders?status=received",
-      "/admin/lr-market/orders?status=received",
-    ],
+    ["/admin/orders?status=received", "/admin/orders?status=received"],
   ])("goes back to the admin page %j", (next, expected) => {
     expect(safeReturnPath(next, "es")).toBe(expected);
   });
 
   test.each([
-    ["es", "/en/admin/platform/stores", "/admin/platform/stores"],
-    ["en", "/admin/platform/stores", "/en/admin/platform/stores"],
-    [
-      "en",
-      "/en/admin/lr-market/orders?page=2",
-      "/en/admin/lr-market/orders?page=2",
-    ],
+    ["es", "/en/admin/metrics", "/admin/metrics"],
+    ["en", "/admin/metrics", "/en/admin/metrics"],
+    ["en", "/en/admin/orders?page=2", "/en/admin/orders?page=2"],
     ["es", "/en/admin", "/admin"],
   ] as const)(
     "on a page in %s, brings %j to that language: %j",
@@ -82,7 +77,7 @@ describe("safeReturnPath", () => {
     ["/\\evil.example/admin"],
     ["\\\\evil.example/admin"],
     ["/admin\\..\\..\\evil"],
-    ["/lr-market"],
+    ["/products"],
     ["/administrator"],
     ["/admin/sign-in"],
     ["/en/admin/sign-in?next=/admin"],

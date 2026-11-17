@@ -50,7 +50,6 @@ export interface OrderManagerProps {
   query: OrdersQuery;
   /** When the server rendered the screen: the clock the ages start from. */
   renderedAt: number;
-  storeSlug: string;
 }
 
 /**
@@ -60,7 +59,6 @@ export interface OrderManagerProps {
  * so leaving for an order and coming back neither repeats nor misses one.
  */
 function useArrivals(
-  storeSlug: string,
   { q, status }: OrdersQuery,
   orders: Pick<ReturnType<typeof useOrders>, "data" | "isPlaceholderData">,
   play: () => void
@@ -70,7 +68,7 @@ function useArrivals(
   const locale = useLocale();
   const fresh = useSyncExternalStore(
     subscribeArrivals,
-    () => freshArrivals(storeSlug),
+    freshArrivals,
     () => NO_ARRIVALS
   );
   const [message, setMessage] = useState("");
@@ -90,17 +88,17 @@ function useArrivals(
   // Arrivals recorded from here on are this screen's to say: declared before
   // the effect that records, so a list read as the screen mounts is heard.
   useEffect(() => {
-    let said = lastArrival(storeSlug)?.seq ?? 0;
+    let said = lastArrival()?.seq ?? 0;
 
     return subscribeArrivals(() => {
-      const last = lastArrival(storeSlug);
+      const last = lastArrival();
 
       if (last && last.seq > said) {
         said = last.seq;
         announce(last.codes);
       }
     });
-  }, [storeSlug]);
+  }, []);
 
   // A list shown while another status or search loads is not that list.
   useEffect(() => {
@@ -109,12 +107,11 @@ function useArrivals(
     }
 
     recordOrderList(
-      storeSlug,
       { q, status },
       data.pages.map((page) => page.items),
       Date.now()
     );
-  }, [data, isPlaceholderData, q, status, storeSlug]);
+  }, [data, isPlaceholderData, q, status]);
 
   return { fresh, message };
 }
@@ -180,22 +177,22 @@ function useLoadMore(
 }
 
 /**
- * A store's orders (FER-027), newest first, refreshed every 15 seconds while
+ * The store's orders (FER-027), newest first, refreshed every 15 seconds while
  * open: this screen is the only place a new order is announced. An order
  * that arrives while it is open is marked "New" (until it is opened, leaves
  * received or ten minutes pass) and said in a polite live region, with a beep
  * if the staff turned the sound on. The status tab and the search live in
  * the address, and each row's link carries them to the order and back.
  */
-function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
+function OrderManager({ query, renderedAt }: OrderManagerProps) {
   const { admin, common } = useDictionary();
   const copy = admin.orders;
-  const orders = useOrders(storeSlug, query);
+  const orders = useOrders(query);
   const now = useNow(renderedAt);
   const sound = useOrderSound();
   const soundHint = useId();
   const items = orders.data?.pages.flatMap((page) => page.items);
-  const arrivals = useArrivals(storeSlug, query, orders, sound.play);
+  const arrivals = useArrivals(query, orders, sound.play);
 
   const rowCount = items?.length ?? 0;
   // An empty list kept on screen while another status or search loads is
@@ -246,8 +243,8 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
           ) : null}
         </div>
       </div>
-      <OrderTabs query={query} storeSlug={storeSlug} />
-      <OrderSearch query={query} storeSlug={storeSlug} />
+      <OrderTabs query={query} />
+      <OrderSearch query={query} />
       <output aria-live="polite" className="sr-only">
         {arrivals.message}
       </output>
@@ -281,7 +278,6 @@ function OrderManager({ query, renderedAt, storeSlug }: OrderManagerProps) {
               key={order.id}
               now={now}
               order={order}
-              storeSlug={storeSlug}
             />
           ))}
         </ul>
@@ -363,16 +359,10 @@ function OrderListEmpty({ query }: { query: OrdersQuery }) {
 }
 
 /** "All" and each status as links, each with its count once known. */
-function OrderTabs({
-  query,
-  storeSlug,
-}: {
-  query: OrdersQuery;
-  storeSlug: string;
-}) {
+function OrderTabs({ query }: { query: OrdersQuery }) {
   const copy = useDictionary().admin.orders;
   const locale = useLocale();
-  const counts = useOrderCounts(storeSlug);
+  const counts = useOrderCounts();
 
   const tabCount = (status: OrderStatus | undefined) => {
     if (!counts.data) {
@@ -405,7 +395,7 @@ function OrderTabs({
                     ? "bg-secondary font-semibold text-secondary-foreground"
                     : "text-muted-foreground"
                 )}
-                href={ordersPath(storeSlug, locale, { q: query.q, status })}
+                href={ordersPath(locale, { q: query.q, status })}
               >
                 {count === undefined
                   ? label
@@ -427,14 +417,12 @@ function OrderListRow({
   isNew,
   now,
   order,
-  storeSlug,
 }: {
   /** The list's selection, carried to the order and back. */
   from: OrdersQuery;
   isNew: boolean;
   now: number;
   order: OrderRow;
-  storeSlug: string;
 }) {
   const copy = useDictionary().admin.orders;
   const locale = useLocale();
@@ -444,7 +432,7 @@ function OrderListRow({
     <li data-testid={`order-row-${order.code}`}>
       <Link
         className="flex flex-col gap-1 p-3 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        href={orderPath(storeSlug, order.id, locale, from)}
+        href={orderPath(order.id, locale, from)}
       >
         <span className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold">{order.code}</span>

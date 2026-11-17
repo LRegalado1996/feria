@@ -53,7 +53,6 @@ function setup({
         product={props.product}
         quantity={quantity}
         seenPriceAmount={seenPriceAmount}
-        storeSlug="lr-market"
       />
     </ul>
   );
@@ -90,8 +89,8 @@ describe("StoreCartLine", () => {
   });
 
   test.each([
-    ["en", "/en/lr-market/products/collar-de-perlas"],
-    ["es", "/lr-market/products/collar-de-perlas"],
+    ["en", "/en/products/collar-de-perlas"],
+    ["es", "/products/collar-de-perlas"],
   ] as const)("in %s, links to the article at %s", (locale, href) => {
     setup({ locale });
 

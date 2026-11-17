@@ -5,7 +5,7 @@ import { orpc } from "@/lib/orpc/client";
 import { storeAttributesKey } from "./use-store-attributes";
 
 /** Deletes a value, taking it off its articles, then reads the list again. */
-export function useDeleteAttributeValue(storeSlug: string) {
+export function useDeleteAttributeValue() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -14,7 +14,7 @@ export function useDeleteAttributeValue(storeSlug: string) {
     meta: { suppressGlobalErrorReport: true },
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: storeAttributesKey(storeSlug),
+        queryKey: storeAttributesKey(),
       });
     },
   });

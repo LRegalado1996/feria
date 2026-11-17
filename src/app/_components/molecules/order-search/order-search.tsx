@@ -16,7 +16,6 @@ export const ORDER_SEARCH_DEBOUNCE_MS = 300;
 export interface OrderSearchProps {
   className?: string;
   query: OrdersQuery;
-  storeSlug: string;
 }
 
 /**
@@ -27,7 +26,7 @@ export interface OrderSearchProps {
  * address brings from elsewhere (the back button) replaces what it shows.
  * Before the script loads it is a plain GET form that keeps the status.
  */
-function OrderSearch({ className, query, storeSlug }: OrderSearchProps) {
+function OrderSearch({ className, query }: OrderSearchProps) {
   const copy = useDictionary().admin.orders;
   const locale = useLocale();
   const router = useRouter();
@@ -81,16 +80,15 @@ function OrderSearch({ className, query, storeSlug }: OrderSearchProps) {
   const go = (typed: string) => {
     const q = typed.trim() === "" ? undefined : typed.trim();
     setSent((previous) => [...previous, q]);
-    router.replace(
-      ordersPath(storeSlug, locale, { q, status: status.current }),
-      { scroll: false }
-    );
+    router.replace(ordersPath(locale, { q, status: status.current }), {
+      scroll: false,
+    });
   };
 
   return (
     <search className={cn("block", className)} data-slot="order-search">
       <form
-        action={ordersPath(storeSlug, locale)}
+        action={ordersPath(locale)}
         className="relative"
         onSubmit={(event) => {
           event.preventDefault();

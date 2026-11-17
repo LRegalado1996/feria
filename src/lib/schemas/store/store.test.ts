@@ -1,38 +1,22 @@
-import { readdirSync } from "node:fs";
-import path from "node:path";
-
 import { describe, expect, test } from "vitest";
 
-import {
-  createStoreSchema,
-  getStoreBySlugSchema,
-  RESERVED_STORE_SLUGS,
-  storeSlugSchema,
-  updateStoreSchema,
-} from ".";
+import { STORE_CURRENCIES, updateStoreSchema } from ".";
 
-const COLOR_MESSAGE =
-  "Write the color as # followed by six hex digits (0 to 9, a to f)";
-const SLUG_FORMAT_MESSAGE =
-  "Use lowercase letters, numbers and single hyphens, such as my-store";
+// The store's colors are code now, with their contrast rules in
+// `src/styles/theme.test.ts`; its address, its logo and the default mark are
+// gone (FER-038). What is left is what a person sets in the admin.
 
-/** A store that passes every rule, in the default palette. */
+const INSTAGRAM_MESSAGE =
+  "Enter a full link, such as https://instagram.com/my-store";
+
+/** A store that passes every rule. */
 function makeStore(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    colorAccent: "#c8f31d",
-    colorBackground: "#f2f3f0",
-    colorContrast: "#111312",
-    colorForeground: "#111312",
-    colorSurface: "#ffffff",
     currencyCode: "UYU",
     instagramUrl: null,
-    isActive: true,
-    isDefault: false,
-    logoUrl: null,
     name: "Sample Store",
-    slug: "sample-store",
     tiktokUrl: null,
     translations: [],
     whatsappNumber: null,
@@ -42,118 +26,17 @@ function makeStore(
 
 /** Every issue of a refused store, as `[field, message]`. */
 function issuesOf(overrides: Record<string, unknown>) {
-  const result = createStoreSchema.safeParse(makeStore(overrides));
+  const result = updateStoreSchema.safeParse(makeStore(overrides));
 
   return result.success
     ? []
     : result.error.issues.map((issue) => [issue.path.join("."), issue.message]);
 }
 
-describe("storeSlugSchema", () => {
-  test.each([
-    ["the shortest address", "ab"],
-    ["the longest address", "a".repeat(40)],
-    ["digits and single hyphens", "my-store-2"],
-    ["a word that only starts like a reserved one", "admins"],
-  ])("accepts %s unchanged", (_case, slug) => {
-    expect(storeSlugSchema.parse(slug)).toBe(slug);
-  });
-
-  test.each([
-    ["one character", "a", "The address needs at least 2 characters"],
-    ["41 characters", "a".repeat(41), "Keep the address to 40 characters"],
-    ["an uppercase letter", "My-store", SLUG_FORMAT_MESSAGE],
-    ["a leading hyphen", "-store", SLUG_FORMAT_MESSAGE],
-    ["a trailing hyphen", "store-", SLUG_FORMAT_MESSAGE],
-    ["a doubled hyphen", "my--store", SLUG_FORMAT_MESSAGE],
-    ["a space", "my store", SLUG_FORMAT_MESSAGE],
-    ["an accent", "joyería", SLUG_FORMAT_MESSAGE],
-    ["a slash", "my/store", SLUG_FORMAT_MESSAGE],
-    // Next's and Vercel's own paths: the pattern alone keeps them out.
-    ["Next's asset path", "_next", SLUG_FORMAT_MESSAGE],
-    ["Vercel's path", "_vercel", SLUG_FORMAT_MESSAGE],
-    ["a file in public/", "favicon.ico", SLUG_FORMAT_MESSAGE],
-  ])("refuses %s", (_case, slug, message) => {
-    const result = storeSlugSchema.safeParse(slug);
-
-    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      message,
-    ]);
-  });
-
-  test("reserves every first path segment the app answers itself", () => {
-    expect(RESERVED_STORE_SLUGS).toEqual([
-      "admin",
-      "api",
-      "coming-soon",
-      "design",
-      "en",
-      "es",
-      "monitoring",
-      "platform",
-      "seed",
-      "sign-in",
-    ]);
-  });
-
-  test.each(RESERVED_STORE_SLUGS)("refuses the reserved address %s", (slug) => {
-    const result = storeSlugSchema.safeParse(slug);
-
-    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      "That address is reserved by the app. Choose another one",
-    ]);
-  });
-});
-
-describe("RESERVED_STORE_SLUGS", () => {
-  const appDirectory = path.join(import.meta.dirname, "../../../app");
-
-  /** The folders of `directory` that are a literal URL segment. */
-  function literalSegments(directory: string) {
-    return readdirSync(directory, { withFileTypes: true })
-      .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          !entry.name.startsWith("[") &&
-          !entry.name.startsWith("_") &&
-          !entry.name.startsWith("(")
-      )
-      .map((entry) => entry.name);
-  }
-
-  // A page added at the top level without its name here would shadow, or be
-  // shadowed by, a store of that name. This fails until the list (and the
-  // database check built from it) has it.
-  test("holds every top-level route of the app", () => {
-    const routes = [
-      ...literalSegments(appDirectory),
-      ...literalSegments(path.join(appDirectory, "[locale]")),
-    ];
-
-    expect(routes).toEqual(["api", "admin", "coming-soon", "design"]);
-    expect(RESERVED_STORE_SLUGS).toEqual(expect.arrayContaining(routes));
-  });
-});
-
-describe("getStoreBySlugSchema", () => {
-  test("accepts a store address", () => {
-    expect(getStoreBySlugSchema.parse({ slug: "lr-market" })).toEqual({
-      slug: "lr-market",
-    });
-  });
-
-  test("holds the address to the same rules as a write", () => {
-    expect(getStoreBySlugSchema.safeParse({ slug: "admin" }).success).toBe(
-      false
-    );
-  });
-});
-
-describe("createStoreSchema", () => {
+describe("updateStoreSchema", () => {
   test("accepts a complete store and returns it as it will be stored", () => {
     const store = makeStore({
       instagramUrl: "https://instagram.com/sample",
-      logoUrl: "https://images.example.test/logo.png",
       name: "  Sample Store ",
       tiktokUrl: "https://tiktok.com/@sample",
       translations: [
@@ -163,7 +46,7 @@ describe("createStoreSchema", () => {
       whatsappNumber: " +59899123456 ",
     });
 
-    expect(createStoreSchema.parse(store)).toEqual({
+    expect(updateStoreSchema.parse(store)).toEqual({
       ...store,
       name: "Sample Store",
       translations: [
@@ -174,173 +57,20 @@ describe("createStoreSchema", () => {
     });
   });
 
-  test("drops a key it does not know, such as a client-sent id", () => {
-    const parsed = createStoreSchema.parse(
-      makeStore({ createdAt: "2020-01-01", id: 99 })
+  test("drops a key it does not know: an id, or what the store no longer holds", () => {
+    const parsed = updateStoreSchema.parse(
+      makeStore({
+        colorAccent: "#ff0000",
+        createdAt: "2020-01-01",
+        id: 99,
+        isActive: false,
+        isDefault: true,
+        logoUrl: "https://images.example.test/logo.png",
+        slug: "another-store",
+      })
     );
 
     expect(parsed).toEqual(makeStore());
-  });
-
-  test("stores a color in lowercase, without the spaces around it", () => {
-    const parsed = createStoreSchema.parse(
-      makeStore({ colorAccent: " #C8F31D " })
-    );
-
-    expect(parsed.colorAccent).toBe("#c8f31d");
-  });
-
-  test.each([
-    ["three digits", "#fff"],
-    ["no hash", "c8f31d"],
-    ["seven digits", "#c8f31d0"],
-    ["a letter past f", "#c8f31g"],
-    ["a color name", "red"],
-    ["a CSS function", "rgb(0, 0, 0)"],
-    ["an attempt to close the style", "#c8f31d;background:url(x)"],
-    ["empty", ""],
-  ])("refuses a color written as %s", (_case, color) => {
-    expect(issuesOf({ colorAccent: color })).toEqual([
-      ["colorAccent", COLOR_MESSAGE],
-    ]);
-  });
-
-  test("reports a malformed color once, without a contrast message computed from it", () => {
-    expect(
-      issuesOf({ colorBackground: "white", colorForeground: "black" })
-    ).toEqual([
-      ["colorBackground", COLOR_MESSAGE],
-      ["colorForeground", COLOR_MESSAGE],
-    ]);
-  });
-
-  test.each([
-    ["colorAccent"],
-    ["colorBackground"],
-    ["colorContrast"],
-    ["colorForeground"],
-    ["colorSurface"],
-  ])("requires %s", (field) => {
-    const { [field]: _omitted, ...rest } = makeStore();
-
-    expect(createStoreSchema.safeParse(rest).success).toBe(false);
-  });
-
-  test("accepts a surface the muted text just reaches 4.5:1 on", () => {
-    // The default muted text, #595b59, on #d2d2d2 is 4.53:1.
-    expect(issuesOf({ colorSurface: "#d2d2d2" })).toEqual([]);
-  });
-
-  test("refuses a surface one step darker, with the ratio it has", () => {
-    // On #d1d1d1 it is 4.486:1: truncated, so it never reads as the 4.5 it
-    // failed to reach. The regular text still passes there, at 12.2:1.
-    expect(issuesOf({ colorSurface: "#d1d1d1" })).toEqual([
-      [
-        "colorSurface",
-        "The small muted text on the surface color has a contrast of 4.48:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
-  });
-
-  test("names the regular text too once the surface is dark enough to fail it", () => {
-    // #111312 on #7d7d7d is 4.53:1 and on #7c7c7c is 4.469:1.
-    const textMessage = [
-      "colorSurface",
-      "The text color on the surface color has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
-    ];
-
-    expect(issuesOf({ colorSurface: "#7c7c7c" })).toContainEqual(textMessage);
-    expect(issuesOf({ colorSurface: "#7d7d7d" })).toEqual([
-      [
-        "colorSurface",
-        "The small muted text on the surface color has a contrast of 1.66:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
-  });
-
-  test("refuses a text color whose muted shade cannot be read on the placeholder behind a missing photo", () => {
-    // The warm palette with #2b1a12 passes every other pair; #26160f passes this one too.
-    const warm = {
-      colorAccent: "#ff8a3d",
-      colorBackground: "#fff4e6",
-      colorContrast: "#3d1f47",
-    };
-
-    expect(issuesOf({ ...warm, colorForeground: "#26160f" })).toEqual([]);
-    expect(issuesOf({ ...warm, colorForeground: "#2b1a12" })).toEqual([
-      [
-        "colorForeground",
-        "The small muted text on the placeholder behind a missing photo has a contrast of 4.46:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
-  });
-
-  test("holds an accent heading on the contrast color to 3:1, the large-text ratio", () => {
-    const headingMessage = [
-      "colorAccent",
-      "The accent color, as a heading on the contrast color has a contrast of 2.96:1. It needs at least 3:1 to be readable",
-    ];
-
-    // #616161 on #111312 is 3.01:1 and #606060 is 2.97:1.
-    expect(issuesOf({ colorAccent: "#606060" })).toContainEqual(headingMessage);
-    expect(issuesOf({ colorAccent: "#616161" })).toEqual([
-      [
-        "colorAccent",
-        "The text color on the accent color has a contrast of 3.01:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
-  });
-
-  test("names every unreadable pair of a gray-on-white palette", () => {
-    expect(
-      issuesOf({
-        colorBackground: "#ffffff",
-        colorForeground: "#777777",
-        colorSurface: "#ffffff",
-      })
-    ).toEqual([
-      [
-        "colorForeground",
-        "The text color on the background color has a contrast of 4.47:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorSurface",
-        "The text color on the surface color has a contrast of 4.47:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorAccent",
-        "The text color on the accent color has a contrast of 3.47:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorForeground",
-        "The small muted text on the background color has a contrast of 2.52:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorSurface",
-        "The small muted text on the surface color has a contrast of 2.52:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorForeground",
-        "The small muted text on the placeholder behind a missing photo has a contrast of 2.21:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
-  });
-
-  test("refuses a contrast color the background cannot be read on", () => {
-    expect(issuesOf({ colorContrast: "#f2f3f0" })).toEqual([
-      [
-        "colorContrast",
-        "The background color, as text on the contrast color has a contrast of 1.00:1. It needs at least 4.5:1 to be readable",
-      ],
-      [
-        "colorAccent",
-        "The accent color, as a heading on the contrast color has a contrast of 1.15:1. It needs at least 3:1 to be readable",
-      ],
-      [
-        "colorContrast",
-        "The small muted text on the contrast color has a contrast of 1.00:1. It needs at least 4.5:1 to be readable",
-      ],
-    ]);
   });
 
   test.each([
@@ -372,12 +102,22 @@ describe("createStoreSchema", () => {
     ["a port", "https://instagram.com:8443/sample"],
     ["a tab a browser would drop", "https:\t//instagram.com/sample"],
     ["backslashes for slashes", "https:\\\\instagram.com\\sample"],
+    [
+      "a user name and password",
+      "https://user:synthetic-secret@instagram.com/sample",
+    ],
+    ["only a user name", "https://user@instagram.com/sample"],
+    ["only a password", "https://:synthetic-secret@instagram.com/sample"],
+    // A browser drops the tab and then reads the user name.
+    [
+      "a user name hidden behind a tab",
+      "https:\t//user:synthetic-secret@instagram.com/sample",
+    ],
+    ["a line break inside", "https://instagram.com/sam\nple"],
+    ["a space inside", "https://instagram.com/my sample"],
   ])("refuses %s as the Instagram link", (_case, link) => {
     expect(issuesOf({ instagramUrl: link })).toEqual([
-      [
-        "instagramUrl",
-        "Enter a full link, such as https://instagram.com/my-store",
-      ],
+      ["instagramUrl", INSTAGRAM_MESSAGE],
     ]);
   });
 
@@ -386,12 +126,10 @@ describe("createStoreSchema", () => {
     ["instagramUrl", "https://www.instagram.com/sample/?hl=es"],
     ["tiktokUrl", "https://tiktok.com/@sample"],
     ["tiktokUrl", "https://www.tiktok.com/@sample"],
-    // Any https host: the image pipeline (FER-011) decides where logos live.
-    ["logoUrl", "https://images.example.test/logo@2x.png"],
   ])("accepts %s %s, trimmed", (field, link) => {
-    const parsed = createStoreSchema.parse(makeStore({ [field]: ` ${link} ` }));
+    const parsed = updateStoreSchema.parse(makeStore({ [field]: ` ${link} ` }));
 
-    expect(parsed[field as "logoUrl"]).toBe(link);
+    expect(parsed[field as "instagramUrl"]).toBe(link);
   });
 
   test.each([
@@ -403,33 +141,13 @@ describe("createStoreSchema", () => {
     ]);
   });
 
-  test.each([
-    [
-      "a user name and password",
-      "https://user:secret@images.example.test/logo.png",
-    ],
-    ["only a user name", "https://user@images.example.test/logo.png"],
-    ["only a password", "https://:secret@images.example.test/logo.png"],
-    // A browser drops the tab and then reads the user name.
-    [
-      "a user name hidden behind a tab",
-      "https:\t//user:secret@images.example.test/logo.png",
-    ],
-    ["a line break inside", "https://images.example.test/lo\ngo.png"],
-    ["a space inside", "https://images.example.test/my logo.png"],
-    ["a script URL", ["javascript", "alert(1)"].join(":")],
-    ["plain http", "http://images.example.test/logo.png"],
-  ])("refuses a logo link with %s", (_case, link) => {
-    expect(issuesOf({ logoUrl: link })).toEqual([
-      ["logoUrl", "Enter a full link, such as https://example.com/logo.png"],
-    ]);
-  });
+  test("holds a link to 2048 characters", () => {
+    const at = (length: number) =>
+      `https://instagram.com/${"a".repeat(length - "https://instagram.com/".length)}`;
 
-  test("refuses a link longer than 2048 characters", () => {
-    const link = `https://example.test/${"a".repeat(2028)}`;
-
-    expect(issuesOf({ logoUrl: link })).toEqual([
-      ["logoUrl", "Keep the link to 2048 characters"],
+    expect(issuesOf({ instagramUrl: at(2048) })).toEqual([]);
+    expect(issuesOf({ instagramUrl: at(2049) })).toEqual([
+      ["instagramUrl", "Keep the link to 2048 characters"],
     ]);
   });
 
@@ -455,9 +173,13 @@ describe("createStoreSchema", () => {
     expect(issuesOf({ whatsappNumber })).toEqual([]);
   });
 
+  test("sells in pesos or dollars, pesos first", () => {
+    expect(STORE_CURRENCIES).toEqual(["UYU", "USD"]);
+  });
+
   test("refuses a currency the product does not sell in", () => {
     expect(
-      createStoreSchema.safeParse(makeStore({ currencyCode: "EUR" })).success
+      updateStoreSchema.safeParse(makeStore({ currencyCode: "EUR" })).success
     ).toBe(false);
   });
 
@@ -499,105 +221,5 @@ describe("createStoreSchema", () => {
         translations: [{ ...text, [field]: "x".repeat(limit + 1) }],
       })
     ).toEqual([[`translations.0.${field}`, message]]);
-  });
-});
-
-describe("the default store", () => {
-  test("an active store can be the default", () => {
-    expect(issuesOf({ isActive: true, isDefault: true })).toEqual([]);
-  });
-
-  test("an inactive store cannot: the site would open on a 404", () => {
-    expect(issuesOf({ isActive: false, isDefault: true })).toEqual([
-      [
-        "isDefault",
-        "The default store has to be active. Activate it, or make another store the default first",
-      ],
-    ]);
-  });
-
-  test("an inactive store that is not the default is fine", () => {
-    expect(issuesOf({ isActive: false, isDefault: false })).toEqual([]);
-  });
-
-  test("an edit is held to the same rule", () => {
-    const result = updateStoreSchema.safeParse({
-      ...makeStore({ isActive: false, isDefault: true }),
-      id: 7,
-    });
-
-    expect(result.error?.issues.map((issue) => issue.path.join("."))).toEqual([
-      "isDefault",
-    ]);
-  });
-
-  test.each([["yes"], [1], [null], [undefined]])(
-    "refuses %j where a yes or no is expected",
-    (isDefault) => {
-      expect(
-        createStoreSchema.safeParse(makeStore({ isDefault })).success
-      ).toBe(false);
-    }
-  );
-});
-
-describe("updateStoreSchema", () => {
-  test("reads the id from a path segment, with the same fields as a create", () => {
-    expect(updateStoreSchema.parse({ ...makeStore(), id: "7" })).toEqual({
-      ...makeStore(),
-      id: 7,
-    });
-  });
-
-  test("accepts the largest id the column holds", () => {
-    expect(
-      updateStoreSchema.parse({ ...makeStore(), id: "2147483647" }).id
-    ).toBe(2_147_483_647);
-  });
-
-  test("accepts the id as a number too", () => {
-    expect(updateStoreSchema.parse({ ...makeStore(), id: 7 }).id).toBe(7);
-  });
-
-  test.each([
-    ["true, which Number() reads as 1", true],
-    ["an array, which Number() reads as its only item", [7]],
-    ["null, which Number() reads as 0", null],
-    ["an object", { id: 7 }],
-  ])("refuses %s as an id", (_case, id) => {
-    expect(updateStoreSchema.safeParse({ ...makeStore(), id }).success).toBe(
-      false
-    );
-  });
-
-  test.each([["0"], ["-1"], ["1.5"], [""], ["abc"], ["2147483648"]])(
-    "refuses %j as an id",
-    (id) => {
-      expect(updateStoreSchema.safeParse({ ...makeStore(), id }).success).toBe(
-        false
-      );
-    }
-  );
-
-  test("checks the contrast of an edited palette too", () => {
-    const result = updateStoreSchema.safeParse({
-      ...makeStore({ colorSurface: "#d1d1d1" }),
-      id: 7,
-    });
-
-    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      "The small muted text on the surface color has a contrast of 4.48:1. It needs at least 4.5:1 to be readable",
-    ]);
-  });
-
-  test("refuses a reserved address on an edit as on a create", () => {
-    const result = updateStoreSchema.safeParse({
-      ...makeStore({ slug: "api" }),
-      id: 7,
-    });
-
-    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
-      "That address is reserved by the app. Choose another one",
-    ]);
   });
 });

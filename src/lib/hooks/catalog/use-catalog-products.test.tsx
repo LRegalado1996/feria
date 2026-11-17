@@ -96,7 +96,6 @@ function setup({
         firstPage,
         locale: "es",
         query,
-        storeSlug: "lr-market",
       }),
     { wrapper }
   );
@@ -141,7 +140,6 @@ describe("useCatalogProducts", () => {
       locale: "es",
       q: "perla",
       sort: "price_asc",
-      storeSlug: "lr-market",
     });
     expect(result.current.hasNextPage).toBe(false);
   });
@@ -162,7 +160,6 @@ describe("useCatalogProducts", () => {
         filters: [],
         locale: "es",
         sort: "newest",
-        storeSlug: "lr-market",
       });
     });
   });

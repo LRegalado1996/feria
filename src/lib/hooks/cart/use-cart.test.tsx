@@ -8,7 +8,7 @@ const { reportError } = vi.hoisted(() => ({ reportError: vi.fn() }));
 
 vi.mock("@/lib/errors/client", () => ({ reportError }));
 
-const KEY = "feria:cart:lr-market";
+const KEY = "feria:cart";
 
 function makeItem(productId: number, quantity = 1) {
   return { productId, quantity };
@@ -27,7 +27,7 @@ interface SetupOptions {
    * first read does.
    */
   refused?: "getter" | "read" | false;
-  /** The text already stored under the store's key; `null` for none. */
+  /** The text already stored under the cart's key; `null` for none. */
   stored?: string | null;
 }
 
@@ -90,7 +90,7 @@ async function setup({
 
   vi.resetModules();
   const cart = await import("./use-cart");
-  const { result, unmount } = renderHook(() => cart.useCart("lr-market"));
+  const { result, unmount } = renderHook(() => cart.useCart());
 
   return {
     cart,
@@ -108,11 +108,17 @@ afterEach(() => {
 });
 
 describe("useCart", () => {
-  test("keeps each store's cart under its own key", async () => {
-    const { cart } = await setup();
+  test("keeps one cart for the whole browser, under one key", async () => {
+    const { cart, result, storage } = await setup();
 
-    expect(cart.cartStorageKey("lr-market")).toBe("feria:cart:lr-market");
-    expect(cart.cartStorageKey("tienda-demo")).toBe("feria:cart:tienda-demo");
+    act(() => {
+      result.current.add(4);
+    });
+
+    expect(cart.CART_STORAGE_KEY).toBe("feria:cart");
+    expect(JSON.parse(storage.getItem("feria:cart") ?? "null")).toEqual([
+      makeItem(4, 1),
+    ]);
   });
 
   test("starts empty with nothing stored", async () => {
@@ -426,22 +432,6 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(7, 1)]);
   });
 
-  test("removeOrdered leaves another store's cart alone", async () => {
-    const { result, storage } = await setup({
-      stored: JSON.stringify([makeItem(4, 2)]),
-    });
-    storage.setItem("feria:cart:tienda-demo", JSON.stringify([makeItem(4, 2)]));
-
-    act(() => {
-      result.current.removeOrdered([makeItem(4, 2)]);
-    });
-
-    expect(result.current.items).toEqual([]);
-    expect(
-      JSON.parse(storage.getItem("feria:cart:tienda-demo") ?? "null")
-    ).toEqual([makeItem(4, 2)]);
-  });
-
   test("treats stored text that is not JSON as empty, and reports it", async () => {
     const { result } = await setup({ stored: "{not json" });
 
@@ -485,9 +475,7 @@ describe("useCart", () => {
       expect(result.current.items).toEqual([makeItem(4, 3)]);
       expect(result.current.count).toBe(3);
       // Another cart of the store on the page sees the same one.
-      expect(
-        renderHook(() => cart.useCart("lr-market")).result.current.count
-      ).toBe(3);
+      expect(renderHook(() => cart.useCart()).result.current.count).toBe(3);
       expect(storage.setItem).not.toHaveBeenCalled();
       expect(reportError).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ name: "SecurityError" }),
@@ -563,48 +551,26 @@ describe("useCart", () => {
     expect(result.current.items).toEqual([makeItem(4, 1)]);
   });
 
-  test("a read that throws for one store keeps another store's newer cart from a refused write", async () => {
-    const { cart, result, storage } = await setup({
+  test("a storage event for another key leaves the page's newer copy alone", async () => {
+    const { result, storage } = await setup({
       stored: JSON.stringify([makeItem(4, 2)]),
     });
-    const other = renderHook(() => cart.useCart("tienda-demo"));
     storage.setItem.mockImplementationOnce(() => {
       throw new DOMException("Quota exceeded", "QuotaExceededError");
     });
 
-    // Storage refuses the write: this store's newer cart lives in the page.
+    // Storage refuses the write: the newer cart lives in the page.
     act(() => {
       result.current.add(9);
     });
-    expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
-
-    // The other store's next read throws.
-    const refused = new DOMException(
-      "The operation is insecure.",
-      "SecurityError"
-    );
-    storage.getItem.mockImplementation(() => {
-      throw refused;
-    });
+    // Another tab wrote something else to storage, not the cart.
     act(() => {
       window.dispatchEvent(
-        new StorageEvent("storage", { key: "feria:cart:tienda-demo" })
+        new StorageEvent("storage", { key: "feria:checkout" })
       );
     });
-    expect(other.result.current.items).toEqual([]);
 
-    act(() => {
-      result.current.add(5);
-    });
-
-    expect(result.current.items).toEqual([
-      makeItem(4, 2),
-      makeItem(9, 1),
-      makeItem(5, 1),
-    ]);
-    expect(reportError).toHaveBeenCalledWith(refused, {
-      action: "Cart.read_storage",
-    });
+    expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
   });
 
   test("a cart another tab removed is not brought back when a later read throws", async () => {
@@ -784,9 +750,9 @@ describe("useCart", () => {
     expect(result.current.count).toBe(2);
   });
 
-  test("keeps two carts of the same store in one tab in step", async () => {
+  test("keeps two readers of the cart in one tab in step", async () => {
     const { cart, result } = await setup();
-    const other = renderHook(() => cart.useCart("lr-market"));
+    const other = renderHook(() => cart.useCart());
 
     act(() => {
       result.current.add(4, 3);
@@ -794,18 +760,6 @@ describe("useCart", () => {
 
     expect(other.result.current.items).toEqual([makeItem(4, 3)]);
     expect(other.result.current.count).toBe(3);
-  });
-
-  test("leaves another store's cart alone", async () => {
-    const { cart, result, storage } = await setup();
-    const other = renderHook(() => cart.useCart("tienda-demo"));
-
-    act(() => {
-      result.current.add(4);
-    });
-
-    expect(other.result.current.items).toEqual([]);
-    expect(storage.getItem("feria:cart:tienda-demo")).toBeNull();
   });
 
   test("stops listening to other tabs once unmounted", async () => {
@@ -829,7 +783,7 @@ describe("useCart", () => {
     const { cart } = await setup({ stored: JSON.stringify([makeItem(4, 2)]) });
 
     function Count() {
-      return <span>{cart.useCart("lr-market").count}</span>;
+      return <span>{cart.useCart().count}</span>;
     }
 
     expect(renderToString(<Count />)).toBe("<span>0</span>");

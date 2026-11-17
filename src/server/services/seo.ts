@@ -8,7 +8,6 @@ import {
   categoryTranslation,
   product,
   productTranslation,
-  store,
 } from "@/server/db/schema";
 
 interface StoreScope {
@@ -17,39 +16,39 @@ interface StoreScope {
 
 /**
  * What search engines and AI assistants are told about (FER-024): the
- * sitemap and each store's `llms.txt`. The rule every read here keeps: a
- * draft or anything of an inactive store is never listed.
+ * sitemap and `llms.txt`. The rule every read here keeps: a draft is never
+ * listed.
  */
 
-/** The active stores, oldest first, with their texts in every language. */
-export async function listIndexableStores(db: DatabaseClient) {
-  return await db.query.store.findMany({
+/**
+ * The store (FER-038: the table's one row) with its texts in every language,
+ * or `null` before that row exists.
+ */
+export async function findIndexableStore(db: DatabaseClient) {
+  const found = await db.query.store.findFirst({
     columns: {
       currencyCode: true,
       id: true,
       name: true,
-      slug: true,
       updatedAt: true,
     },
-    orderBy: [asc(store.id)],
-    where: eq(store.isActive, true),
     with: {
       translations: {
         columns: { description: true, locale: true, tagline: true },
       },
     },
   });
+
+  return found ?? null;
 }
 
-export type IndexableStore = Awaited<
-  ReturnType<typeof listIndexableStores>
->[number];
+export type IndexableStore = NonNullable<
+  Awaited<ReturnType<typeof findIndexableStore>>
+>;
 
 /**
- * A store's published articles, newest first, with their titles in every
- * language: none of an inactive store, even when asked by its id. Core
- * selects, not the relational API: that one would rewrite a column of
- * another table inside a condition to its own (`"product"."isActive"`).
+ * The store's published articles, newest first, with their titles in every
+ * language.
  */
 export async function listIndexableArticles(
   db: DatabaseClient,
@@ -64,14 +63,7 @@ export async function listIndexableArticles(
       updatedAt: product.updatedAt,
     })
     .from(product)
-    .innerJoin(store, eq(store.id, product.storeId))
-    .where(
-      and(
-        eq(product.storeId, storeId),
-        eq(product.status, "published"),
-        eq(store.isActive, true)
-      )
-    )
+    .where(and(eq(product.storeId, storeId), eq(product.status, "published")))
     .orderBy(desc(product.publishedAt), desc(product.id));
 
   if (rows.length === 0) {
@@ -123,11 +115,9 @@ export async function listIndexableCategories(
   const rows = await db
     .select({ id: category.id, slug: category.slug })
     .from(category)
-    .innerJoin(store, eq(store.id, category.storeId))
     .where(
       and(
         eq(category.storeId, storeId),
-        eq(store.isActive, true),
         sql`exists (select 1 from ${product} where ${and(
           eq(product.categoryId, category.id),
           eq(product.storeId, category.storeId),

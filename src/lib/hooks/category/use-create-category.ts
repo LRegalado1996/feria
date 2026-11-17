@@ -8,7 +8,7 @@ import { storeCategoriesKey } from "./use-store-categories";
  * Adds a category; the list is read again once the server answered, since
  * the slug and the place are the server's to decide.
  */
-export function useCreateCategory(storeSlug: string) {
+export function useCreateCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -17,7 +17,7 @@ export function useCreateCategory(storeSlug: string) {
     meta: { suppressGlobalErrorReport: true },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: storeCategoriesKey(storeSlug),
+        queryKey: storeCategoriesKey(),
       });
     },
   });

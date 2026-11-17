@@ -59,8 +59,10 @@ export default defineConfig({
   testDir: "./tests",
   outputDir: "./test-results",
 
-  // Every test may run beside any other: a worker owns its user, and a spec
-  // asserts only on rows it created (src/e2e/AGENTS.md).
+  // Every test of the parallel project may run beside any other: a worker
+  // owns its user, and a spec asserts only on rows it created; the few that
+  // change what every spec reads run first, one at a time (`serial` below,
+  // src/e2e/AGENTS.md).
   fullyParallel: true,
   forbidOnly: isCI,
   // Zero, everywhere. A retry-pass is a defect report thrown away: a race the
@@ -109,12 +111,25 @@ export default defineConfig({
     timeout: 60_000,
   },
 
+  // No `storageState` in either project: it would override the user
+  // fixture's, which signs the default `page` in as the worker's own user.
   projects: [
+    {
+      // The specs that change what every spec reads: the store's settings,
+      // or the store's whole list (a reorder, the orders' counts). Alone, in
+      // one worker, before the parallel project starts; Playwright runs a
+      // dependency in full under a file filter and never repeats it under
+      // `--repeat-each`.
+      name: "serial",
+      testMatch: /.*\.serial\.e2e\.ts/,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "chromium",
       testMatch: /.*\.e2e\.ts/,
-      // No `storageState` here: it would override the user fixture's, which
-      // signs the default `page` in as the worker's own user.
+      testIgnore: /.*\.serial\.e2e\.ts/,
+      dependencies: ["serial"],
       use: { ...devices["Desktop Chrome"] },
     },
   ],

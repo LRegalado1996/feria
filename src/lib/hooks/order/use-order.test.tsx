@@ -61,7 +61,7 @@ function setup({
       : createOrpcHandler("order.get", get)
   );
   const wrapper = createQueryWrapper();
-  const { result } = renderHook(() => useOrder("lr-market", 42), { wrapper });
+  const { result } = renderHook(() => useOrder(42), { wrapper });
 
   return { get, queryClient: wrapper.queryClient, result };
 }
@@ -75,29 +75,23 @@ describe("useOrder", () => {
     });
     expect(get).toHaveBeenCalledExactlyOnceWith({
       id: 42,
-      storeSlug: "lr-market",
     });
-    expect(queryClient.getQueryData(orderKey("lr-market", 42))).toEqual(ORDER);
+    expect(queryClient.getQueryData(orderKey(42))).toEqual(ORDER);
   });
 
-  test("keys each order apart, all of a store's under one prefix", async () => {
+  test("keys each order apart, all of them under one prefix", async () => {
     const { queryClient, result } = setup();
     await waitFor(() => {
       expect(result.current.data).toEqual(ORDER);
     });
 
-    expect(orderKey("lr-market", 43)).not.toEqual(orderKey("lr-market", 42));
+    expect(orderKey(43)).not.toEqual(orderKey(42));
     expect(
       queryClient
         .getQueryCache()
-        .findAll({ queryKey: storeOrderKeys("lr-market") })
+        .findAll({ queryKey: storeOrderKeys() })
         .map((query) => query.state.data)
     ).toEqual([ORDER]);
-    expect(
-      queryClient
-        .getQueryCache()
-        .findAll({ queryKey: storeOrderKeys("tienda-demo") })
-    ).toEqual([]);
   });
 
   test("reads the order again every 15 seconds while the tab is in sight, so another staff's move shows", async () => {
@@ -106,8 +100,8 @@ describe("useOrder", () => {
       expect(result.current.data).toEqual(ORDER);
     });
     const [observer] =
-      queryClient.getQueryCache().find({ queryKey: orderKey("lr-market", 42) })
-        ?.observers ?? [];
+      queryClient.getQueryCache().find({ queryKey: orderKey(42) })?.observers ??
+      [];
     expect(observer?.options).toMatchObject({
       refetchInterval: 15_000,
       refetchIntervalInBackground: false,
@@ -118,7 +112,6 @@ describe("useOrder", () => {
     });
     expect(get).toHaveBeenCalledExactlyOnceWith({
       id: 42,
-      storeSlug: "lr-market",
     });
 
     await act(async () => {
@@ -126,10 +119,7 @@ describe("useOrder", () => {
     });
 
     await waitFor(() => {
-      expect(get.mock.calls).toEqual([
-        [{ id: 42, storeSlug: "lr-market" }],
-        [{ id: 42, storeSlug: "lr-market" }],
-      ]);
+      expect(get.mock.calls).toEqual([[{ id: 42 }], [{ id: 42 }]]);
     });
   });
 
@@ -146,7 +136,6 @@ describe("useOrder", () => {
 
     expect(get).toHaveBeenCalledExactlyOnceWith({
       id: 42,
-      storeSlug: "lr-market",
     });
   });
 

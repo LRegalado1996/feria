@@ -16,12 +16,10 @@ import {
 } from "./catalog";
 import { customerOrder, orderItem, orderStatusEvent } from "./order";
 import { store, storeTranslation } from "./store";
-import { storeMember } from "./store-member";
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
-  storeMemberships: many(storeMember),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -41,20 +39,8 @@ export const accountRelations = relations(account, ({ one }) => ({
 export const storeRelations = relations(store, ({ many }) => ({
   attributes: many(attribute),
   categories: many(category),
-  members: many(storeMember),
   products: many(product),
   translations: many(storeTranslation),
-}));
-
-export const storeMemberRelations = relations(storeMember, ({ one }) => ({
-  store: one(store, {
-    fields: [storeMember.storeId],
-    references: [store.id],
-  }),
-  user: one(user, {
-    fields: [storeMember.userId],
-    references: [user.id],
-  }),
 }));
 
 export const storeTranslationRelations = relations(

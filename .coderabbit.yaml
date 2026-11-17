@@ -51,11 +51,11 @@ reviews:
     - path: "src/server/api/routers/**/*.ts"
       instructions: |
         oRPC rules (AGENTS.md § API):
-        - Procedures are built from `publicProcedure` or `protectedProcedure` (`@/server/api/orpc`); routers are plain objects aggregated in `src/server/api/root.ts`.
+        - Procedures are built from `publicProcedure` or `adminProcedure` (`@/server/api/orpc`); routers are plain objects aggregated in `src/server/api/root.ts`.
         - Input is validated by a zod schema from `src/lib/schemas/`.
         - A procedure is input → auth → one service call: no Drizzle in a router, even for one-step CRUD. Queries live in `src/server/services/<domain>.ts`, which take a `DatabaseClient` first.
         - Expected failures (unauthenticated, not found, invalid state) throw `ORPCError` with a code.
-        - Authorization (Definition of done: no OWASP Top 10 issues): a procedure that touches user data is a `protectedProcedure`, takes the acting user from the session, and checks every id from input against that user before a query uses it. A missing ownership check is a security defect, not a style comment.
+        - Authorization (Definition of done: no OWASP Top 10 issues): a procedure that touches user data is an `adminProcedure`, takes the acting user from the session, filters every query by `context.store.id` (never a store id from the input), and checks every other id from input (an article, a category, an order) belongs to that store in the same query that uses it (`docs/agents/security.md`). A missing ownership check is a security defect, not a style comment.
     - path: "src/app/**/*.tsx"
       instructions: |
         Architecture (AGENTS.md § Architecture):

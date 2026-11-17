@@ -2,11 +2,10 @@ import { ORPCError, os } from "@orpc/server";
 import { z } from "zod";
 
 import { appErrorDataSchema } from "@/lib/errors";
-import type { StoreScopeValues } from "@/lib/schemas/access";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 import { auth } from "@/server/better-auth";
 import { db } from "@/server/db";
-import { findAccessibleStore, getUserRole } from "@/server/services/access";
+import { findAdminStore } from "@/server/services/access";
 
 /**
  * `resHeaders` and `signal` exist only on an HTTP request: the RSC `caller`
@@ -35,13 +34,15 @@ export const createORPCContext = async (opts: {
   };
 };
 
+type ORPCContext = Awaited<ReturnType<typeof createORPCContext>>;
+
 /**
  * The error contract every procedure shares. Handlers throw
  * `errors.NOT_FOUND({ message, data: { fix } })` or the equivalent
  * `new ORPCError("NOT_FOUND", …)`, and clients narrow on `error.code` with
  * `data` typed. `data` is sent to the browser: never PII, tokens or stacks.
  */
-const o = os.$context<Awaited<ReturnType<typeof createORPCContext>>>().errors({
+const ERRORS = {
   BAD_REQUEST: { data: appErrorDataSchema.optional() },
   UNAUTHORIZED: { data: appErrorDataSchema.optional() },
   FORBIDDEN: { data: appErrorDataSchema.optional() },
@@ -51,7 +52,9 @@ const o = os.$context<Awaited<ReturnType<typeof createORPCContext>>>().errors({
   TOO_MANY_REQUESTS: {
     data: appErrorDataSchema.extend({ retryAfter: z.number().int().min(1) }),
   },
-});
+};
+
+const o = os.$context<ORPCContext>().errors(ERRORS);
 
 /** Each call's procedure and duration, on the request's wide event. */
 const timingMiddleware = o.middleware(async ({ next, path }) => {
@@ -70,80 +73,41 @@ const timingMiddleware = o.middleware(async ({ next, path }) => {
 
 export const publicProcedure = o.use(timingMiddleware);
 
-export const protectedProcedure = publicProcedure.use(({ context, next }) => {
-  if (!context.session?.user) {
-    throw new ORPCError("UNAUTHORIZED");
-  }
-  return next({
-    context: {
-      session: { ...context.session, user: context.session.user },
-    },
-  });
-});
-
 /**
- * A superadmin only (FER-009): every store, every user, the metrics. The role
- * is re-read from the database on every call; the session's copy can be
- * minutes old. Anyone else gets FORBIDDEN: the platform procedures are no
- * secret, so refusing them confirms nothing.
+ * Every procedure of the admin (FER-038): any signed-in login, since every
+ * login is an admin and reaches the whole admin. The login is re-read from
+ * the database (a session can outlive its user for minutes) and the handler
+ * gets the store, the table's one row, as `context.store`: it filters every
+ * query by `context.store.id`, and no procedure takes a store from its input.
+ * A missing session or login answers UNAUTHORIZED.
+ *
+ * The order is session, input, then the database. A later `.input()` places
+ * validation after every middleware added before it; the initial index of -1
+ * moves it one earlier, before the last one, so a caller without a session
+ * or with a malformed input is refused before anything is read.
  */
-export const superadminProcedure = protectedProcedure.use(
-  async ({ context, next }) => {
-    const role = await getUserRole(context.db, context.session.user.id);
-
-    if (role !== "superadmin") {
-      throw new ORPCError("FORBIDDEN");
+export const adminProcedure = os
+  .$context<ORPCContext>()
+  .$config({ initialInputValidationIndex: -1 })
+  .errors(ERRORS)
+  .use(timingMiddleware)
+  .use(async ({ context, next }) => {
+    if (!context.session?.user) {
+      throw new ORPCError("UNAUTHORIZED");
     }
 
-    return await next();
-  }
-);
-
-/**
- * Resolves the store a store-scoped procedure works on, from the slug in its
- * input, against the caller's access. Attached with `storeProcedure(schema)`.
- */
-const storeAccess = os
-  .$context<SignedInContext>()
-  .middleware(async ({ context, next }, storeSlug: string) => {
-    const store = await findAccessibleStore(context.db, {
-      slug: storeSlug,
-      userId: context.session.user.id,
+    return await next({
+      context: {
+        session: { ...context.session, user: context.session.user },
+      },
     });
+  })
+  .use(async ({ context, next }) => {
+    const store = await findAdminStore(context.db, context.session.user.id);
 
     if (!store) {
-      throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+      throw new ORPCError("UNAUTHORIZED");
     }
 
     return await next({ context: { store } });
   });
-
-/** The context after `protectedProcedure`: a session with its user. */
-type SignedInContext = Omit<
-  Awaited<ReturnType<typeof createORPCContext>>,
-  "session"
-> & {
-  session: NonNullable<
-    Awaited<ReturnType<typeof createORPCContext>>["session"]
-  >;
-};
-
-/**
- * A procedure on one store (FER-009). Its input names the store by
- * `storeSlug` (extend `storeScopeSchema`); before the handler runs, the slug
- * is resolved against the caller: a superadmin reaches every store, a member
- * only theirs. A store the caller may not work on answers NOT_FOUND, exactly
- * like one that does not exist, so a member of store A learns nothing about
- * store B. The handler gets the trusted row as `context.store` and filters
- * every query by `context.store.id`, never by an id from the input.
- */
-export function storeProcedure<TSchema extends StoreScopedSchema>(
-  schema: TSchema
-) {
-  return protectedProcedure
-    .input(schema)
-    .use(storeAccess, (input) => input.storeSlug);
-}
-
-/** Any zod schema whose output names a store, as `storeScopeSchema` does. */
-type StoreScopedSchema = z.ZodType<StoreScopeValues>;

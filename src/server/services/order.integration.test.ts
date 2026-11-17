@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -8,9 +8,9 @@ import {
   ORDER_TOKEN_PATTERN,
   type OrderStatus,
 } from "@/lib/schemas/order";
-import { createStoreSchema } from "@/lib/schemas/store";
 import { type DatabaseClient, db } from "@/server/db";
 import {
+  category,
   customerOrder,
   orderItem,
   orderStatusEvent,
@@ -22,7 +22,7 @@ import {
 } from "@/server/db/schema";
 import { createProduct, publishProduct } from "@/server/services/catalog";
 import { createCategory } from "@/server/services/category";
-import { createStore } from "@/server/services/store";
+import { theStoreId, uniqueTag } from "@/server/test/one-store";
 import {
   backendPid,
   deferred,
@@ -49,59 +49,83 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// Deleting a store cascades to its articles and orders.
-const createdStoreIds: number[] = [];
-const createdUserIds: string[] = [];
+// The store is shared (`theStoreId`): what this file created is deleted by
+// id after each test. Orders by the request keys it used (their items and
+// history go with them), then its articles, its category and its users; a
+// currency a test changed is put back.
+const created = {
+  categoryIds: [] as number[],
+  /** The codes of this test's orders: lists and searches look at these. */
+  codes: new Set<string>(),
+  currencies: [] as ("UYU" | "USD")[],
+  productIds: [] as number[],
+  requestKeys: [] as string[],
+  userIds: [] as string[],
+};
+
+// Publishing needs a category: one per test, made on first use. The promise
+// is kept, so articles made at once share it.
+const testCategory = new Map<number, Promise<number>>();
 
 afterEach(async () => {
   await releaseHeldWriters();
-  await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
-  await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
+  await db
+    .delete(customerOrder)
+    .where(inArray(customerOrder.requestKey, created.requestKeys.splice(0)));
+  await db
+    .delete(product)
+    .where(inArray(product.id, created.productIds.splice(0)));
+  await db
+    .delete(category)
+    .where(inArray(category.id, created.categoryIds.splice(0)));
+  await db.delete(user).where(inArray(user.id, created.userIds.splice(0)));
+  const [original] = created.currencies.splice(0);
+
+  if (original) {
+    await db.update(store).set({ currencyCode: original });
+  }
+
+  created.codes.clear();
+  testCategory.clear();
 });
 
-async function makeStore(currencyCode: "UYU" | "USD" = "UYU") {
-  const row = await createStore(
-    db,
-    createStoreSchema.parse({
-      colorAccent: "#c8f31d",
-      colorBackground: "#f2f3f0",
-      colorContrast: "#111312",
-      colorForeground: "#111312",
-      colorSurface: "#ffffff",
-      currencyCode,
-      instagramUrl: null,
-      isActive: true,
-      isDefault: false,
-      logoUrl: null,
-      name: "Orders Test",
-      slug: `orders-${randomUUID().slice(0, 8)}`,
-      tiktokUrl: null,
-      translations: [],
-      whatsappNumber: null,
-    })
-  );
-  createdStoreIds.push(row.id);
+/** The store, as the services take it, in `currencyCode` for this test. */
+async function makeShop(currencyCode?: "UYU" | "USD") {
+  const id = await theStoreId(db);
 
-  return row;
+  if (currencyCode) {
+    const [current] = await db
+      .select({ currencyCode: store.currencyCode })
+      .from(store)
+      .where(eq(store.id, id));
+
+    if (current && created.currencies.length === 0) {
+      created.currencies.push(current.currencyCode);
+    }
+
+    await db.update(store).set({ currencyCode }).where(eq(store.id, id));
+  }
+
+  return { id };
 }
-
-// Publishing needs a category: one per store, made on first use. The
-// promise is kept, so articles made at once share it.
-const storeCategories = new Map<number, Promise<number>>();
 
 async function categoryOf(storeId: number) {
   const known =
-    storeCategories.get(storeId) ??
+    testCategory.get(storeId) ??
     db
       .transaction(
         async (tx) =>
           await createCategory(tx, {
             storeId,
-            values: { nameEn: null, nameEs: "Varios" },
+            values: { nameEn: null, nameEs: `Varios ${uniqueTag()}` },
           })
       )
-      .then((created) => created.id);
-  storeCategories.set(storeId, known);
+      .then((row) => {
+        created.categoryIds.push(row.id);
+
+        return row.id;
+      });
+  testCategory.set(storeId, known);
 
   return await known;
 }
@@ -114,7 +138,7 @@ async function makeUser(name: string) {
     id,
     name,
   });
-  createdUserIds.push(id);
+  created.userIds.push(id);
 
   return id;
 }
@@ -134,7 +158,7 @@ async function makeArticle(
     titleEn?: string;
   }
 ) {
-  const created = await createProduct(db, {
+  const row = await createProduct(db, {
     storeId,
     values: {
       categoryId: await categoryOf(storeId),
@@ -162,39 +186,39 @@ async function makeArticle(
       ],
     },
   });
+  created.productIds.push(row.id);
   await db.insert(productImage).values({
     height: 100,
     position: 0,
-    productId: created.id,
+    productId: row.id,
     url: "/seed/ring-1.jpg",
     width: 100,
   });
 
   if (publish) {
-    await publishProduct(db, { id: created.id, storeId });
+    await publishProduct(db, { id: row.id, storeId });
   }
 
-  return created;
+  return row;
 }
 
-/** An order's input, one of `productId` unless `items` says otherwise. */
 /**
  * A Uruguayan mobile no other test, and no row the database was copied with,
- * is likely to hold: the phone limit counts orders across every store, so a
+ * is likely to hold: the phone limit counts every order of the store, so a
  * limit test with a shared number would count someone else's orders.
  */
 function uniquePhone() {
   return `+5989${String(randomInt(10_000_000)).padStart(7, "0")}`;
 }
 
+/** An order's input, one of `productId` unless `items` says otherwise. */
 function orderValues(
   overrides: Partial<Parameters<typeof createOrder>[1]["values"]> & {
     productId?: number;
   } = {}
 ) {
   const { productId = 0, ...rest } = overrides;
-
-  return {
+  const values = {
     customerName: "Ana",
     customerPhone: "+59899123456",
     items: [{ productId, quantity: 1 }],
@@ -203,6 +227,9 @@ function orderValues(
     requestKey: randomUUID(),
     ...rest,
   };
+  created.requestKeys.push(values.requestKey);
+
+  return values;
 }
 
 async function place(
@@ -210,12 +237,15 @@ async function place(
   values: ReturnType<typeof orderValues>,
   { clientKey = null, now }: { clientKey?: string | null; now?: Date } = {}
 ) {
-  return await createOrder(db, {
+  const order = await createOrder(db, {
     clientKey,
     now,
     storeId: shop.id,
     values,
   });
+  created.codes.add(order.code);
+
+  return order;
 }
 
 async function orderRow(token: string) {
@@ -231,9 +261,17 @@ async function orderRow(token: string) {
   return row;
 }
 
+/** The orders written under `requestKey`: one at most, by its unique index. */
+async function ordersWith(requestKey: string) {
+  return await db
+    .select({ id: customerOrder.id, name: customerOrder.customerName })
+    .from(customerOrder)
+    .where(eq(customerOrder.requestKey, requestKey));
+}
+
 describe("creating an order", () => {
   test("prices every item from the database, copies the store's currency and starts as received", async () => {
-    const shop = await makeStore("USD");
+    const shop = await makeShop("USD");
     const ring = await makeArticle(shop.id, {
       priceAmount: 1250,
       title: "Anillo",
@@ -244,7 +282,7 @@ describe("creating an order", () => {
       title: "Cadena",
     });
 
-    const created = await place(
+    const order = await place(
       shop,
       orderValues({
         customerName: "Ana",
@@ -257,11 +295,11 @@ describe("creating an order", () => {
       })
     );
 
-    expect(created.token).toMatch(ORDER_TOKEN_PATTERN);
-    expect(created.code).toMatch(/^[2-9A-HJ-NP-Z]{5}$/u);
-    const row = await orderRow(created.token);
+    expect(order.token).toMatch(ORDER_TOKEN_PATTERN);
+    expect(order.code).toMatch(/^[2-9A-HJ-NP-Z]{5}$/u);
+    const row = await orderRow(order.token);
     expect(row).toMatchObject({
-      code: created.code,
+      code: order.code,
       currencyCode: "USD",
       customerName: "Ana",
       customerPhone: "+59899123456",
@@ -312,13 +350,6 @@ describe("creating an order", () => {
     ]
   >([
     [
-      "another store's article",
-      "NOT_FOUND",
-      "Article not found",
-      async () =>
-        (await makeArticle((await makeStore()).id, { title: "Ajeno" })).id,
-    ],
-    [
       "a draft",
       "NOT_FOUND",
       "Article not found",
@@ -346,31 +377,22 @@ describe("creating an order", () => {
       },
     ],
   ])("refuses %s, writing nothing", async (_kind, code, message, make) => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const fine = await makeArticle(shop.id, { title: "Bien" });
     const productId = await make(shop.id);
+    const values = orderValues({
+      items: [
+        { productId: fine.id, quantity: 1 },
+        { productId, quantity: 1 },
+      ],
+    });
 
-    await expect(
-      place(
-        shop,
-        orderValues({
-          items: [
-            { productId: fine.id, quantity: 1 },
-            { productId, quantity: 1 },
-          ],
-        })
-      )
-    ).rejects.toMatchObject({ code, message });
-    expect(
-      await db
-        .select({ id: customerOrder.id })
-        .from(customerOrder)
-        .where(eq(customerOrder.storeId, shop.id))
-    ).toEqual([]);
+    await expect(place(shop, values)).rejects.toMatchObject({ code, message });
+    expect(await ordersWith(values.requestKey)).toEqual([]);
   });
 
   test("refuses a total past what an order can hold", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const items = await Promise.all(
       Array.from({ length: 3 }, async (_, index) => ({
         productId: (
@@ -390,7 +412,7 @@ describe("creating an order", () => {
   });
 
   test("an order's items keep their title and price after the article is edited or deleted", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, {
       priceAmount: 1500,
       title: "Anillo",
@@ -428,7 +450,7 @@ describe("creating an order", () => {
   });
 
   test("the same request key again answers the order it created, writing one", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const values = orderValues({ productId: ring.id });
 
@@ -437,16 +459,13 @@ describe("creating an order", () => {
 
     expect(again).toEqual(first);
     expect(
-      await db
-        .select({ name: customerOrder.customerName })
-        .from(customerOrder)
-        .where(eq(customerOrder.storeId, shop.id))
-    ).toEqual([{ name: "Ana" }]);
+      (await ordersWith(values.requestKey)).map((row) => row.name)
+    ).toEqual(["Ana"]);
   });
 });
 
 test("a request key reused with another phone is refused, never answered with that order", async () => {
-  const shop = await makeStore();
+  const shop = await makeShop();
   const ring = await makeArticle(shop.id, { title: "Anillo" });
   const values = orderValues({ productId: ring.id });
   await place(shop, values);
@@ -460,7 +479,7 @@ test("a request key reused with another phone is refused, never answered with th
 });
 
 test("an order is stamped by the database's clock, and its first event with it", async () => {
-  const shop = await makeStore();
+  const shop = await makeShop();
   const ring = await makeArticle(shop.id, { title: "Anillo" });
   const before = await db.execute<{ now: string }>(
     sql`select clock_timestamp() as now`
@@ -479,32 +498,9 @@ test("an order is stamped by the database's clock, and its first event with it",
   expect(event?.createdAt).toEqual(row.createdAt);
 });
 
-test("a store deactivated before the order took its lock takes no order", async () => {
-  const shop = await makeStore();
-  const ring = await makeArticle(shop.id, { title: "Anillo" });
-  await db.update(store).set({ isActive: false }).where(eq(store.id, shop.id));
-  const values = orderValues({ productId: ring.id });
-
-  await expect(place(shop, values)).rejects.toMatchObject({
-    code: "NOT_FOUND",
-    message: "Store not found",
-  });
-  expect(
-    await db
-      .select({ id: customerOrder.id })
-      .from(customerOrder)
-      .where(
-        and(
-          eq(customerOrder.storeId, shop.id),
-          eq(customerOrder.requestKey, values.requestKey)
-        )
-      )
-  ).toEqual([]);
-});
-
 describe("abuse limits", () => {
   test("a phone places five orders an hour; the sixth waits for the oldest to leave the window", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const start = new Date();
     const customerPhone = uniquePhone();
@@ -518,7 +514,7 @@ describe("abuse limits", () => {
     const rows = await db
       .select({ createdAt: customerOrder.createdAt })
       .from(customerOrder)
-      .where(eq(customerOrder.storeId, shop.id))
+      .where(eq(customerOrder.customerPhone, customerPhone))
       .orderBy(customerOrder.createdAt);
     const oldest = rows[0]?.createdAt ?? start;
     const sixth = new Date(oldest.getTime() + 50 * 60_000);
@@ -545,7 +541,7 @@ describe("abuse limits", () => {
   });
 
   test("an hour after the oldest order, the phone can order again", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const customerPhone = uniquePhone();
 
@@ -563,7 +559,7 @@ describe("abuse limits", () => {
   });
 
   test("a client places twenty orders an hour across phones; the twenty-first is refused", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const clientKey = `client-${randomUUID()}`;
 
@@ -599,9 +595,8 @@ describe("abuse limits", () => {
 });
 
 describe("reading an order", () => {
-  test("the public page has the masked phone and no internal id, only in its own store", async () => {
-    const shop = await makeStore();
-    const other = await makeStore();
+  test("the public page has the masked phone and no internal id; a token nobody holds is NOT_FOUND", async () => {
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, {
       priceAmount: 700,
       title: "Anillo",
@@ -626,69 +621,34 @@ describe("reading an order", () => {
       totalAmount: 700,
     });
     await expect(
-      getOrderByToken(db, { storeId: other.id, token })
+      getOrderByToken(db, {
+        storeId: shop.id,
+        token: `${token.slice(1)}${token.startsWith("a") ? "b" : "a"}`,
+      })
     ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Order not found" });
   });
 
-  test("store A's orders are invisible to store B: list, read and move", async () => {
-    const shopA = await makeStore();
-    const shopB = await makeStore();
-    const ring = await makeArticle(shopA.id, { title: "Anillo" });
-    const { token } = await place(shopA, orderValues({ productId: ring.id }));
-    const { id } = await orderRow(token);
-    const memberB = await makeUser("Bea");
-
-    expect((await listOrders(db, { storeId: shopB.id })).items).toEqual([]);
-    await expect(getOrder(db, { id, storeId: shopB.id })).rejects.toMatchObject(
-      {
-        code: "NOT_FOUND",
-        message: "Order not found",
-      }
-    );
-    await expect(
-      db.transaction(
-        async (tx) =>
-          await changeOrderStatus(tx, {
-            id,
-            status: "packed",
-            storeId: shopB.id,
-            userId: memberB,
-          })
-      )
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect((await orderRow(token)).status).toBe("received");
-  });
-
   test("the list is newest first, filtered by status, and its cursor never repeats or skips", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const member = await makeUser("Ana");
     const codes: string[] = [];
 
     for (let order = 0; order < 3; order += 1) {
-      const created = await place(
+      const placed = await place(
         shop,
-        orderValues({
-          customerPhone: `+5989911100${order}`,
-          productId: ring.id,
-        })
+        orderValues({ customerPhone: uniquePhone(), productId: ring.id })
       );
-      codes.push(created.code);
+      codes.push(placed.code);
     }
 
-    const newest = await orderRow(
-      (
-        await db
-          .select({ token: customerOrder.token })
-          .from(customerOrder)
-          .where(
-            and(
-              eq(customerOrder.storeId, shop.id),
-              eq(customerOrder.code, codes[2] ?? "")
-            )
-          )
-      )[0]?.token ?? ""
-    );
+    const newestToken = (
+      await db
+        .select({ token: customerOrder.token })
+        .from(customerOrder)
+        .where(eq(customerOrder.code, codes[2] ?? ""))
+    )[0]?.token;
+    const newest = await orderRow(newestToken ?? "");
     await db.transaction(
       async (tx) =>
         await changeOrderStatus(tx, {
@@ -698,30 +658,33 @@ describe("reading an order", () => {
           userId: member,
         })
     );
+    const own = (rows: { code: string }[]) =>
+      rows.map((row) => row.code).filter((code) => created.codes.has(code));
 
-    const first = await listOrders(db, { limit: 2, storeId: shop.id });
-    const second = await listOrders(db, {
-      cursor: first.nextCursor ?? undefined,
-      limit: 2,
-      storeId: shop.id,
-    });
+    // Every page of the store's orders, two at a time, to the last.
+    const pages = [await listOrders(db, { limit: 2, storeId: shop.id })];
 
-    expect([...first.items, ...second.items].map((row) => row.code)).toEqual([
-      codes[2],
-      codes[1],
-      codes[0],
-    ]);
-    expect(second.nextCursor).toBeNull();
+    for (
+      let cursor = pages[0]?.nextCursor;
+      cursor;
+      cursor = pages.at(-1)?.nextCursor
+    ) {
+      pages.push(await listOrders(db, { cursor, limit: 2, storeId: shop.id }));
+    }
+
+    // Each order once, newest first: this test's three in their order,
+    // wherever the pages put them.
+    const seen = pages.flatMap((page) => page.items);
+    expect(new Set(seen.map((row) => row.id)).size).toBe(seen.length);
+    expect(own(seen)).toEqual([codes[2], codes[1], codes[0]]);
     expect(
-      (await listOrders(db, { status: "packed", storeId: shop.id })).items.map(
-        (row) => row.code
-      )
+      own((await listOrders(db, { status: "packed", storeId: shop.id })).items)
     ).toEqual([codes[2]]);
   });
 });
 
 describe("searching and counting the orders", () => {
-  /** An order of `shop` with this name and phone, its code and status set. */
+  /** An order of the store with this name and phone, its code and status set. */
   async function makeOrder(
     shop: { id: number },
     {
@@ -737,7 +700,7 @@ describe("searching and counting the orders", () => {
     } = {}
   ) {
     const ring = await makeArticle(shop.id, { title: "Anillo" });
-    const created = await place(
+    const placed = await place(
       shop,
       orderValues({
         customerName,
@@ -745,12 +708,18 @@ describe("searching and counting the orders", () => {
         productId: ring.id,
       })
     );
+
+    if (code) {
+      created.codes.add(code);
+    }
+
     await db
       .update(customerOrder)
-      .set({ code: code ?? created.code, status })
-      .where(eq(customerOrder.token, created.token));
+      .set({ code: code ?? placed.code, status })
+      .where(eq(customerOrder.token, placed.token));
   }
 
+  /** The codes a search finds among this test's orders, newest first. */
   async function searched(
     shop: { id: number },
     q: string,
@@ -758,11 +727,13 @@ describe("searching and counting the orders", () => {
   ) {
     const page = await listOrders(db, { q, status, storeId: shop.id });
 
-    return page.items.map((row) => row.code);
+    return page.items
+      .map((row) => row.code)
+      .filter((code) => created.codes.has(code));
   }
 
   test("a code prefix typed in lower case finds the order, a code holding it elsewhere does not", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, { code: "K7P2M" });
     await makeOrder(shop, { code: "XK7PA" });
 
@@ -770,7 +741,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("a name typed without its accents finds it, in any case", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, { code: "HXR4Q", customerName: "José Martínez" });
     await makeOrder(shop, { code: "B9TNW", customerName: "Ana" });
 
@@ -779,7 +750,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("a phone typed locally finds the stored international number", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, { code: "M3N5P", customerPhone: "+59899123987" });
     await makeOrder(shop, { code: "R6S8T", customerPhone: "+59891234567" });
 
@@ -787,17 +758,21 @@ describe("searching and counting the orders", () => {
   });
 
   test("a search that matches nothing lists nothing, and % is taken literally", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, { customerName: "Ana" });
 
+    // Letters only: three digits or more also search the phones, and a
+    // random tag's digits can spell part of this order's (+59894000000).
+    const nothing = `zzz-${uniqueTag().replaceAll(/\d/gu, "x")}`;
+
     await expect(
-      listOrders(db, { q: "zzz", storeId: shop.id })
+      listOrders(db, { q: nothing, storeId: shop.id })
     ).resolves.toEqual({ items: [], nextCursor: null });
     expect(await searched(shop, "%")).toEqual([]);
   });
 
   test("_ is taken literally: it never stands for any one character", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, {
       code: "P2Q3R",
       customerName: "Ana Luz",
@@ -814,7 +789,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("\\ is taken literally: a name holding one is found by it, and only it", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, {
       code: "V6W7X",
       customerName: "Ana\\Luz",
@@ -831,7 +806,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("a whole code typed is a code: a phone holding its digits does not match", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     let anaPhone = uniquePhone();
 
     // Ana's own phone must not hold them, or it would match for itself.
@@ -855,7 +830,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("a phone typed in its 00 international form finds the stored +598 number", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const digits = String(randomInt(1_000_000)).padStart(6, "0");
     await makeOrder(shop, {
       code: "C2D4F",
@@ -875,7 +850,7 @@ describe("searching and counting the orders", () => {
   });
 
   test("a search narrows within a status", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     await makeOrder(shop, { code: "C2D3E", customerName: "Lucía" });
     await makeOrder(shop, {
       code: "F4G5H",
@@ -892,29 +867,9 @@ describe("searching and counting the orders", () => {
     expect(await searched(shop, "lucia", "packed")).toEqual(["F4G5H"]);
   });
 
-  test("another store's orders never match", async () => {
-    const shopA = await makeStore();
-    const shopB = await makeStore();
-    await makeOrder(shopA, {
-      code: "N8P9Q",
-      customerName: "José",
-      customerPhone: "+59899123987",
-    });
-    await makeOrder(shopB, {
-      code: "N8P9R",
-      customerName: "José",
-      customerPhone: "+59899123987",
-    });
-
-    expect(await searched(shopA, "jose")).toEqual(["N8P9Q"]);
-    expect(await searched(shopA, "099 123")).toEqual(["N8P9Q"]);
-    expect(await searched(shopA, "n8p9")).toEqual(["N8P9Q"]);
-  });
-
-  test("counts the store's orders in each status, 0 where none, another store's left out", async () => {
-    const shop = await makeStore();
-    const other = await makeStore();
-    const empty = await makeStore();
+  test("counts the store's orders in each status, every status always there, 0 where none came", async () => {
+    const shop = await makeShop();
+    const before = await countOrders(db, { storeId: shop.id });
     const statuses: OrderStatus[] = [
       "received",
       "received",
@@ -922,7 +877,6 @@ describe("searching and counting the orders", () => {
       "packed",
       "delivered",
       "delivered",
-      "undeliverable",
     ];
 
     // A phone each: one phone's hourly limit would stop the sixth.
@@ -930,21 +884,16 @@ describe("searching and counting the orders", () => {
       await makeOrder(shop, { customerPhone: uniquePhone(), status });
     }
 
-    await makeOrder(other, { status: "undeliverable" });
-    await makeOrder(other, { status: "packed" });
-
-    await expect(countOrders(db, { storeId: shop.id })).resolves.toEqual({
-      delivered: 2,
-      packed: 1,
-      received: 3,
-      undeliverable: 1,
-    });
-    await expect(countOrders(db, { storeId: empty.id })).resolves.toEqual({
-      delivered: 0,
-      packed: 0,
-      received: 0,
-      undeliverable: 0,
-    });
+    const after = await countOrders(db, { storeId: shop.id });
+    expect(new Set(Object.keys(after))).toEqual(
+      new Set(["delivered", "packed", "received", "undeliverable"])
+    );
+    expect({
+      delivered: after.delivered - before.delivered,
+      packed: after.packed - before.packed,
+      received: after.received - before.received,
+      undeliverable: after.undeliverable - before.undeliverable,
+    }).toEqual({ delivered: 2, packed: 1, received: 3, undeliverable: 0 });
   });
 });
 
@@ -966,9 +915,9 @@ describe("status moves", () => {
     ).map((to): [OrderStatus, OrderStatus] => [from, to])
   );
 
-  /** An order of a new store, put in `status` directly, and a member. */
+  /** An order of the store, put in `status` directly, and an admin. */
   async function setup(status: OrderStatus) {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const { token } = await place(shop, orderValues({ productId: ring.id }));
     const { id } = await orderRow(token);
@@ -976,13 +925,13 @@ describe("status moves", () => {
       .update(customerOrder)
       .set({ status })
       .where(eq(customerOrder.id, id));
-    const member = await makeUser("Mara");
+    const admin = await makeUser("Mara");
 
-    return { id, member, shop, token };
+    return { admin, id, shop, token };
   }
 
   const move = async (
-    { id, member, shop }: Awaited<ReturnType<typeof setup>>,
+    { admin, id, shop }: Awaited<ReturnType<typeof setup>>,
     status: OrderStatus
   ) =>
     await db.transaction(
@@ -991,7 +940,7 @@ describe("status moves", () => {
           id,
           status,
           storeId: shop.id,
-          userId: member,
+          userId: admin,
         })
     );
 
@@ -1036,77 +985,14 @@ describe("status moves", () => {
   );
 });
 
-describe("one client ordering in two stores at once", () => {
-  test("the second waits for the first's client lock, so the hourly count is never read stale", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const ringA = await makeArticle(storeA.id, { title: "Anillo" });
-    const ringB = await makeArticle(storeB.id, { title: "Anillo" });
-    const clientKey = `client-${randomUUID()}`;
-    const held = deferred();
-    const written = deferred();
-    const firstPid = deferred<number>();
-    const secondPid = deferred<number>();
-    const writers: Promise<unknown>[] = [];
-    releaseOnTeardown(
-      () => {
-        held.resolve(undefined);
-      },
-      async () => await Promise.allSettled(writers)
-    );
-
-    const first = db.transaction(async (tx) => {
-      firstPid.resolve(await backendPid(tx));
-      const created = await createOrder(tx, {
-        clientKey,
-        storeId: storeA.id,
-        values: orderValues({ productId: ringA.id }),
-      });
-      written.resolve(undefined);
-      await held.promise;
-
-      return created;
-    });
-    writers.push(first);
-    await readyOrFailed(written.promise, first);
-    // Another phone and another store: only the client's lock is shared.
-    const second = db.transaction(async (tx) => {
-      secondPid.resolve(await backendPid(tx));
-
-      return await createOrder(tx, {
-        clientKey,
-        storeId: storeB.id,
-        values: orderValues({
-          customerPhone: "+59899000333",
-          productId: ringB.id,
-        }),
-      });
-    });
-    writers.push(second);
-
-    try {
-      await waitUntilAdvisoryBlocked(
-        db,
-        await readyOrFailed(secondPid.promise, second),
-        await readyOrFailed(firstPid.promise, first)
-      );
-    } finally {
-      held.resolve(undefined);
-      await Promise.allSettled([first, second]);
-    }
-
-    await expect(second).resolves.toMatchObject({
-      token: expect.stringMatching(ORDER_TOKEN_PATTERN),
-    });
-  });
-});
-
 describe("an order and a currency change at once", () => {
   test("the change waits for the order, which keeps the currency its prices were read in", async () => {
-    const shop = await makeStore("UYU");
+    const shop = await makeShop("UYU");
     const ring = await makeArticle(shop.id, {
       priceAmount: 1000,
       title: "Anillo",
     });
+    const values = orderValues({ productId: ring.id });
     const held = deferred();
     const written = deferred();
     const orderPid = deferred<number>();
@@ -1121,15 +1007,15 @@ describe("an order and a currency change at once", () => {
 
     const order = db.transaction(async (tx) => {
       orderPid.resolve(await backendPid(tx));
-      const created = await createOrder(tx, {
+      const placed = await createOrder(tx, {
         clientKey: null,
         storeId: shop.id,
-        values: orderValues({ productId: ring.id }),
+        values,
       });
       written.resolve(undefined);
       await held.promise;
 
-      return created;
+      return placed;
     });
     writers.push(order);
     await readyOrFailed(written.promise, order);
@@ -1165,7 +1051,7 @@ describe("an order and a currency change at once", () => {
 
 describe("one submit sent twice at once", () => {
   test("the second waits for the first's lock and answers the same order", async () => {
-    const shop = await makeStore();
+    const shop = await makeShop();
     const ring = await makeArticle(shop.id, { title: "Anillo" });
     const values = orderValues({ productId: ring.id });
     const held = deferred();
@@ -1188,11 +1074,11 @@ describe("one submit sent twice at once", () => {
 
     const first = db.transaction(async (tx) => {
       firstPid.resolve(await backendPid(tx));
-      const created = await submit(tx);
+      const placed = await submit(tx);
       written.resolve(undefined);
       await held.promise;
 
-      return created;
+      return placed;
     });
     writers.push(first);
     await readyOrFailed(written.promise, first);
@@ -1215,11 +1101,8 @@ describe("one submit sent twice at once", () => {
     }
 
     expect(await second).toEqual(await first);
-    expect(
-      await db
-        .select({ id: customerOrder.id })
-        .from(customerOrder)
-        .where(eq(customerOrder.storeId, shop.id))
-    ).toHaveLength(1);
+    expect(await ordersWith(values.requestKey)).toEqual([
+      { id: (await orderRow((await first).token)).id, name: "Ana" },
+    ]);
   });
 });

@@ -1,63 +1,33 @@
-import {
-  createStoreSchema,
-  getStoreBySlugSchema,
-  updateStoreSchema,
-} from "@/lib/schemas/store";
-import { publicProcedure, superadminProcedure } from "@/server/api/orpc";
+import { updateStoreSchema } from "@/lib/schemas/store";
+import { adminProcedure, publicProcedure } from "@/server/api/orpc";
+import { writeToStore } from "@/server/api/utils/write-to-store";
 import { invalidateCatalogCache } from "@/server/cache/catalog";
 import { invalidateStoreCache } from "@/server/cache/store";
-import { withStoreAccess } from "@/server/services/access";
-import {
-  createStore,
-  getActiveStoreBySlug,
-  updateStore,
-} from "@/server/services/store";
+import { getStore, updateStore } from "@/server/services/store";
 
+/**
+ * The company the site sells for (FER-038): the store table's one row. There
+ * is nothing to create, so there is no procedure that creates one; any admin
+ * edits it (the settings screen is FER-014).
+ */
 export const storeRouter = {
-  getBySlug: publicProcedure
-    .input(getStoreBySlugSchema)
-    .handler(
-      async ({ context, input }) =>
-        await getActiveStoreBySlug(context.db, input)
-    )
+  get: publicProcedure
+    .handler(async ({ context }) => await getStore(context.db))
     .route({
       method: "GET",
-      path: "/stores/{slug}",
-      summary: "Get an active store by its address",
-      tags: ["stores"],
+      path: "/store",
+      summary: "The store: its name, contacts, currency and texts",
+      tags: ["store"],
     }),
 
-  // Opening a store is the platform's call (FER-009). Editing one stays with
-  // superadmins too until the settings screen lets members edit their own
-  // store through `storeProcedure` (FER-014).
-  create: superadminProcedure
-    .input(createStoreSchema)
-    .handler(async ({ context, input }) => {
-      const created = await withStoreAccess(
-        context.db,
-        { storeId: null, userId: context.session.user.id },
-        async (tx) => await createStore(tx, input)
-      );
-      invalidateStoreCache(created);
-
-      return created;
-    })
-    .route({
-      method: "POST",
-      path: "/stores",
-      summary: "Create a store",
-      tags: ["stores"],
-    }),
-
-  update: superadminProcedure
+  update: adminProcedure
     .input(updateStoreSchema)
     .handler(async ({ context, input }) => {
-      const updated = await withStoreAccess(
-        context.db,
-        { storeId: null, userId: context.session.user.id },
+      const updated = await writeToStore(
+        context,
         async (tx) => await updateStore(tx, input)
       );
-      invalidateStoreCache(updated);
+      invalidateStoreCache();
       // Its articles show its currency.
       invalidateCatalogCache(updated.id);
 
@@ -65,8 +35,8 @@ export const storeRouter = {
     })
     .route({
       method: "PUT",
-      path: "/stores/{id}",
-      summary: "Replace a store's details, colors and texts",
-      tags: ["stores"],
+      path: "/store",
+      summary: "Replace the store's details and texts",
+      tags: ["store"],
     }),
 };

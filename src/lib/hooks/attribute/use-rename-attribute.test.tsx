@@ -16,7 +16,6 @@ const INPUT = {
   id: 7,
   nameEn: null,
   nameEs: "Material",
-  storeSlug: "lr-market",
 };
 
 const OUTPUT = { id: 7, slug: "color" };
@@ -34,7 +33,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useRenameAttribute("lr-market"), {
+  const { result } = renderHook(() => useRenameAttribute(), {
     wrapper,
   });
   const metas = () =>
@@ -54,7 +53,7 @@ describe("useRenameAttribute", () => {
 
     expect(procedure).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
   });
 
@@ -67,7 +66,7 @@ describe("useRenameAttribute", () => {
     });
 
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });

@@ -20,7 +20,7 @@ export function isStatusConflict(error: unknown): boolean {
  * to first (CONFLICT) is an expected outcome, not a defect: it is not
  * reported. Any other failure is.
  */
-export function useChangeOrderStatus(storeSlug: string) {
+export function useChangeOrderStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -32,15 +32,13 @@ export function useChangeOrderStatus(storeSlug: string) {
         reportError(error, { action: "Orders.change_status" });
       }
     },
-    // The order is matched by its store, not its id: the id the call sent
-    // is typed as anything the schema coerces.
+    // Every order read is refreshed, not this one by its id: the id the
+    // call sent is typed as anything the schema coerces.
     onSettled: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: storeOrderKeys(storeSlug) }),
-        queryClient.invalidateQueries({ queryKey: ordersKey(storeSlug) }),
-        queryClient.invalidateQueries({
-          queryKey: orderCountsKey(storeSlug),
-        }),
+        queryClient.invalidateQueries({ queryKey: storeOrderKeys() }),
+        queryClient.invalidateQueries({ queryKey: ordersKey() }),
+        queryClient.invalidateQueries({ queryKey: orderCountsKey() }),
       ]);
     },
   });

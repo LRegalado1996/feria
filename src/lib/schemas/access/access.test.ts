@@ -1,19 +1,18 @@
 import { describe, expect, test } from "vitest";
 
-import { createAccountSchema, storeScopeSchema, USER_ROLES } from ".";
+import { createAccountSchema, USER_ROLES } from ".";
 
 function makeAccount(overrides: Record<string, unknown> = {}) {
   return {
     email: "owner@example.com",
     name: "Store Owner",
     password: "12345678",
-    role: "member",
     ...overrides,
   };
 }
 
 describe("USER_ROLES", () => {
-  test("are a superadmin and a member, nothing else", () => {
+  test("are the two values the database's type still holds, until it becomes `admin` alone (FER-041)", () => {
     expect(USER_ROLES).toEqual(["superadmin", "member"]);
   });
 });
@@ -27,6 +26,12 @@ describe("createAccountSchema", () => {
     ).toEqual(makeAccount({ name: "Ana" }));
   });
 
+  test("takes no role: every login is an admin, so a role sent is dropped", () => {
+    expect(
+      createAccountSchema.parse(makeAccount({ role: "superadmin" }))
+    ).toEqual(makeAccount());
+  });
+
   test.each([
     ["password", "1234567", false],
     ["password", "12345678", true],
@@ -36,22 +41,9 @@ describe("createAccountSchema", () => {
     ["name", "x".repeat(120), true],
     ["name", "x".repeat(121), false],
     ["email", "owner@", false],
-    ["role", "owner", false],
-    ["role", "superadmin", true],
   ])("a %s of %j is accepted: %s", (field, value, accepted) => {
     expect(
       createAccountSchema.safeParse(makeAccount({ [field]: value })).success
     ).toBe(accepted);
-  });
-});
-
-describe("storeScopeSchema", () => {
-  test.each([
-    ["lr-market", true],
-    ["LR Market", false],
-    ["admin", false],
-    ["", false],
-  ])("a store slug of %j is accepted: %s", (storeSlug, accepted) => {
-    expect(storeScopeSchema.safeParse({ storeSlug }).success).toBe(accepted);
   });
 });

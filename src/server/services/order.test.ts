@@ -71,7 +71,7 @@ const CODE_SQL =
   '("customer_order"."storeId" = $1 and "customer_order"."code" = $2)';
 const LOCK_SQL = "select pg_advisory_xact_lock(hashtext($1))";
 const CLOCK_SQL = "select clock_timestamp() as now";
-const STORE_ROW_SQL = '("store"."id" = $1 and "store"."isActive" = $2)';
+const STORE_ROW_SQL = '"store"."id" = $1';
 
 /** `minutes` after an hour ago: an order still inside the window. */
 function minutesIntoWindow(minutes: number) {
@@ -487,8 +487,7 @@ describe("createOrder", () => {
       { params: [STORE_ID, REQUEST_KEY], sql: REQUEST_SQL },
       { params: [PHONE, HOUR_AGO.toISOString()], sql: PHONE_HOUR_SQL },
       { params: [CLIENT_KEY, HOUR_AGO.toISOString()], sql: CLIENT_HOUR_SQL },
-      // Active too, under the same lock: a deactivation closes the store.
-      { params: [STORE_ID, true], sql: STORE_ROW_SQL },
+      { params: [STORE_ID], sql: STORE_ROW_SQL },
       { params: [11, 12, STORE_ID, "published"], sql: ARTICLES_SQL },
     ]);
     expect(db.$.select.mock.calls[3]).toEqual([
@@ -498,7 +497,7 @@ describe("createOrder", () => {
     expect(db.$["select.for"].mock.calls[0]).toEqual(["share"]);
   });
 
-  test("answers NOT_FOUND when the store is gone or no longer active, reading no articles", async () => {
+  test("answers NOT_FOUND when the store's row is gone, reading no articles", async () => {
     const { create, db, selectWheres } = setup({ shop: null });
 
     await expect(create()).rejects.toMatchObject({

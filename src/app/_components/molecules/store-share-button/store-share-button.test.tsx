@@ -11,8 +11,8 @@ import { StoreShareButton } from "./store-share-button";
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
 // The page's own address carries noise the shared link must not.
-const LOCATION = "/lr-market/products?category=collares&utm_source=ig";
-const PATH = "/lr-market/products?category=collares";
+const LOCATION = "/products?category=collares&utm_source=ig";
+const PATH = "/products?category=collares";
 const URL_SHARED = `http://localhost:3000${PATH}`;
 const MARK = "\u2060";
 

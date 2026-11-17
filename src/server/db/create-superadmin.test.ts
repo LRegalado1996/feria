@@ -11,7 +11,6 @@ const { createAccount } = vi.hoisted(() => ({
       email: values.email,
       id: "admin-1",
       name: "Superadmin",
-      role: "superadmin" as const,
     })
   ),
 }));
@@ -23,7 +22,7 @@ const ENV = {
   SUPERADMIN_PASSWORD: "synthetic-pass-123",
 };
 
-function setup({ superadminExists = false } = {}) {
+function setup({ loginExists = false } = {}) {
   const db = createMockDatabase();
   // The transaction's own handle, and whether its callback is still running.
   const tx = createMockDatabase();
@@ -37,7 +36,7 @@ function setup({ superadminExists = false } = {}) {
     }
   });
   tx.query.user.findFirst.mockResolvedValue(
-    superadminExists ? { id: "admin-0" } : undefined
+    loginExists ? { id: "admin-0" } : undefined
   );
   const auth = { $context: Promise.resolve({}) };
 
@@ -52,7 +51,7 @@ function setup({ superadminExists = false } = {}) {
 }
 
 describe("createSuperadmin", () => {
-  test("creates a superadmin from the environment's email and password", async () => {
+  test("creates the first login from the environment's email and password, with no role to give", async () => {
     const { auth, run, tx } = setup();
 
     await expect(run()).resolves.toMatchObject({ email: "admin@example.com" });
@@ -60,7 +59,6 @@ describe("createSuperadmin", () => {
       email: "admin@example.com",
       name: "Superadmin",
       password: "synthetic-pass-123",
-      role: "superadmin",
     });
   });
 
@@ -82,12 +80,7 @@ describe("createSuperadmin", () => {
     createAccount.mockImplementationOnce(
       async (_auth: unknown, handle: unknown, values: { email: string }) => {
         createdInsideTransaction = transaction.open && handle === tx;
-        return {
-          email: values.email,
-          id: "admin-1",
-          name: "S",
-          role: "superadmin",
-        };
+        return { email: values.email, id: "admin-1", name: "S" };
       }
     );
 
@@ -104,12 +97,16 @@ describe("createSuperadmin", () => {
     expect(createdInsideTransaction).toBe(true);
   });
 
-  test("refuses once any superadmin exists, creating nothing", async () => {
-    const { run } = setup({ superadminExists: true });
+  test("refuses once any login exists, creating nothing", async () => {
+    const { run, tx } = setup({ loginExists: true });
 
     await expect(run()).rejects.toThrow(
-      "A superadmin already exists: this script only creates the first one"
+      "A login already exists: this script only creates the first one"
     );
+    // Any login at all, whatever its role: every login is an admin.
+    expect(tx.query.user.findFirst).toHaveBeenCalledExactlyOnceWith({
+      columns: { id: true },
+    });
     expect(createAccount).not.toHaveBeenCalled();
   });
 

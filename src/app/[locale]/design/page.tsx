@@ -66,9 +66,7 @@ const SECTION_CLASS = "mx-auto flex w-full max-w-7xl flex-col gap-6 px-4";
 /** A store with every link set, so the footer shows each one. */
 const SAMPLE_STORE = {
   instagramUrl: "https://www.instagram.com/lrmarket",
-  logoUrl: null,
   name: "LR Market",
-  slug: "lr-market",
   tiktokUrl: "https://www.tiktok.com/@lrmarket",
   whatsappNumber: "+59899000000",
 };
@@ -336,7 +334,6 @@ export default async function DesignPage({ params }: DesignPageProps) {
           className="static"
           copy={storefront.shell}
           locale={locale}
-          store={SAMPLE_STORE}
         />
         <StoreFooter
           copy={storefront.shell}

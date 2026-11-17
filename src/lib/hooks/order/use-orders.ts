@@ -13,25 +13,25 @@ export type OrdersPage = Awaited<ReturnType<typeof client.order.list>>;
 export const ORDERS_REFRESH_MS = 15_000;
 
 /**
- * The prefix of every list of a store's orders, whatever its status, search
- * or pages: what a status change invalidates.
+ * The prefix of every list of the store's orders, whatever its status,
+ * search or pages: what a status change invalidates.
  */
-export function ordersKey(storeSlug: string) {
-  return orpc.order.list.key({ input: { storeSlug } });
+export function ordersKey() {
+  return orpc.order.list.key();
 }
 
 /**
- * A store's orders, newest first, a page at a time. Every loaded page is read
+ * The store's orders, newest first, a page at a time. Every loaded page is read
  * again every 15 seconds while the tab is in sight (a hidden tab waits), and
  * a new status or search keeps the previous list on screen until its own
  * arrives.
  */
-export function useOrders(storeSlug: string, { q, status }: OrdersQuery) {
+export function useOrders({ q, status }: OrdersQuery) {
   return useInfiniteQuery({
     ...orpc.order.list.infiniteOptions({
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       initialPageParam: undefined as ListOrdersValues["cursor"],
-      input: (cursor) => ({ cursor, q, status, storeSlug }),
+      input: (cursor) => ({ cursor, q, status }),
     }),
     placeholderData: keepPreviousData,
     refetchInterval: ORDERS_REFRESH_MS,

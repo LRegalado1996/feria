@@ -21,7 +21,6 @@ export interface CreatedAccount {
   email: string;
   id: string;
   name: string;
-  role: CreateAccountValues["role"];
 }
 
 // The name Postgres gives `user.email`'s unique constraint (migration 0000).
@@ -36,7 +35,7 @@ function emailTaken() {
 /**
  * Creates a login with an email and password the way Better Auth's sign-up
  * would (its hasher and ids, a `credential` account), now that sign-up is
- * closed to visitors (FER-009). The role is the caller's to decide; nothing
+ * closed to visitors (FER-009). Every login is an admin (FER-038); nothing
  * here reads a request.
  *
  * The user and its credential are written in one transaction, on `db` (the
@@ -53,11 +52,11 @@ export async function createAccount(
 
   if (!parsed.success) {
     throw new ORPCError("BAD_REQUEST", {
-      message: "The account's email, name, password or role is not valid",
+      message: "The account's email, name or password is not valid",
     });
   }
 
-  const { email, name, password, role } = parsed.data;
+  const { email, name, password } = parsed.data;
   const context = await auth.$context;
   const hash = await context.password.hash(password);
   // `false` only when ids are left to the database, which this app never does.
@@ -77,7 +76,7 @@ export async function createAccount(
     try {
       await tx
         .insert(user)
-        .values({ email, emailVerified: false, id: userId, name, role });
+        .values({ email, emailVerified: false, id: userId, name });
     } catch (error) {
       // Another request created the same email between the check and here.
       if (isUniqueViolation(error, EMAIL_UNIQUE_CONSTRAINT)) {
@@ -95,6 +94,6 @@ export async function createAccount(
       userId,
     });
 
-    return { email, id: userId, name, role };
+    return { email, id: userId, name };
   });
 }

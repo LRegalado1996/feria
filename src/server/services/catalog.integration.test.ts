@@ -1,9 +1,6 @@
-import { randomUUID } from "node:crypto";
-
 import { desc, eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { createStoreSchema } from "@/lib/schemas/store";
 import { type DatabaseClient, db } from "@/server/db";
 import {
   category,
@@ -11,9 +8,8 @@ import {
   product,
   productImage,
   productImageTranslation,
-  store,
 } from "@/server/db/schema";
-import { createStore } from "@/server/services/store";
+import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
   createProduct,
@@ -37,40 +33,22 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// The stores this file created; deleting one cascades to its categories,
-// articles, texts and images.
-const createdStoreIds: number[] = [];
+// The store is shared (`theStoreId`): a test lists through a category of its
+// own, or by ids it holds, and what it created is deleted by id after it,
+// the articles first (their texts and images go with them), since a category
+// that still has one cannot be deleted.
+const created = { categoryIds: [] as number[], productIds: [] as number[] };
 
 afterEach(async () => {
-  await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
+  await db
+    .delete(product)
+    .where(inArray(product.id, created.productIds.splice(0)));
+  await db
+    .delete(category)
+    .where(inArray(category.id, created.categoryIds.splice(0)));
 });
 
-async function makeStore() {
-  const row = await createStore(
-    db,
-    createStoreSchema.parse({
-      colorAccent: "#c8f31d",
-      colorBackground: "#f2f3f0",
-      colorContrast: "#111312",
-      colorForeground: "#111312",
-      colorSurface: "#ffffff",
-      currencyCode: "UYU",
-      instagramUrl: null,
-      isActive: true,
-      isDefault: false,
-      logoUrl: null,
-      name: "Catalog Test",
-      slug: `catalog-${randomUUID().slice(0, 8)}`,
-      tiktokUrl: null,
-      translations: [],
-      whatsappNumber: null,
-    })
-  );
-  createdStoreIds.push(row.id);
-
-  return row;
-}
-
+/** A category of the store at `slug-<tag>`, named in Spanish and maybe English. */
 async function makeCategory(
   storeId: number,
   slug: string,
@@ -86,6 +64,7 @@ async function makeCategory(
     throw new Error("no category");
   }
 
+  created.categoryIds.push(row.id);
   await db
     .insert(categoryTranslation)
     .values([
@@ -110,7 +89,7 @@ interface ArticleOptions {
 
 /** An article through the service, with images, published unless told not to. */
 async function makeArticle(storeId: number, options: ArticleOptions) {
-  const created = await createProduct(db, {
+  const row = await createProduct(db, {
     storeId,
     values: {
       categoryId: options.categoryId,
@@ -139,6 +118,7 @@ async function makeArticle(storeId: number, options: ArticleOptions) {
       ],
     },
   });
+  created.productIds.push(row.id);
 
   for (let position = 0; position < (options.images ?? 1); position += 1) {
     const [image] = await db
@@ -146,7 +126,7 @@ async function makeArticle(storeId: number, options: ArticleOptions) {
       .values({
         height: 800,
         position,
-        productId: created.id,
+        productId: row.id,
         url: `/seed/test-${position}.jpg`,
         width: 800,
       })
@@ -162,15 +142,30 @@ async function makeArticle(storeId: number, options: ArticleOptions) {
   }
 
   if (options.publish !== false) {
-    await publishProduct(db, { id: created.id, storeId });
+    await publishProduct(db, { id: row.id, storeId });
   }
 
-  return created;
+  return row;
 }
 
+/** The store's id, a tag for this test's names, and its own category. */
+async function setup() {
+  const storeId = await theStoreId(db);
+  const tag = uniqueTag();
+  const chains = await makeCategory(storeId, `cadenas-${tag}`, {
+    en: "Chains",
+    es: `Cadenas ${tag}`,
+  });
+
+  return { chains, storeId, tag };
+}
+
+/** The store's published list through one category, a test's own. */
 const list = async (
   storeId: number,
-  options: Partial<Parameters<typeof listPublishedProducts>[1]> = {}
+  options: Partial<Parameters<typeof listPublishedProducts>[1]> & {
+    category: string;
+  }
 ) =>
   await listPublishedProducts(db, {
     currencyCode: "UYU",
@@ -181,31 +176,25 @@ const list = async (
   });
 
 describe("public catalog", () => {
-  test("lists only the store's published articles, never a draft or another store's", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const chains = await makeCategory(storeA.id, "cadenas", { es: "Cadenas" });
-    const chainsB = await makeCategory(storeB.id, "cadenas", { es: "Cadenas" });
-    const published = await makeArticle(storeA.id, {
+  test("lists only the store's published articles, never a draft", async () => {
+    const { chains, storeId, tag } = await setup();
+    const published = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena dorada",
+      title: `Cadena dorada ${tag}`,
     });
-    await makeArticle(storeA.id, {
+    await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Cadena borrador",
-    });
-    await makeArticle(storeB.id, {
-      categoryId: chainsB.id,
-      title: "Cadena de otra tienda",
+      title: `Cadena borrador ${tag}`,
     });
 
-    const { items } = await list(storeA.id);
+    const { items } = await list(storeId, { category: chains.slug });
 
     expect(items.map((item) => item.slug)).toEqual([published.slug]);
     expect(items[0]).toMatchObject({
-      categorySlug: "cadenas",
+      categorySlug: chains.slug,
       cover: {
-        alt: "Cadena dorada 0",
+        alt: `Cadena dorada ${tag} 0`,
         height: 800,
         url: "/seed/test-0.jpg",
         width: 800,
@@ -214,23 +203,30 @@ describe("public catalog", () => {
       isAvailable: true,
       lang: "es",
       priceAmount: 129_000,
-      title: "Cadena dorada",
+      title: `Cadena dorada ${tag}`,
     });
   });
 
-  test("a draft or another store's article is NOT_FOUND by its slug, a published one is found", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const rings = await makeCategory(storeA.id, "anillos", { es: "Anillos" });
-    const published = await makeArticle(storeA.id, {
-      categoryId: rings.id,
-      title: "Anillo plata",
+  test("a draft or a deleted article is NOT_FOUND by its slug, a published one is found", async () => {
+    const { storeId, tag } = await setup();
+    const rings = await makeCategory(storeId, `anillos-${tag}`, {
+      es: `Anillos ${tag}`,
     });
-    const draft = await makeArticle(storeA.id, {
+    const published = await makeArticle(storeId, {
+      categoryId: rings.id,
+      title: `Anillo plata ${tag}`,
+    });
+    const draft = await makeArticle(storeId, {
       categoryId: rings.id,
       publish: false,
-      title: "Anillo borrador",
+      title: `Anillo borrador ${tag}`,
     });
-    const get = async (storeId: number, slug: string) =>
+    const deleted = await makeArticle(storeId, {
+      categoryId: rings.id,
+      title: `Anillo borrado ${tag}`,
+    });
+    await deleteProduct(db, { id: deleted.id, storeId });
+    const get = async (slug: string) =>
       await getPublishedProduct(db, {
         currencyCode: "UYU",
         locale: "es",
@@ -238,53 +234,55 @@ describe("public catalog", () => {
         storeId,
       });
 
-    await expect(get(storeA.id, published.slug)).resolves.toMatchObject({
-      category: { name: "Anillos", slug: "anillos" },
-      title: "Anillo plata",
+    await expect(get(published.slug)).resolves.toMatchObject({
+      category: { name: `Anillos ${tag}`, slug: rings.slug },
+      title: `Anillo plata ${tag}`,
     });
-    await expect(get(storeA.id, draft.slug)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
-    await expect(get(storeB.id, published.slug)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-    });
+    const notFound = { code: "NOT_FOUND", message: "Article not found" };
+
+    await expect(get(draft.slug)).rejects.toMatchObject(notFound);
+    await expect(get(deleted.slug)).rejects.toMatchObject(notFound);
   });
 
   test("filters by category slug, and an unknown category lists nothing", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const rings = await makeCategory(shop.id, "anillos", { es: "Anillos" });
-    const chain = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      title: "Cadena",
+    const { chains, storeId, tag } = await setup();
+    const rings = await makeCategory(storeId, `anillos-${tag}`, {
+      es: `Anillos ${tag}`,
     });
-    await makeArticle(shop.id, { categoryId: rings.id, title: "Anillo" });
+    const chain = await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Cadena ${tag}`,
+    });
+    await makeArticle(storeId, {
+      categoryId: rings.id,
+      title: `Anillo ${tag}`,
+    });
 
     expect(
-      (await list(shop.id, { category: "cadenas" })).items.map((i) => i.slug)
+      (await list(storeId, { category: chains.slug })).items.map((i) => i.slug)
     ).toEqual([chain.slug]);
-    expect((await list(shop.id, { category: "nada" })).items).toEqual([]);
+    expect((await list(storeId, { category: `nada-${tag}` })).items).toEqual(
+      []
+    );
   });
 
   test("search matches title and description in the requested language, Spanish only where English is missing", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", {
-      en: "Chains",
-      es: "Cadenas",
-    });
-    const both = await makeArticle(shop.id, {
+    const { chains, storeId } = await setup();
+    const both = await makeArticle(storeId, {
       categoryId: chains.id,
       description: "Baño de oro de 18k",
       en: { description: "18k gold plated", title: "Golden chain" },
       title: "Cadena dorada",
     });
-    const spanishOnly = await makeArticle(shop.id, {
+    const spanishOnly = await makeArticle(storeId, {
       categoryId: chains.id,
       description: "Plata 925",
       title: "Cadena plateada",
     });
     const search = async (q: string, locale: "en" | "es") =>
-      (await list(shop.id, { locale, q })).items.map((item) => item.slug);
+      (await list(storeId, { category: chains.slug, locale, q })).items.map(
+        (item) => item.slug
+      );
 
     expect(await search("dorada", "es")).toEqual([both.slug]);
     expect(await search("ORO", "es")).toEqual([both.slug]);
@@ -304,31 +302,38 @@ describe("public catalog", () => {
   });
 
   test("keyset pages never repeat or skip a row while new articles are published", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+    const { chains, storeId, tag } = await setup();
     // Newest first, the order the list answers in.
     const first: string[] = [];
 
     for (let index = 0; index < 5; index += 1) {
       first.unshift(
         (
-          await makeArticle(shop.id, {
+          await makeArticle(storeId, {
             categoryId: chains.id,
-            title: `Cadena ${index}`,
+            title: `Cadena ${index} ${tag}`,
           })
         ).slug
       );
     }
 
-    const pageOne = await list(shop.id, { limit: 2 });
+    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
     // Two more published between the visitor's pages land before the cursor.
-    await makeArticle(shop.id, { categoryId: chains.id, title: "Nueva 1" });
-    await makeArticle(shop.id, { categoryId: chains.id, title: "Nueva 2" });
-    const pageTwo = await list(shop.id, {
+    await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Nueva 1 ${tag}`,
+    });
+    await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Nueva 2 ${tag}`,
+    });
+    const pageTwo = await list(storeId, {
+      category: chains.slug,
       cursor: pageOne.nextCursor ?? undefined,
       limit: 2,
     });
-    const pageThree = await list(shop.id, {
+    const pageThree = await list(storeId, {
+      category: chains.slug,
       cursor: pageTwo.nextCursor ?? undefined,
       limit: 2,
     });
@@ -346,8 +351,7 @@ describe("public catalog", () => {
   ] as const)(
     "sorts by %s across pages, a tie in price broken by id, never repeating a row",
     async (sort, titles) => {
-      const shop = await makeStore();
-      const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
+      const { chains, storeId, tag } = await setup();
       const slugOf = new Map<string, string>();
       const idOf = new Map<string, number>();
 
@@ -357,17 +361,22 @@ describe("public catalog", () => {
         ["Barato", 100],
         ["Medio B", 500],
       ] as const) {
-        const created = await makeArticle(shop.id, {
+        const row = await makeArticle(storeId, {
           categoryId: chains.id,
           priceAmount,
-          title,
+          title: `${title} ${tag}`,
         });
-        slugOf.set(title, created.slug);
-        idOf.set(title, created.id);
+        slugOf.set(title, row.slug);
+        idOf.set(title, row.id);
       }
 
-      const pageOne = await list(shop.id, { limit: 2, sort });
-      const pageTwo = await list(shop.id, {
+      const pageOne = await list(storeId, {
+        category: chains.slug,
+        limit: 2,
+        sort,
+      });
+      const pageTwo = await list(storeId, {
+        category: chains.slug,
         cursor: pageOne.nextCursor ?? undefined,
         limit: 2,
         sort,
@@ -387,14 +396,14 @@ describe("public catalog", () => {
   );
 
   test("a cursor from another sort is refused, never read as this one's", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    await makeArticle(shop.id, { categoryId: chains.id, title: "Uno" });
-    await makeArticle(shop.id, { categoryId: chains.id, title: "Dos" });
-    const newest = await list(shop.id, { limit: 1 });
+    const { chains, storeId, tag } = await setup();
+    await makeArticle(storeId, { categoryId: chains.id, title: `Uno ${tag}` });
+    await makeArticle(storeId, { categoryId: chains.id, title: `Dos ${tag}` });
+    const newest = await list(storeId, { category: chains.slug, limit: 1 });
 
     await expect(
-      list(shop.id, {
+      list(storeId, {
+        category: chains.slug,
         cursor: newest.nextCursor ?? undefined,
         limit: 1,
         sort: "price_asc",
@@ -406,22 +415,26 @@ describe("public catalog", () => {
   });
 
   test("a price_asc cursor is refused by price_desc, though both carry a price", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    await makeArticle(storeId, {
       categoryId: chains.id,
       priceAmount: 100,
-      title: "Barato",
+      title: `Barato ${tag}`,
     });
-    await makeArticle(shop.id, {
+    await makeArticle(storeId, {
       categoryId: chains.id,
       priceAmount: 900,
-      title: "Caro",
+      title: `Caro ${tag}`,
     });
-    const ascending = await list(shop.id, { limit: 1, sort: "price_asc" });
+    const ascending = await list(storeId, {
+      category: chains.slug,
+      limit: 1,
+      sort: "price_asc",
+    });
 
     await expect(
-      list(shop.id, {
+      list(storeId, {
+        category: chains.slug,
         cursor: ascending.nextCursor ?? undefined,
         limit: 1,
         sort: "price_desc",
@@ -433,36 +446,54 @@ describe("public catalog", () => {
   });
 
   test("categories come in their order, named in the visitor's language or Spanish", async () => {
-    const shop = await makeStore();
-    await makeCategory(shop.id, "anillos", { es: "Anillos" }, 1);
-    await makeCategory(shop.id, "cadenas", { en: "Chains", es: "Cadenas" }, 0);
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const rings = await makeCategory(
+      storeId,
+      `anillos-${tag}`,
+      { es: `Anillos ${tag}` },
+      1
+    );
+    const chains = await makeCategory(
+      storeId,
+      `cadenas-${tag}`,
+      { en: "Chains", es: `Cadenas ${tag}` },
+      0
+    );
 
     expect(
-      await listCategories(db, { locale: "en", storeId: shop.id })
+      onlyIds(await listCategories(db, { locale: "en", storeId }), [
+        chains.id,
+        rings.id,
+      ])
     ).toMatchObject([
-      { lang: "en", name: "Chains", slug: "cadenas" },
-      { lang: "es", name: "Anillos", slug: "anillos" },
+      { lang: "en", name: "Chains", slug: chains.slug },
+      { lang: "es", name: `Anillos ${tag}`, slug: rings.slug },
     ]);
   });
 
   test("related articles share the category, never include the article itself or a draft", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const rings = await makeCategory(shop.id, "anillos", { es: "Anillos" });
-    const main = await makeArticle(shop.id, {
-      categoryId: chains.id,
-      title: "Cadena A",
+    const { chains, storeId, tag } = await setup();
+    const rings = await makeCategory(storeId, `anillos-${tag}`, {
+      es: `Anillos ${tag}`,
     });
-    const sibling = await makeArticle(shop.id, {
+    const main = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena B",
+      title: `Cadena A ${tag}`,
     });
-    await makeArticle(shop.id, {
+    const sibling = await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Cadena B ${tag}`,
+    });
+    await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Cadena C",
+      title: `Cadena C ${tag}`,
     });
-    await makeArticle(shop.id, { categoryId: rings.id, title: "Anillo" });
+    await makeArticle(storeId, {
+      categoryId: rings.id,
+      title: `Anillo ${tag}`,
+    });
 
     const related = await listRelatedProducts(db, {
       categoryId: chains.id,
@@ -470,7 +501,7 @@ describe("public catalog", () => {
       limit: 4,
       locale: "es",
       productId: main.id,
-      storeId: shop.id,
+      storeId,
     });
 
     expect(related.map((item) => item.slug)).toEqual([sibling.slug]);
@@ -479,51 +510,43 @@ describe("public catalog", () => {
 
 describe("cart products", () => {
   test.each(["newer", "older"] as const)(
-    "answers the store's published articles in the order the cart asked (the %s first), leaving out another store's, a draft and a deleted one",
+    "answers the store's published articles in the order the cart asked (the %s first), leaving out a draft and a deleted one",
     async (lead) => {
-      const [shop, other] = [await makeStore(), await makeStore()];
-      const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-      const otherChains = await makeCategory(other.id, "cadenas", {
-        es: "Cadenas",
-      });
-      const first = await makeArticle(shop.id, {
+      const { chains, storeId, tag } = await setup();
+      const first = await makeArticle(storeId, {
         categoryId: chains.id,
         priceAmount: 129_000,
-        title: "Cadena primera",
+        title: `Cadena primera ${tag}`,
       });
-      const second = await makeArticle(shop.id, {
+      const second = await makeArticle(storeId, {
         categoryId: chains.id,
         priceAmount: 54_000,
-        title: "Cadena segunda",
+        title: `Cadena segunda ${tag}`,
       });
-      const draft = await makeArticle(shop.id, {
+      const draft = await makeArticle(storeId, {
         categoryId: chains.id,
         publish: false,
-        title: "Cadena borrador",
+        title: `Cadena borrador ${tag}`,
       });
-      const foreign = await makeArticle(other.id, {
-        categoryId: otherChains.id,
-        title: "Cadena ajena",
-      });
-      const deleted = await makeArticle(shop.id, {
+      const deleted = await makeArticle(storeId, {
         categoryId: chains.id,
-        title: "Cadena borrada",
+        title: `Cadena borrada ${tag}`,
       });
-      await deleteProduct(db, { id: deleted.id, storeId: shop.id });
+      await deleteProduct(db, { id: deleted.id, storeId });
 
       const firstRow = {
         currencyCode: "UYU",
         id: first.id,
         isAvailable: true,
         priceAmount: 129_000,
-        title: "Cadena primera",
+        title: `Cadena primera ${tag}`,
       };
       const secondRow = {
         currencyCode: "UYU",
         id: second.id,
         isAvailable: true,
         priceAmount: 54_000,
-        title: "Cadena segunda",
+        title: `Cadena segunda ${tag}`,
       };
       // Both orders: the cart's order, so an implementation sorting newest
       // first, or by id, fails one of them.
@@ -534,9 +557,9 @@ describe("cart products", () => {
 
       const items = await listCartProducts(db, {
         currencyCode: "UYU",
-        ids: [askedFirst.id, foreign.id, draft.id, deleted.id, askedLast.id],
+        ids: [askedFirst.id, draft.id, deleted.id, askedLast.id],
         locale: "es",
-        storeId: shop.id,
+        storeId,
       });
 
       expect(
@@ -552,23 +575,22 @@ describe("cart products", () => {
   );
 
   test("a sold-out article comes back, marked as not available", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const soldOut = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const soldOut = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena agotada",
+      title: `Cadena agotada ${tag}`,
     });
     await setProductAvailability(db, {
       id: soldOut.id,
       isAvailable: false,
-      storeId: shop.id,
+      storeId,
     });
 
     const items = await listCartProducts(db, {
       currencyCode: "UYU",
       ids: [soldOut.id],
       locale: "es",
-      storeId: shop.id,
+      storeId,
     });
 
     expect(items.map(({ id, isAvailable }) => ({ id, isAvailable }))).toEqual([
@@ -579,78 +601,61 @@ describe("cart products", () => {
 
 describe("store-scoped writes", () => {
   test("slugs come from the Spanish title, stay unique in the store, and stop following it once published", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const first = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const first = await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Collar Ñandú",
+      title: `Collar Ñandú ${tag}`,
     });
-    const second = await makeArticle(shop.id, {
+    const second = await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Collar Ñandú",
+      title: `Collar Ñandú ${tag}`,
     });
 
     expect([first.slug, second.slug]).toEqual([
-      "collar-nandu",
-      "collar-nandu-2",
+      `collar-nandu-${tag}`,
+      `collar-nandu-${tag}-2`,
     ]);
 
-    const renamedDraft = await updateProduct(db, {
-      storeId: shop.id,
-      values: {
-        categoryId: chains.id,
-        id: second.id,
-        isAvailable: true,
-        priceAmount: 1000,
-        translations: [
-          {
-            description: "",
-            locale: "es",
-            seoDescription: null,
-            seoTitle: null,
-            title: "Pulsera",
-          },
-        ],
-      },
-    });
-    expect(renamedDraft.slug).toBe("pulsera");
+    const rename = async (title: string) =>
+      await updateProduct(db, {
+        storeId,
+        values: {
+          categoryId: chains.id,
+          id: second.id,
+          isAvailable: true,
+          priceAmount: 1000,
+          translations: [
+            {
+              description: "",
+              locale: "es",
+              seoDescription: null,
+              seoTitle: null,
+              title,
+            },
+          ],
+        },
+      });
 
-    await publishProduct(db, { id: second.id, storeId: shop.id });
-    const renamedPublished = await updateProduct(db, {
-      storeId: shop.id,
-      values: {
-        categoryId: chains.id,
-        id: second.id,
-        isAvailable: true,
-        priceAmount: 1000,
-        translations: [
-          {
-            description: "",
-            locale: "es",
-            seoDescription: null,
-            seoTitle: null,
-            title: "Otra cosa",
-          },
-        ],
-      },
-    });
-    expect(renamedPublished.slug).toBe("pulsera");
+    expect((await rename(`Pulsera ${tag}`)).slug).toBe(`pulsera-${tag}`);
+
+    await publishProduct(db, { id: second.id, storeId });
+    expect((await rename(`Otra cosa ${tag}`)).slug).toBe(`pulsera-${tag}`);
   });
 
   test("publishing is refused until it has an image, a category and a price, and says what is missing", async () => {
-    const shop = await makeStore();
-    const bare = await makeArticle(shop.id, {
+    const storeId = await theStoreId(db);
+    const bare = await makeArticle(storeId, {
       categoryId: null,
       images: 0,
       priceAmount: null,
       publish: false,
-      title: "Sin nada",
+      title: `Sin nada ${uniqueTag()}`,
     });
 
     await expect(
-      publishProduct(db, { id: bare.id, storeId: shop.id })
+      publishProduct(db, { id: bare.id, storeId })
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message:
@@ -659,33 +664,35 @@ describe("store-scoped writes", () => {
   });
 
   test("the first publication stamps the date once; unpublishing hides it and keeps the date", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
     const dateOf = async () =>
       (await db.query.product.findFirst({ where: eq(product.id, article.id) }))
         ?.publishedAt;
     const firstDate = await dateOf();
 
-    await unpublishProduct(db, { id: article.id, storeId: shop.id });
-    expect((await list(shop.id)).items).toEqual([]);
+    await unpublishProduct(db, { id: article.id, storeId });
+    expect((await list(storeId, { category: chains.slug })).items).toEqual([]);
 
-    await publishProduct(db, { id: article.id, storeId: shop.id });
+    await publishProduct(db, { id: article.id, storeId });
     expect(await dateOf()).toEqual(firstDate);
   });
 
-  test("another store's category cannot be attached, through the service or the database", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const foreign = await makeCategory(storeB.id, "cadenas", { es: "Cadenas" });
+  test("a category the store no longer has cannot be attached, through the service or the database", async () => {
+    const { storeId, tag } = await setup();
+    const gone = await makeCategory(storeId, `viejas-${tag}`, {
+      es: `Viejas ${tag}`,
+    });
+    await db.delete(category).where(eq(category.id, gone.id));
 
     await expect(
-      makeArticle(storeA.id, {
-        categoryId: foreign.id,
+      makeArticle(storeId, {
+        categoryId: gone.id,
         publish: false,
-        title: "X",
+        title: `X ${tag}`,
       })
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -694,36 +701,34 @@ describe("store-scoped writes", () => {
     await expect(
       db
         .insert(product)
-        .values({ categoryId: foreign.id, slug: "x", storeId: storeA.id })
+        .values({ categoryId: gone.id, slug: `x-${tag}`, storeId })
     ).rejects.toMatchObject({
       cause: { constraint: "product_store_category_fk" },
     });
   });
 
-  test("a category with articles cannot be deleted, and deleting the store takes everything", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    await makeArticle(shop.id, { categoryId: chains.id, title: "Cadena" });
+  test("a category with articles cannot be deleted", async () => {
+    const { chains, storeId, tag } = await setup();
+    await makeArticle(storeId, {
+      categoryId: chains.id,
+      title: `Cadena ${tag}`,
+    });
 
     await expect(
       db.delete(category).where(eq(category.id, chains.id))
     ).rejects.toMatchObject({
       cause: { constraint: "product_store_category_fk" },
     });
-    await db.delete(store).where(eq(store.id, shop.id));
-    expect(
-      await db.query.product.findMany({ where: eq(product.storeId, shop.id) })
-    ).toEqual([]);
   });
 
-  test("another store's article is NOT_FOUND for every write", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const chains = await makeCategory(storeA.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(storeA.id, {
+  test("an article the store no longer has is NOT_FOUND for every write", async () => {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
-    const scope = { id: article.id, storeId: storeB.id };
+    await deleteProduct(db, { id: article.id, storeId });
+    const scope = { id: article.id, storeId };
     const notFound = { code: "NOT_FOUND", message: "Article not found" };
 
     await expect(publishProduct(db, scope)).rejects.toMatchObject(notFound);
@@ -738,12 +743,11 @@ describe("store-scoped writes", () => {
   });
 
   test("reorders the images in one go, and refuses a list that is not all of them", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
       images: 3,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
     // Last image first: the new order.
     const reversed = (
@@ -756,16 +760,16 @@ describe("store-scoped writes", () => {
     await reorderProductImages(db, {
       id: article.id,
       imageIds: reversed,
-      storeId: shop.id,
+      storeId,
     });
-    const [cover] = (await list(shop.id)).items;
+    const [cover] = (await list(storeId, { category: chains.slug })).items;
     expect(cover?.cover?.url).toBe("/seed/test-2.jpg");
 
     await expect(
       reorderProductImages(db, {
         id: article.id,
         imageIds: reversed.slice(1),
-        storeId: shop.id,
+        storeId,
       })
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -774,16 +778,15 @@ describe("store-scoped writes", () => {
   });
 
   test("an edit that takes a published article's price away is refused", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
 
     await expect(
       updateProduct(db, {
-        storeId: shop.id,
+        storeId,
         values: {
           categoryId: chains.id,
           id: article.id,
@@ -795,7 +798,7 @@ describe("store-scoped writes", () => {
               locale: "es",
               seoDescription: null,
               seoTitle: null,
-              title: "Cadena",
+              title: `Cadena ${tag}`,
             },
           ],
         },
@@ -894,31 +897,39 @@ function draftValues(title: string) {
 
 describe("slug allocation under two writers", () => {
   test("a second article with the same title waits for the first one's slug and takes the next", async () => {
-    const shop = await makeStore();
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
     const held = deferred();
     const allocated = deferred();
     const firstPid = deferred<number>();
     const secondPid = deferred<number>();
+    const register = <T extends { id: number }>(row: T) => {
+      created.productIds.push(row.id);
+
+      return row;
+    };
 
     const first = db.transaction(async (tx) => {
       firstPid.resolve(await backendPid(tx));
-      const created = await createProduct(tx, {
-        storeId: shop.id,
-        values: draftValues("Collar Gemelo"),
+      const row = await createProduct(tx, {
+        storeId,
+        values: draftValues(`Collar Gemelo ${tag}`),
       });
       allocated.resolve(undefined);
       await held.promise;
 
-      return created;
+      return register(row);
     });
     await allocated.promise;
     const second = db.transaction(async (tx) => {
       secondPid.resolve(await backendPid(tx));
 
-      return await createProduct(tx, {
-        storeId: shop.id,
-        values: draftValues("Collar Gemelo"),
-      });
+      return register(
+        await createProduct(tx, {
+          storeId,
+          values: draftValues(`Collar Gemelo ${tag}`),
+        })
+      );
     });
 
     try {
@@ -932,53 +943,20 @@ describe("slug allocation under two writers", () => {
     }
 
     const [a, b] = await Promise.all([first, second]);
-    expect([a.slug, b.slug]).toEqual(["collar-gemelo", "collar-gemelo-2"]);
-  });
-
-  test("control: a store's slug lock never makes another store's creation wait", async () => {
-    const [storeA, storeB] = [await makeStore(), await makeStore()];
-    const held = deferred();
-    const allocated = deferred();
-
-    const first = db.transaction(async (tx) => {
-      const created = await createProduct(tx, {
-        storeId: storeA.id,
-        values: draftValues("Collar"),
-      });
-      allocated.resolve(undefined);
-      await held.promise;
-
-      return created;
-    });
-
-    try {
-      await allocated.promise;
-      // Finishes while store A's transaction still holds its lock: with one
-      // lock for every store this would wait for ever.
-      const second = await db.transaction(
-        async (tx) =>
-          await createProduct(tx, {
-            storeId: storeB.id,
-            values: draftValues("Collar"),
-          })
-      );
-      expect(second.slug).toBe("collar");
-    } finally {
-      held.resolve(undefined);
-    }
-
-    expect((await first).slug).toBe("collar");
+    expect([a.slug, b.slug]).toEqual([
+      `collar-gemelo-${tag}`,
+      `collar-gemelo-${tag}-2`,
+    ]);
   });
 });
 
 describe("an edit and a publication of the same article", () => {
   test("the publication waits for the edit's row lock, then refuses the price the edit took away", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
     const held = deferred();
     const locked = deferred();
@@ -987,7 +965,7 @@ describe("an edit and a publication of the same article", () => {
     // waited for it (the row lock) reads the cleared price and refuses.
     const edit = db.transaction(async (tx) => {
       const updated = await updateProduct(tx, {
-        storeId: shop.id,
+        storeId,
         values: {
           categoryId: chains.id,
           id: article.id,
@@ -999,7 +977,7 @@ describe("an edit and a publication of the same article", () => {
               locale: "es",
               seoDescription: null,
               seoTitle: null,
-              title: "Cadena",
+              title: `Cadena ${tag}`,
             },
           ],
         },
@@ -1010,10 +988,7 @@ describe("an edit and a publication of the same article", () => {
       return updated;
     });
     await Promise.race([locked.promise, edit]);
-    const publication = publishProduct(db, {
-      id: article.id,
-      storeId: shop.id,
-    });
+    const publication = publishProduct(db, { id: article.id, storeId });
 
     try {
       await waitUntilBlocked();
@@ -1030,16 +1005,19 @@ describe("an edit and a publication of the same article", () => {
   });
 
   test("control: a publication after the edit committed waits on nothing", async () => {
-    const shop = await makeStore();
-    const chains = await makeCategory(shop.id, "cadenas", { es: "Cadenas" });
-    const article = await makeArticle(shop.id, {
+    const { chains, storeId, tag } = await setup();
+    const article = await makeArticle(storeId, {
       categoryId: chains.id,
       publish: false,
-      title: "Cadena",
+      title: `Cadena ${tag}`,
     });
 
     await expect(
-      publishProduct(db, { id: article.id, storeId: shop.id })
-    ).resolves.toEqual({ id: article.id, slug: "cadena", status: "published" });
+      publishProduct(db, { id: article.id, storeId })
+    ).resolves.toEqual({
+      id: article.id,
+      slug: `cadena-${tag}`,
+      status: "published",
+    });
   });
 });

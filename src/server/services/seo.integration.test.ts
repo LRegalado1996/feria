@@ -1,23 +1,22 @@
-import { randomUUID } from "node:crypto";
-
 import { eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { createStoreSchema } from "@/lib/schemas/store";
 import { db } from "@/server/db";
 import {
   category,
   categoryTranslation,
+  product,
   productImage,
   store,
+  storeTranslation,
 } from "@/server/db/schema";
 import { createProduct, publishProduct } from "@/server/services/catalog";
-import { createStore } from "@/server/services/store";
+import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
+  findIndexableStore,
   listIndexableArticles,
   listIndexableCategories,
-  listIndexableStores,
 } from "./seo";
 
 vi.mock("@/env", () => ({
@@ -27,44 +26,31 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// Deleting a store cascades to its categories, articles and texts.
-const createdStoreIds: number[] = [];
+// The store is shared (`theStoreId`): what this file created is deleted by
+// id after each test, the articles before their categories.
+const created = { categoryIds: [] as number[], productIds: [] as number[] };
+
+const ROLLED_BACK = "Rolled back on purpose: this test keeps nothing";
+
+const SPANISH = {
+  description: "Anillos y cadenas.",
+  locale: "es",
+  tagline: "Joyas en la feria",
+} as const;
+const ENGLISH = {
+  description: "Rings and chains.",
+  locale: "en",
+  tagline: "Jewelry at the fair",
+} as const;
 
 afterEach(async () => {
-  await db.delete(store).where(inArray(store.id, createdStoreIds.splice(0)));
+  await db
+    .delete(product)
+    .where(inArray(product.id, created.productIds.splice(0)));
+  await db
+    .delete(category)
+    .where(inArray(category.id, created.categoryIds.splice(0)));
 });
-
-async function makeStore({ isActive = true } = {}) {
-  const row = await createStore(
-    db,
-    createStoreSchema.parse({
-      colorAccent: "#c8f31d",
-      colorBackground: "#f2f3f0",
-      colorContrast: "#111312",
-      colorForeground: "#111312",
-      colorSurface: "#ffffff",
-      currencyCode: "UYU",
-      instagramUrl: null,
-      isActive,
-      isDefault: false,
-      logoUrl: null,
-      name: "SEO Test",
-      slug: `seo-${randomUUID().slice(0, 8)}`,
-      tiktokUrl: null,
-      translations: [
-        {
-          description: "Bijou para todos los días.",
-          locale: "es",
-          tagline: "Bijou y burbujas",
-        },
-      ],
-      whatsappNumber: null,
-    })
-  );
-  createdStoreIds.push(row.id);
-
-  return row;
-}
 
 async function makeCategory(storeId: number, slug: string, name: string) {
   const [row] = await db
@@ -76,6 +62,7 @@ async function makeCategory(storeId: number, slug: string, name: string) {
     throw new Error("no category");
   }
 
+  created.categoryIds.push(row.id);
   await db
     .insert(categoryTranslation)
     .values({ categoryId: row.id, locale: "es", name });
@@ -90,7 +77,7 @@ async function makeArticle(
   title: string,
   { publish = true } = {}
 ) {
-  const created = await createProduct(db, {
+  const row = await createProduct(db, {
     storeId,
     values: {
       categoryId,
@@ -107,109 +94,119 @@ async function makeArticle(
       ],
     },
   });
+  created.productIds.push(row.id);
 
   if (publish) {
     // Publishing needs a photo.
     await db.insert(productImage).values({
       height: 800,
       position: 0,
-      productId: created.id,
+      productId: row.id,
       url: "/seed/test-0.jpg",
       width: 800,
     });
-    await publishProduct(db, { id: created.id, storeId });
+    await publishProduct(db, { id: row.id, storeId });
   }
 
-  return created;
+  return row;
 }
 
 /**
- * Two stores, one open and one closed, with nothing in them yet.
+ * "Anillos" holding a published article and a draft, "Aros" holding only a
+ * draft and "Pulseras" empty, all under one tag.
  */
-async function setupStores() {
+async function setup() {
+  const storeId = await theStoreId(db);
+  const tag = uniqueTag();
+  const rings = await makeCategory(storeId, `anillos-${tag}`, `Anillos ${tag}`);
+  const earrings = await makeCategory(storeId, `aros-${tag}`, `Aros ${tag}`);
+  const bracelets = await makeCategory(
+    storeId,
+    `pulseras-${tag}`,
+    `Pulseras ${tag}`
+  );
+  const published = await makeArticle(storeId, rings.id, `Anillo sello ${tag}`);
+  const drafts = [
+    await makeArticle(storeId, rings.id, `Anillo borrador ${tag}`, {
+      publish: false,
+    }),
+    await makeArticle(storeId, earrings.id, `Aro borrador ${tag}`, {
+      publish: false,
+    }),
+  ];
+
   return {
-    closed: await makeStore({ isActive: false }),
-    open: await makeStore(),
+    categories: [rings, earrings, bracelets],
+    drafts,
+    published,
+    rings,
+    storeId,
+    tag,
   };
 }
 
-/**
- * An active store (closed afterwards when `deactivate`) with "Anillos"
- * holding a published article and a draft, "Aros" holding only a draft and
- * "Pulseras" empty.
- */
-async function setup({ deactivate = false } = {}) {
-  const shop = await makeStore();
-  const rings = await makeCategory(shop.id, "anillos", "Anillos");
-  const earrings = await makeCategory(shop.id, "aros", "Aros");
-  await makeCategory(shop.id, "pulseras", "Pulseras");
-  const published = await makeArticle(shop.id, rings.id, "Anillo sello");
-  await makeArticle(shop.id, rings.id, "Anillo borrador", { publish: false });
-  await makeArticle(shop.id, earrings.id, "Aro borrador", { publish: false });
-
-  if (deactivate) {
-    await db
-      .update(store)
-      .set({ isActive: false })
-      .where(eq(store.id, shop.id));
-  }
-
-  return { published, shop };
-}
-
 describe("what search engines and assistants are told about", () => {
-  test("lists an active store with its texts, never an inactive one", async () => {
-    const { closed, open } = await setupStores();
+  // The store's texts are every file's: a migrated database has none, so
+  // the test writes its own, inside a transaction it then rolls back.
+  test("reads the store's own row with its texts, the columns the sitemap and llms.txt use", async () => {
+    const run = db.transaction(async (tx) => {
+      const storeId = await theStoreId(tx);
+      await tx
+        .delete(storeTranslation)
+        .where(eq(storeTranslation.storeId, storeId));
+      await tx.insert(storeTranslation).values([
+        { ...SPANISH, storeId },
+        { ...ENGLISH, storeId },
+      ]);
+      const [row] = await tx
+        .select({
+          currencyCode: store.currencyCode,
+          id: store.id,
+          name: store.name,
+          updatedAt: store.updatedAt,
+        })
+        .from(store)
+        .where(eq(store.id, storeId));
 
-    const listed = (await listIndexableStores(db)).filter((row) =>
-      [open.id, closed.id].includes(row.id)
-    );
+      const found = await findIndexableStore(tx);
 
-    expect(listed).toEqual([
-      {
-        currencyCode: "UYU",
-        id: open.id,
-        name: "SEO Test",
-        slug: open.slug,
-        translations: [
-          {
-            description: "Bijou para todos los días.",
-            locale: "es",
-            tagline: "Bijou y burbujas",
-          },
-        ],
-        updatedAt: expect.any(Date),
-      },
-    ]);
+      expect(found).toEqual({ ...row, translations: expect.any(Array) });
+      // Whatever order the read gave them: both texts, and only them.
+      expect(new Set(found?.translations)).toEqual(new Set([SPANISH, ENGLISH]));
+
+      throw new Error(ROLLED_BACK);
+    });
+
+    // A failed expectation above rejects with its own message instead.
+    await expect(run).rejects.toThrow(ROLLED_BACK);
   });
 
-  test("lists a store's published articles only, never a draft", async () => {
-    const { published, shop } = await setup();
+  test("lists the store's published articles only, never a draft", async () => {
+    const { drafts, published, storeId, tag } = await setup();
 
-    const articles = await listIndexableArticles(db, { storeId: shop.id });
+    const articles = onlyIds(await listIndexableArticles(db, { storeId }), [
+      published.id,
+      ...drafts.map((draft) => draft.id),
+    ]);
 
     expect(articles.map((row) => [row.id, row.slug, row.titles])).toEqual([
-      [published.id, published.slug, [{ locale: "es", title: "Anillo sello" }]],
+      [
+        published.id,
+        published.slug,
+        [{ locale: "es", title: `Anillo sello ${tag}` }],
+      ],
     ]);
     expect(articles[0]?.priceAmount).toBe(69_000);
   });
 
-  test("lists nothing of an inactive store, even its published articles", async () => {
-    const { shop } = await setup({ deactivate: true });
+  test("lists the categories that hold a published article, by name, never one with only drafts or none", async () => {
+    const { categories, rings, storeId, tag } = await setup();
+    const ownSlugs = new Set(categories.map((row) => row.slug));
 
-    await expect(
-      listIndexableArticles(db, { storeId: shop.id })
-    ).resolves.toEqual([]);
-    await expect(
-      listIndexableCategories(db, { locale: "es", storeId: shop.id })
-    ).resolves.toEqual([]);
-  });
-
-  test("lists the categories that hold a published article, by name", async () => {
-    const { shop } = await setup();
-
-    await expect(
-      listIndexableCategories(db, { locale: "en", storeId: shop.id })
-    ).resolves.toEqual([{ name: "Anillos", slug: "anillos" }]);
+    expect(
+      (await listIndexableCategories(db, { locale: "en", storeId })).filter(
+        (row) => ownSlugs.has(row.slug)
+      )
+    ).toEqual([{ name: `Anillos ${tag}`, slug: rings.slug }]);
   });
 });

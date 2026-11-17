@@ -5,7 +5,7 @@ import { orpc } from "@/lib/orpc/client";
 import { storeCategoriesKey } from "./use-store-categories";
 
 /** Renames a category, then reads the list again. */
-export function useRenameCategory(storeSlug: string) {
+export function useRenameCategory() {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -14,7 +14,7 @@ export function useRenameCategory(storeSlug: string) {
     meta: { suppressGlobalErrorReport: true },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: storeCategoriesKey(storeSlug),
+        queryKey: storeCategoriesKey(),
       });
     },
   });

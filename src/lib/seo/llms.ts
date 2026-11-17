@@ -14,7 +14,7 @@ export interface StoreLlmsInput {
   currencyCode: Currency;
   locale: Locale;
   origin: string;
-  store: Pick<IndexableStore, "name" | "slug" | "translations">;
+  store: Pick<IndexableStore, "name" | "translations">;
 }
 
 /** Text safe inside a Markdown link's brackets, on one line. */
@@ -30,7 +30,7 @@ function section(title: string, lines: string[]) {
 }
 
 /**
- * A store's `llms.txt` (llmstxt.org) in `locale`: the store's name as the
+ * The store's `llms.txt` (llmstxt.org) in `locale`: the store's name as the
  * one H1, its tagline as the blockquote summary, its description, then
  * links to its categories and to every published article with its price.
  * Generated from the same rows as the pages, so it never drifts from them.
@@ -60,7 +60,7 @@ export function buildStoreLlms({
       categories.map(
         (entry) =>
           `- [${linkText(entry.name)}](${url(
-            catalogHref(store.slug, locale, {
+            catalogHref(locale, {
               ...EMPTY_CATALOG_QUERY,
               category: entry.slug,
             })
@@ -72,7 +72,7 @@ export function buildStoreLlms({
       articles.map((article) => {
         const title = pickTranslation(article.titles, locale)?.title ?? "";
         const link = `- [${linkText(title)}](${url(
-          localizePath(`/${store.slug}/products/${article.slug}`, locale)
+          localizePath(`/products/${article.slug}`, locale)
         )})`;
 
         return article.priceAmount === null
@@ -81,11 +81,9 @@ export function buildStoreLlms({
       })
     ),
     ...section("Optional", [
-      `- [${copy.catalog}](${url(
-        catalogHref(store.slug, locale, EMPTY_CATALOG_QUERY)
-      )})`,
+      `- [${copy.catalog}](${url(catalogHref(locale, EMPTY_CATALOG_QUERY))})`,
       `- [${copy.otherLanguage}](${url(
-        localizePath(`/${store.slug}/llms.txt`, otherLocale)
+        localizePath("/llms.txt", otherLocale)
       )})`,
     ]),
   ].join("\n");

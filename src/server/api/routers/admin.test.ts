@@ -8,10 +8,10 @@ import {
 
 import { adminRouter } from "./admin";
 
-// The router is session → service; the queries are
-// `src/server/services/access.test.ts`'s.
+// The router is session → the login re-read from the database → answer; the
+// queries are `src/server/services/access.test.ts`'s.
 
-const services = vi.hoisted(() => ({ getAdminProfile: vi.fn() }));
+const services = vi.hoisted(() => ({ findAdminStore: vi.fn() }));
 
 vi.mock("@/server/services/access", () => services);
 
@@ -23,20 +23,14 @@ vi.mock("@/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 
-const STORES = [
-  { id: 3, isActive: true, name: "LR Market", slug: "lr-market" },
-];
-
 function setup({
-  role = "member",
+  isLogin = true,
   signedIn = true,
-}: { role?: "member" | "superadmin" | null; signedIn?: boolean } = {}) {
+}: { isLogin?: boolean; signedIn?: boolean } = {}) {
   const { mockCtx } = signedIn
     ? createMockContext()
     : createUnauthenticatedMockContext();
-  services.getAdminProfile.mockResolvedValue(
-    role === null ? null : { role, stores: STORES }
-  );
+  services.findAdminStore.mockResolvedValue(isLogin ? { id: 3 } : null);
   const options = { context: mockCtx as never };
 
   return {
@@ -46,25 +40,18 @@ function setup({
 }
 
 describe("admin.me", () => {
-  test.each(["member", "superadmin"] as const)(
-    "answers the %s's name, the role the database holds and the stores it may open",
-    async (role) => {
-      const { db, me } = setup({ role });
+  test("answers the signed-in login's name, once the database confirms the login", async () => {
+    const { db, me } = setup();
 
-      await expect(me()).resolves.toEqual({
-        name: "Test User",
-        role,
-        stores: STORES,
-      });
-      expect(services.getAdminProfile).toHaveBeenCalledExactlyOnceWith(
-        db,
-        "test-user-id"
-      );
-    }
-  );
+    await expect(me()).resolves.toEqual({ name: "Test User" });
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      "test-user-id"
+    );
+  });
 
   test("treats a session whose user no longer exists as signed out", async () => {
-    const { me } = setup({ role: null });
+    const { me } = setup({ isLogin: false });
 
     await expect(me()).rejects.toMatchObject({
       code: "UNAUTHORIZED",
@@ -79,6 +66,6 @@ describe("admin.me", () => {
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });
-    expect(services.getAdminProfile).not.toHaveBeenCalled();
+    expect(services.findAdminStore).not.toHaveBeenCalled();
   });
 });

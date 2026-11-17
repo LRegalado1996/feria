@@ -64,7 +64,6 @@ function setup({
       idPrefix="sidebar"
       locale={locale}
       query={query}
-      storeSlug="lr-market"
     />
   );
 
@@ -97,13 +96,9 @@ describe("StoreCatalogFilters", () => {
 
     const nav = screen.getByRole("navigation", { name: "Categorías" });
     expect(linksIn(nav)).toEqual([
-      ["Todas", "/lr-market/products?sort=price_asc", "true"],
-      [
-        "Collares",
-        "/lr-market/products?category=collares&sort=price_asc",
-        null,
-      ],
-      ["Rings", "/lr-market/products?category=anillos&sort=price_asc", null],
+      ["Todas", "/products?sort=price_asc", "true"],
+      ["Collares", "/products?category=collares&sort=price_asc", null],
+      ["Rings", "/products?category=anillos&sort=price_asc", null],
     ]);
     expect(within(nav).getByRole("link", { name: "Rings" })).toHaveAttribute(
       "lang",
@@ -120,9 +115,9 @@ describe("StoreCatalogFilters", () => {
     expect(
       linksIn(screen.getByRole("navigation", { name: "Categories" }))
     ).toEqual([
-      ["All", "/en/lr-market/products", null],
-      ["Collares", "/en/lr-market/products", "true"],
-      ["Rings", "/en/lr-market/products?category=anillos", null],
+      ["All", "/en/products", null],
+      ["Collares", "/en/products", "true"],
+      ["Rings", "/en/products?category=anillos", null],
     ]);
   });
 
@@ -141,11 +136,11 @@ describe("StoreCatalogFilters", () => {
     });
 
     expect(linksIn(group("sidebar-color"))).toEqual([
-      ["Dorado(4)", "/lr-market/products", "true"],
-      ["Plateado(1)", "/lr-market/products?color=dorado,plateado", null],
+      ["Dorado(4)", "/products", "true"],
+      ["Plateado(1)", "/products?color=dorado,plateado", null],
     ]);
     expect(linksIn(group("sidebar-talle"))).toEqual([
-      ["M(3)", "/lr-market/products?color=dorado&talle=m", null],
+      ["M(3)", "/products?color=dorado&talle=m", null],
     ]);
   });
 

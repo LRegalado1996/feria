@@ -8,7 +8,7 @@ import { createI18nWrapper, DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import { StoreArticlePurchase } from "./store-article-purchase";
 
-const KEY = "feria:cart:lr-market";
+const KEY = "feria:cart";
 const MARK = "\u2060";
 // The price the page shows, kept on the cart line it adds.
 const PRICE = 125_000;
@@ -38,7 +38,6 @@ function setup({
       className="custom"
       priceAmount={PRICE}
       productId={productId}
-      storeSlug="lr-market"
     />,
     { locale }
   );
@@ -238,11 +237,7 @@ describe("StoreArticlePurchase before hydration", () => {
     const I18n = createI18nWrapper("es");
     const { clientHtml, errors, serverHtml } = collectHydrationErrors(
       <I18n>
-        <StoreArticlePurchase
-          priceAmount={PRICE}
-          productId={42}
-          storeSlug="lr-market"
-        />
+        <StoreArticlePurchase priceAmount={PRICE} productId={42} />
       </I18n>,
       { clientNowMs: 1000, serverNowMs: 0 }
     );

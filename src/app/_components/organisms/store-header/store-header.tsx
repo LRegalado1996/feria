@@ -1,6 +1,6 @@
-import Image from "next/image";
 import Link from "next/link";
 
+import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { StoreCartButton } from "@/app/_components/molecules/store-cart-button";
 import { StoreLocaleToggle } from "@/app/_components/molecules/store-locale-toggle";
 import { StoreMobileMenu } from "@/app/_components/molecules/store-mobile-menu";
@@ -17,22 +17,21 @@ export interface StoreHeaderProps {
   className?: string;
   copy: Dictionary["storefront"]["shell"];
   locale: Locale;
-  store: { logoUrl: string | null; name: string; slug: string };
 }
 
 const NAV_LINK_CLASS =
   "inline-flex min-h-11 items-center text-sm font-semibold text-store-foreground underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground";
 
 /**
- * Every page of a store starts here (FER-021): its logo (or its name), the
- * home and the catalog, the search, the language and the cart. Sticky. On a
- * phone the links, the search and the language move into a full-screen
- * menu. Rendered by the server; only the menu, the language link and the
- * cart's count hydrate.
+ * Every page of the store starts here (FER-021): the brand's logo, the home
+ * and the catalog, the search, the language and the cart. Sticky. On a phone
+ * the links, the search and the language move into a full-screen menu.
+ * Rendered by the server; only the menu, the language link and the cart's
+ * count hydrate. It reads no data: the logo is code (FER-038).
  */
-function StoreHeader({ className, copy, locale, store }: StoreHeaderProps) {
-  const home = localizePath(`/${store.slug}`, locale);
-  const catalog = localizePath(`/${store.slug}/products`, locale);
+function StoreHeader({ className, copy, locale }: StoreHeaderProps) {
+  const home = localizePath("/", locale);
+  const catalog = localizePath("/products", locale);
 
   return (
     <header
@@ -55,22 +54,8 @@ function StoreHeader({ className, copy, locale, store }: StoreHeaderProps) {
           data-testid="store-header-home"
           href={home}
         >
-          {store.logoUrl ? (
-            // Unoptimized: a store's logo can live at any address, and the
-            // optimizer only fetches from hosts listed ahead of time.
-            <Image
-              alt={store.name}
-              className="h-10 w-auto"
-              height={40}
-              src={store.logoUrl}
-              unoptimized
-              width={40}
-            />
-          ) : (
-            <span className="truncate font-display text-2xl leading-none tracking-display uppercase">
-              {store.name}
-            </span>
-          )}
+          {/* The mark: under 96 px the full logo's MARKET cannot be read. */}
+          <StoreLogo className="h-10" variant="mark" />
         </Link>
         <nav aria-label={copy.navigation} className="hidden md:block">
           <ul className="flex items-center gap-6">
@@ -92,10 +77,9 @@ function StoreHeader({ className, copy, locale, store }: StoreHeaderProps) {
             copy={copy}
             id="store-search"
             locale={locale}
-            storeSlug={store.slug}
           />
           <StoreLocaleToggle className="hidden md:inline-flex" />
-          <StoreCartButton storeSlug={store.slug} />
+          <StoreCartButton />
           <StoreMobileMenu
             className="md:hidden"
             closeLabel={copy.closeMenu}
@@ -125,7 +109,6 @@ function StoreHeader({ className, copy, locale, store }: StoreHeaderProps) {
               copy={copy}
               id="store-search-menu"
               locale={locale}
-              storeSlug={store.slug}
             />
             <StoreLocaleToggle className="self-start" />
           </StoreMobileMenu>

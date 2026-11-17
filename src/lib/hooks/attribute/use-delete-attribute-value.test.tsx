@@ -12,7 +12,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const INPUT = { id: 21, storeSlug: "lr-market" };
+const INPUT = { id: 21 };
 
 const OUTPUT = { id: 21 };
 
@@ -29,7 +29,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useDeleteAttributeValue("lr-market"), {
+  const { result } = renderHook(() => useDeleteAttributeValue(), {
     wrapper,
   });
   const metas = () =>
@@ -49,7 +49,7 @@ describe("useDeleteAttributeValue", () => {
 
     expect(procedure).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
   });
 
@@ -62,7 +62,7 @@ describe("useDeleteAttributeValue", () => {
     });
 
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeAttributesKey("lr-market"),
+      queryKey: storeAttributesKey(),
     });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });

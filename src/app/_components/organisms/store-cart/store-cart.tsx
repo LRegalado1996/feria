@@ -20,7 +20,6 @@ import { formatPrice } from "@/lib/utils/format";
 
 export interface StoreCartProps {
   className?: string;
-  storeSlug: string;
 }
 
 /**
@@ -49,13 +48,13 @@ function flagOf(
 }
 
 /**
- * A store's cart and its checkout on one page (FER-026), so an order takes
+ * The cart and its checkout on one page (FER-026), so an order takes
  * one screen and one thumb: the articles at the shop's prices now (read as
  * the page opens), what changed since each was added, the total, and the
  * shopper's details. An article that is gone or sold out holds the order
  * until it is taken out: the server would refuse it anyway.
  */
-function StoreCart({ className, storeSlug }: StoreCartProps) {
+function StoreCart({ className }: StoreCartProps) {
   const copy = useDictionary().storefront.cart;
   const root = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -110,7 +109,6 @@ function StoreCart({ className, storeSlug }: StoreCartProps) {
             title,
           }));
         }}
-        storeSlug={storeSlug}
       />
       <output aria-live="polite" className="sr-only">
         {removed ? interpolate(copy.removed, { title: removed.title }) : ""}
@@ -124,24 +122,21 @@ function StoreCart({ className, storeSlug }: StoreCartProps) {
 /** What the cart holds, from "unknown yet" to the checkout. */
 function CartBody({
   onRemoved,
-  storeSlug,
 }: {
   /** A line was taken out: its place in the list and its name. */
   onRemoved: (index: number, title: string) => void;
-  storeSlug: string;
 }) {
   const { storefront } = useDictionary();
   const copy = storefront.cart;
   const locale = useLocale();
   const router = useRouter();
   const hydrated = useHydrated();
-  const { items, removeOrdered, setQuantity } = useCart(storeSlug);
+  const { items, removeOrdered, setQuantity } = useCart();
   const products = useCartProducts({
     ids: items.map((item) => item.productId),
     locale,
-    storeSlug,
   });
-  const catalogHref = localizePath(`/${storeSlug}/products`, locale);
+  const catalogHref = localizePath("/products", locale);
   // Taken: the ordered articles leave the cart while the order's page
   // loads, which must not read as "your cart is empty". A transition, so the
   // page shown again with the back button starts over, never "sending".
@@ -291,7 +286,6 @@ function CartBody({
                 product={product ?? null}
                 quantity={item.quantity}
                 seenPriceAmount={item.seenPriceAmount}
-                storeSlug={storeSlug}
               />
             ))}
           </ul>
@@ -314,14 +308,13 @@ function CartBody({
         }))}
         onPlaced={(token, ordered) => {
           startNavigation(() => {
-            router.push(localizePath(`/${storeSlug}/orders/${token}`, locale));
+            router.push(localizePath(`/orders/${token}`, locale));
           });
           removeOrdered(ordered);
         }}
         onStale={() => {
           void products.refetch();
         }}
-        storeSlug={storeSlug}
       />
     </div>
   );

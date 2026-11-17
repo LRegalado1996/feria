@@ -11,7 +11,6 @@ const ORIGIN = "https://lrmarket.example";
 function makeStore(overrides: Partial<StoreLlmsInput["store"]> = {}) {
   return {
     name: "LR Market",
-    slug: "lr-market",
     translations: [
       {
         description: "Bijou y pistolas de burbujas en Montevideo.",
@@ -69,16 +68,16 @@ describe("buildStoreLlms", () => {
         "",
         "## Categorías",
         "",
-        `- [Anillos](${ORIGIN}/lr-market/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/products?category=anillos)`,
         "",
         "## Artículos",
         "",
-        `- [Anillo sello](${ORIGIN}/lr-market/products/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
+        `- [Anillo sello](${ORIGIN}/products/anillo-sello): ${formatPrice(69_000, "UYU", "es")}`,
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/lr-market/products)`,
-        `- [English version](${ORIGIN}/en/lr-market/llms.txt)`,
+        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
     );
@@ -95,16 +94,16 @@ describe("buildStoreLlms", () => {
         "",
         "## Categories",
         "",
-        `- [Anillos](${ORIGIN}/en/lr-market/products?category=anillos)`,
+        `- [Anillos](${ORIGIN}/en/products?category=anillos)`,
         "",
         "## Articles",
         "",
-        `- [Signet ring](${ORIGIN}/en/lr-market/products/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
+        `- [Signet ring](${ORIGIN}/en/products/anillo-sello): ${formatPrice(69_000, "UYU", "en")}`,
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/lr-market/products)`,
-        `- [Versión en español](${ORIGIN}/lr-market/llms.txt)`,
+        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
     );
@@ -117,7 +116,7 @@ describe("buildStoreLlms", () => {
         currencyCode: "USD",
       })
     ).toContain(
-      `/lr-market/products/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
+      `/products/anillo-sello): ${formatPrice(129_050, "USD", "es")}\n`
     );
     expect(formatPrice(129_050, "USD", "es")).toMatch(/^US\$\s1\.290,50$/u);
   });
@@ -148,12 +147,12 @@ describe("buildStoreLlms", () => {
         "",
         "## Articles",
         "",
-        `- [Cadena](${ORIGIN}/en/lr-market/products/cadena)`,
+        `- [Cadena](${ORIGIN}/en/products/cadena)`,
         "",
         "## Optional",
         "",
-        `- [Full catalog](${ORIGIN}/en/lr-market/products)`,
-        `- [Versión en español](${ORIGIN}/lr-market/llms.txt)`,
+        `- [Full catalog](${ORIGIN}/en/products)`,
+        `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
     );
@@ -172,8 +171,8 @@ describe("buildStoreLlms", () => {
         "",
         "## Optional",
         "",
-        `- [Catálogo completo](${ORIGIN}/lr-market/products)`,
-        `- [English version](${ORIGIN}/en/lr-market/llms.txt)`,
+        `- [Catálogo completo](${ORIGIN}/products)`,
+        `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
     );
@@ -190,7 +189,7 @@ describe("buildStoreLlms", () => {
         categories: [{ name: "Aros \\ dijes", slug: "aros" }],
       })
     ).toContain(
-      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/lr-market/products/anillo-sello)`
+      `${String.raw`- [Aros \[edición\] limitada](`}${ORIGIN}/products/anillo-sello)`
     );
     expect(
       build({ categories: [{ name: "Aros \\ dijes", slug: "aros" }] })
@@ -199,7 +198,7 @@ describe("buildStoreLlms", () => {
 
   test("writes an article without any title as an empty link text", () => {
     expect(build({ articles: [makeArticle({ titles: [] })] })).toContain(
-      `- [](${ORIGIN}/lr-market/products/anillo-sello)`
+      `- [](${ORIGIN}/products/anillo-sello)`
     );
   });
 });

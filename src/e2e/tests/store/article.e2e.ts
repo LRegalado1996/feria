@@ -1,44 +1,39 @@
 import type { Locator } from "@playwright/test";
 
-import { type DbFixture, expect, test } from "../../fixtures";
+import {
+  type DbFixture,
+  expect,
+  STORE_SETTINGS,
+  test,
+  uniqueTag,
+} from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
 
-// FER-024. Each test seeds its own store and articles.
+// FER-024. Each test seeds its own articles, at addresses no other test has;
+// the store's WhatsApp is the run's (`STORE_SETTINGS`).
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const TEXTS = [
-  { description: "Joyas.", locale: "es" as const, tagline: "Joyas" },
-  { description: "Jewelry.", locale: "en" as const, tagline: "Jewelry" },
-];
-
-/** A store with WhatsApp and a published article with three photos. */
+/** A published article with three photos, in a category of the test's own. */
 async function setup(
   { db }: { db: DbFixture["db"] },
   options: { isAvailable?: boolean } = {}
 ) {
-  const store = await db.seed.createStore(
-    { name: "Article Store", whatsappNumber: "+59899123456" },
-    TEXTS
-  );
-  const rings = await db.seed.createCategory(store.id, {
-    nameEs: "Anillos",
-    position: 0,
-    slug: "anillos",
+  const tag = uniqueTag();
+  const rings = await db.seed.createCategory({
+    nameEs: `Anillos ${tag}`,
+    slug: `anillos-${tag}`,
   });
-  const article = await db.seed.createArticle(
-    store.id,
-    rings.id,
-    "Anillo de plata",
-    {
-      images: 3,
-      isAvailable: options.isAvailable ?? true,
-      priceAmount: 120_000,
-    }
-  );
+  const article = await db.seed.createArticle({
+    categoryId: rings.id,
+    images: 3,
+    isAvailable: options.isAvailable ?? true,
+    priceAmount: 120_000,
+    title: "Anillo de plata",
+  });
 
-  return { article, rings, store };
+  return { article, rings };
 }
 
 test.describe("Article page", () => {
@@ -46,8 +41,8 @@ test.describe("Article page", () => {
     db,
     page,
   }) => {
-    const { article, store } = await setup({ db });
-    await page.goto(`/${store.slug}/products/${article.slug}`);
+    const { article } = await setup({ db });
+    await page.goto(`/products/${article.slug}`);
     const gallery = page.getByTestId("store-gallery");
     await expect(gallery.getByText("Foto 1 de 3")).toBeVisible();
 
@@ -87,9 +82,9 @@ test.describe("Article page", () => {
   });
 
   test("adds the chosen quantity to the cart", async ({ db, page }) => {
-    const { article, store } = await setup({ db });
-    await page.goto(`/${store.slug}/products/${article.slug}`);
-    const storePage = new StorePage(page, store.slug);
+    const { article } = await setup({ db });
+    await page.goto(`/products/${article.slug}`);
+    const storePage = new StorePage(page);
     const quantity = page.getByTestId("store-article-quantity");
 
     await clickUntilVisible(
@@ -106,12 +101,12 @@ test.describe("Article page", () => {
     );
   });
 
-  test("a sold-out article stays visible, cannot be added, and offers WhatsApp with the article written", async ({
+  test("a sold-out article stays visible, cannot be added, and offers the store's WhatsApp with the article written", async ({
     db,
     page,
   }) => {
-    const { article, store } = await setup({ db }, { isAvailable: false });
-    await page.goto(`/${store.slug}/products/${article.slug}`);
+    const { article } = await setup({ db }, { isAvailable: false });
+    await page.goto(`/products/${article.slug}`);
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Anillo de plata" })
@@ -122,7 +117,11 @@ test.describe("Article page", () => {
     ).toHaveCount(0);
     const whatsapp = page.getByTestId("store-article-whatsapp");
     const href = (await whatsapp.getAttribute("href")) ?? "";
-    expect(href.startsWith("https://wa.me/59899123456?text=")).toBe(true);
+    expect(
+      href.startsWith(
+        `https://wa.me/${STORE_SETTINGS.whatsappNumber.slice(1)}?text=`
+      )
+    ).toBe(true);
     expect(decodeURIComponent(href.split("text=")[1] ?? "")).toContain(
       "«Anillo de plata»"
     );
@@ -136,13 +135,15 @@ test.describe("Article page", () => {
       db,
       page,
     }) => {
-      const { article, store } = await setup({ db });
-      const path = `${prefix}/${store.slug}/products/${article.slug}`;
+      const { article } = await setup({ db });
+      const path = `${prefix}/products/${article.slug}`;
 
       const response = await page.goto(path);
 
       expect(response?.status()).toBe(200);
-      await expect(page).toHaveTitle("Anillo de plata · Article Store");
+      await expect(page).toHaveTitle(
+        `Anillo de plata · ${STORE_SETTINGS.name}`
+      );
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
         "href",
         new URL(path, page.url()).href
@@ -153,7 +154,9 @@ test.describe("Article page", () => {
           .textContent()) ?? "[]"
       ) as {
         "@type": string;
+        name?: string;
         offers?: { availability: string; price: string };
+        sameAs?: string[];
       }[];
       expect(structured.map((entry) => entry["@type"])).toEqual([
         "Product",
@@ -164,15 +167,24 @@ test.describe("Article page", () => {
         availability: "https://schema.org/InStock",
         price: "1200.00",
       });
+      // The store behind the article, from its settings.
+      expect(structured[2]).toMatchObject({
+        name: STORE_SETTINGS.name,
+        sameAs: [STORE_SETTINGS.instagramUrl],
+      });
     });
   }
 
   test("a draft is a 404, never a page", async ({ db, page }) => {
-    const { rings, store } = await setup({ db });
-    const draft = await db.seed.createArticle(store.id, rings.id, "Borrador");
+    const { rings } = await setup({ db });
+    const draft = await db.seed.createArticle({
+      categoryId: rings.id,
+      title: "Borrador",
+    });
 
-    const response = await page.goto(`/${store.slug}/products/${draft.slug}`);
+    const response = await page.goto(`/products/${draft.slug}`);
 
     expect(response?.status()).toBe(404);
+    await expect(new StorePage(page).getNotFoundHeading()).toBeVisible();
   });
 });

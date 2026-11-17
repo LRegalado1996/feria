@@ -1,5 +1,5 @@
 import { daysUntilFair } from "../../../lib/brand/fair";
-import { expect, test } from "../../fixtures";
+import { expect, STORE_SETTINGS, test } from "../../fixtures";
 import { ComingSoonPage } from "../../page-objects/coming-soon.page";
 import { StorePage } from "../../page-objects/store.page";
 
@@ -17,12 +17,15 @@ test.describe("Launch switch off: the store is closed", () => {
     storageState: { cookies: [], origins: [] },
   });
 
+  // The store's pages (FER-038), and an address no page answers.
   for (const [path, target] of [
     ["/", "/coming-soon"],
+    ["/products?color=dorado", "/coming-soon"],
+    ["/products/collar-de-perlas", "/coming-soon"],
+    ["/cart", "/coming-soon"],
     ["/lr-market", "/coming-soon"],
-    ["/lr-market/collar-de-perlas?color=dorado", "/coming-soon"],
     ["/en", "/en/coming-soon"],
-    ["/en/lr-market/pearl-necklace", "/en/coming-soon"],
+    ["/en/products/pearl-necklace", "/en/coming-soon"],
   ] as const) {
     test(`${path} answers a temporary redirect to ${target}`, async ({
       request,
@@ -191,54 +194,30 @@ test.describe("Launch switch off: the store is closed", () => {
 });
 
 test.describe("Launch switch on: the store is open", () => {
-  test.use({ extraHTTPHeaders: OPEN });
+  test.use({
+    extraHTTPHeaders: OPEN,
+    storageState: { cookies: [], origins: [] },
+  });
 
-  // Signed in as the worker's superadmin: marking a store as the default is
-  // a store edit, and the edit is what drops the cached answer.
-  test("/ opens the default store, in the language of the address", async ({
-    db,
-    superadminPage: page,
+  test("/ opens the store's home, in the language of the address", async ({
+    page,
   }) => {
-    const store = await db.seed.createStore({ name: "Default Store" });
-    const edit = async (isDefault: boolean) =>
-      await page.request.post("/api/orpc/store/update", {
-        data: {
-          json: {
-            colorAccent: store.colorAccent,
-            colorBackground: store.colorBackground,
-            colorContrast: store.colorContrast,
-            colorForeground: store.colorForeground,
-            colorSurface: store.colorSurface,
-            currencyCode: store.currencyCode,
-            id: store.id,
-            instagramUrl: null,
-            isActive: true,
-            isDefault,
-            logoUrl: null,
-            name: store.name,
-            slug: store.slug,
-            tiktokUrl: null,
-            translations: [],
-            whatsappNumber: null,
-          },
-        },
-      });
-    expect((await edit(true)).status()).toBe(200);
-    const storePage = new StorePage(page, store.slug);
+    const storePage = new StorePage(page);
 
-    await page.goto("/");
+    const response = await page.goto("/");
 
+    expect(response?.status()).toBe(200);
     await storePage.waitForLoad();
-    await expect(page).toHaveURL(`/${store.slug}`);
-    await expect(storePage.getHeading(1)).toHaveText("Default Store");
+    await expect(page).toHaveURL("/");
+    await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
+    await storePage.expectDocumentLanguage("es");
 
     await page.goto("/en");
 
-    await expect(page).toHaveURL(`/en/${store.slug}`);
+    await storePage.waitForLoad();
+    await expect(page).toHaveURL("/en");
+    await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
     await storePage.expectDocumentLanguage("en");
-
-    // The mark is given back, so `/` never leads to a store that is gone.
-    expect((await edit(false)).status()).toBe(200);
   });
 
   for (const [path, target] of [

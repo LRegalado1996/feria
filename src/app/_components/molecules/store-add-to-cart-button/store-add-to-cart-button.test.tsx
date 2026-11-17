@@ -8,7 +8,7 @@ import { createI18nWrapper, renderWithI18n } from "@/test/i18n";
 
 import { StoreAddToCartButton } from "./store-add-to-cart-button";
 
-const KEY = "feria:cart:lr-market";
+const KEY = "feria:cart";
 
 /** `count` distinct articles, one unit each. */
 function makeCart(count: number) {
@@ -38,7 +38,6 @@ function setup({
       name="Collar de perlas"
       priceAmount={PRICE}
       productId={productId}
-      storeSlug="lr-market"
     />,
     { locale }
   );
@@ -173,7 +172,6 @@ describe("StoreAddToCartButton before hydration", () => {
           name="Collar de perlas"
           priceAmount={PRICE}
           productId={42}
-          storeSlug="lr-market"
         />
       </I18n>,
       { clientNowMs: 1000, serverNowMs: 0 }

@@ -27,7 +27,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
       : createOrpcHandler("order.counts", counts)
   );
   const wrapper = createQueryWrapper();
-  const { result } = renderHook(() => useOrderCounts("lr-market"), {
+  const { result } = renderHook(() => useOrderCounts(), {
     wrapper,
   });
 
@@ -41,10 +41,8 @@ describe("useOrderCounts", () => {
     await waitFor(() => {
       expect(result.current.data).toEqual(COUNTS);
     });
-    expect(counts).toHaveBeenCalledExactlyOnceWith({ storeSlug: "lr-market" });
-    expect(queryClient.getQueryData(orderCountsKey("lr-market"))).toEqual(
-      COUNTS
-    );
+    expect(counts).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(queryClient.getQueryData(orderCountsKey())).toEqual(COUNTS);
   });
 
   test("reads again every 15 seconds while the tab is in sight, and only then", async () => {
@@ -54,9 +52,8 @@ describe("useOrderCounts", () => {
     });
 
     const [observer] =
-      queryClient
-        .getQueryCache()
-        .find({ queryKey: orderCountsKey("lr-market") })?.observers ?? [];
+      queryClient.getQueryCache().find({ queryKey: orderCountsKey() })
+        ?.observers ?? [];
     expect(observer?.options).toMatchObject({
       refetchInterval: 15_000,
       refetchIntervalInBackground: false,
@@ -76,7 +73,7 @@ describe("useOrderCounts", () => {
     await waitFor(() => {
       expect(counts).toHaveBeenCalledTimes(2);
     });
-    expect(counts).toHaveBeenLastCalledWith({ storeSlug: "lr-market" });
+    expect(counts).toHaveBeenLastCalledWith(undefined);
   });
 
   test("answers a refused read as an error, never as zeros", async () => {

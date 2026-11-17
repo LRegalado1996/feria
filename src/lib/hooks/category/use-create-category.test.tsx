@@ -12,7 +12,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const INPUT = { nameEn: null, nameEs: "Collares", storeSlug: "lr-market" };
+const INPUT = { nameEn: null, nameEs: "Collares" };
 
 function setup({ fails = false }: { fails?: boolean } = {}) {
   const create = vi.fn((_input: unknown) => ({
@@ -31,7 +31,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useCreateCategory("lr-market"), {
+  const { result } = renderHook(() => useCreateCategory(), {
     wrapper,
   });
   const metas = () =>
@@ -55,7 +55,7 @@ describe("useCreateCategory", () => {
 
     expect(create).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeCategoriesKey("lr-market"),
+      queryKey: storeCategoriesKey(),
     });
   });
 

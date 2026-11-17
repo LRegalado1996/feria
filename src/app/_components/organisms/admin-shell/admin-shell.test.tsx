@@ -3,26 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, test, vi } from "vitest";
 
+import type { AdminSection } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
-import type { UserRole } from "@/lib/schemas/access";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { server } from "@/test/msw";
 
-import { AdminShell, type AdminLocation } from "./admin-shell";
+import { AdminShell } from "./admin-shell";
 
-// The badge polls the API and has its own tests; here it shows the store
-// it was given and says the label, as the real one names the link.
+// The badge polls the API and has its own tests; here it only says the
+// label, as the real one names the link.
 vi.mock("@/app/_components/molecules/orders-pending-badge", () => ({
-  OrdersPendingBadge: ({
-    label,
-    storeSlug,
-  }: {
-    label: string;
-    storeSlug: string;
-  }) => (
-    <span data-store={storeSlug} data-testid="orders-pending-badge">
-      {label}
-    </span>
+  OrdersPendingBadge: ({ label }: { label: string }) => (
+    <span data-testid="orders-pending-badge">{label}</span>
   ),
 }));
 
@@ -32,25 +24,12 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-const LR_MARKET = { name: "LR Market", slug: "lr-market" };
-const SAMPLE = { name: "Sample Store", slug: "sample-store" };
-
-function inStore(
-  section: Extract<AdminLocation, { kind: "store" }>["section"] = "products"
-): AdminLocation {
-  return { kind: "store", section, store: LR_MARKET };
-}
-
 function setup({
   locale = "en",
-  location = inStore(),
-  role = "member",
-  stores = [LR_MARKET],
+  section = "products",
 }: {
   locale?: Locale;
-  location?: AdminLocation;
-  role?: UserRole;
-  stores?: { name: string; slug: string }[];
+  section?: AdminSection;
 } = {}) {
   server.use(
     http.post("*/api/auth/sign-out", () => HttpResponse.json({ success: true }))
@@ -64,9 +43,7 @@ function setup({
     <AdminShell
       dictionary={DICTIONARIES[locale].admin}
       locale={locale}
-      location={location}
-      role={role}
-      stores={stores}
+      section={section}
     >
       <p>Section content</p>
     </AdminShell>,
@@ -118,213 +95,70 @@ describe("AdminShell", () => {
       "en",
       "Admin sections",
       [
-        ["Articles", "/en/admin/lr-market/products", null],
-        ["Categories", "/en/admin/lr-market/categories", null],
-        ["Filters", "/en/admin/lr-market/filters", null],
-        ["Orders", "/en/admin/lr-market/orders", "page"],
-        ["Home", "/en/admin/lr-market/home", null],
-        ["Settings", "/en/admin/lr-market/settings", null],
-        ["Users", "/en/admin/lr-market/users", null],
+        ["Articles", "/en/admin/products", null],
+        ["Categories", "/en/admin/categories", null],
+        ["Filters", "/en/admin/filters", null],
+        ["Orders", "/en/admin/orders", "page"],
+        ["Home", "/en/admin/home", null],
+        ["Settings", "/en/admin/settings", null],
+        ["Users", "/en/admin/users", null],
+        ["Metrics", "/en/admin/metrics", null],
       ],
     ],
     [
       "es",
       "Secciones del panel",
       [
-        ["Artículos", "/admin/lr-market/products", null],
-        ["Categorías", "/admin/lr-market/categories", null],
-        ["Filtros", "/admin/lr-market/filters", null],
-        ["Pedidos", "/admin/lr-market/orders", "page"],
-        ["Inicio", "/admin/lr-market/home", null],
-        ["Ajustes", "/admin/lr-market/settings", null],
-        ["Usuarios", "/admin/lr-market/users", null],
+        ["Artículos", "/admin/products", null],
+        ["Categorías", "/admin/categories", null],
+        ["Filtros", "/admin/filters", null],
+        ["Pedidos", "/admin/orders", "page"],
+        ["Inicio", "/admin/home", null],
+        ["Ajustes", "/admin/settings", null],
+        ["Usuarios", "/admin/users", null],
+        ["Métricas", "/admin/metrics", null],
       ],
     ],
   ] as const)(
-    "in %s, lists the store's seven sections, the one on screen current",
+    "in %s, lists the eight sections, the one on screen current",
     (locale, name, expected) => {
-      const { links } = setup({ locale, location: inStore("orders") });
+      const { links } = setup({ locale, section: "orders" });
 
       expect(links(name)).toEqual(expected);
     }
   );
 
-  test("titles the store's navigation with the store's name", () => {
-    setup();
+  test("has one navigation, the same for every login: no platform area", () => {
+    setup({ section: "metrics" });
 
     expect(
-      screen.getByRole("navigation", { name: "Admin sections" })
-    ).toHaveTextContent(/^LR Market/);
+      screen
+        .getAllByRole("navigation")
+        .map((nav) => nav.getAttribute("aria-label"))
+    ).toEqual(["Admin sections"]);
+    expect(screen.queryByText("Platform")).not.toBeInTheDocument();
   });
 
-  test("shows the store's orders still to pack inside the orders link, and in no other", () => {
-    setup({ location: inStore("categories") });
+  test("shows the orders still to pack inside the orders link, and in no other", () => {
+    setup({ section: "categories" });
 
     const badges = screen.getAllByTestId("orders-pending-badge");
-    expect(
-      badges.map((badge) => [badge.dataset.store, badge.textContent])
-    ).toEqual([["lr-market", "Orders"]]);
+    expect(badges.map((badge) => badge.textContent)).toEqual(["Orders"]);
     expect(screen.getByRole("link", { name: "Orders" })).toContainElement(
       badges[0] ?? null
     );
   });
 
-  test("shows no orders count outside a store", () => {
-    setup({ location: { kind: "landing" } });
-
-    expect(
-      screen.queryByTestId("orders-pending-badge")
-    ).not.toBeInTheDocument();
-  });
-
-  test("shows a member no platform navigation", () => {
-    setup({ role: "member" });
-
-    expect(
-      screen.queryByRole("navigation", { name: "Platform sections" })
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("Platform")).not.toBeInTheDocument();
-  });
-
-  test.each([
-    [
-      "en",
-      "Platform sections",
-      [
-        ["Stores", "/en/admin/platform/stores", null],
-        ["Users", "/en/admin/platform/users", "page"],
-        ["Metrics", "/en/admin/platform/metrics", null],
-      ],
-    ],
-    [
-      "es",
-      "Secciones de la plataforma",
-      [
-        ["Tiendas", "/admin/platform/stores", null],
-        ["Usuarios", "/admin/platform/users", "page"],
-        ["Métricas", "/admin/platform/metrics", null],
-      ],
-    ],
-  ] as const)(
-    "in %s, shows a superadmin in the platform its sections, without a store's",
-    (locale, name, expected) => {
-      const { links } = setup({
-        locale,
-        location: { kind: "platform", section: "users" },
-        role: "superadmin",
-      });
-
-      expect(links(name)).toEqual(expected);
-      expect(
-        screen
-          .getAllByRole("navigation")
-          .map((nav) => nav.getAttribute("aria-label"))
-      ).toEqual([name]);
-    }
-  );
-
-  test("shows a superadmin in a store both navigations, no platform section current", () => {
-    const { links } = setup({ role: "superadmin" });
-
-    expect(links("Admin sections")[0]).toEqual([
-      "Articles",
-      "/en/admin/lr-market/products",
-      "page",
-    ]);
-    expect(links("Platform sections").map((link) => link[2])).toEqual([
-      null,
-      null,
-      null,
-    ]);
-  });
-
-  test("shows a member of one store that store's name, without a switcher", () => {
-    setup({ location: { kind: "landing" }, stores: [SAMPLE] });
-
-    expect(screen.queryByTestId("store-switcher")).not.toBeInTheDocument();
-    expect(screen.getByText("Sample Store")).toHaveTextContent(
-      /^Sample Store$/
-    );
-    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
-  });
-
-  test("shows a member of one store the current store's name in it", () => {
+  test("keeps the banner to the logo and the controls: no store to name", () => {
     setup();
 
-    expect(screen.queryByTestId("store-switcher")).not.toBeInTheDocument();
-    expect(
-      within(screen.getByRole("banner")).getByText("LR Market")
-    ).toHaveTextContent(/^LR Market$/);
-  });
-
-  test("offers a member of several stores the switcher, keeping the section", async () => {
-    const { user } = setup({
-      location: inStore("settings"),
-      stores: [LR_MARKET, SAMPLE],
-    });
-
-    await user.click(
-      screen.getByRole("button", { name: "Switch store: LR Market" })
-    );
-
-    expect(
-      within(screen.getByRole("menu"))
-        .getAllByRole("menuitem")
-        .map((link) => [
-          link.textContent,
-          link.getAttribute("href"),
-          link.getAttribute("aria-current"),
-        ])
-    ).toEqual([
-      ["LR Market", "/en/admin/lr-market/settings", "page"],
-      ["Sample Store", "/en/admin/sample-store/settings", null],
-    ]);
-  });
-
-  test("offers a superadmin with one store the switcher, opening stores on their articles outside a store", async () => {
-    const { user } = setup({
-      locale: "es",
-      location: { kind: "platform", section: "stores" },
-      role: "superadmin",
-      stores: [SAMPLE],
-    });
-
-    const trigger = screen.getByRole("button", {
-      name: "Cambiar de tienda: Tiendas",
-    });
-    expect(trigger).toHaveTextContent(/^Tiendas$/);
-
-    await user.click(trigger);
-
-    expect(
-      within(screen.getByRole("menu"))
-        .getAllByRole("menuitem")
-        .map((link) => [link.textContent, link.getAttribute("href")])
-    ).toEqual([["Sample Store", "/admin/sample-store/products"]]);
-  });
-
-  test("shows a superadmin with no stores neither a switcher nor a store name", () => {
-    setup({
-      location: { kind: "platform", section: "stores" },
-      role: "superadmin",
-      stores: [],
-    });
-
     const banner = screen.getByRole("banner");
-    expect(screen.queryByTestId("store-switcher")).not.toBeInTheDocument();
+    expect(
+      within(banner).getByRole("img", { name: "LR Market" })
+    ).toBeInTheDocument();
     expect(
       [...banner.querySelectorAll("p")].map((line) => line.textContent)
     ).toEqual([]);
-  });
-
-  test("names the only store of a member on the landing in a line of the banner", () => {
-    setup({ location: { kind: "landing" }, stores: [SAMPLE] });
-
-    expect(
-      [...screen.getByRole("banner").querySelectorAll("p")].map(
-        (line) => line.textContent
-      )
-    ).toEqual(["Sample Store"]);
   });
 
   test("speaks Spanish in its own chrome", () => {

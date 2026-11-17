@@ -48,7 +48,6 @@ export interface StoreArticleProps {
   copy: Dictionary["storefront"];
   locale: Locale;
   related: StoreRelatedArticle[];
-  store: { slug: string };
   /** The store's chat with the article pre-written, when it has WhatsApp. */
   whatsappHref: string | null;
 }
@@ -68,12 +67,11 @@ function StoreArticle({
   copy,
   locale,
   related,
-  store,
   whatsappHref,
 }: StoreArticleProps) {
-  const home = localizePath(`/${store.slug}`, locale);
-  const catalog = localizePath(`/${store.slug}/products`, locale);
-  const path = localizePath(`/${store.slug}/products/${article.slug}`, locale);
+  const home = localizePath("/", locale);
+  const catalog = localizePath("/products", locale);
+  const path = localizePath(`/products/${article.slug}`, locale);
   const labels = { card: copy.articleCard, price: copy.price };
 
   return (
@@ -137,7 +135,6 @@ function StoreArticle({
             <StoreArticlePurchase
               priceAmount={article.priceAmount}
               productId={article.id}
-              storeSlug={store.slug}
             />
           ) : (
             <p className="text-base">{copy.article.unavailableBody}</p>
@@ -186,17 +183,13 @@ function StoreArticle({
                         name={item.title}
                         priceAmount={item.priceAmount}
                         productId={item.id}
-                        storeSlug={store.slug}
                       />
                     ) : undefined
                   }
                   amount={item.priceAmount}
                   currency={item.currencyCode}
                   headingLevel="h3"
-                  href={localizePath(
-                    `/${store.slug}/products/${item.slug}`,
-                    locale
-                  )}
+                  href={localizePath(`/products/${item.slug}`, locale)}
                   image={
                     item.cover
                       ? { alt: item.cover.alt, src: item.cover.url }

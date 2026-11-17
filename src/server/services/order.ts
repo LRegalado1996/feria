@@ -174,7 +174,7 @@ export async function createOrder(
     clientKey: string | null;
     /** The moment the order is taken at; the database's clock unless given. */
     now?: Date;
-    values: Omit<CreateOrderValues, "storeSlug">;
+    values: CreateOrderValues;
   }
 ) {
   return await db.transaction(async (tx) => {
@@ -245,13 +245,10 @@ export async function createOrder(
     // The store's currency, read here and kept from changing until the
     // order is written: read before the transaction, a change committing
     // meanwhile would pair the old currency with the new prices.
-    // Active too: a deactivation that committed while this order waited on
-    // its locks closes the store to it, and the share lock keeps one from
-    // committing until the order is written.
     const [shop] = await tx
       .select({ currencyCode: store.currencyCode })
       .from(store)
-      .where(and(eq(store.id, storeId), eq(store.isActive, true)))
+      .where(eq(store.id, storeId))
       .for("share");
 
     if (!shop) {

@@ -16,7 +16,6 @@ const INPUT = {
   id: 5,
   nameEn: "Necklaces",
   nameEs: "Collares",
-  storeSlug: "lr-market",
 };
 
 function setup({ fails = false }: { fails?: boolean } = {}) {
@@ -32,7 +31,7 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
   );
   const wrapper = createQueryWrapper();
   const invalidateQueries = vi.spyOn(wrapper.queryClient, "invalidateQueries");
-  const { result } = renderHook(() => useRenameCategory("lr-market"), {
+  const { result } = renderHook(() => useRenameCategory(), {
     wrapper,
   });
   const metas = () =>
@@ -55,7 +54,7 @@ describe("useRenameCategory", () => {
 
     expect(rename).toHaveBeenCalledExactlyOnceWith(INPUT);
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
-      queryKey: storeCategoriesKey("lr-market"),
+      queryKey: storeCategoriesKey(),
     });
   });
 

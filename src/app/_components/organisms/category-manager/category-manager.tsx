@@ -51,10 +51,6 @@ import { cn } from "@/lib/utils";
 
 type StoreCategory = Awaited<ReturnType<typeof client.category.list>>[number];
 
-export interface CategoryManagerProps {
-  storeSlug: string;
-}
-
 /** A failed save, as the form shows it: a taken name, or anything else. */
 function toFormResult(error: unknown, action: string): CategoryFormResult {
   if (error instanceof ORPCError && error.code === "CONFLICT") {
@@ -66,16 +62,16 @@ function toFormResult(error: unknown, action: string): CategoryFormResult {
 }
 
 /**
- * A store's categories on one screen (FER-016): add inline, rename in both
+ * The store's categories on one screen (FER-016): add inline, rename in both
  * languages, reorder by dragging (or with the buttons, or the keyboard on the
  * handle), and delete, moving the articles of a category that has some.
  */
-function CategoryManager({ storeSlug }: CategoryManagerProps) {
+function CategoryManager() {
   const { admin, common } = useDictionary();
   const copy = admin.categories;
-  const categories = useStoreCategories(storeSlug);
-  const create = useCreateCategory(storeSlug);
-  const reorder = useReorderCategories(storeSlug);
+  const categories = useStoreCategories();
+  const create = useCreateCategory();
+  const reorder = useReorderCategories();
   const [announcement, setAnnouncement] = useState("");
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -98,7 +94,6 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
       try {
         await reorder.mutateAsync({
           ids: next.map((row) => row.id),
-          storeSlug,
         });
       } catch (error) {
         reportError(error, { action: "Category.reorder" });
@@ -137,7 +132,7 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
         <CategoryForm
           onSave={async (names) => {
             try {
-              await create.mutateAsync({ ...names, storeSlug });
+              await create.mutateAsync(names);
               toast.success(copy.toasts.created);
               return "saved";
             } catch (error) {
@@ -185,7 +180,6 @@ function CategoryManager({ storeSlug }: CategoryManagerProps) {
           countLabel={countLabel}
           move={move}
           rows={categories.data}
-          storeSlug={storeSlug}
           titleRef={titleRef}
         />
       ) : null}
@@ -197,13 +191,11 @@ function CategoryList({
   countLabel,
   move,
   rows,
-  storeSlug,
   titleRef,
 }: {
   countLabel: (count: number) => string;
   move: (rows: StoreCategory[], from: number, to: number) => void;
   rows: StoreCategory[];
-  storeSlug: string;
   titleRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const { admin } = useDictionary();
@@ -288,7 +280,6 @@ function CategoryList({
               }}
               others={rows.filter((other) => other.id !== row.id)}
               row={row}
-              storeSlug={storeSlug}
               titleRef={titleRef}
             />
           ))}
@@ -305,7 +296,6 @@ function CategoryRow({
   onMove,
   others,
   row,
-  storeSlug,
   titleRef,
 }: {
   countLabel: string;
@@ -314,14 +304,13 @@ function CategoryRow({
   onMove: (offset: number) => void;
   others: StoreCategory[];
   row: StoreCategory;
-  storeSlug: string;
   /** Where focus goes once the category is deleted and its row is gone. */
   titleRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const { admin } = useDictionary();
   const copy = admin.categories;
-  const rename = useRenameCategory(storeSlug);
-  const remove = useDeleteCategory(storeSlug);
+  const rename = useRenameCategory();
+  const remove = useDeleteCategory();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -364,7 +353,7 @@ function CategoryRow({
           }}
           onSave={async (names) => {
             try {
-              await rename.mutateAsync({ ...names, id: row.id, storeSlug });
+              await rename.mutateAsync({ ...names, id: row.id });
               setEditing(false);
               toast.success(copy.toasts.renamed);
               return "saved";
@@ -459,7 +448,7 @@ function CategoryRow({
                 // Awaited here, not in a per-call callback: the list read
                 // after the deletion unmounts this row, and TanStack runs no
                 // per-call callback for an unmounted component.
-                await remove.mutateAsync({ id: row.id, moveToId, storeSlug });
+                await remove.mutateAsync({ id: row.id, moveToId });
                 // Closed first: while open, the dialog's focus trap would pull
                 // focus back into it.
                 flushSync(() => {

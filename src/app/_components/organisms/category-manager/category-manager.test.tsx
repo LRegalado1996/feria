@@ -20,8 +20,6 @@ vi.mock("@/lib/orpc/client", async () => {
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
-const STORE_SLUG = "lr-market";
-
 function makeRow(
   id: number,
   nameEs: string,
@@ -116,7 +114,7 @@ function setup({ list = ROWS, locale = "en", writes = {} }: SetupOptions = {}) {
   }
 
   const user = userEvent.setup();
-  renderWithI18n(<CategoryManager storeSlug={STORE_SLUG} />, {
+  renderWithI18n(<CategoryManager />, {
     locale,
     wrapper: Providers,
   });
@@ -167,9 +165,7 @@ describe("CategoryManager", () => {
     expect(skeleton).toHaveTextContent(/^Loading$/u);
     expect(screen.queryByTestId("category-list")).toBeNull();
     await waitFor(() => {
-      expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: STORE_SLUG,
-      });
+      expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
     });
   });
 
@@ -186,9 +182,7 @@ describe("CategoryManager", () => {
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     await shown();
-    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: STORE_SLUG,
-    });
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -213,9 +207,7 @@ describe("CategoryManager", () => {
     );
     expect(row("aros")).toHaveTextContent(/^Aros3 articles$/u);
     expect(row("pulseras")).toHaveTextContent(/^Pulseras0 articles$/u);
-    expect(spies.list).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: STORE_SLUG,
-    });
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   test("names every row's controls after its category", async () => {
@@ -246,13 +238,9 @@ describe("CategoryManager", () => {
     expect(spies.create).toHaveBeenCalledExactlyOnceWith({
       nameEn: null,
       nameEs: "Anillos",
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
-      expect(spies.list.mock.calls).toEqual([
-        [{ storeSlug: STORE_SLUG }],
-        [{ storeSlug: STORE_SLUG }],
-      ]);
+      expect(spies.list.mock.calls).toEqual([[undefined], [undefined]]);
     });
     expect(screen.getByLabelText(/^Name in Spanish/u)).toHaveValue("");
   });
@@ -275,7 +263,6 @@ describe("CategoryManager", () => {
       expect(spies.create).toHaveBeenCalledExactlyOnceWith({
         nameEn: null,
         nameEs: "Anillos",
-        storeSlug: STORE_SLUG,
       });
     });
   });
@@ -296,7 +283,6 @@ describe("CategoryManager", () => {
       expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
         id: 3,
         moveToId: null,
-        storeSlug: STORE_SLUG,
       });
     });
     expect(
@@ -367,7 +353,6 @@ describe("CategoryManager", () => {
       id: 1,
       nameEn: null,
       nameEs: "Collares",
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(within(row("collares")).queryByRole("textbox")).toBeNull();
@@ -471,7 +456,6 @@ describe("CategoryManager", () => {
       await waitFor(() => {
         expect(spies.reorder).toHaveBeenCalledExactlyOnceWith({
           ids,
-          storeSlug: STORE_SLUG,
         });
       });
     }
@@ -548,7 +532,7 @@ describe("CategoryManager", () => {
       })
     );
     await waitFor(() => {
-      expect(received).toEqual([{ ids: [2, 1, 3], storeSlug: STORE_SLUG }]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }]);
     });
     await user.click(
       within(row("pulseras")).getByRole("button", { name: "Move up: Pulseras" })
@@ -560,10 +544,7 @@ describe("CategoryManager", () => {
     failFirst();
 
     await waitFor(() => {
-      expect(received).toEqual([
-        { ids: [2, 1, 3], storeSlug: STORE_SLUG },
-        { ids: [2, 3, 1], storeSlug: STORE_SLUG },
-      ]);
+      expect(received).toEqual([{ ids: [2, 1, 3] }, { ids: [2, 3, 1] }]);
     });
     await waitFor(() => {
       expect(order()).toEqual(["Aros", "Pulseras", "Collares"]);
@@ -589,7 +570,6 @@ describe("CategoryManager", () => {
     await waitFor(() => {
       expect(spies.reorder).toHaveBeenCalledExactlyOnceWith({
         ids: [2, 1, 3],
-        storeSlug: STORE_SLUG,
       });
     });
     expect(order()).toEqual(["Aros", "Collares", "Pulseras"]);
@@ -624,7 +604,7 @@ describe("CategoryManager", () => {
     await user.keyboard("{ArrowDown}");
     act(() => {
       queryClient.setQueryData(
-        ["category", "list", { input: { storeSlug: STORE_SLUG } }],
+        ["category", "list", { input: undefined }],
         [ROWS[1], ROWS[2]]
       );
     });
@@ -659,7 +639,6 @@ describe("CategoryManager", () => {
     expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
       id: 2,
       moveToId: 3,
-      storeSlug: STORE_SLUG,
     });
     await waitFor(() => {
       expect(screen.queryByTestId("delete-category-dialog")).toBeNull();
@@ -684,7 +663,6 @@ describe("CategoryManager", () => {
       expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
         id: 3,
         moveToId: null,
-        storeSlug: STORE_SLUG,
       });
     });
   });
@@ -886,7 +864,6 @@ describe("CategoryManager", () => {
     expect(spies.delete).toHaveBeenCalledExactlyOnceWith({
       id: 3,
       moveToId: null,
-      storeSlug: STORE_SLUG,
     });
   });
 

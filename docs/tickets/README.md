@@ -46,7 +46,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-011](FER-011-image-uploads.md)            | Image upload pipeline                              | P0       | todo   |
 | [FER-012](FER-012-remove-post-demo.md)         | Remove the posts demo                              | P1       | done   |
 | [FER-033](FER-033-article-filters.md)          | Article filters: color and other attributes        | P0       | done   |
-| [FER-038](FER-038-single-store.md)             | One store, one admin role                          | P0       | todo   |
+| [FER-038](FER-038-single-store.md)             | One store, one admin role                          | P0       | done   |
 | [FER-041](FER-041-drop-unread-schema.md)       | Drop what nothing reads any more                   | P2       | todo   |
 
 ### M3 Admin
@@ -105,7 +105,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 005, 008 → 021 → 023, 024
 010 → 025 → 026 → 027 → 028
 012, 027 → 038 → 039 → 040
-012 → 041
+038 → 041
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
 024 → 029 → 030

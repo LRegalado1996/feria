@@ -12,18 +12,18 @@ type StoreAttributes = Awaited<ReturnType<typeof client.attribute.list>>;
  * Puts the filters in a new order at once on screen, then on the server; a
  * refused or failed save puts the previous order back.
  */
-export function useReorderAttributes(storeSlug: string) {
+export function useReorderAttributes() {
   const queryClient = useQueryClient();
-  const queryKey = storeAttributesKey(storeSlug);
+  const queryKey = storeAttributesKey();
   // The order of the last move made, which every save that went through
   // shows again.
   const latest = useRef<number[] | null>(null);
 
   return useMutation({
     ...orpc.attribute.reorder.mutationOptions(),
-    // One move at a time per store, shared with the values' moves: two in
-    // flight could land in the other order.
-    scope: { id: `attribute-reorder:${storeSlug}` },
+    // One move at a time, shared with the values' moves: two in flight
+    // could land in the other order.
+    scope: { id: "attribute-reorder" },
     // The screen reports a failure itself, once.
     meta: { suppressGlobalErrorReport: true },
     onMutate: async ({ ids }) => {

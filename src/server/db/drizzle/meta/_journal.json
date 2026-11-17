@@ -85,6 +85,13 @@
       "when": 1794803149356,
       "tag": "0011_big_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794805853002,
+      "tag": "0012_outstanding_madame_masque",
+      "breakpoints": true
     }
   ]
 }

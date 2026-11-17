@@ -11,7 +11,6 @@ function makeValues(overrides: Record<string, unknown> = {}) {
     email: "Owner@Example.com ",
     name: " Store Owner ",
     password: "synthetic-pass-123",
-    role: "member" as const,
     ...overrides,
   };
 }
@@ -65,14 +64,13 @@ function setup({
 }
 
 describe("createAccount", () => {
-  test("writes the user with its role and a hashed credential in one transaction, normalized", async () => {
+  test("writes the user and a hashed credential in one transaction, normalized", async () => {
     const { create, db, hash, tx } = setup();
 
-    await expect(create({ role: "superadmin" })).resolves.toEqual({
+    await expect(create()).resolves.toEqual({
       email: "owner@example.com",
       id: "generated-user",
       name: "Store Owner",
-      role: "superadmin",
     });
     expect(hash).toHaveBeenCalledExactlyOnceWith("synthetic-pass-123");
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
@@ -87,7 +85,6 @@ describe("createAccount", () => {
           emailVerified: false,
           id: "generated-user",
           name: "Store Owner",
-          role: "superadmin",
         },
       ],
       [
@@ -99,6 +96,21 @@ describe("createAccount", () => {
           userId: "generated-user",
         },
       ],
+    ]);
+  });
+
+  test("never writes a role, even when the values carry one: every login is an admin", async () => {
+    const { create, tx } = setup();
+
+    await create({ role: "superadmin" });
+
+    expect(tx.$["insert.values"].mock.calls[0]).toEqual([
+      {
+        email: "owner@example.com",
+        emailVerified: false,
+        id: "generated-user",
+        name: "Store Owner",
+      },
     ]);
   });
 
@@ -144,7 +156,6 @@ describe("createAccount", () => {
     ["a password one character short", { password: "1234567" }],
     ["a blank name", { name: "   " }],
     ["an email that is not one", { email: "owner" }],
-    ["a role that does not exist", { role: "owner" }],
   ])(
     "refuses %s with BAD_REQUEST before touching the database",
     async (_case, overrides) => {
@@ -152,7 +163,7 @@ describe("createAccount", () => {
 
       await expect(create(overrides)).rejects.toMatchObject({
         code: "BAD_REQUEST",
-        message: "The account's email, name, password or role is not valid",
+        message: "The account's email, name or password is not valid",
       });
       expect(db.$.transaction).not.toHaveBeenCalled();
     }

@@ -49,7 +49,7 @@ function setup({ ids = [4, 9] }: { ids?: number[] } = {}) {
   const wrapper = createQueryWrapper();
   const { rerender, result } = renderHook(
     ({ current }: { current: number[] }) =>
-      useCartProducts({ ids: current, locale: "es", storeSlug: "lr-market" }),
+      useCartProducts({ ids: current, locale: "es" }),
     { initialProps: { current: ids }, wrapper }
   );
 
@@ -81,7 +81,6 @@ describe("useCartProducts", () => {
     expect(cartProducts).toHaveBeenCalledExactlyOnceWith({
       ids: [4, 9],
       locale: "es",
-      storeSlug: "lr-market",
     });
   });
 
@@ -107,7 +106,6 @@ describe("useCartProducts", () => {
       expect(cartProducts).toHaveBeenLastCalledWith({
         ids: [9],
         locale: "es",
-        storeSlug: "lr-market",
       });
     });
     expect(result.current.isPlaceholderData).toBe(true);

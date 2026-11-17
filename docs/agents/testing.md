@@ -32,9 +32,7 @@ function setup({ signedIn = true } = {}) {
 test("refuses a signed-out caller before touching the database", async () => {
   const { db, create } = setup({ signedIn: false });
 
-  await expect(
-    create({ nameEs: "Collares", storeSlug: "lr-market" })
-  ).rejects.toMatchObject({
+  await expect(create({ nameEs: "Collares" })).rejects.toMatchObject({
     code: "UNAUTHORIZED",
     message: "Unauthorized",
   });
@@ -84,6 +82,7 @@ And required:
 - Navigation: spy on `window.location.assign` (`vi.spyOn(window.location, "assign").mockImplementation(() => undefined)`); auth changes reload the page instead of calling the router (`docs/agents/nextjs.md` § Navigation).
 - Module mocking: `vi.mock()`, which Vitest hoists above the imports, so the module under test is imported statically. A value the factory uses comes from `vi.hoisted()`.
 - Clock: `vi.setSystemTime(date)` freezes `Date` for the test; `setup-common.ts` restores it.
+- Request-time reads: code that awaits `connection()` before a read is tested with `holdRequest(connection)` from `@/test/connection`, which keeps the mocked `connection()` pending until `arrive()`. Start the work, `await settle()`, assert the read has not happened, then `arrive()` and await the result. Call order alone (`invocationCallOrder`) stays green when the `await` is dropped.
 - Hydration: `collectHydrationErrors(element, { serverNowMs, clientNowMs })` from `@/test/hydration` server-renders at one instant, hydrates at a later one and returns React's mismatch errors; `render` never hydrates (`docs/agents/nextjs.md` § Hydration).
 - Globals happy-dom lacks: `stubIntersectionObserver()` from `@/test/intersection-observer` returns the observers to drive by hand. `vi.stubGlobal` ends with its test (`unstubGlobals`).
 - Reduced motion: `stubReducedMotion(initial)` from `@/test/reduced-motion` answers `matchMedia` and flips the setting with `set()`. happy-dom lays nothing out, so a component that reads geometry (`molecules/store-slider`) gets `clientWidth`, `scrollWidth` and `offsetLeft` defined by hand in its test.
@@ -95,7 +94,7 @@ And required:
 - Cover real database operations, auth flows and cross-service interactions. A multi-step write also gets the two-writer test in `docs/agents/database.md`.
 - **A database per worker.** `src/server/test/integration-global-setup.ts` clones the migrated database in `DATABASE_URL` once per Vitest worker (`<db>_w1` … `<db>_wN`, N = `min(8, cores)`) and drops the clones at the end; `integration-worker-database.ts` points each worker at its own. Files running at the same time never share a row, so they run in parallel. Cloning needs the template idle, so the setup closes other connections to it (a dev server's pool reconnects on its next query), and a second run against the same database waits for the first (a session advisory lock, released if a run dies).
 - **Fails closed.** No `DATABASE_URL`, no run: the global setup throws instead of skipping. Never `describe.skipIf(!dbAvailable)`: a broken database must be a red job, not a green one with zero tests.
-- **Own your rows.** Files that share a worker run back to back against one clone, so every file seeds what it reads (a fresh user per test: `randomUUID()` in the email), asserts only on its own rows (a store of its own, or a list filtered by the ids it created), and deletes what it created in `afterEach` by the captured ids (deleting a store cascades to its catalog and orders, a user to its sessions and accounts). Never by name prefix or `LIKE`.
+- **Own your rows.** Files that share a worker run back to back against one clone, so every file seeds what it reads (a fresh user per test: `randomUUID()` in the email), asserts only on its own rows (a list filtered by the ids it created: every file shares the one store the migrations create, FER-038), and deletes what it created in `afterEach` by the captured ids (deleting a category or an article cascades to its texts, a user to its sessions and accounts; never the store). Never by name prefix or `LIKE`.
 - CI runs them in their own job, against a Postgres service, in parallel with the unit tests.
 - Locally: `pnpm test:integration` starts this worktree's Postgres first. The config reads `DATABASE_URL` from `.env` unless it is already exported.
 
@@ -110,6 +109,6 @@ Readiness helpers, the interaction races and how to diagnose a failing spec: `sr
 - Page objects read the interface in Spanish, the language of an unprefixed URL; `tests/i18n.e2e.ts` covers English and the toggle.
 - Also use `getByRole`, `getByLabel`, `getByText` where semantically appropriate. Never raw CSS selectors.
 - No fixed waits: `page.waitForTimeout` proves nothing finished. Wait for the rendered result or the completed response. Only when elapsed time is itself the assertion, keep the window with a trailing `// e2e-elapsed-time: <why>`. The `e2e-fixed-delay` ratchet enforces it (`docs/agents/ci.md` § Structure and ratchets), and `e2e-networkidle` keeps `networkidle` out: an idle network is not a hydrated page.
-- Fully parallel, one user per worker (`fixtures/user.fixture.ts`): a spec asserts only on rows it created and the `db` fixture deletes them by their captured ids (`src/e2e/AGENTS.md`).
+- Parallel, one user per worker (`fixtures/user.fixture.ts`): every spec shares the one store, asserts only on rows it created, and the `db` fixture deletes them by their captured ids. A spec that changes the store's own settings or needs its whole list is a `*.serial.e2e.ts` file, run alone by the `serial` project before the parallel one (`src/e2e/AGENTS.md`).
 - CI runs e2e as one job against the build job's standalone output (`PLAYWRIGHT_SERVER_COMMAND`) and uploads the HTML report only when it fails (`docs/agents/ci.md` § Pipeline).
 - In a worktree, Playwright reuses the app already running at `E2E_BASE_URL` (from `.env`), so run `pnpm dev` first and then `pnpm e2e`. Its fallback `next dev` listens on port 3000, not on the worktree's port.

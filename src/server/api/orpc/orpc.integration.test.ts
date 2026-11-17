@@ -35,7 +35,6 @@ async function setup() {
     email,
     name: "Cache Test",
     password,
-    role: "member",
   });
   createdUserIds.push(created.id);
   const { headers, response } = await auth.api.signInEmail({

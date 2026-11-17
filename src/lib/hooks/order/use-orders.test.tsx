@@ -80,7 +80,7 @@ function setup({
   );
   const wrapper = createQueryWrapper();
   const view = renderHook(
-    ({ current }: { current: OrdersQuery }) => useOrders("lr-market", current),
+    ({ current }: { current: OrdersQuery }) => useOrders(current),
     { initialProps: { current: query }, wrapper }
   );
 
@@ -104,7 +104,6 @@ describe("useOrders", () => {
     expect(list).toHaveBeenCalledExactlyOnceWith({
       q: "ana",
       status: "received",
-      storeSlug: "lr-market",
     });
     expect(result.current.hasNextPage).toBe(true);
   });
@@ -121,7 +120,6 @@ describe("useOrders", () => {
 
     expect(list).toHaveBeenLastCalledWith({
       cursor: CURSOR,
-      storeSlug: "lr-market",
     });
     await waitFor(() => {
       expect(result.current.data?.pages).toEqual([FIRST_PAGE, LAST_PAGE]);
@@ -136,9 +134,8 @@ describe("useOrders", () => {
     });
 
     const [observer] =
-      queryClient
-        .getQueryCache()
-        .findAll({ queryKey: ordersKey("lr-market") })[0]?.observers ?? [];
+      queryClient.getQueryCache().findAll({ queryKey: ordersKey() })[0]
+        ?.observers ?? [];
     expect(observer?.options).toMatchObject({
       refetchInterval: 15_000,
       refetchIntervalInBackground: false,
@@ -161,7 +158,6 @@ describe("useOrders", () => {
     expect(list).toHaveBeenLastCalledWith({
       q: "ana",
       status: "received",
-      storeSlug: "lr-market",
     });
   });
 
@@ -179,7 +175,6 @@ describe("useOrders", () => {
     expect(list).toHaveBeenCalledExactlyOnceWith({
       q: "ana",
       status: "received",
-      storeSlug: "lr-market",
     });
   });
 
@@ -197,7 +192,6 @@ describe("useOrders", () => {
     await waitFor(() => {
       expect(list).toHaveBeenLastCalledWith({
         status: "packed",
-        storeSlug: "lr-market",
       });
     });
     expect(result.current.data?.pages).toEqual([FIRST_PAGE]);
@@ -216,7 +210,7 @@ describe("useOrders", () => {
     expect(result.current.data).toBeUndefined();
   });
 
-  test("keys every list of a store under one prefix, apart from another store's", async () => {
+  test("keys every list under one prefix, whatever its status or search", async () => {
     const { queryClient, result } = setup();
     await waitFor(() => {
       expect(result.current.data?.pages).toEqual([FIRST_PAGE]);
@@ -225,13 +219,8 @@ describe("useOrders", () => {
     expect(
       queryClient
         .getQueryCache()
-        .findAll({ queryKey: ordersKey("lr-market") })
+        .findAll({ queryKey: ordersKey() })
         .map((query) => query.state.data)
     ).toEqual([{ pageParams: [undefined], pages: [FIRST_PAGE] }]);
-    expect(
-      queryClient
-        .getQueryCache()
-        .findAll({ queryKey: ordersKey("tienda-demo") })
-    ).toEqual([]);
   });
 });

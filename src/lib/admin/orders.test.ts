@@ -35,43 +35,39 @@ describe("readOrdersQuery", () => {
 
 describe("ordersPath", () => {
   test.each([
-    ["es", {}, "/admin/lr-market/orders"],
-    ["en", {}, "/en/admin/lr-market/orders"],
-    ["es", { status: "packed" }, "/admin/lr-market/orders?status=packed"],
+    ["es", {}, "/admin/orders"],
+    ["en", {}, "/en/admin/orders"],
+    ["es", { status: "packed" }, "/admin/orders?status=packed"],
     [
       "en",
       { q: " José 099 ", status: "received" },
-      "/en/admin/lr-market/orders?status=received&q=Jos%C3%A9+099",
+      "/en/admin/orders?status=received&q=Jos%C3%A9+099",
     ],
-    ["es", { q: "  " }, "/admin/lr-market/orders"],
+    ["es", { q: "  " }, "/admin/orders"],
   ] as const)("in %s, %j is %s", (locale, query, expected) => {
-    expect(ordersPath("lr-market", locale, query)).toBe(expected);
+    expect(ordersPath(locale, query)).toBe(expected);
   });
 });
 
 describe("orderPath", () => {
   test.each([
-    ["es", "/admin/lr-market/orders/42"],
-    ["en", "/en/admin/lr-market/orders/42"],
+    ["es", "/admin/orders/42"],
+    ["en", "/en/admin/orders/42"],
   ] as const)("in %s is %s", (locale, expected) => {
-    expect(orderPath("lr-market", 42, locale)).toBe(expected);
+    expect(orderPath(42, locale)).toBe(expected);
   });
 
   test.each([
-    ["es", {}, "/admin/lr-market/orders/42"],
-    [
-      "es",
-      { status: "received" },
-      "/admin/lr-market/orders/42?status=received",
-    ],
+    ["es", {}, "/admin/orders/42"],
+    ["es", { status: "received" }, "/admin/orders/42?status=received"],
     [
       "en",
       { q: " Ana 099 ", status: "packed" },
-      "/en/admin/lr-market/orders/42?status=packed&q=Ana+099",
+      "/en/admin/orders/42?status=packed&q=Ana+099",
     ],
-    ["es", { q: "  " }, "/admin/lr-market/orders/42"],
+    ["es", { q: "  " }, "/admin/orders/42"],
   ] as const)("in %s, opened from %j, is %s", (locale, from, expected) => {
-    expect(orderPath("lr-market", 42, locale, from)).toBe(expected);
+    expect(orderPath(42, locale, from)).toBe(expected);
   });
 });
 

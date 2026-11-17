@@ -16,7 +16,6 @@ import {
   listCatalogFiltersSchema,
   listProductsSchema,
   listRelatedProductsSchema,
-  listStoreAttributesSchema,
   renameAttributeSchema,
   renameCategorySchema,
   reorderAttributesSchema,
@@ -44,7 +43,6 @@ function makeProduct(overrides: Record<string, unknown> = {}) {
     categoryId: 1,
     isAvailable: true,
     priceAmount: 129_000,
-    storeSlug: "lr-market",
     translations: [makeTranslation()],
     ...overrides,
   };
@@ -137,14 +135,12 @@ describe("listProductsSchema", () => {
       listProductsSchema.parse({
         locale: "es",
         q: "   ",
-        storeSlug: "lr-market",
       })
     ).toEqual({
       limit: 24,
       locale: "es",
       q: undefined,
       sort: "newest",
-      storeSlug: "lr-market",
     });
   });
 
@@ -155,7 +151,6 @@ describe("listProductsSchema", () => {
         listProductsSchema.safeParse({
           locale: "es",
           sort,
-          storeSlug: "lr-market",
         }).data?.sort
       ).toBe(sort);
     }
@@ -166,7 +161,6 @@ describe("listProductsSchema", () => {
       listProductsSchema.safeParse({
         locale: "es",
         sort,
-        storeSlug: "lr-market",
       }).success
     ).toBe(false);
   });
@@ -242,7 +236,6 @@ describe("listProductsSchema", () => {
     expect(
       listProductsSchema.safeParse({
         locale: "es",
-        storeSlug: "lr-market",
         ...overrides,
       }).success
     ).toBe(accepted);
@@ -259,7 +252,6 @@ describe("listRelatedProductsSchema", () => {
         limit,
         locale: "es",
         slug: "cadena",
-        storeSlug: "lr-market",
       }).limit
     ).toBe(expected);
   });
@@ -270,7 +262,6 @@ describe("listRelatedProductsSchema", () => {
         limit: 13,
         locale: "es",
         slug: "cadena",
-        storeSlug: "lr-market",
       }).success
     ).toBe(false);
   });
@@ -287,7 +278,6 @@ describe("reorderProductImagesSchema", () => {
       reorderProductImagesSchema.safeParse({
         id: 1,
         imageIds,
-        storeSlug: "lr-market",
       }).success
     ).toBe(accepted);
   });
@@ -297,7 +287,6 @@ function makeCategoryNames(overrides: Record<string, unknown> = {}) {
   return {
     nameEn: "Necklaces",
     nameEs: "Collares",
-    storeSlug: "lr-market",
     ...overrides,
   };
 }
@@ -311,7 +300,6 @@ describe("createCategorySchema", () => {
     ).toEqual({
       nameEn: "Necklaces",
       nameEs: "Collares",
-      storeSlug: "lr-market",
     });
   });
 
@@ -353,7 +341,6 @@ describe("renameCategorySchema", () => {
       id: 5,
       nameEn: null,
       nameEs: "Collares",
-      storeSlug: "lr-market",
     });
   });
 
@@ -379,15 +366,12 @@ describe("reorderCategoriesSchema", () => {
     [[true], false],
     [[0], false],
   ])("ids %j are accepted: %s", (ids, accepted) => {
-    expect(
-      reorderCategoriesSchema.safeParse({ ids, storeSlug: "lr-market" }).success
-    ).toBe(accepted);
+    expect(reorderCategoriesSchema.safeParse({ ids }).success).toBe(accepted);
   });
 
   test("names a repeated id in its message", () => {
     const parsed = reorderCategoriesSchema.safeParse({
       ids: [2, 2],
-      storeSlug: "lr-market",
     });
 
     expect(parsed.error?.issues.map((issue) => issue.message)).toEqual([
@@ -407,9 +391,7 @@ describe("deleteCategorySchema", () => {
       { id: 5, moveToId: 6 },
     ],
   ])("reads %j as %j", (input, expected) => {
-    expect(
-      deleteCategorySchema.parse({ ...input, storeSlug: "lr-market" })
-    ).toEqual({ ...expected, storeSlug: "lr-market" });
+    expect(deleteCategorySchema.parse({ ...input })).toEqual({ ...expected });
   });
 
   test.each([
@@ -421,7 +403,6 @@ describe("deleteCategorySchema", () => {
     expect(
       deleteCategorySchema.safeParse({
         id: 5,
-        storeSlug: "lr-market",
         ...overrides,
       }).success
     ).toBe(false);
@@ -494,7 +475,6 @@ describe("catalogFiltersSchema", () => {
       listProductsSchema.parse({
         filters: [{ attribute: " color ", values: ["dorado", " oro-rosa "] }],
         locale: "es",
-        storeSlug: "lr-market",
       }).filters
     ).toEqual([{ attribute: "color", values: ["dorado", "oro-rosa"] }]);
   });
@@ -502,9 +482,9 @@ describe("catalogFiltersSchema", () => {
 
 describe("listCatalogFiltersSchema", () => {
   test.each([
-    [{ locale: "en", storeSlug: "lr-market" }, true],
-    [{ locale: "fr", storeSlug: "lr-market" }, false],
-    [{ locale: "es" }, false],
+    [{ locale: "en" }, true],
+    [{ locale: "fr" }, false],
+    [{}, false],
   ])("%j is accepted: %s", (input, accepted) => {
     expect(listCatalogFiltersSchema.safeParse(input).success).toBe(accepted);
   });
@@ -527,7 +507,6 @@ function makeAttributeNames(overrides: Record<string, unknown> = {}) {
   return {
     nameEn: "Color",
     nameEs: "Color",
-    storeSlug: "lr-market",
     ...overrides,
   };
 }
@@ -538,7 +517,7 @@ describe("createAttributeSchema", () => {
       createAttributeSchema.parse(
         makeAttributeNames({ nameEn: " Colour ", nameEs: "  Color  " })
       )
-    ).toEqual({ nameEn: "Colour", nameEs: "Color", storeSlug: "lr-market" });
+    ).toEqual({ nameEn: "Colour", nameEs: "Color" });
   });
 
   test.each([
@@ -581,14 +560,9 @@ describe("store-scoped filter ids", () => {
       id: 5,
       nameEn: null,
       nameEs: "Color",
-      storeSlug: "lr-market",
     });
-    expect(
-      deleteAttributeSchema.parse({ id: "5", storeSlug: "lr-market" })
-    ).toEqual({ id: 5, storeSlug: "lr-market" });
-    expect(
-      deleteAttributeValueSchema.parse({ id: "6", storeSlug: "lr-market" })
-    ).toEqual({ id: 6, storeSlug: "lr-market" });
+    expect(deleteAttributeSchema.parse({ id: "5" })).toEqual({ id: 5 });
+    expect(deleteAttributeValueSchema.parse({ id: "6" })).toEqual({ id: 6 });
   });
 
   test.each([
@@ -599,17 +573,9 @@ describe("store-scoped filter ids", () => {
   ])("an id of %j is accepted: %s", (id, accepted) => {
     expect([
       renameAttributeSchema.safeParse(makeAttributeNames({ id })).success,
-      deleteAttributeSchema.safeParse({ id, storeSlug: "lr-market" }).success,
-      deleteAttributeValueSchema.safeParse({ id, storeSlug: "lr-market" })
-        .success,
+      deleteAttributeSchema.safeParse({ id }).success,
+      deleteAttributeValueSchema.safeParse({ id }).success,
     ]).toEqual([accepted, accepted, accepted]);
-  });
-
-  test("lists by the store alone", () => {
-    expect(
-      listStoreAttributesSchema.safeParse({ storeSlug: "lr-market" }).success
-    ).toBe(true);
-    expect(listStoreAttributesSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -624,12 +590,10 @@ describe("reorderAttributesSchema and reorderAttributeValuesSchema", () => {
     [[0], false],
   ])("ids %j are accepted: %s", (ids, accepted) => {
     expect([
-      reorderAttributesSchema.safeParse({ ids, storeSlug: "lr-market" })
-        .success,
+      reorderAttributesSchema.safeParse({ ids }).success,
       reorderAttributeValuesSchema.safeParse({
         attributeId: 5,
         ids,
-        storeSlug: "lr-market",
       }).success,
     ]).toEqual([accepted, accepted]);
   });
@@ -643,9 +607,7 @@ describe("reorderAttributesSchema and reorderAttributeValuesSchema", () => {
     ],
   ])("names a repeated id in its message: %#", (schema, input, message) => {
     expect(
-      schema
-        .safeParse({ ...input, storeSlug: "lr-market" })
-        .error?.issues.map((issue) => issue.message)
+      schema.safeParse({ ...input }).error?.issues.map((issue) => issue.message)
     ).toEqual([message]);
   });
 
@@ -659,7 +621,6 @@ describe("reorderAttributesSchema and reorderAttributeValuesSchema", () => {
       reorderAttributeValuesSchema.safeParse({
         attributeId,
         ids: [1],
-        storeSlug: "lr-market",
       }).success
     ).toBe(accepted);
   });
@@ -670,7 +631,6 @@ function makeValue(overrides: Record<string, unknown> = {}) {
     attributeId: 5,
     nameEn: "Gold",
     nameEs: "Dorado",
-    storeSlug: "lr-market",
     swatchColor: "#d4af37",
     ...overrides,
   };
@@ -714,7 +674,6 @@ describe("createAttributeValueSchema and updateAttributeValueSchema", () => {
       attributeId: 5,
       nameEn: null,
       nameEs: "Dorado",
-      storeSlug: "lr-market",
       swatchColor: "#d4af37",
     });
   });
@@ -744,7 +703,6 @@ describe("createAttributeValueSchema and updateAttributeValueSchema", () => {
       id: 21,
       nameEn: "Gold",
       nameEs: "Dorado",
-      storeSlug: "lr-market",
       swatchColor: null,
     });
   });
@@ -765,7 +723,6 @@ describe("setProductAttributeValuesSchema", () => {
     expect(
       setProductAttributeValuesSchema.safeParse({
         id: "5",
-        storeSlug: "lr-market",
         valueIds,
       }).success
     ).toBe(accepted);
@@ -774,7 +731,7 @@ describe("setProductAttributeValuesSchema", () => {
   test("names a repeated value in its message", () => {
     expect(
       setProductAttributeValuesSchema
-        .safeParse({ id: 5, storeSlug: "lr-market", valueIds: [21, 21] })
+        .safeParse({ id: 5, valueIds: [21, 21] })
         .error?.issues.map((issue) => issue.message)
     ).toEqual(["Each value at most once"]);
   });
@@ -783,10 +740,9 @@ describe("setProductAttributeValuesSchema", () => {
     expect(
       setProductAttributeValuesSchema.parse({
         id: "5",
-        storeSlug: "lr-market",
         valueIds: [21, 22],
       })
-    ).toEqual({ id: 5, storeSlug: "lr-market", valueIds: [21, 22] });
+    ).toEqual({ id: 5, valueIds: [21, 22] });
   });
 });
 

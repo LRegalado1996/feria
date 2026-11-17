@@ -168,7 +168,6 @@ function setup({
       firstPage={page}
       heading="Collares"
       query={next}
-      storeSlug="lr-market"
     />
   );
   const view = renderWithI18n(catalog(query, firstPage), {
@@ -233,19 +232,15 @@ describe("StoreCatalog", () => {
           link.getAttribute("aria-current"),
         ])
     ).toEqual([
-      [
-        "Más nuevos",
-        "/lr-market/products?category=collares&color=dorado&q=perla",
-        null,
-      ],
+      ["Más nuevos", "/products?category=collares&color=dorado&q=perla", null],
       [
         "Precio: menor a mayor",
-        "/lr-market/products?category=collares&color=dorado&q=perla&sort=price_asc",
+        "/products?category=collares&color=dorado&q=perla&sort=price_asc",
         "true",
       ],
       [
         "Precio: mayor a menor",
-        "/lr-market/products?category=collares&color=dorado&q=perla&sort=price_desc",
+        "/products?category=collares&color=dorado&q=perla&sort=price_desc",
         null,
       ],
     ]);
@@ -261,7 +256,7 @@ describe("StoreCatalog", () => {
     );
     expect(
       sorts.getByRole("link", { name: "Price: low to high" })
-    ).toHaveAttribute("href", "/en/lr-market/products?sort=price_asc");
+    ).toHaveAttribute("href", "/en/products?sort=price_asc");
   });
 
   test("shares the selection's own link", async () => {
@@ -279,7 +274,7 @@ describe("StoreCatalog", () => {
     await user.click(screen.getByRole("button", { name: "Compartir" }));
 
     expect(writeText).toHaveBeenCalledExactlyOnceWith(
-      "http://localhost:3000/lr-market/products?category=collares&color=dorado&q=perla&sort=price_asc"
+      "http://localhost:3000/products?category=collares&color=dorado&q=perla&sort=price_asc"
     );
   });
 
@@ -360,19 +355,13 @@ describe("StoreCatalog", () => {
           link.getAttribute("href"),
         ])
     ).toEqual([
-      [
-        "Quitar: Collares",
-        "/lr-market/products?color=dorado&q=perla&sort=price_asc",
-      ],
-      [
-        "Quitar: Dorado",
-        "/lr-market/products?category=collares&q=perla&sort=price_asc",
-      ],
+      ["Quitar: Collares", "/products?color=dorado&q=perla&sort=price_asc"],
+      ["Quitar: Dorado", "/products?category=collares&q=perla&sort=price_asc"],
       [
         "Quitar: perla",
-        "/lr-market/products?category=collares&color=dorado&sort=price_asc",
+        "/products?category=collares&color=dorado&sort=price_asc",
       ],
-      ["Limpiar todo", "/lr-market/products?sort=price_asc"],
+      ["Limpiar todo", "/products?sort=price_asc"],
     ]);
   });
 
@@ -402,7 +391,7 @@ describe("StoreCatalog", () => {
     const link = within(first ?? document.body).getByRole("link", {
       name: "Artículo 1",
     });
-    expect(link).toHaveAttribute("href", "/lr-market/products/articulo-1");
+    expect(link).toHaveAttribute("href", "/products/articulo-1");
     // The name's language is on its link; the card keeps the page's.
     expect(link).toHaveAttribute("lang", "es");
     expect(first?.closest("li")).not.toHaveAttribute("lang");
@@ -427,7 +416,7 @@ describe("StoreCatalog", () => {
     const grid = within(screen.getByTestId("store-catalog-grid"));
     expect(grid.getByRole("link", { name: "Artículo 1" })).toHaveAttribute(
       "href",
-      "/en/lr-market/products/articulo-1"
+      "/en/products/articulo-1"
     );
     expect(
       grid.getByRole("button", { name: "Add to cart: Artículo 1" })
@@ -469,7 +458,7 @@ describe("StoreCatalog", () => {
     );
     expect(
       within(empty).getByRole("link", { name: "Ver todo el catálogo" })
-    ).toHaveAttribute("href", "/lr-market/products?sort=price_asc");
+    ).toHaveAttribute("href", "/products?sort=price_asc");
   });
 
   test("shows no load more when there is no next page", () => {
@@ -496,7 +485,6 @@ describe("StoreCatalog", () => {
       locale: "es",
       q: "perla",
       sort: "price_asc",
-      storeSlug: "lr-market",
     });
     expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
   });

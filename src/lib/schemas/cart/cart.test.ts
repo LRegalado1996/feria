@@ -70,7 +70,7 @@ describe("cartItemSchema", () => {
 
 /** The cart's articles as the cart page asks for them. */
 function makeListInput(ids: unknown[]) {
-  return { ids, locale: "es", storeSlug: "lr-market" };
+  return { ids, locale: "es" };
 }
 
 /** `count` distinct ids, from 1. */
@@ -115,13 +115,19 @@ describe("listCartProductsSchema", () => {
     ).toEqual([["ids", "Each article is asked for once"]]);
   });
 
-  test.each([
-    ["another language", { locale: "fr" }],
-    ["a store slug that is not one", { storeSlug: "LR Market" }],
-  ])("refuses %s", (_case, overrides) => {
+  test("refuses another language", () => {
     expect(
-      listCartProductsSchema.safeParse({ ...makeListInput([4]), ...overrides })
+      listCartProductsSchema.safeParse({ ...makeListInput([4]), locale: "fr" })
         .success
     ).toBe(false);
+  });
+
+  test("names no store: one a stale client sends is dropped", () => {
+    expect(
+      listCartProductsSchema.parse({
+        ...makeListInput([4]),
+        storeSlug: "lr-market",
+      })
+    ).toEqual(makeListInput([4]));
   });
 });

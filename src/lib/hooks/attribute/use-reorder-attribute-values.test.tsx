@@ -14,7 +14,7 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const KEY = storeAttributesKey("lr-market");
+const KEY = storeAttributesKey();
 
 const REFUSAL = "Give every value of the filter, once each";
 
@@ -52,7 +52,7 @@ function listWith(colors: number[], sizes: number[] = [81, 82]) {
 const LIST = listWith([71, 72, 73]);
 
 function move(attributeId: number, ids: number[]) {
-  return { attributeId, ids, storeSlug: "lr-market" };
+  return { attributeId, ids };
 }
 
 interface SetupOptions {
@@ -85,8 +85,8 @@ function setup({ answer = "save", list = LIST }: SetupOptions = {}) {
   const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
   const { result } = renderHook(
     () => ({
-      filters: useReorderAttributes("lr-market"),
-      reorder: useReorderAttributeValues("lr-market"),
+      filters: useReorderAttributes(),
+      reorder: useReorderAttributeValues(),
     }),
     { wrapper }
   );
@@ -246,7 +246,7 @@ describe("useReorderAttributeValues", () => {
   test("waits for a move of the filters in flight too: both share the store's queue", async () => {
     const { queue, result } = setup();
     const { answer, received } = holdReorders();
-    const filtersMove = { ids: [8, 7], storeSlug: "lr-market" };
+    const filtersMove = { ids: [8, 7] };
 
     const filters = result.current.filters.mutateAsync(filtersMove);
     const values = result.current.reorder.mutateAsync(move(7, [72, 71, 73]));

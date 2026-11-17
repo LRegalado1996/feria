@@ -8,24 +8,16 @@ import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { STORE_MAIN_ID, StoreHeader } from "./store-header";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/lr-market",
+  usePathname: () => "/",
   useSearchParams: () => new URLSearchParams(),
 }));
 
-function makeStore(overrides: Partial<{ logoUrl: string | null }> = {}) {
-  return { logoUrl: null, name: "LR Market", slug: "lr-market", ...overrides };
-}
-
-function setup({
-  locale = "en",
-  logoUrl = null,
-}: { locale?: Locale; logoUrl?: string | null } = {}) {
+function setup({ locale = "en" }: { locale?: Locale } = {}) {
   renderWithI18n(
     <StoreHeader
       className="custom"
       copy={DICTIONARIES[locale].storefront.shell}
       locale={locale}
-      store={makeStore({ logoUrl })}
     />,
     { locale }
   );
@@ -37,22 +29,22 @@ function setup({
 }
 
 describe("StoreHeader", () => {
-  test("shows the store's name on its home link when it has no logo", () => {
-    const { home } = setup();
+  test.each([
+    ["en", "/en"],
+    ["es", "/"],
+  ] as const)(
+    "in %s, leads home at %s from the brand's mark, named after the brand",
+    (locale, href) => {
+      const { home } = setup({ locale });
 
-    expect(home).toHaveTextContent(/^LR Market$/u);
-    expect(within(home).queryByRole("img")).toBeNull();
-    expect(home).toHaveAttribute("href", "/en/lr-market");
-  });
-
-  test("shows the logo, named by the store, when it has one", () => {
-    const { home } = setup({ logoUrl: "https://cdn.example.com/lr.png" });
-
-    const logo = within(home).getByRole("img", { name: "LR Market" });
-    expect(logo).toHaveAttribute("src", "https://cdn.example.com/lr.png");
-    expect(home).toHaveAccessibleName("LR Market");
-    expect(home).not.toHaveTextContent("LR Market");
-  });
+      const logo = within(home).getByRole("img", { name: "LR Market" });
+      expect(logo).toHaveAttribute("data-slot", "store-logo");
+      expect(logo).toHaveAttribute("data-variant", "mark");
+      expect(logo).toHaveClass("h-10");
+      expect(home).toHaveAccessibleName("LR Market");
+      expect(home).toHaveAttribute("href", href);
+    }
+  );
 
   test("starts with a skip link to the page's main content", () => {
     const { header } = setup();
@@ -64,22 +56,8 @@ describe("StoreHeader", () => {
   });
 
   test.each([
-    [
-      "en",
-      "Store sections",
-      "Home",
-      "/en/lr-market",
-      "Catalog",
-      "/en/lr-market/products",
-    ],
-    [
-      "es",
-      "Secciones de la tienda",
-      "Inicio",
-      "/lr-market",
-      "Catálogo",
-      "/lr-market/products",
-    ],
+    ["en", "Store sections", "Home", "/en", "Catalog", "/en/products"],
+    ["es", "Secciones de la tienda", "Inicio", "/", "Catálogo", "/products"],
   ] as const)(
     "in %s, links home and to the catalog",
     (locale, navigation, homeName, homeHref, catalogName, catalogHref) => {
@@ -102,22 +80,19 @@ describe("StoreHeader", () => {
 
     const field = screen.getByRole("searchbox", { name: "Search the store" });
     expect(field).toHaveAttribute("id", "store-search");
-    expect(field.closest("form")).toHaveAttribute(
-      "action",
-      "/en/lr-market/products"
-    );
+    expect(field.closest("form")).toHaveAttribute("action", "/en/products");
   });
 
-  test("gives the cart the store, and offers the language", () => {
+  test("leads to the cart, and offers the language", () => {
     const { header } = setup({ locale: "es" });
 
     expect(within(header).getByTestId("store-cart-button")).toHaveAttribute(
       "href",
-      "/lr-market/cart"
+      "/cart"
     );
     expect(
       within(header).getByRole("link", { name: "English" })
-    ).toHaveAttribute("href", "/en/lr-market");
+    ).toHaveAttribute("href", "/en");
   });
 
   test("is sticky and takes a className", () => {
@@ -140,9 +115,9 @@ describe("StoreHeader", () => {
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")])
     ).toEqual([
-      ["Inicio", "/lr-market"],
-      ["Catálogo", "/lr-market/products"],
-      ["English", "/en/lr-market"],
+      ["Inicio", "/"],
+      ["Catálogo", "/products"],
+      ["English", "/en"],
     ]);
     expect(
       menu.getByRole("searchbox", { name: "Buscar en la tienda" })

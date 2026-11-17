@@ -40,7 +40,6 @@ export interface StoreCatalogFiltersProps {
   idPrefix: string;
   locale: Locale;
   query: CatalogQuery;
-  storeSlug: string;
 }
 
 /**
@@ -57,9 +56,8 @@ function StoreCatalogFilters({
   idPrefix,
   locale,
   query,
-  storeSlug,
 }: StoreCatalogFiltersProps) {
-  const href = (next: CatalogQuery) => catalogHref(storeSlug, locale, next);
+  const href = (next: CatalogQuery) => catalogHref(locale, next);
 
   return (
     <div
@@ -142,8 +140,8 @@ function StoreCatalogFilters({
                           <span
                             aria-hidden="true"
                             className="size-3 shrink-0 ring-1 ring-store-foreground"
-                            // A store's own color, checked as `#rrggbb` when
-                            // it was saved.
+                            // The value's own swatch, checked as `#rrggbb`
+                            // when it was saved.
                             style={{ backgroundColor: value.swatchColor }}
                           />
                         ) : null}

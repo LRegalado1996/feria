@@ -79,11 +79,12 @@ function createOrpcProxy(segments: string[] = []): unknown {
 
         // The prefix every key of the procedure starts with, its queries
         // and its infinite queries alike, for an invalidation that reaches
-        // both.
+        // both. Without an input it reaches every input, as oRPC's own
+        // (`{}` is a prefix of any object; `{ input: undefined }` is not).
         if (prop === "key") {
           return ({ input }: { input?: unknown } = {}) => [
             ...segments,
-            { input },
+            input === undefined ? {} : { input },
           ];
         }
 

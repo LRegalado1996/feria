@@ -12,8 +12,8 @@ import { orderRouter } from "./order";
 // are `src/server/services/order.test.ts`'s and the access rules
 // `src/server/services/access.test.ts`'s.
 
-// The handle `withStoreAccess` hands its write: distinct from the client, so
-// a write that went through the outer client instead would be caught.
+// The handle `withAdmin` hands its write: distinct from the client, so a
+// write that went through the outer client instead would be caught.
 const { TX } = vi.hoisted(() => ({
   TX: { handle: "the write's transaction" },
 }));
@@ -27,8 +27,8 @@ const services = vi.hoisted(() => ({
     undeliverable: 1,
   })),
   createOrder: vi.fn(async () => ({ code: "ABCDE", token: "the-token" })),
-  findAccessibleStore: vi.fn(),
-  getActiveStoreBySlug: vi.fn(),
+  findAdminStore: vi.fn(),
+  getStore: vi.fn(),
   getOrder: vi.fn(async () => ({ code: "ABCDE", id: 70 })),
   getOrderByToken: vi.fn(async () => ({ code: "ABCDE" })),
   // Vercel BotID's verdict; its own rules are `utils/bot-check.test.ts`'s.
@@ -43,10 +43,10 @@ const services = vi.hoisted(() => ({
     const ip = headers.get("x-real-ip");
     return ip === null ? null : `key-of:${ip}`;
   }),
-  withStoreAccess: vi.fn(
+  withAdmin: vi.fn(
     async (
       _db: unknown,
-      _scope: unknown,
+      _userId: unknown,
       write: (handle: unknown) => Promise<unknown>
     ) => await write(TX)
   ),
@@ -62,7 +62,7 @@ vi.mock("@/server/services/order", () => ({
 }));
 
 vi.mock("@/server/services/store", () => ({
-  getActiveStoreBySlug: services.getActiveStoreBySlug,
+  getStore: services.getStore,
 }));
 
 vi.mock("@/server/api/utils/client-key", () => ({
@@ -83,9 +83,8 @@ vi.mock("@/lib/env/launch", () => ({
 }));
 
 vi.mock("@/server/services/access", () => ({
-  findAccessibleStore: services.findAccessibleStore,
-  getUserRole: vi.fn(),
-  withStoreAccess: services.withStoreAccess,
+  findAdminStore: services.findAdminStore,
+  withAdmin: services.withAdmin,
 }));
 
 vi.mock("@/env", () => ({
@@ -96,8 +95,8 @@ vi.mock("@/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 
-const STORE = { currencyCode: "USD", id: 7, slug: "lr-market" };
-const ACCESS = { storeId: 7, userId: "test-user-id" };
+const STORE = { currencyCode: "USD", id: 7 };
+const USER_ID = "test-user-id";
 const REQUEST_KEY = "11111111-1111-4111-8111-111111111111";
 const TOKEN = "a".repeat(43);
 
@@ -109,29 +108,29 @@ function makeOrderInput(overrides: Record<string, unknown> = {}) {
     locale: "es",
     note: "",
     requestKey: REQUEST_KEY,
-    storeSlug: "lr-market",
     ...overrides,
   };
 }
 
 /**
- * A caller: a shopper by default (signed out), or a member who may work on
- * `lr-market`. The storefront is open and `lr-market` active unless told not.
+ * A caller: a shopper by default (signed out), or a signed-in admin (or a
+ * login the database no longer has). The storefront is open and the store's
+ * row there unless told not.
  */
 function setup({
   bot = false,
   headers = {},
   launched = true,
-  mayWork = true,
+  isLogin = true,
   signedIn = false,
-  storeActive = true,
+  storeExists = true,
 }: {
   bot?: boolean;
   headers?: Record<string, string>;
   launched?: boolean;
-  mayWork?: boolean;
+  isLogin?: boolean;
   signedIn?: boolean;
-  storeActive?: boolean;
+  storeExists?: boolean;
 } = {}) {
   const { mockCtx } = signedIn
     ? createMockContext()
@@ -139,16 +138,14 @@ function setup({
   mockCtx.headers = new Headers(headers);
   services.isStorefrontLaunchedFor.mockReturnValue(launched);
   services.isBotRequest.mockResolvedValue(bot);
-  services.findAccessibleStore.mockResolvedValue(mayWork ? STORE : null);
-  services.getActiveStoreBySlug.mockImplementation(
-    async (_db: unknown, { slug }: { slug: string }) => {
-      if (storeActive && slug === STORE.slug) {
-        return await Promise.resolve(STORE);
-      }
-
-      throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+  services.findAdminStore.mockResolvedValue(isLogin ? STORE : null);
+  services.getStore.mockImplementation(async () => {
+    if (storeExists) {
+      return await Promise.resolve(STORE);
     }
-  );
+
+    throw new ORPCError("NOT_FOUND", { message: "Store not found" });
+  });
   const options = { context: mockCtx as never };
   const procedures = {
     changeStatus: async (input: unknown) =>
@@ -185,7 +182,7 @@ function orderLogFields() {
 const STORE_NOT_FOUND = { code: "NOT_FOUND", message: "Store not found" };
 
 describe("order router: the shopper's side", () => {
-  test("creates the order in the active store, its currency and client key from the server", async () => {
+  test("creates the order in the store, its currency and client key from the server", async () => {
     const { ctx, db, run } = setup({
       headers: {
         "x-e2e-storefront-launched": "true",
@@ -200,9 +197,7 @@ describe("order router: the shopper's side", () => {
     expect(services.isStorefrontLaunchedFor).toHaveBeenCalledExactlyOnceWith(
       "true"
     );
-    expect(services.getActiveStoreBySlug).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-    });
+    expect(services.getStore).toHaveBeenCalledExactlyOnceWith(db);
     expect(services.orderClientKey).toHaveBeenCalledExactlyOnceWith(
       ctx.headers
     );
@@ -232,6 +227,9 @@ describe("order router: the shopper's side", () => {
     ["a currency", { currencyCode: "UYU" }],
     ["a store id", { storeId: 99 }],
     ["a client key", { clientKey: "forged" }],
+    // The store is the site's one; an address naming another is a stale
+    // client's or a forged one.
+    ["a store's address", { storeSlug: "lr-market" }],
   ])(
     "refuses a request carrying %s as tampered, before reading anything",
     async (_what, forged) => {
@@ -242,7 +240,7 @@ describe("order router: the shopper's side", () => {
       await expect(run("create", makeOrderInput(forged))).rejects.toMatchObject(
         { code: "BAD_REQUEST" }
       );
-      expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+      expect(services.getStore).not.toHaveBeenCalled();
       expect(services.createOrder).not.toHaveBeenCalled();
     }
   );
@@ -263,13 +261,13 @@ describe("order router: the shopper's side", () => {
     expect(orderLogFields()).toEqual([{ order: { clientLimit: "skipped" } }]);
   });
 
-  test("a closed storefront takes no order, before resolving the store", async () => {
+  test("a closed storefront takes no order, before reading the login", async () => {
     const { run } = setup({ launched: false });
 
     await expect(run("create", makeOrderInput())).rejects.toMatchObject(
       STORE_NOT_FOUND
     );
-    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.getStore).not.toHaveBeenCalled();
     expect(services.createOrder).not.toHaveBeenCalled();
     // Closed answers the same to everyone: no bot check is spent on it.
     expect(services.isBotRequest).not.toHaveBeenCalled();
@@ -285,7 +283,7 @@ describe("order router: the shopper's side", () => {
       code: "FORBIDDEN",
       message: "Request refused",
     });
-    expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+    expect(services.getStore).not.toHaveBeenCalled();
     expect(services.orderClientKey).not.toHaveBeenCalled();
     expect(services.createOrder).not.toHaveBeenCalled();
     expect(db.$.select).not.toHaveBeenCalled();
@@ -308,31 +306,25 @@ describe("order router: the shopper's side", () => {
 
   test.each([
     ["create", makeOrderInput(), services.createOrder],
-    [
-      "getByToken",
-      { storeSlug: "lr-market", token: TOKEN },
-      services.getOrderByToken,
-    ],
+    ["getByToken", { token: TOKEN }, services.getOrderByToken],
   ] as const)(
-    "%s on an inactive or unknown store is NOT_FOUND, before the service",
+    "%s before the store's row exists is NOT_FOUND, before the service",
     async (name, input, service) => {
-      const { run } = setup({ storeActive: false });
+      const { run } = setup({ storeExists: false });
 
       await expect(run(name, input)).rejects.toMatchObject(STORE_NOT_FOUND);
       expect(service).not.toHaveBeenCalled();
     }
   );
 
-  test("reads an order by its token within the resolved store", async () => {
+  test("reads an order by its token within the store", async () => {
     const { db, run } = setup();
 
-    await expect(
-      run("getByToken", { storeSlug: "lr-market", token: TOKEN })
-    ).resolves.toEqual({ code: "ABCDE" });
-
-    expect(services.getActiveStoreBySlug).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
+    await expect(run("getByToken", { token: TOKEN })).resolves.toEqual({
+      code: "ABCDE",
     });
+
+    expect(services.getStore).toHaveBeenCalledExactlyOnceWith(db);
     expect(services.getOrderByToken).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
       token: TOKEN,
@@ -342,9 +334,9 @@ describe("order router: the shopper's side", () => {
   test.each([
     ["create", makeOrderInput({ customerPhone: "24001234" })],
     ["create", makeOrderInput({ items: [{ productId: 11, quantity: 11 }] })],
-    ["getByToken", { storeSlug: "lr-market", token: "a".repeat(42) }],
+    ["getByToken", { token: "a".repeat(42) }],
   ] as const)(
-    "refuses invalid %s input before resolving the store",
+    "refuses invalid %s input before reading the store",
     async (name, input) => {
       const { run } = setup();
 
@@ -352,33 +344,32 @@ describe("order router: the shopper's side", () => {
         code: "BAD_REQUEST",
         message: "Input validation failed",
       });
-      expect(services.getActiveStoreBySlug).not.toHaveBeenCalled();
+      expect(services.getStore).not.toHaveBeenCalled();
     }
   );
 });
 
-describe("order router: the store's side", () => {
-  test("lists the resolved store's orders with the cursor and status, outside any write", async () => {
+describe("order router: the admin's side", () => {
+  test("lists the store's orders with the cursor and status, outside any write", async () => {
     const { db, run } = setup({ signedIn: true });
 
     await expect(
       run("list", {
         cursor: { createdAt: "2026-11-15T10:00:00.000Z", id: "40" },
         status: "packed",
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ items: [{ id: 70 }], nextCursor: null });
 
-    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-      userId: "test-user-id",
-    });
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID
+    );
     expect(services.listOrders).toHaveBeenCalledExactlyOnceWith(db, {
       cursor: { createdAt: new Date("2026-11-15T10:00:00.000Z"), id: 40 },
       status: "packed",
       storeId: 7,
     });
-    expect(services.withStoreAccess).not.toHaveBeenCalled();
+    expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -387,7 +378,7 @@ describe("order router: the store's side", () => {
   ])("lists with the search %j sent as %j", async (q, expected) => {
     const { db, run } = setup({ signedIn: true });
 
-    await run("list", { q, storeSlug: "lr-market" });
+    await run("list", { q });
 
     expect(services.listOrders).toHaveBeenCalledExactlyOnceWith(db, {
       cursor: undefined,
@@ -397,32 +388,33 @@ describe("order router: the store's side", () => {
     });
   });
 
-  test("counts the resolved store's orders per status, outside any write", async () => {
+  test("counts the store's orders per status, outside any write", async () => {
     const { db, run } = setup({ signedIn: true });
 
-    await expect(run("counts", { storeSlug: "lr-market" })).resolves.toEqual({
+    await expect(run("counts", undefined)).resolves.toEqual({
       delivered: 2,
       packed: 0,
       received: 5,
       undeliverable: 1,
     });
 
-    expect(services.findAccessibleStore).toHaveBeenCalledExactlyOnceWith(db, {
-      slug: "lr-market",
-      userId: "test-user-id",
-    });
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID
+    );
     expect(services.countOrders).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });
-    expect(services.withStoreAccess).not.toHaveBeenCalled();
+    expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
-  test("gets one order by id within the resolved store", async () => {
+  test("gets one order by id within the store", async () => {
     const { db, run } = setup({ signedIn: true });
 
-    await expect(
-      run("get", { id: "70", storeSlug: "lr-market" })
-    ).resolves.toEqual({ code: "ABCDE", id: 70 });
+    await expect(run("get", { id: "70" })).resolves.toEqual({
+      code: "ABCDE",
+      id: 70,
+    });
 
     expect(services.getOrder).toHaveBeenCalledExactlyOnceWith(db, {
       id: 70,
@@ -437,13 +429,12 @@ describe("order router: the store's side", () => {
       run("changeStatus", {
         id: "70",
         status: "packed",
-        storeSlug: "lr-market",
       })
     ).resolves.toEqual({ id: 70, status: "packed" });
 
-    expect(services.withStoreAccess).toHaveBeenCalledExactlyOnceWith(
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
       db,
-      ACCESS,
+      USER_ID,
       expect.any(Function)
     );
     expect(services.changeOrderStatus).toHaveBeenCalledExactlyOnceWith(TX, {
@@ -455,32 +446,31 @@ describe("order router: the store's side", () => {
   });
 
   test.each([
-    ["list", { storeSlug: "tienda-demo" }, services.listOrders],
-    ["counts", { storeSlug: "tienda-demo" }, services.countOrders],
-    ["get", { id: 70, storeSlug: "tienda-demo" }, services.getOrder],
-    [
-      "changeStatus",
-      { id: 70, status: "packed", storeSlug: "tienda-demo" },
-      services.changeOrderStatus,
-    ],
+    ["list", {}, services.listOrders],
+    ["counts", undefined, services.countOrders],
+    ["get", { id: 70 }, services.getOrder],
+    ["changeStatus", { id: 70, status: "packed" }, services.changeOrderStatus],
   ] as const)(
-    "%s on a store the caller may not work on is NOT_FOUND, before the service",
+    "%s by a login the database no longer has is UNAUTHORIZED, before the service",
     async (name, input, service) => {
-      const { run } = setup({ mayWork: false, signedIn: true });
+      const { run } = setup({ isLogin: false, signedIn: true });
 
-      await expect(run(name, input)).rejects.toMatchObject(STORE_NOT_FOUND);
-      expect(services.withStoreAccess).not.toHaveBeenCalled();
+      await expect(run(name, input)).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      });
+      expect(services.withAdmin).not.toHaveBeenCalled();
       expect(service).not.toHaveBeenCalled();
     }
   );
 
   test.each([
-    ["list", { storeSlug: "lr-market" }],
-    ["counts", { storeSlug: "lr-market" }],
-    ["get", { id: 70, storeSlug: "lr-market" }],
-    ["changeStatus", { id: 70, status: "packed", storeSlug: "lr-market" }],
+    ["list", {}],
+    ["counts", undefined],
+    ["get", { id: 70 }],
+    ["changeStatus", { id: 70, status: "packed" }],
   ] as const)(
-    "%s from a signed-out caller is UNAUTHORIZED, before the store is resolved",
+    "%s from a signed-out caller is UNAUTHORIZED, before the login is read",
     async (name, input) => {
       const { run } = setup();
 
@@ -488,24 +478,23 @@ describe("order router: the store's side", () => {
         code: "UNAUTHORIZED",
         message: "Unauthorized",
       });
-      expect(services.findAccessibleStore).not.toHaveBeenCalled();
+      expect(services.findAdminStore).not.toHaveBeenCalled();
     }
   );
 
-  test("refuses an unknown status before resolving the store", async () => {
+  test("refuses an unknown status before reading the login", async () => {
     const { run } = setup({ signedIn: true });
 
     await expect(
       run("changeStatus", {
         id: 70,
         status: "cancelled",
-        storeSlug: "lr-market",
       })
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "Input validation failed",
     });
-    expect(services.findAccessibleStore).not.toHaveBeenCalled();
+    expect(services.findAdminStore).not.toHaveBeenCalled();
     expect(services.changeOrderStatus).not.toHaveBeenCalled();
   });
 });

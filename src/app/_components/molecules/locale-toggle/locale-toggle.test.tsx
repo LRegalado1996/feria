@@ -108,7 +108,7 @@ describe("LocaleToggle", () => {
 
   test("bare, is a plain link styled only by its className, without the icon", () => {
     const { link } = setup({
-      pathname: "/lr-market/products",
+      pathname: "/products",
       search: "q=aros",
       tone: "bare",
     });
@@ -117,7 +117,7 @@ describe("LocaleToggle", () => {
     expect(link).not.toHaveAttribute("data-variant");
     expect(link.querySelector("svg")).toBeNull();
     expect(link).toHaveAccessibleName("English");
-    expect(link).toHaveAttribute("href", "/en/lr-market/products?q=aros");
+    expect(link).toHaveAttribute("href", "/en/products?q=aros");
     expect(link).toHaveAttribute("lang", "en");
     expect(link).toHaveAttribute("hreflang", "en");
     expect(link).toHaveAttribute("data-slot", "locale-toggle");

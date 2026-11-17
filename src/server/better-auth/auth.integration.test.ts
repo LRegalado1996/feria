@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import type { UserRole } from "@/lib/schemas/access";
 import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
@@ -42,13 +41,11 @@ function uniqueEmail() {
 async function createLogin({
   email = uniqueEmail(),
   name = "Auth Test User",
-  role = "member",
-}: { email?: string; name?: string; role?: UserRole } = {}) {
+}: { email?: string; name?: string } = {}) {
   const created = await createAccount(auth, db, {
     email,
     name,
     password: PASSWORD,
-    role,
   });
   createdUserIds.push(created.id);
 
@@ -94,8 +91,8 @@ describe("sign-up", () => {
 });
 
 describe("createAccount", () => {
-  test("stores the user as given, with its role, and returns it", async () => {
-    const created = await createLogin({ name: "Ada", role: "superadmin" });
+  test("stores the user as given and returns it, giving no role of its own: every login is an admin", async () => {
+    const created = await createLogin({ name: "Ada" });
 
     expect(
       await db.query.user.findFirst({ where: eq(user.id, created.id) })
@@ -103,7 +100,8 @@ describe("createAccount", () => {
       email: created.email,
       id: created.id,
       name: "Ada",
-      role: "superadmin",
+      // The database's default, which nothing reads since FER-038.
+      role: "member",
     });
   });
 
@@ -173,8 +171,9 @@ describe("sign-in", () => {
     ]);
   });
 
-  test("puts the role on the session, where pages route by it", async () => {
-    const { email } = await createLogin({ role: "superadmin" });
+  test("puts the role the database holds on the session, never one of its own", async () => {
+    const { email, id } = await createLogin();
+    await db.update(user).set({ role: "superadmin" }).where(eq(user.id, id));
 
     const signedIn = await signIn(email);
 

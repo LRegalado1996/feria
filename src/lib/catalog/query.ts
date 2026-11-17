@@ -80,11 +80,7 @@ export function readCatalogQuery(raw: RawSearchParams): CatalogQuery {
  * given, search, sort), leaving out what is the default, so the same
  * selection is always the same link.
  */
-export function catalogHref(
-  storeSlug: string,
-  locale: Locale,
-  query: CatalogQuery
-): string {
+export function catalogHref(locale: Locale, query: CatalogQuery): string {
   const params = new URLSearchParams();
 
   if (query.category) {
@@ -103,7 +99,7 @@ export function catalogHref(
     params.set("sort", query.sort);
   }
 
-  const path = localizePath(`/${storeSlug}/products`, locale);
+  const path = localizePath("/products", locale);
   // Commas stay readable in a link that is pasted into a chat.
   const search = params.toString().replaceAll("%2C", ",");
 

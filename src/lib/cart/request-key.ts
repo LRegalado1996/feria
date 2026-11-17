@@ -7,47 +7,41 @@ const storedRequestSchema = z.object({
   signature: z.string(),
 });
 
+/** Where the checkout's request lives: one per tab (FER-038: one store). */
+const STORAGE_KEY = "feria:checkout";
+
 // The request as this page last wrote it, kept only while session storage
 // refuses to: from then on it outranks what storage still holds, which is
 // older. `null` marks a request forgotten after its order was taken, so a
-// removal storage refused cannot bring that request back. A write storage
-// takes again drops the entry, and storage is the record once more.
-const memory = new Map<string, string | null>();
+// removal storage refused cannot bring that request back; `undefined` is no
+// copy, and storage is the record. A write storage takes again drops it.
+let memory: string | null | undefined;
 
-function storageKey(storeSlug: string) {
-  return `feria:checkout:${storeSlug}`;
-}
-
-function readStored(storeSlug: string): string | null {
-  const key = storageKey(storeSlug);
-  const kept = memory.get(key);
-
-  if (kept !== undefined) {
-    return kept;
+function readStored(): string | null {
+  if (memory !== undefined) {
+    return memory;
   }
 
   try {
-    return window.sessionStorage.getItem(key);
+    return window.sessionStorage.getItem(STORAGE_KEY);
   } catch (error) {
     reportError(error, { action: "Checkout.read_request" });
     return null;
   }
 }
 
-function writeStored(storeSlug: string, text: string | null) {
-  const key = storageKey(storeSlug);
-
+function writeStored(text: string | null) {
   try {
     if (text === null) {
-      window.sessionStorage.removeItem(key);
+      window.sessionStorage.removeItem(STORAGE_KEY);
     } else {
-      window.sessionStorage.setItem(key, text);
+      window.sessionStorage.setItem(STORAGE_KEY, text);
     }
 
-    memory.delete(key);
+    memory = undefined;
   } catch (error) {
     reportError(error, { action: "Checkout.write_request" });
-    memory.set(key, text);
+    memory = text;
   }
 }
 
@@ -59,11 +53,8 @@ function writeStored(storeSlug: string, text: string | null) {
  * instead of taking a second one. When storage refuses, the page keeps it,
  * which still covers a double tap and a retry without a reload.
  */
-export function checkoutRequestKey(
-  storeSlug: string,
-  signature: string
-): string {
-  const raw = readStored(storeSlug);
+export function checkoutRequestKey(signature: string): string {
+  const raw = readStored();
   let stored: z.infer<typeof storedRequestSchema> | null = null;
 
   try {
@@ -81,12 +72,12 @@ export function checkoutRequestKey(
   }
 
   const key = crypto.randomUUID();
-  writeStored(storeSlug, JSON.stringify({ key, signature }));
+  writeStored(JSON.stringify({ key, signature }));
 
   return key;
 }
 
 /** The order was taken: the next checkout is a new request. */
-export function forgetCheckoutRequest(storeSlug: string) {
-  writeStored(storeSlug, null);
+export function forgetCheckoutRequest() {
+  writeStored(null);
 }

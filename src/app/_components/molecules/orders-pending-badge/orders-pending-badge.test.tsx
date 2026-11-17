@@ -22,7 +22,7 @@ vi.mock("@/lib/orpc/client", async () => {
  * the loaded count too, not the state before it.
  */
 function LoadedCount() {
-  const counts = useOrderCounts("lr-market");
+  const counts = useOrderCounts();
 
   return counts.isSuccess ? (
     <p data-testid="loaded-count">{counts.data.received}</p>
@@ -68,15 +68,9 @@ function setup({
     <AdminNav
       items={[
         {
-          badge: (
-            <OrdersPendingBadge
-              className="custom"
-              label={label}
-              storeSlug="lr-market"
-            />
-          ),
+          badge: <OrdersPendingBadge className="custom" label={label} />,
           current: false,
-          href: "/admin/lr-market/orders",
+          href: "/admin/orders",
           label,
         },
       ]}
@@ -115,9 +109,7 @@ describe("OrdersPendingBadge", () => {
       expect(spoken).toHaveTextContent(new RegExp(`^${name}$`, "u"));
       expect(spoken).not.toHaveAttribute("aria-hidden");
       expect(link.textContent).toBe(`${label}${name}${figure}`);
-      expect(counts).toHaveBeenCalledExactlyOnceWith({
-        storeSlug: "lr-market",
-      });
+      expect(counts).toHaveBeenCalledExactlyOnceWith(undefined);
     }
   );
 
@@ -134,9 +126,7 @@ describe("OrdersPendingBadge", () => {
     const { counts } = setup({ locale: "es", received: 0 });
 
     expect(await screen.findByTestId("loaded-count")).toHaveTextContent(/^0$/u);
-    expect(counts).toHaveBeenCalledExactlyOnceWith({
-      storeSlug: "lr-market",
-    });
+    expect(counts).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.getByRole("link")).toHaveAccessibleName("Pedidos");
     expect(
       screen.queryByTestId("orders-pending-badge")

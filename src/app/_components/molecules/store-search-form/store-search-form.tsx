@@ -12,7 +12,6 @@ export interface StoreSearchFormProps {
   /** Unique on the page: the header and the phone menu each have one. */
   id: string;
   locale: Locale;
-  storeSlug: string;
 }
 
 /**
@@ -24,12 +23,11 @@ function StoreSearchForm({
   copy,
   id,
   locale,
-  storeSlug,
 }: StoreSearchFormProps) {
   return (
     <search className={cn("block", className)} data-slot="store-search-form">
       <form
-        action={localizePath(`/${storeSlug}/products`, locale)}
+        action={localizePath("/products", locale)}
         className="flex items-stretch"
         data-testid="store-search-form"
         method="get"

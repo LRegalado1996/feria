@@ -16,7 +16,6 @@ export const SEARCH_DEBOUNCE_MS = 300;
 export interface StoreCatalogSearchProps {
   className?: string;
   query: CatalogQuery;
-  storeSlug: string;
 }
 
 /**
@@ -26,11 +25,7 @@ export interface StoreCatalogSearchProps {
  * focus; a search the address brings from elsewhere (the back button)
  * replaces what it shows.
  */
-function StoreCatalogSearch({
-  className,
-  query,
-  storeSlug,
-}: StoreCatalogSearchProps) {
+function StoreCatalogSearch({ className, query }: StoreCatalogSearchProps) {
   const copy = useDictionary().storefront.catalog;
   const locale = useLocale();
   const router = useRouter();
@@ -81,7 +76,7 @@ function StoreCatalogSearch({
   const go = (typed: string) => {
     const q = typed.trim() === "" ? null : typed.trim();
     setSent((previous) => [...previous, q]);
-    router.replace(catalogHref(storeSlug, locale, { ...query, q }), {
+    router.replace(catalogHref(locale, { ...query, q }), {
       scroll: false,
     });
   };
@@ -89,7 +84,7 @@ function StoreCatalogSearch({
   return (
     <search className={cn("block", className)} data-slot="store-catalog-search">
       <form
-        action={localizePath(`/${storeSlug}/products`, locale)}
+        action={localizePath("/products", locale)}
         className="flex items-stretch"
         onSubmit={(event) => {
           event.preventDefault();
