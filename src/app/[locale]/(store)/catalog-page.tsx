@@ -15,6 +15,7 @@ import {
   knownOnly,
   type RawSearchParams,
   rawSearchParams,
+  readCatalogCursor,
   readCatalogQuery,
   searchOf,
 } from "@/lib/catalog/query";
@@ -126,15 +127,18 @@ const loadCatalogPage = cache(
       caller.catalog.categories({ locale }),
       caller.catalog.filters({ locale }),
     ]);
+    const raw = rawSearchParams(new URLSearchParams(search));
     const query = knownOnly(
-      readCatalogQuery(
-        rawSearchParams(new URLSearchParams(search)),
-        page ? { path: page.path, slug: page.slug } : null
-      ),
+      readCatalogQuery(raw, page ? { path: page.path, slug: page.slug } : null),
       filters
     );
+    // The "Cargar más" link's page (FER-044): what a visitor without the
+    // script, or a crawler, opens; a cursor that does not read is the
+    // first page.
+    const startCursor = readCatalogCursor(raw, query.sort);
     const firstPage = await caller.catalog.products({
       category: page?.slug,
+      cursor: startCursor ?? undefined,
       filters: query.filters,
       locale,
       q: query.q ?? undefined,
@@ -183,6 +187,7 @@ const loadCatalogPage = cache(
       page,
       query,
       selection,
+      startCursor,
       store,
     };
   }
@@ -284,8 +289,12 @@ export async function catalogMetadata(
       title: ownTitle ?? shared,
       type: "website",
     },
-    // A search result is not a page of its own for a search engine.
-    ...(query.q ? { robots: { follow: true, index: false } } : {}),
+    // A search result is not a page of its own for a search engine, nor is
+    // a later page of a list (FER-044): its articles move as the store
+    // orders them, and each has its own page. Its links are followed.
+    ...(query.q || loaded.startCursor
+      ? { robots: { follow: true, index: false } }
+      : {}),
     title: { absolute: ownTitle ?? storeTitle(title, store.name) },
   };
 }
@@ -348,11 +357,11 @@ export async function CatalogPageView(props: CatalogPageProps) {
             slug: category.slug,
           }))}
           cover={loaded.cover}
-          description={loaded.description}
           filters={loaded.filters}
           firstPage={firstPage}
           heading={heading}
           query={query}
+          startCursor={loaded.startCursor}
         />
       </main>
       <StorePageFooter

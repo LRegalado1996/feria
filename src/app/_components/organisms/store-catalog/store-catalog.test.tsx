@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import type {
   CatalogCategory,
@@ -81,13 +81,9 @@ function makeItem(
     ...overrides,
   };
 }
-
-const CURSOR = {
-  id: 2,
-  publishedAt: "2026-11-01T12:00:00.000Z",
-  sort: "newest" as const,
-};
-// A price order's cursor carries the price, not the date.
+// The store's own order's cursor carries the place (FER-044).
+const CURSOR = { id: 2, position: 2, sort: "position" as const };
+// A price order's cursor carries the price.
 const PRICE_CURSOR = { id: 2, priceAmount: 2000, sort: "price_asc" as const };
 
 function makePage(
@@ -109,6 +105,15 @@ const CHOSEN = makeQuery({
   sort: "price_asc",
 });
 
+/** The cover of a page, a computer image and maybe a phone one. */
+function makeCover(phone: CatalogCover["phone"] = null): CatalogCover {
+  return {
+    alt: "Anillo sello dorado",
+    computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+    phone,
+  };
+}
+
 interface SetupOptions {
   /** The page's cover (FER-043); none by default. */
   cover?: CatalogCover | null;
@@ -119,7 +124,11 @@ interface SetupOptions {
    * test's `release()`.
    */
   next?: "fail" | "hang" | "held" | "ok";
+  /** The next page `catalog.products` answers with. */
+  nextPage?: CatalogPage;
   query?: CatalogQuery;
+  /** Where the server's page started, when the address carried a cursor. */
+  startCursor?: CatalogPage["nextCursor"];
 }
 
 function setup({
@@ -127,7 +136,9 @@ function setup({
   firstPage = makePage([makeItem(1), makeItem(2, { isAvailable: false })]),
   locale = "es",
   next = "ok",
+  nextPage = makePage([makeItem(3)]),
   query = makeQuery(),
+  startCursor = null,
 }: SetupOptions = {}) {
   const releases: (() => void)[] = [];
   const held = new Promise<void>((resolve) => {
@@ -142,7 +153,7 @@ function setup({
       await held;
     }
 
-    return makePage([makeItem(3)]);
+    return nextPage;
   });
   server.use(
     next === "fail"
@@ -175,11 +186,11 @@ function setup({
       }}
       categories={CATEGORIES}
       cover={cover}
-      description="Todos los artículos de LR Market."
       filters={FILTERS}
       firstPage={page}
       heading="Collares"
       query={next}
+      startCursor={startCursor}
     />
   );
   const view = renderWithI18n(catalog(query, firstPage), {
@@ -188,6 +199,8 @@ function setup({
   });
 
   return {
+    /** The link that asks for the next page, by its name. */
+    more: (name = "Cargar más") => screen.getByRole("link", { name }),
     /**
      * Renders the catalog again for another selection, as the router does,
      * with that selection's first page (the same one unless given).
@@ -203,6 +216,8 @@ function setup({
         resolve();
       }
     },
+    /** What the polite status line says. */
+    status: () => screen.getByTestId("store-catalog-status"),
     /** The grid's article names, in order. */
     titles: () =>
       within(screen.getByTestId("store-catalog-grid"))
@@ -223,43 +238,34 @@ function sortItems() {
     ]);
 }
 
-afterEach(() => {
-  localStorage.clear();
-  Reflect.deleteProperty(navigator, "share");
-  Reflect.deleteProperty(navigator, "clipboard");
-});
-
 describe("StoreCatalog", () => {
-  test("is headed, centered, by the selection's name and one line about it, with the share button", () => {
+  test("without a cover, is headed, centered, by the selection's name under its trail, with no description and no share button", () => {
     setup();
 
     const heading = screen.getByRole("heading", { level: 1 });
     expect(heading).toHaveTextContent(/^Collares$/u);
     expect(heading).toHaveClass("font-display", "store-display-page");
     expect(heading.parentElement).toHaveClass("items-center", "text-center");
-    expect(heading.nextElementSibling).toHaveTextContent(
-      /^Todos los artículos de LR Market\.$/u
+    // The trail first, then the title, and nothing else in the header.
+    const header = required(heading.closest("header"));
+    expect(header.firstElementChild).toBe(
+      screen.getByRole("navigation", { name: "Ruta" })
     );
-    expect(screen.getByRole("button", { name: "Compartir" })).toBeVisible();
+    expect(heading.nextElementSibling).toBeNull();
+    expect(header).not.toHaveTextContent("LR Market");
+    expect(screen.queryByRole("button", { name: "Compartir" })).toBeNull();
     // Without a cover, the plain title: no photo.
     expect(screen.queryByTestId("store-catalog-cover")).toBeNull();
   });
 
-  test("starts with the trail to the page, every step a link but the page itself (FER-043)", () => {
+  test("leads home from a house named Inicio, then each step a link but the page itself (FER-043, FER-044)", () => {
     setup();
 
     const trail = screen.getByRole("navigation", { name: "Ruta" });
-    expect(
-      within(trail)
-        .getAllByRole("listitem")
-        .map((item) => [
-          item.textContent,
-          item.querySelector("a")?.getAttribute("href") ?? null,
-        ])
-    ).toEqual([
-      ["Inicio", "/"],
-      ["Collares", null],
-    ]);
+    const home = within(trail).getByRole("link", { name: "Inicio" });
+    expect(home).toHaveAttribute("href", "/");
+    expect(home.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(within(home).getByText("Inicio")).toHaveClass("sr-only");
     expect(within(trail).getByText("Collares")).toHaveAttribute(
       "aria-current",
       "page"
@@ -280,15 +286,9 @@ describe("StoreCatalog", () => {
       [],
     ],
   ])(
-    "with a cover and %s, puts the page's h1 over the photo, fetched first",
+    "with a cover and %s, opens on it, the window's width and nearly its height, the page's h1 over it, fetched first",
     (_case, phone, phoneSrc, computerMedia) => {
-      setup({
-        cover: {
-          alt: "Anillo sello dorado",
-          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
-          phone,
-        },
-      });
+      setup({ cover: makeCover(phone) });
 
       const cover = screen.getByTestId("store-catalog-cover");
       const image = within(cover).getByRole("img", {
@@ -306,7 +306,13 @@ describe("StoreCatalog", () => {
           source.getAttribute("media")
         )
       ).toEqual(computerMedia);
-      expect(cover).toHaveClass("aspect-square", "md:aspect-3/1");
+      // Attached to the header: the first thing on the page, the trail
+      // under it.
+      const header = required(cover.closest("header"));
+      expect(header.firstElementChild).toBe(cover);
+      expect(cover.nextElementSibling).toBe(
+        screen.getByRole("navigation", { name: "Ruta" })
+      );
       // One h1 on the page: the plain title is not drawn as well.
       expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     }
@@ -314,11 +320,7 @@ describe("StoreCatalog", () => {
 
   test("serves the computer image from md up when the cover has a phone one", () => {
     setup({
-      cover: {
-        alt: "Anillos",
-        computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
-        phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1000 },
-      },
+      cover: makeCover({ height: 1200, url: "/seed/ring-1.jpg", width: 1000 }),
     });
 
     const source = required(
@@ -409,25 +411,6 @@ describe("StoreCatalog", () => {
     expect(trigger).toHaveFocus();
   });
 
-  test("shares the selection's own link", async () => {
-    const writeText = vi.fn(async (_text: string) => {});
-    const { user } = setup({ query: CHOSEN });
-    Object.defineProperty(navigator, "share", {
-      configurable: true,
-      value: undefined,
-    });
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
-
-    await user.click(screen.getByRole("button", { name: "Compartir" }));
-
-    expect(writeText).toHaveBeenCalledExactlyOnceWith(
-      "http://localhost:3000/collares?color=dorado&q=perla&sort=price_asc"
-    );
-  });
-
   test("opens its choices in a panel named Filtrar, closed by its close button", async () => {
     const { user } = setup();
     const trigger = screen.getByRole("button", { name: "Filtrar" });
@@ -513,8 +496,11 @@ describe("StoreCatalog", () => {
       within(panel).getByRole("link", { name: /^Dorado/u })
     ).toHaveAttribute("aria-current", "true");
     // Behind the open panel (hidden from a screen reader while it is open),
-    // its button already counts the new choice.
-    expect(trigger).toHaveTextContent(/^Filtrar \(1\)$/u);
+    // its button already counts the new choice: the eye's count and the
+    // words a screen reader hears once the panel closes.
+    expect(trigger).toHaveTextContent(
+      /^Filtrar \(1\)Filtrar, 1 filtro elegido$/u
+    );
   });
 
   test("following a category in the panel closes it at once: the category is another page (FER-043)", async () => {
@@ -535,7 +521,7 @@ describe("StoreCatalog", () => {
   test("the panel offers to clear what is chosen, keeping the sort, only when something is", async () => {
     const chosen = setup({ query: CHOSEN });
     await chosen.user.click(
-      screen.getByRole("button", { name: "Filtrar (2)" })
+      screen.getByRole("button", { name: "Filtrar, 1 filtro elegido" })
     );
 
     expect(
@@ -554,51 +540,65 @@ describe("StoreCatalog", () => {
     ).toBeNull();
   });
 
-  test("the panel's button counts the chosen category and filter values, not the search", () => {
+  test.each([
+    ["es", "no filter", [], "Filtrar", "Filtrar"],
+    ["es", "one value", ["dorado"], "Filtrar (1)", "Filtrar, 1 filtro elegido"],
+    [
+      "es",
+      "two values",
+      ["dorado", "rojo"],
+      "Filtrar (2)",
+      "Filtrar, 2 filtros elegidos",
+    ],
+    ["en", "one value", ["dorado"], "Filter (1)", "Filter, 1 filter chosen"],
+    [
+      "en",
+      "two values",
+      ["dorado", "rojo"],
+      "Filter (2)",
+      "Filter, 2 filters chosen",
+    ],
+  ] as const)(
+    "in %s, with %s chosen, the panel's button reads %j and is named %j",
+    (locale, _case, values, shown, name) => {
+      setup({
+        locale,
+        query: makeQuery({
+          filters:
+            values.length > 0
+              ? [{ attribute: "color", values: [...values] }]
+              : [],
+        }),
+      });
+
+      const trigger = screen.getByRole("button", { name });
+      expect(trigger).toBe(screen.getByTestId("store-catalog-filter"));
+      // What the eye reads; a screen reader hears the name instead.
+      const visible = [...trigger.querySelectorAll("span")].filter(
+        (span) => !span.classList.contains("sr-only")
+      );
+      expect(visible.map((span) => span.textContent)).toEqual([shown]);
+    }
+  );
+
+  test("the panel's button counts the filters' values only, never the page's category or a search", () => {
     setup({ query: CHOSEN });
 
     expect(
-      screen.getByRole("button", { name: "Filtrar (2)" })
-    ).toBeInTheDocument();
+      screen.getByRole("button", { name: "Filtrar, 1 filtro elegido" })
+    ).toBeVisible();
   });
 
-  test("shows each choice as a chip that leads to the selection without it, and a clear-all", () => {
+  test("lists no chosen choice under the bar: no pills and no clear-all (FER-044)", () => {
     setup({ query: CHOSEN });
 
-    const chips = within(
-      screen.getByRole("heading", { name: "Filtros elegidos" }).parentElement ??
-        document.body
-    );
+    expect(screen.queryByRole("link", { name: /^Quitar/u })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Limpiar todo" })).toBeNull();
+    // Right under the bar, the grid: nothing between them.
     expect(
-      chips
-        .getAllByRole("link")
-        .map((link) => [
-          link.getAttribute("aria-label") ?? link.textContent,
-          link.getAttribute("href"),
-        ])
-    ).toEqual([
-      ["Quitar: Collares", "/productos?color=dorado&q=perla&sort=price_asc"],
-      ["Quitar: Dorado", "/collares?q=perla&sort=price_asc"],
-      ["Quitar: perla", "/collares?color=dorado&sort=price_asc"],
-      ["Limpiar todo", "/productos?sort=price_asc"],
-    ]);
-  });
-
-  test("leaves out chips for choices the store does not have, and shows none with nothing chosen", () => {
-    setup({
-      query: makeQuery({
-        category: { path: "/anillos", slug: "anillos" },
-        filters: [
-          { attribute: "color", values: ["verde"] },
-          { attribute: "talle", values: ["m"] },
-        ],
-      }),
-    });
-
-    expect(
-      screen.queryByRole("heading", { name: "Filtros elegidos" })
-    ).toBeNull();
-    expect(screen.getByRole("button", { name: "Filtrar" })).toBeVisible();
+      screen.getByTestId("store-catalog-grid").parentElement
+        ?.previousElementSibling
+    ).toHaveAttribute("data-slot", "store-catalog-bar");
   });
 
   test("lists the articles as cards in a grid of two columns, four from a tablet up", () => {
@@ -685,18 +685,52 @@ describe("StoreCatalog", () => {
   });
 
   test("shows no load more when there is no next page", () => {
-    setup();
+    const { status } = setup();
 
-    expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Cargar más" })).toBeNull();
+    expect(status()).toHaveTextContent(/^$/u);
   });
 
-  test("loads the next page with its button, with the whole selection", async () => {
-    const { products, titles, user } = setup({
+  test.each([
+    ["the store's order", makeQuery(), CURSOR, "/productos?cursor=2.2"],
+    [
+      "a whole selection by price",
+      CHOSEN,
+      PRICE_CURSOR,
+      "/collares?color=dorado&q=perla&sort=price_asc&cursor=2000.2",
+    ],
+  ] as const)(
+    "with %s, load more is a real link to the next page, for a visitor without the script",
+    (_case, query, cursor, href) => {
+      const { more } = setup({
+        firstPage: makePage([makeItem(1), makeItem(2)], cursor),
+        query,
+      });
+
+      expect(more()).toHaveAttribute("href", href);
+      expect(more()).toHaveAttribute("data-slot", "store-button");
+    }
+  );
+
+  test("in English, the link leads to the English page", () => {
+    const { more } = setup({
+      firstPage: makePage([makeItem(1)], CURSOR),
+      locale: "en",
+    });
+
+    expect(more("Load more")).toHaveAttribute(
+      "href",
+      "/en/productos?cursor=2.2"
+    );
+  });
+
+  test("with the script, loads the next page in place, with the whole selection, then the link is gone", async () => {
+    const { more, products, titles, user } = setup({
       firstPage: makePage([makeItem(1), makeItem(2)], PRICE_CURSOR),
       query: CHOSEN,
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await user.click(more());
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
@@ -709,19 +743,52 @@ describe("StoreCatalog", () => {
       q: "perla",
       sort: "price_asc",
     });
-    expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Cargar más" })).toBeNull();
+  });
+
+  test("leaves a click that opens elsewhere to the browser, loading nothing", async () => {
+    const { more, products, user } = setup({
+      firstPage: makePage([makeItem(1)], CURSOR),
+    });
+    const link = more();
+    // A new tab is the browser's own business; this page does not follow it.
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+    });
+
+    await user.keyboard("{Control>}");
+    await user.click(link);
+    await user.keyboard("{/Control}");
+
+    expect(products).not.toHaveBeenCalled();
+  });
+
+  test("a page that started further down (the link followed without the script) loads the one after it", async () => {
+    const { more, products, user } = setup({
+      firstPage: makePage([makeItem(4)], { ...CURSOR, id: 4, position: 4 }),
+      startCursor: CURSOR,
+    });
+
+    await user.click(more());
+
+    await waitFor(() => {
+      expect(products).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cursor: { id: 4, position: 4, sort: "position" },
+        })
+      );
+    });
   });
 
   test("says it is loading and ignores presses meanwhile, keeping its focus", async () => {
-    const { products, user } = setup({
+    const { more, products, user } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
       next: "hang",
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await user.click(more());
 
-    const loading = await screen.findByRole("button", { name: "Cargando…" });
-    expect(loading).toBeEnabled();
+    const loading = await screen.findByRole("link", { name: "Cargando…" });
     expect(loading).toHaveAttribute("aria-disabled", "true");
     expect(loading).toHaveAttribute("aria-busy", "true");
     expect(loading).toHaveFocus();
@@ -731,14 +798,49 @@ describe("StoreCatalog", () => {
     );
   });
 
-  test("moves focus to the first new card once a page asked for with the button lands", async () => {
-    const { titles, user } = setup({
+  test.each([
+    [
+      "es",
+      makePage([makeItem(3), makeItem(4)], { ...CURSOR, id: 4, position: 4 }),
+      "Se cargaron 2 artículos más; ya ves 4.",
+    ],
+    [
+      "es",
+      makePage([makeItem(3)]),
+      "Se cargó 1 artículo más; ya ves 3. Ya están todos.",
+    ],
+    [
+      "en",
+      makePage([makeItem(3), makeItem(4)]),
+      "2 more articles loaded; showing 4. That is all of them.",
+    ],
+  ] as const)(
+    "in %s, says politely what each page brought and when the list ends",
+    async (locale, nextPage, said) => {
+      const { observers, status, titles } = setup({
+        firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
+        locale,
+        nextPage,
+      });
+      expect(status().tagName).toBe("OUTPUT");
+      expect(status()).toHaveClass("sr-only");
+
+      observers.active()?.emit(true);
+
+      await waitFor(() => {
+        expect(titles()).toHaveLength(nextPage.items.length + 2);
+      });
+      expect(status()).toHaveTextContent(said);
+    }
+  );
+
+  test("moves focus to the first new card once a page asked for with the link lands", async () => {
+    const { more, titles, user } = setup({
       firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
     });
-    const button = screen.getByRole("button", { name: "Cargar más" });
-    expect(button).toHaveAttribute("aria-disabled", "false");
+    expect(more()).toHaveAttribute("aria-disabled", "false");
 
-    await user.click(button);
+    await user.click(more());
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
@@ -746,13 +848,13 @@ describe("StoreCatalog", () => {
     expect(screen.getByRole("link", { name: "Artículo 3" })).toHaveFocus();
   });
 
-  test("forgets a press of load more once the selection changes, leaving focus on the button", async () => {
-    const { navigate, titles, user } = setup({
+  test("forgets a press of load more once the selection changes, leaving focus on the link", async () => {
+    const { more, navigate, titles, user } = setup({
       firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
       next: "hang",
     });
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
-    await screen.findByRole("button", { name: "Cargando…" });
+    await user.click(more());
+    await screen.findByRole("link", { name: "Cargando…" });
 
     // Another selection's first page is longer than the one pressed in.
     navigate(
@@ -764,36 +866,36 @@ describe("StoreCatalog", () => {
     );
 
     expect(titles()).toEqual(["Artículo 4", "Artículo 5", "Artículo 6"]);
-    expect(screen.getByRole("button", { name: "Cargar más" })).toHaveFocus();
+    expect(more()).toHaveFocus();
   });
 
-  test("leaves focus where the shopper took it while a page asked for with the button loaded", async () => {
-    const { release, titles, user } = setup({
+  test("leaves focus where the shopper took it while a page asked for with the link loaded", async () => {
+    const { more, release, titles, user } = setup({
       firstPage: makePage([makeItem(1), makeItem(2)], CURSOR),
       next: "held",
     });
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
-    await screen.findByRole("button", { name: "Cargando…" });
-    const share = screen.getByRole("button", { name: "Compartir" });
+    await user.click(more());
+    await screen.findByRole("link", { name: "Cargando…" });
+    const filter = screen.getByRole("button", { name: "Filtrar" });
 
     act(() => {
-      share.focus();
+      filter.focus();
     });
     release();
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);
     });
-    expect(share).toHaveFocus();
+    expect(filter).toHaveFocus();
   });
 
-  test("moves focus to the retry when a page asked for with the button fails", async () => {
-    const { user } = setup({
+  test("moves focus to the retry when a page asked for with the link fails", async () => {
+    const { more, user } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
       next: "fail",
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await user.click(more());
 
     const alert = await screen.findByRole("alert");
     expect(
@@ -801,12 +903,12 @@ describe("StoreCatalog", () => {
     ).toHaveFocus();
   });
 
-  test("leaves focus alone when a page asked for by scrolling fails, even from a focused button", async () => {
-    const { observers } = setup({
+  test("leaves focus alone when a page asked for by scrolling fails, even from a focused link", async () => {
+    const { more, observers } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
       next: "fail",
     });
-    screen.getByRole("button", { name: "Cargar más" }).focus();
+    more().focus();
 
     observers.active()?.emit(true);
 
@@ -821,46 +923,49 @@ describe("StoreCatalog", () => {
     const { observers, titles } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
     });
-    const share = screen.getByRole("button", { name: "Compartir" });
-    share.focus();
+    const filter = screen.getByRole("button", { name: "Filtrar" });
+    filter.focus();
 
     observers.active()?.emit(true);
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 3"]);
     });
-    expect(share).toHaveFocus();
+    expect(filter).toHaveFocus();
   });
 
-  test("loads the next page when the end of the grid scrolls into view", async () => {
-    const { observers, titles } = setup({
+  test("loads the next page by itself as the end of the grid nears the window, and stops pulling once the list ends", async () => {
+    const { more, observers, titles } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
     });
 
     const observer = observers.active();
-    expect(observer?.observed).toEqual([
-      screen.getByRole("button", { name: "Cargar más" }).parentElement,
-    ]);
+    expect(observer?.observed).toEqual([more().parentElement]);
+    // Well before the end reaches the window.
+    expect(observer?.rootMargin).toBe("0px 0px 800px 0px");
     observer?.emit(true);
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 3"]);
     });
+    // No page follows: nothing is watched, so the footer stays in reach.
+    expect(observers.active()).toBeUndefined();
+    expect(screen.queryByRole("link", { name: "Cargar más" })).toBeNull();
   });
 
   test("a next page that failed says so in an alert and loads again on retry", async () => {
-    const { products, titles, user } = setup({
+    const { more, products, titles, user } = setup({
       firstPage: makePage([makeItem(1)], CURSOR),
       next: "fail",
     });
 
-    await user.click(screen.getByRole("button", { name: "Cargar más" }));
+    await user.click(more());
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(
       /^No pudimos cargar más artículos\.Probar de nuevo$/u
     );
-    expect(screen.queryByRole("button", { name: "Cargar más" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Cargar más" })).toBeNull();
 
     server.use(createOrpcHandler("catalog.products", products));
     await user.click(

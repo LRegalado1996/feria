@@ -95,7 +95,6 @@ export const storefront = {
       "Comprá {name} en {store}: {categories}. Mirá los precios y hacé tu pedido online.",
     home: "Inicio",
     clear: "Limpiar",
-    clearAll: "Limpiar todo",
     closeFilters: "Cerrar los filtros",
     description: "Todos los artículos de {store}.",
     empty: {
@@ -103,19 +102,25 @@ export const storefront = {
       title: "Todavía no hay artículos",
     },
     filter: "Filtrar",
+    // The button's whole name with filters chosen (FER-044): on screen it
+    // reads "Filtrar (2)".
+    filterCount: "Filtrar, {count} filtros elegidos",
+    filterCountOne: "Filtrar, 1 filtro elegido",
     filteredDescription: "{selection}, en {store}.",
     loadFailed: "No pudimos cargar más artículos.",
     loadMore: "Cargar más",
+    // Said to a screen reader as each page arrives (FER-044).
+    loaded: "Se cargaron {count} artículos más; ya ves {total}.",
+    loadedAll: "Ya están todos.",
+    loadedOne: "Se cargó 1 artículo más; ya ves {total}.",
     loading: "Cargando…",
     noResults: {
       body: "Probá con otra búsqueda o quitá algún filtro.",
       clear: "Ver todo el catálogo",
       title: "No encontramos nada",
     },
-    remove: "Quitar: {name}",
     retry: "Probar de nuevo",
     searchResult: "«{q}»",
-    selected: "Filtros elegidos",
     share: "Compartir",
     shareCopied: "Enlace copiado.",
     shareFailed: "No pudimos copiar el enlace.",

@@ -15,17 +15,21 @@ export interface StoreCatalogCoverProps {
 const COMPUTER_MEDIA = "(min-width: 768px)";
 
 /**
- * A catalog page's cover (FER-043), after the collection pages of the
- * reference store: a full-width photo with the page's title over its
- * bottom-left corner. Art direction: a `<picture>` whose phone image shows
- * below `md` and whose computer image shows from there up, and on a phone
- * too when there is no phone image. The box keeps its own proportions
- * (square on a phone, 3:1 on a computer, so the articles start in the
- * first view), so the space is reserved before the photo arrives and the
- * photo is cropped to fill it. It is the page's
- * largest image: fetched first, never lazily. The one gradient the
- * storefront allows rises from the bottom so the white title reads on any
- * photo.
+ * A catalog page's cover (FER-043, FER-044), after the collection pages of
+ * the reference store: a photo the whole width of the window, right under
+ * the header, nearly a screen tall, with the page's title over its
+ * bottom-left corner. Its height is the window's less what the frame and
+ * the page put around it (the bar and the header above; the trail, the
+ * filter bar and a hint of the first row of articles below): 17.5rem on a
+ * phone, 20rem from `md` up, never under 20rem in all, so a window turned
+ * sideways still shows a photo. `svh`, the window with the phone's
+ * toolbars shown, so the hint survives them. Art direction: a `<picture>`
+ * whose phone image shows below `md` and whose computer image shows from
+ * there up, and on a phone too when there is no phone image. The box has
+ * its height before the photo arrives, and the photo is cropped to fill
+ * it. It is the page's largest image: fetched first, never lazily. The one
+ * gradient the storefront allows rises from the bottom so the white title
+ * reads on any photo.
  */
 function StoreCatalogCover({
   children,
@@ -57,7 +61,7 @@ function StoreCatalogCover({
   return (
     <div
       className={cn(
-        "relative aspect-square w-full overflow-hidden bg-store-contrast text-store-background md:aspect-3/1",
+        "relative h-[calc(100svh-17.5rem)] min-h-80 w-full overflow-hidden bg-store-contrast text-store-background md:h-[calc(100svh-20rem)]",
         className
       )}
       data-slot="store-catalog-cover"
