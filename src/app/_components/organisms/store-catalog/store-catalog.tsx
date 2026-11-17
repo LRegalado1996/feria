@@ -6,10 +6,9 @@ import {
   Dialog as DialogPrimitive,
   DropdownMenu as DropdownMenuPrimitive,
 } from "radix-ui";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
-import { StoreChip } from "@/app/_components/atoms/store-chip";
 import { StoreArticleCard } from "@/app/_components/molecules/store-article-card";
 import {
   StoreBreadcrumb,
@@ -21,7 +20,6 @@ import {
   type CatalogFilter,
   StoreCatalogFilters,
 } from "@/app/_components/molecules/store-catalog-filters";
-import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { CatalogCover } from "@/lib/catalog/cover";
 import { articlePath } from "@/lib/catalog/paths";
 import {
@@ -29,28 +27,37 @@ import {
   catalogHref,
   clearFilters,
   isFiltered,
-  toggleFilterValue,
 } from "@/lib/catalog/query";
 import { type CatalogPage, useCatalogProducts } from "@/lib/hooks/catalog";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
-import { PRODUCT_SORTS } from "@/lib/schemas/catalog";
+import {
+  DEFAULT_PRODUCT_SORT,
+  PRODUCT_SORTS,
+  type ProductCursor,
+} from "@/lib/schemas/catalog";
+import { cn } from "@/lib/utils";
+import { formatInteger } from "@/lib/utils/format";
 
 export interface StoreCatalogProps {
-  /** The trail from the home to this page, shown above it (FER-043). */
+  /** The trail from the home to this page, shown under its cover (FER-043). */
   breadcrumb: { items: readonly StoreBreadcrumbItem[]; label: string };
   categories: CatalogCategory[];
   /** The page's photo, with its title over it; none, a plain title. */
   cover: CatalogCover | null;
-  /** The one line under the heading: what this selection is, in the store. */
-  description: string;
   filters: CatalogFilter[];
-  /** The first page, rendered by the server for this exact selection. */
+  /** The page the server rendered for this exact selection and address. */
   firstPage: CatalogPage;
   /** The page's heading: the selection's name, or "Catálogo". */
   heading: string;
   query: CatalogQuery;
+  /**
+   * Where the server's page started: `null` for the first page, else the
+   * cursor the address carried (a "Cargar más" link followed without the
+   * script, FER-044).
+   */
+  startCursor?: ProductCursor | null;
 }
 
 /** The page's side margins: 16 px on a phone, 28 px from a tablet up. */
@@ -59,24 +66,38 @@ const GUTTER_CLASS = "px-4 md:px-7";
 const TEXT_LINK_CLASS =
   "inline-flex min-h-11 items-center px-2 text-sm font-semibold text-store-foreground underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground";
 
+/** A click the browser should keep: a new tab, a new window, a download. */
+function opensElsewhere(event: MouseEvent) {
+  return (
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  );
+}
+
 /**
- * The store's catalog (FER-023, FER-039): a centered heading and one line
- * about the selection, then a bar with "Filtrar", which opens the panel of
- * categories and filters (a drawer from the left on a computer, a sheet from
- * the bottom on a phone), and the sort on the right; the chosen ones as
- * removable chips; and a grid of four columns (two on a phone) that loads
- * the next page as it scrolls, or with its button. Everything chosen lives
- * in the address, so a shared link opens on the same selection.
+ * The store's catalog (FER-023, FER-039, FER-044): the page's cover, the
+ * width of the window with its title over it (or a centered title), the
+ * trail home under it, then a bar with "Filtrar", which opens the panel of
+ * categories and filters (a drawer from the left on a computer, a sheet
+ * from the bottom on a phone) and says how many filters are chosen, and
+ * the sort on the right; and a grid of four columns (two on a phone) that
+ * loads the next page by itself as the shopper nears its end. "Cargar más"
+ * is a real link to that page, for a visitor without the script and for a
+ * crawler; with the script it loads in place. Everything chosen lives in
+ * the address, so a shared link opens on the same selection.
  */
 function StoreCatalog({
   breadcrumb,
   categories,
   cover,
-  description,
   filters,
   firstPage,
   heading,
   query,
+  startCursor = null,
 }: StoreCatalogProps) {
   const { storefront } = useDictionary();
   const copy = storefront.catalog;
@@ -85,10 +106,11 @@ function StoreCatalog({
   const [panelOpen, setPanelOpen] = useState(false);
   const grid = useRef<HTMLUListElement>(null);
   // Set when "Cargar más" (or its retry) is pressed: the first card of the
-  // page it asked for takes focus once it lands, since the button may then
-  // be gone. It names the selection it was pressed in (another selection's
+  // page it asked for takes focus once it lands, since the link may then be
+  // gone. It names the selection it was pressed in (another selection's
   // first page is no page it asked for) and the control pressed: focus the
-  // visitor took elsewhere meanwhile, the sort say, stays there.
+  // visitor took elsewhere meanwhile, the sort say, stays there. A page the
+  // scroll loaded moves no focus.
   const focusFrom = useRef<{
     from: number;
     selection: string;
@@ -99,6 +121,7 @@ function StoreCatalog({
     firstPage,
     locale,
     query,
+    startCursor,
   });
   const href = (next: CatalogQuery) => catalogHref(locale, next);
   const selection = href(query);
@@ -118,15 +141,44 @@ function StoreCatalog({
       focusFrom.current = null;
       grid.current?.children[pending.from]?.querySelector("a")?.focus();
     } else if (products.isFetchNextPageError) {
-      // The pressed button went with the failed page: its retry takes over.
+      // The pressed control went with the failed page: its retry takes over.
       focusFrom.current = null;
       retry.current?.focus();
     }
   }, [products.isFetchNextPageError, products.items.length, selection]);
-  const chosen = chosenChips(query, categories, filters);
-  // The panel offers the categories and the filters; the search is not one
-  // of its choices, so it does not count on its button.
-  const panelChoices = chosen.filter((chip) => chip.key !== "q").length;
+
+  /** Asks for the next page from a control, whose press may move focus. */
+  const loadFrom = (trigger: HTMLElement) => {
+    focusFrom.current = {
+      from: products.items.length,
+      selection,
+      trigger,
+    };
+    fetchNextPage();
+  };
+  // The panel offers the filters' values: only they count on its button,
+  // never the page's own category or a search (FER-044).
+  const chosenFilters = query.filters.reduce(
+    (total, filter) => total + filter.values.length,
+    0
+  );
+  const announcement = loadedAnnouncement(copy, locale, {
+    ...products.loaded,
+    complete: !products.hasNextPage,
+    total: products.items.length,
+  });
+  // Over the cover it keeps to a measure of its own letters, so a word
+  // breaks only when a line cannot hold it.
+  const title = (overCover: boolean) => (
+    <h1
+      className={cn(
+        "font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase",
+        overCover && "max-w-[18ch]"
+      )}
+    >
+      {heading}
+    </h1>
+  );
 
   return (
     <div
@@ -135,35 +187,21 @@ function StoreCatalog({
       data-testid="store-catalog"
     >
       <header className="flex flex-col">
+        {cover ? (
+          <StoreCatalogCover cover={cover}>{title(true)}</StoreCatalogCover>
+        ) : null}
         <StoreBreadcrumb
           className={`${GUTTER_CLASS} py-1.5`}
           items={breadcrumb.items}
           label={breadcrumb.label}
         />
-        {cover ? (
-          <StoreCatalogCover cover={cover}>
-            <h1 className="max-w-[18ch] font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
-              {heading}
-            </h1>
-          </StoreCatalogCover>
-        ) : null}
-        <div
-          className={`${GUTTER_CLASS} flex flex-col items-center gap-3 pb-5.5 text-center md:pb-7.5 ${cover ? "pt-5 md:pt-7" : "pt-7 md:pt-11"}`}
-        >
-          {cover ? null : (
-            <h1 className="font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
-              {heading}
-            </h1>
-          )}
-          <p className="max-w-prose text-sm text-store-muted md:text-base">
-            {description}
-          </p>
-          <StoreShareButton
-            className="justify-center"
-            path={selection}
-            title={heading}
-          />
-        </div>
+        {cover ? null : (
+          <div
+            className={`${GUTTER_CLASS} flex flex-col items-center pt-4 pb-6 text-center md:pt-6 md:pb-9`}
+          >
+            {title(false)}
+          </div>
+        )}
       </header>
       <div
         className={`${GUTTER_CLASS} flex items-center justify-between gap-3 pb-3.5 md:pb-4.5`}
@@ -171,10 +209,25 @@ function StoreCatalog({
       >
         <DialogPrimitive.Root onOpenChange={setPanelOpen} open={panelOpen}>
           <DialogPrimitive.Trigger asChild>
-            <StoreButton variant="outline">
+            <StoreButton data-testid="store-catalog-filter" variant="outline">
               <SlidersHorizontal aria-hidden="true" />
-              {copy.filter}
-              {panelChoices > 0 ? ` (${panelChoices})` : null}
+              {/* The eye reads "Filtrar (2)"; a screen reader hears the
+                  whole name, "Filtrar, 2 filtros elegidos". */}
+              <span aria-hidden={chosenFilters > 0 ? "true" : undefined}>
+                {copy.filter}
+                {chosenFilters > 0
+                  ? ` (${formatInteger(chosenFilters, locale)})`
+                  : null}
+              </span>
+              {chosenFilters > 0 ? (
+                <span className="sr-only">
+                  {chosenFilters === 1
+                    ? copy.filterCountOne
+                    : interpolate(copy.filterCount, {
+                        count: formatInteger(chosenFilters, locale),
+                      })}
+                </span>
+              ) : null}
             </StoreButton>
           </DialogPrimitive.Trigger>
           {/* In place, not in a portal, like every storefront dialog. It
@@ -248,13 +301,21 @@ function StoreCatalog({
             className="inline-flex min-h-11 items-center gap-1.5 font-display text-xs leading-none font-extrabold text-store-foreground uppercase focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
             data-slot="store-catalog-sort"
           >
-            {/* On a phone only the sort shows; a screen reader hears both. */}
-            <span className="sr-only sm:not-sr-only">
-              {copy.sort.label}
-            </span>{" "}
-            <span className="underline decoration-2 underline-offset-4">
-              {copy.sort[query.sort]}
-            </span>
+            {/* The store's own order is the one nobody chose: the button
+                names no sort then (FER-044). Another sort is named, and on
+                a phone only it shows; a screen reader hears both. */}
+            {query.sort === DEFAULT_PRODUCT_SORT ? (
+              <span>{copy.sort.prompt}</span>
+            ) : (
+              <>
+                <span className="sr-only sm:not-sr-only">
+                  {copy.sort.label}
+                </span>{" "}
+                <span className="underline decoration-2 underline-offset-4">
+                  {copy.sort[query.sort]}
+                </span>
+              </>
+            )}
             <ChevronDown aria-hidden="true" className="size-4" />
           </DropdownMenuPrimitive.Trigger>
           <DropdownMenuPrimitive.Content
@@ -264,55 +325,30 @@ function StoreCatalog({
             loop
             sideOffset={6}
           >
-            {PRODUCT_SORTS.map((sort) => (
-              <DropdownMenuPrimitive.Item asChild key={sort}>
-                <Link
-                  aria-current={query.sort === sort ? "true" : undefined}
-                  className="flex min-h-11 items-center justify-between gap-4 px-3 text-sm outline-none data-highlighted:bg-store-foreground data-highlighted:text-store-background"
-                  href={href({ ...query, sort })}
-                  scroll={false}
-                >
-                  {copy.sort[sort]}
-                  {query.sort === sort ? (
-                    <Check aria-hidden="true" className="size-4" />
-                  ) : null}
-                </Link>
-              </DropdownMenuPrimitive.Item>
-            ))}
+            {PRODUCT_SORTS.map((sort) => {
+              // The default is never marked: it is what nothing chosen means.
+              const chosenSort =
+                query.sort === sort && sort !== DEFAULT_PRODUCT_SORT;
+
+              return (
+                <DropdownMenuPrimitive.Item asChild key={sort}>
+                  <Link
+                    aria-current={chosenSort ? "true" : undefined}
+                    className="flex min-h-11 items-center justify-between gap-4 px-3 text-sm outline-none data-highlighted:bg-store-foreground data-highlighted:text-store-background"
+                    href={href({ ...query, sort })}
+                    scroll={false}
+                  >
+                    {copy.sort[sort]}
+                    {chosenSort ? (
+                      <Check aria-hidden="true" className="size-4" />
+                    ) : null}
+                  </Link>
+                </DropdownMenuPrimitive.Item>
+              );
+            })}
           </DropdownMenuPrimitive.Content>
         </DropdownMenuPrimitive.Root>
       </div>
-      {chosen.length > 0 ? (
-        <div
-          className={`${GUTTER_CLASS} flex flex-wrap items-center gap-2 pb-5`}
-          data-slot="store-catalog-chosen"
-        >
-          <h2 className="sr-only">{copy.selected}</h2>
-          <ul className="flex flex-wrap gap-2">
-            {chosen.map((chip) => (
-              <li key={chip.key}>
-                <StoreChip asChild className="gap-2" selected>
-                  <Link
-                    aria-label={interpolate(copy.remove, { name: chip.name })}
-                    href={href(chip.without)}
-                    scroll={false}
-                  >
-                    {chip.name}
-                    <X aria-hidden="true" className="size-4" />
-                  </Link>
-                </StoreChip>
-              </li>
-            ))}
-          </ul>
-          <Link
-            className={TEXT_LINK_CLASS}
-            href={href(clearFilters(query))}
-            scroll={false}
-          >
-            {copy.clearAll}
-          </Link>
-        </div>
-      ) : null}
       <div className={`${GUTTER_CLASS} flex flex-col gap-8`}>
         {products.items.length === 0 ? (
           <div
@@ -363,17 +399,18 @@ function StoreCatalog({
             ))}
           </ul>
         )}
+        {/* Each page the browser adds is said, politely (an output is a
+            polite status), with how many the grid holds now; the end of
+            the list too. */}
+        <output className="sr-only" data-testid="store-catalog-status">
+          {announcement}
+        </output>
         {products.isFetchNextPageError ? (
           <div className="flex flex-col items-center gap-3" role="alert">
             <p className="text-sm">{copy.loadFailed}</p>
             <StoreButton
               onClick={(event) => {
-                focusFrom.current = {
-                  from: products.items.length,
-                  selection,
-                  trigger: event.currentTarget,
-                };
-                fetchNextPage();
+                loadFrom(event.currentTarget);
               }}
               ref={retry}
               variant="outline"
@@ -382,32 +419,76 @@ function StoreCatalog({
             </StoreButton>
           </div>
         ) : null}
-        {products.hasNextPage && !products.isFetchNextPageError ? (
+        {products.hasNextPage &&
+        products.nextCursor &&
+        !products.isFetchNextPageError ? (
+          // The scroll's sentinel: as it nears the window, the next page
+          // loads by itself. Once the list ends it is gone, and so is the
+          // pull, so the footer stays within reach.
           <div className="flex justify-center" ref={attachSentinel}>
-            {/* Never disabled: a disabled button drops the keyboard's focus
-                to the page. While a page loads, a press does nothing. */}
-            <StoreButton
-              aria-busy={products.isFetchingNextPage}
-              aria-disabled={products.isFetchingNextPage}
-              onClick={(event) => {
-                if (!products.isFetchingNextPage) {
-                  focusFrom.current = {
-                    from: products.items.length,
-                    selection,
-                    trigger: event.currentTarget,
-                  };
-                  fetchNextPage();
-                }
-              }}
-              variant="outline"
-            >
-              {products.isFetchingNextPage ? copy.loading : copy.loadMore}
+            {/* A real link to the next page: without the script, or for a
+                crawler, it opens it; with the script it loads in place.
+                Never disabled: a disabled control drops the keyboard's
+                focus to the page. While a page loads, a press does
+                nothing. */}
+            <StoreButton asChild variant="outline">
+              <Link
+                aria-busy={products.isFetchingNextPage}
+                aria-disabled={products.isFetchingNextPage}
+                data-testid="store-catalog-more"
+                href={catalogHref(locale, query, products.nextCursor)}
+                onClick={(event) => {
+                  if (opensElsewhere(event)) {
+                    return;
+                  }
+
+                  event.preventDefault();
+
+                  if (!products.isFetchingNextPage) {
+                    loadFrom(event.currentTarget);
+                  }
+                }}
+                prefetch={false}
+                scroll={false}
+              >
+                {products.isFetchingNextPage ? copy.loading : copy.loadMore}
+              </Link>
             </StoreButton>
           </div>
         ) : null}
       </div>
     </div>
   );
+}
+
+/**
+ * What the status line says once the browser added pages to the server's:
+ * how many the last brought and how many the grid holds, and that the
+ * list ended. Nothing before the first one: the page itself was read.
+ */
+function loadedAnnouncement(
+  copy: ReturnType<typeof useDictionary>["storefront"]["catalog"],
+  locale: ReturnType<typeof useLocale>,
+  {
+    added,
+    complete,
+    last,
+    total,
+  }: { added: number; complete: boolean; last: number; total: number }
+) {
+  if (added === 0) {
+    return "";
+  }
+
+  const loaded =
+    last === 1
+      ? interpolate(copy.loadedOne, { total: formatInteger(total, locale) })
+      : interpolate(copy.loaded, {
+          count: formatInteger(last, locale),
+          total: formatInteger(total, locale),
+        });
+
+  return complete ? `${loaded} ${copy.loadedAll}` : loaded;
 }
 
 /**
@@ -421,51 +502,6 @@ function ownsFocus(trigger: HTMLElement) {
     active === trigger ||
     (!trigger.isConnected && (active === null || active === document.body))
   );
-}
-
-/**
- * The selection as removable chips: the category, each filter value and
- * the search, each with the address without it.
- */
-function chosenChips(
-  query: CatalogQuery,
-  categories: CatalogCategory[],
-  filters: CatalogFilter[]
-) {
-  const chips: { key: string; name: string; without: CatalogQuery }[] = [];
-  const category = categories.find(
-    (entry) => entry.slug === query.category?.slug
-  );
-
-  if (category) {
-    chips.push({
-      key: `category:${category.slug}`,
-      name: category.name,
-      without: { ...query, category: null },
-    });
-  }
-
-  for (const entry of query.filters) {
-    const filter = filters.find((known) => known.slug === entry.attribute);
-
-    for (const slug of entry.values) {
-      const value = filter?.values.find((known) => known.slug === slug);
-
-      if (filter && value) {
-        chips.push({
-          key: `${filter.slug}:${slug}`,
-          name: value.name,
-          without: toggleFilterValue(query, filter.slug, slug),
-        });
-      }
-    }
-  }
-
-  if (query.q) {
-    chips.push({ key: "q", name: query.q, without: { ...query, q: null } });
-  }
-
-  return chips;
 }
 
 export { StoreCatalog };

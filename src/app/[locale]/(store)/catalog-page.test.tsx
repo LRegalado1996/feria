@@ -253,33 +253,39 @@ describe("a catalog page's address", () => {
     const { catalog, show } = setup();
     mocks.readAllArticlesCover.mockResolvedValue(COVER);
 
-    await show();
+    const [collection] = await show();
 
     expect(mocks.readCategoryPage).not.toHaveBeenCalled();
     expect(mocks.readAllArticlesCover).toHaveBeenCalledExactlyOnceWith(
       makeStore(),
       "es",
-      "Todos los artículos"
+      "Catálogo"
     );
     expect(mocks.products).toHaveBeenCalledExactlyOnceWith({
       category: undefined,
       filters: [],
       locale: "es",
       q: undefined,
-      sort: "newest",
+      sort: "position",
     });
     expect(catalog()).toMatchObject({
       breadcrumb: {
         items: [
           { href: "/", name: "Inicio" },
-          { lang: undefined, name: "Todos los artículos" },
+          { lang: undefined, name: "Catálogo" },
         ],
         label: "Ruta",
       },
       cover: COVER,
-      description: "Todos los artículos de LR Market.",
-      heading: "Todos los artículos",
+      heading: "Catálogo",
       query: { category: null },
+      startCursor: null,
+    });
+    // The page's words feed its structured data and its metadata, and are
+    // no longer shown on it (FER-044).
+    expect(catalog()).not.toHaveProperty("description");
+    expect(collection).toMatchObject({
+      description: "Todos los artículos de LR Market.",
     });
     // The filter panel lists a group's categories right after it.
     expect(
@@ -315,13 +321,17 @@ describe("a catalog page's address", () => {
   test("is a group's page at its slug, listing every article in it, its words made from its categories", async () => {
     const { catalog, show } = setup({ group: "bijouterie" });
 
-    await show();
+    const [collection] = await show();
 
     expect(mocks.readCategoryPage).toHaveBeenCalledExactlyOnceWith(
       makeStore(),
       "bijouterie",
       "es"
     );
+    expect(collection).toMatchObject({
+      description:
+        "Comprá Bijouterie en LR Market: Cadenas y Anillos. Mirá los precios y hacé tu pedido online.",
+    });
     expect(mocks.products).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ category: "bijouterie" })
     );
@@ -333,8 +343,6 @@ describe("a catalog page's address", () => {
         ],
       },
       cover: null,
-      description:
-        "Comprá Bijouterie en LR Market: Cadenas y Anillos. Mirá los precios y hacé tu pedido online.",
       heading: "Bijouterie",
       query: { category: { path: "/bijouterie", slug: "bijouterie" } },
     });
@@ -351,13 +359,16 @@ describe("a catalog page's address", () => {
       locale: "en",
     });
 
-    await show();
+    const [collection] = await show();
 
     expect(mocks.readCategoryPage).toHaveBeenCalledExactlyOnceWith(
       makeStore(),
       "anillos",
       "en"
     );
+    expect(collection).toMatchObject({
+      description: "Anillos de la feria, de plata y dorados.",
+    });
     expect(catalog()).toMatchObject({
       breadcrumb: {
         items: [
@@ -368,7 +379,6 @@ describe("a catalog page's address", () => {
         label: "Breadcrumb",
       },
       cover: COVER,
-      description: "Anillos de la feria, de plata y dorados.",
     });
   });
 
@@ -381,15 +391,19 @@ describe("a catalog page's address", () => {
       seoDescription: null,
       slug: "burbujeros",
     };
-    const { catalog, show } = setup({
+    const { metadata, show } = setup({
       group: "burbujeros",
       locale: "en",
       pages: { burbujeros: bubbles },
     });
 
-    await show();
+    const [collection] = await show();
 
-    expect(catalog()?.description).toBe(
+    expect(collection).toMatchObject({
+      description:
+        "Shop Burbujeros at LR Market. See the prices and order online.",
+    });
+    expect((await metadata()).description).toBe(
       "Shop Burbujeros at LR Market. See the prices and order online."
     );
   });
@@ -625,5 +639,65 @@ describe("catalogMetadata", () => {
     const { metadata } = setup({ group: "relojes" });
 
     await expect(metadata()).rejects.toMatchObject(NOT_FOUND);
+  });
+
+  test("keeps a later page of a list out of the index, its links followed, its canonical the list's first (FER-044)", async () => {
+    const { metadata } = setup({
+      category: "anillos",
+      group: "bijouterie",
+      search: { cursor: "12.48", sort: "price_asc" },
+    });
+
+    await expect(metadata()).resolves.toMatchObject({
+      alternates: { canonical: "/bijouterie/anillos" },
+      robots: { follow: true, index: false },
+    });
+  });
+
+  test("indexes a list's first page", async () => {
+    const { metadata } = setup({ category: "anillos", group: "bijouterie" });
+
+    expect(await metadata()).not.toHaveProperty("robots");
+  });
+});
+
+describe("a catalog page's later page (FER-044)", () => {
+  test.each([
+    [
+      "the store's order",
+      { cursor: "12.48" },
+      { id: 48, position: 12, sort: "position" },
+    ],
+    [
+      "a price order",
+      { cursor: "69000.48", sort: "price_desc" },
+      { id: 48, priceAmount: 69_000, sort: "price_desc" },
+    ],
+  ] as const)(
+    "with %s, reads the articles after the address's cursor and tells the catalog where it started",
+    async (_case, search, cursor) => {
+      const { catalog, show } = setup({ search });
+
+      await show();
+
+      expect(mocks.products).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cursor })
+      );
+      expect(catalog()?.startCursor).toEqual(cursor);
+    }
+  );
+
+  test.each([
+    ["a cursor that does not read", { cursor: "doce" }],
+    ["a cursor repeated", { cursor: ["12.48", "13.49"] }],
+  ])("reads %s as the first page", async (_case, search) => {
+    const { catalog, show } = setup({ search });
+
+    await show();
+
+    expect(mocks.products).toHaveBeenCalledExactlyOnceWith(
+      expect.not.objectContaining({ cursor: expect.anything() })
+    );
+    expect(catalog()?.startCursor).toBeNull();
   });
 });

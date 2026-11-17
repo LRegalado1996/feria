@@ -113,7 +113,6 @@ export const storefront = {
       "Comprá {name} en {store}: {categories}. Mirá los precios y hacé tu pedido online.",
     home: "Inicio",
     clear: "Limpiar",
-    clearAll: "Limpiar todo",
     closeFilters: "Cerrar los filtros",
     description: "Todos los artículos de {store}.",
     empty: {
@@ -121,19 +120,25 @@ export const storefront = {
       title: "Todavía no hay artículos",
     },
     filter: "Filtrar",
+    // The button's whole name with filters chosen (FER-044): on screen it
+    // reads "Filtrar (2)".
+    filterCount: "Filtrar, {count} filtros elegidos",
+    filterCountOne: "Filtrar, 1 filtro elegido",
     filteredDescription: "{selection}, en {store}.",
     loadFailed: "No pudimos cargar más artículos.",
     loadMore: "Cargar más",
+    // Said to a screen reader as each page arrives (FER-044).
+    loaded: "Se cargaron {count} artículos más; ya ves {total}.",
+    loadedAll: "Ya están todos.",
+    loadedOne: "Se cargó 1 artículo más; ya ves {total}.",
     loading: "Cargando…",
     noResults: {
       body: "Probá con otra búsqueda o quitá algún filtro.",
       clear: "Ver todo el catálogo",
       title: "No encontramos nada",
     },
-    remove: "Quitar: {name}",
     retry: "Probar de nuevo",
     searchResult: "«{q}»",
-    selected: "Filtros elegidos",
     share: "Compartir",
     shareCopied: "Enlace copiado.",
     shareFailed: "No pudimos copiar el enlace.",
@@ -142,10 +147,14 @@ export const storefront = {
       // Before the current sort on its button: "Ordenar por: Más nuevos".
       label: "Ordenar por:",
       newest: "Más nuevos",
+      // The store's own order, the default (FER-044): chosen, the button
+      // names no sort and reads only the prompt.
+      position: "Destacados",
       price_asc: "Precio: menor a mayor",
       price_desc: "Precio: mayor a menor",
+      prompt: "Ordenar por",
     },
-    title: "Todos los artículos",
+    title: "Catálogo",
   },
   home: {
     browse: "Ver el catálogo",
@@ -196,9 +205,12 @@ export const storefront = {
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
-    catalog: "Todos los artículos",
+    catalog: "Catálogo",
     closeMenu: "Cerrar el menú",
-    // The button beside a group in the header (FER-043).
+    // The first link of a group's list on the header's line (FER-044): the
+    // group's own page.
+    groupAll: "Ver todo",
+    // The button beside a group in the phone's menu (FER-043).
     groupToggle: "{name}: sus categorías",
     copyright: "© {store}",
     credit: "Hecho por Lucas Regalado",
@@ -230,6 +242,12 @@ export const storefront = {
     searchSubmit: "Buscar",
     shop: "Tienda",
     skipToContent: "Saltar al contenido",
+    // Under the footer's logo, in Pepe's own words (Lucas, 2026-11-18,
+    // FER-044), until the company settings (FER-014) may make it editable.
+    story: {
+      signature: "Pepe",
+      text: "Hace más de 20 años que mi familia arma su puesto en la feria navideña. Empecé ayudando a mis padres y hace unos 10 años tengo el mío. Vendimos de todo: zapatos, ropa, juguetes, perfumes. Este año venimos con bijouterie y pistolas de burbujas: pasá por el puesto 86 o pedí desde acá.",
+    },
     tiktok: "TikTok de {store}",
     whatsapp: "Escribinos por WhatsApp",
   },

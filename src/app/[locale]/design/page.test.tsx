@@ -462,8 +462,13 @@ describe("DesignPage", () => {
       within(shell.getByRole("navigation", { name: "Secciones de la tienda" }))
         .getAllByRole("link")
         .map((link) => link.textContent)
-      // The group's categories wait behind its button (FER-043).
-    ).toEqual(["Todos los artículos", "Bijouterie", "Burbujeros"]);
+      // The group is one control, and its links wait behind it (FER-044).
+    ).toEqual(["Catálogo", "Burbujeros"]);
+    expect(
+      within(
+        shell.getByRole("navigation", { name: "Secciones de la tienda" })
+      ).getByRole("button", { name: "Bijouterie" })
+    ).toHaveAttribute("aria-expanded", "false");
     // Its skip link leads to the gallery's own content.
     expect(page).toHaveAttribute("id", "store-main");
     expect(page).toHaveAttribute("tabindex", "-1");

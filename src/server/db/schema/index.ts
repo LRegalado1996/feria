@@ -46,6 +46,7 @@ export {
   productImage,
   productAttributeValue,
   productImageTranslation,
+  productPositionSequence,
   productStatusEnum,
   productTranslation,
 } from "./catalog";

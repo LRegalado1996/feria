@@ -43,7 +43,10 @@ test.describe("Editing the store", () => {
     await expect(page).toHaveTitle("Puesto Editado");
     await expect(introOf(page).getByText("Texto nuevo")).toBeVisible();
     const footer = storePage.getFooter();
-    await expect(footer).toContainText("Texto nuevo");
+    // The footer tells Pepe's story, never the tagline (FER-044); the
+    // store's name signs its copyright.
+    await expect(footer).toContainText("© Puesto Editado");
+    await expect(footer).not.toContainText("Texto nuevo");
     await expect(
       footer.getByRole("link", { name: "TikTok de Puesto Editado" })
     ).toHaveAttribute("href", "https://tiktok.com/@puesto-editado");
@@ -64,7 +67,6 @@ test.describe("Editing the store", () => {
     ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);
     await expect(storePage.getDescription()).toHaveCount(0);
     await expect(footer).not.toContainText("Texto nuevo");
-    await expect(footer).not.toContainText(STORE_TEXTS.es.tagline);
   });
 
   test("a change of currency reaches the cached article page and the catalog at once", async ({

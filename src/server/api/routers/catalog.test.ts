@@ -178,8 +178,8 @@ describe("catalog router", () => {
       currencyCode: "USD",
       limit: 24,
       locale: "en",
-      // No sort asked: the newest first.
-      sort: "newest",
+      // No sort asked: the store's own order (FER-044).
+      sort: "position",
       storeId: 7,
       valueGroups: [],
     });

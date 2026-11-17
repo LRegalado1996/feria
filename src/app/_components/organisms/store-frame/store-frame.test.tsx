@@ -143,9 +143,10 @@ describe("StoreFrame", () => {
       "href",
       "/anillos"
     );
-    expect(
-      nav.getByRole("link", { name: "Todos los artículos" })
-    ).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
   });
 
   test("holds the cart's side panel, which the header's cart opens and closes back to it", async () => {

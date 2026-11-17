@@ -34,11 +34,8 @@ function makeItem(id: number): CatalogPage["items"][number] {
 
 // The default selection is by price, so its cursor carries the price.
 const CURSOR = { id: 2, priceAmount: 2000, sort: "price_asc" as const };
-const NEWEST_CURSOR = {
-  id: 2,
-  publishedAt: "2026-11-01T12:00:00.000Z",
-  sort: "newest" as const,
-};
+// The store's own order, the empty selection's, carries the place.
+const POSITION_CURSOR = { id: 2, position: 2, sort: "position" as const };
 
 function makePage(
   ids: number[],
@@ -59,10 +56,12 @@ function setup({
   firstPage = makePage([1, 2], CURSOR),
   next = "ok",
   query = QUERY,
+  startCursor,
 }: {
   firstPage?: CatalogPage;
   next?: "fail" | "ok";
   query?: CatalogQuery;
+  startCursor?: CatalogPage["nextCursor"];
 } = {}) {
   const products = vi.fn((_input: unknown) => makePage([3, 4]));
   server.use(
@@ -96,6 +95,7 @@ function setup({
         firstPage,
         locale: "es",
         query,
+        startCursor,
       }),
     { wrapper }
   );
@@ -104,6 +104,42 @@ function setup({
 }
 
 describe("useCatalogProducts", () => {
+  test("hands over the next page's cursor and, once pages arrive, how many and how big the last was", async () => {
+    const { result } = setup();
+
+    expect(result.current.nextCursor).toEqual(CURSOR);
+    expect(result.current.loaded).toEqual({ added: 0, last: 2 });
+
+    act(() => {
+      result.current.fetchNextPage();
+    });
+
+    await waitFor(() => {
+      expect(result.current.loaded).toEqual({ added: 1, last: 2 });
+    });
+    // The server's answer had no cursor: the list ends there.
+    expect(result.current.nextCursor).toBeNull();
+  });
+
+  test("keys a list that started at a cursor apart from the first page's", () => {
+    const { queryClient } = setup({ startCursor: POSITION_CURSOR });
+    const [query] = queryClient.getQueryCache().getAll();
+
+    expect(JSON.stringify(query?.queryKey)).toContain(
+      JSON.stringify(POSITION_CURSOR)
+    );
+  });
+
+  test("watches for the end of the list well before it reaches the window", () => {
+    const { observers, result } = setup();
+
+    act(() => {
+      result.current.attachSentinel(document.createElement("div"));
+    });
+
+    expect(observers.active()?.rootMargin).toBe("0px 0px 800px 0px");
+  });
+
   test("starts from the server's first page without asking again", () => {
     const { products, queryClient, result } = setup();
 
@@ -146,7 +182,7 @@ describe("useCatalogProducts", () => {
 
   test("sends no category and no search when none is chosen", async () => {
     const { products, result } = setup({
-      firstPage: makePage([1, 2], NEWEST_CURSOR),
+      firstPage: makePage([1, 2], POSITION_CURSOR),
       query: EMPTY_CATALOG_QUERY,
     });
 
@@ -156,10 +192,10 @@ describe("useCatalogProducts", () => {
 
     await waitFor(() => {
       expect(products).toHaveBeenCalledExactlyOnceWith({
-        cursor: NEWEST_CURSOR,
+        cursor: POSITION_CURSOR,
         filters: [],
         locale: "es",
-        sort: "newest",
+        sort: "position",
       });
     });
   });

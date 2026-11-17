@@ -17,13 +17,14 @@ An admin finds any article quickly and makes the common changes without opening 
 - Bulk edit: select several articles and add or remove a filter value, for tagging the existing catalog quickly.
 - Inline actions: toggle available, edit price, publish or unpublish, duplicate, delete with confirmation.
 - Infinite scroll on the template's keyset pagination.
+- Reorder the articles by dragging them or with up and down arrows, as the categories are (FER-016): it sets `product.position`, the store's own order, which the catalog shows by default ([FER-044](FER-044-catalog-round.md)). The server takes the whole order or refuses it, as the categories' reorder does, and drops the catalog's cache (`writeToCatalog`).
 - The primary action is always "new article", leading to the wizard.
 
 ## Acceptance criteria
 
 - Marking an article unavailable from a phone takes two taps and shows on the storefront at once.
 - Deleting removes the article's images (FER-011) and keeps past orders intact (they hold their own copy of title and price).
-- E2E: search, toggle availability, change a price, delete.
+- E2E: search, toggle availability, change a price, delete, reorder (and the catalog follows the new order).
 
 ## Reporting
 
