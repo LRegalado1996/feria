@@ -39,9 +39,10 @@ test.describe("Storefront shell", () => {
     const nav = header.getByRole("navigation", {
       name: "Secciones de la tienda",
     });
-    await expect(
-      nav.getByRole("link", { name: "Todos los artículos" })
-    ).toHaveAttribute("href", "/productos");
+    await expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "href",
+      "/productos"
+    );
 
     // The first Tab of the page reaches the skip link, which moves focus to
     // the page's content.
@@ -160,7 +161,9 @@ test.describe("Storefront shell", () => {
       await toggle.click();
 
       await expect(page).toHaveURL("/en?ref=qr");
-      await expect(storePage.getFooter()).toContainText(STORE_TEXTS.en.tagline);
+      await expect(storePage.getFooter()).toContainText(
+        "For more than 20 years my family has set up its stall"
+      );
       await storePage.expectDocumentLanguage("en");
       await reachToggle("Menu");
       await expect(toggle).toHaveAccessibleName("Español");
@@ -195,9 +198,7 @@ test.describe("Storefront shell", () => {
         x: 0,
         y: 0,
       });
-      await expect(
-        menu.getByRole("link", { name: "Todos los artículos" })
-      ).toBeVisible();
+      await expect(menu.getByRole("link", { name: "Catálogo" })).toBeVisible();
       await expect(menu.getByRole("link", { name: "English" })).toBeVisible();
       await menu.getByRole("button", { name: "Cerrar el menú" }).click();
       await expectDialogRemoved(page, menu);
@@ -209,14 +210,23 @@ test.describe("Storefront shell", () => {
     });
   });
 
-  test("the footer shows only the links the store has, and the credit", async ({
+  test("the footer tells Pepe's story, shows only the links the store has, and the credit", async ({
     page,
   }) => {
     const storePage = new StorePage(page);
     await storePage.goto();
     const footer = storePage.getFooter();
 
-    await expect(footer).toContainText(STORE_TEXTS.es.tagline);
+    // Under the logo, the stall's story, signed (FER-044); not the tagline.
+    const story = footer.getByTestId("store-footer-story");
+    await expect(story).toContainText(
+      "Hace más de 20 años que mi familia arma su puesto en la feria navideña."
+    );
+    await expect(story).toContainText(
+      "pasá por el puesto 86 o pedí desde acá."
+    );
+    await expect(story.getByText("Pepe", { exact: true })).toBeVisible();
+    await expect(footer).not.toContainText(STORE_TEXTS.es.tagline);
     await expect(
       footer.getByRole("link", { name: `Instagram de ${STORE_SETTINGS.name}` })
     ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);

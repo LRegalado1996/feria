@@ -94,12 +94,16 @@ test.describe("Catalog filter panel", () => {
     const trigger = page.getByRole("button", { name: /^Filtrar/u });
     const panel = page.getByRole("dialog", { name: "Filtrar" });
 
-    // The control before it in the page is the share button: Tab from there
-    // reaches the panel's button, which counts the category chosen.
-    await page.getByRole("button", { name: "Compartir" }).focus();
+    // The control before it in the page is the trail's house: Tab from there
+    // reaches the panel's button, which counts no filter yet: the page's
+    // category and the search are not filters (FER-044).
+    await page
+      .getByRole("navigation", { name: "Ruta" })
+      .getByRole("link", { name: "Inicio" })
+      .focus();
     await page.keyboard.press("Tab");
     await expect(trigger).toBeFocused();
-    await expect(trigger).toHaveAccessibleName("Filtrar (1)");
+    await expect(trigger).toHaveAccessibleName("Filtrar");
 
     await openByKeyboard(trigger, panel);
     // Focus moved inside, to its first control, and Tab goes on to the

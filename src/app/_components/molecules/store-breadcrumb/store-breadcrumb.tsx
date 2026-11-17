@@ -81,7 +81,11 @@ function Step({ home, item }: { home: boolean; item: StoreBreadcrumbItem }) {
         data-testid="store-breadcrumb-home"
         href={item.href}
       >
-        <House aria-hidden="true" className="size-4 shrink-0" />
+        <House
+          aria-hidden="true"
+          className="size-4 shrink-0"
+          data-testid="store-breadcrumb-home-icon"
+        />
         <span className="sr-only" lang={item.lang}>
           {item.name}
         </span>

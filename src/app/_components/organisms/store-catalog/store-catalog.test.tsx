@@ -294,9 +294,10 @@ describe("StoreCatalog", () => {
       const image = within(cover).getByRole("img", {
         name: "Anillo sello dorado",
       });
+      // Its measure in its own letters: a word breaks only when it must.
       expect(
         within(cover).getByRole("heading", { level: 1, name: "Collares" })
-      ).toBeVisible();
+      ).toHaveClass("max-w-[18ch]");
       expect(image.getAttribute("src")).toContain(encodeURIComponent(phoneSrc));
       expect(image).toHaveAttribute("fetchpriority", "high");
       expect(image).toHaveAttribute("loading", "eager");
@@ -729,8 +730,18 @@ describe("StoreCatalog", () => {
       firstPage: makePage([makeItem(1), makeItem(2)], PRICE_CURSOR),
       query: CHOSEN,
     });
+    // Read once React's own handler ran: the link is not followed.
+    const followed: boolean[] = [];
+    document.addEventListener(
+      "click",
+      (event) => {
+        followed.push(!event.defaultPrevented);
+      },
+      { once: true }
+    );
 
     await user.click(more());
+    expect(followed).toEqual([false]);
 
     await waitFor(() => {
       expect(titles()).toEqual(["Artículo 1", "Artículo 2", "Artículo 3"]);

@@ -482,9 +482,11 @@ export default async function DesignPage({ params }: DesignPageProps) {
         </h2>
         <div>
           <StoreAnnouncementBar>{sample.announcement}</StoreAnnouncementBar>
-          {/* Not sticky here: it would stay over the rest of the gallery. */}
+          {/* Not sticky here: it would stay over the rest of the gallery.
+              Its categories read already, as a catalog page hands them, so
+              they are in the HTML before any script runs. */}
           <StoreHeader
-            categories={Promise.resolve(categories)}
+            categories={categories}
             className="static"
             copy={storefront.shell}
             locale={locale}

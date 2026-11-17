@@ -125,6 +125,7 @@ function StoreNavGroup({
         open && "rotate-180"
       )}
       data-slot="store-nav-group-chevron"
+      data-testid="store-nav-group-chevron"
     />
   );
   const toggle = () => {

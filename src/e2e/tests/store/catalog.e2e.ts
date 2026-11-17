@@ -93,6 +93,36 @@ async function setup({ db }: { db: DbFixture["db"] }) {
 }
 
 /**
+ * `count` more articles of the test's, "Extra 0" to "Extra {count - 1}" in
+ * the order they are added, in a category of their own, priced from 1.000
+ * up and found by the test's tag.
+ */
+async function seedMany({
+  count,
+  db,
+  tag,
+}: {
+  count: number;
+  db: DbFixture["db"];
+  tag: string;
+}) {
+  const extra = await db.seed.createCategory({
+    nameEs: `Varios ${tag}`,
+    slug: `varios-${tag}`,
+  });
+
+  // 24 a page: 25 more articles make a second page.
+  for (let index = 0; index < count; index += 1) {
+    await db.seed.createArticle({
+      categoryId: extra.id,
+      description: tag,
+      priceAmount: 1000 + index,
+      title: `Extra ${index}`,
+    });
+  }
+}
+
+/**
  * The titles the grid shows, in order. Hidden ones too: while the filter
  * panel is open it hides the page behind it from assistive technology, and
  * the grid is still what the address shows.
@@ -248,30 +278,188 @@ test.describe("Catalog", () => {
     ).toBeVisible();
   });
 
-  test("sorts by price and loads the next page", async ({ db, page }) => {
+  test("sorts by price and loads the next page from its link, in place", async ({
+    db,
+    page,
+  }) => {
     const { tag } = await setup({ db });
-    const extra = await db.seed.createCategory({
-      nameEs: `Varios ${tag}`,
-      slug: `varios-${tag}`,
-    });
-
-    // 24 a page: 25 more articles make a second page.
-    for (let index = 0; index < 25; index += 1) {
-      await db.seed.createArticle({
-        categoryId: extra.id,
-        description: tag,
-        priceAmount: 1000 + index,
-        title: `Extra ${index}`,
-      });
-    }
+    await seedMany({ count: 25, db, tag });
 
     await page.goto(`/productos?q=${tag}&sort=price_desc`);
     await expect(titles(page).first()).toHaveText("Collar dorado");
     await expect(titles(page)).toHaveCount(24);
 
-    await page.getByRole("button", { name: "Cargar más" }).click();
+    const more = page.getByRole("link", { name: "Cargar más" });
+    // A real link to the next page, the sort and the search kept.
+    await expect(more).toHaveAttribute(
+      "href",
+      new RegExp(
+        `^/productos\\?q=${tag}&sort=price_desc&cursor=\\d+\\.\\d+$`,
+        "u"
+      )
+    );
+    // A press before React owns the page would follow the link instead.
+    await new StorePage(page).getLiveSearchButton();
+    await more.click();
     await expect(titles(page)).toHaveCount(29);
     await expect(titles(page).last()).toHaveText("Extra 0");
+    // Loaded in place: the address is the list's, not the next page's.
+    await expect(page).toHaveURL(
+      new RegExp(`/productos\\?q=${tag}&sort=price_desc$`, "u")
+    );
+    // The page it asked for takes focus: its first card, the 25th.
+    await expect(
+      page.getByTestId("store-catalog-grid").getByRole("link").nth(24)
+    ).toBeFocused();
+  });
+
+  test("the default order is the store's own: nothing chosen, articles in the order they were added", async ({
+    db,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Estante ${tag}`,
+      slug: `estante-${tag}`,
+    });
+    const at = (minutesAgo: number) =>
+      new Date(Date.now() - minutesAgo * 60_000);
+    // Added in this order; the newest first and both prices read otherwise.
+    for (const [title, minutesAgo, priceAmount] of [
+      ["Primero", 30, 50_000],
+      ["Segundo", 10, 90_000],
+      ["Tercero", 20, 10_000],
+    ] as const) {
+      await db.seed.createArticle({
+        categoryId: shelf.id,
+        priceAmount,
+        publishedAt: at(minutesAgo),
+        title,
+      });
+    }
+
+    await page.goto(`/${shelf.slug}`);
+
+    await expect(titles(page)).toHaveText(["Primero", "Segundo", "Tercero"]);
+    const menu = page.getByRole("menu");
+    await clickUntilVisible(
+      page.getByRole("button", { exact: true, name: "Ordenar por" }),
+      menu
+    );
+    await menu.getByRole("menuitem", { name: "Más nuevos" }).click();
+
+    await expect(page).toHaveURL(
+      new RegExp(`/${shelf.slug}\\?sort=newest$`, "u")
+    );
+    await expect(titles(page)).toHaveText(["Segundo", "Tercero", "Primero"]);
+    const named = page.getByRole("button", {
+      name: "Ordenar por: Más nuevos",
+    });
+    await clickUntilVisible(named, menu);
+    await expect(
+      menu.getByRole("menuitem", { name: "Más nuevos" })
+    ).toHaveAttribute("aria-current", "true");
+
+    // Back to the store's own order: its link is the bare address.
+    await menu.getByRole("menuitem", { name: "Destacados" }).click();
+    await expect(page).toHaveURL(new RegExp(`/${shelf.slug}$`, "u"));
+    await expect(titles(page)).toHaveText(["Primero", "Segundo", "Tercero"]);
+  });
+
+  test("the filter button says how many filter values are chosen, and no pills list them", async ({
+    db,
+    page,
+  }) => {
+    const { color, necklaces, tag } = await setup({ db });
+
+    await page.goto(`/${necklaces.slug}?${color}=dorado,violeta`);
+
+    const trigger = page.getByRole("button", {
+      name: "Filtrar, 2 filtros elegidos",
+    });
+    await expect(trigger).toBeVisible();
+    // What the eye reads: the word and the count.
+    await expect(trigger.getByText("Filtrar (2)")).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Quitar/u })).toHaveCount(0);
+    // Every chosen value was a pill, a link that removed it: none is left.
+    await expect(
+      page.getByRole("link", { name: new RegExp(`Dorado ${tag}`, "u") })
+    ).toHaveCount(0);
+    await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
+  });
+
+  test("loads the next pages by itself near the end of the list, says so, and leaves the footer in reach once it ends", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    // 4 + 45 = 49 articles: three pages of 24.
+    await seedMany({ count: 45, db, tag });
+    const storePage = new StorePage(page);
+
+    await page.goto(`/productos?q=${tag}`);
+    await expect(titles(page)).toHaveCount(24);
+    const status = page.getByTestId("store-catalog-status");
+    await expect(status).toHaveText("");
+
+    // Toward the end of the grid, no press: the next page comes by itself.
+    await titles(page).nth(23).scrollIntoViewIfNeeded();
+    await expect(titles(page)).toHaveCount(48);
+    await expect(status).toHaveText("Se cargaron 24 artículos más; ya ves 48.");
+
+    await titles(page).nth(47).scrollIntoViewIfNeeded();
+    await expect(titles(page)).toHaveCount(49);
+    await expect(status).toHaveText(
+      "Se cargó 1 artículo más; ya ves 49. Ya están todos."
+    );
+    await expect(page.getByRole("link", { name: "Cargar más" })).toHaveCount(0);
+
+    // Nothing pulls any more: the footer stays where the list ends.
+    const footer = storePage.getFooter();
+    await footer.scrollIntoViewIfNeeded();
+    await expect(footer).toBeInViewport();
+    await expect(titles(page)).toHaveCount(49);
+  });
+
+  test("without the script, Cargar más is a link that opens the next page, kept out of the index", async ({
+    baseURL,
+    browser,
+    db,
+  }) => {
+    const { tag } = await setup({ db });
+    await seedMany({ count: 25, db, tag });
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      timezoneId: "UTC",
+    });
+
+    try {
+      const page = await context.newPage();
+      await page.goto(`/productos?q=${tag}`);
+      await expect(titles(page)).toHaveCount(24);
+      await expect(titles(page).first()).toHaveText("Collar dorado");
+
+      await page.getByRole("link", { name: "Cargar más" }).click();
+
+      // The page after the first: the last five, in the store's order.
+      await expect(page).toHaveURL(
+        new RegExp(`/productos\\?q=${tag}&cursor=\\d+\\.\\d+$`, "u")
+      );
+      await expect(titles(page)).toHaveText(
+        [20, 21, 22, 23, 24].map((index) => `Extra ${index}`)
+      );
+      await expect(page.getByRole("link", { name: "Cargar más" })).toHaveCount(
+        0
+      );
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+        "content",
+        "noindex, follow"
+      );
+    } finally {
+      await context.close();
+    }
   });
 
   test("a card is one link to its article, with nothing to add; the article's page adds to the browser's one cart", async ({
@@ -314,26 +502,24 @@ test.describe("Catalog", () => {
     ]);
   });
 
-  test("shares a filtered view by copying its link", async ({
-    context,
+  test("a catalog page shows neither its description nor a share button (FER-044)", async ({
     db,
     page,
   }) => {
-    const { color } = await setup({ db });
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.goto(`/productos?${color}=dorado`);
-    // A computer browser without a share sheet copies the link.
-    await page.evaluate(() => {
-      Object.defineProperty(navigator, "share", { value: undefined });
-    });
+    const { necklaces, tag } = await setup({ db });
 
-    await clickUntilVisible(
-      page.getByRole("button", { name: "Compartir" }),
-      page.getByText("Enlace copiado.")
+    await page.goto(`/${necklaces.slug}`);
+    await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
+
+    const description = `Comprá Collares ${tag} en ${STORE_SETTINGS.name}. Mirá los precios y hacé tu pedido online.`;
+    // Still the page's description for search engines and share cards.
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      "content",
+      description
     );
-
-    expect(
-      await page.evaluate(async () => await navigator.clipboard.readText())
-    ).toBe(page.url());
+    await expect(page.getByText(description)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Compartir" })).toHaveCount(
+      0
+    );
   });
 });

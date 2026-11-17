@@ -37,6 +37,7 @@ import {
   PRODUCT_SORTS,
   type ProductCursor,
 } from "@/lib/schemas/catalog";
+import { cn } from "@/lib/utils";
 import { formatInteger } from "@/lib/utils/format";
 
 export interface StoreCatalogProps {
@@ -166,8 +167,15 @@ function StoreCatalog({
     complete: !products.hasNextPage,
     total: products.items.length,
   });
-  const title = (
-    <h1 className="font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase">
+  // Over the cover it keeps to a measure of its own letters, so a word
+  // breaks only when a line cannot hold it.
+  const title = (overCover: boolean) => (
+    <h1
+      className={cn(
+        "font-display store-display-page leading-display font-extrabold wrap-anywhere uppercase",
+        overCover && "max-w-[18ch]"
+      )}
+    >
       {heading}
     </h1>
   );
@@ -180,9 +188,7 @@ function StoreCatalog({
     >
       <header className="flex flex-col">
         {cover ? (
-          <StoreCatalogCover cover={cover}>
-            <div className="max-w-[18ch]">{title}</div>
-          </StoreCatalogCover>
+          <StoreCatalogCover cover={cover}>{title(true)}</StoreCatalogCover>
         ) : null}
         <StoreBreadcrumb
           className={`${GUTTER_CLASS} py-1.5`}
@@ -193,7 +199,7 @@ function StoreCatalog({
           <div
             className={`${GUTTER_CLASS} flex flex-col items-center pt-4 pb-6 text-center md:pt-6 md:pb-9`}
           >
-            {title}
+            {title(false)}
           </div>
         )}
       </header>
