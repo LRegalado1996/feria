@@ -1,11 +1,32 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { screen, within } from "@testing-library/react";
+import useEmblaCarousel from "embla-carousel-react";
+import { describe, expect, test, vi } from "vitest";
 
+import type { StoreRelatedArticle } from "@/app/_components/organisms/store-article";
 import type { Locale } from "@/lib/i18n/config";
 import type { OrderStatus } from "@/lib/schemas/order";
-import { DICTIONARIES } from "@/test/i18n";
+import { createFakeEmbla } from "@/test/embla";
+import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { stubReducedMotion } from "@/test/reduced-motion";
+import { required } from "@/test/required";
 
 import { StoreOrder, type StoreOrderProps } from "./store-order";
+
+// The row measures a layout happy-dom does not have.
+vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
+
+function makeArticle(id: number): StoreRelatedArticle {
+  return {
+    cover: id === 8 ? null : { alt: `Foto ${id}`, url: `/related-${id}.jpg` },
+    currencyCode: "UYU",
+    id,
+    isAvailable: id !== 8,
+    lang: "es",
+    priceAmount: id * 1000,
+    slug: `articulo-${id}`,
+    title: `Artículo ${id}`,
+  };
+}
 
 const WHATSAPP = "https://wa.me/59899000111?text=Hola";
 
@@ -28,31 +49,38 @@ function makeOrder(
 }
 
 function setup({
+  again = null,
   locale = "en",
   order = makeOrder(),
   whatsappHref = null,
 }: {
+  again?: StoreOrderProps["again"];
   locale?: Locale;
   order?: StoreOrderProps["order"];
   whatsappHref?: string | null;
 } = {}) {
+  stubReducedMotion(false);
+  vi.mocked(useEmblaCarousel).mockReturnValue(
+    createFakeEmbla({ snaps: 1 }).hook
+  );
   const { storefront } = DICTIONARIES[locale];
-  render(
+  renderWithI18n(
     <StoreOrder
+      again={again}
       catalogHref={locale === "en" ? "/en/products" : "/products"}
       className="custom"
-      labels={storefront.order}
+      copy={storefront}
       locale={locale}
-      newTabLabel={storefront.shell.newTab}
       order={order}
       whatsappHref={whatsappHref}
-    />
+    />,
+    { locale }
   );
 
   return {
     /** Each ordered line's text, no-break spaces read as spaces. */
     items: () =>
-      within(screen.getByRole("list"))
+      within(screen.getByTestId("store-order-items"))
         .getAllByRole("listitem")
         .map((item) => item.textContent?.replaceAll(" ", " ")),
     total: () =>
@@ -115,7 +143,9 @@ describe("StoreOrder", () => {
         totalAmount: 125_000,
       }),
     });
-    const [line] = within(screen.getByRole("list")).getAllByRole("listitem");
+    const [line] = within(screen.getByTestId("store-order-items")).getAllByRole(
+      "listitem"
+    );
 
     expect(line?.firstElementChild).toHaveTextContent(
       "1 × Collardeperlascultivadasconcierredeoroyplata"
@@ -195,9 +225,110 @@ describe("StoreOrder", () => {
   test("offers no WhatsApp link when the store has none", () => {
     setup();
 
-    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(
-      ["Keep browsing the store"]
+    expect(
+      within(screen.getByTestId("store-order-actions"))
+        .getAllByRole("link")
+        .map((link) => link.textContent)
+    ).toEqual(["Keep browsing the store"]);
+  });
+
+  test("centers its buttons, each on its own line, the way back last", () => {
+    setup({ whatsappHref: WHATSAPP });
+
+    const actions = screen.getByTestId("store-order-actions");
+    expect(actions).toHaveClass("flex-col", "items-center");
+    expect(actions).not.toHaveClass("sm:flex-row");
+    expect(actions.lastElementChild).toHaveTextContent(
+      "Keep browsing the store"
     );
+  });
+
+  test.each([
+    ["received", "Order status: Received"],
+    ["undeliverable", "Order status: Couldn't deliver"],
+  ] as const)(
+    "shows a %s order's steps read only: across on a computer, down on a phone above the buttons",
+    (status, name) => {
+      setup({ order: makeOrder({ status }) });
+
+      const steppers = screen.getAllByRole("list", { name });
+      const [wide, narrow] = steppers.map((list) => list.parentElement);
+
+      expect(steppers).toHaveLength(2);
+      expect(wide).toHaveClass("hidden", "md:block");
+      expect(narrow).toHaveClass("md:hidden");
+      expect(
+        screen
+          .getByTestId("store-order-banner")
+          .compareDocumentPosition(required(wide))
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(
+        required(narrow).compareDocumentPosition(
+          screen.getByTestId("store-order-actions")
+        )
+      ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      for (const list of steppers) {
+        expect(within(list).queryAllByRole("button")).toEqual([]);
+      }
+    }
+  );
+
+  test("sets the festive band apart after the order, with its pause", () => {
+    setup();
+
+    const band = document.querySelector('[data-slot="store-article-band"]');
+
+    expect(band).toHaveClass("my-6", "md:my-10");
+    expect(band).toHaveTextContent("Happy Holidays!");
+    expect(
+      screen
+        .getByTestId("store-order-actions")
+        .compareDocumentPosition(required(band))
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  test("under the band, a row of one category's articles to order again, leading to its page", () => {
+    setup({
+      again: {
+        articles: [makeArticle(7), makeArticle(8)],
+        href: "/en/aros",
+        name: "Earrings",
+      },
+    });
+
+    const row = screen.getByRole("region", {
+      name: "Order as often as you like",
+    });
+    expect(
+      within(row)
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent)
+    ).toEqual(["Artículo 7", "Artículo 8"]);
+    expect(
+      within(row).getByRole("link", { name: "Artículo 7" })
+    ).toHaveAttribute("href", "/en/productos/articulo-7");
+    expect(
+      screen.getByRole("link", { name: "See all: Earrings" })
+    ).toHaveAttribute("href", "/en/aros");
+    expect(
+      document
+        .querySelector('[data-slot="store-article-band"]')
+        ?.compareDocumentPosition(row)
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  test.each([
+    ["no category to show", null],
+    [
+      "a category whose articles are gone",
+      { articles: [], href: "/aros", name: "Aros" },
+    ],
+  ])("shows no row for %s", (_case, again) => {
+    setup({ again });
+
+    expect(
+      document.querySelector('[data-slot="store-article-row"]')
+    ).not.toBeInTheDocument();
   });
 
   test.each([

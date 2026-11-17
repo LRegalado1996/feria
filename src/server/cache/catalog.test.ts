@@ -10,6 +10,8 @@ import {
   invalidateCatalogCache,
   readAllArticlesCover,
   readCategories,
+  readCategoryArticles,
+  readCategoryCounts,
   readCategoryPage,
   readPublishedArticle,
   readRelatedArticles,
@@ -24,12 +26,16 @@ const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
 // The queries are `src/server/services/catalog.test.ts`'s: here only what the
 // cache layer adds around them.
 const {
+  countPublishedByCategory,
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
   listCategories,
+  listCategoryArticles,
   listRelatedPool,
 } = vi.hoisted(() => ({
+  countPublishedByCategory: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listCategoryArticles: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getAllArticlesCover: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getCategoryPage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -42,10 +48,12 @@ const {
 vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
 
 vi.mock("@/server/services/catalog", () => ({
+  countPublishedByCategory,
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
   listCategories,
+  listCategoryArticles,
   listRelatedPool,
 }));
 
@@ -198,6 +206,35 @@ describe("readCategories", () => {
   });
 });
 
+describe("readCategoryCounts", () => {
+  test("counts the store's published articles per category", async () => {
+    const counts = [{ categoryId: 3, count: 4 }];
+    countPublishedByCategory.mockResolvedValue(counts);
+
+    await expect(readCategoryCounts({ id: 7 })).resolves.toBe(counts);
+    expect(countPublishedByCategory).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategoryArticles", () => {
+  test("lists a category's articles in that language and the store's currency", async () => {
+    const cards = [{ id: 11, title: "Ring" }];
+    listCategoryArticles.mockResolvedValue(cards);
+
+    await expect(readCategoryArticles(makeStore(), 3, "en")).resolves.toBe(
+      cards
+    );
+    expect(listCategoryArticles).toHaveBeenCalledExactlyOnceWith(db, {
+      categoryId: 3,
+      currencyCode: "USD",
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
 describe("readCategoryPage", () => {
   test("answers the store's category page at that address, in that language", async () => {
     const page = { name: "Rings", path: "/bijouterie/anillos" };
@@ -256,6 +293,14 @@ describe("cached reads", () => {
         await readRelated({ categoryId: null, id: 11 }),
     ],
     ["the categories", async () => await readCategories({ id: 7 }, "es")],
+    [
+      "the counts per category",
+      async () => await readCategoryCounts({ id: 7 }),
+    ],
+    [
+      "a category's articles",
+      async () => await readCategoryArticles(makeStore(), 3, "es"),
+    ],
     [
       "a category's page",
       async () => await readCategoryPage({ id: 7 }, "anillos", "es"),

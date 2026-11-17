@@ -6,10 +6,12 @@ import { catalogSlugSchema } from "@/lib/schemas/catalog";
 import type { Currency } from "@/lib/utils/format";
 import { db } from "@/server/db";
 import {
+  countPublishedByCategory,
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
   listCategories,
+  listCategoryArticles,
   listRelatedPool,
 } from "@/server/services/catalog";
 
@@ -87,6 +89,39 @@ export async function readRelatedArticles(
     currencyCode: store.currencyCode,
     locale,
     productId: article.id,
+    storeId: store.id,
+  });
+}
+
+/**
+ * How many published articles each category holds, cached with the
+ * catalog: what the order page's row draws its category from (FER-051).
+ */
+export async function readCategoryCounts(store: { id: number }) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await countPublishedByCategory(db, { storeId: store.id });
+}
+
+/**
+ * A category's newest published articles in `locale`, cached with the
+ * catalog: the order page's row once its category is drawn (FER-051).
+ */
+export async function readCategoryArticles(
+  store: { currencyCode: Currency; id: number },
+  categoryId: number,
+  locale: Locale
+) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(catalogTag(store.id));
+
+  return await listCategoryArticles(db, {
+    categoryId,
+    currencyCode: store.currencyCode,
+    locale,
     storeId: store.id,
   });
 }

@@ -385,9 +385,9 @@ test.describe("Cart and checkout", () => {
       }
     );
     const order = page.getByTestId("store-order-page");
-    await expect(order.getByRole("listitem")).toHaveText([
-      "1 × Collar dorado$ 1.200",
-    ]);
+    await expect(
+      order.getByTestId("store-order-items").getByRole("listitem")
+    ).toHaveText(["1 × Collar dorado$ 1.200"]);
     await expect(order).toContainText("Paso a la tarde.");
   });
 
