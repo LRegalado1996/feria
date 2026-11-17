@@ -356,11 +356,19 @@ test.describe("Cart and checkout", () => {
     await other.close();
     await expect(submit).toBeDisabled();
 
-    await dialog.getByRole("button", { name: "Volver" }).click();
+    // From the keyboard: "Volver" has focus as the dialog opens.
+    await expect(dialog.getByRole("button", { name: "Volver" })).toBeFocused();
+    await page.keyboard.press("Enter");
     await expectDialogRemoved(page, dialog);
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Tus datos" })
-    ).toBeFocused();
+    const title = page.getByRole("heading", { level: 2, name: "Tus datos" });
+    await expect(title).toBeFocused();
+    // The keyboard user sees where focus went: the fields' 3 px ring.
+    expect(
+      await title.evaluate((heading) => {
+        const style = getComputedStyle(heading);
+        return [style.outlineStyle, style.outlineWidth];
+      })
+    ).toEqual(["solid", "3px"]);
     expect(await orders()).toEqual([]);
   });
 
