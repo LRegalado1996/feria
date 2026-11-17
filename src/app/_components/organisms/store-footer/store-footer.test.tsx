@@ -124,8 +124,8 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["en", "Shop", "All articles", "/en"],
-    ["es", "Tienda", "Todos los artículos", ""],
+    ["en", "Shop", "Catalog", "/en"],
+    ["es", "Tienda", "Catálogo", ""],
   ] as const)(
     "in %s, the %s links lead to all articles and to each page, a group's categories after it, one step in",
     (locale, heading, catalog, prefix) => {
@@ -165,7 +165,7 @@ describe("StoreFooter", () => {
       shop
         .getAllByRole("link")
         .map((link) => [link.textContent, link.getAttribute("href")])
-    ).toEqual([["All articles", "/en/productos"]]);
+    ).toEqual([["Catalog", "/en/productos"]]);
   });
 
   test.each([

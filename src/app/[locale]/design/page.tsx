@@ -168,15 +168,15 @@ export default async function DesignPage({ params }: DesignPageProps) {
     sample.marquee.products,
     sample.marquee.fair,
   ];
-  // LR Market's navigation (FER-043): Bijouterie holding four, then the
-  // bubble guns in no group.
+  // LR Market's navigation in Lucas's order (FER-044): the bubble guns in
+  // no group, then Bijouterie holding four (FER-043).
   const categories = [
+    { id: 6, name: sample.categories.bubbles, slug: "burbujeros" },
     { id: 1, name: sample.categories.jewelry, slug: "bijouterie" },
     { id: 2, name: sample.categories.chains, parentId: 1, slug: "cadenas" },
     { id: 3, name: sample.categories.rings, parentId: 1, slug: "anillos" },
     { id: 4, name: sample.categories.earrings, parentId: 1, slug: "aros" },
     { id: 5, name: sample.categories.bracelets, parentId: 1, slug: "pulseras" },
-    { id: 6, name: sample.categories.bubbles, slug: "burbujeros" },
   ].map(({ parentId = null, ...category }) => ({
     ...category,
     lang: locale,

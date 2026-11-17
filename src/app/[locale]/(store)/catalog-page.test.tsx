@@ -259,7 +259,7 @@ describe("a catalog page's address", () => {
     expect(mocks.readAllArticlesCover).toHaveBeenCalledExactlyOnceWith(
       makeStore(),
       "es",
-      "Todos los artículos"
+      "Catálogo"
     );
     expect(mocks.products).toHaveBeenCalledExactlyOnceWith({
       category: undefined,
@@ -272,13 +272,13 @@ describe("a catalog page's address", () => {
       breadcrumb: {
         items: [
           { href: "/", name: "Inicio" },
-          { lang: undefined, name: "Todos los artículos" },
+          { lang: undefined, name: "Catálogo" },
         ],
         label: "Ruta",
       },
       cover: COVER,
       description: "Todos los artículos de LR Market.",
-      heading: "Todos los artículos",
+      heading: "Catálogo",
       query: { category: null },
     });
     // The filter panel lists a group's categories right after it.

@@ -131,7 +131,7 @@ export const storefront = {
       price_desc: "Precio: mayor a menor",
       prompt: "Ordenar por",
     },
-    title: "Todos los artículos",
+    title: "Catálogo",
   },
   home: {
     browse: "Ver el catálogo",
@@ -182,9 +182,12 @@ export const storefront = {
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
-    catalog: "Todos los artículos",
+    catalog: "Catálogo",
     closeMenu: "Cerrar el menú",
-    // The button beside a group in the header (FER-043).
+    // The first link of a group's list on the header's line (FER-044): the
+    // group's own page.
+    groupAll: "Ver todo",
+    // The button beside a group in the phone's menu (FER-043).
     groupToggle: "{name}: sus categorías",
     copyright: "© {store}",
     credit: "Hecho por Lucas Regalado",

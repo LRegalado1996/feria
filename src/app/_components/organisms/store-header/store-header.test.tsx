@@ -36,14 +36,17 @@ function makeCategory(
 
 const BIJOUTERIE = { id: 6, slug: "bijouterie" };
 
-/** The seed's catalog (FER-043): Bijouterie holding four, then the bubbles. */
+/**
+ * The seed's catalog in Lucas's order (FER-044): the bubble guns, then
+ * Bijouterie holding four (FER-043).
+ */
 const CATEGORIES: StoreHeaderCategory[] = [
+  makeCategory(1, "Burbujeros", "burbujeros"),
   makeCategory(6, "Bijouterie", "bijouterie"),
   makeCategory(2, "Cadenas", "cadenas", BIJOUTERIE),
   makeCategory(3, "Anillos", "anillos", BIJOUTERIE),
   makeCategory(4, "Aros", "aros", BIJOUTERIE),
   makeCategory(5, "Pulseras", "pulseras", BIJOUTERIE),
-  makeCategory(1, "Burbujeros", "burbujeros"),
 ];
 
 async function setup({
@@ -146,8 +149,8 @@ describe("StoreHeader", () => {
   });
 
   test.each([
-    ["en", "All articles", "/en/productos"],
-    ["es", "Todos los artículos", "/productos"],
+    ["en", "Catalog", "/en/productos"],
+    ["es", "Catálogo", "/productos"],
   ] as const)(
     "in %s, without its categories, its line links to all articles alone",
     async (locale, name, href) => {
@@ -161,7 +164,7 @@ describe("StoreHeader", () => {
     ["streamed in", true],
     ["read already, in the first response", false],
   ])(
-    "its line links to all articles, the group and the category in none, %s",
+    "its line reads the catalog, then the category in none and the group in the store's order, %s",
     async (_case, streamed) => {
       const { bar, barElement } = await setup({
         categories: CATEGORIES,
@@ -169,16 +172,24 @@ describe("StoreHeader", () => {
         streamed,
       });
 
-      // The group's categories wait behind its button, out of the reading
-      // order until it opens.
+      // In the store's order, never a fixed one: the bubble guns come first
+      // because their position does (FER-044).
+      // Each entry by its first control: a link, or the group's button.
+      expect(
+        [...(barElement().querySelector("ul")?.children ?? [])].map(
+          (item) => item.querySelector("a, button")?.textContent
+        )
+      ).toEqual(["Catálogo", "Burbujeros", "Bijouterie"]);
+      // The group's page and categories wait behind its one control, out of
+      // the reading order until it opens.
       expect(linksOf(barElement())).toEqual([
-        ["Todos los artículos", "/productos"],
-        ["Bijouterie", "/bijouterie"],
+        ["Catálogo", "/productos"],
         ["Burbujeros", "/burbujeros"],
       ]);
-      expect(
-        bar().getByRole("button", { name: "Bijouterie: sus categorías" })
-      ).toHaveAttribute("aria-expanded", "false");
+      expect(bar().getByRole("button", { name: "Bijouterie" })).toHaveAttribute(
+        "aria-expanded",
+        "false"
+      );
       expect(bar().getByRole("link", { name: "Burbujeros" })).toHaveAttribute(
         "lang",
         "es"
@@ -192,18 +203,16 @@ describe("StoreHeader", () => {
       locale: "es",
     });
 
-    await user.click(
-      bar().getByRole("button", { name: "Bijouterie: sus categorías" })
-    );
+    await user.click(bar().getByRole("button", { name: "Bijouterie" }));
 
     expect(linksOf(barElement())).toEqual([
-      ["Todos los artículos", "/productos"],
-      ["Bijouterie", "/bijouterie"],
+      ["Catálogo", "/productos"],
+      ["Burbujeros", "/burbujeros"],
+      ["Ver todo", "/bijouterie"],
       ["Cadenas", "/bijouterie/cadenas"],
       ["Anillos", "/bijouterie/anillos"],
       ["Aros", "/bijouterie/aros"],
       ["Pulseras", "/bijouterie/pulseras"],
-      ["Burbujeros", "/burbujeros"],
     ]);
   });
 
@@ -224,7 +233,7 @@ describe("StoreHeader", () => {
     );
     const { bar } = await setup({ categories: many, locale: "es" });
 
-    // "Todos los artículos" and the first five.
+    // "Catálogo" and the first five.
     expect(bar().getAllByRole("link")).toHaveLength(BAR_CATEGORIES_MAX + 1);
     expect(
       bar().queryByRole("link", { name: `C${BAR_CATEGORIES_MAX}` })
@@ -241,18 +250,17 @@ describe("StoreHeader", () => {
       locale: "es",
     });
 
-    // "Todos los artículos" (19) + 18 + 20 = 57 letters, past the 44 the
-    // line holds; 19 + 18 = 37 fits.
+    // "Catálogo" (8) + 18 + 20 = 46 letters, past the 44 the line holds;
+    // 8 + 18 = 26 fits.
     expect(linksOf(barElement()).map(([name]) => name)).toEqual([
-      "Todos los artículos",
+      "Catálogo",
       "Collares de perlas",
     ]);
   });
 
   test.each([
-    ["all articles", "/productos", "Todos los artículos"],
+    ["all articles", "/productos", "Catálogo"],
     ["a category in no group", "/burbujeros", "Burbujeros"],
-    ["a group", "/bijouterie", "Bijouterie"],
   ])(
     "marks %s's link as the current page on it, and nothing else",
     async (_case, currentPath, name) => {
@@ -271,25 +279,30 @@ describe("StoreHeader", () => {
     }
   );
 
-  test("marks a group's category as the current page inside the group", async () => {
-    const { bar, user } = await setup({
-      categories: CATEGORIES,
-      currentPath: "/bijouterie/anillos",
-      locale: "es",
-    });
+  test.each([
+    ["the group's page", "/bijouterie", "Ver todo"],
+    ["one of its categories", "/bijouterie/anillos", "Anillos"],
+  ])(
+    "on %s, marks its link inside the group as the current page and underlines the group",
+    async (_case, currentPath, name) => {
+      const { bar, user } = await setup({
+        categories: CATEGORIES,
+        currentPath,
+        locale: "es",
+      });
+      const group = bar().getByRole("button", { name: "Bijouterie" });
 
-    await user.click(
-      bar().getByRole("button", { name: "Bijouterie: sus categorías" })
-    );
+      expect(group).toHaveAttribute("data-current", "true");
+      await user.click(group);
 
-    expect(bar().getByRole("link", { name: "Anillos" })).toHaveAttribute(
-      "aria-current",
-      "page"
-    );
-    expect(bar().getByRole("link", { name: "Bijouterie" })).not.toHaveAttribute(
-      "aria-current"
-    );
-  });
+      expect(
+        bar()
+          .getAllByRole("link")
+          .filter((link) => link.getAttribute("aria-current") === "page")
+          .map((link) => link.textContent)
+      ).toEqual([name]);
+    }
+  );
 
   test("marks nothing as current elsewhere", async () => {
     const { bar } = await setup({ categories: CATEGORIES, locale: "es" });
@@ -342,14 +355,15 @@ describe("StoreHeader", () => {
     const menu = within(dialog());
     expect(linksOf(dialog())).toEqual([
       ["Inicio", "/"],
-      ["Todos los artículos", "/productos"],
-      ["Bijouterie", "/bijouterie"],
+      ["Catálogo", "/productos"],
       ["Burbujeros", "/burbujeros"],
+      ["Bijouterie", "/bijouterie"],
       ["English", "/en"],
     ]);
-    expect(
-      menu.getByRole("link", { name: "Todos los artículos" })
-    ).toHaveAttribute("aria-current", "page");
+    expect(menu.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
 
     await user.click(
       menu.getByRole("button", { name: "Bijouterie: sus categorías" })
@@ -357,13 +371,13 @@ describe("StoreHeader", () => {
 
     expect(linksOf(dialog()).map(([name]) => name)).toEqual([
       "Inicio",
-      "Todos los artículos",
+      "Catálogo",
+      "Burbujeros",
       "Bijouterie",
       "Cadenas",
       "Anillos",
       "Aros",
       "Pulseras",
-      "Burbujeros",
       "English",
     ]);
     expect(menu.getByRole("button", { name: "Cerrar el menú" })).toBeVisible();
@@ -376,7 +390,7 @@ describe("StoreHeader", () => {
 
     expect(linksOf(dialog()).map(([name]) => name)).toEqual([
       "Inicio",
-      "Todos los artículos",
+      "Catálogo",
       "English",
     ]);
   });

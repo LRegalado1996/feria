@@ -135,8 +135,9 @@ describe("StoreFrame", () => {
       "href",
       "/anillos"
     );
-    expect(
-      nav.getByRole("link", { name: "Todos los artículos" })
-    ).toHaveAttribute("aria-current", "page");
+    expect(nav.getByRole("link", { name: "Catálogo" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
   });
 });
