@@ -128,4 +128,22 @@ describe("shellOf", () => {
     expect(readStore).not.toHaveBeenCalled();
     expect(connection).not.toHaveBeenCalled();
   });
+
+  test("from a page that read its categories as of now, those, reading no cached list (FER-043)", async () => {
+    const own = [
+      {
+        id: 4,
+        lang: "es",
+        name: "Aros",
+        parentId: null,
+        path: "/aros",
+        slug: "aros",
+      },
+    ];
+
+    const shell = await shellOf(makeStore(), "es", own);
+
+    expect(shell.categories).toBe(own);
+    expect(readCategories).not.toHaveBeenCalled();
+  });
 });

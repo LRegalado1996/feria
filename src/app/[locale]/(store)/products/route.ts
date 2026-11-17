@@ -5,8 +5,9 @@ import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import { rawSearchParams, readLegacyCategory } from "@/lib/catalog/query";
 import { isLocale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
-import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
+import { db } from "@/server/db";
+import { listCategories } from "@/server/services/catalog";
 
 interface LegacyCatalogContext {
   params: Promise<{ locale: string }>;
@@ -39,7 +40,10 @@ export async function GET(
     // The build has no database: the store is read once a request is there.
     await connection();
     const store = await readStore();
-    const categories = store ? await readCategories(store, locale) : [];
+    // As of now, not cached: a group just set must lead its links there.
+    const categories = store
+      ? await listCategories(db, { locale, storeId: store.id })
+      : [];
     path = categories.find((entry) => entry.slug === slug)?.path ?? path;
   }
 

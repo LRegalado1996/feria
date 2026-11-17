@@ -2,6 +2,7 @@ import { connection } from "next/server";
 
 import type { StoreAnnouncement } from "@/app/_components/organisms/store-frame";
 import type { StoreHeaderProps } from "@/app/_components/organisms/store-header";
+import type { NavigationCategory } from "@/lib/catalog/navigation";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readCategories } from "@/server/cache/catalog";
@@ -77,14 +78,16 @@ export function streamedShell(locale: Locale): StoreShell {
  * which wait for their reads before anything is sent. The categories are
  * read here, before the page renders, so the header's links sit behind no
  * boundary and are in the first response, for a crawler that runs no
- * script (FER-043).
+ * script (FER-043). A page that read them itself, as of now (a catalog
+ * page), hands them over instead of the cached list.
  */
 export async function shellOf(
   store: PublicStore,
-  locale: Locale
+  locale: Locale,
+  categories?: readonly NavigationCategory[]
 ): Promise<StoreShell> {
   return {
     announcement: Promise.resolve(announcementOf(store, locale)),
-    categories: await readCategories(store, locale),
+    categories: categories ?? (await readCategories(store, locale)),
   };
 }

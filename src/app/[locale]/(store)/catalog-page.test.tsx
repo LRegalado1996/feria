@@ -20,10 +20,12 @@ const mocks = vi.hoisted(() => ({
   readCategories: vi.fn(),
   readCategoryPage: vi.fn(),
   readStore: vi.fn<() => Promise<PublicStore | null>>(),
-  shellOf: vi.fn(async () => ({
-    announcement: Promise.resolve(null),
-    categories: [],
-  })),
+  shellOf: vi.fn(
+    async (_store: unknown, _locale: string, _categories?: unknown) => ({
+      announcement: Promise.resolve(null),
+      categories: [],
+    })
+  ),
 }));
 
 // `server-only` throws on import outside a React Server Components build.
@@ -33,13 +35,18 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/cache/store", () => ({ readStore: mocks.readStore }));
 vi.mock("@/server/cache/catalog", () => ({
   readAllArticlesCover: mocks.readAllArticlesCover,
-  readCategories: mocks.readCategories,
   readCategoryPage: mocks.readCategoryPage,
 }));
 
 // The procedures have their own tests; here they are spied on.
 vi.mock("@/lib/orpc/server", () => ({
-  caller: { catalog: { filters: mocks.filters, products: mocks.products } },
+  caller: {
+    catalog: {
+      categories: mocks.readCategories,
+      filters: mocks.filters,
+      products: mocks.products,
+    },
+  },
 }));
 
 // The frame's parts have their own tests (`store-shell.test.ts`).
@@ -63,8 +70,16 @@ vi.mock("@/app/_components/organisms/store-catalog", () => ({
 }));
 
 vi.mock("./store-page-footer", () => ({
-  StorePageFooter: ({ locale }: { locale: Locale }) => (
-    <footer data-testid="footer">{locale}</footer>
+  StorePageFooter: ({
+    categories,
+    locale,
+  }: {
+    categories?: readonly { slug: string }[];
+    locale: Locale;
+  }) => (
+    <footer data-testid="footer">
+      {`${locale} ${categories?.map((entry) => entry.slug).join(",") ?? "cached"}`}
+    </footer>
   ),
 }));
 
@@ -282,7 +297,19 @@ describe("a catalog page's address", () => {
     expect(mocks.frameProps).toHaveBeenCalledWith(
       expect.objectContaining({ currentPath: "/productos", locale: "es" })
     );
-    expect(screen.getByTestId("footer")).toHaveTextContent("es");
+    // The categories read as of now, not the cached list: the header and the
+    // footer list the same ones as the filter panel.
+    expect(mocks.readCategories).toHaveBeenCalledExactlyOnceWith({
+      locale: "es",
+    });
+    expect(mocks.shellOf).toHaveBeenCalledExactlyOnceWith(
+      makeStore(),
+      "es",
+      CATEGORIES
+    );
+    expect(screen.getByTestId("footer")).toHaveTextContent(
+      "es bijouterie,cadenas,anillos,burbujeros"
+    );
   });
 
   test("is a group's page at its slug, listing every article in it, its words made from its categories", async () => {

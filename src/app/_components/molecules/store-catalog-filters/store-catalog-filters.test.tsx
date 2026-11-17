@@ -83,6 +83,7 @@ function setup({
   locale?: Locale;
   query?: CatalogQuery;
 } = {}) {
+  const onCategoryChoice = vi.fn();
   const { container } = render(
     <StoreCatalogFilters
       categories={categories}
@@ -91,6 +92,7 @@ function setup({
       filters={FILTERS}
       idPrefix="panel"
       locale={locale}
+      onCategoryChoice={onCategoryChoice}
       query={query}
     />
   );
@@ -118,6 +120,7 @@ function setup({
   return {
     choicesIn,
     group,
+    onCategoryChoice,
     root: container.querySelector('[data-slot="store-catalog-filters"]'),
   };
 }
@@ -151,6 +154,18 @@ describe("StoreCatalogFilters", () => {
       ["Collares", "/en/productos", "true"],
       ["Rings", "/en/collares/anillos", null],
     ]);
+  });
+
+  test("says when a category, another page (FER-043), is followed, and not a filter's value", () => {
+    const { onCategoryChoice } = setup();
+
+    screen.getByRole("link", { name: /^Dorado/u }).click();
+    expect(onCategoryChoice).not.toHaveBeenCalled();
+    screen.getByRole("link", { name: "Rings" }).click();
+    screen.getByRole("link", { name: "Todas" }).click();
+
+    const click = expect.objectContaining({ type: "click" });
+    expect(onCategoryChoice.mock.calls).toEqual([[click], [click]]);
   });
 
   test("sets a group's categories one step in, under it (FER-043)", () => {

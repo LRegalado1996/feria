@@ -45,6 +45,11 @@ export interface StoreCatalogFiltersProps {
   /** Unique on the page: it prefixes the ids that name each group. */
   idPrefix: string;
   locale: Locale;
+  /**
+   * A category was chosen: it leads to another page (FER-043), so the
+   * panel around the choices closes as it is followed.
+   */
+  onCategoryChoice?: () => void;
   query: CatalogQuery;
 }
 
@@ -60,6 +65,7 @@ interface ChoiceProps {
   count?: number;
   href: string;
   lang?: string;
+  onFollow?: () => void;
   /** The value's own color, checked as `#rrggbb` when it was saved. */
   swatchColor?: string | null;
 }
@@ -75,6 +81,7 @@ function Choice({
   count,
   href,
   lang,
+  onFollow,
   swatchColor = null,
 }: ChoiceProps) {
   return (
@@ -85,6 +92,7 @@ function Choice({
       data-slot="store-catalog-choice"
       href={href}
       lang={lang}
+      onClick={onFollow}
       scroll={false}
     >
       {/* The box shows the state the link's `aria-current` states. */}
@@ -129,6 +137,7 @@ function StoreCatalogFilters({
   filters,
   idPrefix,
   locale,
+  onCategoryChoice,
   query,
 }: StoreCatalogFiltersProps) {
   const href = (next: CatalogQuery) => catalogHref(locale, next);
@@ -148,6 +157,7 @@ function StoreCatalogFilters({
               <Choice
                 chosen={query.category === null}
                 href={href({ ...query, category: null })}
+                onFollow={onCategoryChoice}
               >
                 {copy.allCategories}
               </Choice>
@@ -169,6 +179,7 @@ function StoreCatalogFilters({
                         : { path: category.path, slug: category.slug },
                     })}
                     lang={category.lang}
+                    onFollow={onCategoryChoice}
                   >
                     {category.name}
                   </Choice>

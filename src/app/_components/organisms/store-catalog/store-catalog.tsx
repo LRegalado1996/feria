@@ -177,17 +177,20 @@ function StoreCatalog({
               {panelChoices > 0 ? ` (${panelChoices})` : null}
             </StoreButton>
           </DialogPrimitive.Trigger>
-          {/* In place, not in a portal, like every storefront dialog. Its
-              open and close are short slides, which reduced motion drops
-              (src/styles/globals.css). */}
+          {/* In place, not in a portal, like every storefront dialog. It
+              opens with a short slide, which reduced motion drops
+              (src/styles/globals.css), and leaves at once: a category is a
+              page of its own (FER-043), and the page left behind stays
+              mounted, hidden, where an exit animation never ends and would
+              keep its scrim in the document (design.md § Admin, the menu). */}
           <DialogPrimitive.Overlay
-            className="fixed inset-0 z-50 bg-store-foreground/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0"
+            className="fixed inset-0 z-50 bg-store-foreground/50 data-[state=open]:animate-in data-[state=open]:fade-in-0"
             data-slot="dialog-overlay"
             data-testid="dialog-overlay"
           />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            className="fixed inset-x-0 bottom-0 z-50 flex h-[86dvh] flex-col overflow-hidden rounded-t-2xl bg-store-background text-store-foreground shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=open]:animate-in max-md:data-[state=closed]:slide-out-to-bottom max-md:data-[state=open]:slide-in-from-bottom md:inset-y-0 md:right-auto md:h-full md:w-full md:max-w-100 md:rounded-none md:data-[state=closed]:slide-out-to-left md:data-[state=open]:slide-in-from-left"
+            className="fixed inset-x-0 bottom-0 z-50 flex h-[86dvh] flex-col overflow-hidden rounded-t-2xl bg-store-background text-store-foreground shadow-lg duration-200 outline-none data-[state=open]:animate-in max-md:data-[state=open]:slide-in-from-bottom md:inset-y-0 md:right-auto md:h-full md:w-full md:max-w-100 md:rounded-none md:data-[state=open]:slide-in-from-left"
             data-slot="dialog-content"
             data-testid="store-catalog-panel"
           >
@@ -214,6 +217,9 @@ function StoreCatalog({
                 filters={filters}
                 idPrefix="panel"
                 locale={locale}
+                onCategoryChoice={() => {
+                  setPanelOpen(false);
+                }}
                 query={query}
               />
             </div>

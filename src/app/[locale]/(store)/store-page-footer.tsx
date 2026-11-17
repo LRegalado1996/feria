@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { StoreFooter } from "@/app/_components/organisms/store-footer";
 import { getDictionary } from "@/content";
+import type { NavigationCategory } from "@/lib/catalog/navigation";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readCategories } from "@/server/cache/catalog";
@@ -11,24 +12,25 @@ import type { PublicStore } from "@/server/services/store";
 
 /**
  * The footer every store page ends with (FER-021, FER-039), from the store
- * the page already read and its categories, a cached read. Pages render it,
- * not the layout: the layout has no address to wait for, so it is
- * prerendered at build, where there is no database (docs/agents/nextjs.md §
- * Store pages).
+ * the page already read and its categories, a cached read, or the ones the
+ * page read itself (a catalog page). Pages render it, not the layout: the
+ * layout has no address to wait for, so it is prerendered at build, where
+ * there is no database (docs/agents/nextjs.md § Store pages).
  */
 export async function StorePageFooter({
+  categories,
   locale,
   store,
 }: {
+  categories?: readonly NavigationCategory[];
   locale: Locale;
   store: PublicStore;
 }) {
   const text = pickTranslation(store.translations, locale);
-  const categories = await readCategories(store, locale);
 
   return (
     <StoreFooter
-      categories={categories}
+      categories={categories ?? (await readCategories(store, locale))}
       // At the bottom of a short page too: the content region is a column.
       className="mt-auto"
       copy={getDictionary(locale).storefront.shell}

@@ -27,11 +27,7 @@ import { absoluteUrl } from "@/lib/seo/origin";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import { breadcrumbList, collectionPage } from "@/lib/seo/structured-data";
 import { formatList } from "@/lib/utils/format";
-import {
-  readAllArticlesCover,
-  readCategories,
-  readCategoryPage,
-} from "@/server/cache/catalog";
+import { readAllArticlesCover, readCategoryPage } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import type { CategoryPage } from "@/server/services/catalog";
 import type { PublicStore } from "@/server/services/store";
@@ -123,8 +119,10 @@ const loadCatalogPage = cache(
     }
 
     const copy = getDictionary(locale).storefront.catalog;
+    // As of now, not cached: the header, the footer and the filter panel
+    // list them, and this page is read per request anyway.
     const [categories, filters] = await Promise.all([
-      readCategories(store, locale),
+      caller.catalog.categories({ locale }),
       caller.catalog.filters({ locale }),
     ]);
     const query = knownOnly(
@@ -304,7 +302,7 @@ export async function CatalogPageView(props: CatalogPageProps) {
       copy={storefront.shell}
       currentPath={page?.path ?? ALL_ARTICLES_PATH}
       locale={locale}
-      {...await shellOf(store, locale)}
+      {...await shellOf(store, locale, loaded.categories)}
     >
       <main>
         <JsonLd
@@ -350,7 +348,11 @@ export async function CatalogPageView(props: CatalogPageProps) {
           query={query}
         />
       </main>
-      <StorePageFooter locale={locale} store={store} />
+      <StorePageFooter
+        categories={loaded.categories}
+        locale={locale}
+        store={store}
+      />
     </StoreFrame>
   );
 }

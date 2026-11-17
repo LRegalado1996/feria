@@ -2,6 +2,7 @@ import type * as NextServer from "next/server";
 import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
+import { db } from "@/server/db";
 import { holdRequest, settle } from "@/test/connection";
 
 import { GET } from "./route";
@@ -10,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   connection: vi.fn(async () => {
     await Promise.resolve();
   }),
-  readCategories: vi.fn(),
+  listCategories: vi.fn(),
   readStore: vi.fn(),
 }));
 
@@ -21,15 +22,15 @@ vi.mock("next/server", async (importOriginal) => ({
 
 // The cached reads have their own tests; here they answer what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore: mocks.readStore }));
-vi.mock("@/server/cache/catalog", () => ({
-  readCategories: mocks.readCategories,
+vi.mock("@/server/services/catalog", () => ({
+  listCategories: mocks.listCategories,
 }));
 
 const STORE = { id: 7 };
 
 function setup({ store = STORE }: { store?: typeof STORE | null } = {}) {
   mocks.readStore.mockResolvedValue(store);
-  mocks.readCategories.mockResolvedValue([
+  mocks.listCategories.mockResolvedValue([
     { path: "/bijouterie/anillos", slug: "anillos" },
     { path: "/burbujeros", slug: "burbujeros" },
   ]);
@@ -88,7 +89,10 @@ describe("GET /products, the catalog's address before FER-043", () => {
     expect(mocks.readStore).not.toHaveBeenCalled();
     request.arrive();
     await response;
-    expect(mocks.readCategories).toHaveBeenCalledExactlyOnceWith(STORE, "en");
+    expect(mocks.listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      storeId: 7,
+    });
   });
 
   test("reads nothing for an address without a category", async () => {
@@ -106,7 +110,7 @@ describe("GET /products, the catalog's address before FER-043", () => {
     const response = await get("?category=anillos");
 
     expect(response.headers.get("location")).toBe("/productos");
-    expect(mocks.readCategories).not.toHaveBeenCalled();
+    expect(mocks.listCategories).not.toHaveBeenCalled();
   });
 
   test("answers a language the site does not speak with a 404", async () => {

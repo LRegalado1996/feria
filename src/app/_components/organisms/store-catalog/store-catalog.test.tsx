@@ -489,26 +489,42 @@ describe("StoreCatalog", () => {
     );
   });
 
-  test("following a choice in the panel leaves it open, and the new selection shows in it", async () => {
+  test("following a filter in the panel leaves it open, and the new selection shows in it", async () => {
     const { navigate, user } = setup();
     const trigger = screen.getByRole("button", { name: "Filtrar" });
     await user.click(trigger);
     const panel = screen.getByTestId("store-catalog-panel");
 
-    await user.click(within(panel).getByRole("link", { name: "Aros" }));
+    await user.click(within(panel).getByRole("link", { name: /^Dorado/u }));
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
 
     // The router renders the catalog again for the address it followed.
-    navigate(makeQuery({ category: { path: "/aros", slug: "aros" } }));
+    navigate(
+      makeQuery({ filters: [{ attribute: "color", values: ["dorado"] }] })
+    );
 
     expect(screen.getByTestId("store-catalog-panel")).toBe(panel);
-    expect(within(panel).getByRole("link", { name: "Aros" })).toHaveAttribute(
-      "aria-current",
-      "true"
-    );
+    expect(
+      within(panel).getByRole("link", { name: /^Dorado/u })
+    ).toHaveAttribute("aria-current", "true");
     // Behind the open panel (hidden from a screen reader while it is open),
     // its button already counts the new choice.
     expect(trigger).toHaveTextContent(/^Filtrar \(1\)$/u);
+  });
+
+  test("following a category in the panel closes it at once: the category is another page (FER-043)", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Filtrar" }));
+
+    await user.click(
+      within(screen.getByTestId("store-catalog-panel")).getByRole("link", {
+        name: "Aros",
+      })
+    );
+
+    expect(screen.queryByTestId("store-catalog-panel")).toBeNull();
+    // No exit animation leaves the scrim behind on the page left behind.
+    expect(screen.queryByTestId("dialog-overlay")).toBeNull();
   });
 
   test("the panel offers to clear what is chosen, keeping the sort, only when something is", async () => {
