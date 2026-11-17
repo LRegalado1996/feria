@@ -1,7 +1,9 @@
+import { ORPCError } from "@orpc/client";
 import { useMutation } from "@tanstack/react-query";
 import { put } from "@vercel/blob/client";
 import { useRef, useState } from "react";
 
+import { ERROR_WHYS } from "@/lib/errors";
 import { reportError } from "@/lib/errors/client";
 import { orpc } from "@/lib/orpc/client";
 import {
@@ -16,7 +18,30 @@ import {
 } from "@/lib/upload/prepare-image";
 
 /** Why an upload stopped: only `failed` is worth retrying as it is. */
-export type ImageUploadFailure = "failed" | "tooLarge" | "unreadable";
+export type ImageUploadFailure =
+  | "failed"
+  | "notConfigured"
+  | "tooLarge"
+  | "unreadable";
+
+/**
+ * The server has no Blob store to sign for (FER-051): no retry can succeed
+ * until someone configures it, so the uploader says so instead.
+ */
+function isUploadsNotConfigured(error: unknown): boolean {
+  if (!(error instanceof ORPCError) || error.code !== "SERVICE_UNAVAILABLE") {
+    return false;
+  }
+
+  const data: unknown = error.data;
+
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "why" in data &&
+    data.why === ERROR_WHYS.UPLOADS_NOT_CONFIGURED
+  );
+}
 
 export type ImageUploadState =
   | { status: "cancelled" }
@@ -40,7 +65,8 @@ interface Attempt {
  * again with a fresh token after a failure; `cancel()` stops it wherever it
  * is. A finished upload is handed to `onUploaded` with its size in pixels,
  * for the form to save. A failure is reported once, here; a file the browser
- * cannot read is the user's to change, not a defect.
+ * cannot read is the user's to change, not a defect. A server without its
+ * Blob store fails as `notConfigured`, which no retry fixes.
  */
 export function useImageUpload({
   onUploaded,
@@ -127,11 +153,14 @@ export function useImageUpload({
         return;
       }
 
+      const reason = isUploadsNotConfigured(error) ? "notConfigured" : "failed";
+      // Reported once either way: a server without its store is a defect
+      // for someone to fix, but an expected answer, not a crash.
       reportError(error, {
         action: "Upload.upload_image",
-        context: { prepared: attempt.prepared !== null, purpose },
+        context: { prepared: attempt.prepared !== null, purpose, reason },
       });
-      setState({ reason: "failed", status: "failed" });
+      setState({ reason, status: "failed" });
     }
   }
 

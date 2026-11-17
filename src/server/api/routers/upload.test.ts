@@ -1,6 +1,7 @@
-import { call } from "@orpc/server";
+import { call, ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
 
+import { ERROR_WHYS } from "@/lib/errors";
 import {
   createMockContext,
   createUnauthenticatedMockContext,
@@ -61,7 +62,7 @@ function setup({
     ? createMockContext()
     : createUnauthenticatedMockContext();
   services.findAdminStore.mockResolvedValue(isLogin ? { id: 7 } : null);
-  services.requireBlobStore.mockReturnValue(BLOB_STORE);
+  services.requireBlobStore.mockImplementation(() => BLOB_STORE);
 
   return {
     db: mockCtx.db,
@@ -89,6 +90,25 @@ describe("upload.createToken", () => {
       BLOB_STORE,
       makeRequest()
     );
+  });
+
+  test("passes on the typed 503 of a server without the store's token, untouched", async () => {
+    const { createToken } = setup();
+    services.requireBlobStore.mockImplementation(() => {
+      throw new ORPCError("SERVICE_UNAVAILABLE", {
+        data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+        message: "Image uploads are not configured on this server",
+      });
+    });
+
+    await expect(createToken(makeRequest())).rejects.toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+      defined: true,
+      message: "Image uploads are not configured on this server",
+      status: 503,
+    });
+    expect(services.issueUploadToken).not.toHaveBeenCalled();
   });
 
   test("refuses a signed-out caller before reading anything, whatever it asks", async () => {
