@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { getPayloadFromClientToken } from "@vercel/blob/client";
-import { getTableColumns, getTableName, is } from "drizzle-orm";
+import { type Column, getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, test, vi } from "vitest";
 
@@ -234,9 +234,9 @@ describe("cleanUpOrphanBlobs", () => {
 describe("IMAGE_URL_COLUMNS", () => {
   test("lists every column of the schema that holds an image's address", () => {
     const imageColumns = Object.values(schema)
-      .filter((value): value is PgTable => is(value, PgTable))
+      .flatMap((value) => (is(value, PgTable) ? [value] : []))
       .flatMap((table) =>
-        Object.values(getTableColumns(table))
+        Object.values<Column>(getTableColumns(table))
           .filter(
             (column) =>
               /image_?url$/i.test(column.name) ||

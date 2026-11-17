@@ -64,14 +64,19 @@ function setup({
   prepared?: ReturnType<typeof makePrepared> | Error;
   tokenFails?: boolean;
 } = {}) {
-  const token = Promise.withResolvers<undefined>();
+  let releaseToken = (): void => undefined;
+  const tokenReady = new Promise<undefined>((resolve) => {
+    releaseToken = () => {
+      resolve(undefined);
+    };
+  });
 
   if (!holdsToken) {
-    token.resolve(undefined);
+    releaseToken();
   }
 
   const tokenRequests = vi.fn(async (_input: unknown) => {
-    await token.promise;
+    await tokenReady;
 
     return {
       pathname: PATHNAME,
@@ -133,7 +138,7 @@ function setup({
   return {
     file,
     giveToken: () => {
-      token.resolve(undefined);
+      releaseToken();
     },
     onUploaded,
     result,
