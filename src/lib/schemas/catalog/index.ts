@@ -245,6 +245,96 @@ export const deleteCategorySchema = z.object({
   moveToId: bodyIdSchema.nullable(),
 });
 
+/** What a search result shows of a page: its title and its description. */
+export const CATEGORY_SEO_TITLE_MAX_LENGTH = 70;
+export const CATEGORY_SEO_DESCRIPTION_MAX_LENGTH = 160;
+export const COVER_ALT_MAX_LENGTH = 200;
+
+/**
+ * A category's slug is its page's address (`/burbujeros`, FER-043), so it
+ * is never a path the site already answers, nor a language prefix: a
+ * category named "Cart" gets `/cart-2`. Every slug is made on the server
+ * from the Spanish name, never taken from a request, so the service holds
+ * this rule.
+ */
+export const RESERVED_CATEGORY_SLUGS = [
+  "admin",
+  "api",
+  "apple-icon",
+  "brand",
+  "cart",
+  "coming-soon",
+  "design",
+  "en",
+  "es",
+  "icon",
+  "llms",
+  "monitoring",
+  "opengraph-image",
+  "orders",
+  "products",
+  "productos",
+  "robots",
+  "seed",
+  "sitemap",
+] as const;
+
+/**
+ * A category's page (FER-043): the group it belongs to, or none, and its
+ * texts for search engines and its cover's description, in both languages.
+ * An empty text is `null`: the page writes its own from the names.
+ */
+export const updateCategoryPageSchema = z.object({
+  coverAltEn: optionalText(COVER_ALT_MAX_LENGTH),
+  coverAltEs: optionalText(COVER_ALT_MAX_LENGTH),
+  id: idSchema,
+  parentId: bodyIdSchema.nullable(),
+  seoDescriptionEn: optionalText(CATEGORY_SEO_DESCRIPTION_MAX_LENGTH),
+  seoDescriptionEs: optionalText(CATEGORY_SEO_DESCRIPTION_MAX_LENGTH),
+  seoTitleEn: optionalText(CATEGORY_SEO_TITLE_MAX_LENGTH),
+  seoTitleEs: optionalText(CATEGORY_SEO_TITLE_MAX_LENGTH),
+});
+
+export type UpdateCategoryPageValues = z.infer<typeof updateCategoryPageSchema>;
+
+/** The messages the category's page form shows under its fields. */
+interface CategoryPageFormMessages {
+  altTooLong: string;
+  descriptionTooLong: string;
+  titleTooLong: string;
+}
+
+/**
+ * The category's page form (FER-043), its messages in the page's language.
+ * The group is the `<select>`'s value: `""` for none, else the group's id.
+ */
+export function createCategoryPageFormSchema(
+  messages: CategoryPageFormMessages
+) {
+  const text = (max: number, message: string) =>
+    z.string().trim().max(max, message);
+
+  return z.object({
+    coverAltEn: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
+    coverAltEs: text(COVER_ALT_MAX_LENGTH, messages.altTooLong),
+    parentId: z.string().regex(/^\d*$/u),
+    seoDescriptionEn: text(
+      CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
+      messages.descriptionTooLong
+    ),
+    seoDescriptionEs: text(
+      CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
+      messages.descriptionTooLong
+    ),
+    seoTitleEn: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
+    seoTitleEs: text(CATEGORY_SEO_TITLE_MAX_LENGTH, messages.titleTooLong),
+  });
+}
+
+export type CategoryPageFormValues = z.infer<
+  ReturnType<typeof createCategoryPageFormSchema>
+>;
+
 /** The messages the category form shows under its fields. */
 interface CategoryFormMessages {
   nameRequired: string;

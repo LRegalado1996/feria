@@ -92,6 +92,13 @@
       "when": 1794805853002,
       "tag": "0012_outstanding_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794876694090,
+      "tag": "0013_organic_sprite",
+      "breakpoints": true
     }
   ]
 }

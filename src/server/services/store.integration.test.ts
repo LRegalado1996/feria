@@ -30,7 +30,11 @@ const ENGLISH = {
 // each test edits it freely, and `setup()` keeps it as it was, columns and
 // texts, for the cleanup to put back.
 const snapshots: {
-  columns: Omit<typeof store.$inferSelect, "createdAt" | "id" | "updatedAt">;
+  // What `updateStore` writes; the catalog's cover (FER-043) it leaves alone.
+  columns: Pick<
+    typeof store.$inferSelect,
+    "currencyCode" | "instagramUrl" | "name" | "tiktokUrl" | "whatsappNumber"
+  >;
   id: number;
   texts: { description: string; locale: "en" | "es"; tagline: string }[];
 }[] = [];

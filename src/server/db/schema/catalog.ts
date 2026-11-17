@@ -14,11 +14,15 @@ import {
 
 import {
   CATALOG_SLUG_PATTERN,
+  CATEGORY_SEO_DESCRIPTION_MAX_LENGTH,
+  CATEGORY_SEO_TITLE_MAX_LENGTH,
+  COVER_ALT_MAX_LENGTH,
   PRODUCT_STATUSES,
   RESERVED_ATTRIBUTE_SLUGS,
   SWATCH_COLOR_PATTERN,
 } from "@/lib/schemas/catalog";
 
+import { coverChecks } from "./cover";
 import { localeEnum } from "./locale";
 import { store } from "./store";
 
@@ -39,9 +43,15 @@ const slugPattern = sql.raw(`'${CATALOG_SLUG_PATTERN.source}'`);
 export const productStatusEnum = pgEnum("product_status", PRODUCT_STATUSES);
 
 /**
- * A store's category (FER-010). Its slug is the catalog's `?category=` value,
- * unique within the store; `position` orders the home's sliders and the
- * catalog's filter (FER-016).
+ * A store's category (FER-010). Its slug is its page's address
+ * (`/burbujeros`), unique within the store; `position` orders the header,
+ * the home's sliders and the catalog's filter (FER-016). A category may
+ * belong to a group, another category of the store (`parentId`, FER-043),
+ * one level only, and its page is then under the group's
+ * (`/bijouterie/anillos`). The database keeps the group in the same store
+ * and never the category itself; the one level is kept by the service,
+ * under the store's category lock. The cover is the page's photo (FER-043):
+ * a computer image and an optional phone image.
  */
 export const category = pgTable(
   "category",
@@ -52,6 +62,13 @@ export const category = pgTable(
       .references(() => store.id, { onDelete: "cascade" }),
     slug: text().notNull(),
     position: integer().notNull(),
+    parentId: integer(),
+    coverUrl: text(),
+    coverWidth: integer(),
+    coverHeight: integer(),
+    coverPhoneUrl: text(),
+    coverPhoneWidth: integer(),
+    coverPhoneHeight: integer(),
     ...timestamps,
   },
   // The pair's unique index leads with `storeId`, so it also serves that
@@ -62,6 +79,28 @@ export const category = pgTable(
     // another store cannot be attached, whatever the code above asks.
     unique("category_store_id_unique").on(table.storeId, table.id),
     check("category_slug_format", sql`${table.slug} ~ ${slugPattern}`),
+    // The group is a category of the same store. NO ACTION: deleting a
+    // group first takes its categories out of it (`deleteCategory`), and
+    // deleting the store still cascades through all of them together.
+    foreignKey({
+      columns: [table.storeId, table.parentId],
+      foreignColumns: [table.storeId, table.id],
+      name: "category_store_parent_fk",
+    }).onDelete("no action"),
+    index().on(table.storeId, table.parentId),
+    check("category_parent_not_self", sql`${table.parentId} <> ${table.id}`),
+    ...coverChecks("category", {
+      computer: {
+        height: table.coverHeight,
+        url: table.coverUrl,
+        width: table.coverWidth,
+      },
+      phone: {
+        height: table.coverPhoneHeight,
+        url: table.coverPhoneUrl,
+        width: table.coverPhoneWidth,
+      },
+    }),
   ]
 );
 
@@ -74,9 +113,22 @@ export const categoryTranslation = pgTable(
       .references(() => category.id, { onDelete: "cascade" }),
     locale: localeEnum().notNull(),
     name: text().notNull(),
+    // The page's own title and description for search engines (FER-043);
+    // `null` lets the page write them from the names.
+    seoTitle: text(),
+    seoDescription: text(),
+    // What the cover shows, for a screen reader and a search engine.
+    coverAlt: text(),
     ...timestamps,
   },
-  (table) => [unique().on(table.categoryId, table.locale)]
+  (table) => [
+    unique().on(table.categoryId, table.locale),
+    // The zod schema's caps, so an overflow is refused whoever writes it.
+    check(
+      "category_translation_texts_length",
+      sql`char_length(${table.seoTitle}) <= ${sql.raw(String(CATEGORY_SEO_TITLE_MAX_LENGTH))} AND char_length(${table.seoDescription}) <= ${sql.raw(String(CATEGORY_SEO_DESCRIPTION_MAX_LENGTH))} AND char_length(${table.coverAlt}) <= ${sql.raw(String(COVER_ALT_MAX_LENGTH))}`
+    ),
+  ]
 );
 
 /**
