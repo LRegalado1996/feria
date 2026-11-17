@@ -48,11 +48,11 @@ A bilingual mini e-commerce for one store, Lucas Regalado's own: bubble guns and
 | All articles | `/productos` · `/en/productos`                   | A cover, the grid with a filter panel (categories, color and other filters), sort and search in the query string, and a share.      |
 | Group        | `/bijouterie` · `/en/bijouterie`                 | The same catalog, every article of the group's categories, with the group's own title, texts and cover.                             |
 | Category     | `/bijouterie/anillos`, `/burbujeros` · `/en/...` | The same catalog, the category's articles; under its group's address when it has one.                                               |
-| Article      | `/productos/{slug}` · `/en/productos/{slug}`     | Gallery, price, description, add to cart, related articles.                                                                         |
+| Article      | `/productos/{slug}` · `/en/productos/{slug}`     | A gallery that goes round, price, description, add to cart (which opens the cart panel), related articles.                          |
 
 Every catalog page (FER-043) has its own address, title, description, canonical and `hreflang`, a visible breadcrumb, JSON-LD (`CollectionPage`, `ItemList`, `BreadcrumbList`), a sitemap and `llms.txt` entry, and an optional cover. The path segment is Spanish in both languages: the URL's `/en` prefix is the only difference between a page's two languages (`docs/agents/i18n.md`). An article lives under all articles' address, which no category can take.
 
-Supporting flow, not counted as views: cart, checkout form, and the order confirmation page `/orders/{token}` (which also hosts the code form when verification is on).
+Supporting flow, not counted as views: the cart, a side panel that adding an article or the header's cart opens on any store page ([FER-045](../tickets/FER-045-cart-drawer.md)); the checkout page `/cart` · `/en/cart` ("Hacer el pedido" in the panel leads there, and the header's cart links there before the page's script runs): the order's summary and the form; and the order confirmation page `/orders/{token}` (which also hosts the code form when verification is on).
 
 ## Admin
 

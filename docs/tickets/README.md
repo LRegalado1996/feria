@@ -79,6 +79,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                              | P0       | done       |
 | [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script  | P1       | superseded |
 | [FER-043](FER-043-category-groups-and-pages.md)      | Category groups and a page of their own for each | P0       | done       |
+| [FER-045](FER-045-cart-drawer.md)                    | Cart side panel and a gallery that goes round    | P0       | done       |
 
 ### M5 Metrics
 
@@ -111,6 +112,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
 039 → 042 → 043
+024, 026, 039 → 045
 024 → 029 → 030
 everything P0 → 031 → 032
 ```
