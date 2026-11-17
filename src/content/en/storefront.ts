@@ -213,6 +213,8 @@ export const storefront: Dictionary["storefront"] = {
     instagram: "{store} on Instagram",
     logo: "{brand}, go to the home page",
     menu: "Menu",
+    // The logo at the top of the phone menu, which leads home (FER-050).
+    menuLogo: "{brand}, home",
     navigation: "Store sections",
     newTab: "(opens in a new tab)",
     notFound: {

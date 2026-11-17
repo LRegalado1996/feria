@@ -226,6 +226,8 @@ export const storefront = {
     instagram: "Instagram de {store}",
     logo: "{brand}, ir al inicio",
     menu: "Menú",
+    // The logo at the top of the phone menu, which leads home (FER-050).
+    menuLogo: "{brand}, inicio",
     navigation: "Secciones de la tienda",
     newTab: "(se abre en otra pestaña)",
     notFound: {
