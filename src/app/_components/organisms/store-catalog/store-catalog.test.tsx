@@ -306,7 +306,7 @@ describe("StoreCatalog", () => {
           source.getAttribute("media")
         )
       ).toEqual(computerMedia);
-      expect(cover).toHaveClass("aspect-4/5", "md:aspect-12/5");
+      expect(cover).toHaveClass("aspect-square", "md:aspect-3/1");
       // One h1 on the page: the plain title is not drawn as well.
       expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     }

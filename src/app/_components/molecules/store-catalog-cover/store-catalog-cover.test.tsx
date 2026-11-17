@@ -59,7 +59,7 @@ test("is fetched first, never lazily, as wide as the screen, filling a box that 
   expect(image).toHaveAttribute("loading", "eager");
   expect(image).toHaveAttribute("sizes", "100vw");
   expect(image).toHaveClass("object-cover", "size-full");
-  expect(root).toHaveClass("aspect-4/5", "md:aspect-12/5", "custom");
+  expect(root).toHaveClass("aspect-square", "md:aspect-3/1", "custom");
 });
 
 test("puts the page's title over the photo, above the one shade the storefront allows", () => {

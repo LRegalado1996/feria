@@ -131,7 +131,7 @@ function StoreNavGroup({
           aria-label={toggleLabel}
           className={cn(
             "inline-flex shrink-0 items-center justify-center rounded-full text-store-accent hover:bg-store-accent/15 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent",
-            variant === "bar" ? "-mr-3 size-11" : "size-11"
+            "size-11"
           )}
           data-slot="store-nav-group-toggle"
           onClick={() => {

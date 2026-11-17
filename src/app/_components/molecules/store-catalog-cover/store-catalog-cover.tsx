@@ -19,9 +19,10 @@ const COMPUTER_MEDIA = "(min-width: 768px)";
  * reference store: a full-width photo with the page's title over its
  * bottom-left corner. Art direction: a `<picture>` whose phone image shows
  * below `md` and whose computer image shows from there up, and on a phone
- * too when there is no phone image. The box keeps its own proportions (4:5
- * on a phone, 12:5 on a computer), so the space is reserved before the
- * photo arrives and the photo is cropped to fill it. It is the page's
+ * too when there is no phone image. The box keeps its own proportions
+ * (square on a phone, 3:1 on a computer, so the articles start in the
+ * first view), so the space is reserved before the photo arrives and the
+ * photo is cropped to fill it. It is the page's
  * largest image: fetched first, never lazily. The one gradient the
  * storefront allows rises from the bottom so the white title reads on any
  * photo.
@@ -56,7 +57,7 @@ function StoreCatalogCover({
   return (
     <div
       className={cn(
-        "relative aspect-4/5 w-full overflow-hidden bg-store-contrast text-store-background md:aspect-12/5",
+        "relative aspect-square w-full overflow-hidden bg-store-contrast text-store-background md:aspect-3/1",
         className
       )}
       data-slot="store-catalog-cover"
