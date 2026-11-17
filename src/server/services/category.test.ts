@@ -17,6 +17,19 @@ import {
 
 const STORE_ID = 3;
 
+// The deployment's Blob store (FER-011) and cover uploads in its folder.
+const BLOB_STORE = {
+  host: "store9.public.blob.vercel-storage.com",
+  namespace: "qa",
+  token: "vercel_blob_rw_Store9_s3cretPart",
+} as const;
+const UPLOAD_ID = "0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e";
+const coverUpload = (id: string) =>
+  `https://${BLOB_STORE.host}/qa/cover/${id}.webp`;
+const OLD_COMPUTER = coverUpload("11111111-1111-4111-8111-111111111111");
+const OLD_PHONE = coverUpload("22222222-2222-4222-8222-222222222222");
+const NEW_COMPUTER = coverUpload(UPLOAD_ID);
+
 const LOCK = {
   params: [`category:${STORE_ID}`],
   sql: "select pg_advisory_xact_lock(hashtext($1))",
@@ -57,11 +70,14 @@ function makeNames(
  * - `taken`: whether the duplicate-name check finds another category.
  */
 function setup({
+  cover = { coverPhoneUrl: null, coverUrl: null },
   existing = [],
   held = 0,
   own = [],
   taken = false,
 }: {
+  /** The cover every category found by id holds (FER-011). */
+  cover?: { coverPhoneUrl: string | null; coverUrl: string | null };
   existing?: ReturnType<typeof makeRow>[];
   held?: number | null;
   own?: number[];
@@ -90,7 +106,7 @@ function setup({
 
     return await Promise.resolve(
       sql === FIND_SQL && storeId === STORE_ID && own.includes(id as number)
-        ? [{ id, slug: `categoria-${String(id)}` }]
+        ? [{ ...cover, id, slug: `categoria-${String(id)}` }]
         : []
     );
   });
@@ -518,13 +534,19 @@ describe("updateCategoryPage", () => {
    * is a group already, holding a category.
    */
   function setupPage({
+    blobStore = BLOB_STORE,
     english = true,
     holds = false,
     own = { 5: null, 6: null },
+    stored = { coverPhoneUrl: null, coverUrl: null },
   }: {
+    /** `null`: the deployment has no Blob store. */
+    blobStore?: typeof BLOB_STORE | null;
     english?: boolean;
     holds?: boolean;
     own?: Record<number, number | null>;
+    /** The cover category 5 holds. */
+    stored?: { coverPhoneUrl: string | null; coverUrl: string | null };
   } = {}) {
     const { db } = setup();
     db.$["select.where"].mockImplementation(async (where: unknown) => {
@@ -544,7 +566,14 @@ describe("updateCategoryPage", () => {
 
       return await Promise.resolve(
         sql === FIND_SQL && params[1] === STORE_ID && id in own
-          ? [{ id, parentId: own[id] ?? null, slug: `categoria-${id}` }]
+          ? [
+              {
+                ...(id === 5 ? stored : {}),
+                id,
+                parentId: own[id] ?? null,
+                slug: `categoria-${id}`,
+              },
+            ]
           : []
       );
     });
@@ -561,9 +590,116 @@ describe("updateCategoryPage", () => {
     return {
       db,
       update: async (values = makePage()) =>
-        await updateCategoryPage(db as never, { storeId: STORE_ID, values }),
+        await updateCategoryPage(db as never, {
+          blobStore,
+          storeId: STORE_ID,
+          values,
+        }),
     };
   }
+
+  test("sets a new uploaded cover and answers the replaced files, both images", async () => {
+    const { db, update } = setupPage({
+      stored: { coverPhoneUrl: OLD_PHONE, coverUrl: OLD_COMPUTER },
+    });
+
+    await expect(
+      update(
+        makePage({
+          cover: { height: 800, url: NEW_COMPUTER, width: 2400 },
+          coverPhone: null,
+        })
+      )
+    ).resolves.toEqual({
+      discardedImageUrls: [OLD_COMPUTER, OLD_PHONE],
+      id: 5,
+      parentId: null,
+    });
+    expect(db.$["update.set"].mock.calls[0]).toEqual([
+      {
+        coverHeight: 800,
+        coverPhoneHeight: null,
+        coverPhoneUrl: null,
+        coverPhoneWidth: null,
+        coverUrl: NEW_COMPUTER,
+        coverWidth: 2400,
+        parentId: null,
+      },
+    ]);
+  });
+
+  test("leaves the cover alone when the form sends none of it, discarding nothing", async () => {
+    const { db, update } = setupPage({
+      stored: { coverPhoneUrl: OLD_PHONE, coverUrl: OLD_COMPUTER },
+    });
+
+    await expect(update()).resolves.toEqual({
+      discardedImageUrls: [],
+      id: 5,
+      parentId: null,
+    });
+    expect(db.$["update.set"].mock.calls[0]).toEqual([{ parentId: null }]);
+  });
+
+  test("keeps the stored image sent back as it is, even one from before uploads", async () => {
+    const { update } = setupPage({
+      blobStore: null,
+      stored: { coverPhoneUrl: null, coverUrl: "/seed/cover.jpg" },
+    });
+
+    await expect(
+      update(
+        makePage({
+          cover: { height: 600, url: "/seed/cover.jpg", width: 1800 },
+        })
+      )
+    ).resolves.toEqual({ discardedImageUrls: [], id: 5, parentId: null });
+  });
+
+  test("removing the computer image while a phone one stays is refused", async () => {
+    const { db, update } = setupPage({
+      stored: { coverPhoneUrl: OLD_PHONE, coverUrl: OLD_COMPUTER },
+    });
+
+    await expect(update(makePage({ cover: null }))).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A phone cover needs a computer cover",
+    });
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["another site's image", "https://evil.example.com/cover.webp"],
+    [
+      "another deployment's upload",
+      `https://${BLOB_STORE.host}/production/cover/${UPLOAD_ID}.webp`,
+    ],
+    [
+      "an upload for another purpose's folder",
+      `https://${BLOB_STORE.host}/qa/avatar/${UPLOAD_ID}.webp`,
+    ],
+  ])("refuses %s as a cover before writing anything", async (_case, url) => {
+    const { db, update } = setupPage();
+
+    await expect(
+      update(makePage({ coverPhone: { height: 1, url, width: 1 } }))
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A cover image must be one uploaded to this store",
+    });
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test("refuses any new image where the deployment has no Blob store", async () => {
+    const { update } = setupPage({ blobStore: null });
+
+    await expect(
+      update(makePage({ cover: { height: 1, url: NEW_COMPUTER, width: 1 } }))
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A cover image must be one uploaded to this store",
+    });
+  });
 
   test("puts the category in a group and writes each language's texts to its own row, under the lock", async () => {
     const { db, update } = setupPage();
@@ -578,7 +714,7 @@ describe("updateCategoryPage", () => {
           seoTitleEs: "Anillos dorados",
         })
       )
-    ).resolves.toEqual({ id: 5, parentId: 6 });
+    ).resolves.toEqual({ discardedImageUrls: [], id: 5, parentId: 6 });
 
     expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual(LOCK);
     // The category to write, then its group to keep while it joins.
@@ -618,6 +754,7 @@ describe("updateCategoryPage", () => {
     const { db, update } = setupPage({ own: { 5: 6, 6: null } });
 
     await expect(update(makePage({ parentId: null }))).resolves.toEqual({
+      discardedImageUrls: [],
       id: 5,
       parentId: null,
     });
@@ -800,6 +937,7 @@ describe("deleteCategory", () => {
       const { db, locks, selectWheres } = setup({ own: [5] });
 
       await expect(remove(db, { moveToId })).resolves.toEqual({
+        discardedImageUrls: [],
         id: 5,
         movedArticles: 0,
       });
@@ -819,10 +957,33 @@ describe("deleteCategory", () => {
     }
   );
 
+  test.each([
+    ["both images", OLD_PHONE, [OLD_COMPUTER, OLD_PHONE]],
+    ["a computer image only", null, [OLD_COMPUTER]],
+  ])(
+    "answers the cover's addresses with %s, for their files to go after it",
+    async (_case, coverPhoneUrl, discarded) => {
+      const { db } = setup({
+        cover: { coverPhoneUrl, coverUrl: OLD_COMPUTER },
+        own: [5],
+      });
+
+      await expect(remove(db)).resolves.toEqual({
+        discardedImageUrls: discarded,
+        id: 5,
+        movedArticles: 0,
+      });
+    }
+  );
+
   test("reads a count with no row as no articles", async () => {
     const { db } = setup({ held: null, own: [5] });
 
-    await expect(remove(db)).resolves.toEqual({ id: 5, movedArticles: 0 });
+    await expect(remove(db)).resolves.toEqual({
+      discardedImageUrls: [],
+      id: 5,
+      movedArticles: 0,
+    });
     expect(deletedWhere(db)).toEqual(DELETED);
   });
 
@@ -867,6 +1028,7 @@ describe("deleteCategory", () => {
     ]);
 
     await expect(remove(db, { moveToId: 6 })).resolves.toEqual({
+      discardedImageUrls: [],
       id: 5,
       movedArticles: 3,
     });

@@ -5,6 +5,7 @@ import { categoryRouter } from "@/server/api/routers/category";
 import { orderRouter } from "@/server/api/routers/order";
 import { productRouter } from "@/server/api/routers/product";
 import { storeRouter } from "@/server/api/routers/store";
+import { uploadRouter } from "@/server/api/routers/upload";
 
 export const appRouter = {
   admin: adminRouter,
@@ -14,6 +15,7 @@ export const appRouter = {
   order: orderRouter,
   product: productRouter,
   store: storeRouter,
+  upload: uploadRouter,
 };
 
 export type AppRouter = typeof appRouter;

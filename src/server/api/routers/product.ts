@@ -7,6 +7,7 @@ import {
   updateProductSchema,
 } from "@/lib/schemas/catalog";
 import { adminProcedure } from "@/server/api/orpc";
+import { discardBlobs } from "@/server/api/utils/blob-store";
 import {
   writeToCatalog,
   writeToStore,
@@ -123,14 +124,17 @@ export const productRouter = {
 
   delete: adminProcedure
     .input(productIdSchema)
-    .handler(
-      async ({ context, input }) =>
-        await writeToCatalog(
-          context,
-          async (tx, storeId) =>
-            await deleteProduct(tx, { id: input.id, storeId })
-        )
-    )
+    .handler(async ({ context, input }) => {
+      const { id, imageUrls } = await writeToCatalog(
+        context,
+        async (tx, storeId) =>
+          await deleteProduct(tx, { id: input.id, storeId })
+      );
+      // Its photos' files go once the rows are gone for good (FER-011).
+      discardBlobs(context.db, imageUrls);
+
+      return { id };
+    })
     .route({
       method: "DELETE",
       path: "/admin/products/{id}",

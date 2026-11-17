@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { eq, inArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -239,6 +241,7 @@ describe("category management", () => {
     });
 
     await expect(remove(rings.id)).resolves.toEqual({
+      discardedImageUrls: [],
       id: chains.id,
       movedArticles: 1,
     });
@@ -404,6 +407,19 @@ describe("category writes under two writers", () => {
     ]);
   });
 });
+// The deployment's Blob store (FER-011): covers it uploaded live in its
+// `local/cover/` folder. Nothing here reaches the real store.
+const BLOB_STORE = {
+  host: "integration.public.blob.vercel-storage.com",
+  namespace: "local",
+  token: "vercel_blob_rw_Integration_synthetic",
+} as const;
+
+/** An address of an upload for covers that no other call gave. */
+function coverUpload() {
+  return `https://${BLOB_STORE.host}/local/cover/${randomUUID()}.webp`;
+}
+
 /** A category's page with no texts, in `parentId`'s group or in none. */
 function page(id: number, parentId: number | null): UpdateCategoryPageValues {
   return {
@@ -423,7 +439,8 @@ async function setPage(
   values: ReturnType<typeof page> & Record<string, unknown>
 ) {
   return await db.transaction(
-    async (tx) => await updateCategoryPage(tx, { storeId, values })
+    async (tx) =>
+      await updateCategoryPage(tx, { blobStore: BLOB_STORE, storeId, values })
   );
 }
 
@@ -433,6 +450,109 @@ async function groupsOf(storeId: number, ids: number[]) {
     .filter((row) => ids.includes(row.id))
     .map((row) => [row.id, row.parentId]);
 }
+
+describe("category covers (FER-011)", () => {
+  /** What the category's row holds of its cover. */
+  async function coverOf(id: number) {
+    const [row] = await db
+      .select({
+        coverHeight: category.coverHeight,
+        coverPhoneUrl: category.coverPhoneUrl,
+        coverUrl: category.coverUrl,
+        coverWidth: category.coverWidth,
+      })
+      .from(category)
+      .where(eq(category.id, id));
+
+    return row;
+  }
+
+  test("an uploaded cover is stored with its size; replacing it answers the old file, keeping the phone one", async () => {
+    const storeId = await theStoreId(db);
+    const rings = await add(storeId, `Anillos ${uniqueTag()}`);
+    const [first, phone, second] = [
+      coverUpload(),
+      coverUpload(),
+      coverUpload(),
+    ];
+
+    await expect(
+      setPage(storeId, {
+        ...page(rings.id, null),
+        cover: { height: 800, url: first, width: 2400 },
+        coverPhone: { height: 1200, url: phone, width: 1200 },
+      })
+    ).resolves.toEqual({
+      discardedImageUrls: [],
+      id: rings.id,
+      parentId: null,
+    });
+    await expect(
+      setPage(storeId, {
+        ...page(rings.id, null),
+        cover: { height: 900, url: second, width: 1800 },
+      })
+    ).resolves.toEqual({
+      discardedImageUrls: [first],
+      id: rings.id,
+      parentId: null,
+    });
+
+    await expect(coverOf(rings.id)).resolves.toEqual({
+      coverHeight: 900,
+      coverPhoneUrl: phone,
+      coverUrl: second,
+      coverWidth: 1800,
+    });
+  });
+
+  test("an address that is not this store's upload is refused and nothing changes", async () => {
+    const storeId = await theStoreId(db);
+    const rings = await add(storeId, `Anillos ${uniqueTag()}`);
+
+    await expect(
+      setPage(storeId, {
+        ...page(rings.id, null),
+        cover: {
+          height: 800,
+          url: "https://images.example.com/cover.webp",
+          width: 2400,
+        },
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "A cover image must be one uploaded to this store",
+    });
+    await expect(coverOf(rings.id)).resolves.toEqual({
+      coverHeight: null,
+      coverPhoneUrl: null,
+      coverUrl: null,
+      coverWidth: null,
+    });
+  });
+
+  test("deleting a category answers its cover's files", async () => {
+    const storeId = await theStoreId(db);
+    const rings = await add(storeId, `Anillos ${uniqueTag()}`);
+    const [computer, phone] = [coverUpload(), coverUpload()];
+    await setPage(storeId, {
+      ...page(rings.id, null),
+      cover: { height: 800, url: computer, width: 2400 },
+      coverPhone: { height: 1200, url: phone, width: 1200 },
+    });
+
+    await expect(
+      db.transaction(
+        async (tx) =>
+          await deleteCategory(tx, { id: rings.id, moveToId: null, storeId })
+      )
+    ).resolves.toEqual({
+      discardedImageUrls: [computer, phone],
+      id: rings.id,
+      movedArticles: 0,
+    });
+  });
+});
 
 describe("category groups and pages (FER-043)", () => {
   test("a category joins a group and leaves it; a group joins none and a category in a group holds none", async () => {
@@ -658,6 +778,7 @@ async function overlappingPages(
   const locked = deferred();
   const first = db.transaction(async (tx) => {
     const result = await updateCategoryPage(tx, {
+      blobStore: null,
       storeId,
       values: values[0],
     });

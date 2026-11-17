@@ -1,14 +1,41 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
+import { createOrpcHandler, server } from "@/test/msw";
+import { createQueryWrapper } from "@/test/setup-helpers";
 
 import {
   CategoryPageForm,
   type CategoryPageFormCategory,
 } from "./category-page-form";
+
+vi.mock("@/lib/orpc/client", async () => {
+  const { orpcClientMock } = await import("@/test/mocks/orpc-client");
+  return orpcClientMock;
+});
+
+// The upload runs for real but for its two edges: the browser's canvas and
+// the Blob store are doubles (`use-image-upload.test.tsx` has the rest).
+const blob = vi.hoisted(() => ({
+  prepareImage: vi.fn(),
+  put: vi.fn(),
+}));
+
+vi.mock("@vercel/blob/client", () => ({ put: blob.put }));
+vi.mock("@/lib/upload/prepare-image", () => ({
+  prepareImage: blob.prepareImage,
+  UnreadableImageError: class extends Error {},
+}));
+
+const UPLOADED =
+  "https://store9.public.blob.vercel-storage.com/local/cover/0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e.webp";
+const STORED = {
+  computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+  phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
+};
 
 function makeCategory(
   overrides: Partial<CategoryPageFormCategory> = {}
@@ -31,11 +58,14 @@ function makeCategory(
 
 function setup({
   category = makeCategory(),
+  holdsUpload = false,
   isGroup = false,
   locale = "en",
   saves = "saved",
 }: {
   category?: CategoryPageFormCategory;
+  /** The store keeps each upload open until `finishUpload()`. */
+  holdsUpload?: boolean;
   isGroup?: boolean;
   locale?: Locale;
   saves?: "failed" | "saved";
@@ -44,6 +74,34 @@ function setup({
     async (_values: unknown) => await Promise.resolve(saves)
   );
   const onCancel = vi.fn<() => void>();
+  server.use(
+    createOrpcHandler("upload.createToken", () => ({
+      pathname: "local/cover/0f8e2b9c-1d2a-4b3c-8d4e-5f6a7b8c9d0e.webp",
+      token: "vercel_blob_client_Store9_signed",
+    }))
+  );
+  blob.prepareImage.mockResolvedValue({
+    blob: new Blob(["webp"], { type: "image/webp" }),
+    contentType: "image/webp",
+    height: 800,
+    width: 2400,
+  });
+  const held: (() => void)[] = [];
+  blob.put.mockImplementation(
+    async () =>
+      await new Promise((resolve) => {
+        const finish = () => {
+          resolve({ url: UPLOADED });
+        };
+
+        if (holdsUpload) {
+          held.push(finish);
+        } else {
+          finish();
+        }
+      })
+  );
+  const wrapper = createQueryWrapper();
   const form = (props: {
     category: CategoryPageFormCategory;
     isGroup: boolean;
@@ -60,10 +118,44 @@ function setup({
   );
   const { rerender } = renderWithI18n(form({ category, isGroup }), {
     locale,
+    wrapper,
   });
+  const user = userEvent.setup();
+  const photo = (name: string) => screen.getByRole("group", { name });
+
+  /** Chooses a file in the photo field `name`, without waiting for it. */
+  const choose = async (name: string) => {
+    await user.upload(
+      within(photo(name)).getByTestId("image-uploader-input"),
+      new File(["photo"], "IMG_0001.jpg", { type: "image/jpeg" })
+    );
+  };
 
   return {
+    choose,
     field: (name: string) => screen.getByRole("textbox", { name }),
+    /** The store ends the upload it holds open, once it was sent. */
+    finishUpload: async () => {
+      await waitFor(() => {
+        expect(held).toHaveLength(1);
+      });
+      act(() => {
+        held.shift()?.();
+      });
+    },
+    photo,
+    save: async () => {
+      await user.click(screen.getByRole("button", { name: "Save the page" }));
+    },
+    /** Chooses a file in the photo field `name` and waits for its upload. */
+    upload: async (name: string) => {
+      await choose(name);
+      await waitFor(() => {
+        expect(within(photo(name)).getByRole("status")).toHaveTextContent(
+          "Photo uploaded."
+        );
+      });
+    },
     onCancel,
     onSave,
     /** The list read again while the form stays open, as the admin's row does. */
@@ -73,7 +165,7 @@ function setup({
     }) => {
       rerender(form(props));
     },
-    user: userEvent.setup(),
+    user,
   };
 }
 
@@ -224,38 +316,241 @@ describe("CategoryPageForm", () => {
     expect(field("Title for search engines in Spanish")).toHaveValue("Anillos");
   });
 
-  test("shows both cover images with their own description, and asks for the description in both languages", () => {
-    setup({
-      category: makeCategory({
-        cover: {
-          computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
-          phone: { height: 1200, url: "/seed/ring-1.jpg", width: 1200 },
-        },
-        coverAltEs: "Anillo sello",
-      }),
+  test("shows the stored cover in its two fields, and asks for its description in both languages", () => {
+    const { photo } = setup({
+      category: makeCategory({ cover: STORED, coverAltEs: "Anillo sello" }),
     });
 
-    const cover = screen.getByRole("region", { name: "Cover" });
     expect(
-      within(cover)
-        .getAllByRole("img", { name: "Anillo sello" })
-        .map((image) => [
-          image.closest("figure")?.querySelector("figcaption")?.textContent,
-          // next/image serves it through its optimizer, the file as `url`.
-          new URL(
-            image.getAttribute("src") ?? "",
-            "http://localhost"
-          ).searchParams.get("url"),
-        ])
-    ).toEqual([
-      ["On a computer", "/seed/ring-2.jpg"],
-      ["On a phone", "/seed/ring-1.jpg"],
-    ]);
-    expect(
-      within(cover).getByRole("textbox", {
-        name: "Cover description in English",
+      within(photo("Computer photo")).getByRole("img", {
+        name: "Preview: Computer photo",
       })
+    ).toHaveAttribute("width", "1200");
+    expect(
+      within(photo("Phone photo (optional)")).getByRole("img", {
+        name: "Preview: Phone photo (optional)",
+      })
+    ).toHaveAttribute("height", "1200");
+    // next/image serves each through its optimizer, the file as `url`.
+    expect(
+      ["Computer photo", "Phone photo (optional)"].map((name) =>
+        new URL(
+          within(photo(name)).getByRole("img").getAttribute("src") ?? "",
+          "http://localhost"
+        ).searchParams.get("url")
+      )
+    ).toEqual(["/seed/ring-2.jpg", "/seed/ring-1.jpg"]);
+    expect(
+      screen.getByRole("textbox", { name: "Cover description in English" })
     ).toBeEnabled();
+  });
+
+  test("sends an uploaded computer photo with the page, and leaves the untouched phone one out", async () => {
+    const { onSave, save, upload } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await upload("Computer photo");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: { height: 800, url: UPLOADED, width: 2400 },
+          coverPhone: undefined,
+        })
+      );
+    });
+  });
+
+  test("sends an uploaded phone photo, keeping the stored computer one out", async () => {
+    const { onSave, save, upload } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await upload("Phone photo (optional)");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: undefined,
+          coverPhone: { height: 800, url: UPLOADED, width: 2400 },
+        })
+      );
+    });
+  });
+
+  test("an untouched cover is not sent at all", async () => {
+    const { onSave, save } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: undefined, coverPhone: undefined })
+      );
+    });
+  });
+
+  test("keeps an untouched cover out of the save when another tab changed it meanwhile", async () => {
+    const { field, onSave, reread, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+    const elsewhere = { height: 800, url: UPLOADED, width: 2400 };
+
+    reread({
+      category: makeCategory({
+        cover: { computer: elsewhere, phone: null },
+      }),
+      isGroup: false,
+    });
+    await user.type(field("Title for search engines in Spanish"), "Anillos");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: undefined,
+          coverPhone: undefined,
+          seoTitleEs: "Anillos",
+        })
+      );
+    });
+  });
+
+  test("removing the computer photo removes the phone one too, and sends both as none", async () => {
+    const { onSave, photo, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: null, coverPhone: null })
+      );
+    });
+    expect(photo("Phone photo (optional)")).toHaveAccessibleDescription(
+      "Choose the computer photo first."
+    );
+  });
+
+  test("the phone photo waits for a computer one", async () => {
+    const { photo, upload } = setup();
+    const choosePhone = () =>
+      within(photo("Phone photo (optional)")).getByRole("button", {
+        name: "Choose a photo: Phone photo (optional)",
+      });
+
+    expect(choosePhone()).toBeDisabled();
+    expect(
+      screen.queryByRole("textbox", { name: "Cover description in Spanish" })
+    ).toBeNull();
+
+    await upload("Computer photo");
+
+    expect(choosePhone()).toBeEnabled();
+    expect(
+      screen.getByRole("textbox", { name: "Cover description in Spanish" })
+    ).toBeEnabled();
+  });
+
+  test("Save waits for a photo still on its way, Cancel does not, and the photo goes with the page", async () => {
+    const { choose, finishUpload, onSave, save } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Computer photo");
+
+    await waitFor(() => {
+      expect(saveButton).toBeDisabled();
+    });
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+
+    await finishUpload();
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: { height: 800, url: UPLOADED, width: 2400 },
+        })
+      );
+    });
+  });
+
+  test("a phone photo that lands after the computer photo was removed is dropped", async () => {
+    const { choose, finishUpload, onSave, photo, save, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    await finishUpload();
+    await waitFor(() => {
+      expect(within(phone).getByRole("status")).toHaveTextContent(
+        "Photo uploaded."
+      );
+    });
+
+    expect(within(phone).queryByRole("img")).toBeNull();
+    await save();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cover: null, coverPhone: null })
+      );
+    });
+  });
+
+  test("a phone upload left without its computer photo can still be cancelled, and Save opens", async () => {
+    const { choose, photo, user } = setup({
+      category: makeCategory({ cover: STORED }),
+      holdsUpload: true,
+    });
+    const phone = photo("Phone photo (optional)");
+    const saveButton = screen.getByRole("button", { name: "Save the page" });
+
+    await choose("Phone photo (optional)");
+    await user.click(
+      within(photo("Computer photo")).getByRole("button", {
+        name: "Remove photo: Computer photo",
+      })
+    );
+    const cancel = await within(phone).findByRole("button", {
+      name: "Cancel: Phone photo (optional)",
+    });
+    expect(cancel).toBeEnabled();
+    expect(saveButton).toBeDisabled();
+
+    await user.click(cancel);
+
+    await waitFor(() => {
+      expect(saveButton).toBeEnabled();
+    });
+    expect(
+      within(phone).getByRole("button", {
+        name: "Choose a photo: Phone photo (optional)",
+      })
+    ).toBeDisabled();
   });
 
   test("cancels without saving", async () => {
@@ -294,8 +589,6 @@ describe("CategoryPageForm", () => {
     );
     expect(
       screen.getByRole("form", { name: "Página de «Anillos»" })
-    ).toHaveTextContent(
-      "Esta categoría todavía no tiene portada: su página muestra solo el título."
-    );
+    ).toHaveTextContent("Primero elegí la foto para computadora.");
   });
 });

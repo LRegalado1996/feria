@@ -455,6 +455,50 @@ function makePageInput(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe("updateCategoryPageSchema's cover (FER-011)", () => {
+  const image = {
+    height: 800,
+    url: "https://store9.public.blob.vercel-storage.com/qa/cover/a.webp",
+    width: 2400,
+  };
+
+  // What is kept, not only that it parses: a field the schema did not know
+  // would be stripped, and the case would still pass on `success` alone.
+  test.each([
+    ["an uploaded image", { cover: image }, { cover: image }],
+    [
+      "none, to remove it",
+      { cover: null, coverPhone: null },
+      { cover: null, coverPhone: null },
+    ],
+    ["left out, to keep it", {}, {}],
+    ["a phone image only", { coverPhone: image }, { coverPhone: image }],
+  ])("takes %s", (_case, overrides, kept) => {
+    const parsed = updateCategoryPageSchema.parse(makePageInput(overrides));
+
+    expect({ cover: parsed.cover, coverPhone: parsed.coverPhone }).toEqual({
+      cover: undefined,
+      coverPhone: undefined,
+      ...kept,
+    });
+    expect(Object.hasOwn(parsed, "cover")).toBe("cover" in kept);
+    expect(Object.hasOwn(parsed, "coverPhone")).toBe("coverPhone" in kept);
+  });
+
+  test.each([
+    ["a seed's local path", { cover: { ...image, url: "/seed/a.jpg" } }],
+    ["an image wider than uploads make", { cover: { ...image, width: 2401 } }],
+    [
+      "a phone image wider than uploads make",
+      { coverPhone: { ...image, width: 2401 } },
+    ],
+  ])("refuses %s", (_case, overrides) => {
+    expect(
+      updateCategoryPageSchema.safeParse(makePageInput(overrides)).success
+    ).toBe(false);
+  });
+});
+
 describe("updateCategoryPageSchema", () => {
   test("reads blank texts as none, so the page writes its own", () => {
     expect(
@@ -522,7 +566,13 @@ describe("createCategoryPageFormSchema", () => {
       .safeParse(input)
       .error?.issues.map((issue) => [issue.path.join("."), issue.message]);
   const form = (overrides: Record<string, unknown> = {}) =>
-    makePageInput({ id: undefined, parentId: "", ...overrides });
+    makePageInput({
+      cover: null,
+      coverPhone: null,
+      id: undefined,
+      parentId: "",
+      ...overrides,
+    });
 
   test.each([
     [{ seoTitleEs: "x".repeat(71) }, [["seoTitleEs", "Title too long"]]],
@@ -538,6 +588,24 @@ describe("createCategoryPageFormSchema", () => {
 
   test("refuses a group that is not an id", () => {
     expect(schema.safeParse(form({ parentId: "abc" })).success).toBe(false);
+  });
+
+  test.each([
+    [
+      "a cover from before uploads, kept as it is",
+      { url: "/seed/a.jpg" },
+      true,
+    ],
+    ["an image with no size", { width: 0 }, false],
+    ["an image with no address", { url: "" }, false],
+  ])("holds %s: %s", (_case, overrides, accepted) => {
+    expect(
+      schema.safeParse(
+        form({
+          cover: { height: 800, url: "/seed/b.jpg", width: 1200, ...overrides },
+        })
+      ).success
+    ).toBe(accepted);
   });
 
   // Without an English name the English texts are shut and sent as none:

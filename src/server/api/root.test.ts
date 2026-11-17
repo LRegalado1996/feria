@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import { appRouter } from "./root";
 import { orderRouter } from "./routers/order";
 import { storeRouter } from "./routers/store";
+import { uploadRouter } from "./routers/upload";
 
 vi.mock("@/env", () => ({
   env: {
@@ -22,7 +23,9 @@ test("mounts each domain router at its own key, and nothing else", () => {
     "order",
     "product",
     "store",
+    "upload",
   ]);
   expect(appRouter.order).toBe(orderRouter);
   expect(appRouter.store).toBe(storeRouter);
+  expect(appRouter.upload).toBe(uploadRouter);
 });

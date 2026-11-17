@@ -66,13 +66,13 @@ export const admin = {
       cover: "Portada",
       coverAltEn: "Descripción de la portada en inglés",
       coverAltEs: "Descripción de la portada en español",
-      coverComputer: "En la computadora",
-      coverNone:
-        "Esta categoría todavía no tiene portada: su página muestra solo el título.",
-      coverPhone: "En el celular",
-      coverPhoneSame: "En el celular se ve la misma foto.",
-      coverUpload:
-        "Muy pronto vas a poder subir y cambiar la portada desde acá (FER-011).",
+      coverComputer: "Foto para computadora",
+      coverHint:
+        "Se ve a todo lo ancho arriba de la página, con el título encima. Sin foto, la página muestra solo el título. Se guarda con «Guardar».",
+      coverPhone: "Foto para celular (opcional)",
+      coverPhoneHint:
+        "Cuadrada queda mejor. Si no subís una, el celular muestra la de computadora.",
+      coverPhoneNeedsComputer: "Primero elegí la foto para computadora.",
       englishNeedsName:
         "Para escribir los textos en inglés, primero ponele un nombre en inglés a la categoría.",
       group: "Grupo",
@@ -180,6 +180,31 @@ export const admin = {
       valueUpdated: "Valor guardado.",
     },
     values: "Valores de «{name}»",
+  },
+  imageUpload: {
+    cancel: "Cancelar",
+    cancelled: "Subida cancelada.",
+    choose: "Elegir foto",
+    // An action's name with the field's, so two uploaders on one screen
+    // read apart ("Elegir foto: Foto para computadora").
+    named: "{action}: {label}",
+    errors: {
+      failed: "No se pudo subir la foto. Revisá la conexión y reintentá.",
+      tooLarge:
+        "La foto sigue siendo demasiado pesada después de reducirla. Probá con otra.",
+      unreadable:
+        "No pudimos leer esta foto. Probá con una en JPEG, PNG o WebP.",
+    },
+    hint: "JPEG, PNG o WebP. La achicamos antes de subirla para que viaje rápido.",
+    preparing: "Preparando la foto…",
+    preview: "Vista previa: {label}",
+    progress: "Progreso de la subida: {label}",
+    remove: "Quitar foto",
+    removed: "Foto quitada.",
+    replace: "Cambiar foto",
+    retry: "Reintentar",
+    uploaded: "Foto subida.",
+    uploading: "Subiendo la foto… {percent}",
   },
   metadata: {
     title: "Panel",

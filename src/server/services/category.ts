@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 
+import { isOwnBlobUrl } from "@/lib/blob/paths";
 import { imageOf } from "@/lib/catalog/cover";
 import {
   type CreateCategoryValues,
@@ -10,6 +11,7 @@ import {
 import { firstFreeSlug, slugify } from "@/lib/utils/slugify";
 import type { DatabaseClient } from "@/server/db";
 import { category, categoryTranslation, product } from "@/server/db/schema";
+import type { BlobStore } from "@/server/services/upload";
 
 /** What names a category whose Spanish name has nothing readable in it. */
 const CATEGORY_SLUG_FALLBACK = "categoria";
@@ -224,7 +226,12 @@ async function findStoreCategory(
   { id, lock, storeId }: StoreScope & { id: number; lock: "share" | "update" }
 ) {
   const [found] = await tx
-    .select({ id: category.id, slug: category.slug })
+    .select({
+      coverPhoneUrl: category.coverPhoneUrl,
+      coverUrl: category.coverUrl,
+      id: category.id,
+      slug: category.slug,
+    })
     .from(category)
     .where(and(eq(category.id, id), eq(category.storeId, storeId)))
     .for(lock);
@@ -268,7 +275,7 @@ export async function renameCategory(
       target: [categoryTranslation.categoryId, categoryTranslation.locale],
     });
 
-  return found;
+  return { id: found.id, slug: found.slug };
 }
 
 /**
@@ -279,10 +286,22 @@ export async function renameCategory(
  * category lock, so two admins cannot nest two categories into each other at
  * once. English texts need the English name's row: without an English name
  * there is no English page text to keep.
+ *
+ * The cover's images (FER-011) change only when given: a new one must be an
+ * upload of this deployment for covers (`isOwnBlobUrl`), and a phone image
+ * needs a computer one. Answers the addresses the category no longer shows,
+ * for the caller to delete those files once this commits.
  */
 export async function updateCategoryPage(
   tx: DatabaseClient,
-  { storeId, values }: StoreScope & { values: UpdateCategoryPageValues }
+  {
+    blobStore,
+    storeId,
+    values,
+  }: StoreScope & {
+    blobStore: BlobStore | null;
+    values: UpdateCategoryPageValues;
+  }
 ) {
   await lockStoreCategories(tx, storeId);
   const found = await findStoreCategory(tx, {
@@ -290,6 +309,7 @@ export async function updateCategoryPage(
     lock: "update",
     storeId,
   });
+  const cover = resolveCover(found, values, blobStore);
 
   if (values.parentId !== null) {
     await assertCanJoin(tx, {
@@ -322,7 +342,7 @@ export async function updateCategoryPage(
 
   await tx
     .update(category)
-    .set({ parentId: values.parentId })
+    .set({ parentId: values.parentId, ...cover.columns })
     .where(and(eq(category.id, found.id), eq(category.storeId, storeId)));
 
   for (const locale of ["es", "en"] as const) {
@@ -350,7 +370,97 @@ export async function updateCategoryPage(
       );
   }
 
-  return { id: found.id, parentId: values.parentId };
+  return {
+    discardedImageUrls: cover.discarded,
+    id: found.id,
+    parentId: values.parentId,
+  };
+}
+
+type CoverImageValue = UpdateCategoryPageValues["cover"];
+
+/**
+ * Where one of the cover's images points after an update: the stored one
+ * when it is left out, none when it is removed, else the given one, which
+ * must be the one stored or this deployment's upload for covers, so no
+ * address from anywhere else is ever saved.
+ */
+function nextImageUrl(
+  image: CoverImageValue,
+  storedUrl: string | null,
+  blobStore: BlobStore | null
+): string | null {
+  if (image === undefined || image === null) {
+    return image === undefined ? storedUrl : null;
+  }
+
+  const uploaded =
+    blobStore !== null &&
+    isOwnBlobUrl(image.url, { ...blobStore, purpose: "cover" });
+
+  if (image.url !== storedUrl && !uploaded) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A cover image must be one uploaded to this store",
+    });
+  }
+
+  return image.url;
+}
+
+/** An image's three columns, all `null` for none. */
+function imageColumns(image: NonNullable<CoverImageValue> | null) {
+  return {
+    height: image?.height ?? null,
+    url: image?.url ?? null,
+    width: image?.width ?? null,
+  };
+}
+
+/**
+ * The cover columns a page update writes, and the addresses it drops. A
+ * phone image needs a computer one, as the table's check says, refused here
+ * with a reason instead.
+ */
+function resolveCover(
+  stored: { coverPhoneUrl: string | null; coverUrl: string | null },
+  { cover, coverPhone }: Pick<UpdateCategoryPageValues, "cover" | "coverPhone">,
+  blobStore: BlobStore | null
+) {
+  const computerUrl = nextImageUrl(cover, stored.coverUrl, blobStore);
+  const phoneUrl = nextImageUrl(coverPhone, stored.coverPhoneUrl, blobStore);
+
+  if (phoneUrl !== null && computerUrl === null) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "A phone cover needs a computer cover",
+    });
+  }
+
+  const kept = new Set([computerUrl, phoneUrl]);
+  const dropped = [stored.coverUrl, stored.coverPhoneUrl].filter(
+    (url): url is string => url !== null && !kept.has(url)
+  );
+  const computer = imageColumns(cover ?? null);
+  const phone = imageColumns(coverPhone ?? null);
+
+  return {
+    columns: {
+      ...(cover === undefined
+        ? {}
+        : {
+            coverHeight: computer.height,
+            coverUrl: computer.url,
+            coverWidth: computer.width,
+          }),
+      ...(coverPhone === undefined
+        ? {}
+        : {
+            coverPhoneHeight: phone.height,
+            coverPhoneUrl: phone.url,
+            coverPhoneWidth: phone.width,
+          }),
+    },
+    discarded: [...new Set(dropped)],
+  };
 }
 
 /**
@@ -440,7 +550,9 @@ export async function reorderCategories(
 /**
  * Deletes a category. When it still has articles they move first to
  * `moveToId`, another category of the same store, so none is ever left
- * without one; without articles `moveToId` is ignored.
+ * without one; without articles `moveToId` is ignored. Answers its cover's
+ * addresses too, for the caller to delete those files once this commits
+ * (FER-011).
  */
 export async function deleteCategory(
   tx: DatabaseClient,
@@ -453,7 +565,10 @@ export async function deleteCategory(
   await lockStoreCategories(tx, storeId);
   // Locked first: an article written into it meanwhile waits for the
   // deletion, then finds the category gone instead of a foreign-key error.
-  await findStoreCategory(tx, { id, lock: "update", storeId });
+  const found = await findStoreCategory(tx, { id, lock: "update", storeId });
+  const discardedImageUrls = [found.coverUrl, found.coverPhoneUrl].filter(
+    (url): url is string => url !== null
+  );
   // A group's categories stay, out of any group: their articles are theirs.
   await tx
     .update(category)
@@ -499,12 +614,12 @@ export async function deleteCategory(
       .delete(category)
       .where(and(eq(category.id, id), eq(category.storeId, storeId)));
 
-    return { id, movedArticles: moved.length };
+    return { discardedImageUrls, id, movedArticles: moved.length };
   }
 
   await tx
     .delete(category)
     .where(and(eq(category.id, id), eq(category.storeId, storeId)));
 
-  return { id, movedArticles: 0 };
+  return { discardedImageUrls, id, movedArticles: 0 };
 }

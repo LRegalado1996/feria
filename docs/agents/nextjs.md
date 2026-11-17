@@ -8,6 +8,7 @@ The rules this app's Next configuration imposes. The API reference is `node_modu
 - `reactCompiler` is on, through Turbopack's native compiler (`experimental.turbopackRustReactCompiler`), so no Babel plugin is installed.
 - `output: "standalone"` only off Vercel (`VERCEL !== "1"`): Vercel packages the app itself; standalone is for Docker and CI's e2e runtime.
 - Response headers that every deployment target must send (security headers) live in `headers()` here, never in `vercel.json`.
+- `images.remotePatterns` allows this deployment's own Blob store and nothing else (`blobImagePatterns`, `src/lib/blob/host.ts`): the host comes from `BLOB_READ_WRITE_TOKEN` at build, over HTTPS, without a query. A build without the token allows no remote image.
 
 ## Layouts and pages
 

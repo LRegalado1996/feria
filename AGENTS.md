@@ -103,7 +103,7 @@ Every change meets all of these; don't ask whether they apply.
 ```
 src/app/[locale]/                                  every page, under the root layout that sets <html lang>
 src/app/_components/{atoms,molecules,organisms}/   atomic design
-src/app/api/{auth,orpc,health,docs}/               Better Auth, oRPC, DB probe, OpenAPI reference
+src/app/api/{auth,orpc,health,docs,cron}/          Better Auth, oRPC, DB probe, OpenAPI reference, Vercel crons
 src/content/{es,en}/                               interface text, one file per area, typed against Spanish
 src/lib/{hooks,orpc,schemas,utils,errors}/         client hooks per domain, oRPC clients, zod, format.ts, reportError
 src/lib/i18n/                                      locales, localized paths, alternates, the dictionary provider

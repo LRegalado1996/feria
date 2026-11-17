@@ -45,7 +45,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-008](FER-008-store-domain-and-theming.md)     | Store domain, routing by path and theming          | P0       | done   |
 | [FER-009](FER-009-roles-and-access.md)             | Roles, memberships and closed sign-up              | P0       | done   |
 | [FER-010](FER-010-catalog-domain.md)               | Catalog domain: categories, articles, translations | P0       | done   |
-| [FER-011](FER-011-image-uploads.md)                | Image upload pipeline                              | P0       | todo   |
+| [FER-011](FER-011-image-uploads.md)                | Image upload pipeline                              | P0       | done   |
 | [FER-012](FER-012-remove-post-demo.md)             | Remove the posts demo                              | P1       | done   |
 | [FER-033](FER-033-article-filters.md)              | Article filters: color and other attributes        | P0       | done   |
 | [FER-038](FER-038-single-store.md)                 | One store, one admin role                          | P0       | done   |

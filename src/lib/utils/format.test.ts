@@ -5,6 +5,7 @@ import {
   formatDate,
   formatList,
   formatInteger,
+  formatPercent,
   formatPrice,
   formatRelativeTime,
   fromPlainNumberText,
@@ -99,6 +100,18 @@ describe("formatPrice", () => {
       expect(formatPrice(amount, currency, "en")).toBe(english);
     }
   );
+});
+
+describe("formatPercent", () => {
+  test.each([
+    [0, "0%"],
+    [45.4, "45%"],
+    [45.6, "46%"],
+    [100, "100%"],
+  ] as const)("%s reads %s in both languages", (value, text) => {
+    expect(formatPercent(value, "es")).toBe(text);
+    expect(formatPercent(value, "en")).toBe(text);
+  });
 });
 
 describe("formatInteger", () => {

@@ -3,6 +3,7 @@ import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 import "./src/env.js";
+import { blobImagePatterns } from "./src/lib/blob/host";
 
 // ── Security headers ─────────────────────────────────────────────────────────
 // Here and not in vercel.json, so a standalone or Docker build sends them too.
@@ -34,6 +35,12 @@ const config: NextConfig = {
     // The compiler as native code inside Turbopack, so no Babel plugin is
     // installed. Throws unless `reactCompiler` is on, and under webpack.
     turbopackRustReactCompiler: true,
+  },
+
+  // Uploaded images (FER-011) are served by `next/image` from this
+  // deployment's own Blob store only, the host its token names.
+  images: {
+    remotePatterns: blobImagePatterns(process.env.BLOB_READ_WRITE_TOKEN),
   },
 
   headers: async () =>

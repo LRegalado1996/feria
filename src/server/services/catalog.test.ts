@@ -1725,18 +1725,52 @@ describe("store-scoped single-row writes", () => {
     });
   });
 
-  test("deleteProduct deletes the store's article", async () => {
-    const { db } = setup();
+  test("deleteProduct locks the store's article, deletes it and answers its images' addresses", async () => {
+    const { answerLocks, db } = setup();
+    answerLocks([lockedRow()]);
+    db.$["select.where"].mockImplementation(async (where: unknown) =>
+      renderSql(where) === '"product_image"."productId" = $1'
+        ? await Promise.resolve([
+            { url: "https://cdn.example.com/a.webp" },
+            { url: "https://cdn.example.com/b.webp" },
+          ])
+        : await Promise.resolve([])
+    );
     db.$["delete.returning"].mockResolvedValue([{ id: 7 }]);
 
     await expect(
       deleteProduct(db as never, { id: 7, storeId: STORE_ID })
-    ).resolves.toEqual({ id: 7 });
+    ).resolves.toEqual({
+      id: 7,
+      imageUrls: [
+        "https://cdn.example.com/a.webp",
+        "https://cdn.example.com/b.webp",
+      ],
+    });
+    expect(
+      db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
+    ).toEqual([
+      {
+        params: [7, STORE_ID],
+        sql: '("product"."id" = $1 and "product"."storeId" = $2)',
+      },
+      { params: [7], sql: '"product_image"."productId" = $1' },
+    ]);
+    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(product);
     expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
       params: [7, STORE_ID],
       sql: '("product"."id" = $1 and "product"."storeId" = $2)',
     });
+  });
+
+  test("deleteProduct throws a plain error when the locked article's delete matches nothing", async () => {
+    const { answerLocks, db } = setup();
+    answerLocks([lockedRow()]);
+
+    await expect(
+      deleteProduct(db as never, { id: 7, storeId: STORE_ID })
+    ).rejects.toThrow(new Error("Deleting a locked article matched no row"));
   });
 
   test.each([

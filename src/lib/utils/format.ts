@@ -141,6 +141,19 @@ export function formatInteger(value: number, locale: Locale): string {
   return integerFormat(INTL_LOCALES[locale]).format(value);
 }
 
+const percentFormat = cached(
+  (tag: string) =>
+    new Intl.NumberFormat(tag, { maximumFractionDigits: 0, style: "percent" })
+);
+
+/**
+ * A share from 0 to 100 as a whole percentage in the language's notation
+ * (an upload's progress): `46%` for 45.6, rounded, never a fraction.
+ */
+export function formatPercent(value: number, locale: Locale): string {
+  return percentFormat(INTL_LOCALES[locale]).format(value / 100);
+}
+
 const listFormat = cached(
   (tag: string) =>
     new Intl.ListFormat(tag, { style: "long", type: "conjunction" })

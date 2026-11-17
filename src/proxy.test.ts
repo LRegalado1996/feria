@@ -63,6 +63,7 @@ describe("proxy: /api requests", () => {
     "/api/health",
     "/api/orpc/category/create",
     "/api/docs/spec.json",
+    "/api/cron/clean-up-blobs",
   ])(
     "never gives %s a language: it is stamped and passed through as it is",
     async (path) => {
@@ -198,18 +199,21 @@ describe("proxy: the launch switch", () => {
     }
   );
 
-  test.each(["/api/health", "/api/orpc/category/create", "/api/auth/sign-in"])(
-    "closed, never touches %s",
-    async (path) => {
-      close();
+  test.each([
+    "/api/health",
+    "/api/orpc/category/create",
+    "/api/auth/sign-in",
+    // Vercel's cron calls it on production, which is closed until launch.
+    "/api/cron/clean-up-blobs",
+  ])("closed, never touches %s", async (path) => {
+    close();
 
-      expect(await route(path)).toMatchObject({
-        status: 200,
-        redirectedTo: null,
-        passedThrough: true,
-      });
-    }
-  );
+    expect(await route(path)).toMatchObject({
+      status: 200,
+      redirectedTo: null,
+      passedThrough: true,
+    });
+  });
 
   test.each([
     ["/coming-soon", "/"],
@@ -256,6 +260,7 @@ describe("proxy matcher", () => {
     "/en",
     "/products/chain-1",
     "/api/health",
+    "/api/cron/clean-up-blobs",
     "/es/cart",
     // A dot does not make a path a file.
     "/products/pulsera-2.5mm",
