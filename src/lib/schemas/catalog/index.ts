@@ -256,9 +256,9 @@ export const COVER_ALT_MAX_LENGTH = 200;
  * is never a path the site already answers, nor a language prefix: a
  * category named "Cart" gets `/cart-2`. Every slug is made on the server
  * from the Spanish name, never taken from a request, so the service holds
- * this rule, and the database refuses a reserved slug
- * (`category_slug_not_reserved`). A path added here comes with a migration
- * that first renames the categories holding it, as `0015` does.
+ * this rule. A path added here comes with a migration that renames the
+ * categories already holding it, as `0015` does; FER-048 has the database
+ * refuse one too.
  */
 export const RESERVED_CATEGORY_SLUGS = [
   "admin",
