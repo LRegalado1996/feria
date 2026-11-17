@@ -157,10 +157,18 @@ describe("CategoryPageForm", () => {
       161,
       "Use up to 160 characters.",
     ],
+    ["Cover description in Spanish", 201, "Use up to 200 characters."],
   ])(
     "refuses a %s of %i characters under its field, sending nothing",
     async (name, length, message) => {
-      const { field, onSave, user } = setup();
+      const { field, onSave, user } = setup({
+        category: makeCategory({
+          cover: {
+            computer: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+            phone: null,
+          },
+        }),
+      });
 
       await user.click(field(name));
       await user.paste("x".repeat(length));
