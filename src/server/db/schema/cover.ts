@@ -8,9 +8,13 @@ interface ImageColumns {
   width: AnyPgColumn;
 }
 
-/** An image's three columns: all set, with a positive size, or none. */
+/**
+ * An image's three columns: all set, with a positive size, or none. Each
+ * column is named NOT NULL in the set branch: a CHECK that comes out NULL
+ * passes, so `width > 0` alone would let a missing width through.
+ */
 function imageComplete({ height, url, width }: ImageColumns): SQL {
-  return sql`(${url} IS NULL AND ${width} IS NULL AND ${height} IS NULL) OR (${url} IS NOT NULL AND ${width} > 0 AND ${height} > 0)`;
+  return sql`(${url} IS NULL AND ${width} IS NULL AND ${height} IS NULL) OR (${url} IS NOT NULL AND ${width} IS NOT NULL AND ${height} IS NOT NULL AND ${width} > 0 AND ${height} > 0)`;
 }
 
 /**

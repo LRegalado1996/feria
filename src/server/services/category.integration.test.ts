@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { UpdateCategoryPageValues } from "@/lib/schemas/catalog";
 import { db } from "@/server/db";
-import { category, product } from "@/server/db/schema";
+import { category, product, store } from "@/server/db/schema";
 import { createProduct } from "@/server/services/catalog";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
@@ -487,6 +487,74 @@ describe("category groups and pages (FER-043)", () => {
       cause: { constraint: "category_store_parent_fk" },
     });
   });
+
+  test.each([
+    [
+      "a category's cover without its width",
+      { coverHeight: 800, coverUrl: "/seed/a.jpg" },
+      "category_cover_complete",
+    ],
+    [
+      "a category's cover without its height",
+      { coverUrl: "/seed/a.jpg", coverWidth: 1200 },
+      "category_cover_complete",
+    ],
+    [
+      "a category's phone image without its width",
+      {
+        coverHeight: 800,
+        coverPhoneHeight: 1200,
+        coverPhoneUrl: "/seed/b.jpg",
+        coverUrl: "/seed/a.jpg",
+        coverWidth: 1200,
+      },
+      "category_cover_phone_complete",
+    ],
+  ])(
+    "the database refuses %s: a CHECK that comes out NULL would pass",
+    async (_case, columns, constraint) => {
+      const storeId = await theStoreId(db);
+      const rings = await add(storeId, `Anillos ${uniqueTag()}`);
+
+      await expect(
+        db.update(category).set(columns).where(eq(category.id, rings.id))
+      ).rejects.toMatchObject({ cause: { constraint } });
+    }
+  );
+
+  test.each([
+    [
+      "its width",
+      {
+        catalogCoverHeight: 800,
+        catalogCoverUrl: "/seed/a.jpg",
+        catalogCoverWidth: null,
+      },
+      "store_catalog_cover_complete",
+    ],
+    [
+      "its phone image's height",
+      {
+        catalogCoverHeight: 800,
+        catalogCoverPhoneHeight: null,
+        catalogCoverPhoneUrl: "/seed/b.jpg",
+        catalogCoverPhoneWidth: 1200,
+        catalogCoverUrl: "/seed/a.jpg",
+        catalogCoverWidth: 1200,
+      },
+      "store_catalog_cover_phone_complete",
+    ],
+  ])(
+    "the database refuses the cover of all articles without %s",
+    async (_case, columns, constraint) => {
+      const storeId = await theStoreId(db);
+
+      // Refused, so the store's row is left as it was.
+      await expect(
+        db.update(store).set(columns).where(eq(store.id, storeId))
+      ).rejects.toMatchObject({ cause: { constraint } });
+    }
+  );
 
   test("page texts are kept by a rename, and English ones need an English name", async () => {
     const storeId = await theStoreId(db);
