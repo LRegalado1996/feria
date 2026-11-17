@@ -294,6 +294,24 @@ describe("CategoryPageForm", () => {
     });
   });
 
+  test("sends an uploaded phone photo, keeping the stored computer one out", async () => {
+    const { onSave, save, upload } = setup({
+      category: makeCategory({ cover: STORED }),
+    });
+
+    await upload("Phone photo (optional)");
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          cover: undefined,
+          coverPhone: { height: 800, url: UPLOADED, width: 2400 },
+        })
+      );
+    });
+  });
+
   test("an untouched cover is not sent at all", async () => {
     const { onSave, save } = setup({
       category: makeCategory({ cover: STORED }),
