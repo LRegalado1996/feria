@@ -6,6 +6,7 @@ import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreOrder } from "@/app/_components/organisms/store-order";
 import { getDictionary } from "@/content";
 import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { pickReorderCategory } from "@/lib/catalog/reorder";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
@@ -14,6 +15,12 @@ import { catchNotFound } from "@/lib/orpc/catch-not-found";
 import { caller } from "@/lib/orpc/server";
 import { ORDER_TOKEN_PATTERN } from "@/lib/schemas/order";
 import { storeTitle } from "@/lib/seo/store-metadata";
+import type { Currency } from "@/lib/utils/format";
+import {
+  readCategories,
+  readCategoryArticles,
+  readCategoryCounts,
+} from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 
 import { StorePageFooter } from "../../store-page-footer";
@@ -107,6 +114,37 @@ function whatsappHref(
   return `https://wa.me/${whatsappNumber.replaceAll(/\D/gu, "")}?text=${encodeURIComponent(text)}`;
 }
 
+/**
+ * The row under the order's band (FER-051): one category drawn at random per
+ * visit from the cached counts, then its cached articles. The page is read
+ * per request, so drawing here costs no cache entry and hydrates as drawn.
+ */
+async function againRow(
+  store: { currencyCode: Currency; id: number },
+  locale: Locale
+) {
+  const categoryId = pickReorderCategory(
+    await readCategoryCounts(store),
+    Math.random
+  );
+  const found =
+    categoryId === null
+      ? undefined
+      : (await readCategories(store, locale)).find(
+          (entry) => entry.id === categoryId
+        );
+
+  if (categoryId === null || !found) {
+    return null;
+  }
+
+  return {
+    articles: await readCategoryArticles(store, categoryId, locale),
+    href: localizePath(found.path, locale),
+    name: found.name,
+  };
+}
+
 async function OrderResolver({ params }: OrderPageProps) {
   const locale = await readLocale(params);
   const { token } = await params;
@@ -129,10 +167,10 @@ async function OrderResolver({ params }: OrderPageProps) {
     >
       <main data-testid="store-order-page">
         <StoreOrder
+          again={await againRow(store, locale)}
           catalogHref={localizePath(ALL_ARTICLES_PATH, locale)}
-          labels={storefront.order}
+          copy={storefront}
           locale={locale}
-          newTabLabel={storefront.shell.newTab}
           order={order}
           whatsappHref={whatsappHref(store.whatsappNumber, order.code, locale)}
         />

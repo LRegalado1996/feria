@@ -22,6 +22,12 @@ export const STORE_THEME = {
   contrast: "#262a1d",
   /** The brand's own color: the announcement bar, buttons, and links on the contrast. */
   accent: "#c8f31d",
+  /**
+   * Something that went wrong, and only that (FER-051: an order that could
+   * not be delivered): a fill with the background as its text, or text on
+   * the page. Never decoration.
+   */
+  danger: "#b42318",
 } as const;
 
 export type StoreThemeColor = keyof typeof STORE_THEME;
@@ -29,7 +35,7 @@ export type StoreThemeColor = keyof typeof STORE_THEME;
 type ThemeStyle = CSSProperties & Record<`--store-${StoreThemeColor}`, string>;
 
 /**
- * The five colors as the custom properties the storefront's utilities read
+ * The colors as the custom properties the storefront's utilities read
  * (`bg-store-background` is `var(--store-background)`, `src/styles/globals.css`).
  * Constants of this file, never data, so nothing else can reach the `style`
  * they are written into.
@@ -39,6 +45,7 @@ export function storeThemeStyle(): ThemeStyle {
     "--store-accent": STORE_THEME.accent,
     "--store-background": STORE_THEME.background,
     "--store-contrast": STORE_THEME.contrast,
+    "--store-danger": STORE_THEME.danger,
     "--store-foreground": STORE_THEME.foreground,
     "--store-surface": STORE_THEME.surface,
   };

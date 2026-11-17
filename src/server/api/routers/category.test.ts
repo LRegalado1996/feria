@@ -303,6 +303,45 @@ describe("category router", () => {
     expect(services.discardBlobs).not.toHaveBeenCalled();
   });
 
+  test("passes the header choice through to the service, and leaves it out when the form does (FER-051)", async () => {
+    const { run } = setup();
+    const page = {
+      coverAltEn: "",
+      coverAltEs: "",
+      id: 5,
+      parentId: null,
+      seoDescriptionEn: "",
+      seoDescriptionEs: "",
+      seoTitleEn: "",
+      seoTitleEs: "",
+    };
+
+    await run("updatePage", { ...page, showInHeader: false });
+    await run("updatePage", page);
+
+    const values = {
+      coverAltEn: null,
+      coverAltEs: null,
+      id: 5,
+      parentId: null,
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: null,
+    };
+    expect(services.updateCategoryPage).toHaveBeenNthCalledWith(1, TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values: { ...values, showInHeader: false },
+    });
+    // Left out stays left out: the stored choice is kept, never defaulted.
+    expect(services.updateCategoryPage).toHaveBeenNthCalledWith(2, TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values,
+    });
+  });
+
   test("refuses a cover that is not an HTTPS address before any write", async () => {
     const { run } = setup();
 
@@ -373,6 +412,21 @@ describe("category router", () => {
   test.each([
     ["list", undefined, services.listStoreCategories],
     ["delete", { id: 5, moveToId: null }, services.deleteCategory],
+    [
+      "updatePage",
+      {
+        coverAltEn: "",
+        coverAltEs: "",
+        id: 5,
+        parentId: null,
+        seoDescriptionEn: "",
+        seoDescriptionEs: "",
+        seoTitleEn: "",
+        seoTitleEs: "",
+        showInHeader: false,
+      },
+      services.updateCategoryPage,
+    ],
   ] as const)(
     "%s by a login the database no longer has is UNAUTHORIZED, before the service",
     async (name, input, service) => {
@@ -410,6 +464,8 @@ describe("category router", () => {
     ["delete", { id: 5, moveToId: "6" }],
     // Valid but for the group sent as text, so only its rule refuses it.
     ["updatePage", makePageInput({ parentId: "6" })],
+    // Valid but for the header choice sent as text (FER-051).
+    ["updatePage", makePageInput({ showInHeader: "false" })],
   ] as const)(
     "refuses invalid %s input before reading the login",
     async (name, input) => {

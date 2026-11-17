@@ -7,9 +7,11 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { AdminPage } from "@/app/_components/molecules/admin-page";
+import { CopyLinkButton } from "@/app/_components/molecules/copy-link-button";
 import { OrderPhoneVerified } from "@/app/_components/molecules/order-phone-verified";
 import { OrderStatusActions } from "@/app/_components/molecules/order-status-actions";
 import { OrderStatusBadge } from "@/app/_components/molecules/order-status-badge";
+import { OrderStepper } from "@/app/_components/molecules/order-stepper";
 import { markOrderSeen } from "@/lib/admin/order-arrivals";
 import { type OrdersQuery, ordersPath } from "@/lib/admin/orders";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
@@ -20,6 +22,7 @@ import {
 } from "@/lib/hooks/order";
 import { useNow } from "@/lib/hooks/ui";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { localizePath } from "@/lib/i18n/paths";
 import type { OrderStatus } from "@/lib/schemas/order";
 import { cn } from "@/lib/utils";
 import {
@@ -175,6 +178,15 @@ function OrderDetail({ from, id, renderedAt }: OrderDetailProps) {
     );
   };
 
+  // The stepper changes the status as the moves do, after asking first.
+  const moves = {
+    code: found.code,
+    onMove,
+    pendingMove: change.isPending ? change.variables.status : null,
+  };
+  const stepperCard =
+    "rounded-lg border bg-card p-4 text-card-foreground md:px-5 md:py-6";
+
   return (
     <section data-slot="order-detail" data-testid="order-detail">
       <AdminPage
@@ -201,6 +213,17 @@ function OrderDetail({ from, id, renderedAt }: OrderDetailProps) {
         title={interpolate(copy.detail.title, { code: found.code })}
       >
         {back}
+        {/* At the top, centered and across, on a computer. */}
+        <div
+          className={cn("hidden md:block", stepperCard)}
+          data-testid="order-stepper-wide"
+        >
+          <OrderStepper
+            className="mx-auto max-w-2xl"
+            moves={moves}
+            status={found.status}
+          />
+        </div>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-6">
           <div className="min-w-0 space-y-4 lg:space-y-6">
             <DetailCard title={copy.detail.status}>
@@ -282,6 +305,16 @@ function OrderDetail({ from, id, renderedAt }: OrderDetailProps) {
                   <span className="sr-only"> {storefront.shell.newTab}</span>
                 </a>
               </Button>
+              <CopyLinkButton
+                labels={{
+                  copied: copy.detail.copyLinkCopied,
+                  copy: copy.detail.copyLink,
+                  field: copy.detail.copyLinkField,
+                  manual: copy.detail.copyLinkManual,
+                }}
+                // The shopper's page, in the language they ordered in.
+                path={localizePath(`/orders/${found.token}`, found.locale)}
+              />
             </DetailCard>
             <DetailCard title={copy.detail.history}>
               <ol className="space-y-3" data-testid="order-history">
@@ -313,6 +346,13 @@ function OrderDetail({ from, id, renderedAt }: OrderDetailProps) {
               </ol>
             </DetailCard>
           </div>
+        </div>
+        {/* Down, at the end of the page, above the moves' bar, on a phone. */}
+        <div
+          className={cn("md:hidden", stepperCard)}
+          data-testid="order-stepper-narrow"
+        >
+          <OrderStepper moves={moves} status={found.status} />
         </div>
       </AdminPage>
     </section>

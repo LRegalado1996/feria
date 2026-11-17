@@ -65,6 +65,10 @@ export const category = pgTable(
     slug: text().notNull(),
     position: integer().notNull(),
     parentId: integer(),
+    // Whether the store's header and phone menu list it (FER-051): read for
+    // a group and a category in no group only; one in a group always shows
+    // in its group's dropdown. Its page is reachable either way.
+    showInHeader: boolean().notNull().default(true),
     coverUrl: text(),
     coverWidth: integer(),
     coverHeight: integer(),

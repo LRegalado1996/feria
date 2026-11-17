@@ -216,6 +216,7 @@
   --color-store-foreground: var(--store-foreground);
   --color-store-contrast: var(--store-contrast);
   --color-store-accent: var(--store-accent);
+  --color-store-danger: var(--store-danger);
   --color-store-muted: var(--store-muted);
   --color-store-contrast-muted: var(--store-contrast-muted);
   --color-store-line: var(--store-line);

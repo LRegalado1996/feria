@@ -22,7 +22,9 @@ import {
   getPublishedProduct,
   getPublishedProductRef,
   listCartProducts,
+  countPublishedByCategory,
   listCategories,
+  listCategoryArticles,
   listPublishedProducts,
   listRelatedPool,
   listRelatedProducts,
@@ -207,6 +209,7 @@ describe("listCategories", () => {
         id: 1,
         parentId: null,
         position: 0,
+        showInHeader: true,
         slug: "collares",
         translations: [
           { locale: "es", name: "Collares" },
@@ -217,6 +220,7 @@ describe("listCategories", () => {
         id: 2,
         parentId: 1,
         position: 1,
+        showInHeader: true,
         slug: "aros",
         translations: [{ locale: "es", name: "Aros" }],
       },
@@ -225,6 +229,7 @@ describe("listCategories", () => {
         // A group the list does not hold leaves the category at the top.
         parentId: 99,
         position: 2,
+        showInHeader: false,
         slug: "sin-nombre",
         translations: [],
       },
@@ -240,6 +245,7 @@ describe("listCategories", () => {
         parentId: null,
         path: "/collares",
         position: 0,
+        showInHeader: true,
         slug: "collares",
       },
       {
@@ -249,6 +255,7 @@ describe("listCategories", () => {
         parentId: 1,
         path: "/collares/aros",
         position: 1,
+        showInHeader: true,
         slug: "aros",
       },
       {
@@ -258,10 +265,19 @@ describe("listCategories", () => {
         parentId: 99,
         path: "/sin-nombre",
         position: 2,
+        showInHeader: false,
         slug: "sin-nombre",
       },
     ]);
     const config = configOf(db.query.category.findMany);
+    // The header's choice travels with each one (FER-051).
+    expect(config.columns).toEqual({
+      id: true,
+      parentId: true,
+      position: true,
+      showInHeader: true,
+      slug: true,
+    });
     expect(renderQuery(config.where)).toEqual({
       params: [STORE_ID],
       sql: '"category"."storeId" = $1',
@@ -1277,6 +1293,56 @@ describe("listRelatedPool", () => {
 
     await expect(pool(db, 9)).resolves.toEqual({ others: [], same: [] });
     expect(db.query.product.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("countPublishedByCategory", () => {
+  test("counts each category's published articles in the store, leaving out the ones in none", async () => {
+    const { db } = setup();
+    db.$["select.orderBy"].mockResolvedValue([
+      { categoryId: 2, count: 5 },
+      { categoryId: null, count: 3 },
+      { categoryId: 9, count: 1 },
+    ]);
+
+    await expect(
+      countPublishedByCategory(db as never, { storeId: STORE_ID })
+    ).resolves.toEqual([
+      { categoryId: 2, count: 5 },
+      { categoryId: 9, count: 1 },
+    ]);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, "published"],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."categoryId" is not null)',
+    });
+    expect(db.$["select.groupBy"]).toHaveBeenCalledExactlyOnceWith(
+      product.categoryId
+    );
+  });
+});
+
+describe("listCategoryArticles", () => {
+  test("hands over the category's newest published articles as cards, eight at most", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValue([{ id: 5 }, { id: 4 }]);
+    db.query.product.findMany.mockResolvedValue([cardRow(4), cardRow(5)]);
+
+    await expect(
+      listCategoryArticles(db as never, {
+        categoryId: 9,
+        currencyCode: "UYU",
+        locale: "es",
+        storeId: STORE_ID,
+      })
+    ).resolves.toEqual([card(5), card(4)]);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, "published", 9],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."categoryId" = $3)',
+    });
+    expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
+      '"product"."publishedAt" desc, "product"."id" desc'
+    );
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(8);
   });
 });
 

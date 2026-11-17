@@ -1,7 +1,11 @@
+import { ORPCError } from "@orpc/server";
+
 import { env } from "@/env";
 import { blobStoreHost } from "@/lib/blob/host";
 import { blobNamespace } from "@/lib/blob/paths";
+import { ERROR_WHYS } from "@/lib/errors";
 import { keepAlivePastResponse } from "@/server/api/utils/keep-alive-past-response";
+import { safeRequestLogger } from "@/server/api/utils/logger";
 import type { DatabaseClient } from "@/server/db";
 import { type BlobStore, deleteBlobs } from "@/server/services/upload";
 
@@ -24,14 +28,20 @@ export function readBlobStore(
 
 /**
  * `readBlobStore` for a request that cannot work without one (a client
- * token): a deployment without the token is misconfigured, a 500 the
- * interceptor reports, never a refusal the admin could fix.
+ * token). A deployment without the token is misconfigured (FER-051): a typed
+ * `SERVICE_UNAVAILABLE` whose `why` the uploader turns into a plain sentence,
+ * and the client reports once (`useImageUpload`), rather than a 500 the
+ * interceptor would report as a crash. The request's log line says so.
  */
 export function requireBlobStore(): BlobStore {
   const blobStore = readBlobStore();
 
   if (!blobStore) {
-    throw new Error("BLOB_READ_WRITE_TOKEN is missing or malformed");
+    safeRequestLogger()?.set({ upload: { configured: false } });
+    throw new ORPCError("SERVICE_UNAVAILABLE", {
+      data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+      message: "Image uploads are not configured on this server",
+    });
   }
 
   return blobStore;

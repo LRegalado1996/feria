@@ -32,6 +32,11 @@ export interface StoreArticleRowProps {
   title: string;
   /** Where "Ver todo" leads; without it there is no such link. */
   viewAllHref?: string;
+  /**
+   * What "Ver todo" leads to, for its name ("Ver todo: Burbujeros"), when
+   * that is not the row's heading (the order page's row, FER-051).
+   */
+  viewAllOf?: string;
 }
 
 /**
@@ -89,6 +94,7 @@ function StoreArticleRow({
   items,
   title,
   viewAllHref,
+  viewAllOf = title,
 }: StoreArticleRowProps) {
   const copy = useDictionary().storefront.row;
 
@@ -103,7 +109,7 @@ function StoreArticleRow({
         </Heading>
         {viewAllHref ? (
           <Link
-            aria-label={interpolate(copy.viewAllOf, { title })}
+            aria-label={interpolate(copy.viewAllOf, { title: viewAllOf })}
             className="inline-flex min-h-11 shrink-0 items-center font-display text-xs font-extrabold uppercase underline decoration-2 underline-offset-6 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground"
             href={viewAllHref}
           >

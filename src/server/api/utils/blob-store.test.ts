@@ -1,4 +1,7 @@
+import { ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
+
+import { ERROR_WHYS } from "@/lib/errors";
 
 import { discardBlobs, readBlobStore, requireBlobStore } from "./blob-store";
 
@@ -10,6 +13,12 @@ const mocks = vi.hoisted(() => ({
   keepAlivePastResponse: vi.fn(
     (_work: Promise<unknown>, _options: { action: string }) => undefined
   ),
+  // The request's wide-event logger: `set` is what lands on its log line.
+  logSet: vi.fn<(fields: unknown) => void>(),
+}));
+
+vi.mock("@/server/api/utils/logger", () => ({
+  safeRequestLogger: () => ({ set: mocks.logSet }),
 }));
 
 vi.mock("@/env", () => ({ env: mocks.env }));
@@ -63,12 +72,34 @@ describe("requireBlobStore", () => {
     expect(requireBlobStore()).toEqual(STORE);
   });
 
-  test("throws a plain error, a 500, without one", () => {
+  test("answers a typed 503 the uploader can explain without one, and logs it", () => {
     setup();
 
-    expect(() => requireBlobStore()).toThrow(
-      new Error("BLOB_READ_WRITE_TOKEN is missing or malformed")
-    );
+    let thrown: unknown = null;
+    try {
+      requireBlobStore();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(ORPCError);
+    expect(thrown).toMatchObject({
+      code: "SERVICE_UNAVAILABLE",
+      data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+      message: "Image uploads are not configured on this server",
+      status: 503,
+    });
+    expect(mocks.logSet).toHaveBeenCalledExactlyOnceWith({
+      upload: { configured: false },
+    });
+  });
+
+  test("logs nothing when the store is configured", () => {
+    setup({ token: TOKEN });
+
+    requireBlobStore();
+
+    expect(mocks.logSet).not.toHaveBeenCalled();
   });
 });
 

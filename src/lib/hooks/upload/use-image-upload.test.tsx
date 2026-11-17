@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import { ERROR_WHYS } from "@/lib/errors";
 import { reportError } from "@/lib/errors/client";
 import type { UploadedImage } from "@/lib/schemas/upload";
 import type * as PrepareImage from "@/lib/upload/prepare-image";
@@ -56,6 +57,7 @@ function setup({
   ignoresAbort = false,
   prepared = makePrepared(),
   tokenFails = false,
+  uploadsNotConfigured = false,
 }: {
   /** The token's answer waits for `giveToken()`. */
   holdsToken?: boolean;
@@ -63,6 +65,8 @@ function setup({
   ignoresAbort?: boolean;
   prepared?: ReturnType<typeof makePrepared> | Error;
   tokenFails?: boolean;
+  /** The server has no Blob store: its typed 503. */
+  uploadsNotConfigured?: boolean;
 } = {}) {
   let releaseToken = (): void => undefined;
   const tokenReady = new Promise<undefined>((resolve) => {
@@ -83,15 +87,26 @@ function setup({
       token: "vercel_blob_client_Store9_signed",
     };
   });
-  server.use(
-    tokenFails
-      ? createOrpcErrorHandler("upload.createToken", {
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Internal server error",
-          status: 500,
-        })
-      : createOrpcHandler("upload.createToken", tokenRequests)
-  );
+  if (uploadsNotConfigured) {
+    server.use(
+      createOrpcErrorHandler("upload.createToken", {
+        code: "SERVICE_UNAVAILABLE",
+        data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+        message: "Image uploads are not configured on this server",
+        status: 503,
+      })
+    );
+  } else {
+    server.use(
+      tokenFails
+        ? createOrpcErrorHandler("upload.createToken", {
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Internal server error",
+            status: 500,
+          })
+        : createOrpcHandler("upload.createToken", tokenRequests)
+    );
+  }
 
   if (prepared instanceof Error) {
     mocks.prepareImage.mockRejectedValue(prepared);
@@ -278,7 +293,7 @@ describe("useImageUpload", () => {
     });
     expect(reportError).toHaveBeenCalledExactlyOnceWith(failed, {
       action: "Upload.upload_image",
-      context: { prepared: true, purpose: "cover" },
+      context: { prepared: true, purpose: "cover", reason: "failed" },
     });
 
     act(() => {
@@ -321,9 +336,87 @@ describe("useImageUpload", () => {
       expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
       {
         action: "Upload.upload_image",
-        context: { prepared: true, purpose: "cover" },
+        context: { prepared: true, purpose: "cover", reason: "failed" },
       }
     );
+  });
+
+  test("a server without its store says so once, and offers no retry", async () => {
+    const { file, result } = setup({ uploadsNotConfigured: true });
+
+    act(() => {
+      result.current.start(file);
+    });
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        reason: "notConfigured",
+        status: "failed",
+      });
+    });
+    expect(mocks.put).not.toHaveBeenCalled();
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        code: "SERVICE_UNAVAILABLE",
+        data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+      }),
+      {
+        action: "Upload.upload_image",
+        context: { prepared: true, purpose: "cover", reason: "notConfigured" },
+      }
+    );
+
+    act(() => {
+      result.current.retry();
+    });
+
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file);
+    expect(result.current.state).toEqual({
+      reason: "notConfigured",
+      status: "failed",
+    });
+  });
+
+  test.each([
+    [
+      "another 503",
+      { code: "SERVICE_UNAVAILABLE", data: undefined, status: 503 },
+    ],
+    [
+      "another why",
+      {
+        code: "SERVICE_UNAVAILABLE",
+        data: { why: ERROR_WHYS.TIMEOUT },
+        status: 503,
+      },
+    ],
+    [
+      "the why on another code",
+      {
+        code: "INTERNAL_SERVER_ERROR",
+        data: { why: ERROR_WHYS.UPLOADS_NOT_CONFIGURED },
+        status: 500,
+      },
+    ],
+  ])("%s is a plain failure, worth a retry", async (_case, refusal) => {
+    const { file, result } = setup();
+    server.use(
+      createOrpcErrorHandler("upload.createToken", {
+        ...refusal,
+        message: "Refused",
+      })
+    );
+
+    act(() => {
+      result.current.start(file);
+    });
+
+    await waitFor(() => {
+      expect(result.current.state).toEqual({
+        reason: "failed",
+        status: "failed",
+      });
+    });
   });
 
   test("cancelling stops the upload and nothing is handed over", async () => {

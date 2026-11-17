@@ -112,6 +112,15 @@ describe("ConfirmDialog", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("draws the confirm button as asked, for a change that is easily undone", () => {
+    setup({ confirmLabel: "Move it", confirmVariant: "default" });
+
+    expect(screen.getByRole("button", { name: "Move it" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
+  });
+
   test("hands the close to the caller to place focus", async () => {
     const onCloseAutoFocus = vi.fn((event: Event) => {
       event.preventDefault();

@@ -66,7 +66,7 @@ const SHELL_END = "</body></html>";
 // The store's colors from the theme file, on <body>, where CSS derives the
 // muted ones from them.
 const THEMED_BODY =
-  '<body data-store-palette="" style="--store-accent:#c8f31d;--store-background:#ffffff;--store-contrast:#262a1d;--store-foreground:#15160f;--store-surface:#f3f3f2">';
+  '<body data-store-palette="" style="--store-accent:#c8f31d;--store-background:#ffffff;--store-contrast:#262a1d;--store-danger:#b42318;--store-foreground:#15160f;--store-surface:#f3f3f2">';
 
 function shellStart(locale: "en" | "es") {
   return `<html class="font-geist-test font-anybody-test" lang="${locale}"><head></head>${THEMED_BODY}<div data-locale="${locale}" data-testid="environment-marker"></div><div data-locale="${locale}" data-testid="app-providers" data-welcome="${WELCOME[locale]}"><main>page content</main></div>`;

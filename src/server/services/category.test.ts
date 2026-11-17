@@ -145,6 +145,7 @@ describe("listStoreCategories", () => {
         parentId: null,
         position: 0,
         productCount: 3,
+        showInHeader: true,
         slug: "collares",
       },
       {
@@ -153,6 +154,7 @@ describe("listStoreCategories", () => {
         parentId: 4,
         position: 1,
         productCount: 0,
+        showInHeader: true,
         slug: "aros",
       },
       {
@@ -161,6 +163,7 @@ describe("listStoreCategories", () => {
         parentId: null,
         position: 2,
         productCount: 0,
+        showInHeader: false,
         slug: "sin-nombre",
       },
     ]);
@@ -224,6 +227,7 @@ describe("listStoreCategories", () => {
         id: 9,
         nameEs: "",
         position: 2,
+        showInHeader: false,
         slug: "sin-nombre",
       }),
     ]);
@@ -240,6 +244,7 @@ describe("listStoreCategories", () => {
       id: category.id,
       parentId: category.parentId,
       position: category.position,
+      showInHeader: category.showInHeader,
       slug: category.slug,
     });
     // Drafts count too: every article joined to the category, in one
@@ -628,7 +633,7 @@ describe("updateCategoryPage", () => {
     ]);
   });
 
-  test("leaves the cover alone when the form sends none of it, discarding nothing", async () => {
+  test("leaves the cover and the header choice alone when the form sends none of them, discarding nothing", async () => {
     const { db, update } = setupPage({
       stored: { coverPhoneUrl: OLD_PHONE, coverUrl: OLD_COMPUTER },
     });
@@ -640,6 +645,23 @@ describe("updateCategoryPage", () => {
     });
     expect(db.$["update.set"].mock.calls[0]).toEqual([{ parentId: null }]);
   });
+
+  test.each([true, false])(
+    "writes the header choice when the form sends it (%s), beside the group",
+    async (showInHeader) => {
+      const { db, update } = setupPage();
+
+      await update(makePage({ showInHeader }));
+
+      expect(db.$["update.set"].mock.calls[0]).toEqual([
+        { parentId: null, showInHeader },
+      ]);
+      expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+        params: [5, STORE_ID],
+        sql: FIND_SQL,
+      });
+    }
+  );
 
   test("keeps the stored image sent back as it is, even one from before uploads", async () => {
     const { update } = setupPage({

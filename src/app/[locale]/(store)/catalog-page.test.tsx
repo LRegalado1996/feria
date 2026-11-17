@@ -111,6 +111,7 @@ function makeCategory(
     parentId: parent?.id ?? null,
     path: parent ? `/${parent.slug}/${slug}` : `/${slug}`,
     position: id,
+    showInHeader: true,
     slug,
   };
 }

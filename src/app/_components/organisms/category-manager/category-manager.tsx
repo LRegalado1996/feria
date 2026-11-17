@@ -32,12 +32,17 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { type RefObject, useId, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/app/_components/atoms/tooltip";
 import { AdminPage } from "@/app/_components/molecules/admin-page";
 import {
   CategoryForm,
@@ -326,6 +331,25 @@ function CategoryList({
 }
 
 /**
+ * An icon-only button's name on hover and on focus (FER-051), the same words
+ * as its `aria-label` (design.md § Tooltips over `title`). The trigger is a
+ * span around the button, so a disabled one (the first row's "up") still
+ * says what it does; focus inside the span opens it too.
+ */
+function IconTip({ children, label }: { children: ReactNode; label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex" data-slot="category-icon-tip">
+          {children}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/**
  * Where a category stands among the groups (FER-043): in one, holding some,
  * or neither.
  */
@@ -395,6 +419,14 @@ function CategoryRow({
     transform,
     transition,
   } = useSortable({ id: row.id });
+  const names = {
+    delete: interpolate(copy.delete.action, { name: row.nameEs }),
+    down: interpolate(copy.move.down, { name: row.nameEs }),
+    drag: interpolate(copy.move.drag, { name: row.nameEs }),
+    edit: interpolate(copy.edit.action, { name: row.nameEs }),
+    page: interpolate(copy.page.action, { name: row.nameEs }),
+    up: interpolate(copy.move.up, { name: row.nameEs }),
+  };
 
   return (
     <li
@@ -406,16 +438,18 @@ function CategoryRow({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
-      <button
-        aria-label={interpolate(copy.move.drag, { name: row.nameEs })}
-        className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:size-9"
-        ref={setActivatorNodeRef}
-        type="button"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical aria-hidden="true" className="size-4" />
-      </button>
+      <IconTip label={names.drag}>
+        <button
+          aria-label={names.drag}
+          className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none md:size-9"
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical aria-hidden="true" className="size-4" />
+        </button>
+      </IconTip>
       {editing ? (
         <CategoryForm
           className="min-w-0 flex-1 basis-full sm:basis-0"
@@ -461,70 +495,81 @@ function CategoryRow({
             ) : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1">
-            <Button
-              aria-label={interpolate(copy.move.up, { name: row.nameEs })}
-              disabled={first}
-              onClick={() => {
-                onMove(-1);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              <ArrowUp aria-hidden="true" className="size-4" />
-            </Button>
-            <Button
-              aria-label={interpolate(copy.move.down, { name: row.nameEs })}
-              disabled={last}
-              onClick={() => {
-                onMove(1);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              <ArrowDown aria-hidden="true" className="size-4" />
-            </Button>
-            <Button
-              // While a save is on its way the page stays as it is: closing and
-              // reopening it would let that save close a newer editor. Only
-              // `aria-disabled`, so the button can take focus back the moment
-              // the save ends, before the list re-renders it (design.md).
-              aria-disabled={updatePage.isPending || undefined}
-              aria-expanded={paging}
-              aria-label={interpolate(copy.page.action, { name: row.nameEs })}
-              className="aria-disabled:opacity-50"
-              onClick={() => {
-                if (!updatePage.isPending) {
-                  setPaging((was) => !was);
-                }
-              }}
-              ref={pageButton}
-              size="icon"
-              variant="ghost"
-            >
-              <FileText aria-hidden="true" className="size-4" />
-            </Button>
-            <Button
-              aria-label={interpolate(copy.edit.action, { name: row.nameEs })}
-              onClick={() => {
-                setEditing(true);
-              }}
-              size="icon"
-              variant="ghost"
-            >
-              <Pencil aria-hidden="true" className="size-4" />
-            </Button>
-            <Button
-              aria-label={interpolate(copy.delete.action, { name: row.nameEs })}
-              onClick={() => {
-                setDeleteError(null);
-                setDeleting(true);
-              }}
-              ref={deleteButton}
-              size="icon"
-              variant="ghost"
-            >
-              <Trash2 aria-hidden="true" className="size-4" />
-            </Button>
+            <IconTip label={names.up}>
+              <Button
+                aria-label={names.up}
+                disabled={first}
+                onClick={() => {
+                  onMove(-1);
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                <ArrowUp aria-hidden="true" className="size-4" />
+              </Button>
+            </IconTip>
+            <IconTip label={names.down}>
+              <Button
+                aria-label={names.down}
+                disabled={last}
+                onClick={() => {
+                  onMove(1);
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                <ArrowDown aria-hidden="true" className="size-4" />
+              </Button>
+            </IconTip>
+            <IconTip label={names.page}>
+              <Button
+                // While a save is on its way the page stays as it is: closing
+                // and reopening it would let that save close a newer editor.
+                // Only `aria-disabled`, so the button can take focus back the
+                // moment the save ends, before the list re-renders it
+                // (design.md).
+                aria-disabled={updatePage.isPending || undefined}
+                aria-expanded={paging}
+                aria-label={names.page}
+                className="aria-disabled:opacity-50"
+                onClick={() => {
+                  if (!updatePage.isPending) {
+                    setPaging((was) => !was);
+                  }
+                }}
+                ref={pageButton}
+                size="icon"
+                variant="ghost"
+              >
+                <FileText aria-hidden="true" className="size-4" />
+              </Button>
+            </IconTip>
+            <IconTip label={names.edit}>
+              <Button
+                aria-label={names.edit}
+                onClick={() => {
+                  setEditing(true);
+                }}
+                size="icon"
+                variant="ghost"
+              >
+                <Pencil aria-hidden="true" className="size-4" />
+              </Button>
+            </IconTip>
+            <IconTip label={names.delete}>
+              <Button
+                aria-label={names.delete}
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleting(true);
+                }}
+                ref={deleteButton}
+                size="icon"
+                variant="ghost"
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+              </Button>
+            </IconTip>
           </div>
         </>
       )}

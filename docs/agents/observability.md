@@ -28,6 +28,7 @@ An issue is something a developer must fix. Everything else is a breadcrumb or n
 
 - **Not an issue:** a typed business `ORPCError` (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`), matched by code and never by message; crawler traffic; Next's streamed `notFound()`/`forbidden()`/`unauthorized()` (digest `NEXT_HTTP_ERROR_FALLBACK;401|403|404`); an error raised entirely inside a browser extension.
 - **Is an issue:** anything else the server could not handle, and any client failure that is not one of the above.
+- **A capability the deployment is not configured for** is a typed `SERVICE_UNAVAILABLE` with a `why` from `ERROR_WHYS` (uploads without `BLOB_READ_WRITE_TOKEN`, FER-051): the interceptor passes it through untouched, so the server reports nothing, and the client that asked reports it once with `reportError` (someone must configure it), beside a plain message instead of a crash.
 - A new noise filter matches the observed signature positively (a code, an exact digest, a frame URL) and gets a test. Never filter by exclusion ("every `TypeError` except…"): it hides the next real failure.
 - Better Auth's error-level log lines reach Sentry through `betterAuthLogger`, once per incident (the underlying error, never Better Auth's `APIError` wrapper).
 

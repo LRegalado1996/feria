@@ -210,7 +210,8 @@ describe("ImageUploader", () => {
       "tooLarge",
       "The photo is still too heavy after shrinking it. Try another one.",
     ],
-  ] as const)("a %s photo asks for another, with no retry", (reason, text) => {
+    ["notConfigured", "Photo uploads aren't set up on this server."],
+  ] as const)("a %s failure says why, with no retry", (reason, text) => {
     const { copy, group, named } = setup({
       state: { reason, status: "failed" },
     });
@@ -227,6 +228,20 @@ describe("ImageUploader", () => {
 
     expect(within(group).getByRole("status")).toHaveTextContent(text);
     expect(within(group).queryByRole("alert")).toBeNull();
+  });
+
+  test("says plainly, in Spanish, that this server cannot upload photos", () => {
+    const { group } = setup({
+      locale: "es",
+      state: { reason: "notConfigured", status: "failed" },
+    });
+
+    expect(within(group).getByRole("alert")).toHaveTextContent(
+      "La subida de fotos no está configurada en este servidor."
+    );
+    expect(
+      within(group).queryByRole("button", { name: `Reintentar: ${LABEL}` })
+    ).toBeNull();
   });
 
   test("speaks Spanish on a Spanish page", () => {

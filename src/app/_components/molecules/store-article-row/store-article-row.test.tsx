@@ -99,6 +99,14 @@ describe("StoreArticleRow", () => {
     }
   );
 
+  test("names the link after what it leads to when that is not the heading", () => {
+    setup({ locale: "en", viewAllHref: "/aros", viewAllOf: "Earrings" });
+
+    expect(
+      screen.getByRole("link", { name: "See all: Earrings" })
+    ).toHaveAttribute("href", "/aros");
+  });
+
   test("has no such link without an address for it", () => {
     setup({ viewAllHref: undefined });
 

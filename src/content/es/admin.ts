@@ -91,6 +91,11 @@ export const admin = {
         "Si los dejás vacíos, se escriben solos con el nombre de la categoría y el de la tienda.",
       seoTitleEn: "Título para buscadores en inglés",
       seoTitleEs: "Título para buscadores en español",
+      showInHeader: "Mostrar en el encabezado",
+      showInHeaderHint:
+        "Si la desmarcás, deja de aparecer en el menú de la tienda, pero su página sigue abierta.",
+      showInHeaderInGroup:
+        "Una categoría de un grupo siempre aparece en el menú de su grupo.",
       submit: "Guardar la página",
       title: "Página de «{name}»",
     },
@@ -190,6 +195,7 @@ export const admin = {
     named: "{action}: {label}",
     errors: {
       failed: "No se pudo subir la foto. Revisá la conexión y reintentá.",
+      notConfigured: "La subida de fotos no está configurada en este servidor.",
       tooLarge:
         "La foto sigue siendo demasiado pesada después de reducirla. Probá con otra.",
       unreadable:
@@ -231,6 +237,12 @@ export const admin = {
     detail: {
       back: "Volver a pedidos",
       contact: "Contacto",
+      // The shopper's own page of the order (FER-051), to send it again.
+      copyLink: "Copiar el enlace del pedido",
+      copyLinkCopied: "Copiamos el enlace del pedido.",
+      copyLinkField: "Enlace del pedido",
+      copyLinkManual:
+        "No pudimos copiarlo: seleccioná el enlace y copialo a mano.",
       history: "Historial",
       historyFormer: "Alguien que ya no está en el equipo",
       historyPlaced: "Pedido hecho",
@@ -287,6 +299,23 @@ export const admin = {
       packed: "Preparado",
       received: "Recibido",
       undeliverable: "No se pudo entregar",
+    },
+    // The stepper's circles as buttons (FER-051): each says what it does, or
+    // why it cannot; its tooltip says the same.
+    stepper: {
+      back: "Volver a {status}",
+      blocked: "{status}: antes tiene que pasar por Preparado",
+      confirm: {
+        back: "Sí, volver a {status}",
+        backTitle: "¿Volver el pedido a {status}?",
+        description:
+          "El pedido {code} pasa a «{status}» y el cliente lo ve en la página de su pedido.",
+        forward: "Sí, pasar a {status}",
+        forwardTitle: "¿Pasar el pedido a {status}?",
+      },
+      current: "{status}: es el estado actual",
+      forward: "Pasar a {status}",
+      pending: "Guardando: {status}",
     },
     tab: "{label} ({count})",
     tabAll: "Todos",

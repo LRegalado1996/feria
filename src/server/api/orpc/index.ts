@@ -48,6 +48,9 @@ const ERRORS = {
   FORBIDDEN: { data: appErrorDataSchema.optional() },
   NOT_FOUND: { data: appErrorDataSchema.optional() },
   CONFLICT: { data: appErrorDataSchema.optional() },
+  // A capability this deployment is not configured for (uploads without
+  // their store, FER-051): a 503 the client explains, never a crash.
+  SERVICE_UNAVAILABLE: { data: appErrorDataSchema.optional() },
   // `retryAfter` in seconds, for a countdown instead of a blind retry.
   TOO_MANY_REQUESTS: {
     data: appErrorDataSchema.extend({ retryAfter: z.number().int().min(1) }),

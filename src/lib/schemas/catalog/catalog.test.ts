@@ -559,6 +559,30 @@ describe("updateCategoryPageSchema", () => {
       updateCategoryPageSchema.parse(makePageInput({ parentId: 6 })).parentId
     ).toBe(6);
   });
+
+  test.each([
+    [true, true],
+    [false, false],
+    [undefined, undefined],
+  ])(
+    "takes the header choice %j as %j: left out, the stored one stays (FER-051)",
+    (showInHeader, expected) => {
+      expect(
+        updateCategoryPageSchema.parse(makePageInput({ showInHeader }))
+          .showInHeader
+      ).toBe(expected);
+    }
+  );
+
+  test.each([["false"], [1], [null]])(
+    "refuses a header choice of %j",
+    (showInHeader) => {
+      expect(
+        updateCategoryPageSchema.safeParse(makePageInput({ showInHeader }))
+          .success
+      ).toBe(false);
+    }
+  );
 });
 
 describe("createCategoryPageFormSchema", () => {
@@ -578,6 +602,7 @@ describe("createCategoryPageFormSchema", () => {
       coverPhone: null,
       id: undefined,
       parentId: "",
+      showInHeader: true,
       ...overrides,
     });
 
@@ -595,6 +620,19 @@ describe("createCategoryPageFormSchema", () => {
 
   test("refuses a group that is not an id", () => {
     expect(schema.safeParse(form({ parentId: "abc" })).success).toBe(false);
+  });
+
+  test.each([
+    [false, true],
+    ["false", false],
+    [undefined, false],
+  ])("holds the header choice %j: %s", (showInHeader, accepted) => {
+    const parsed = schema.safeParse(form({ showInHeader }));
+
+    // Accepted, the choice comes out as it went in, never another value.
+    expect(parsed.success ? parsed.data.showInHeader : "refused").toBe(
+      accepted ? showInHeader : "refused"
+    );
   });
 
   test.each([

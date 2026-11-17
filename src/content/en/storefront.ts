@@ -174,6 +174,7 @@ export const storefront: Dictionary["storefront"] = {
     keepShopping: "Keep browsing the store",
     next: "The store will write to you at {phone} to arrange payment and delivery. Keep this link: it shows how your order is going.",
     note: "Your note",
+    orderAgain: "Order as often as you like",
     received: "We received your order!",
     status: "Status",
     statuses: {

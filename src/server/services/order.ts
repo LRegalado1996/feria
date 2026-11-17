@@ -573,6 +573,8 @@ export async function getOrder(
           note: customerOrder.note,
           phoneVerifiedAt: customerOrder.phoneVerifiedAt,
           status: customerOrder.status,
+          // The shopper's link (FER-051), which the staff may send again.
+          token: customerOrder.token,
           totalAmount: customerOrder.totalAmount,
         })
         .from(customerOrder)

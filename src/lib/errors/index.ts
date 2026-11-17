@@ -10,6 +10,9 @@ export const ERROR_WHYS = {
   DATABASE: "A temporary database problem",
   NETWORK: "A connection problem with a service we depend on",
   TIMEOUT: "A service took too long to respond",
+  // A deployment without `BLOB_READ_WRITE_TOKEN` (FER-051): nothing the
+  // admin can fix from the screen, so the uploader says so plainly.
+  UPLOADS_NOT_CONFIGURED: "Image uploads are not configured on this server",
 } as const;
 
 export type ErrorWhy = (typeof ERROR_WHYS)[keyof typeof ERROR_WHYS];

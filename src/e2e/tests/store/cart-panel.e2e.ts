@@ -291,9 +291,9 @@ test.describe("Cart panel", () => {
     await expect(order.getByTestId("store-order-banner")).toContainText(
       "¡Recibimos tu pedido!"
     );
-    await expect(order.getByRole("listitem")).toHaveText([
-      "1 × Collar dorado$ 1.200",
-    ]);
+    await expect(
+      order.getByTestId("store-order-items").getByRole("listitem")
+    ).toHaveText(["1 × Collar dorado$ 1.200"]);
     await expect(storePage.getCartButton()).toHaveAccessibleName(
       "Carrito, vacío"
     );
