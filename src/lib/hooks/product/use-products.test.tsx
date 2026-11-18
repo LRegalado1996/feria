@@ -42,11 +42,9 @@ function makePage(page: number) {
 
 /** The hook over `product.list`, which answers the page asked for. */
 function setup({
-  enabled,
   fails = false,
   input = { locale: "es" },
 }: {
-  enabled?: boolean;
   fails?: boolean;
   input?: ListStoreProductsInput;
 } = {}) {
@@ -71,8 +69,7 @@ function setup({
   );
   const wrapper = createQueryWrapper();
   const view = renderHook(
-    ({ asked }: { asked: ListStoreProductsInput }) =>
-      useProducts(asked, enabled === undefined ? undefined : { enabled }),
+    ({ asked }: { asked: ListStoreProductsInput }) => useProducts(asked),
     { initialProps: { asked: input }, wrapper }
   );
 
@@ -119,16 +116,6 @@ describe("useProducts", () => {
     });
     expect(result.current.isPlaceholderData).toBe(false);
     expect(list).toHaveBeenLastCalledWith({ locale: "es", page: 3 });
-  });
-
-  test("sends nothing while it is not enabled", async () => {
-    const { list, result } = setup({ enabled: false });
-
-    await waitFor(() => {
-      expect(result.current.fetchStatus).toBe("idle");
-    });
-    expect(result.current.data).toBeUndefined();
-    expect(list).not.toHaveBeenCalled();
   });
 
   test("files every page under the prefix a save invalidates", async () => {

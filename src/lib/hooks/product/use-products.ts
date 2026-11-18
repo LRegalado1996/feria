@@ -17,16 +17,11 @@ export function productsKey() {
  * One numbered page of the store's articles for the admin's list (FER-019),
  * drafts too, as `input` asks (`productsListInput`): the page the address
  * names, searched, filtered and sorted. Another page, search or filter keeps
- * the previous one on screen until it arrives (design.md § Data). `enabled`
- * holds a read nobody looks at yet (the filter panel's count while shut).
+ * the previous one on screen until it arrives (design.md § Data).
  */
-export function useProducts(
-  input: ListStoreProductsInput,
-  { enabled = true }: { enabled?: boolean } = {}
-) {
+export function useProducts(input: ListStoreProductsInput) {
   return useQuery({
     ...orpc.product.list.queryOptions({ input }),
-    enabled,
     placeholderData: keepPreviousData,
   });
 }
