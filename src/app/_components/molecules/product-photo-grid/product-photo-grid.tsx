@@ -24,6 +24,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   ArrowRight,
+  CircleAlert,
   RotateCcw,
   Star,
   Trash2,
@@ -63,6 +64,16 @@ export interface ProductPhotoGridProps {
 
 /** The widths a thumbnail is drawn at: two columns on a phone, four wide. */
 const TILE_SIZES = "(min-width: 1024px) 12rem, (min-width: 768px) 30vw, 45vw";
+
+// One column that may shrink to the tile's width (`grid-cols-1` is
+// `minmax(0, 1fr)`): an `auto` column grows to its widest line, and a long
+// failure once pushed the photo and its buttons out of the tile.
+const TILE_CLASS =
+  "grid min-w-0 grid-cols-1 content-start gap-2 overflow-hidden rounded-lg border bg-card p-2 text-card-foreground";
+
+/** The photo's square, its picture held inside it whatever its shape. */
+const FRAME_CLASS =
+  "relative aspect-square min-w-0 overflow-hidden rounded-md bg-muted";
 
 /**
  * An article's photos as tiles in their order (FER-017), the first one the
@@ -184,94 +195,20 @@ function ProductPhotoGrid({
                 photo={photo}
               />
             ))}
-            {queued.map((item, index) => {
-              const name = nameAt(photos.length + index);
-              const { state } = item;
-
-              return (
-                <li
-                  className="grid min-w-0 content-start gap-2 rounded-lg border bg-card p-2 text-card-foreground"
-                  data-status={state.status}
-                  data-testid="product-photo-queued"
-                  key={item.key}
-                >
-                  <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
-                    <Image
-                      alt={name}
-                      className={cn(
-                        "object-contain",
-                        state.status !== "failed" && "opacity-60"
-                      )}
-                      fill
-                      sizes={TILE_SIZES}
-                      src={item.preview}
-                      unoptimized
-                    />
-                    {state.status === "failed" ? null : (
-                      <progress
-                        aria-label={interpolate(copy.progress, { photo: name })}
-                        className="absolute inset-x-2 bottom-2 h-1.5 w-[calc(100%-1rem)] appearance-none overflow-hidden rounded-full bg-secondary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-secondary [&::-webkit-progress-value]:bg-primary"
-                        max={100}
-                        value={
-                          state.status === "uploading"
-                            ? state.percent
-                            : undefined
-                        }
-                      />
-                    )}
-                  </div>
-                  <div className="flex min-h-11 items-center justify-between gap-1 md:min-h-9">
-                    <p
-                      className={cn(
-                        "min-w-0 truncate text-xs",
-                        state.status === "failed"
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                      )}
-                      role={state.status === "failed" ? "alert" : undefined}
-                    >
-                      {queuedSays(state)}
-                    </p>
-                    <div className="flex shrink-0 gap-1">
-                      {state.status === "failed" &&
-                      state.reason === "failed" ? (
-                        <Button
-                          aria-label={interpolate(copy.retry, { photo: name })}
-                          onClick={() => {
-                            onRetry(item.key);
-                          }}
-                          size="icon"
-                          type="button"
-                          variant="outline"
-                        >
-                          <RotateCcw aria-hidden />
-                        </Button>
-                      ) : null}
-                      <Button
-                        aria-label={interpolate(
-                          state.status === "failed"
-                            ? copy.discard
-                            : copy.cancel,
-                          { photo: name }
-                        )}
-                        onClick={() => {
-                          onRemoveQueued(item.key);
-                        }}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                      >
-                        {state.status === "failed" ? (
-                          <Trash2 aria-hidden />
-                        ) : (
-                          <X aria-hidden />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
+            {queued.map((item, index) => (
+              <QueuedTile
+                item={item}
+                key={item.key}
+                name={nameAt(photos.length + index)}
+                onRemove={() => {
+                  onRemoveQueued(item.key);
+                }}
+                onRetry={() => {
+                  onRetry(item.key);
+                }}
+                says={queuedSays(item.state)}
+              />
+            ))}
           </ul>
         </SortableContext>
       </DndContext>
@@ -310,7 +247,8 @@ function PhotoTile({
   return (
     <li
       className={cn(
-        "grid min-w-0 content-start gap-2 rounded-lg border bg-card p-2 text-card-foreground motion-safe:animate-wizard-settle",
+        TILE_CLASS,
+        "motion-safe:animate-wizard-settle",
         first && "border-foreground",
         isDragging && "relative z-10 shadow-sm"
       )}
@@ -320,7 +258,7 @@ function PhotoTile({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
-      <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
+      <div className={FRAME_CLASS}>
         {/* The photo is the handle: a short press drags it on a phone, and
             the keyboard picks it up with space. */}
         <button
@@ -357,7 +295,7 @@ function PhotoTile({
           <Trash2 aria-hidden />
         </Button>
       </div>
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex min-w-0 flex-wrap items-center justify-between">
         <Button
           aria-label={interpolate(copy.moveEarlier, { photo: name })}
           disabled={first}
@@ -399,6 +337,97 @@ function PhotoTile({
           <ArrowRight aria-hidden />
         </Button>
       </div>
+    </li>
+  );
+}
+
+/**
+ * A photo on its way: its thumbnail, dimmed until it arrives, with its
+ * progress; what it is doing, or why it stopped, in words that wrap inside
+ * the tile; cancel or discard on the photo's corner, as a stored photo's
+ * remove; a retry under the words when one can help.
+ */
+function QueuedTile({
+  item,
+  name,
+  onRemove,
+  onRetry,
+  says,
+}: {
+  item: QueuedPhoto;
+  name: string;
+  onRemove: () => void;
+  onRetry: () => void;
+  says: string;
+}) {
+  const copy = useDictionary().articles.wizard.photos;
+  const { state } = item;
+  const failed = state.status === "failed";
+
+  return (
+    <li
+      className={cn(TILE_CLASS, failed && "border-destructive/50")}
+      data-status={state.status}
+      data-testid="product-photo-queued"
+    >
+      <div className={FRAME_CLASS} data-testid="product-photo-queued-frame">
+        <Image
+          alt={name}
+          className={cn("object-contain", failed ? "opacity-40" : "opacity-60")}
+          fill
+          sizes={TILE_SIZES}
+          src={item.preview}
+          unoptimized
+        />
+        {failed ? (
+          <CircleAlert
+            aria-hidden
+            className="absolute top-2 left-2 size-6 rounded-full bg-background text-destructive"
+          />
+        ) : (
+          <progress
+            aria-label={interpolate(copy.progress, { photo: name })}
+            className="absolute inset-x-2 bottom-2 h-1.5 w-[calc(100%-1rem)] appearance-none overflow-hidden rounded-full bg-secondary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-secondary [&::-webkit-progress-value]:bg-primary"
+            max={100}
+            value={state.status === "uploading" ? state.percent : undefined}
+          />
+        )}
+        <Button
+          aria-label={interpolate(failed ? copy.discard : copy.cancel, {
+            photo: name,
+          })}
+          className="absolute top-1 right-1 rounded-full bg-background/90"
+          onClick={onRemove}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          {failed ? <Trash2 aria-hidden /> : <X aria-hidden />}
+        </Button>
+      </div>
+      <p
+        className={cn(
+          "min-w-0 text-xs wrap-break-word",
+          failed ? "text-destructive" : "text-muted-foreground"
+        )}
+        data-testid="product-photo-queued-status"
+        role={failed ? "alert" : undefined}
+      >
+        {says}
+      </p>
+      {failed && state.reason === "failed" ? (
+        <Button
+          aria-label={interpolate(copy.retry, { photo: name })}
+          className="w-full"
+          onClick={onRetry}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <RotateCcw aria-hidden />
+          {copy.retryShort}
+        </Button>
+      ) : null}
     </li>
   );
 }

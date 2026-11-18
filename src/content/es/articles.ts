@@ -169,6 +169,7 @@ export const articles = {
       },
       remove: "Quitar: {photo}",
       retry: "Reintentar: {photo}",
+      retryShort: "Reintentar",
       uploading: "Subiendo… {percent}",
       waiting: "En espera",
     },

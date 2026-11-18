@@ -283,6 +283,46 @@ describe("ProductPhotoGrid", () => {
     expect(spies.onRemoveQueued).toHaveBeenCalledExactlyOnceWith("photo-3");
   });
 
+  // The owner's review (FER-017, 2026-11-18): a failed photo spilled out of
+  // its tile. happy-dom lays nothing out, so this holds the classes that
+  // keep it in; the e2e measures the boxes.
+  test("keeps a failed photo, its words and its buttons inside its tile, the words wrapping", () => {
+    setup({
+      photos: [],
+      queued: [
+        makeQueued("photo-3", { reason: "notConfigured", status: "failed" }),
+      ],
+    });
+    const tile = screen.getByTestId("product-photo-queued");
+    const status = screen.getByTestId("product-photo-queued-status");
+
+    expect(tile).toHaveClass("grid-cols-1", "min-w-0", "overflow-hidden");
+    expect(screen.getByTestId("product-photo-queued-frame")).toHaveClass(
+      "aspect-square",
+      "min-w-0",
+      "overflow-hidden"
+    );
+    expect(status).toHaveClass("wrap-break-word");
+    expect(status).not.toHaveClass("truncate");
+    expect(status).toHaveTextContent(
+      "Photo uploads aren't set up on this server."
+    );
+    expect(
+      within(tile).getByRole("button", { name: "Discard: Photo 1" })
+    ).toBeVisible();
+  });
+
+  test("shows the retry's word on the button, under the reason", () => {
+    setup({
+      photos: [],
+      queued: [makeQueued("photo-3", { reason: "failed", status: "failed" })],
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Retry: Photo 1" })
+    ).toHaveTextContent("Retry");
+  });
+
   test.each(["tooLarge", "unreadable", "notConfigured"] as const)(
     "offers no retry for a photo that failed as %s",
     (reason) => {

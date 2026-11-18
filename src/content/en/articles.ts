@@ -169,6 +169,7 @@ export const articles: Dictionary["articles"] = {
       },
       remove: "Remove: {photo}",
       retry: "Retry: {photo}",
+      retryShort: "Retry",
       uploading: "Uploading… {percent}",
       waiting: "Waiting",
     },
