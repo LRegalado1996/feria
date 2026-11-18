@@ -2,7 +2,16 @@ import { describe, expect, test } from "vitest";
 
 import { en } from "@/content/en";
 import { es } from "@/content/es";
-import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
+import {
+  EMPTY_PRODUCTS_QUERY,
+  type ProductsQuery,
+  productsPath,
+  readProductsQuery,
+} from "@/lib/admin/products";
+import {
+  CATALOG_FILTER_VALUES_MAX,
+  CATALOG_FILTERS_MAX,
+} from "@/lib/schemas/catalog";
 import { makeStoreCategory } from "@/test/factories/store-category";
 
 import {
@@ -72,6 +81,18 @@ const MATERIAL = makeAttribute({
     }),
   ],
 });
+
+/** `count` distinct slugs, in order. */
+function makeSlugs(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => `s${index + 1}`);
+}
+
+/** `query` written to the list's address and read back from it. */
+function readBack(query: ProductsQuery): ProductsQuery {
+  const address = new URL(productsPath("es", query), "http://localhost");
+
+  return readProductsQuery(Object.fromEntries(address.searchParams));
+}
 
 /** Rings, then earrings, in the store's order. */
 function setup() {
@@ -363,6 +384,86 @@ describe("filter form values", () => {
         filters: [{ attribute: "color", values: colors }],
         page: 1,
       });
+    }
+  );
+
+  test.each([
+    [CATALOG_FILTER_VALUES_MAX, CATALOG_FILTER_VALUES_MAX],
+    [CATALOG_FILTER_VALUES_MAX + 1, CATALOG_FILTER_VALUES_MAX],
+  ])(
+    "with %i categories chosen, applying keeps the first %i, as the address reads them back",
+    (chosen, kept) => {
+      const slugs = makeSlugs(chosen);
+      const categories = slugs.map((slug, position) =>
+        makeStoreCategory({ id: position + 1, position, slug })
+      );
+
+      const applied = applyFilterForm(
+        makeQuery(),
+        { ...EMPTY_FILTER_FORM, categories: slugs },
+        { attributes: [], categories }
+      );
+
+      expect(applied.categories).toEqual(slugs.slice(0, kept));
+      expect(readBack(applied)).toEqual(applied);
+    }
+  );
+
+  test.each([
+    [CATALOG_FILTER_VALUES_MAX, CATALOG_FILTER_VALUES_MAX],
+    [CATALOG_FILTER_VALUES_MAX + 1, CATALOG_FILTER_VALUES_MAX],
+  ])(
+    "with %i values of a filter chosen, applying keeps the first %i, as the address reads them back",
+    (chosen, kept) => {
+      const slugs = makeSlugs(chosen);
+      const color = makeAttribute({
+        values: slugs.map((slug, position) =>
+          makeValue({ id: position + 1, position, slug })
+        ),
+      });
+
+      const applied = applyFilterForm(
+        makeQuery(),
+        {
+          ...EMPTY_FILTER_FORM,
+          values: slugs.map((slug) => valueToken("color", slug)),
+        },
+        { attributes: [color], categories: [] }
+      );
+
+      expect(applied.filters).toEqual([
+        { attribute: "color", values: slugs.slice(0, kept) },
+      ]);
+      expect(readBack(applied)).toEqual(applied);
+    }
+  );
+
+  test.each([
+    [CATALOG_FILTERS_MAX, CATALOG_FILTERS_MAX],
+    [CATALOG_FILTERS_MAX + 1, CATALOG_FILTERS_MAX],
+  ])(
+    "with values of %i filters chosen, applying keeps the first %i filters, as the address reads them back",
+    (chosen, kept) => {
+      const slugs = makeSlugs(chosen);
+      const attributes = slugs.map((slug, position) =>
+        makeAttribute({ id: position + 1, position, slug })
+      );
+
+      const applied = applyFilterForm(
+        makeQuery(),
+        {
+          ...EMPTY_FILTER_FORM,
+          values: slugs.map((slug) => valueToken(slug, "dorado")),
+        },
+        { attributes, categories: [] }
+      );
+
+      expect(applied.filters).toEqual(
+        slugs
+          .slice(0, kept)
+          .map((attribute) => ({ attribute, values: ["dorado"] }))
+      );
+      expect(readBack(applied)).toEqual(applied);
     }
   );
 

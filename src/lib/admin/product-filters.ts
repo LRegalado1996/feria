@@ -2,6 +2,10 @@ import type { Dictionary } from "@/content";
 import type { ProductsQuery } from "@/lib/admin/products";
 import type { Locale } from "@/lib/i18n/config";
 import type { client } from "@/lib/orpc/client";
+import {
+  CATALOG_FILTER_VALUES_MAX,
+  CATALOG_FILTERS_MAX,
+} from "@/lib/schemas/catalog";
 
 /** A category of the store as the admin reads them (`category.list`). */
 export type ListCategory = Awaited<
@@ -171,7 +175,11 @@ export function filterFormValues(query: ProductsQuery): FilterFormValues {
  * address; one the store does not have is dropped. A list not read yet, or
  * whose read failed (`undefined`), cannot tell which slugs the store has:
  * the address's own then stay as they were, less those the form let go
- * ("Limpiar"), rather than every one being dropped as unknown.
+ * ("Limpiar"), rather than every one being dropped as unknown. The
+ * choice is held to what the address keeps (`readProductsQuery`) and the
+ * API takes: the first `CATALOG_FILTER_VALUES_MAX` categories and values of
+ * a filter, the first `CATALOG_FILTERS_MAX` filters, so the panel's count,
+ * the address and the list agree.
  */
 export function applyFilterForm(
   query: ProductsQuery,
@@ -204,8 +212,16 @@ export function applyFilterForm(
     availability: values.availability === "" ? null : values.availability,
     categories: (
       categories?.map((category) => category.slug) ?? query.categories
-    ).filter((slug) => values.categories.includes(slug)),
-    filters: filters.filter((filter) => filter.values.length > 0),
+    )
+      .filter((slug) => values.categories.includes(slug))
+      .slice(0, CATALOG_FILTER_VALUES_MAX),
+    filters: filters
+      .filter((filter) => filter.values.length > 0)
+      .slice(0, CATALOG_FILTERS_MAX)
+      .map((filter) => ({
+        ...filter,
+        values: filter.values.slice(0, CATALOG_FILTER_VALUES_MAX),
+      })),
     page: 1,
     status: values.status === "" ? null : values.status,
   };
