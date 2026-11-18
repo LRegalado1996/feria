@@ -677,7 +677,9 @@ describe("ProductWizard: a new article", () => {
   });
 
   test("a draft created after the wizard was left does not move the address of the page shown instead", async () => {
-    const { arrive, replaceState, unmount } = setup({ article: null });
+    const { arrive, queryClient, replaceState, unmount } = setup({
+      article: null,
+    });
     let answer = (): void => undefined;
     const create = vi.fn(async (_input: unknown) => {
       await new Promise<void>((resolve) => {
@@ -697,9 +699,18 @@ describe("ProductWizard: a new article", () => {
     act(() => {
       answer();
     });
-    // Long enough for the answer to land and the queue to settle.
+    // The create answered and its save went through (the id is known),
+    // then whatever was queued after it ran.
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getMutationCache()
+          .getAll()
+          .map((mutation) => mutation.state.status)
+      ).toContain("success");
+    });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+      await vi.advanceTimersByTimeAsync(0);
     });
 
     expect(replaceState).not.toHaveBeenCalled();
