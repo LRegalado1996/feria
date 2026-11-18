@@ -988,27 +988,30 @@ export async function listStoreProducts(
       const [counted] = await tx
         .select({ total: sql<number>`count(*)::int` })
         .from(matching);
-      // The pages end where the count does: past `ceil(cap / limit)` the
-      // foot has no page to name, so that page is past the end and reads
-      // nothing, even with more matches beyond the cap.
-      const pastTheCap = page > Math.ceil(STORE_PRODUCTS_COUNT_CAP / limit);
-      const ids = pastTheCap
-        ? []
-        : (
-            await tx
-              .select({ id: product.id })
-              .from(product)
-              .where(where)
-              .orderBy(
-                ...listOrder(
-                  sort,
-                  dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
-                  locale
+      // The pages end where the count does: the last page inside the cap
+      // reads only the rows left under it, and a page past
+      // `ceil(cap / limit)`, which the foot cannot name, reads nothing, even
+      // with more matches beyond the cap.
+      const offset = (page - 1) * limit;
+      const leftUnderCap = STORE_PRODUCTS_COUNT_CAP - offset;
+      const ids =
+        leftUnderCap <= 0
+          ? []
+          : (
+              await tx
+                .select({ id: product.id })
+                .from(product)
+                .where(where)
+                .orderBy(
+                  ...listOrder(
+                    sort,
+                    dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
+                    locale
+                  )
                 )
-              )
-              .limit(limit)
-              .offset((page - 1) * limit)
-          ).map((row) => row.id);
+                .limit(Math.min(limit, leftUnderCap))
+                .offset(offset)
+            ).map((row) => row.id);
       const rows =
         ids.length === 0
           ? []

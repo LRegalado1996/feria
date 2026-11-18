@@ -1692,11 +1692,18 @@ describe("listStoreProducts", () => {
 
   test.each([
     // ceil(10,000 / 24) = 417: the last page the capped count names.
-    ["the capped count's last page reads its rows", 417, [5], 9984],
+    ["the page before the last reads a whole page", 416, [5], [9960, 24]],
+    // 9,984 rows before it: only the 16 left under the cap.
+    [
+      "the capped count's last page reads the rows left under the cap",
+      417,
+      [5],
+      [9984, 16],
+    ],
     ["the page after it is past the end and reads none", 418, [], null],
   ] as const)(
     "with more matches than the cap, %s",
-    async (_case, page, items, offset) => {
+    async (_case, page, items, read) => {
       const { db, list } = setupList({
         pageIds: [5],
         rows: [listedRow(5)],
@@ -1719,7 +1726,13 @@ describe("listStoreProducts", () => {
         totalCapped: true,
       });
       expect(required(db.$["select.offset"]).mock.calls).toEqual(
-        offset === null ? [] : [[offset]]
+        read === null ? [] : [[read[0]]]
+      );
+      // The count's limit, then the page's.
+      expect(db.$["select.limit"].mock.calls).toEqual(
+        read === null
+          ? [[STORE_PRODUCTS_COUNT_CAP + 1]]
+          : [[STORE_PRODUCTS_COUNT_CAP + 1], [read[1]]]
       );
     }
   );
