@@ -135,12 +135,18 @@ async function setup() {
     .insert(categoryTranslation)
     .values({ categoryId: row.id, locale: "es", name: `Cadenas ${tag}` });
 
+  // Each write in a transaction of its own, as the router's, unless a
+  // two-writer test hands it the one it holds open: a refused write then
+  // leaves nothing behind, and its locks last until it ends.
   const create = async (overrides: Partial<Values> = {}) => {
-    const article = await createProduct(db, {
-      blobStore: BLOB_STORE,
-      storeId,
-      values: articleValues({ categoryId: row.id, ...overrides }),
-    });
+    const article = await db.transaction(
+      async (tx) =>
+        await createProduct(tx, {
+          blobStore: BLOB_STORE,
+          storeId,
+          values: articleValues({ categoryId: row.id, ...overrides }),
+        })
+    );
     created.productIds.push(article.id);
 
     return article;
@@ -148,13 +154,17 @@ async function setup() {
   const save = async (
     id: number,
     overrides: Partial<Values> = {},
-    client: DatabaseClient = db
-  ) =>
-    await updateProduct(client, {
-      blobStore: BLOB_STORE,
-      storeId,
-      values: { ...articleValues({ categoryId: row.id, ...overrides }), id },
-    });
+    client?: DatabaseClient
+  ) => {
+    const write = async (tx: DatabaseClient) =>
+      await updateProduct(tx, {
+        blobStore: BLOB_STORE,
+        storeId,
+        values: { ...articleValues({ categoryId: row.id, ...overrides }), id },
+      });
+
+    return client ? await write(client) : await db.transaction(write);
+  };
   const photosOf = async (id: number) =>
     await db
       .select({
@@ -464,13 +474,22 @@ describe("saving an article's texts and filter values", () => {
     expect(await carried()).toEqual([silver, purple]);
 
     await db.delete(attributeValue).where(eq(attributeValue.id, purple));
+    const before = await getStoreProduct(db, { id: article.id, storeId });
+    // Another title too: a refused save writes none of its other fields.
     await expect(
-      save(article.id, { attributeValueIds: [silver, purple], images })
+      save(article.id, {
+        attributeValueIds: [silver, purple],
+        images: [...images, upload()],
+        translations: [spanish(`Rechazado ${tag}`)],
+      })
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Filter value not found",
     });
     expect(await carried()).toEqual([silver]);
+    await expect(
+      getStoreProduct(db, { id: article.id, storeId })
+    ).resolves.toEqual(before);
   });
 });
 
@@ -562,6 +581,9 @@ describe("the admin's reads", () => {
       updatedAt: "2999-01-01T00:00:00.000Z",
     });
     expect(second.items[0]?.id).toBe(older.id);
+    // Whatever else of the store follows, never an article of page one.
+    const firstIds = new Set(first.items.map((item) => item.id));
+    expect(second.items.filter((item) => firstIds.has(item.id))).toEqual([]);
     expect(first.items.find((item) => item.id === blank.id)).toMatchObject({
       cover: null,
       status: "draft",
@@ -614,20 +636,27 @@ describe("store-scoped writes", () => {
     });
   });
 
-  test("the first publication stamps the date once; unpublishing keeps the date", async () => {
+  test("the first publication stamps the date once; unpublishing and publishing again keep it", async () => {
     const { create, storeId } = await setup();
     const article = await create();
     const dateOf = async () =>
       (await db.query.product.findFirst({ where: eq(product.id, article.id) }))
         ?.publishedAt;
+    expect(await dateOf()).toBeNull();
     await publishProduct(db, { id: article.id, storeId });
-    const firstDate = await dateOf();
+    expect(await dateOf()).toBeInstanceOf(Date);
+
+    // A date no write of this test could stamp, so keeping it is visible.
+    const firstPublished = new Date("2020-03-04T05:06:07.890Z");
+    await db
+      .update(product)
+      .set({ publishedAt: firstPublished })
+      .where(eq(product.id, article.id));
 
     await unpublishProduct(db, { id: article.id, storeId });
+    expect(await dateOf()).toEqual(firstPublished);
     await publishProduct(db, { id: article.id, storeId });
-
-    expect(firstDate).toBeInstanceOf(Date);
-    expect(await dateOf()).toEqual(firstDate);
+    expect(await dateOf()).toEqual(firstPublished);
   });
 
   test("a category the store no longer has cannot be attached, through the service or the database", async () => {
@@ -762,7 +791,7 @@ describe("slug allocation under two writers", () => {
 
     await waitUntilAdvisoryBlocked(
       db,
-      await secondPid.promise,
+      await readyOrFailed(secondPid.promise, second),
       await firstPid.promise
     );
     held.resolve(undefined);
@@ -829,7 +858,7 @@ describe("two saves of the same article (FER-017 autosave)", () => {
 
     await waitUntilBlockedBy(
       db,
-      await secondPid.promise,
+      await readyOrFailed(secondPid.promise, second),
       await firstPid.promise
     );
     held.resolve(undefined);
@@ -910,7 +939,7 @@ describe("an edit and a publication of the same article", () => {
 
     await waitUntilBlockedBy(
       db,
-      await publishPid.promise,
+      await readyOrFailed(publishPid.promise, publication),
       await editPid.promise
     );
     held.resolve(undefined);
