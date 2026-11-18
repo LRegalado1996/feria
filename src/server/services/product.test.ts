@@ -1458,6 +1458,10 @@ describe("listStoreProducts", () => {
 
     await list({ categories: ["anillos", "bijouterie"] });
 
+    // The outer predicate holds the groups' subquery, which the double
+    // cannot render: its two branches (a slug matches its own category, a
+    // group's slug the categories in it) are held by the integration test
+    // "narrows to a category, to several, and to a group".
     expect(db.$["select.from"]).toHaveBeenCalledWith(category);
     expect(
       db.$["select.where"].mock.calls
