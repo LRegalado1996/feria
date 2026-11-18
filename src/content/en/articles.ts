@@ -91,8 +91,8 @@ export const articles: Dictionary["articles"] = {
           desc: "Status, published first",
         },
         title: {
-          asc: "Title, A to Z",
-          desc: "Title, Z to A",
+          asc: "Article, A to Z",
+          desc: "Article, Z to A",
         },
         updated: {
           asc: "Updated, oldest first",

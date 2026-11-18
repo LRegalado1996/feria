@@ -71,10 +71,28 @@ describe("ProductListHead", () => {
       query: makeQuery({ dir: "desc", sort: "title" }),
     });
 
-    expect(link("title")).toHaveAccessibleName("Sort: Title, A to Z");
+    expect(link("title")).toHaveAccessibleName("Sort: Article, A to Z");
     expect(link("price")).toHaveAccessibleName("Sort: Price, low to high");
     expect(link("updated")).toHaveAccessibleName("Sort: Updated, newest first");
   });
+
+  test.each([
+    ["en", "asc"],
+    ["en", "desc"],
+    ["es", "asc"],
+    ["es", "desc"],
+  ] as const)(
+    "in %s, sorted %s, every link's name holds the column's visible name (WCAG 2.5.3)",
+    (locale, dir) => {
+      setup({ locale, query: makeQuery({ dir, sort: "title" }) });
+
+      for (const sort of ["title", "category", "price", "status", "updated"]) {
+        const link = screen.getByTestId(`sort-${sort}`);
+
+        expect(link.getAttribute("aria-label")).toContain(link.textContent);
+      }
+    }
+  );
 
   test.each([
     ["asc", "lucide-arrow-up"],

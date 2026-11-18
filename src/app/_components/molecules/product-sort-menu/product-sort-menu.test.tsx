@@ -53,8 +53,8 @@ describe("ProductSortMenu", () => {
     ).toEqual([
       ["Updated, newest first", "false"],
       ["Updated, oldest first", "false"],
-      ["Title, A to Z", "false"],
-      ["Title, Z to A", "false"],
+      ["Article, A to Z", "false"],
+      ["Article, Z to A", "false"],
       ["Category, A to Z", "false"],
       ["Category, Z to A", "false"],
       ["Price, low to high", "false"],
@@ -85,7 +85,7 @@ describe("ProductSortMenu", () => {
     await open();
 
     await user.click(
-      screen.getByRole("menuitemradio", { name: "Title, A to Z" })
+      screen.getByRole("menuitemradio", { name: "Article, A to Z" })
     );
 
     expect(push).toHaveBeenCalledExactlyOnceWith(

@@ -94,8 +94,8 @@ export const articles = {
           desc: "Estado, publicados primero",
         },
         title: {
-          asc: "Título, de la A a la Z",
-          desc: "Título, de la Z a la A",
+          asc: "Artículo, de la A a la Z",
+          desc: "Artículo, de la Z a la A",
         },
         updated: {
           asc: "Modificado, los más viejos primero",
