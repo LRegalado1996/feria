@@ -88,39 +88,44 @@ interface ArticleOptions {
 
 /** An article through the service, with images, published unless told not to. */
 async function makeArticle(storeId: number, options: ArticleOptions) {
-  const row = await createProduct(db, {
-    // The photos are the site's files, inserted below: no upload to check.
-    blobStore: null,
-    storeId,
-    values: {
-      attributeValueIds: [],
-      categoryId: options.categoryId,
-      images: [],
-      isAvailable: true,
-      priceAmount:
-        options.priceAmount === undefined ? 129_000 : options.priceAmount,
-      translations: [
-        {
-          description: options.description ?? "",
-          locale: "es",
-          seoDescription: null,
-          seoTitle: null,
-          title: options.title,
+  // One transaction, as the router's: a failed write of its contents leaves
+  // no draft behind that teardown could not find.
+  const row = await db.transaction(
+    async (tx) =>
+      await createProduct(tx, {
+        // The photos are the site's files, inserted below: no upload to check.
+        blobStore: null,
+        storeId,
+        values: {
+          attributeValueIds: [],
+          categoryId: options.categoryId,
+          images: [],
+          isAvailable: true,
+          priceAmount:
+            options.priceAmount === undefined ? 129_000 : options.priceAmount,
+          translations: [
+            {
+              description: options.description ?? "",
+              locale: "es",
+              seoDescription: null,
+              seoTitle: null,
+              title: options.title,
+            },
+            ...(options.en
+              ? [
+                  {
+                    description: options.en.description,
+                    locale: "en" as const,
+                    seoDescription: null,
+                    seoTitle: null,
+                    title: options.en.title,
+                  },
+                ]
+              : []),
+          ],
         },
-        ...(options.en
-          ? [
-              {
-                description: options.en.description,
-                locale: "en" as const,
-                seoDescription: null,
-                seoTitle: null,
-                title: options.en.title,
-              },
-            ]
-          : []),
-      ],
-    },
-  });
+      })
+  );
   created.productIds.push(row.id);
 
   for (let position = 0; position < (options.images ?? 1); position += 1) {

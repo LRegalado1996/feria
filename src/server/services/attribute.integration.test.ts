@@ -116,26 +116,31 @@ async function setup() {
     valueIds: number[],
     publish = true
   ) => {
-    const row = await createProduct(db, {
-      blobStore: null,
-      storeId,
-      values: {
-        attributeValueIds: valueIds,
-        images: [],
-        categoryId,
-        isAvailable: true,
-        priceAmount: 1000,
-        translations: [
-          {
-            description: "",
-            locale: "es",
-            seoDescription: null,
-            seoTitle: null,
-            title: `${title} ${tag}`,
+    // One transaction, as the router's: a failed filter-value write leaves
+    // no article behind that teardown could not find.
+    const row = await inTx(
+      async (tx) =>
+        await createProduct(tx, {
+          blobStore: null,
+          storeId,
+          values: {
+            attributeValueIds: valueIds,
+            images: [],
+            categoryId,
+            isAvailable: true,
+            priceAmount: 1000,
+            translations: [
+              {
+                description: "",
+                locale: "es",
+                seoDescription: null,
+                seoTitle: null,
+                title: `${title} ${tag}`,
+              },
+            ],
           },
-        ],
-      },
-    });
+        })
+    );
     created.productIds.push(row.id);
     await db.insert(productImage).values({
       height: 100,
