@@ -1,5 +1,6 @@
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath, splitLocale } from "@/lib/i18n/paths";
+import { INT4_MAX } from "@/lib/schemas/catalog";
 
 /**
  * The admin's sections (FER-038: one store, so one list), in the order the
@@ -80,4 +81,20 @@ export function safeReturnPath(next: unknown, locale: Locale): string {
   return url.origin === PROBE_ORIGIN && inAdmin && !isSignIn
     ? `${localizePath(pathname, locale)}${url.search}`
     : fallback;
+}
+
+/**
+ * A row's id from a page's address (an order's, an article's), or `null`
+ * when the segment cannot be one (not a whole positive number in plain
+ * digits, or past what an id column holds), so a made-up address costs no
+ * query.
+ */
+export function readRowId(segment: string): number | null {
+  if (!/^[1-9]\d*$/u.test(segment)) {
+    return null;
+  }
+
+  const id = Number(segment);
+
+  return id <= INT4_MAX ? id : null;
 }

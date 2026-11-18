@@ -20,7 +20,6 @@ import {
   getStoreProduct,
   listStoreProducts,
   publishProduct,
-  resolvePublishGaps,
   setProductAvailability,
   unpublishProduct,
   updateProduct,
@@ -214,69 +213,6 @@ function setup({
 }
 
 type MockDb = ReturnType<typeof setup>["db"];
-
-describe("resolvePublishGaps", () => {
-  const ready = {
-    categoryId: 9,
-    imageCount: 1,
-    priceAmount: 0,
-    translations: [{ locale: "es" as const, title: "Collar" }],
-  };
-
-  test.each([
-    ["nothing for a ready article", {}, []],
-    ["the image", { imageCount: 0 }, ["image"]],
-    ["the category", { categoryId: null }, ["category"]],
-    ["the price", { priceAmount: null }, ["price"]],
-    [
-      "the Spanish title when only English has one",
-      { translations: [{ locale: "en" as const, title: "Necklace" }] },
-      ["spanishTitle"],
-    ],
-    [
-      "the Spanish title of a blank draft",
-      { translations: [{ locale: "es" as const, title: "" }] },
-      ["spanishTitle"],
-    ],
-    [
-      "the Spanish title when it is only spaces",
-      { translations: [{ locale: "es" as const, title: "   " }] },
-      ["spanishTitle"],
-    ],
-    [
-      "the English title when its texts have none",
-      {
-        translations: [
-          { locale: "es" as const, title: "Collar" },
-          { locale: "en" as const, title: " " },
-        ],
-      },
-      ["englishTitle"],
-    ],
-    [
-      "nothing for English titled beside Spanish",
-      {
-        translations: [
-          { locale: "es" as const, title: "Collar" },
-          { locale: "en" as const, title: "Necklace" },
-        ],
-      },
-      [],
-    ],
-    [
-      "everything, in order",
-      {
-        categoryId: null,
-        imageCount: 0,
-        priceAmount: null,
-        translations: [{ locale: "en" as const, title: "" }],
-      },
-      ["image", "category", "price", "spanishTitle", "englishTitle"],
-    ],
-  ])("names %s", (_name, overrides, expected) => {
-    expect(resolvePublishGaps({ ...ready, ...overrides })).toEqual(expected);
-  });
-});
 
 describe("createProduct", () => {
   async function create(

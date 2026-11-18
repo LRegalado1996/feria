@@ -1,10 +1,13 @@
 import { describe, test, expect } from "vitest";
 
+import { INT4_MAX } from "@/lib/schemas/catalog";
+
 import {
   ADMIN_LANDING_SECTION,
   ADMIN_SECTIONS,
   adminSectionPath,
   isAdminSection,
+  readRowId,
   safeReturnPath,
   signInPath,
 } from "./paths";
@@ -88,5 +91,20 @@ describe("safeReturnPath", () => {
     ["/\t/example.com:bad/admin"],
   ])("falls back to the landing for %j", (next) => {
     expect(safeReturnPath(next, "en")).toBe("/en/admin");
+  });
+});
+
+describe("readRowId", () => {
+  test.each([
+    ["1", 1],
+    [String(INT4_MAX), INT4_MAX],
+    [String(INT4_MAX + 1), null],
+    ["0", null],
+    ["-3", null],
+    ["07", null],
+    [" 7", null],
+    ["7.0", null],
+  ])("reads %s as %s", (segment, expected) => {
+    expect(readRowId(segment)).toBe(expected);
   });
 });

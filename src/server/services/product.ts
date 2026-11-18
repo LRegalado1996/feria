@@ -14,6 +14,10 @@ import {
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { isOwnBlobUrl } from "@/lib/blob/paths";
+import {
+  type PublishGap,
+  resolvePublishGaps,
+} from "@/lib/catalog/publish-gaps";
 import { LOCALES, type Locale } from "@/lib/i18n/config";
 import type {
   CreateProductValues,
@@ -61,59 +65,9 @@ const PRODUCT_SLUG_FALLBACK = "articulo";
 
 // ── The rule for publishing ──────────────────────────────────────────────
 
-/** What publishing an article still needs (FER-010), in a stable order. */
-export type PublishGap =
-  | "category"
-  | "englishTitle"
-  | "image"
-  | "price"
-  | "spanishTitle";
-
-/**
- * The one rule for "ready to publish": at least one image, a category, a
- * price, a Spanish title, and a title in every other language the article
- * has texts in. A draft may have a blank title (FER-017); a published article
- * never shows one, since the storefront shows a language's row whole once it
- * exists (`pickTranslation`). The wizard shows the answer; the service
- * re-derives it at commit and that answer wins.
- */
-export function resolvePublishGaps(article: {
-  categoryId: number | null;
-  imageCount: number;
-  priceAmount: number | null;
-  translations: readonly { locale: Locale; title: string }[];
-}): PublishGap[] {
-  const gaps: PublishGap[] = [];
-  const titled = (locale: Locale) =>
-    article.translations.some(
-      (row) => row.locale === locale && row.title.trim() !== ""
-    );
-
-  if (article.imageCount === 0) {
-    gaps.push("image");
-  }
-
-  if (article.categoryId === null) {
-    gaps.push("category");
-  }
-
-  if (article.priceAmount === null) {
-    gaps.push("price");
-  }
-
-  if (!titled("es")) {
-    gaps.push("spanishTitle");
-  }
-
-  if (
-    article.translations.some((row) => row.locale === "en") &&
-    !titled("en")
-  ) {
-    gaps.push("englishTitle");
-  }
-
-  return gaps;
-}
+// `resolvePublishGaps` (`src/lib/catalog/publish-gaps.ts`) is the rule: the
+// wizard shows its answer as the article is typed, and every write here
+// re-derives it under the article's lock.
 
 function publishRefused(gaps: PublishGap[]) {
   return new ORPCError("BAD_REQUEST", {
