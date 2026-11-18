@@ -598,6 +598,9 @@ function WizardEditor({
   // Whether this wizard is still the page shown: a write that ends after it
   // was left must not touch the address of the page that replaced it.
   const mounted = useRef(false);
+  // Moves on with every "Descartar cambios": an answer that arrives after it
+  // belongs to the changes that were discarded.
+  const edits = useRef(0);
   const [confirming, setConfirming] = useState<ConfirmKind | null>(null);
   const [busy, setBusy] = useState(false);
   // The photos uploaded from this browser, drawn from its own files until
@@ -1039,6 +1042,8 @@ function WizardEditor({
   };
 
   const onDiscardChanges = (articleId: number) => {
+    edits.current += 1;
+
     // A photo on its way would land in the discarded changes: stop them.
     for (const item of queue.items) {
       queue.remove(item.key);
@@ -1122,11 +1127,19 @@ function WizardEditor({
     attributeId: number,
     names: AttributeFormSaved
   ): Promise<AttributeFormResult> => {
+    const startedOver = edits.current;
+
     try {
       const created = await createValue.mutateAsync({
         ...names,
         attributeId,
       });
+
+      // The value stays in the store; the discarded changes do not get it.
+      if (startedOver !== edits.current) {
+        return "saved";
+      }
+
       // Chosen in the choice as it is now: chips tapped while the store
       // answered, even on another step, stay as they were left.
       const held = form.getValues("attributeValueIds");

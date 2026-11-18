@@ -1808,6 +1808,44 @@ describe("ProductWizard: a published article", () => {
     expect(queue.remove).toHaveBeenCalledExactlyOnceWith("photo-1");
   });
 
+  test("a filter value created after the changes were discarded is kept in the store but not chosen in them", async () => {
+    const { saveStatus, user } = setup({ article: published() });
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const created = vi.fn(async (_input: unknown) => {
+      await held;
+      return { id: 99, position: 1, slug: "lila" };
+    });
+    server.use(createOrpcHandler("attribute.createValue", created));
+    await onStep("Article photos");
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "!");
+    await user.click(screen.getByRole("button", { name: "Add to Color" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Name in Spanish" }),
+      "Lila"
+    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => {
+      expect(created).toHaveBeenCalledOnce();
+    });
+
+    await chooseFromMenu(user, "Discard changes");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Yes, discard",
+      })
+    );
+    await act(async () => {
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(saveStatus()).toHaveTextContent("No changes");
+    expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
+  });
+
   test("moving back to draft with nothing changed saves nothing", async () => {
     const { unpublish, update, user } = setup({ article: published() });
     await onStep("Article photos");
