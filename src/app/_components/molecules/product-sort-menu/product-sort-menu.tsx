@@ -67,7 +67,11 @@ function ProductSortMenu({ className, query }: ProductSortMenuProps) {
             {copy.button}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuContent
+          align="end"
+          className="w-72"
+          data-testid="product-sort-menu"
+        >
           <DropdownMenuRadioGroup
             onValueChange={(value) => {
               // Radix answers any string: only a listed order navigates.

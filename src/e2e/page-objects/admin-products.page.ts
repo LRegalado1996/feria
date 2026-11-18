@@ -71,7 +71,8 @@ export class AdminProductsPage extends AdminPage {
   }
 
   sortMenu(): Locator {
-    return this.page.getByRole("menu");
+    // Its content is portalled out of the list, so it is found on the page.
+    return this.page.getByTestId("product-sort-menu");
   }
 
   /** Opens "Ordenar" (below `xl`): the first harmless open after a load. */

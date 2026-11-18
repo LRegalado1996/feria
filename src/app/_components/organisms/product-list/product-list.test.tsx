@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { ListAttribute } from "@/lib/admin/product-filters";
 import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
+import type { ProductsPage } from "@/lib/hooks/product";
 import type { Locale } from "@/lib/i18n/config";
 import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
@@ -98,19 +99,10 @@ const HANG = () => undefined;
 const EMPTY_STORE =
   "No articles yet. Start with the photos: it is published in a minute.";
 
-interface ListedItem {
-  category: { id: number; nameEn: string | null; nameEs: string } | null;
-  cover: null;
-  id: number;
-  isAvailable: boolean;
-  priceAmount: number | null;
-  slug: string;
-  status: "draft" | "published";
-  title: string | null;
-  titleLang: "en" | "es" | null;
-  /** When it last changed, as oRPC sends a date. */
+/** A row of `product.list` as it travels: its date as oRPC sends it. */
+type ListedItem = Omit<ProductsPage["items"][number], "updatedAt"> & {
   updatedAt: string;
-}
+};
 
 function makeItem(id: number, overrides: Partial<ListedItem> = {}): ListedItem {
   return {
@@ -130,12 +122,9 @@ function makeItem(id: number, overrides: Partial<ListedItem> = {}): ListedItem {
 
 function makePage(
   items: ListedItem[],
-  overrides: Partial<{
-    page: number;
-    pageCount: number;
-    total: number;
-    totalCapped: boolean;
-  }> = {}
+  overrides: Partial<
+    Pick<ProductsPage, "page" | "pageCount" | "total" | "totalCapped">
+  > = {}
 ) {
   return {
     currencyCode: "UYU",
@@ -246,6 +235,8 @@ function setup({
       server.use(createOrpcHandler("product.list", list));
     },
     list,
+    /** The router's `push`, which the filter panel's "Aplicar" calls. */
+    push,
     /** The page handing the screen another address. */
     navigate: (next: ProductsQuery) => {
       view.rerender(<ProductList query={next} renderedAt={RENDERED_AT} />);
@@ -464,7 +455,7 @@ describe("ProductList", () => {
   });
 
   test("with the store's categories and filters unread, applying the filters keeps the address's own", async () => {
-    const { user } = setup({
+    const { push, user } = setup({
       listsFail: true,
       query: makeQuery({
         categories: ["anillos"],
