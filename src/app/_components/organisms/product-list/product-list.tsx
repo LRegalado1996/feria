@@ -271,12 +271,16 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring xl:overflow-hidden xl:border xl:bg-card"
               data-testid="product-list-table"
               ref={table}
+              // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- `block` drops a table's implicit roles in WebKit, so they are said outright (rows and cells: `product-list-row`)
+              role="table"
               tabIndex={-1}
             >
               <ProductListHead query={query} />
               <tbody
                 className="block space-y-2 xl:space-y-0 xl:divide-y"
                 data-testid="product-list-rows"
+                // oxlint-disable-next-line jsx-a11y/no-redundant-roles -- `block`, as the table's
+                role="rowgroup"
               >
                 {page.items.map((item) => (
                   <ProductListRow

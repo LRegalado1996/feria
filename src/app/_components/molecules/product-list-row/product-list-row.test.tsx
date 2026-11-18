@@ -84,6 +84,15 @@ describe("ProductListRow", () => {
     );
   });
 
+  test("says its table roles outright, which its grid and flex display would drop in WebKit", () => {
+    const { row } = setup();
+
+    expect(row).toHaveAttribute("role", "row");
+    expect(
+      [...row.querySelectorAll("td")].map((cell) => cell.getAttribute("role"))
+    ).toEqual(["cell", "cell", "cell", "cell", "cell", "cell"]);
+  });
+
   test("the title is the one link, to the wizard, stretched over the whole row", () => {
     const { link, row } = setup();
 

@@ -278,6 +278,18 @@ describe("ProductList", () => {
     );
   });
 
+  test("its table says its roles outright, which its block display would drop in WebKit", async () => {
+    setup();
+
+    const rows = await screen.findByTestId("product-list-rows");
+
+    expect([
+      screen.getByTestId("product-list-table").getAttribute("role"),
+      screen.getByTestId("product-list-columns").getAttribute("role"),
+      rows.getAttribute("role"),
+    ]).toEqual(["table", "rowgroup", "rowgroup"]);
+  });
+
   test("says it could not load the articles, and reads again on retry", async () => {
     const { heal, rows, user } = setup({ refuses: true });
 

@@ -94,6 +94,31 @@ describe("ProductListHead", () => {
     }
   );
 
+  test("says its table roles outright, which its block and grid display would drop in WebKit", () => {
+    const { head } = setup({
+      query: makeQuery({ dir: "asc", sort: "price" }),
+    });
+    const row = head.querySelector("tr");
+
+    expect([head.getAttribute("role"), row?.getAttribute("role")]).toEqual([
+      "rowgroup",
+      "row",
+    ]);
+    expect(
+      [...head.querySelectorAll("th")].map((header) => [
+        header.getAttribute("role"),
+        header.getAttribute("aria-sort"),
+      ])
+    ).toEqual([
+      ["columnheader", null],
+      ["columnheader", "none"],
+      ["columnheader", "none"],
+      ["columnheader", "ascending"],
+      ["columnheader", "none"],
+      ["columnheader", "none"],
+    ]);
+  });
+
   test("aligns the price's name with its figures, on the right", () => {
     const { head } = setup();
     const headers = within(head).getAllByRole("columnheader");

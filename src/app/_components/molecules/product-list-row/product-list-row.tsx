@@ -1,3 +1,7 @@
+// A row is a grid (its cells grid items, some `flex`), which drops a
+// table's implicit roles in WebKit: the row and its cells say them outright.
+// oxlint-disable jsx-a11y/no-redundant-roles -- redundant only where the display is a table's (7 here)
+// oxlint-disable jsx-a11y/no-interactive-element-to-noninteractive-role -- reads `tr` and `td` as interactive; `row` and `cell` are their own roles (7 here)
 import { ChevronRight, CircleCheck, ImageOff, PencilLine } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -75,8 +79,12 @@ function ProductListRow({
       )}
       data-slot="product-list-row"
       data-testid={`product-row-${item.id}`}
+      role="row"
     >
-      <td className="relative row-span-4 flex size-14 items-center justify-center self-start overflow-hidden rounded-md bg-muted xl:row-span-1 xl:self-center">
+      <td
+        role="cell"
+        className="relative row-span-4 flex size-14 items-center justify-center self-start overflow-hidden rounded-md bg-muted xl:row-span-1 xl:self-center"
+      >
         {item.cover ? (
           <Image
             alt=""
@@ -92,7 +100,7 @@ function ProductListRow({
           </>
         )}
       </td>
-      <td className="min-w-0">
+      <td role="cell" className="min-w-0">
         <Link
           className={cn(
             "block truncate text-base font-medium outline-none after:absolute after:inset-0 after:rounded-lg xl:text-sm xl:after:rounded-none",
@@ -105,10 +113,14 @@ function ProductListRow({
           {item.title ?? copy.untitled}
         </Link>
       </td>
-      <td className="col-start-2 min-w-0 truncate text-xs text-muted-foreground xl:col-start-auto xl:text-sm">
+      <td
+        role="cell"
+        className="col-start-2 min-w-0 truncate text-xs text-muted-foreground xl:col-start-auto xl:text-sm"
+      >
         {category ?? copy.noCategory}
       </td>
       <td
+        role="cell"
         className={cn(
           "col-start-2 text-sm tabular-nums xl:col-start-auto xl:text-right",
           item.priceAmount === null ? "text-muted-foreground" : "font-semibold"
@@ -118,7 +130,10 @@ function ProductListRow({
           ? copy.noPrice
           : formatPrice(item.priceAmount, currency, locale)}
       </td>
-      <td className="col-start-2 mt-0.5 flex flex-wrap gap-1.5 xl:col-start-auto xl:mt-0">
+      <td
+        role="cell"
+        className="col-start-2 mt-0.5 flex flex-wrap gap-1.5 xl:col-start-auto xl:mt-0"
+      >
         <span
           className={cn(
             "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-medium",
@@ -144,7 +159,10 @@ function ProductListRow({
           </span>
         )}
       </td>
-      <td className="hidden items-center justify-between gap-2 text-sm text-muted-foreground xl:flex">
+      <td
+        role="cell"
+        className="hidden items-center justify-between gap-2 text-sm text-muted-foreground xl:flex"
+      >
         <time
           data-testid="product-row-updated"
           dateTime={item.updatedAt.toISOString()}

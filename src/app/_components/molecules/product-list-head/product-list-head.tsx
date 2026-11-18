@@ -1,5 +1,10 @@
 "use client";
 
+// The head is `block` and its row a grid, which drops a table's implicit
+// roles in WebKit: the rowgroup, row and column headers say them outright.
+// oxlint-disable jsx-a11y/no-redundant-roles -- redundant only where the display is a table's (4 here)
+// oxlint-disable jsx-a11y/no-interactive-element-to-noninteractive-role -- reads `tr` as interactive; `row` is its own role (1 here)
+
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import Link from "next/link";
 
@@ -53,14 +58,16 @@ function ProductListHead({ query }: ProductListHeadProps) {
       className="hidden border-b bg-muted/50 xl:block"
       data-slot="product-list-head"
       data-testid="product-list-columns"
+      role="rowgroup"
     >
       <tr
+        role="row"
         className={cn(
           "grid h-10 items-center gap-x-4 px-4 text-xs text-muted-foreground",
           PRODUCT_ROW_COLUMNS
         )}
       >
-        <th className="font-normal" scope="col">
+        <th className="font-normal" role="columnheader" scope="col">
           <span className="sr-only">{copy.columns.photo}</span>
         </th>
         {COLUMNS.map(({ align, sort }) => {
@@ -86,6 +93,7 @@ function ProductListHead({ query }: ProductListHeadProps) {
                 align === "right" && "text-right"
               )}
               key={sort}
+              role="columnheader"
               scope="col"
             >
               <Link
