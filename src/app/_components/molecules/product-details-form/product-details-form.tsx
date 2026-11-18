@@ -117,7 +117,6 @@ function ProductDetailsForm({
         </Tabs.List>
         <Tabs.Content
           className="grid min-w-0 gap-4 outline-none"
-          lang={language}
           value={language}
         >
           {language === "en" ? (
@@ -135,6 +134,9 @@ function ProductDetailsForm({
                     {...field}
                     autoComplete="off"
                     enterKeyHint="next"
+                    // The article's text is in the tab's language; its label,
+                    // help and errors stay in the page's.
+                    lang={language}
                     placeholder={copy.titlePlaceholder}
                   />
                 </FormControl>
@@ -150,7 +152,12 @@ function ProductDetailsForm({
               <FormItem className="min-w-0">
                 <FormLabel>{copy.description}</FormLabel>
                 <FormControl>
-                  <textarea {...field} className={TEXTAREA_CLASS} rows={5} />
+                  <textarea
+                    {...field}
+                    className={TEXTAREA_CLASS}
+                    lang={language}
+                    rows={5}
+                  />
                 </FormControl>
                 <FormDescription className="text-xs">
                   {copy.descriptionHint}

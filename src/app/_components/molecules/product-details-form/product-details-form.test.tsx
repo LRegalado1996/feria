@@ -130,6 +130,28 @@ describe("ProductDetailsForm", () => {
     ).toBeVisible();
   });
 
+  test.each([
+    ["the Spanish tab on an English page", "en", "es"],
+    ["the English tab on a Spanish page", "es", "en"],
+  ] as const)(
+    "on %s, marks the texts in the tab's language and the words around them in the page's",
+    (_case, locale, language) => {
+      setup({ language, locale });
+      const words = DICTIONARIES[locale].articles.wizard.details;
+
+      for (const name of [words.title, words.description]) {
+        const field = screen.getByRole("textbox", { name });
+
+        expect(field).toHaveAttribute("lang", language);
+        expect(field.closest(`[lang="${language}"]`)).toBe(field);
+      }
+
+      expect(
+        screen.getByText(words.descriptionHint).closest("[lang]")
+      ).toBeNull();
+    }
+  );
+
   test("says the English hint only on the English tab", () => {
     setup();
 
