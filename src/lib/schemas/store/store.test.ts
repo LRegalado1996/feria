@@ -307,6 +307,11 @@ describe("createStoreSettingsFormSchema", () => {
 
   test.each([
     ["a Uruguayan mobile with its leading 0", "099 123 456", "+59899123456"],
+    [
+      "the country code and the leading 0 together",
+      "+598 099 123 456",
+      "+59899123456",
+    ],
     ["a Uruguayan mobile without it", "99 123 456", "+59899123456"],
     ["dashes and dots", "099-123.456", "+59899123456"],
     ["parentheses and spaces", "+598 (99) 123 456", "+59899123456"],

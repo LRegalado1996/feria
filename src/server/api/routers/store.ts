@@ -29,9 +29,9 @@ export const storeRouter = {
         async (tx) => await updateStore(tx, input)
       );
       invalidateStoreCache();
-      // The page of all articles caches its cover's description out of the
+      // The page of all articles caches its cover's alt text out of the
       // store's texts (`readAllArticlesCover`), falling back to the other
-      // language's: an edit that adds or removes a language's text changes it.
+      // language's: an edit that removes a language's text removes its alt.
       invalidateCatalogCache(updated.id);
 
       return updated;

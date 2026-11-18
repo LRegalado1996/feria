@@ -1,3 +1,4 @@
+import { noop } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
@@ -13,7 +14,6 @@ vi.mock("@/lib/orpc/client", async () => {
 });
 
 const INPUT = {
-  currencyCode: "UYU" as const,
   instagramUrl: null,
   name: "Renamed Store",
   tiktokUrl: null,
@@ -25,6 +25,7 @@ const INPUT = {
 
 const LOADED = {
   ...INPUT,
+  currencyCode: "UYU" as const,
   id: 7,
   name: "Sample Store",
   whatsappNumber: "+59899123456",
@@ -63,6 +64,32 @@ describe("useUpdateStoreSettings", () => {
     });
 
     expect(update).toHaveBeenCalledExactlyOnceWith(INPUT);
+    expect(queryClient.getQueryData(storeSettingsKey())).toEqual({
+      ...INPUT,
+      id: 7,
+    });
+  });
+
+  test("a read answered before the save and landing after it never puts the old settings back", async () => {
+    const { queryClient, result } = setup();
+    const answers: ((store: typeof LOADED) => void)[] = [];
+    const stale = queryClient
+      .query({
+        queryFn: async () =>
+          await new Promise<typeof LOADED>((resolve) => {
+            answers.push(resolve);
+          }),
+        queryKey: storeSettingsKey(),
+        staleTime: 0,
+      })
+      .catch(noop);
+
+    await result.current.mutateAsync(INPUT);
+    for (const answer of answers) {
+      answer(LOADED);
+    }
+    await stale;
+
     expect(queryClient.getQueryData(storeSettingsKey())).toEqual({
       ...INPUT,
       id: 7,

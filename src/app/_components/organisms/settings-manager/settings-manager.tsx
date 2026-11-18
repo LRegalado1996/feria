@@ -65,7 +65,7 @@ function SettingsManager() {
             ))}
           </div>
         ) : null}
-        {settings.isError ? (
+        {settings.isError && !settings.data ? (
           <div
             className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
             role="alert"

@@ -16,7 +16,10 @@ export function useUpdateStoreSettings() {
     ...orpc.store.update.mutationOptions(),
     // The form says the failure in place, and the screen reports it.
     meta: { suppressGlobalErrorReport: true },
-    onSuccess: (saved) => {
+    onSuccess: async (saved) => {
+      // A read still on its way was answered before the save: landing
+      // later, it would put the old settings back on the screen.
+      await queryClient.cancelQueries({ queryKey: storeSettingsKey() });
       queryClient.setQueryData(storeSettingsKey(), saved);
     },
   });

@@ -163,7 +163,7 @@ function SettingsForm({ className, id, onSave, store }: SettingsFormProps) {
               name="name"
               render={({ field }) => (
                 <FormItem className="min-w-0">
-                  <FormLabel>{copy.fields.name}</FormLabel>
+                  <FormLabel required>{copy.fields.name}</FormLabel>
                   <FormControl>
                     <Input {...field} autoComplete="organization" />
                   </FormControl>
@@ -188,7 +188,7 @@ function SettingsForm({ className, id, onSave, store }: SettingsFormProps) {
                   name={name}
                   render={({ field }) => (
                     <FormItem className="min-w-0">
-                      <FormLabel>{copy.fields[name]}</FormLabel>
+                      <FormLabel required>{copy.fields[name]}</FormLabel>
                       <FormControl>
                         {control === "input" ? (
                           <Input {...field} autoComplete="off" lang={lang} />

@@ -77,7 +77,7 @@ function setup({
   const user = userEvent.setup();
 
   return {
-    field: (name: string) => screen.getByLabelText(name),
+    field: (name: string) => screen.getByRole("textbox", { name }),
     finish: () => {
       for (const resolve of held.splice(0)) {
         resolve();
@@ -124,10 +124,32 @@ describe("SettingsForm", () => {
     }
   );
 
+  test.each([
+    ["Store name", "Store name*"],
+    ["Tagline in Spanish", "Tagline in Spanish*"],
+    ["Tagline in English", "Tagline in English*"],
+    ["Description in Spanish", "Description in Spanish*"],
+    ["Description in English", "Description in English*"],
+    ["WhatsApp number", "WhatsApp number"],
+    ["Instagram link", "Instagram link"],
+    ["TikTok link", "TikTok link"],
+  ])(
+    "marks %s as the schema asks for it: its label reads %s",
+    (name, label) => {
+      const { field } = setup();
+
+      expect(
+        document.querySelector(`label[for="${field(name).id}"]`)?.textContent
+      ).toBe(label);
+    }
+  );
+
   test("marks each text with its language", () => {
     const { field } = setup();
 
     expect(field("Tagline in Spanish")).toHaveAttribute("lang", "es");
+    expect(field("Tagline in English")).toHaveAttribute("lang", "en");
+    expect(field("Description in Spanish")).toHaveAttribute("lang", "es");
     expect(field("Description in English")).toHaveAttribute("lang", "en");
   });
 

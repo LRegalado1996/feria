@@ -201,10 +201,10 @@ describe("updateStore", () => {
     // Set by hand, as the only way to change it is (FER-014).
     await db.update(store).set({ currencyCode: "USD" }).where(eq(store.id, id));
 
-    const updated = await updateStore(db, {
-      ...makeValues(),
-      currencyCode: "UYU",
-    } as UpdateStoreValues);
+    // A variable, not a literal: TypeScript lets a key the type does not
+    // list ride along, as a request's body can carry one.
+    const values = { ...makeValues(), currencyCode: "UYU" };
+    const updated = await updateStore(db, values);
 
     expect(updated.currencyCode).toBe("USD");
     await expect(

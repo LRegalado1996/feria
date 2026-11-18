@@ -9,6 +9,14 @@
 export function normalizePhone(typed: string): string | null {
   const compact = typed.replaceAll(/[\s.\-()]/gu, "");
 
+  // +598 099 123 456: the country code and the national prefix together.
+  // WhatsApp reaches no such number, so the 0 drops as it does below.
+  const doubled = /^(?:\+|00)5980(9\d{7})$/u.exec(compact);
+
+  if (doubled) {
+    return `+598${doubled[1]}`;
+  }
+
   // Country codes never start with 0.
   if (/^(?:\+|00)[1-9]\d{7,14}$/u.test(compact)) {
     return `+${compact.replace(/^(?:\+|00)/u, "")}`;

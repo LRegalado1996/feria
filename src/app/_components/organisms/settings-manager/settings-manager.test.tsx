@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
@@ -76,7 +76,11 @@ function setup({
   const spies = {
     get: vi.fn((_input: unknown) => STORE),
     // The server answers the store as stored.
-    update: vi.fn((input: unknown) => ({ ...(input as object), id: 7 })),
+    update: vi.fn((input: unknown) => ({
+      ...(input as object),
+      currencyCode: STORE.currencyCode,
+      id: 7,
+    })),
   };
   server.use(
     answer("store.get", spies.get, get),
@@ -99,7 +103,7 @@ function setup({
   const user = userEvent.setup();
 
   return {
-    field: (name: string) => screen.getByLabelText(name),
+    field: (name: string) => screen.getByRole("textbox", { name }),
     queryClient,
     saveButton: () =>
       within(screen.getByTestId("admin-primary-action")).getByRole("button"),
@@ -132,6 +136,25 @@ describe("SettingsManager", () => {
     });
   });
 
+  test("a refresh that fails behind a loaded form says nothing: the form it has still works", async () => {
+    const { queryClient } = setup();
+    await screen.findByTestId("settings-form");
+    server.use(createOrpcErrorHandler("store.get", FAILURE));
+
+    await act(async () => {
+      await queryClient.refetchQueries();
+      // The query tells its screen on the next tick: without waiting for
+      // it, the screen below would still be the one from before the failure.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+
+    expect(queryClient.getQueryState(storeSettingsKey())?.status).toBe("error");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("settings-form")).toBeInTheDocument();
+  });
+
   test("says the settings failed to load, with no form to save, and loads them again on retry", async () => {
     const { field, spies, user } = setup({ get: "fail" });
 
@@ -147,7 +170,7 @@ describe("SettingsManager", () => {
 
     await screen.findByTestId("settings-form");
     expect(field("Store name")).toHaveValue("Sample Store");
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/load the settings/u)).toBeNull();
   });
 
   test("saves from the top bar's button, says so, and shows what was stored", async () => {

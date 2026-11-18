@@ -27,9 +27,15 @@ export class AdminSettingsPage extends AdminPage {
       .getByRole("button", { name: "Guardar" });
   }
 
-  /** A field of the form, by its exact label. */
+  /**
+   * A field of the form, by its exact name: by role, since a required
+   * field's label also holds an asterisk that is no part of its name.
+   */
   field(label: string): Locator {
-    return this.getByTestId("settings-form").getByLabel(label, { exact: true });
+    return this.getByTestId("settings-form").getByRole("textbox", {
+      exact: true,
+      name: label,
+    });
   }
 
   /**
