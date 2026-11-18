@@ -919,7 +919,8 @@ describe("the admin's list (FER-019)", () => {
 describe("the admin's list order (FER-019)", () => {
   /**
    * Three articles of this test, found by a filter value of their own: T1
-   * "Ábaco", $300, in "Cadenas", published; T2 "banana" (English "Zebra"),
+   * "Ábaco", $300, in "Cadenas", published; T2 "banana" (English
+   * "Aardvark", which sorts before "Ábaco" where "banana" sorts after),
    * $100, in "Anillos" ("Rings"), a draft; T3 a blank draft without a price
    * or a category. Changed T1, T3, T2, the latest first.
    */
@@ -944,7 +945,7 @@ describe("the admin's list order (FER-019)", () => {
       attributeValueIds: mine,
       categoryId: rings.id,
       priceAmount: 10_000,
-      translations: [spanish("banana"), english("Zebra")],
+      translations: [spanish("banana"), english("Aardvark")],
     });
     const t3 = await create({
       attributeValueIds: mine,
@@ -989,7 +990,7 @@ describe("the admin's list order (FER-019)", () => {
     ["updated", "asc", "es", ["T2", "T3", "T1"]],
     ["title", "asc", "es", ["T1", "T2", "T3"]],
     ["title", "desc", "es", ["T2", "T1", "T3"]],
-    ["title", "asc", "en", ["T1", "T2", "T3"]],
+    ["title", "asc", "en", ["T2", "T1", "T3"]],
     ["price", "asc", "es", ["T2", "T1", "T3"]],
     ["price", "desc", "es", ["T1", "T2", "T3"]],
     ["category", "asc", "es", ["T2", "T1", "T3"]],
@@ -1009,11 +1010,41 @@ describe("the admin's list order (FER-019)", () => {
   test("sorts the title in English by the English one, else the Spanish one", async () => {
     const { listed } = await setupOrder();
 
-    // T2 is "Zebra" in English: after "Ábaco"; "banana" no more.
+    // T2 is "Aardvark" in English: before "Ábaco", where "banana" is after.
     expect(await listed({ dir: "desc", locale: "en", sort: "title" })).toEqual([
-      "T2",
       "T1",
+      "T2",
       "T3",
+    ]);
+  });
+
+  test("a title of whitespace alone is blank to the sort, as to the row: the next language's decides", async () => {
+    const { create, storeId, tag } = await setup();
+    const own = await insertFilter(`propio-${tag}`, ["si"], storeId);
+    // "Zorro" in English is a tab: the row shows "Zorro", and so it sorts.
+    const fox = await create({
+      attributeValueIds: [own.idOf("si")],
+      translations: [spanish("Zorro"), english("\t\n")],
+    });
+    const donkey = await create({
+      attributeValueIds: [own.idOf("si")],
+      translations: [spanish("Burro"), english("Donkey")],
+    });
+
+    const page = await listStoreProducts(db, {
+      filters: [{ attribute: own.slug, values: ["si"] }],
+      limit: 24,
+      locale: "en",
+      page: 1,
+      sort: "title",
+      storeId,
+    });
+
+    expect(
+      page.items.map((item) => [item.id, item.title, item.titleLang])
+    ).toEqual([
+      [donkey.id, "Donkey", "en"],
+      [fox.id, "Zorro", "es"],
     ]);
   });
 

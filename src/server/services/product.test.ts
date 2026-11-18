@@ -1545,7 +1545,7 @@ describe("listStoreProducts", () => {
   );
 
   const titleIn = (n: number) =>
-    `(select nullif(btrim("titled"."title"), '') from "product_translation" as "titled" where ("titled"."productId" = "product"."id" and "titled"."locale" = $${n}))`;
+    `(select nullif(regexp_replace("titled"."title", '^[[:space:]]+|[[:space:]]+$', '', 'g'), '') from "product_translation" as "titled" where ("titled"."productId" = "product"."id" and "titled"."locale" = $${n}))`;
   const categoryIn = (n: number) =>
     `(select nullif(btrim("named"."name"), '') from "category_translation" as "named" where ("named"."categoryId" = "product"."categoryId" and "named"."locale" = $${n}))`;
 

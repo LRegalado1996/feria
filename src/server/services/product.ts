@@ -794,7 +794,12 @@ function textKey(
   )})))`;
 }
 
-/** The title the row shows (`listTitle`), as a sort key. */
+/**
+ * The title the row shows (`listTitle`), as a sort key. Blank is what
+ * `String.trim()` leaves empty: a title of tabs or line breaks falls back to
+ * the next language as the row does, where `btrim` would strip spaces only
+ * and sort by the tab.
+ */
 function titleKey(locale: Locale): SQL {
   const text = alias(productTranslation, "titled");
   const fromText = sql`${productTranslation} as ${sql.identifier("titled")}`;
@@ -802,7 +807,7 @@ function titleKey(locale: Locale): SQL {
   return textKey(
     languagesFrom(locale),
     (language) =>
-      sql`select nullif(btrim(${text.title}), '') from ${fromText} where ${and(
+      sql`select nullif(regexp_replace(${text.title}, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '') from ${fromText} where ${and(
         eq(text.productId, product.id),
         eq(text.locale, language)
       )}`
