@@ -126,6 +126,8 @@ function ProductListRow({
           item.priceAmount === null ? "text-muted-foreground" : "font-semibold"
         )}
       >
+        {/* Below `xl` the column names are hidden: the price says its own. */}
+        <span className="sr-only xl:hidden">{`${copy.columns.price}: `}</span>
         {item.priceAmount === null
           ? copy.noPrice
           : formatPrice(item.priceAmount, currency, locale)}

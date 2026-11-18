@@ -197,18 +197,29 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const filtersButton = useRef<HTMLButtonElement>(null);
   const table = useRef<HTMLTableElement>(null);
   const rangeId = useId();
-  // A step of the pages was followed: its page takes focus once it shows.
-  const paging = useRef(false);
-  const shownPage = products.isPlaceholderData ? null : (page?.page ?? null);
+  // The address a step of the pages led to: that page takes focus once it
+  // shows, and no other selection does.
+  const paging = useRef<string | null>(null);
+  const here = productsPath(locale, query);
+  // An earlier selection's answer, shown while this one's is on its way
+  // (`keepPreviousData`): its rows stay, marked busy, but its count, its
+  // empty state and its pages are not this selection's to show.
+  const settled = products.isPlaceholderData ? undefined : page;
+  const shownPage = settled?.page ?? null;
 
   useEffect(() => {
-    if (shownPage !== null && paging.current) {
-      // Disarmed even when the page has no table (past the end): it was
-      // this step's, never a later one's.
-      paging.current = false;
+    if (shownPage === null || paging.current === null) {
+      return;
+    }
+
+    // Disarmed even when the page has no table (past the end), and when
+    // another selection replaced the step's before it showed.
+    if (paging.current === here) {
       table.current?.focus();
     }
-  }, [shownPage]);
+
+    paging.current = null;
+  }, [here, shownPage]);
 
   const chips = activeFilterChips(query, {
     attributes: attributes ?? [],
@@ -216,7 +227,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
     copy,
     locale,
   });
-  const summary = page ? summaryOf(page, copy, locale) : null;
+  const summary = settled ? summaryOf(settled, copy, locale) : null;
 
   return (
     <section data-slot="product-list" data-testid="product-list">
@@ -264,11 +275,12 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               {summary.count}
             </p>
           ) : null}
-          {page && page.items.length === 0 ? (
-            <NoRows page={page} query={query} />
+          {settled && settled.items.length === 0 ? (
+            <NoRows page={settled} query={query} />
           ) : null}
           {page && page.items.length > 0 ? (
             <table
+              aria-busy={products.isPlaceholderData || undefined}
               aria-describedby={rangeId}
               aria-label={copy.label}
               className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring xl:overflow-hidden xl:border xl:bg-card"
@@ -299,7 +311,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               </tbody>
             </table>
           ) : null}
-          {page && summary && page.total > 0 ? (
+          {settled && summary && settled.total > 0 ? (
             <div
               className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1"
               data-testid="product-list-foot"
@@ -307,11 +319,10 @@ function ProductList({ query, renderedAt }: ProductListProps) {
                 const link = followedLink(event);
 
                 // The current page's own link changes nothing either.
-                if (
-                  link !== null &&
-                  link.getAttribute("href") !== productsPath(locale, query)
-                ) {
-                  paging.current = true;
+                const destination = link?.getAttribute("href") ?? null;
+
+                if (destination !== null && destination !== here) {
+                  paging.current = destination;
                 }
               }}
             >
@@ -320,14 +331,14 @@ function ProductList({ query, renderedAt }: ProductListProps) {
                 data-testid="product-list-range"
                 id={rangeId}
               >
-                {page.items.length > 0 ? summary.range : null}
+                {settled.items.length > 0 ? summary.range : null}
               </p>
               <Pagination
                 hrefFor={(number) =>
                   productsPath(locale, { ...query, page: number })
                 }
                 page={query.page}
-                pageCount={page.pageCount}
+                pageCount={settled.pageCount}
               />
             </div>
           ) : null}

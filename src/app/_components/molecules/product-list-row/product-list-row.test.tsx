@@ -68,7 +68,7 @@ describe("ProductListRow", () => {
       "",
       "Anillo de plata",
       "Rings",
-      "UYU 1,290",
+      "Price: UYU 1,290",
       "Published",
       "2 hours ago",
     ]);
@@ -123,7 +123,7 @@ describe("ProductListRow", () => {
       "No photo",
       "Untitled",
       "No category",
-      "No price",
+      "Price: No price",
       "Draft",
     ]);
     expect(row.querySelector("img")).toBeNull();
@@ -158,7 +158,7 @@ describe("ProductListRow", () => {
       "",
       "Anillo de plata",
       "Anillos",
-      "$ 1.290",
+      "Precio: $ 1.290",
       "BorradorNo disponible",
       "hace 2 horas",
     ]);

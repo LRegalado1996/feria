@@ -92,6 +92,11 @@ vi.mock("@/lib/orpc/client", () => {
 
 const RENDERED_AT = Date.parse("2026-11-18T12:00:00.000Z");
 const HOUR = 3_600_000;
+/** A read that never answers. */
+const HANG = () => undefined;
+/** What the list says of a store with no article at all. */
+const EMPTY_STORE =
+  "No articles yet. Start with the photos: it is published in a minute.";
 
 interface ListedItem {
   category: { id: number; nameEn: string | null; nameEs: string } | null;
@@ -486,7 +491,8 @@ describe("ProductList", () => {
       answer: (input) => {
         const asked = typeof input === "object" && input !== null ? input : {};
 
-        if ("page" in asked) {
+        // Page 2 of the search, and only it, is row 30.
+        if ("page" in asked && "q" in asked) {
           return makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 });
         }
 
@@ -503,8 +509,10 @@ describe("ProductList", () => {
     expect(await screen.findByTestId("product-row-12")).toBeVisible();
     expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
 
-    await user.click(screen.getByRole("link", { name: "Page 2" }));
-    navigate(makeQuery({ page: 2 }));
+    const second = screen.getByRole("link", { name: "Page 2" });
+    expect(second).toHaveAttribute("href", "/en/admin/products?q=aro&page=2");
+    await user.click(second);
+    navigate(makeQuery({ page: 2, q: "aro" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("product-list-table")).toHaveFocus();
@@ -564,7 +572,9 @@ describe("ProductList", () => {
     });
     await screen.findByTestId("product-row-9");
 
-    await user.click(screen.getByRole("link", { name: "Page 2" }));
+    const second = screen.getByRole("link", { name: "Page 2" });
+    expect(second).toHaveAttribute("href", "/en/admin/products?page=2");
+    await user.click(second);
     navigate(makeQuery({ page: 2 }));
     expect(await screen.findByTestId("product-list-empty-page")).toBeVisible();
 
@@ -572,6 +582,54 @@ describe("ProductList", () => {
 
     expect(await screen.findByTestId("product-row-12")).toBeVisible();
     expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+  });
+
+  test("a step of the pages replaced by another selection before it showed takes no focus there", async () => {
+    const { navigate, user } = setup({
+      answer: (input) =>
+        makePage(
+          [
+            makeItem(
+              typeof input === "object" && input !== null && "sort" in input
+                ? 12
+                : 9
+            ),
+          ],
+          { pageCount: 2, total: 25 }
+        ),
+    });
+    await screen.findByTestId("product-row-9");
+
+    // Page 2 is followed, but the order changes before it arrives.
+    await user.click(screen.getByRole("link", { name: "Page 2" }));
+    navigate(makeQuery({ sort: "price" }));
+
+    expect(await screen.findByTestId("product-row-12")).toBeVisible();
+    expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+  });
+
+  test("while another selection loads, says nothing of it from the last one's answer", async () => {
+    const { navigate } = setup({
+      answer: () => makePage([], { pageCount: 0, total: 0 }),
+      query: makeQuery({ q: "zz" }),
+    });
+    expect(await screen.findByTestId("product-list-no-matches")).toBeVisible();
+    server.use(
+      createOrpcHandler(
+        "product.list",
+        async () => await new Promise<ReturnType<typeof makePage>>(HANG)
+      )
+    );
+
+    // The search cleared: its answer is on its way, the last one is shown.
+    navigate(makeQuery());
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("product-list-no-matches")).toBeNull();
+    });
+    expect(screen.queryByText(EMPTY_STORE)).toBeNull();
+    expect(screen.queryByTestId("product-list-count")).toBeNull();
+    expect(screen.queryByTestId("product-list-foot")).toBeNull();
   });
 
   test("speaks Spanish", async () => {
