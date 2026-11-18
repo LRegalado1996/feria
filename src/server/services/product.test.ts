@@ -1232,7 +1232,9 @@ describe("listStoreProducts", () => {
   /**
    * A store in USD whose matching articles count `total`, whose page holds
    * the ids `pageIds`, read back as `rows` (in no order), and whose
-   * categories asked for resolve to `categoryIds`.
+   * categories asked for resolve to `categoryIds`. Every read answers on
+   * `db`, the transaction's own handle; `outer`, the handle the service is
+   * given, answers nothing, so a read made outside the snapshot shows.
    */
   function setupList({
     categoryIds = [],
@@ -1250,6 +1252,10 @@ describe("listStoreProducts", () => {
     valueGroups?: number[][];
   } = {}) {
     const { db } = setup();
+    const { db: outer } = setup();
+    outer.$.transaction.mockImplementation(async (callback: unknown) =>
+      typeof callback === "function" ? await callback(db) : undefined
+    );
     resolveCatalogFilters.mockResolvedValue(valueGroups);
     db.$["select.where"].mockImplementation(async (where: unknown) => {
       const text = sqlOrNull(where);
@@ -1280,7 +1286,7 @@ describe("listStoreProducts", () => {
     const list = async (
       options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
     ) =>
-      await listStoreProducts(db as never, {
+      await listStoreProducts(outer as never, {
         limit: 2,
         locale: "es",
         page: 1,
@@ -1299,29 +1305,45 @@ describe("listStoreProducts", () => {
             !text.includes("category_group")
         );
     /**
-     * The `where` the count and the page were read with (one object, so
-     * the first is both), as SQL and parameters.
+     * The `where` the count and the page were each read with, in that
+     * order, as SQL and parameters: they must narrow alike, or the count
+     * and the rows disagree.
      */
-    const pageWhere = () =>
-      renderQuery(
-        db.$["select.where"].mock.calls.find(([where]) =>
-          sqlOrNull(where)?.includes('"product"."storeId"')
-        )?.[0]
-      );
+    const readWheres = () => {
+      const [count, page, ...more] = db.$["select.where"].mock.calls
+        .filter(([where]) => sqlOrNull(where)?.includes('"product"."storeId"'))
+        .map(([where]) => renderQuery(where));
+
+      return { count, more, page };
+    };
     const order = () => db.$["select.orderBy"].mock.calls[0] ?? [];
 
-    return { db, list, listWheres, order, pageWhere };
+    return { db, list, listWheres, order, outer, readWheres };
   }
 
   test("reads the count, the page and its rows in one read-only snapshot", async () => {
-    const { db, list } = setupList();
+    const { db, list, outer } = setupList({
+      pageIds: [5],
+      rows: [listedRow(5)],
+      total: 1,
+    });
 
-    await list();
+    const page = await list();
 
-    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+    expect(outer.$.transaction).toHaveBeenCalledExactlyOnceWith(
       expect.any(Function),
       { accessMode: "read only", isolationLevel: "repeatable read" }
     );
+    expect(page.items.map((item) => item.id)).toEqual([5]);
+    expect(page.total).toBe(1);
+    // Every read on the snapshot's handle, none on the outer one.
+    expect(db.$["select.from"]).toHaveBeenCalledWith(product);
+    expect(renderQuery(configOf(db.query.product.findMany).where)).toEqual({
+      params: [5],
+      sql: '"product"."id" in ($1)',
+    });
+    expect(outer.$.select).not.toHaveBeenCalled();
+    expect(outer.query.product.findMany).not.toHaveBeenCalled();
   });
 
   test("reads the store's articles, drafts too, newest change first, the id breaking ties", async () => {
@@ -1368,7 +1390,7 @@ describe("listStoreProducts", () => {
   });
 
   test("narrows by status, availability, categories, title and the store's filters together", async () => {
-    const { list, pageWhere } = setupList({
+    const { list, readWheres } = setupList({
       categoryIds: [9, 11],
       valueGroups: [[21, 22], [31]],
     });
@@ -1384,13 +1406,19 @@ describe("listStoreProducts", () => {
       status: "draft",
     });
 
-    expect(pageWhere()).toEqual({
+    const narrowed = {
       params: [STORE_ID, "draft", false, 9, 11, "%aro%", 21, 22, 31],
       sql:
         '("product"."storeId" = $1 and "product"."status" = $2 and "product"."isAvailable" = $3 and "product"."categoryId" in ($4, $5) and ' +
         'exists (select 1 from "product_translation" as "searched" where ("searched"."productId" = "product"."id" and unaccent("searched"."title") ilike unaccent($6))) and ' +
         'exists (select 1 from "product_attribute_value" where ("product_attribute_value"."productId" = "product"."id" and "product_attribute_value"."attributeValueId" in ($7, $8))) and ' +
         'exists (select 1 from "product_attribute_value" where ("product_attribute_value"."productId" = "product"."id" and "product_attribute_value"."attributeValueId" in ($9))))',
+    };
+
+    expect(readWheres()).toEqual({
+      count: narrowed,
+      more: [],
+      page: narrowed,
     });
   });
 
@@ -1398,22 +1426,31 @@ describe("listStoreProducts", () => {
     ["available", true],
     ["unavailable", false],
   ] as const)("narrows to %s articles", async (availability, isAvailable) => {
-    const { list, pageWhere } = setupList();
+    const { list, readWheres } = setupList();
 
     await list({ availability });
 
-    expect(pageWhere()).toEqual({
+    const narrowed = {
       params: [STORE_ID, isAvailable],
       sql: '("product"."storeId" = $1 and "product"."isAvailable" = $2)',
+    };
+    expect(readWheres()).toEqual({
+      count: narrowed,
+      more: [],
+      page: narrowed,
     });
   });
 
   test("searches the title with its wildcards and escape taken literally", async () => {
-    const { list, pageWhere } = setupList();
+    const { list, readWheres } = setupList();
 
     await list({ q: String.raw`50%_off\x` });
 
-    expect(pageWhere().params).toEqual([STORE_ID, String.raw`%50\%\_off\\x%`]);
+    const { count, page } = readWheres();
+    expect([count?.params, page?.params]).toEqual([
+      [STORE_ID, String.raw`%50\%\_off\\x%`],
+      [STORE_ID, String.raw`%50\%\_off\\x%`],
+    ]);
   });
 
   test("resolves the categories asked for by slug in the store, a group standing for the categories in it", async () => {
@@ -1437,13 +1474,15 @@ describe("listStoreProducts", () => {
   });
 
   test("ignores categories the store has none of, rather than narrowing to nothing", async () => {
-    const { list, pageWhere } = setupList({ categoryIds: [] });
+    const { list, readWheres } = setupList({ categoryIds: [] });
 
     await list({ categories: ["relojes"] });
 
-    expect(pageWhere()).toEqual({
-      params: [STORE_ID],
-      sql: '"product"."storeId" = $1',
+    const unnarrowed = { params: [STORE_ID], sql: '"product"."storeId" = $1' };
+    expect(readWheres()).toEqual({
+      count: unnarrowed,
+      more: [],
+      page: unnarrowed,
     });
   });
 
