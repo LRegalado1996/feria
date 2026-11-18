@@ -882,7 +882,7 @@ describe("the admin's list (FER-019)", () => {
     });
   });
 
-  test("breaks a tie by the id, so pages never repeat or skip an article", async () => {
+  test("breaks a tie by the id, so pages of unchanged matches never repeat or skip an article", async () => {
     const { create, storeId, tag } = await setup();
     const ids: number[] = [];
 

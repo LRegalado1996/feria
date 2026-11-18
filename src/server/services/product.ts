@@ -834,9 +834,11 @@ function categoryKey(locale: Locale): SQL {
 
 /**
  * The admin list's order (FER-019): the column's key in `dir`, then the id
- * the same way, so the order is total and a page never repeats or skips a
- * row. An article without the key (no title, no category, no price) comes
- * last whichever the direction: the gaps gather at the end.
+ * the same way, so the order is total: while the matches stay as they are,
+ * a page never repeats or skips a row. Numbered pages are offsets, so a
+ * row that changes between two requests can still shift one onto the next
+ * page or off it. An article without the key (no title, no category, no
+ * price) comes last whichever the direction: the gaps gather at the end.
  */
 function listOrder(
   sort: StoreProductSort,
@@ -935,7 +937,9 @@ function listWhere(
  * article with its cover (its first photo), the title that names it in
  * `locale`, its price, status, availability and category; the prices are in
  * the store's currency, answered beside them.
- * One snapshot, so the count, the page and its rows agree.
+ * One snapshot, so the count, the page and its rows agree: `db` is the root
+ * client, since inside a caller's transaction it would be a savepoint
+ * without the snapshot's isolation.
  */
 export async function listStoreProducts(
   db: DatabaseClient,
