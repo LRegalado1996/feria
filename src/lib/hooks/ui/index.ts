@@ -6,3 +6,4 @@ export { useHydrated } from "./use-hydrated";
 export { useVisitSeed } from "./use-visit-seed";
 export { useOnScreen } from "./use-on-screen";
 export { useSessionFlag } from "./use-session-flag";
+export { SEARCH_DEBOUNCE_MS, useSearchField } from "./use-search-field";
