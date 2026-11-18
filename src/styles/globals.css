@@ -51,6 +51,63 @@
   --animate-store-wash: store-wash 1.8s ease-out 0.12s both;
   --animate-store-bump: store-bump 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 
+  /* The article wizard (FER-017): a step slides in from the side it comes
+     from, a photo that arrives settles into its tile, and publishing pops
+     a ring of confetti once around the check. Transform and opacity only,
+     each done in under a second; every use sits behind `motion-safe:`. */
+  --animate-wizard-step-next: wizard-step-next 0.24s
+    cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-wizard-step-back: wizard-step-back 0.24s
+    cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-wizard-settle: wizard-settle 0.32s cubic-bezier(0.22, 1, 0.36, 1)
+    both;
+  --animate-wizard-pop: wizard-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  /* One piece of confetti; it sets its own direction inline. */
+  --animate-wizard-confetti: wizard-confetti 0.9s cubic-bezier(0.22, 1, 0.36, 1)
+    0.1s both;
+
+  @keyframes wizard-step-next {
+    from {
+      opacity: 0;
+      transform: translateX(1.5rem);
+    }
+  }
+
+  @keyframes wizard-step-back {
+    from {
+      opacity: 0;
+      transform: translateX(-1.5rem);
+    }
+  }
+
+  @keyframes wizard-settle {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+  }
+
+  @keyframes wizard-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+  }
+
+  @keyframes wizard-confetti {
+    from {
+      opacity: 1;
+      transform: rotate(var(--wizard-confetti-angle, 0deg)) translateY(0)
+        scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: rotate(var(--wizard-confetti-angle, 0deg)) translateY(-4.5rem)
+        scale(0.6);
+    }
+  }
+
   /* A column the band's height, from just above the band to below it, at
      one steady speed (the theme value is `linear`; only the transform's
      ends are set, so the stops below change the opacity alone). Over the

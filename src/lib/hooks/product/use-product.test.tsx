@@ -20,7 +20,7 @@ const ARTICLE = {
 
 function setup({
   fails = false,
-  id = 12 as number | null,
+  id = 12,
 }: { fails?: boolean; id?: number | null } = {}) {
   const get = vi.fn((_input: unknown) => ARTICLE);
   server.use(

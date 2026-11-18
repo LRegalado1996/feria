@@ -63,8 +63,15 @@ interface PutOptions {
  */
 function setup({
   holdsToken = false,
-  prepared = makePrepared() as ReturnType<typeof makePrepared> | Error,
-  token = "answers" as "answers" | "fails" | "notConfigured",
+  ignoresAbort = false,
+  prepared = makePrepared(),
+  token = "answers",
+}: {
+  holdsToken?: boolean;
+  /** The store finishes an upload even once it was aborted. */
+  ignoresAbort?: boolean;
+  prepared?: ReturnType<typeof makePrepared> | Error;
+  token?: "answers" | "fails" | "notConfigured";
 } = {}) {
   let tokens = 0;
   let giveToken = (): void => undefined;
@@ -115,6 +122,10 @@ function setup({
     async (pathname: string, _body: Blob, options: PutOptions) =>
       await new Promise((resolve, reject) => {
         options.abortSignal.addEventListener("abort", () => {
+          if (ignoresAbort) {
+            return;
+          }
+
           reject(new Error("aborted"));
         });
         uploads.push({
@@ -453,5 +464,49 @@ describe("usePhotoQueue", () => {
       setTimeout(resolve, 50);
     });
     expect(uploads).toHaveLength(0);
+  });
+
+  test("a photo removed while it is prepared asks for no token", async () => {
+    const { add, result, tokenRequests } = setup();
+    let finishPreparing = (_value: unknown): void => undefined;
+    mocks.prepareImage.mockReturnValue(
+      new Promise((resolve) => {
+        finishPreparing = resolve;
+      })
+    );
+    add([makeFile("a.jpg")], 1);
+    await waitFor(() => {
+      expect(result.current.items[0]?.state).toEqual({ status: "preparing" });
+    });
+
+    act(() => {
+      result.current.remove(required(result.current.items[0]).key);
+    });
+    finishPreparing(makePrepared());
+    // A macrotask: the prepared photo has been handed back by then.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+
+    expect(tokenRequests).not.toHaveBeenCalled();
+  });
+
+  test("an upload the store finishes after the photo was removed is handed to nobody", async () => {
+    const { add, onUploaded, result, upload } = setup({ ignoresAbort: true });
+    add([makeFile("a.jpg")], 1);
+    const first = await upload(0);
+
+    act(() => {
+      result.current.remove(required(result.current.items[0]).key);
+    });
+    act(() => {
+      first.finish();
+    });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 50);
+    });
+
+    expect(onUploaded).not.toHaveBeenCalled();
+    expect(result.current.items).toEqual([]);
   });
 });

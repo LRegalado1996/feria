@@ -8,21 +8,20 @@ import { createSaveQueue, type SaveQueueStatus } from "./save-queue";
  */
 function setup({ failing = [] as string[] } = {}) {
   const pending: { resolve: () => void; values: string }[] = [];
-  const save = vi.fn(
-    async (values: string) =>
-      await new Promise<void>((resolve, reject) => {
-        pending.push({
-          resolve: () => {
-            if (failing.includes(values)) {
-              reject(new Error(`refused ${values}`));
-            } else {
-              resolve();
-            }
-          },
-          values,
-        });
-      })
-  );
+  const save = vi.fn(async (values: string) => {
+    await new Promise<void>((resolve, reject) => {
+      pending.push({
+        resolve: () => {
+          if (failing.includes(values)) {
+            reject(new Error(`refused ${values}`));
+          } else {
+            resolve();
+          }
+        },
+        values,
+      });
+    });
+  });
   const statuses: [SaveQueueStatus, unknown][] = [];
   const queue = createSaveQueue<string>({
     onStatus: (status, error) => {

@@ -334,8 +334,12 @@ describe("useProductAutosave", () => {
 
 describe("createAutosave", () => {
   test("fails a save that starts before its writers were handed in, and says so", async () => {
-    const onStatus = vi.fn();
-    const autosave = createAutosave({ id: 12, onId: vi.fn(), onStatus });
+    const onStatus = vi.fn<(status: string) => void>();
+    const autosave = createAutosave({
+      id: 12,
+      onId: vi.fn<(id: number) => void>(),
+      onStatus,
+    });
 
     autosave.saveNow(toProductValues(makeProductForm()));
 

@@ -62,7 +62,7 @@ describe("sendImage", () => {
         });
       }
     );
-    const onProgress = vi.fn();
+    const onProgress = vi.fn<(percent: number) => void>();
     const signal = new AbortController().signal;
     const sent = sendImage({
       onProgress,

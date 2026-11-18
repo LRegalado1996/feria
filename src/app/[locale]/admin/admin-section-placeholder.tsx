@@ -11,7 +11,7 @@ import { readLocale } from "@/lib/i18n/read-locale";
 /** The sections whose screen is still to come. */
 export type PlaceholderSection = Extract<
   AdminSection,
-  "home" | "metrics" | "products" | "users"
+  "home" | "metrics" | "users"
 >;
 
 interface AdminSectionPlaceholderProps {
