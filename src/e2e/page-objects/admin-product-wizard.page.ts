@@ -124,8 +124,8 @@ export class AdminProductWizardPage extends AdminPage {
    * body): the save after a pause in the typing, which "Guardado" from an
    * earlier save does not prove. Arm it before the last change.
    */
-  savedWhen(matches: (body: string) => boolean): Promise<unknown> {
-    return this.page.waitForResponse(
+  async savedWhen(matches: (body: string) => boolean): Promise<unknown> {
+    return await this.page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === "/api/orpc/product/update" &&
         response.ok() &&
