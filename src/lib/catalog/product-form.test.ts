@@ -5,6 +5,7 @@ import {
   makeProductForm,
   makeStoreProduct,
 } from "@/test/factories/store-product";
+import { required } from "@/test/required";
 
 import {
   emptyProductForm,
@@ -212,10 +213,26 @@ describe("sameProduct", () => {
       makeProductForm({ attributeValueIds: [31, 32] }),
       false,
     ],
-    ["photos in another order", makeProductForm({ images: [] }), false],
+    ["one photo fewer", makeProductForm({ images: [] }), false],
   ])("compares %s → %s", (_case, other, expected) => {
     expect(sameProduct(makeProductForm(), other)).toBe(expected);
   });
+});
+
+test("sameProduct tells the same two photos in another order apart", () => {
+  const first = required(makeProductForm().images[0]);
+  const second = {
+    height: 600,
+    url: "https://store.public.blob.vercel-storage.com/local/product/22222222-2222-4222-8222-222222222222.webp",
+    width: 800,
+  };
+
+  expect(
+    sameProduct(
+      makeProductForm({ images: [first, second] }),
+      makeProductForm({ images: [second, first] })
+    )
+  ).toBe(false);
 });
 
 test("sameProduct ignores the order filter values were tapped in", () => {
