@@ -382,7 +382,9 @@ function ProductWizard(props: ProductWizardProps) {
   const { articles, common } = useDictionary();
   const editing = props.articleId !== null;
 
-  if (editing && product.isError) {
+  // Only a read that never arrived: a failed refetch keeps the article on
+  // screen, with what is typed and the photos on their way.
+  if (editing && product.isError && !product.data) {
     return (
       <AdminPage title={articles.wizard.titleEdit}>
         <div
@@ -474,7 +476,15 @@ function useWizardMode({
           ? "back"
           : "next"
       );
-      window.history.pushState(null, "", wizardStepPath(id, locale, next));
+      const path = wizardStepPath(id, locale, next);
+
+      // Before the draft exists its steps replace one another, so no entry
+      // of a blank `/new` is left behind the draft's own address.
+      if (id === null) {
+        window.history.replaceState(null, "", path);
+      } else {
+        window.history.pushState(null, "", path);
+      }
     },
     mode,
     step,

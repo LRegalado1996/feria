@@ -104,6 +104,12 @@ export function createAutosave({
     setWriters: (next: Writers) => {
       writers.current = next;
     },
+    /** The wizard is gone: a draft created after it tells it nothing. */
+    stopTelling: () => {
+      if (writers.current) {
+        writers.current = { ...writers.current, onCreated: undefined };
+      }
+    },
   };
 }
 
@@ -160,7 +166,9 @@ export function useProductAutosave({
 
     return () => {
       document.removeEventListener("visibilitychange", onHidden);
-      // Leaving the wizard keeps what was typed last.
+      // Leaving the wizard keeps what was typed last, and a draft created
+      // after it no longer moves the address of the page shown instead.
+      autosave.stopTelling();
       autosave.sendWaiting();
     };
   }, [autosave]);

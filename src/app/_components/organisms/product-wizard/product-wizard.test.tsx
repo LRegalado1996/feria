@@ -125,6 +125,7 @@ function HANG() {
 
 // The browser's own, kept before any test spies on it.
 const PUSH_STATE = window.history.pushState.bind(window.history);
+const REPLACE_STATE = window.history.replaceState.bind(window.history);
 
 const PHOTO_A =
   "https://store.public.blob.vercel-storage.com/local/product/11111111-1111-4111-8111-111111111111.webp";
@@ -242,7 +243,13 @@ function setup({
       PUSH_STATE(...args);
       window.dispatchEvent(new Event("test:address"));
     });
-  const replaceState = vi.spyOn(window.history, "replaceState");
+  // Next keeps its router in step with both, as `useSearchParams` here does.
+  const replaceState = vi
+    .spyOn(window.history, "replaceState")
+    .mockImplementation((...args) => {
+      REPLACE_STATE(...args);
+      window.dispatchEvent(new Event("test:address"));
+    });
 
   if (kept) {
     window.localStorage.setItem(
@@ -288,8 +295,13 @@ function setup({
   };
   server.use(
     get === "fails"
-      ? http.post("*/api/orpc/product/get", () => {
-          void spies.get(undefined);
+      ? http.post("*/api/orpc/product/get", async ({ request }) => {
+          const body: unknown = await request.json();
+          void spies.get(
+            typeof body === "object" && body !== null && "json" in body
+              ? body.json
+              : undefined
+          );
           return HttpResponse.json(
             {
               code: "INTERNAL_SERVER_ERROR",
@@ -376,6 +388,7 @@ function setup({
       });
     },
     pushState,
+    queryClient: wrapper.queryClient,
     replaceState,
     saveStatus: () => screen.getByTestId("product-save-status"),
     setQueued: (items: QueuedPhoto[]) => {
@@ -423,7 +436,7 @@ describe("ProductWizard: loading", () => {
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     await waitFor(() => {
-      expect(get).toHaveBeenCalledTimes(2);
+      expect(get.mock.calls).toEqual([[{ id: 12 }], [{ id: 12 }]]);
     });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We couldn't load the article."
@@ -444,6 +457,44 @@ describe("ProductWizard: loading", () => {
       expect(await onStep(step)).toBeVisible();
     }
   );
+});
+
+describe("ProductWizard: a failed read again", () => {
+  test("keeps an article on screen, with what was typed, when a later read of it fails", async () => {
+    const { queryClient, user } = setup({
+      url: "/en/admin/products/12?step=details",
+    });
+    const title = await screen.findByRole("textbox", { name: "Title" });
+    await user.type(title, "!");
+    server.use(
+      createOrpcErrorHandler("product.get", {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Internal server error",
+        status: 500,
+      })
+    );
+
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+
+    // The article's read failed this time, keeping what it had read.
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getQueryCache()
+          .findAll()
+          .some(
+            (query) =>
+              query.state.status === "error" && query.state.data !== undefined
+          )
+      ).toBe(true);
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveValue(
+      "Anillo de plata!"
+    );
+  });
 });
 
 describe("ProductWizard: a new article", () => {
@@ -625,6 +676,35 @@ describe("ProductWizard: a new article", () => {
     expect(queue.remove).toHaveBeenCalledExactlyOnceWith("photo-1");
   });
 
+  test("a draft created after the wizard was left does not move the address of the page shown instead", async () => {
+    const { arrive, replaceState, unmount } = setup({ article: null });
+    let answer = (): void => undefined;
+    const create = vi.fn(async (_input: unknown) => {
+      await new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      return savedAnswer();
+    });
+    server.use(createOrpcHandler("product.create", create));
+    await onStep("Article photos");
+    arrive(PHOTO_A);
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledOnce();
+    });
+    replaceState.mockClear();
+
+    unmount();
+    act(() => {
+      answer();
+    });
+    // Long enough for the answer to land and the queue to settle.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    });
+
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
   test("discards an article never saved by going back to the list", async () => {
     const { remove, user } = setup({ article: null });
     await onStep("Article photos");
@@ -677,8 +757,10 @@ describe("ProductWizard: steps", () => {
     expect(window.location.search).toBe("?step=photos");
   });
 
-  test("a new article's steps stay on the new article's address", async () => {
-    const { setQueued, user } = setup({ article: null });
+  test("a new article's steps stay on the new article's address, one history entry until the draft exists", async () => {
+    const { pushState, replaceState, setQueued, user } = setup({
+      article: null,
+    });
     await onStep("Article photos");
     setQueued([
       {
@@ -695,6 +777,13 @@ describe("ProductWizard: steps", () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe(
       "/en/admin/products/new?step=details"
     );
+    // Replaced, not pushed: no blank `/new` entry stays behind the draft.
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/en/admin/products/new?step=details"
+    );
+    expect(pushState).not.toHaveBeenCalled();
   });
 });
 
@@ -780,6 +869,15 @@ describe("ProductWizard: autosave", () => {
       screen.getByRole("button", { name: "Move later: Photo 1" })
     );
     expect(said()).toBe("Photo 1 is now in place 2 of 2.");
+    await pause();
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        savedValues(article, (values) => ({
+          ...values,
+          images: values.images.toReversed(),
+        }))
+      );
+    });
 
     await user.click(
       screen.getByRole("button", { name: "Use as the main photo: Photo 2" })
@@ -787,7 +885,7 @@ describe("ProductWizard: autosave", () => {
     expect(said()).toBe("Photo 2 is now the main photo.");
     await pause();
     await waitFor(() => {
-      expect(update).toHaveBeenCalledOnce();
+      expect(update).toHaveBeenCalledTimes(2);
     });
     expect(update).toHaveBeenLastCalledWith(savedValues(article));
 
@@ -1058,6 +1156,13 @@ describe("ProductWizard: publishing", () => {
     expect(
       screen.queryByRole("heading", { name: "Published!" })
     ).not.toBeInTheDocument();
+
+    // A gap the server named is marked at its field.
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await onStep("Article details");
+    expect(screen.queryByText("Set the price to publish.") !== null).toBe(
+      !reported
+    );
   });
 
   test("discards a saved draft after asking, and goes back to the list", async () => {
