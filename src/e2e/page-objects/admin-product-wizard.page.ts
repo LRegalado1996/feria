@@ -7,8 +7,10 @@ import { AdminPage } from "./admin.page";
 type WizardStep = "details" | "photos" | "review";
 
 /**
- * The article wizard (FER-017), in Spanish. After a navigation the page left
- * behind stays mounted and hidden, so every locator takes the visible one.
+ * The article wizard (FER-017), in Spanish: a new article's journey in
+ * steps, an article opened from the list on one screen (`?step=` decides,
+ * `readWizardMode`). After a navigation the page left behind stays mounted
+ * and hidden, so every locator takes the visible one.
  */
 export class AdminProductWizardPage extends AdminPage {
   async gotoNew(prefix = ""): Promise<void> {
@@ -26,17 +28,44 @@ export class AdminProductWizardPage extends AdminPage {
     await this.waitForWizard();
   }
 
-  /** The wizard once React owns it: its step shows only after hydration. */
+  /**
+   * The wizard once React owns it: its step, or its single screen, shows
+   * only after hydration.
+   */
   async waitForWizard(): Promise<void> {
     await expect(
-      this.page.locator("[data-testid^='product-step-']").filter({
-        visible: true,
-      })
+      this.page
+        .getByTestId(/^product-(step-[a-z]+|screen)$/u)
+        .filter({ visible: true })
     ).toBeVisible();
   }
 
   step(name: WizardStep): Locator {
     return this.getByTestId(`product-step-${name}`).filter({ visible: true });
+  }
+
+  /** An article opened from the list: everything on one screen. */
+  screen(): Locator {
+    return this.getByTestId("product-screen").filter({ visible: true });
+  }
+
+  /** The journey's steps, which the single screen has none of. */
+  stepsNavigation(): Locator {
+    return this.page
+      .getByRole("navigation", { name: "Pasos para cargar el artículo" })
+      .filter({ visible: true });
+  }
+
+  /** The search result's preview, drawn from the title and description. */
+  googlePreview(): Locator {
+    return this.getByTestId("product-seo-preview-google").filter({
+      visible: true,
+    });
+  }
+
+  /** Photos on their way, or stopped (`data-status`). */
+  queuedPhotos(): Locator {
+    return this.getByTestId("product-photo-queued").filter({ visible: true });
   }
 
   photoInput(): Locator {
@@ -106,13 +135,13 @@ export class AdminProductWizardPage extends AdminPage {
 
   /**
    * The first photo of a new article: it creates the draft, whose id the
-   * address then carries.
+   * address then carries, the journey still on its photos.
    */
   async addFirstPhotos(files: string[]): Promise<number> {
     await completeRpcAction(this.page, "/api/orpc/product/create", async () => {
       await this.photoInput().setInputFiles(files);
     });
-    await expect(this.page).toHaveURL(/\/admin\/products\/\d+/u);
+    await expect(this.page).toHaveURL(/\/admin\/products\/\d+\?step=photos$/u);
     const id = Number(/\/admin\/products\/(\d+)/u.exec(this.page.url())?.[1]);
     await expect(this.photos()).toHaveCount(files.length);
 

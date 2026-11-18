@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { type DbFixture, expect, test, uniqueTag } from "../../fixtures";
 import { interceptBlobStore, seedPhoto } from "../../fixtures/blob-store";
@@ -6,14 +6,26 @@ import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { AdminProductWizardPage } from "../../page-objects/admin-product-wizard.page";
 
-// FER-017. An article goes from photos to published in the wizard, and a
-// draft or a published article is edited in it. Nothing reaches the real
-// Blob store (`interceptBlobStore`); the tokens and the saves are the app's
-// own. Every test works in a category and on articles of its own.
+// FER-017. A new article goes from photos to published in three steps, and
+// an article opened from the list, a draft or a published one, is edited on
+// one screen (Lucas, 2026-11-18). Nothing reaches the real Blob store
+// (`interceptBlobStore`); the tokens and the saves are the app's own. Every
+// test works in a category and on articles of its own.
 
 const RING_1 = seedPhoto("ring-1.jpg");
 const RING_2 = seedPhoto("ring-2.jpg");
 const RING_3 = seedPhoto("ring-3.jpg");
+
+/** Where `locator` is drawn on the page. */
+async function boxOf(locator: Locator) {
+  const box = await locator.boundingBox();
+
+  if (!box) {
+    throw new Error("Not drawn on the page");
+  }
+
+  return box;
+}
 
 /** Intl writes a no-break space between the currency and the amount. */
 const price = (amount: string) => new RegExp(`\\$\\s${amount}$`, "u");
@@ -50,7 +62,12 @@ async function publishFromPhotos(
 
   await wizard.next().click();
   await expect(wizard.step("details")).toBeVisible();
+  // Its search texts are its title and description: nothing to fill in.
+  await expect(
+    page.getByRole("textbox", { name: /para buscadores/u })
+  ).toHaveCount(0);
   await wizard.titleField().fill(title);
+  await expect(wizard.googlePreview()).toContainText(title);
   await wizard.categoryField().selectOption({ value: String(category.id) });
   await wizard.priceField().fill("12,50");
   await wizard.priceField().blur();
@@ -96,7 +113,7 @@ test.describe("Article wizard", () => {
     await expect(article.getByText(price("12,50"))).toBeVisible();
   });
 
-  test("a draft left half-way opens again exactly as it was, after a reload and from the list", async ({
+  test("a draft left half-way opens again exactly as it was: on its step after a reload, and on one screen from the list", async ({
     db,
     page,
   }) => {
@@ -133,8 +150,13 @@ test.describe("Article wizard", () => {
     await expect(chip).toHaveAttribute("aria-pressed", "true");
     await saved;
 
+    // A reload mid-way goes on with the journey, on the same step.
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/products/${id}\\?step=details$`, "u")
+    );
     await page.reload();
     await wizard.waitForWizard();
+    await expect(wizard.step("details")).toBeVisible();
     await expect(wizard.titleField()).toHaveValue(title);
     await expect(wizard.priceField()).toHaveValue("12,5");
     await expect(wizard.categoryField()).toHaveValue(String(category.id));
@@ -149,8 +171,64 @@ test.describe("Article wizard", () => {
       .getByRole("link", { name: new RegExp(title, "u") })
       .click();
     await wizard.waitForWizard();
+    // From the list, everything on one screen: no steps.
+    await expect(wizard.screen()).toBeVisible();
+    await expect(wizard.stepsNavigation()).toHaveCount(0);
     await expect(wizard.photos()).toHaveCount(2);
     expect(await wizard.photoUrls()).toEqual(uploads);
+    await expect(wizard.titleField()).toHaveValue(title);
+    await expect(wizard.priceField()).toHaveValue("12,5");
+  });
+
+  test("a draft from the list is edited and published on one screen, what is missing leading to its field", async ({
+    db,
+    page,
+  }) => {
+    test.slow();
+    const { category, title, wizard } = await setup({ db, page });
+    const draft = await db.seed.createArticle({
+      categoryId: category.id,
+      title,
+    });
+    await wizard.gotoArticle(draft.id);
+    await expect(wizard.screen()).toBeVisible();
+    await expect(wizard.stepsNavigation()).toHaveCount(0);
+
+    // Pressable while something is missing, and it leads to the field.
+    await expect(wizard.publishButton()).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    );
+    await wizard.publishButton().press("Enter");
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Fotos del artículo" })
+    ).toBeFocused();
+
+    await wizard.addPhotos([RING_1], 1);
+    const saved = wizard.savedWhen((body) =>
+      body.includes('"priceAmount":1250')
+    );
+    await wizard.priceField().fill("12,50");
+    await wizard.priceField().blur();
+    await saved;
+    await expect(page.getByTestId("product-publish-ready")).toBeVisible();
+
+    await completeRpcAction(page, "/api/orpc/product/publish", async () => {
+      await wizard.publishButton().click();
+    });
+    await expect(
+      page
+        .getByTestId("product-publish-success")
+        .getByRole("heading", { name: "¡Publicado!" })
+    ).toBeFocused();
+    // Published, its address is the article's own: a reload is its screen.
+    await expect(page).toHaveURL(
+      new RegExp(`/admin/products/${draft.id}$`, "u")
+    );
+    await page.reload();
+    await wizard.waitForWizard();
+    await expect(wizard.screen()).toBeVisible();
+    await expect(page.getByTestId("product-published-notice")).toBeVisible();
   });
 
   test("photos are put in order and the main one chosen from the keyboard, each move said aloud", async ({
@@ -276,7 +354,9 @@ test.describe("Article wizard", () => {
       priceAmount: 129_000,
       title: `Collar ${uniqueTag()}`,
     });
+    // Even on a step's address, a published article is its single screen.
     await wizard.gotoArticle(article.id, { step: "details" });
+    await expect(wizard.screen()).toBeVisible();
     await expect(page.getByTestId("product-published-notice")).toBeVisible();
 
     await wizard.priceField().fill("1575,50");
@@ -335,7 +415,7 @@ test.describe("Article wizard", () => {
         categoryId: category.id,
         title: `Aro ${uniqueTag()}`,
       });
-      await wizard.gotoArticle(draft.id, { prefix, step: "details" });
+      await wizard.gotoArticle(draft.id, { prefix });
 
       await completeRpcAction(
         page,
@@ -369,5 +449,49 @@ test.describe("Article wizard on a phone", () => {
       () => document.documentElement.scrollWidth - window.innerWidth
     );
     expect(overflow).toBe(0);
+  });
+
+  // The owner's review (2026-11-18): a photo that failed spilled out of its
+  // tile, the photo wider than the card and its button outside it.
+  test("a photo that fails stays inside its tile, its reason and its buttons too", async ({
+    db,
+    page,
+  }) => {
+    const { wizard } = await setup({ db, page });
+    // The store refuses the upload outright, so it fails with a retry.
+    await page.route("https://vercel.com/api/blob/**", async (route) => {
+      await route.fulfill({
+        json: { error: { code: "bad_request", message: "Refused" } },
+        status: 400,
+      });
+    });
+    await wizard.gotoNew();
+
+    await wizard.photoInput().setInputFiles([RING_1]);
+
+    const failed = wizard
+      .queuedPhotos()
+      .filter({ has: page.getByRole("alert") });
+    await expect(failed).toHaveCount(1);
+    const tile = await boxOf(failed);
+    const parts = [
+      failed.getByRole("img"),
+      failed.getByRole("alert"),
+      failed.getByRole("button", { name: "Reintentar: Foto 1" }),
+      failed.getByRole("button", { name: "Descartar: Foto 1" }),
+    ];
+
+    for (const part of parts) {
+      const box = await boxOf(part);
+      expect(box.x).toBeGreaterThanOrEqual(tile.x);
+      expect(box.y).toBeGreaterThanOrEqual(tile.y);
+      expect(box.x + box.width).toBeLessThanOrEqual(tile.x + tile.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(tile.y + tile.height);
+    }
+
+    // The first photo never arrived: no draft, and it can be dropped.
+    await failed.getByRole("button", { name: "Descartar: Foto 1" }).click();
+    await expect(wizard.queuedPhotos()).toHaveCount(0);
+    await expect(page).toHaveURL(/\/admin\/products\/new$/u);
   });
 });
