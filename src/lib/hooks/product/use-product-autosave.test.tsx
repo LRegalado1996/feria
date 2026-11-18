@@ -225,7 +225,7 @@ describe("useProductAutosave", () => {
       result.current.saveNow(makeValues(100));
     });
     await waitFor(() => {
-      expect(create).toHaveBeenCalledOnce();
+      expect(create).toHaveBeenCalledExactlyOnceWith(makeValues(100));
     });
     expect(result.current.status).toBe("saving");
 
