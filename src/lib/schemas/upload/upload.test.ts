@@ -36,6 +36,16 @@ describe("createUploadTokenSchema", () => {
     ["a purpose nobody uses", { purpose: "avatar" }, false],
     ["exactly the cover's cap", { size: 5_000_000 }, true],
     ["one byte over it", { size: 5_000_001 }, false],
+    [
+      "exactly an article photo's cap",
+      { purpose: "product", size: 4_000_000 },
+      true,
+    ],
+    [
+      "an article photo one byte over it",
+      { purpose: "product", size: 4_000_001 },
+      false,
+    ],
     ["one byte", { size: 1 }, true],
     ["an empty file", { size: 0 }, false],
     ["a fractional size", { size: 10.5 }, false],

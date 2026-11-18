@@ -58,6 +58,17 @@ describe("blobPathname", () => {
       blobPathname({ contentType, id: ID, namespace: "qa", purpose: "cover" })
     ).toBe(pathname);
   });
+
+  test("puts an article photo in its purpose's folder", () => {
+    expect(
+      blobPathname({
+        contentType: "image/webp",
+        id: ID,
+        namespace: "production",
+        purpose: "product",
+      })
+    ).toBe(`production/product/${ID}.webp`);
+  });
 });
 
 describe("isOwnBlobUrl", () => {
@@ -102,8 +113,28 @@ describe("isOwnBlobUrl", () => {
     ).toBe(true);
   });
 
+  test("an article photo's folder is a known purpose's", () => {
+    expect(isOwnBlobUrl(ownUrl(`qa/product/${ID}.webp`), scope)).toBe(true);
+  });
+
   test("checks the purpose's folder when one is given", () => {
     expect(isOwnBlobUrl(ownUrl(), { ...scope, purpose: "cover" })).toBe(true);
+    expect(
+      isOwnBlobUrl(ownUrl(`qa/product/${ID}.webp`), {
+        ...scope,
+        purpose: "product",
+      })
+    ).toBe(true);
+    // A cover is no article photo, nor the other way round.
+    expect(isOwnBlobUrl(ownUrl(), { ...scope, purpose: "product" })).toBe(
+      false
+    );
+    expect(
+      isOwnBlobUrl(ownUrl(`qa/product/${ID}.webp`), {
+        ...scope,
+        purpose: "cover",
+      })
+    ).toBe(false);
     // Shaped like an upload, but in another purpose's folder.
     expect(
       isOwnBlobUrl(ownUrl(`qa/avatar/${ID}.webp`), {
