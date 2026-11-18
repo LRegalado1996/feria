@@ -97,7 +97,10 @@ import {
   type StoreProduct,
   toProductValues,
 } from "@/lib/catalog/product-form";
-import { PUBLISH_GAPS, type PublishGap } from "@/lib/catalog/publish-gaps";
+import {
+  type PublishGap,
+  readPublishRefusal,
+} from "@/lib/catalog/publish-gaps";
 import { reportError } from "@/lib/errors/client";
 import {
   useCreateAttributeValue,
@@ -242,11 +245,7 @@ function gapsOf(error: unknown): PublishGap[] | null {
     return null;
   }
 
-  const listed = /Missing: (.+)$/u.exec(error.message)?.[1];
-
-  return listed
-    ? PUBLISH_GAPS.filter((gap) => listed.split(", ").includes(gap))
-    : null;
+  return readPublishRefusal(error.message);
 }
 
 /** What the save line says, from where the article and its saves stand. */

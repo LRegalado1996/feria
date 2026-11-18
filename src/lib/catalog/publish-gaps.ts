@@ -59,3 +59,29 @@ export function resolvePublishGaps(article: {
 
   return gaps;
 }
+
+const REFUSAL = "The article cannot be published yet. Missing: ";
+
+/**
+ * The message of the server's refusal to publish, naming the gaps. It is
+ * the one place that writes it, and `readPublishRefusal` the one that
+ * reads it, so the wizard can mark each gap at its field.
+ */
+export function publishRefusalMessage(gaps: readonly PublishGap[]): string {
+  return `${REFUSAL}${gaps.join(", ")}`;
+}
+
+/**
+ * The gaps a refusal to publish names, in the rule's order, or `null` for
+ * any other message (or one that names no known gap).
+ */
+export function readPublishRefusal(message: string): PublishGap[] | null {
+  if (!message.startsWith(REFUSAL)) {
+    return null;
+  }
+
+  const listed = new Set(message.slice(REFUSAL.length).split(", "));
+  const gaps = PUBLISH_GAPS.filter((gap) => listed.has(gap));
+
+  return gaps.length > 0 ? gaps : null;
+}

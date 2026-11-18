@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { PUBLISH_GAPS, resolvePublishGaps } from "./publish-gaps";
+import {
+  PUBLISH_GAPS,
+  publishRefusalMessage,
+  readPublishRefusal,
+  resolvePublishGaps,
+} from "./publish-gaps";
 
 describe("resolvePublishGaps", () => {
   const ready = {
@@ -74,5 +79,38 @@ describe("PUBLISH_GAPS", () => {
       "spanishTitle",
       "englishTitle",
     ]);
+  });
+});
+
+describe("publishRefusalMessage and readPublishRefusal", () => {
+  test.each([
+    ["one gap", ["price"]],
+    ["every gap", [...PUBLISH_GAPS]],
+  ] as const)("read back what they wrote: %s", (_case, gaps) => {
+    const message = publishRefusalMessage(gaps);
+
+    expect(message).toBe(
+      `The article cannot be published yet. Missing: ${gaps.join(", ")}`
+    );
+    expect(readPublishRefusal(message)).toEqual(gaps);
+  });
+
+  test("reads the gaps in the rule's order, leaving out names it does not know", () => {
+    expect(
+      readPublishRefusal(
+        "The article cannot be published yet. Missing: price, colour, image"
+      )
+    ).toEqual(["image", "price"]);
+  });
+
+  test.each([
+    ["another refusal", "Article not found"],
+    ["the gaps without the refusal's words", "Missing: price"],
+    [
+      "a refusal naming no known gap",
+      "The article cannot be published yet. Missing: colour",
+    ],
+  ])("answers null for %s", (_case, message) => {
+    expect(readPublishRefusal(message)).toBeNull();
   });
 });

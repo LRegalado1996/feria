@@ -16,6 +16,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { isOwnBlobUrl } from "@/lib/blob/paths";
 import {
   type PublishGap,
+  publishRefusalMessage,
   resolvePublishGaps,
 } from "@/lib/catalog/publish-gaps";
 import { LOCALES, type Locale } from "@/lib/i18n/config";
@@ -71,7 +72,7 @@ const PRODUCT_SLUG_FALLBACK = "articulo";
 
 function publishRefused(gaps: PublishGap[]) {
   return new ORPCError("BAD_REQUEST", {
-    message: `The article cannot be published yet. Missing: ${gaps.join(", ")}`,
+    message: publishRefusalMessage(gaps),
   });
 }
 
