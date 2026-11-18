@@ -13,6 +13,7 @@ import type { ProductListProps } from "@/app/_components/organisms/product-list"
 import type { requireAdmin as RequireAdmin } from "@/lib/admin/access";
 import { EMPTY_PRODUCTS_QUERY } from "@/lib/admin/products";
 import type { RawSearchParams } from "@/lib/catalog/query";
+import { holdRequest, settle } from "@/test/connection";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import ProductsPage from "./page";
@@ -181,8 +182,9 @@ function setup({
           .textContent
       ) as unknown,
     resolve: async () => await inner.type(inner.props),
-    show: async () => {
-      render(await inner.type(inner.props), {
+    /** Renders what the boundary streams, once `resolving` (a fresh one) does. */
+    show: async (resolving = inner.type(inner.props)) => {
+      render(await resolving, {
         wrapper: ({ children }) => (
           <QueryClientProvider client={new QueryClient()}>
             {children}
@@ -287,6 +289,26 @@ describe("ProductsPage", () => {
       });
     }
   );
+
+  test("reads the clock the ages start from only once the request is there", async () => {
+    const { resolve, show } = setup();
+    const request = holdRequest(connection);
+
+    const resolving = resolve();
+    await settle();
+    // The request arrives a moment later: the clock is the one it brings.
+    vi.setSystemTime(RENDERED_AT + 5000);
+
+    expect(connection).toHaveBeenCalledExactlyOnceWith();
+
+    request.arrive();
+    await show(resolving);
+
+    expect(listProps).toHaveBeenCalledExactlyOnceWith({
+      query: EMPTY_PRODUCTS_QUERY,
+      renderedAt: RENDERED_AT + 5000,
+    });
+  });
 
   test("reads the selection from the address, dropping what is malformed, and fetches that page", async () => {
     const { show } = setup({
