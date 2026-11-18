@@ -43,6 +43,7 @@ export const articles: Dictionary["articles"] = {
       discarded: "Draft discarded.",
       discarding: "Discarding…",
       savedAsDraft: "Draft saved.",
+      waitForPhotos: "Wait for the photos to finish uploading.",
     },
     details: {
       addValue: "Add to {filter}",
@@ -186,6 +187,8 @@ export const articles: Dictionary["articles"] = {
       discardConfirm: "Yes, discard",
       discardTitle: "Discard the changes?",
       discarded: "Changes discarded.",
+      expired:
+        "We discarded changes you hadn't saved: they were over a day old.",
       more: "More actions",
       noChanges: "No changes",
       restored: "We brought back changes you hadn't saved.",

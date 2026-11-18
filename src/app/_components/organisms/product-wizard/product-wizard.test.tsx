@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { type ReactNode, useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { PRODUCT_EDITS_MAX_AGE_MS } from "@/lib/admin/product-edits";
 import {
   productFormValues,
   type StoreProduct,
@@ -196,7 +197,12 @@ interface SetupOptions {
   get?: "answers" | "fails" | "hangs";
   locale?: Locale;
   /** A copy of changes this browser kept for the article. */
-  kept?: { baseUpdatedAt: string; values: ProductFormValues };
+  kept?: {
+    baseUpdatedAt: string;
+    /** When its first change was kept; now unless said. */
+    startedAt?: string;
+    values: ProductFormValues;
+  };
   /** The procedures that refuse, and how. */
   refuse?: Partial<
     Record<
@@ -241,7 +247,11 @@ function setup({
   if (kept) {
     window.localStorage.setItem(
       "feria:product-edit:12",
-      JSON.stringify({ ...kept, version: 1 })
+      JSON.stringify({
+        startedAt: new Date().toISOString(),
+        ...kept,
+        version: 2,
+      })
     );
   }
 
@@ -780,6 +790,50 @@ describe("ProductWizard: autosave", () => {
     });
   });
 
+  test("does not save as a draft and leave while a photo is on its way, and says why", async () => {
+    const { toast } = await import("sonner");
+    const { setQueued, user } = setup({
+      url: "/en/admin/products/12?step=review",
+    });
+    await onStep("Check how it looks");
+    setQueued([
+      {
+        key: "photo-1",
+        name: "a.jpg",
+        preview: "blob:a",
+        state: { percent: 30, status: "uploading" },
+      },
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Save as draft" }));
+
+    expect(toast.info).toHaveBeenCalledExactlyOnceWith(
+      "Wait for the photos to finish uploading."
+    );
+    expect(navigation.push).not.toHaveBeenCalled();
+  });
+
+  test("does not save as a draft and leave with a field over its limit, and takes the person to it", async () => {
+    const { update, user } = setup({
+      url: "/en/admin/products/12?step=details",
+    });
+    await user.type(
+      await screen.findByRole("textbox", { name: "Title" }),
+      "a".repeat(121)
+    );
+    await user.click(screen.getByTestId("product-next"));
+    await onStep("Check how it looks");
+
+    await user.click(screen.getByRole("button", { name: "Save as draft" }));
+
+    await onStep("Article details");
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Title" })).toHaveFocus();
+    });
+    expect(navigation.push).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   test("stays when saving as a draft fails, and says so", async () => {
     const { toast } = await import("sonner");
     const { user } = setup({
@@ -1292,6 +1346,50 @@ describe("ProductWizard: a published article", () => {
     expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
   });
 
+  test("drops changes kept for over a day, whose new photos the cleanup may have deleted, and says so", async () => {
+    const { toast } = await import("sonner");
+    setup({
+      article: published(),
+      kept: {
+        baseUpdatedAt: UPDATED_AT,
+        startedAt: new Date(
+          Date.now() - PRODUCT_EDITS_MAX_AGE_MS - 1000
+        ).toISOString(),
+        values: withPrice(1500),
+      },
+      url: "/en/admin/products/12?step=details",
+    });
+
+    expect(await screen.findByRole("textbox", { name: "Price" })).toHaveValue(
+      "1290"
+    );
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+      "We discarded changes you hadn't saved: they were over a day old.",
+      { id: "product-edits-expired" }
+    );
+    expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
+  });
+
+  test("brings back kept changes whose title is over its limit, for the field to say so", async () => {
+    const long = "a".repeat(121);
+    setup({
+      article: published(),
+      kept: {
+        baseUpdatedAt: UPDATED_AT,
+        values: {
+          ...withPrice(1500),
+          es: { description: "", title: long },
+        },
+      },
+      url: "/en/admin/products/12?step=details",
+    });
+
+    expect(await screen.findByRole("textbox", { name: "Title" })).toHaveValue(
+      long
+    );
+    expect(screen.getByRole("textbox", { name: "Price" })).toHaveValue("1500");
+  });
+
   test("links to the article in the store from its card's preview, in a new tab, and says nothing else of it", async () => {
     const { toast } = await import("sonner");
     setup({ article: published() });
@@ -1703,6 +1801,34 @@ describe("ProductWizard: one screen for an article from the list", () => {
     expect(screen.queryByTestId("product-screen")).not.toBeInTheDocument();
   });
 
+  test("takes no typing while a draft is being published", async () => {
+    const { user } = setup({ article: makeReadyDraft() });
+    let answer = (): void => undefined;
+    const publish = vi.fn(async (_input: unknown) => {
+      await new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      return { id: 12, slug: "anillo-de-plata", status: "published" };
+    });
+    server.use(createOrpcHandler("product.publish", publish));
+    await screen.findByTestId("product-screen");
+    const details = screen.getByTestId("product-section-details");
+    expect(details.closest("[inert]")).toBeNull();
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    await waitFor(() => {
+      expect(publish).toHaveBeenCalledOnce();
+    });
+    expect(details.closest("[inert]")).not.toBeNull();
+    act(() => {
+      answer();
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Published!" })
+    ).toBeVisible();
+  });
+
   test("publishing from the journey ends it: the address drops its step", async () => {
     const { replaceState, user } = setup({
       article: makeReadyDraft(),
@@ -1861,6 +1987,67 @@ describe("ProductWizard: photos", () => {
       "Photos can't be uploaded for now: uploads aren't set up on this server."
     );
     expect(screen.getByTestId("product-photo-drop")).toBeDisabled();
+  });
+
+  test("says a failed first save of the draft, with its retry, instead of waiting for a photo", async () => {
+    const { arrive, create, saveStatus, user } = setup({
+      article: null,
+      refuse: { "product.create": REFUSED },
+    });
+    await onStep("Article photos");
+    expect(saveStatus()).toHaveTextContent(
+      "It saves itself once the first photo is uploaded."
+    );
+
+    arrive(PHOTO_A);
+
+    await waitFor(() => {
+      expect(saveStatus()).toHaveTextContent("Couldn't save.");
+    });
+    server.use(createOrpcHandler("product.create", create));
+    await user.click(
+      within(saveStatus()).getByRole("button", { name: "Retry" })
+    );
+    await waitFor(() => {
+      expect(saveStatus()).toHaveTextContent("Saved");
+    });
+  });
+
+  test("discarding while the first photo is still creating the draft deletes the draft once it exists", async () => {
+    const { arrive, remove, user } = setup({ article: null });
+    let answer = (): void => undefined;
+    const create = vi.fn(async (_input: unknown) => {
+      await new Promise<void>((resolve) => {
+        answer = resolve;
+      });
+      return savedAnswer();
+    });
+    server.use(createOrpcHandler("product.create", create));
+    await onStep("Article photos");
+    arrive(PHOTO_A);
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledOnce();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Discard draft",
+      })
+    );
+    expect(remove).not.toHaveBeenCalled();
+    act(() => {
+      answer();
+    });
+
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledExactlyOnceWith({ id: 12 });
+    });
+    await waitFor(() => {
+      expect(navigation.push).toHaveBeenCalledExactlyOnceWith(
+        "/en/admin/products"
+      );
+    });
   });
 
   test("a first photo that fails creates no draft and leaves the person free to discard it", async () => {

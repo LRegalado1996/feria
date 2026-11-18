@@ -152,6 +152,40 @@ describe("useProductAutosave", () => {
     expect(result.current.id).toBe(7);
   });
 
+  test("answers the article's id as of now, before and after its first save", async () => {
+    const { result } = setup();
+
+    expect(result.current.currentId()).toBeNull();
+
+    await act(async () => {
+      result.current.saveNow(makeValues(100));
+      await result.current.flush();
+    });
+
+    expect(result.current.currentId()).toBe(12);
+  });
+
+  test("keeps one saving for the wizard's whole life, whatever id it is handed later", async () => {
+    // The handlers and their spies; this test renders its own hook.
+    const { update } = setup({ id: 7 });
+    const { rerender, result } = renderHook(
+      ({ id }: { id: number }) => useProductAutosave({ id }),
+      { initialProps: { id: 7 }, wrapper: createQueryWrapper() }
+    );
+
+    rerender({ id: 8 });
+    act(() => {
+      result.current.saveNow(makeValues(100));
+    });
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledExactlyOnceWith({
+        ...makeValues(100),
+        id: 7,
+      });
+    });
+  });
+
   test("waits for the typing to pause before it saves, and saves only the latest", async () => {
     const { result, update } = setup({ id: 7, stillClock: true });
 

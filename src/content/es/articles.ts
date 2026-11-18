@@ -40,6 +40,7 @@ export const articles = {
       discarded: "Borrador descartado.",
       discarding: "Descartando…",
       savedAsDraft: "Guardamos el borrador.",
+      waitForPhotos: "Esperá a que terminen de subir las fotos.",
     },
     details: {
       addValue: "Agregar a {filter}",
@@ -187,6 +188,8 @@ export const articles = {
       discardConfirm: "Sí, descartar",
       discardTitle: "¿Descartar los cambios?",
       discarded: "Descartamos los cambios.",
+      expired:
+        "Descartamos cambios que no habías guardado: tenían más de un día.",
       more: "Más acciones",
       noChanges: "Sin cambios",
       restored: "Recuperamos cambios que no habías guardado.",

@@ -272,7 +272,10 @@ function saveStateOf({
     return "invalid";
   }
 
-  if (!hasId) {
+  // Before the draft exists, the photo on its way is what saves it; once
+  // its first save was tried, that save says how it stands (a failed one
+  // with its retry).
+  if (!hasId && autosave === "idle") {
     return uploading ? "saving" : "notYet";
   }
 
@@ -614,7 +617,14 @@ function WizardEditor({
       );
     },
   });
-  const { flush, id, retry: retrySave, saveNow, schedule } = autosave;
+  const {
+    currentId,
+    flush,
+    id,
+    retry: retrySave,
+    saveNow,
+    schedule,
+  } = autosave;
   const { currency, isPublished, slug, storePath, updatedAt } = factsOf(
     useProduct(id).data ?? article,
     store.currencyCode,
@@ -698,8 +708,15 @@ function WizardEditor({
       toast.info(copy.published.restored, { id: "product-edits-restored" });
     } else if (restored.kind === "stale") {
       toast.warning(copy.published.stale, { id: "product-edits-stale" });
+    } else if (restored.kind === "expired") {
+      toast.warning(copy.published.expired, { id: "product-edits-expired" });
     }
-  }, [copy.published.restored, copy.published.stale, restored.kind]);
+  }, [
+    copy.published.expired,
+    copy.published.restored,
+    copy.published.stale,
+    restored.kind,
+  ]);
 
   // Every change: a draft saves itself, a published article keeps it here.
   useEffect(
@@ -888,8 +905,10 @@ function WizardEditor({
       if ((await flush()) === "failed") {
         toast.error(copy.save.failed);
       } else {
+        // What the server holds now: the published article's baseline.
+        const saved = structuredClone(form.getValues());
         await publish.mutateAsync({ id });
-        setBaseline(form.getValues());
+        setBaseline(saved);
         dropProductEdits(id);
         setJustPublished(true);
         // The journey ended: a reload opens the article's single screen.
@@ -903,6 +922,17 @@ function WizardEditor({
   };
 
   const onSaveDraft = async () => {
+    // Leaving would stop a photo on its way, and a field the draft cannot
+    // hold (a title over its limit) was never queued: stay, and say why.
+    if (uploading) {
+      toast.info(copy.draft.waitForPhotos);
+      return;
+    }
+
+    if (!(await checkFields())) {
+      return;
+    }
+
     setBusy(true);
     const outcome = await flush();
     setBusy(false);
@@ -990,9 +1020,14 @@ function WizardEditor({
     setBusy(true);
 
     try {
-      if (id !== null) {
-        await remove.mutateAsync({ id });
-        dropProductEdits(id);
+      // A first photo's save may still be creating the draft: wait for it,
+      // or the draft would land after the person discarded it.
+      await flush();
+      const saved = currentId();
+
+      if (saved !== null) {
+        await remove.mutateAsync({ id: saved });
+        dropProductEdits(saved);
       }
 
       toast.success(copy.draft.discarded);
@@ -1382,7 +1417,14 @@ function WizardEditor({
             title={preview.title}
           />
         ) : (
-          <Form {...form}>{body()}</Form>
+          <Form {...form}>
+            {/* Nothing is typed or chosen while a write is on its way: a
+                change then would reach a draft being published, past the
+                published article's confirm, or be lost on leaving. */}
+            <div className="contents" inert={busy}>
+              {body()}
+            </div>
+          </Form>
         )}
       </AdminPage>
       <WizardConfirm

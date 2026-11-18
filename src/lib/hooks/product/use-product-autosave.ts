@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { createSaveQueue, type SaveQueueStatus } from "@/lib/admin/save-queue";
 import { reportError } from "@/lib/errors/client";
@@ -78,6 +78,8 @@ export function createAutosave({
   };
 
   return {
+    /** The article's id as of now: set by the first save, even mid-render. */
+    currentId: () => id,
     flush: async () => {
       sendWaiting();
       return await queue.settled();
@@ -130,9 +132,11 @@ export function useProductAutosave({
   const [status, setStatus] = useState<SaveQueueStatus>("idle");
   const [id, setId] = useState(initialId);
   // Made once per article: the wizard is keyed by it.
-  const autosave = useMemo(
-    () => createAutosave({ id: initialId, onId: setId, onStatus: setStatus }),
-    [initialId]
+  // Made once per wizard, never again: React may throw a memo away, and a
+  // new instance would forget the article's id and create a second draft.
+  // oxlint-disable-next-line react/hook-use-state -- an instance kept for the component's life, never replaced, so it has no setter
+  const [autosave] = useState(() =>
+    createAutosave({ id: initialId, onId: setId, onStatus: setStatus })
   );
 
   // Before any save can run: effects run in order, and a save only starts
@@ -162,6 +166,8 @@ export function useProductAutosave({
   }, [autosave]);
 
   return {
+    /** The article's id now, for a handler that awaited a save. */
+    currentId: autosave.currentId,
     /** Sends what is waiting and resolves once all of it is saved, or not. */
     flush: autosave.flush,
     /** The article's id once it exists. */
