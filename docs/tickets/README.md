@@ -69,6 +69,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done   |
 | [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)   | The bottom bar stays above the iPhone keyboard     | P1       | todo   |
 | [FER-054](FER-054-article-save-conflicts.md)          | Saving one article from two tabs                   | P2       | todo   |
+| [FER-055](FER-055-photo-grid-swipe.md)                | Swiping over the wizard's photos scrolls           | P2       | todo   |
 
 ### M4 Storefront and orders
 
@@ -119,7 +120,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 010 → 025 → 026 → 027 → 028
 012, 027 → 038 → 040 → 039
 038 → 041
-017 → 049, 052, 053, 054
+017 → 049, 052, 053, 054, 055
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
 039 → 042 → 043 → 044, 046, 047, 048
