@@ -137,6 +137,17 @@ function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
 }
 
 /**
+ * How wide a photo is drawn, so the browser picks the right file: the
+ * gallery is the page's width below `lg` and what the 27rem column beside
+ * it leaves from there up (`store-article`); with more than one photo each
+ * takes 88% of it on a phone and 62% from `md` up, as its `basis` says.
+ */
+const GALLERY_SIZES = {
+  one: "(min-width: 1024px) calc(100vw - 27rem), 100vw",
+  row: "(min-width: 1024px) calc((100vw - 27rem) * 0.62), (min-width: 768px) 62vw, 88vw",
+} as const;
+
+/**
  * An article's photos (FER-024, FER-039, FER-045): large, on the grey
  * tile, in a carousel that goes round, which a finger or a mouse drags, a
  * trackpad swipes, the arrow keys step through and the round arrow pages;
@@ -193,13 +204,14 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
               <Image
                 alt={image.alt}
                 className="object-cover"
+                // The first photo is what the visitor came for: fetched at
+                // once and ahead of the rest (`priority` is deprecated since
+                // Next 16); the others wait until they near the view.
+                fetchPriority={position === 0 ? "high" : undefined}
                 fill
-                // The first photo is what the visitor came for.
-                priority={position === 0}
+                loading={position === 0 ? "eager" : "lazy"}
                 sizes={
-                  images.length > 1
-                    ? "(min-width: 768px) 40vw, 88vw"
-                    : "(min-width: 1024px) 70vw, 100vw"
+                  images.length > 1 ? GALLERY_SIZES.row : GALLERY_SIZES.one
                 }
                 src={image.url}
               />

@@ -110,12 +110,20 @@ describe("StoreGallery", () => {
     expect(embla.fake.scrollTo).not.toHaveBeenCalled();
   });
 
-  test("loads the first photo first, the others lazily", () => {
+  test("loads the first photo at once and ahead of the rest, the others lazily", () => {
     setup();
 
     const photos = screen.getAllByRole("img");
-    expect(photos[0]).not.toHaveAttribute("loading", "lazy");
-    expect(photos[1]).toHaveAttribute("loading", "lazy");
+    expect(
+      photos.map((photo) => [
+        photo.getAttribute("loading"),
+        photo.getAttribute("fetchpriority"),
+      ])
+    ).toEqual([
+      ["eager", "high"],
+      ["lazy", null],
+      ["lazy", null],
+    ]);
   });
 
   test("where Embla could not go round, its round arrow shows the next photo, then leads back to the first", async () => {
@@ -151,9 +159,11 @@ describe("StoreGallery", () => {
 
     const [first] = screen.getAllByRole("group");
     expect(first).toHaveClass("basis-[88%]", "md:basis-[62%]");
+    // That share of the gallery, which from `lg` is what the article's
+    // 27rem column leaves: the file the browser picks is never too small.
     expect(screen.getAllByRole("img")[0]).toHaveAttribute(
       "sizes",
-      "(min-width: 768px) 40vw, 88vw"
+      "(min-width: 1024px) calc((100vw - 27rem) * 0.62), (min-width: 768px) 62vw, 88vw"
     );
   });
 
@@ -164,7 +174,7 @@ describe("StoreGallery", () => {
     expect(screen.getByRole("group")).not.toHaveClass("basis-[88%]");
     expect(screen.getByRole("img")).toHaveAttribute(
       "sizes",
-      "(min-width: 1024px) 70vw, 100vw"
+      "(min-width: 1024px) calc(100vw - 27rem), 100vw"
     );
   });
 
