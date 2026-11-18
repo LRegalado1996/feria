@@ -1651,7 +1651,7 @@ describe("listStoreProducts", () => {
         total: STORE_PRODUCTS_COUNT_CAP,
         totalCapped: true,
       });
-      expect(db.$["select.offset"].mock.calls).toEqual(
+      expect(required(db.$["select.offset"]).mock.calls).toEqual(
         offset === null ? [] : [[offset]]
       );
     }
