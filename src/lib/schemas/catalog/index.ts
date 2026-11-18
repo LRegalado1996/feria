@@ -277,6 +277,86 @@ export const setProductAvailabilitySchema = productIdSchema.extend({
   isAvailable: z.boolean(),
 });
 
+/** The messages the article wizard (FER-017) shows under its fields. */
+export interface ProductFormMessages {
+  descriptionTooLong: string;
+  priceDecimals: string;
+  priceNegative: string;
+  priceTooHigh: string;
+  seoDescriptionTooLong: string;
+  seoTitleTooLong: string;
+  titleTooLong: string;
+}
+
+/** Cents per unit of either currency the store sells in. */
+export const PRICE_MINOR_UNITS = 100;
+
+/**
+ * The article wizard's own schema (FER-017), its messages in the page's
+ * language: every field as the form holds it. The price is in whole units
+ * as typed (`12.5`), `null` while blank or refused, and becomes minor units
+ * only on its way out; it may not carry more decimals than the cents hold,
+ * which would be rounded silently. The category is the `<select>`'s value,
+ * `""` for none. A blank text is a draft's right: what publishing needs is
+ * `resolvePublishGaps`'s, not this schema's. Without messages (a local copy
+ * read back from the browser, FER-017) zod's own are kept.
+ */
+export function createProductFormSchema(messages?: ProductFormMessages) {
+  const texts = z.object({
+    description: z
+      .string()
+      .trim()
+      .max(PRODUCT_DESCRIPTION_MAX_LENGTH, messages?.descriptionTooLong),
+    seoDescription: z
+      .string()
+      .trim()
+      .max(PRODUCT_SEO_DESCRIPTION_MAX_LENGTH, messages?.seoDescriptionTooLong),
+    seoTitle: z
+      .string()
+      .trim()
+      .max(PRODUCT_SEO_TITLE_MAX_LENGTH, messages?.seoTitleTooLong),
+    title: z
+      .string()
+      .trim()
+      .max(PRODUCT_TITLE_MAX_LENGTH, messages?.titleTooLong),
+  });
+
+  return z.object({
+    attributeValueIds: z.array(bodyIdSchema).max(PRODUCT_ATTRIBUTE_VALUES_MAX),
+    categoryId: z.string().regex(/^\d*$/u),
+    en: texts,
+    es: texts,
+    // A photo the article holds, as `product.get` answered it, or a new
+    // upload: the server checks the address, so only the shape counts here.
+    images: z
+      .array(
+        z.object({
+          height: z.number().int().positive(),
+          url: z.string().min(1).max(500),
+          width: z.number().int().positive(),
+        })
+      )
+      .max(PRODUCT_IMAGES_MAX),
+    isAvailable: z.boolean(),
+    price: z
+      .number()
+      .min(0, messages?.priceNegative)
+      .max(PRODUCT_PRICE_MAX / PRICE_MINOR_UNITS, messages?.priceTooHigh)
+      .refine(
+        (value) => {
+          const cents = value * PRICE_MINOR_UNITS;
+          return Math.abs(cents - Math.round(cents)) < 1e-6;
+        },
+        { message: messages?.priceDecimals }
+      )
+      .nullable(),
+  });
+}
+
+export type ProductFormValues = z.infer<
+  ReturnType<typeof createProductFormSchema>
+>;
+
 /**
  * The keyset cursor of the admin's article list: the last row's `updatedAt`
  * and id, the whole of the list's order.
