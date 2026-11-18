@@ -57,7 +57,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | ID                                                    | Title                                              | Priority | Status      |
 | ----------------------------------------------------- | -------------------------------------------------- | -------- | ----------- |
 | [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done        |
-| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | in progress |
+| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | done        |
 | [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | done        |
 | [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo        |
 | [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done        |
