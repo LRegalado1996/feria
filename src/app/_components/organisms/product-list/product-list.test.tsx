@@ -212,7 +212,7 @@ describe("ProductList", () => {
   });
 
   test("says a failed next page under the list and keeps the rows it has", async () => {
-    const { refuse, rows, user } = setup({
+    const { refuse, user } = setup({
       first: makePage([makeItem(9), makeItem(8)], CURSOR),
     });
     const more = await screen.findByRole("button", { name: "Load more" });
@@ -223,7 +223,11 @@ describe("ProductList", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We couldn't load more articles."
     );
-    expect(rows()).toHaveLength(2);
+    expect(
+      within(screen.getByTestId("product-list-rows"))
+        .getAllByRole("link")
+        .map((link) => link.getAttribute("href"))
+    ).toEqual(["/en/admin/products/9", "/en/admin/products/8"]);
     expect(screen.queryByText("We couldn't load the articles.")).toBeNull();
   });
 

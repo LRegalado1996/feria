@@ -110,8 +110,9 @@ describe("ProductSeoPreview", () => {
 
     expect(googleLines()[2]).toBe("… · LR Market");
 
+    // Exactly: no price, not even a zero.
     expect(screen.getByTestId("store-share-preview")).toHaveTextContent(
-      "LR Market…"
+      /^LR Market…$/u
     );
     expect(
       screen.getByTestId("store-share-preview-photo").style.backgroundImage

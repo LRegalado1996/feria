@@ -54,11 +54,14 @@ async function setup({ db, page }: { db: DbFixture["db"]; page: Page }) {
  */
 async function publishFromPhotos(
   page: Page,
-  { category, title, wizard }: Awaited<ReturnType<typeof setup>>
+  { category, title, wizard }: Awaited<ReturnType<typeof setup>>,
+  /** Runs on each step once it is filled, before leaving it. */
+  onStep?: () => Promise<void>
 ) {
   await wizard.gotoNew();
   await expect(wizard.next()).toBeDisabled();
   await wizard.addFirstPhotos([RING_1, RING_2]);
+  await onStep?.();
 
   await wizard.next().click();
   await expect(wizard.step("details")).toBeVisible();
@@ -72,6 +75,7 @@ async function publishFromPhotos(
   await wizard.priceField().fill("12,50");
   await wizard.priceField().blur();
   await wizard.expectSaved();
+  await onStep?.();
 
   await wizard.next().click();
   await expect(wizard.step("review")).toBeVisible();
@@ -79,6 +83,7 @@ async function publishFromPhotos(
   await expect(
     page.getByTestId("store-article-preview-card").getByText(title)
   ).toBeVisible();
+  await onStep?.();
 
   await completeRpcAction(page, "/api/orpc/product/publish", async () => {
     await wizard.publishButton().click();
@@ -160,10 +165,7 @@ test.describe("Article wizard", () => {
     await expect(wizard.titleField()).toHaveValue(title);
     await expect(wizard.priceField()).toHaveValue("12,5");
     await expect(wizard.categoryField()).toHaveValue(String(category.id));
-    await expect(page.getByRole("button", { name: "Dorado" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
+    await expect(chip).toHaveAttribute("aria-pressed", "true");
 
     await page.goto("/admin/products");
     await page
@@ -500,13 +502,20 @@ test.describe("Article wizard on a phone", () => {
     test.slow();
     const context = await setup({ db, page });
 
-    const storePath = await publishFromPhotos(page, context);
+    const overflow = async () =>
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth
+      );
+    const steps: number[] = [];
+
+    const storePath = await publishFromPhotos(page, context, async () => {
+      steps.push(await overflow());
+    });
 
     expect(storePath).toMatch(/^\/productos\//u);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth
-    );
-    expect(overflow).toBe(0);
+    // Photos, details and review, then the success.
+    expect(steps).toEqual([0, 0, 0]);
+    expect(await overflow()).toBe(0);
   });
 
   // The owner's review (2026-11-18): a photo that failed spilled out of its
