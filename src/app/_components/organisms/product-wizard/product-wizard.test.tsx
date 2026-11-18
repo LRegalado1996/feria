@@ -1416,7 +1416,7 @@ describe("ProductWizard: details", () => {
         name: "Rings",
         path: "/bijouterie/anillos",
       },
-      href: "/en/productos/anillo-de-plata",
+      href: "#preview",
       lang: "en",
       title: "Silver ring",
     });
@@ -1450,7 +1450,7 @@ describe("ProductWizard: details", () => {
 
     expect(JSON.parse(screen.getByTestId("preview-card").textContent)).toEqual({
       category: { group: null, name: "Bijouterie", path: "/bijouterie" },
-      href: "/en/productos/anillo-de-plata",
+      href: "#preview",
       lang: "es",
       title: "New article",
     });

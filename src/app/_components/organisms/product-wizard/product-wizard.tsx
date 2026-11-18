@@ -1075,7 +1075,6 @@ function WizardEditor({
           void onSaveDraft();
         }}
         preview={preview}
-        storePath={storePath}
       />
     );
   };
@@ -1463,7 +1462,6 @@ function ReviewStep({
   onJump,
   onSaveDraft,
   preview,
-  storePath,
 }: {
   busy: boolean;
   canSaveDraft: boolean;
@@ -1473,7 +1471,6 @@ function ReviewStep({
   onJump: (gap: PublishGap) => void;
   onSaveDraft: () => void;
   preview: StoreArticleMainData;
-  storePath: string | null;
 }) {
   const { storefront } = useDictionary();
 
@@ -1487,7 +1484,9 @@ function ReviewStep({
           <StoreArticlePreview
             article={preview}
             copy={storefront}
-            href={storePath ?? "#"}
+            // Never the article's address: a draft's page would be fetched ahead
+            // (a link prefetches) and kept as not found once it is published.
+            href="#preview"
             locale={locale}
             view="card"
           />
@@ -1498,7 +1497,7 @@ function ReviewStep({
             article={preview}
             className="rounded-lg border"
             copy={storefront}
-            href={storePath ?? "#"}
+            href="#preview"
             locale={locale}
             view="page"
           />
