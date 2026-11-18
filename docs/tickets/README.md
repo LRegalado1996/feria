@@ -51,21 +51,23 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-038](FER-038-single-store.md)                 | One store, one admin role                          | P0       | done   |
 | [FER-041](FER-041-drop-unread-schema.md)           | Drop what nothing reads any more                   | P2       | todo   |
 | [FER-048](FER-048-reserved-category-slug-check.md) | The database refuses a category on a reserved path | P2       | todo   |
+| [FER-052](FER-052-drop-article-search-texts.md)    | Drop an article's own search texts                 | P2       | todo   |
 
 ### M3 Admin
 
-| ID                                                    | Title                                              | Priority | Status      |
-| ----------------------------------------------------- | -------------------------------------------------- | -------- | ----------- |
-| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done        |
-| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | done        |
-| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | done        |
-| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo        |
-| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done        |
-| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | in progress |
-| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
-| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo        |
-| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo        |
-| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done        |
+| ID                                                    | Title                                              | Priority | Status |
+| ----------------------------------------------------- | -------------------------------------------------- | -------- | ------ |
+| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done   |
+| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | done   |
+| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | done   |
+| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo   |
+| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done   |
+| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | done   |
+| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo   |
+| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | todo   |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo   |
+| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done   |
+| [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)   | The bottom bar stays above the iPhone keyboard     | P1       | todo   |
 
 ### M4 Storefront and orders
 
@@ -86,6 +88,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-045](FER-045-cart-drawer.md)                    | Cart side panel and a gallery that goes round     | P0       | done        |
 | [FER-050](FER-050-storefront-round.md)               | Storefront round: menu, grid, footer, confirm     | P0       | done        |
 | [FER-051](FER-051-order-stepper-and-admin-round.md)  | Order stepper, the order pages and an admin round | P0       | done        |
+| [FER-049](FER-049-share-card-blob-photos.md)         | An article's share card draws its uploaded photo  | P1       | todo        |
 
 ### M5 Metrics
 
@@ -115,6 +118,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 010 → 025 → 026 → 027 → 028
 012, 027 → 038 → 040 → 039
 038 → 041
+017 → 049, 052, 053
 040 → 014, 015, 017, 019, 020, 030
 039, 020 → 022
 039 → 042 → 043 → 044, 046, 047, 048

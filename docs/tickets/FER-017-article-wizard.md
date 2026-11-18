@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-011, FER-016, FER-033, FER-040
 
 ## Goal
@@ -65,7 +65,9 @@ Lucas's, on 2026-11-18, after trying it live (mostly from a phone):
 - **Uploads:** `usePhotoQueue` (several at once, refusals before work); `prepareImage` keeps transparency (FER-011's decision updated).
 - **Tests:** unit tests for every new and changed file; `src/e2e/tests/admin/article-wizard.e2e.ts`: create from photos and publish (the store shows it), on a computer and at 390 px; a draft left half-way restored after a reload and from the list; photos ordered and the main one chosen by keyboard, said aloud; publishing blocked with what is missing next to each field; a published article's changes kept across a reload and shown by the store only once saved; the price `12,50` and `12.50` read as twelve and a half on `/` and on `/en` (FER-035's pending e2e).
 - **After Lucas's review (2026-11-18):** `src/lib/admin/product-wizard-mode.ts` (`readWizardMode`, `wizardStepPath`); the single screen in `organisms/product-wizard` (`ArticleScreen`, `WizardCard`; the same photos, details, filters and previews as the journey's steps); `molecules/product-details-form` holds the texts, category, price and availability only, the filters and previews being the wizard's sections; `molecules/product-seo-preview` computes the result and the card from the title, description and main photo; `molecules/product-photo-drop` takes `unavailable` (the page reads `readBlobStore()`); `molecules/product-photo-grid`'s `QueuedTile`; `formatCurrencySign` in `src/lib/utils/format.ts`. The e2e covers the journey (a reload mid-way staying on its step), a draft and a published article on the single screen, no search inputs, and a failed photo's boxes inside its tile at 390 px.
-- **Found on the way:** an article's share card draws only a photo stored on this site (`ownUrl()`), so an uploaded photo is left out of it and the card shows its moss block; the wizard's preview shows the same and says so. Left for Lucas to decide (it needs the card to fetch from the Blob store).
+- **What shipped, in short:** creating is three steps (photos, details, review) and editing is one screen; no search inputs, the Google result and the share card are previews of the title, the description and the main photo; a published article has no panel, "Ver en la tienda" is on the store card's preview and "Descartar cambios" and "Pasar a borrador" are in the "Más acciones" menu (⋯); up to 8 photos, a cut-out keeping its transparency; a draft saves itself, a published article keeps a local copy until "Guardar cambios" is confirmed. Lucas tried it by hand on 2026-11-18 and approved it.
+- **Not verified by anyone yet:** a real upload from a phone to the Blob store (the e2e stands in for the store); Safari's PNG path for a cut-out photo (where the browser cannot write WebP, a cut-out is sent as PNG; only the unit tests cover that branch); the first acceptance criterion, a new user publishing from a phone in under a minute without help, with a real person; and the keyboard and screen reader criterion beyond the e2e and the unit tests (no screen reader was used).
+- **Follow-ups ticketed:** [FER-049](FER-049-share-card-blob-photos.md), the share card draws only a photo stored on this site (`ownUrl()`), so an uploaded photo is left out and the card shows its moss block (the wizard's preview shows the same and says so); [FER-052](FER-052-drop-article-search-texts.md), dropping the unused `seo_title` and `seo_description` columns (expand → contract); [FER-053](FER-053-bottom-bar-above-ios-keyboard.md), the bar under the thumb hidden behind the iPhone keyboard, which ignores `interactiveWidget`.
 
 ## Reporting
 
