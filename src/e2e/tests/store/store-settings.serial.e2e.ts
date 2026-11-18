@@ -69,7 +69,7 @@ test.describe("Editing the store", () => {
     await expect(footer).not.toContainText("Texto nuevo");
   });
 
-  test("a change of currency reaches the cached article page and the catalog at once", async ({
+  test("a currency sent with an edit is dropped: the store keeps selling in pesos", async ({
     db,
     page,
     storeEdit,
@@ -84,22 +84,19 @@ test.describe("Editing the store", () => {
       priceAmount: 120_000,
       title: "Anillo de plata",
     });
-    const article = page.getByTestId("store-article");
-    // Visited in pesos first: that is what the article's static page holds.
-    await page.goto(`/productos/${ring.slug}`);
-    await expect(article.getByText("$ 1.200", { exact: true })).toBeVisible();
 
-    await storeEdit.update({ currencyCode: "USD" });
+    // Accepted, as an edit of the rest: the API drops what it does not keep.
+    expect(
+      await storeEdit.send({ ...STORE_SETTINGS, currencyCode: "USD" })
+    ).toBe(200);
     await page.goto(`/productos/${ring.slug}`);
 
-    await expect(article.getByText("US$ 1.200", { exact: true })).toBeVisible();
-    await expect(article.getByText("$ 1.200", { exact: true })).toHaveCount(0);
-    await page.goto(`/${rings.slug}`);
     await expect(
-      page
-        .getByTestId("store-catalog-grid")
-        .getByText("US$ 1.200", { exact: true })
+      page.getByTestId("store-article").getByText("$ 1.200", { exact: true })
     ).toBeVisible();
+    await expect(
+      db.drizzle.query.store.findFirst({ columns: { currencyCode: true } })
+    ).resolves.toEqual({ currencyCode: "UYU" });
   });
 
   test.describe("on a phone", () => {
@@ -135,7 +132,6 @@ test.describe("Editing the store", () => {
         { instagramUrl: "https://evil.example/x" },
       ],
       ["a WhatsApp number in local form", { whatsappNumber: "099 123 456" }],
-      ["a currency the store cannot sell in", { currencyCode: "EUR" }],
       [
         "a language twice",
         {

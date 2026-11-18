@@ -8,7 +8,8 @@ import { getStore, updateStore } from "@/server/services/store";
 /**
  * The company the site sells for (FER-038): the store table's one row. There
  * is nothing to create, so there is no procedure that creates one; any admin
- * edits it (the settings screen is FER-014).
+ * edits it from the settings screen (FER-014), all but its currency, which
+ * is fixed per store.
  */
 export const storeRouter = {
   get: publicProcedure
@@ -28,7 +29,9 @@ export const storeRouter = {
         async (tx) => await updateStore(tx, input)
       );
       invalidateStoreCache();
-      // Its articles show its currency.
+      // The page of all articles caches its cover's description out of the
+      // store's texts (`readAllArticlesCover`), falling back to the other
+      // language's: an edit that adds or removes a language's text changes it.
       invalidateCatalogCache(updated.id);
 
       return updated;
@@ -36,7 +39,7 @@ export const storeRouter = {
     .route({
       method: "PUT",
       path: "/store",
-      summary: "Replace the store's details and texts",
+      summary: "Replace the store's details and texts (never its currency)",
       tags: ["store"],
     }),
 };

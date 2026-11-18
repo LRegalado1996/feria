@@ -32,10 +32,13 @@ interface FormFieldContextValue<
 
 const FormFieldContext = createContext<FormFieldContextValue>({ name: "" });
 
+// `TTransformedValues`: a form whose schema transforms what is typed (the
+// settings' WhatsApp number) submits other values than its fields hold.
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
->({ ...props }: ControllerProps<TFieldValues, TName>) {
+  TTransformedValues = TFieldValues,
+>({ ...props }: ControllerProps<TFieldValues, TName, TTransformedValues>) {
   const value = useMemo(() => ({ name: props.name }), [props.name]);
 
   return (

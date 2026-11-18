@@ -196,7 +196,8 @@ export async function readAllArticlesCover(
  * Drops what is cached about a store's articles after a write that changes
  * what a visitor sees: an article's texts, price, photos, availability or
  * publication, a category (its name, its place, a new or a deleted one), the
- * store's currency. `expire: 0` serves nothing stale.
+ * store's texts (the all-articles cover's description). `expire: 0` serves
+ * nothing stale.
  */
 export function invalidateCatalogCache(storeId: number): void {
   revalidateTag(catalogTag(storeId), { expire: 0 });

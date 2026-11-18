@@ -318,6 +318,56 @@ export const admin: Dictionary["admin"] = {
       title: "Couldn't deliver the order?",
     },
   },
+  settings: {
+    contact: "Contact and socials",
+    currencies: {
+      UYU: "Uruguayan pesos (UYU)",
+      USD: "US dollars (USD)",
+    },
+    currency: "Currency",
+    currencyHint:
+      "Every price in the store is in this currency. It can't be changed from the admin.",
+    description:
+      "What the store says about itself and how people find it. Changes show in the store as soon as you save them.",
+    errors: {
+      descriptionRequired: "Write the description.",
+      descriptionTooLong: "Use up to 600 characters.",
+      instagramInvalid:
+        "Paste the full Instagram link, such as https://instagram.com/your-store",
+      linkTooLong: "The link is too long.",
+      load: "We couldn't load the settings.",
+      nameRequired: "Write the store's name.",
+      nameTooLong: "Use up to 80 characters.",
+      save: "We couldn't save the settings. What you wrote is still here: try again.",
+      taglineRequired: "Write the tagline.",
+      taglineTooLong: "Use up to 120 characters.",
+      tiktokInvalid:
+        "Paste the full TikTok link, such as https://tiktok.com/@your-store",
+      whatsappInvalid:
+        "That is not a WhatsApp number we can use. Write it as 099 123 456 or, from another country, with its code: +54 9 11 1234 5678.",
+    },
+    fields: {
+      descriptionEn: "Description in English",
+      descriptionEs: "Description in Spanish",
+      instagramUrl: "Instagram link",
+      name: "Store name",
+      socialHint: "Leave it empty and the store won't show it.",
+      taglineEn: "Tagline in English",
+      taglineEs: "Tagline in Spanish",
+      tiktokUrl: "TikTok link",
+      whatsappHint:
+        "Write it any way you like: 099 123 456 or +598 99 123 456. We keep it with the country code. Leave it empty and the store won't show WhatsApp.",
+      whatsappNumber: "WhatsApp number",
+    },
+    identity: "The store",
+    pending: "Saving…",
+    saved: "Settings saved.",
+    submit: "Save",
+    texts: "Texts",
+    textsHint:
+      "The tagline goes above the name on the home page, and the description below it.",
+    title: "Settings",
+  },
   shell: {
     closeMenu: "Close the menu",
     menu: "Menu",

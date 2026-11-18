@@ -102,7 +102,6 @@ describe("AdminSectionPlaceholderResolver", () => {
     ["en", "products", "/en/admin/products"],
     ["en", "metrics", "/en/admin/metrics"],
     ["es", "home", "/admin/home"],
-    ["es", "settings", "/admin/settings"],
     ["es", "users", "/admin/users"],
   ] as const satisfies [Locale, PlaceholderSection, string][])(
     "in %s, checks the session for %s, coming back to %s",
@@ -119,7 +118,6 @@ describe("AdminSectionPlaceholderResolver", () => {
     ["en", "products", "Articles", "Coming soon"],
     ["en", "metrics", "Metrics", "Coming soon"],
     ["es", "home", "Inicio", "Próximamente"],
-    ["es", "settings", "Ajustes", "Próximamente"],
     ["es", "users", "Usuarios", "Próximamente"],
   ] as const satisfies [Locale, PlaceholderSection, string, string][])(
     "in %s, shows the %s section by name inside the shell, still to come",

@@ -27,7 +27,6 @@ function makeValues(
   overrides: Partial<UpdateStoreValues> = {}
 ): UpdateStoreValues {
   return {
-    currencyCode: "UYU",
     instagramUrl: "https://instagram.com/sample",
     name: "Sample Store",
     tiktokUrl: null,
@@ -37,11 +36,14 @@ function makeValues(
   };
 }
 
-/** The row Postgres hands back for {@link makeValues}. */
+/**
+ * The row Postgres hands back for {@link makeValues}, with the currency the
+ * store keeps.
+ */
 function makeRow(overrides: Partial<UpdateStoreValues> = {}) {
   const { translations: _translations, ...columns } = makeValues(overrides);
 
-  return { ...columns, id: 7 };
+  return { ...columns, currencyCode: "UYU" as const, id: 7 };
 }
 
 /**
@@ -147,7 +149,6 @@ describe("updateStore", () => {
     expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("update");
     expect(db.$.update).toHaveBeenCalledExactlyOnceWith(store);
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      currencyCode: "UYU",
       instagramUrl: "https://instagram.com/sample",
       name: "Renamed",
       tiktokUrl: null,
@@ -162,17 +163,17 @@ describe("updateStore", () => {
     );
   });
 
-  test("writes only the columns it names, whatever else the values carry", async () => {
+  test("writes only the columns it names, whatever else the values carry: never an id, nor the currency", async () => {
     const { db, update } = setup();
 
     await update({
       ...makeValues(),
+      currencyCode: "USD",
       id: 99,
       slug: "another",
     } as unknown as UpdateStoreValues);
 
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      currencyCode: "UYU",
       instagramUrl: "https://instagram.com/sample",
       name: "Sample Store",
       tiktokUrl: null,
