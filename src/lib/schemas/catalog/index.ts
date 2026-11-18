@@ -389,8 +389,10 @@ export type ProductAvailability = (typeof PRODUCT_AVAILABILITIES)[number];
 
 /**
  * How far the admin's list counts its matches (`docs/agents/database.md`:
- * count capped): past it, the total reads "10.000+". No page past it can
- * hold a row, so it bounds the page number too.
+ * count capped): past it, the total reads "10.000+" and the pages stop at
+ * `ceil(cap / limit)`, so the service answers a page past that one with no
+ * rows, like any page past the last. It bounds the page number too: at one
+ * row a page, the cap is the last page there can be.
  */
 export const STORE_PRODUCTS_COUNT_CAP = 10_000;
 

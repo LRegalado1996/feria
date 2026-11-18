@@ -1623,6 +1623,40 @@ describe("listStoreProducts", () => {
     expect(db.query.product.findMany).not.toHaveBeenCalled();
   });
 
+  test.each([
+    // ceil(10,000 / 24) = 417: the last page the capped count names.
+    ["the capped count's last page reads its rows", 417, [5], 9984],
+    ["the page after it is past the end and reads none", 418, [], null],
+  ] as const)(
+    "with more matches than the cap, %s",
+    async (_case, page, items, offset) => {
+      const { db, list } = setupList({
+        pageIds: [5],
+        rows: [listedRow(5)],
+        total: STORE_PRODUCTS_COUNT_CAP + 1,
+      });
+
+      const answered = await list({ limit: 24, page });
+
+      expect({
+        ids: answered.items.map((item) => item.id),
+        page: answered.page,
+        pageCount: answered.pageCount,
+        total: answered.total,
+        totalCapped: answered.totalCapped,
+      }).toEqual({
+        ids: items,
+        page,
+        pageCount: 417,
+        total: STORE_PRODUCTS_COUNT_CAP,
+        totalCapped: true,
+      });
+      expect(db.$["select.offset"].mock.calls).toEqual(
+        offset === null ? [] : [[offset]]
+      );
+    }
+  );
+
   test("shows each article by its cover, its title and its category in both languages", async () => {
     const { list } = setupList({
       pageIds: [5],

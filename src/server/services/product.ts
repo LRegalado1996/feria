@@ -926,7 +926,7 @@ function listWhere(
  * (`listOrder`), with how many match (counted up to
  * `STORE_PRODUCTS_COUNT_CAP`, `totalCapped` past it) and how many pages
  * that makes. A page past the last answers no rows and the same total, so
- * the screen can say so. Each article with its cover (its first photo),
+ * the screen can say so; past the cap the last is `ceil(cap / limit)`. Each article with its cover (its first photo),
  * the title that names it in `locale`, its price, status, availability and
  * category; the prices are in the store's currency, answered beside them.
  * One snapshot, so the count, the page and its rows agree.
@@ -978,21 +978,27 @@ export async function listStoreProducts(
       const [counted] = await tx
         .select({ total: sql<number>`count(*)::int` })
         .from(matching);
-      const ids = (
-        await tx
-          .select({ id: product.id })
-          .from(product)
-          .where(where)
-          .orderBy(
-            ...listOrder(
-              sort,
-              dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
-              locale
-            )
-          )
-          .limit(limit)
-          .offset((page - 1) * limit)
-      ).map((row) => row.id);
+      // The pages end where the count does: past `ceil(cap / limit)` the
+      // foot has no page to name, so that page is past the end and reads
+      // nothing, even with more matches beyond the cap.
+      const pastTheCap = page > Math.ceil(STORE_PRODUCTS_COUNT_CAP / limit);
+      const ids = pastTheCap
+        ? []
+        : (
+            await tx
+              .select({ id: product.id })
+              .from(product)
+              .where(where)
+              .orderBy(
+                ...listOrder(
+                  sort,
+                  dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
+                  locale
+                )
+              )
+              .limit(limit)
+              .offset((page - 1) * limit)
+          ).map((row) => row.id);
       const rows =
         ids.length === 0
           ? []
