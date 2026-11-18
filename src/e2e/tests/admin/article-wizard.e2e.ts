@@ -381,11 +381,16 @@ test.describe("Article wizard", () => {
     await expect(wizard.saveStatus()).toHaveText("Cambios sin guardar");
     await expect(wizard.priceField()).toHaveValue("1575,5");
     // The owner saw this very state reload over and over (2026-11-18): the
-    // screen stays put, no new document and no new read of the page.
+    // screen stays put, no new document and no new read of the page. A
+    // production build prefetches the links in view (the navigation, the
+    // language pill), each marked `next-router-prefetch`; those read no
+    // page into this screen, so they are not counted.
     await expect(
       page.waitForRequest(
         (request) =>
-          request.isNavigationRequest() || request.url().includes("_rsc="),
+          request.isNavigationRequest() ||
+          (request.url().includes("_rsc=") &&
+            request.headers()["next-router-prefetch"] === undefined),
         { timeout: 3000 }
       )
     ).rejects.toThrow(/Timeout 3000ms exceeded/u);
