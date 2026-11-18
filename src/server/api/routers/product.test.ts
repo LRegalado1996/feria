@@ -106,6 +106,10 @@ vi.mock("@/server/better-auth", () => ({
 
 const STORE = { id: 7 };
 
+/** A photo the saved article no longer shows. */
+const DROPPED_PHOTO =
+  "https://store9.public.blob.vercel-storage.com/qa/product/b.webp";
+
 const UNAUTHORIZED = { code: "UNAUTHORIZED", message: "Unauthorized" };
 
 function makeFields(overrides: Record<string, unknown> = {}) {
@@ -191,7 +195,39 @@ function setup({
   const run = async (name: keyof typeof procedures, input: unknown) =>
     await procedures[name](input);
 
-  return { db: mockCtx.db, run };
+  return { db: mockCtx.db, holdTransaction, run };
+}
+
+/**
+ * Keeps the next write's transaction open once its work returned, until the
+ * test commits it or makes the commit fail: whatever runs in between runs
+ * before the commit.
+ */
+function holdTransaction() {
+  let markWorked: () => void = () => undefined;
+  const worked = new Promise<void>((resolve) => {
+    markWorked = resolve;
+  });
+  let settle: { fail: (error: Error) => void; pass: () => void } = {
+    fail: () => undefined,
+    pass: () => undefined,
+  };
+  const commit = new Promise<void>((resolve, reject) => {
+    settle = { fail: (error) => reject(error), pass: () => resolve() };
+  });
+  services.withAdmin.mockImplementationOnce(async (_db, _userId, write) => {
+    const result = await write(TX);
+    markWorked();
+    await commit;
+
+    return result;
+  });
+
+  return {
+    commit: () => settle.pass(),
+    failCommit: (error: Error) => settle.fail(error),
+    worked,
+  };
 }
 
 const USER_ID = "test-user-id";
@@ -225,9 +261,7 @@ describe("product router", () => {
   test("saves the whole article by id within the store, answering without the dropped addresses", async () => {
     const { db, run } = setup();
     services.updateProduct.mockResolvedValueOnce(
-      makeSaved("draft", [
-        "https://store9.public.blob.vercel-storage.com/qa/product/b.webp",
-      ])
+      makeSaved("draft", [DROPPED_PHOTO])
     );
 
     await expect(run("update", { ...makeFields(), id: "5" })).resolves.toEqual({
@@ -248,13 +282,48 @@ describe("product router", () => {
       storeId: 7,
       values: { ...makeFields(), id: 5 },
     });
-    // The photo it no longer shows goes once the save committed.
-    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
-      "https://store9.public.blob.vercel-storage.com/qa/product/b.webp",
-    ]);
-    expect(services.discardBlobs.mock.invocationCallOrder[0]).toBeGreaterThan(
-      services.updateProduct.mock.invocationCallOrder[0] ?? Infinity
+  });
+
+  test("deletes the photos the save dropped only once its transaction committed", async () => {
+    const { db, holdTransaction, run } = setup();
+    const transaction = holdTransaction();
+    services.updateProduct.mockResolvedValueOnce(
+      makeSaved("draft", [DROPPED_PHOTO])
     );
+
+    const saving = run("update", { ...makeFields(), id: 5 });
+    await transaction.worked;
+
+    expect(services.updateProduct).toHaveBeenCalledExactlyOnceWith(TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values: { ...makeFields(), id: 5 },
+    });
+    expect(services.discardBlobs).not.toHaveBeenCalled();
+
+    transaction.commit();
+    await expect(saving).resolves.toMatchObject({ id: 17 });
+
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
+      DROPPED_PHOTO,
+    ]);
+  });
+
+  test("a save whose commit fails deletes no photo", async () => {
+    const { holdTransaction, run } = setup();
+    const transaction = holdTransaction();
+    services.updateProduct.mockResolvedValueOnce(
+      makeSaved("draft", [DROPPED_PHOTO])
+    );
+
+    const saving = run("update", { ...makeFields(), id: 5 });
+    await transaction.worked;
+    transaction.failCommit(new Error("could not serialize access"));
+
+    await expect(saving).rejects.toMatchObject({
+      message: "could not serialize access",
+    });
+    expect(services.discardBlobs).not.toHaveBeenCalled();
   });
 
   test.each([
