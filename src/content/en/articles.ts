@@ -176,8 +176,6 @@ export const articles: Dictionary["articles"] = {
     },
     previous: "Back",
     published: {
-      banner:
-        "It is published: changes stay in this browser until you tap “Save changes”.",
       confirm: "Yes, save",
       confirmBody:
         "Your customers will see the changes in the store right away.",
@@ -188,6 +186,7 @@ export const articles: Dictionary["articles"] = {
       discardConfirm: "Yes, discard",
       discardTitle: "Discard the changes?",
       discarded: "Changes discarded.",
+      more: "More actions",
       noChanges: "No changes",
       restored: "We brought back changes you hadn't saved.",
       save: "Save changes",

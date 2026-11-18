@@ -228,7 +228,11 @@ test.describe("Article wizard", () => {
     await page.reload();
     await wizard.waitForWizard();
     await expect(wizard.screen()).toBeVisible();
-    await expect(page.getByTestId("product-published-notice")).toBeVisible();
+    await expect(wizard.moreActions()).toBeVisible();
+    await expect(wizard.viewInStore()).toHaveAttribute(
+      "href",
+      /^\/productos\/[a-z0-9-]+$/u
+    );
   });
 
   test("photos are put in order and the main one chosen from the keyboard, each move said aloud", async ({
@@ -357,7 +361,12 @@ test.describe("Article wizard", () => {
     // Even on a step's address, a published article is its single screen.
     await wizard.gotoArticle(article.id, { step: "details" });
     await expect(wizard.screen()).toBeVisible();
-    await expect(page.getByTestId("product-published-notice")).toBeVisible();
+    // No panel (Lucas, 2026-11-18): the store's link is on its card.
+    await expect(wizard.viewInStore()).toHaveAttribute(
+      "href",
+      `/productos/${article.slug}`
+    );
+    await expect(wizard.viewInStore()).toHaveAttribute("target", "_blank");
 
     await wizard.priceField().fill("1575,50");
     await wizard.priceField().blur();
@@ -365,10 +374,21 @@ test.describe("Article wizard", () => {
     await page.reload();
     await wizard.waitForWizard();
 
-    await expect(page.getByTestId("product-edits-notice")).toHaveText(
-      "Recuperamos cambios que no habías guardado."
-    );
+    // Said once, as a toast; the save line keeps saying it.
+    await expect(
+      page.getByText("Recuperamos cambios que no habías guardado.")
+    ).toBeVisible();
+    await expect(wizard.saveStatus()).toHaveText("Cambios sin guardar");
     await expect(wizard.priceField()).toHaveValue("1575,5");
+    // The owner saw this very state reload over and over (2026-11-18): the
+    // screen stays put, no new document and no new read of the page.
+    await expect(
+      page.waitForRequest(
+        (request) =>
+          request.isNavigationRequest() || request.url().includes("_rsc="),
+        { timeout: 3000 }
+      )
+    ).rejects.toThrow(/Timeout 3000ms exceeded/u);
     const store = await page.context().newPage();
     await store.goto(`/productos/${article.slug}`);
     await expect(
@@ -397,7 +417,40 @@ test.describe("Article wizard", () => {
     ).toBeVisible();
     await page.reload();
     await wizard.waitForWizard();
-    await expect(page.getByTestId("product-edits-notice")).toHaveCount(0);
+    await expect(wizard.saveStatus()).toHaveText("Sin cambios");
+    await expect(
+      page.getByText("Recuperamos cambios que no habías guardado.")
+    ).toHaveCount(0);
+  });
+
+  test("a published article goes back to draft from its menu, after asking", async ({
+    db,
+    page,
+  }) => {
+    const { category, wizard } = await setup({ db, page });
+    const article = await db.seed.createArticle({
+      categoryId: category.id,
+      priceAmount: 129_000,
+      title: `Pulsera ${uniqueTag()}`,
+    });
+    await wizard.gotoArticle(article.id);
+
+    await wizard.openMoreActions();
+    const menu = page.getByRole("menu").filter({ visible: true });
+    // Nothing changed yet: nothing to discard.
+    await expect(menu.getByRole("menuitem")).toHaveText(["Pasar a borrador"]);
+    await menu.getByRole("menuitem", { name: "Pasar a borrador" }).click();
+    const dialog = page.getByTestId("confirm-dialog");
+    await completeRpcAction(page, "/api/orpc/product/unpublish", async () => {
+      await dialog
+        .getByRole("button", { name: "Sí, pasar a borrador" })
+        .click();
+    });
+    await expectDialogRemoved(page, dialog);
+
+    await expect(wizard.publishButton()).toBeVisible();
+    await expect(wizard.moreActions()).toHaveCount(0);
+    await expect(wizard.viewInStore()).toHaveCount(0);
   });
 
   for (const [prefix, typed, shown] of [

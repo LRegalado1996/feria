@@ -178,8 +178,6 @@ export const articles = {
     },
     previous: "Atrás",
     published: {
-      banner:
-        "Está publicado: los cambios quedan guardados en este navegador hasta que toques «Guardar cambios».",
       confirm: "Sí, guardar",
       confirmBody: "Tus clientes van a ver los cambios en la tienda enseguida.",
       confirmTitle: "¿Guardar los cambios?",
@@ -189,6 +187,7 @@ export const articles = {
       discardConfirm: "Sí, descartar",
       discardTitle: "¿Descartar los cambios?",
       discarded: "Descartamos los cambios.",
+      more: "Más acciones",
       noChanges: "Sin cambios",
       restored: "Recuperamos cambios que no habías guardado.",
       save: "Guardar cambios",

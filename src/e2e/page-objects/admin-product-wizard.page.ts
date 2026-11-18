@@ -63,6 +63,28 @@ export class AdminProductWizardPage extends AdminPage {
     });
   }
 
+  /** A published article's other actions, beside "Guardar cambios". */
+  moreActions(): Locator {
+    return this.page
+      .getByRole("button", { exact: true, name: "Más acciones" })
+      .filter({ visible: true });
+  }
+
+  /** Opens the "Más acciones" menu, once React owns its button. */
+  async openMoreActions(): Promise<void> {
+    await this.clickUntilVisible(
+      this.moreActions(),
+      this.page.getByRole("menu").filter({ visible: true })
+    );
+  }
+
+  /** The way to a published article's page, on its store card's preview. */
+  viewInStore(): Locator {
+    return this.getByTestId("product-card-preview")
+      .filter({ visible: true })
+      .getByRole("link", { name: "Ver en la tienda" });
+  }
+
   /** Photos on their way, or stopped (`data-status`). */
   queuedPhotos(): Locator {
     return this.getByTestId("product-photo-queued").filter({ visible: true });

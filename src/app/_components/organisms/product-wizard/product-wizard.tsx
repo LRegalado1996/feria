@@ -6,12 +6,15 @@ import { ORPCError } from "@orpc/client";
 import {
   ArrowLeft,
   ArrowRight,
+  Ellipsis,
   ExternalLink,
+  FilePen,
   Trash2,
   Undo2,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  type ComponentProps,
   type ReactNode,
   type Ref,
   type RefObject,
@@ -38,6 +41,12 @@ import type {
   AttributeFormSaved,
 } from "@/app/_components/molecules/attribute-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/app/_components/molecules/dropdown-menu";
 import { Form, FormField } from "@/app/_components/molecules/form";
 import {
   ProductDetailsForm,
@@ -541,8 +550,9 @@ function WizardEditor({
   const copy = articles.wizard;
   const locale = useLocale();
   const router = useRouter();
-  // A published article's unsaved changes, kept in this browser; once
-  // saved or discarded, nothing is said about them any more.
+  // A published article's unsaved changes, kept in this browser, read once
+  // as the screen opens; a toast says what became of them. Once saved or
+  // discarded, nothing is restored any more.
   const [restored, setRestored] = useState<RestoredEdits>(() =>
     article?.status === "published"
       ? restoreProductEdits(article.id, article.updatedAt)
@@ -582,6 +592,8 @@ function WizardEditor({
   const lastQueued = useRef<string | null>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const photosHeading = useRef<HTMLHeadingElement>(null);
+  const moreButton = useRef<HTMLButtonElement>(null);
+  const askedFromMenu = useRef(false);
   const successHeading = useRef<HTMLHeadingElement>(null);
   const stepAtCreation = useRef<WizardStep>("photos");
   const categories = useStoreCategories();
@@ -678,6 +690,17 @@ function WizardEditor({
       successHeading.current?.focus();
     }
   }, [justPublished]);
+
+  // What became of the changes this browser kept, said once as the screen
+  // opens (an id, so a second run of the effect shows no second toast);
+  // the save line beside the main action keeps saying whether any wait.
+  useEffect(() => {
+    if (restored.kind === "restored") {
+      toast.info(copy.published.restored, { id: "product-edits-restored" });
+    } else if (restored.kind === "stale") {
+      toast.warning(copy.published.stale, { id: "product-edits-stale" });
+    }
+  }, [copy.published.restored, copy.published.stale, restored.kind]);
 
   // Every change: a draft saves itself, a published article keeps it here.
   useEffect(
@@ -946,7 +969,6 @@ function WizardEditor({
       const typed = form.getValues();
       dropProductEdits(articleId);
       setDirty(false);
-      setRestored({ kind: "none" });
 
       // Its unsaved changes become the draft's, saved as a draft's are.
       if (!sameProduct(typed, baseline)) {
@@ -1144,15 +1166,6 @@ function WizardEditor({
       </Button>
     </div>
   );
-  const publishedNotice = isPublished ? (
-    <PublishedNotice
-      copy={copy}
-      dirty={dirty}
-      notice={restored.kind === "none" ? null : restored.kind}
-      onAsk={setConfirming}
-      storePath={storePath}
-    />
-  ) : null;
 
   /** The step on screen, under its heading. */
   const stepBody = (shown: WizardStep) => {
@@ -1232,6 +1245,22 @@ function WizardEditor({
         aside={
           <>
             <WizardCard
+              action={
+                isPublished && storePath ? (
+                  // A plain link, never Next's: nothing is fetched ahead.
+                  <Button asChild size="sm" variant="ghost">
+                    <a
+                      data-testid="product-view-in-store"
+                      href={storePath}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      <ExternalLink aria-hidden />
+                      {copy.success.view}
+                    </a>
+                  </Button>
+                ) : null
+              }
               heading={copy.review.card}
               testId="product-card-preview"
             >
@@ -1256,7 +1285,7 @@ function WizardEditor({
           </>
         }
       >
-        {publishedNotice ?? (
+        {isPublished ? null : (
           <ProductPublishGaps gaps={gaps} headingLevel="h2" onJump={jumpTo} />
         )}
         <WizardCard
@@ -1310,6 +1339,19 @@ function WizardEditor({
               copy={copy}
               dirty={dirty}
               gaps={gaps}
+              more={
+                isPublished ? (
+                  <PublishedMenu
+                    copy={copy}
+                    dirty={dirty}
+                    onAsk={(kind) => {
+                      askedFromMenu.current = true;
+                      setConfirming(kind);
+                    }}
+                    triggerRef={moreButton}
+                  />
+                ) : null
+              }
               onGoTo={goTo}
               onPublish={() => {
                 void onPublish();
@@ -1351,6 +1393,18 @@ function WizardEditor({
         onClose={() => {
           setConfirming(null);
         }}
+        onCloseAutoFocus={(event) => {
+          // Asked from the menu, focus goes back to its button while it is
+          // there (back to draft takes it away; the dialog then decides).
+          const more = moreButton.current;
+
+          if (askedFromMenu.current && more?.isConnected) {
+            event.preventDefault();
+            more.focus();
+          }
+
+          askedFromMenu.current = false;
+        }}
         onConfirm={onConfirm}
       />
     </section>
@@ -1371,6 +1425,7 @@ function WizardActions({
   copy,
   dirty,
   gaps,
+  more,
   onGoTo,
   onPublish,
   onSave,
@@ -1383,6 +1438,8 @@ function WizardActions({
   copy: WizardCopy;
   dirty: boolean;
   gaps: readonly PublishGap[];
+  /** A published article's other actions, before its main one. */
+  more: ReactNode;
   onGoTo: (step: WizardStep) => void;
   onPublish: () => void;
   onSave: () => void;
@@ -1441,7 +1498,7 @@ function WizardActions({
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2" data-testid="product-wizard-actions">
       {previous ? (
         <Button
           aria-label={copy.previous}
@@ -1457,76 +1514,82 @@ function WizardActions({
           </span>
         </Button>
       ) : null}
+      {more}
       {main}
     </div>
   );
 }
 
 /**
- * A published article's line above the steps: changes stay in this
- * browser until "Guardar cambios"; what was restored or dropped from an
- * earlier visit; and the way to the store, to discard the changes and to
- * take it back to draft.
+ * A published article's other actions (Lucas, 2026-11-18: no panel), in a
+ * menu beside "Guardar cambios", so it lives where the main action does:
+ * the top bar on a computer, the bar under the thumb on a phone: discarding
+ * the changes kept in this browser while there are some, and back to draft
+ * (never empty); both ask first. The way to the store is on the store
+ * card's preview.
  */
-function PublishedNotice({
+function PublishedMenu({
   copy,
   dirty,
-  notice,
   onAsk,
-  storePath,
+  triggerRef,
 }: {
   copy: WizardCopy;
   dirty: boolean;
-  notice: "restored" | "stale" | null;
-  onAsk: (kind: ConfirmKind) => void;
-  storePath: string | null;
+  onAsk: (kind: "discard" | "unpublish") => void;
+  triggerRef: Ref<HTMLButtonElement>;
 }) {
+  // An item that asks first hands focus to its confirmation: the menu must
+  // not pull it back to its button as it closes.
+  const asking = useRef(false);
+  const ask = (kind: "discard" | "unpublish") => {
+    asking.current = true;
+    onAsk(kind);
+  };
+
   return (
-    <div
-      // blue-900 on blue-50: 10:1; blue-100 on blue-950: 13:1.
-      className="grid gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100"
-      data-testid="product-published-notice"
-    >
-      <p>{copy.published.banner}</p>
-      {notice ? (
-        <output className="font-medium" data-testid="product-edits-notice">
-          {copy.published[notice]}
-        </output>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        {storePath ? (
-          <Button asChild size="sm" variant="outline">
-            <a href={storePath} rel="noopener noreferrer" target="_blank">
-              <ExternalLink aria-hidden />
-              {copy.success.view}
-            </a>
-          </Button>
-        ) : null}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          aria-label={copy.published.more}
+          data-testid="product-more"
+          ref={triggerRef}
+          size="icon"
+          type="button"
+          variant="outline"
+        >
+          <Ellipsis aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(event) => {
+          if (asking.current) {
+            event.preventDefault();
+            asking.current = false;
+          }
+        }}
+      >
         {dirty ? (
-          <Button
-            onClick={() => {
-              onAsk("discard");
+          <DropdownMenuItem
+            onSelect={() => {
+              ask("discard");
             }}
-            size="sm"
-            type="button"
-            variant="outline"
           >
             <Undo2 aria-hidden />
             {copy.published.discard}
-          </Button>
+          </DropdownMenuItem>
         ) : null}
-        <Button
-          onClick={() => {
-            onAsk("unpublish");
+        <DropdownMenuItem
+          onSelect={() => {
+            ask("unpublish");
           }}
-          size="sm"
-          type="button"
-          variant="ghost"
         >
+          <FilePen aria-hidden />
           {copy.published.unpublish}
-        </Button>
-      </div>
-    </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1629,13 +1692,18 @@ function ArticleScreen({
   );
 }
 
-/** One of the single screen's cards: its heading, then what it holds. */
+/**
+ * One of the single screen's cards: its heading, with a quiet action across
+ * from it when it has one, then what it holds.
+ */
 function WizardCard({
+  action,
   children,
   heading,
   headingRef,
   testId,
 }: {
+  action?: ReactNode;
   children: ReactNode;
   heading: string;
   /** Makes the heading a focus target (a missing photo leads to it). */
@@ -1650,14 +1718,17 @@ function WizardCard({
       className="grid min-w-0 gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
       data-testid={testId}
     >
-      <h2
-        className="text-base font-semibold outline-none"
-        id={headingId}
-        ref={headingRef}
-        tabIndex={headingRef ? -1 : undefined}
-      >
-        {heading}
-      </h2>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2
+          className="text-base font-semibold outline-none"
+          id={headingId}
+          ref={headingRef}
+          tabIndex={headingRef ? -1 : undefined}
+        >
+          {heading}
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -1801,12 +1872,14 @@ function WizardConfirm({
   copy,
   kind,
   onClose,
+  onCloseAutoFocus,
   onConfirm,
 }: {
   busy: boolean;
   copy: WizardCopy;
   kind: ConfirmKind | null;
   onClose: () => void;
+  onCloseAutoFocus: ComponentProps<typeof ConfirmDialog>["onCloseAutoFocus"];
   onConfirm: (kind: ConfirmKind) => void;
 }) {
   const { common } = useDictionary();
@@ -1826,6 +1899,7 @@ function WizardConfirm({
       confirmVariant={words.variant}
       description={words.body}
       isPending={busy}
+      onCloseAutoFocus={onCloseAutoFocus}
       onConfirm={() => {
         if (kind !== null) {
           onConfirm(kind);

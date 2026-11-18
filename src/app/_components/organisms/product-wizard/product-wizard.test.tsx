@@ -33,7 +33,9 @@ vi.mock("@/lib/orpc/client", async () => {
 });
 
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("sonner", () => ({
+  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
+}));
 
 // The router: a spy for `push`, and the address read from the page's own
 // location, read again whenever the wizard moves it.
@@ -228,10 +230,12 @@ function setup({
     url ??
       (article ? `${prefix}/admin/products/12` : `${prefix}/admin/products/new`)
   );
-  vi.spyOn(window.history, "pushState").mockImplementation((...args) => {
-    PUSH_STATE(...args);
-    window.dispatchEvent(new Event("test:address"));
-  });
+  const pushState = vi
+    .spyOn(window.history, "pushState")
+    .mockImplementation((...args) => {
+      PUSH_STATE(...args);
+      window.dispatchEvent(new Event("test:address"));
+    });
   const replaceState = vi.spyOn(window.history, "replaceState");
 
   if (kept) {
@@ -361,6 +365,7 @@ function setup({
         await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
       });
     },
+    pushState,
     replaceState,
     saveStatus: () => screen.getByTestId("product-save-status"),
     setQueued: (items: QueuedPhoto[]) => {
@@ -375,6 +380,15 @@ function setup({
 
 async function onStep(name: string) {
   return await screen.findByRole("heading", { level: 2, name });
+}
+
+/** Opens a published article's "More actions" menu and picks `name`. */
+async function chooseFromMenu(
+  user: ReturnType<typeof setup>["user"],
+  name: string
+) {
+  await user.click(await screen.findByRole("button", { name: "More actions" }));
+  await user.click(await screen.findByRole("menuitem", { name }));
 }
 
 describe("ProductWizard: loading", () => {
@@ -1187,13 +1201,18 @@ describe("ProductWizard: a published article", () => {
       url: "/en/admin/products/12?step=details",
     });
 
-    expect(await screen.findByTestId("product-edits-notice")).toHaveTextContent(
-      "We brought back changes you hadn't saved."
+    expect(await screen.findByRole("textbox", { name: "Price" })).toHaveValue(
+      "1500"
     );
-    expect(screen.getByRole("textbox", { name: "Price" })).toHaveValue("1500");
+    // Said once, as a toast; the save line keeps saying it.
+    expect(toast.info).toHaveBeenCalledExactlyOnceWith(
+      "We brought back changes you hadn't saved.",
+      { id: "product-edits-restored" }
+    );
+    expect(toast.warning).not.toHaveBeenCalled();
     expect(saveStatus()).toHaveTextContent("Unsaved changes");
 
-    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    await chooseFromMenu(user, "Discard changes");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Yes, discard",
@@ -1203,12 +1222,56 @@ describe("ProductWizard: a published article", () => {
     expect(toast.success).toHaveBeenCalledWith("Changes discarded.");
     expect(screen.getByRole("textbox", { name: "Price" })).toHaveValue("1290");
     expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
+    expect(toast.info).toHaveBeenCalledOnce();
+    // Nothing left to discard: the menu offers only back to draft.
+    await user.click(screen.getByRole("button", { name: "More actions" }));
     expect(
-      screen.queryByTestId("product-edits-notice")
-    ).not.toBeInTheDocument();
+      screen.getAllByRole("menuitem").map((item) => item.textContent)
+    ).toEqual(["Move to draft"]);
+  });
+
+  // The owner saw this screen reload over and over (2026-11-18): the
+  // wizard itself never moves the address nor reads the article again.
+  test("opens a published article with changes kept here without moving the address or reading it again", async () => {
+    const { get, pause, pushState, replaceState } = setup({
+      article: published(),
+      kept: { baseUpdatedAt: UPDATED_AT, values: withPrice(1500) },
+    });
+    // The address as the test set it, before the wizard ran.
+    const addressSet = [...replaceState.mock.calls];
+    expect(await screen.findByRole("textbox", { name: "Price" })).toHaveValue(
+      "1500"
+    );
+
+    await pause();
+    await pause();
+
+    expect(replaceState.mock.calls).toEqual(addressSet);
+    expect(pushState).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalledExactlyOnceWith({ id: 12 });
+  });
+
+  test("the confirmation asked from the menu gives focus back to the menu's button", async () => {
+    const { user } = setup({
+      article: published(),
+      kept: { baseUpdatedAt: UPDATED_AT, values: withPrice(1500) },
+    });
+
+    await chooseFromMenu(user, "Discard changes");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Cancel",
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "More actions" })).toHaveFocus();
   });
 
   test("drops changes kept over an older version of the article, and says so", async () => {
+    const { toast } = await import("sonner");
     setup({
       article: published(),
       kept: {
@@ -1218,19 +1281,28 @@ describe("ProductWizard: a published article", () => {
       url: "/en/admin/products/12?step=details",
     });
 
-    expect(await screen.findByTestId("product-edits-notice")).toHaveTextContent(
-      "We discarded changes you hadn't saved: the article changed since then."
+    expect(await screen.findByRole("textbox", { name: "Price" })).toHaveValue(
+      "1290"
     );
-    expect(screen.getByRole("textbox", { name: "Price" })).toHaveValue("1290");
+    expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+      "We discarded changes you hadn't saved: the article changed since then.",
+      { id: "product-edits-stale" }
+    );
+    expect(toast.info).not.toHaveBeenCalled();
     expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
   });
 
-  test("links to the article in the store", async () => {
+  test("links to the article in the store from its card's preview, in a new tab, and says nothing else of it", async () => {
+    const { toast } = await import("sonner");
     setup({ article: published() });
 
-    expect(
-      await screen.findByRole("link", { name: "View in the store" })
-    ).toHaveAttribute("href", "/en/productos/anillo-de-plata");
+    const link = within(
+      await screen.findByTestId("product-card-preview")
+    ).getByRole("link", { name: "View in the store" });
+    expect(link).toHaveAttribute("href", "/en/productos/anillo-de-plata");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 
   test("moves back to draft after asking, and its unsaved changes become the draft's", async () => {
@@ -1241,7 +1313,7 @@ describe("ProductWizard: a published article", () => {
     });
     await onStep("Article photos");
 
-    await user.click(screen.getByRole("button", { name: "Move to draft" }));
+    await chooseFromMenu(user, "Move to draft");
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent(
       "It stops showing in the store. You can publish it again whenever you want."
@@ -1259,16 +1331,19 @@ describe("ProductWizard: a published article", () => {
     expect(window.localStorage.getItem("feria:product-edit:12")).toBeNull();
     await waitFor(() => {
       expect(
-        screen.queryByTestId("product-published-notice")
+        screen.queryByRole("button", { name: "More actions" })
       ).not.toBeInTheDocument();
     });
+    expect(
+      within(screen.getByTestId("product-card-preview")).queryByRole("link")
+    ).not.toBeInTheDocument();
   });
 
   test("moving back to draft with nothing changed saves nothing", async () => {
     const { unpublish, update, user } = setup({ article: published() });
     await onStep("Article photos");
 
-    await user.click(screen.getByRole("button", { name: "Move to draft" }));
+    await chooseFromMenu(user, "Move to draft");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Yes, move to draft",
@@ -1289,7 +1364,7 @@ describe("ProductWizard: a published article", () => {
     });
     await onStep("Article photos");
 
-    await user.click(screen.getByRole("button", { name: "Move to draft" }));
+    await chooseFromMenu(user, "Move to draft");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Yes, move to draft",
@@ -1305,7 +1380,7 @@ describe("ProductWizard: a published article", () => {
       expect.objectContaining({ code: "INTERNAL_SERVER_ERROR" }),
       { action: "Product.unpublish" }
     );
-    expect(screen.getByTestId("product-published-notice")).toBeVisible();
+    expect(screen.getByRole("button", { name: "More actions" })).toBeVisible();
   });
 });
 
@@ -1661,11 +1736,19 @@ describe("ProductWizard: one screen for an article from the list", () => {
       "Card in the store",
       "Search and sharing",
     ]);
-    expect(screen.getByTestId("product-published-notice")).toBeVisible();
+    // No panel (Lucas, 2026-11-18): the other actions are a menu beside
+    // the main one.
+    expect(screen.queryByText(/changes stay in this browser/u)).toBeNull();
     expect(screen.getByTestId("product-save-changes")).toHaveTextContent(
       "Save changes"
     );
-    expect(screen.getByRole("button", { name: "Move to draft" })).toBeVisible();
+    expect(
+      within(screen.getByTestId("product-wizard-actions"))
+        .getAllByRole("button")
+        .map(
+          (button) => button.getAttribute("aria-label") ?? button.textContent
+        )
+    ).toEqual(["More actions", "Save changes"]);
     expect(screen.queryByTestId("product-publish")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Discard draft" })
