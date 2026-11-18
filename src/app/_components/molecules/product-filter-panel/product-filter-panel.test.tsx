@@ -323,7 +323,10 @@ describe("ProductFilterPanel", () => {
 
     await open();
 
-    expect(await screen.findByTestId("filter-matches")).toHaveTextContent(said);
+    // The output is there, empty, before the count arrives: wait for its words.
+    await waitFor(() => {
+      expect(screen.getByTestId("filter-matches")).toHaveTextContent(said);
+    });
   });
 
   test("Clear empties the choice without changing the list", async () => {
@@ -457,8 +460,10 @@ describe("ProductFilterPanel", () => {
     expect(
       within(sheet).getByRole("button", { name: "Cerrar filtros" })
     ).toBeVisible();
-    expect(await screen.findByTestId("filter-matches")).toHaveTextContent(
-      "Coincide 1 artículo"
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("filter-matches")).toHaveTextContent(
+        "Coincide 1 artículo"
+      );
+    });
   });
 });
