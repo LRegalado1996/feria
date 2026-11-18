@@ -1372,7 +1372,14 @@ function WizardEditor({
   };
 
   return (
-    <section data-slot="product-wizard" data-testid="product-wizard">
+    // A step slides in from 1.5rem to its side, past the page's gutter: the
+    // wizard clips it there (`clip`, unlike `hidden`, keeps the top bar
+    // sticky), so the page never scrolls sideways mid-slide.
+    <section
+      className="overflow-x-clip"
+      data-slot="product-wizard"
+      data-testid="product-wizard"
+    >
       <AdminPage
         actions={
           <ProductSaveStatus
