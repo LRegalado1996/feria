@@ -178,7 +178,7 @@ function setup({
    * Resolves once a token's answer reached the queue, over HTTP: asked
    * before the answer is given, so it cannot miss it.
    */
-  const tokenAnswered = async () =>
+  const tokenAnswered = async () => {
     await new Promise<void>((resolve) => {
       const stop = mutations.subscribe((event) => {
         if (event.mutation?.state.status === "success") {
@@ -187,6 +187,7 @@ function setup({
         }
       });
     });
+  };
   /** The tokens the queue has asked for so far, answered or not. */
   const tokensAsked = () =>
     mutations.getAll().map((mutation) => mutation.state.variables);

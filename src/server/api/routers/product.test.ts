@@ -208,12 +208,15 @@ function holdTransaction() {
   const worked = new Promise<void>((resolve) => {
     markWorked = resolve;
   });
-  let settle: { fail: (error: Error) => void; pass: () => void } = {
-    fail: () => undefined,
-    pass: () => undefined,
-  };
+  let pass = (): void => undefined;
+  let fail = (_error: Error): void => undefined;
   const commit = new Promise<void>((resolve, reject) => {
-    settle = { fail: (error) => reject(error), pass: () => resolve() };
+    pass = () => {
+      resolve();
+    };
+    fail = (error) => {
+      reject(error);
+    };
   });
   services.withAdmin.mockImplementationOnce(async (_db, _userId, write) => {
     const result = await write(TX);
@@ -224,8 +227,12 @@ function holdTransaction() {
   });
 
   return {
-    commit: () => settle.pass(),
-    failCommit: (error: Error) => settle.fail(error),
+    commit: () => {
+      pass();
+    },
+    failCommit: (error: Error) => {
+      fail(error);
+    },
     worked,
   };
 }
