@@ -54,7 +54,7 @@ const keptValuesSchema: z.ZodType<ProductFormValues> = z.object({
     )
     .max(PRODUCT_IMAGES_MAX),
   isAvailable: z.boolean(),
-  price: z.number().finite().nullable(),
+  price: z.number().nullable(),
 });
 
 /**
