@@ -62,12 +62,13 @@ const SAVED = {
 
 /**
  * The hook over a save the test answers when it chooses, with the article
- * already read into the cache.
+ * (`article`, unless told) already read into the cache.
  */
 function setup({
+  article = makeStoreProduct(),
   cached = true,
   fails = false,
-}: { cached?: boolean; fails?: boolean } = {}) {
+}: { article?: StoreProduct; cached?: boolean; fails?: boolean } = {}) {
   let answer = (): void => undefined;
   const answered = new Promise<void>((resolve) => {
     answer = resolve;
@@ -89,7 +90,7 @@ function setup({
   const { queryClient } = wrapper;
 
   if (cached) {
-    queryClient.setQueryData(productKey(12), makeStoreProduct());
+    queryClient.setQueryData(productKey(12), article);
   }
 
   const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
@@ -148,20 +149,25 @@ describe("useUpdateProduct", () => {
     });
   });
 
-  test("names no gap once the save holds everything publishing needs", async () => {
-    const { answer, cachedProduct, result } = setup();
+  test("names no gap once the save holds everything publishing needs, before the server answers", async () => {
+    const { answer, cachedProduct, result, update } = setup({
+      article: makeStoreProduct({ priceAmount: null, publishGaps: ["price"] }),
+    });
+    const complete = makeInput({
+      priceAmount: 0,
+      translations: [makeInput().translations[0]],
+    });
+    expect(cachedProduct()?.publishGaps).toEqual(["price"]);
 
-    void result.current.mutateAsync(
-      makeInput({
-        priceAmount: 0,
-        translations: [makeInput().translations[0]],
-      })
-    );
+    const saving = result.current.mutateAsync(complete);
 
     await waitFor(() => {
-      expect(cachedProduct()?.publishGaps).toEqual([]);
+      expect(update).toHaveBeenCalledExactlyOnceWith(complete);
     });
+    expect(cachedProduct()?.publishGaps).toEqual([]);
+
     answer();
+    await expect(saving).resolves.toEqual(SAVED);
   });
 
   test("puts the read back as it was when the save is refused, and reads no list", async () => {
