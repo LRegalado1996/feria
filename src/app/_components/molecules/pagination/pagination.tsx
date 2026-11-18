@@ -4,9 +4,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { buttonVariants } from "@/app/_components/atoms/button";
-import { useDictionary } from "@/lib/hooks/i18n";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { cn } from "@/lib/utils";
+import { formatInteger } from "@/lib/utils/format";
 import { paginationItems } from "@/lib/utils/pagination";
 
 export interface PaginationProps {
@@ -68,10 +69,12 @@ function Step({
  * (`paginationItems`). Every page is a link, so the list's address names its
  * page and back and forward walk through them. On a phone the numbers give
  * way to "Página 2 de 6" between the steps. A step past either end is
- * dimmed; past the last page (an old link) the steps still lead back.
+ * dimmed; past the last page (an old link) the steps still lead back. The
+ * figures are in the page's language, as the list's counts are.
  */
 function Pagination({ className, hrefFor, page, pageCount }: PaginationProps) {
   const copy = useDictionary().common.pagination;
+  const locale = useLocale();
 
   if (pageCount <= 1 && page <= 1) {
     return null;
@@ -106,7 +109,9 @@ function Pagination({ className, hrefFor, page, pageCount }: PaginationProps) {
             <li className="hidden sm:block" key={item.page}>
               <Link
                 aria-current={item.page === page ? "page" : undefined}
-                aria-label={interpolate(copy.page, { page: item.page })}
+                aria-label={interpolate(copy.page, {
+                  page: formatInteger(item.page, locale),
+                })}
                 className={cn(
                   buttonVariants({
                     size: "icon-sm",
@@ -116,7 +121,7 @@ function Pagination({ className, hrefFor, page, pageCount }: PaginationProps) {
                 )}
                 href={hrefFor(item.page)}
               >
-                {item.page}
+                {formatInteger(item.page, locale)}
               </Link>
             </li>
           )
@@ -125,7 +130,10 @@ function Pagination({ className, hrefFor, page, pageCount }: PaginationProps) {
           className="px-2 text-sm text-muted-foreground tabular-nums sm:hidden"
           data-testid="pagination-position"
         >
-          {interpolate(copy.pageOf, { count: last, page })}
+          {interpolate(copy.pageOf, {
+            count: formatInteger(last, locale),
+            page: formatInteger(page, locale),
+          })}
         </li>
         <li>
           <Step

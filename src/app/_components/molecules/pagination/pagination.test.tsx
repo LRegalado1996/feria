@@ -33,7 +33,7 @@ function setup({
     /** Each page link's name, address and whether it is the current one. */
     pages: () =>
       within(nav())
-        .getAllByRole("link", { name: /^(Page|Página) \d+$/u })
+        .getAllByRole("link", { name: /^(Page|Página) [\d.,]+$/u })
         .map((link) => [
           link.textContent,
           link.getAttribute("href"),
@@ -97,6 +97,34 @@ describe("Pagination", () => {
       "Page 2 of 6"
     );
   });
+
+  test.each([
+    [
+      "en",
+      ["1", "1,233", "1,234", "1,235", "2,000"],
+      "Page 1,234",
+      "Page 1,234 of 2,000",
+    ],
+    [
+      "es",
+      ["1", "1.233", "1.234", "1.235", "2.000"],
+      "Página 1.234",
+      "Página 1.234 de 2.000",
+    ],
+  ] as const)(
+    "in %s, writes the page figures with the language's grouping",
+    (locale, figures, current, position) => {
+      const { nav, pages } = setup({ locale, page: 1234, pageCount: 2000 });
+
+      expect(pages().map(([page]) => page)).toEqual(figures);
+      expect(
+        within(nav()).getByRole("link", { name: current })
+      ).toHaveAttribute("aria-current", "page");
+      expect(screen.getByTestId("pagination-position")).toHaveTextContent(
+        position
+      );
+    }
+  );
 
   test("shows nothing for a list of one page", () => {
     const { container } = setup({ page: 1, pageCount: 1 });
