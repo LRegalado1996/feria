@@ -465,6 +465,68 @@ describe("ProductList", () => {
     expect(screen.getByTestId("product-row-30")).toBeVisible();
   });
 
+  test.each([
+    ["the current page's own link", "Page 2", null],
+    ["another page opened in a new tab", "Page 1", "Control"],
+    ["another page opened in a new window", "Page 1", "Shift"],
+  ])(
+    "a click on %s moves nothing, nor arms a later page change to steal focus",
+    async (_case, name, held) => {
+      const { navigate, user } = setup({
+        answer: (input) =>
+          typeof input === "object" && input !== null && "page" in input
+            ? makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 })
+            : makePage([makeItem(9)], { pageCount: 2, total: 25 }),
+        query: makeQuery({ page: 2 }),
+      });
+      await screen.findByTestId("product-row-30");
+
+      if (held) {
+        await user.keyboard(`{${held}>}`);
+      }
+
+      await user.click(screen.getByRole("link", { name }));
+
+      if (held) {
+        await user.keyboard(`{/${held}}`);
+      }
+
+      // A sort brings the first page back: no step of the pages asked for it.
+      navigate(makeQuery({ sort: "price" }));
+
+      expect(await screen.findByTestId("product-row-9")).toBeVisible();
+      expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+    }
+  );
+
+  test("a step to a page that comes back empty is spent: a later page change keeps focus where it is", async () => {
+    const { navigate, user } = setup({
+      answer: (input) => {
+        const asked = typeof input === "object" && input !== null ? input : {};
+
+        if ("page" in asked) {
+          // Emptied meanwhile: the store lost the articles of page 2.
+          return makePage([], { page: 2, pageCount: 1, total: 24 });
+        }
+
+        return makePage([makeItem("sort" in asked ? 12 : 9)], {
+          pageCount: 2,
+          total: 25,
+        });
+      },
+    });
+    await screen.findByTestId("product-row-9");
+
+    await user.click(screen.getByRole("link", { name: "Page 2" }));
+    navigate(makeQuery({ page: 2 }));
+    expect(await screen.findByTestId("product-list-empty-page")).toBeVisible();
+
+    navigate(makeQuery({ sort: "price" }));
+
+    expect(await screen.findByTestId("product-row-12")).toBeVisible();
+    expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+  });
+
   test("speaks Spanish", async () => {
     setup({
       answer: () =>
