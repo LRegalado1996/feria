@@ -749,6 +749,10 @@ describe("the admin's list (FER-019)", () => {
     // What `50%_off` matches as a pattern: 50, anything, one character, off.
     await create({ translations: [spanish(`50xyoff ${tag}`)] });
     await create({ translations: [spanish(`50 off ${tag}`)] });
+    // One escape lost at a time: `%` as anything finds the first, `_` as
+    // any one character the second.
+    await create({ translations: [spanish(`50xy_off ${tag}`)] });
+    await create({ translations: [spanish(`50%Xoff ${tag}`)] });
 
     const { items, total } = await listStoreProducts(db, {
       limit: 24,
@@ -837,7 +841,32 @@ describe("the admin's list (FER-019)", () => {
   });
 
   test("combines a category, a filter, a status and the search", async () => {
-    const { color, group, listed } = await setupCatalog();
+    const {
+      category: chains,
+      color,
+      create,
+      group,
+      listed,
+      rings,
+      tag,
+    } = await setupCatalog();
+    // Drafts that only one of the four leaves out, each read as "?": outside
+    // the group, without the search's tag, of another color.
+    await create({
+      attributeValueIds: [color.idOf("violeta")],
+      categoryId: chains.id,
+      translations: [spanish(`Fuera del grupo ${tag}`)],
+    });
+    await create({
+      attributeValueIds: [color.idOf("violeta")],
+      categoryId: rings.id,
+      translations: [spanish("Sin la etiqueta")],
+    });
+    await create({
+      attributeValueIds: [color.idOf("dorado")],
+      categoryId: rings.id,
+      translations: [spanish(`Otro color ${tag}`)],
+    });
 
     expect(
       await listed({
