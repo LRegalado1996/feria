@@ -50,7 +50,7 @@ function makeAttribute(
 
 interface SetupOptions {
   attributes?: ReturnType<typeof makeAttribute>[];
-  created?: { id?: number; result: AttributeFormResult };
+  created?: AttributeFormResult;
   locale?: Locale;
   value?: number[];
 }
@@ -66,7 +66,7 @@ function setup({
       values: [makeValue(41, "Plata")],
     }),
   ],
-  created = { id: 99, result: "saved" },
+  created = "saved",
   locale = "en",
   value = [32],
 }: SetupOptions = {}) {
@@ -133,7 +133,7 @@ describe("ProductFilterChips", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith(expected);
   });
 
-  test("adds a value in place, chooses it, and gives focus back to its button", async () => {
+  test("adds a value in place through its owner, which chooses it, and gives focus back to its button", async () => {
     const { filter, onChange, onCreateValue, user } = setup();
     const opener = filter("Color").getByRole("button", {
       name: "Add to Color",
@@ -151,52 +151,19 @@ describe("ProductFilterChips", () => {
       nameEs: "Rosa",
       swatchColor: null,
     });
-    expect(onChange).toHaveBeenCalledExactlyOnceWith([32, 99]);
+    // The owner chooses it, in its choice as it is when the store answers.
+    expect(onChange).not.toHaveBeenCalled();
     expect(screen.queryByRole("form", { name: "New Color value" })).toBeNull();
     expect(opener).toHaveFocus();
     expect(opener).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("a value added while chips were tapped joins the choice as it is then, not as it was", async () => {
-    const onChange = vi.fn<(ids: number[]) => void>();
-    let answer = (_created: { id: number; result: "saved" }): void => undefined;
-    const onCreateValue = vi.fn(
-      async () =>
-        await new Promise<{ id: number; result: "saved" }>((resolve) => {
-          answer = resolve;
-        })
-    );
-    const user = userEvent.setup();
-    const chips = (value: number[]) => (
-      <ProductFilterChips
-        attributes={[makeAttribute()]}
-        onChange={onChange}
-        onCreateValue={onCreateValue}
-        value={value}
-      />
-    );
-    const { rerender } = renderWithI18n(chips([32]));
-    await user.click(screen.getByRole("button", { name: "Add to Color" }));
-    const form = screen.getByRole("form", { name: "New Color value" });
-    await user.type(within(form).getByLabelText(/^Name in Spanish/u), "Rosa");
-    await user.click(within(form).getByRole("button", { name: "Add" }));
-
-    // Gold tapped while the store had not answered yet.
-    rerender(chips([32, 31]));
-    await act(async () => {
-      answer({ id: 99, result: "saved" });
-      await Promise.resolve();
-    });
-
-    expect(onChange).toHaveBeenCalledExactlyOnceWith([32, 31, 99]);
-  });
-
   test("a value saved after another filter's form was opened leaves that form as it is", async () => {
     const onChange = vi.fn<(ids: number[]) => void>();
-    let answer = (_created: { id: number; result: "saved" }): void => undefined;
+    let answer = (_result: "saved"): void => undefined;
     const onCreateValue = vi.fn(
       async () =>
-        await new Promise<{ id: number; result: "saved" }>((resolve) => {
+        await new Promise<"saved">((resolve) => {
           answer = resolve;
         })
     );
@@ -228,11 +195,15 @@ describe("ProductFilterChips", () => {
     const name = within(material).getByLabelText(/^Name in Spanish/u);
     await user.type(name, "Oro");
     await act(async () => {
-      answer({ id: 99, result: "saved" });
+      answer("saved");
       await Promise.resolve();
     });
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith([99]);
+    expect(onCreateValue).toHaveBeenCalledExactlyOnceWith(1, {
+      nameEn: null,
+      nameEs: "Rosa",
+      swatchColor: null,
+    });
     expect(
       screen.getByRole("form", { name: "New Material value" })
     ).toBeInTheDocument();
@@ -242,10 +213,10 @@ describe("ProductFilterChips", () => {
 
   test("a value saved after its filter's form was closed and opened again leaves the new form as it is", async () => {
     const onChange = vi.fn<(ids: number[]) => void>();
-    let answer = (_created: { id: number; result: "saved" }): void => undefined;
+    let answer = (_result: "saved"): void => undefined;
     const onCreateValue = vi.fn(
       async () =>
-        await new Promise<{ id: number; result: "saved" }>((resolve) => {
+        await new Promise<"saved">((resolve) => {
           answer = resolve;
         })
     );
@@ -272,18 +243,22 @@ describe("ProductFilterChips", () => {
     ).getByLabelText(/^Name in Spanish/u);
     await user.type(name, "Coral");
     await act(async () => {
-      answer({ id: 99, result: "saved" });
+      answer("saved");
       await Promise.resolve();
     });
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith([99]);
+    expect(onCreateValue).toHaveBeenCalledExactlyOnceWith(1, {
+      nameEn: null,
+      nameEs: "Rosa",
+      swatchColor: null,
+    });
     expect(name).toHaveValue("Coral");
     expect(name).toHaveFocus();
   });
 
   test("keeps the form open with the reason when the name is taken, choosing nothing", async () => {
     const { filter, onChange, user } = setup({
-      created: { result: "duplicate" },
+      created: "duplicate",
     });
 
     await user.click(
@@ -297,20 +272,6 @@ describe("ProductFilterChips", () => {
       "There is already one with that name here."
     );
     expect(onChange).not.toHaveBeenCalled();
-  });
-
-  test("chooses nothing when a saved value comes back without its id", async () => {
-    const { filter, onChange, user } = setup({ created: { result: "saved" } });
-
-    await user.click(
-      filter("Color").getByRole("button", { name: "Add to Color" })
-    );
-    const form = screen.getByRole("form", { name: "New Color value" });
-    await user.type(within(form).getByLabelText(/^Name in Spanish/u), "Rosa");
-    await user.click(within(form).getByRole("button", { name: "Add" }));
-
-    expect(onChange).not.toHaveBeenCalled();
-    expect(screen.queryByRole("form")).toBeNull();
   });
 
   test("cancelling the new value closes it and gives focus back", async () => {

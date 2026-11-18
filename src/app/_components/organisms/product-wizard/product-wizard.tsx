@@ -592,6 +592,12 @@ function WizardEditor({
   const [invalid, setInvalid] = useState(false);
   const [dirty, setDirty] = useState(restored.kind === "restored");
   const [justPublished, setJustPublished] = useState(false);
+  // The store's address the publish answered, for when the article's own
+  // read has not arrived (a new draft's first read can lag the publish).
+  const [publishedPath, setPublishedPath] = useState<string | null>(null);
+  // Whether this wizard is still the page shown: a write that ends after it
+  // was left must not touch the address of the page that replaced it.
+  const mounted = useRef(false);
   const [confirming, setConfirming] = useState<ConfirmKind | null>(null);
   const [busy, setBusy] = useState(false);
   // The photos uploaded from this browser, drawn from its own files until
@@ -714,6 +720,14 @@ function WizardEditor({
     language,
     step,
   });
+
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // Every thumbnail drawn from this browser's files, freed on leaving.
   useEffect(() => {
@@ -922,6 +936,11 @@ function WizardEditor({
       markGaps(gaps);
       const [first] = gaps;
 
+      // Nothing is missing but a photo on its way: say so, as a draft does.
+      if (!first && uploading) {
+        toast.info(copy.draft.waitForPhotos);
+      }
+
       // The review lists what is missing under its heading; the single
       // screen takes the person to the first field that misses.
       if (step !== null) {
@@ -941,12 +960,16 @@ function WizardEditor({
       } else {
         // What the server holds now: the published article's baseline.
         const saved = structuredClone(form.getValues());
-        await publish.mutateAsync({ id });
+        const published = await publish.mutateAsync({ id });
         setBaseline(saved);
         dropProductEdits(id);
+        setPublishedPath(localizePath(articlePath(published.slug), locale));
         setJustPublished(true);
+
         // The journey ended: a reload opens the article's single screen.
-        window.history.replaceState(null, "", productPath(id, locale));
+        if (mounted.current) {
+          window.history.replaceState(null, "", productPath(id, locale));
+        }
       }
     } catch (error) {
       refused(error, "Product.publish", copy.errors.publishFailed);
@@ -1016,6 +1039,11 @@ function WizardEditor({
   };
 
   const onDiscardChanges = (articleId: number) => {
+    // A photo on its way would land in the discarded changes: stop them.
+    for (const item of queue.items) {
+      queue.remove(item.key);
+    }
+
     dropProductEdits(articleId);
     form.reset(baseline);
     forgetPreviews(baseline.images);
@@ -1093,21 +1121,30 @@ function WizardEditor({
   const onCreateValue = async (
     attributeId: number,
     names: AttributeFormSaved
-  ): Promise<{ id?: number; result: AttributeFormResult }> => {
+  ): Promise<AttributeFormResult> => {
     try {
       const created = await createValue.mutateAsync({
         ...names,
         attributeId,
       });
+      // Chosen in the choice as it is now: chips tapped while the store
+      // answered, even on another step, stay as they were left.
+      const held = form.getValues("attributeValueIds");
 
-      return { id: created.id, result: "saved" };
+      if (!held.includes(created.id)) {
+        form.setValue("attributeValueIds", [...held, created.id], {
+          shouldDirty: true,
+        });
+      }
+
+      return "saved";
     } catch (error) {
       if (error instanceof ORPCError && error.code === "CONFLICT") {
-        return { result: "duplicate" };
+        return "duplicate";
       }
 
       reportError(error, { action: "Attribute.create_value" });
-      return { result: "failed" };
+      return "failed";
     }
   };
 
@@ -1392,6 +1429,8 @@ function WizardEditor({
     );
   };
 
+  const successPath = storePath ?? publishedPath;
+
   return (
     // A step slides in from 1.5rem to its side, past the page's gutter: the
     // wizard clips it there (`clip`, unlike `hidden`, keeps the top bar
@@ -1461,9 +1500,9 @@ function WizardEditor({
         >
           {announcement}
         </output>
-        {justPublished && storePath ? (
+        {justPublished && successPath ? (
           <ProductPublishSuccess
-            articlePath={storePath}
+            articlePath={successPath}
             headingRef={successHeading}
             listHref={productsPath(locale)}
             newHref={newProductPath(locale)}

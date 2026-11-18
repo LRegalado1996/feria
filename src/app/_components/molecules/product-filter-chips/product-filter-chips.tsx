@@ -21,13 +21,14 @@ export interface ProductFilterChipsProps {
   className?: string;
   onChange: (ids: number[]) => void;
   /**
-   * Adds a value to a filter; answers how it went and, once saved, the new
-   * value's id, which is then chosen.
+   * Adds a value to a filter and chooses it, in the choice as it is when
+   * the store answers (the person may have tapped chips meanwhile, even on
+   * another screen); answers how it went.
    */
   onCreateValue: (
     attributeId: number,
     values: AttributeFormSaved
-  ) => Promise<{ id?: number; result: AttributeFormResult }>;
+  ) => Promise<AttributeFormResult>;
   /** The chosen values' ids. */
   value: readonly number[];
 }
@@ -42,7 +43,8 @@ function nameIn(row: { nameEn: string | null; nameEs: string }, en: boolean) {
  * group of chips, one per value, a color's with its swatch; a tap chooses
  * or drops one (`aria-pressed`), several per filter. A value the store
  * lacks is added right there, with the filters screen's own form, and
- * chosen at once; focus then returns to the button that opened it.
+ * chosen at once by the owner (`onCreateValue`); focus then returns to the
+ * button that opened it.
  */
 function ProductFilterChips({
   attributes,
@@ -63,16 +65,9 @@ function ProductFilterChips({
   const openings = useRef(0);
   const formTitle = useId();
   const openers = useRef(new Map<number, HTMLButtonElement>());
-  // The choice as it is now: a value being added is chosen once the store
-  // answers, on top of whatever was tapped while it was on its way.
-  const latest = useRef(value);
   // The form open now: a save that ends after another was opened, or after
   // this one was opened again, closes nothing and takes no focus.
   const open = useRef(adding);
-
-  useEffect(() => {
-    latest.current = value;
-  }, [value]);
 
   useEffect(() => {
     open.current = adding;
@@ -195,15 +190,9 @@ function ProductFilterChips({
                     close(attribute.id, adding.opening);
                   }}
                   onSave={async (values) => {
-                    const { id, result } = await onCreateValue(
-                      attribute.id,
-                      values
-                    );
+                    const result = await onCreateValue(attribute.id, values);
 
                     if (result === "saved") {
-                      if (id !== undefined && !latest.current.includes(id)) {
-                        onChange([...latest.current, id]);
-                      }
                       close(attribute.id, adding.opening);
                     }
 

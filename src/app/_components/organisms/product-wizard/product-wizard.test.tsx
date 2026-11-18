@@ -984,6 +984,48 @@ describe("ProductWizard: autosave", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  test("saves an edit still waiting before leaving as a draft", async () => {
+    const article = makeDraft();
+    const { update, user } = setup({
+      article,
+      url: "/en/admin/products/12?step=details",
+    });
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // What the save sent, as it left; the answer waits for `release()`.
+    const sent = vi.fn((_input: unknown) => undefined);
+    server.use(
+      createOrpcHandler("product.update", async (input: unknown) => {
+        sent(input);
+        await held;
+        return update(input);
+      })
+    );
+    await user.type(await screen.findByRole("textbox", { name: "Title" }), "!");
+    await user.click(screen.getByTestId("product-next"));
+    await onStep("Check how it looks");
+
+    await user.click(screen.getByRole("button", { name: "Save as draft" }));
+
+    await waitFor(() => {
+      expect(sent).toHaveBeenCalledExactlyOnceWith(
+        savedValues(article, (values) => ({
+          ...values,
+          es: { ...values.es, title: `${values.es.title}!` },
+        }))
+      );
+    });
+    expect(navigation.push).not.toHaveBeenCalled();
+    release();
+    await waitFor(() => {
+      expect(navigation.push).toHaveBeenCalledExactlyOnceWith(
+        "/en/admin/products"
+      );
+    });
+  });
+
   test("stays when saving as a draft fails, and says so", async () => {
     const { toast } = await import("sonner");
     const { user } = setup({
@@ -1102,18 +1144,34 @@ describe("ProductWizard: publishing", () => {
     expect(screen.queryByTestId("product-publish")).not.toBeInTheDocument();
   });
 
-  test("sends what was typed before publishing", async () => {
+  test("sends what was typed before publishing, and publishes only once it is saved", async () => {
     const article = makeReadyDraft();
     const { publish, update, user } = setup({
       article,
       url: "/en/admin/products/12?step=details",
     });
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      createOrpcHandler("product.update", async (input: unknown) => {
+        await held;
+        return update(input);
+      })
+    );
     await user.type(await screen.findByRole("textbox", { name: "Title" }), "!");
     await user.click(screen.getByTestId("product-next"));
     await onStep("Check how it looks");
 
     await user.click(screen.getByTestId("product-publish"));
 
+    // The save is on its way: nothing is published before it lands.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    });
+    expect(publish).not.toHaveBeenCalled();
+    release();
     await screen.findByRole("heading", { name: "Published!" });
     expect(update).toHaveBeenCalledExactlyOnceWith(
       savedValues(article, (values) => ({
@@ -1188,6 +1246,99 @@ describe("ProductWizard: publishing", () => {
     expect(screen.queryByText("Set the price to publish.") !== null).toBe(
       !reported
     );
+  });
+
+  test("says why it does not publish while a photo is on its way and nothing else is missing", async () => {
+    const { toast } = await import("sonner");
+    const { publish, setQueued, user } = setup({
+      article: makeReadyDraft(),
+      url: "/en/admin/products/12?step=review",
+    });
+    await onStep("Check how it looks");
+    setQueued([
+      {
+        key: "photo-1",
+        name: "a.jpg",
+        preview: "blob:a",
+        state: { percent: 30, status: "uploading" },
+      },
+    ]);
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    expect(toast.info).toHaveBeenCalledExactlyOnceWith(
+      "Wait for the photos to finish uploading."
+    );
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  test("shows the success with the store's link from the publish's answer when the draft's own read failed", async () => {
+    const { arrive, user } = setup({ article: null, get: "fails" });
+    await onStep("Article photos");
+    arrive(PHOTO_A);
+    await waitFor(() => {
+      expect(screen.getByTestId("product-next")).toBeEnabled();
+    });
+    await user.click(screen.getByTestId("product-next"));
+    await onStep("Article details");
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "Anillo");
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Category" }),
+      "4"
+    );
+    await user.type(screen.getByRole("textbox", { name: "Price" }), "1290");
+    await user.click(screen.getByTestId("product-next"));
+    await onStep("Check how it looks");
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    const success = await screen.findByTestId("product-publish-success");
+    expect(
+      within(success).getByRole("link", { name: "View in the store" })
+    ).toHaveAttribute("href", "/en/productos/anillo-de-plata");
+  });
+
+  test("a publish that ends after the wizard was left does not move the address of the page shown instead", async () => {
+    const { queryClient, replaceState, unmount, user } = setup({
+      article: makeReadyDraft(),
+    });
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      createOrpcHandler("product.publish", async () => {
+        await held;
+        return { id: 12, slug: "anillo-de-plata", status: "published" };
+      })
+    );
+    await screen.findByTestId("product-screen");
+    await user.click(screen.getByTestId("product-publish"));
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getMutationCache()
+          .getAll()
+          .map((mutation) => mutation.state.status)
+      ).toContain("pending");
+    });
+    replaceState.mockClear();
+
+    unmount();
+    release();
+    await waitFor(() => {
+      expect(
+        queryClient
+          .getMutationCache()
+          .getAll()
+          .map((mutation) => mutation.state.status)
+      ).toContain("success");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   test("discards a saved draft after asking, and goes back to the list", async () => {
@@ -1634,6 +1785,29 @@ describe("ProductWizard: a published article", () => {
     expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:local-b");
   });
 
+  test("discarding the changes stops the photos on their way, so none lands in them afterwards", async () => {
+    const { setQueued, user } = setup({ article: published() });
+    await onStep("Article photos");
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "!");
+    setQueued([
+      {
+        key: "photo-1",
+        name: "a.jpg",
+        preview: "blob:a",
+        state: { percent: 30, status: "uploading" },
+      },
+    ]);
+
+    await chooseFromMenu(user, "Discard changes");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Yes, discard",
+      })
+    );
+
+    expect(queue.remove).toHaveBeenCalledExactlyOnceWith("photo-1");
+  });
+
   test("moving back to draft with nothing changed saves nothing", async () => {
     const { unpublish, update, user } = setup({ article: published() });
     await onStep("Article photos");
@@ -1680,6 +1854,72 @@ describe("ProductWizard: a published article", () => {
 });
 
 describe("ProductWizard: details", () => {
+  test("a new filter value is chosen in the choice as it is when the store answers, a chip dropped meanwhile staying dropped", async () => {
+    const { user } = setup({ url: "/en/admin/products/12?step=details" });
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      createOrpcHandler("attribute.createValue", async () => {
+        await held;
+        return { id: 99, position: 1, slug: "lila" };
+      })
+    );
+    const gold = await screen.findByRole("button", { name: "Gold" });
+    expect(gold).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Add to Color" }));
+    await user.type(
+      screen.getByRole("textbox", { name: "Name in Spanish" }),
+      "Lila"
+    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
+
+    // Gold dropped while the store has not answered yet.
+    await user.click(gold);
+    expect(gold).toHaveAttribute("aria-pressed", "false");
+    server.use(
+      createOrpcHandler("attribute.list", () => [
+        {
+          id: 1,
+          nameEn: "Color",
+          nameEs: "Color",
+          position: 0,
+          slug: "color",
+          values: [
+            {
+              id: 31,
+              nameEn: "Gold",
+              nameEs: "Dorado",
+              position: 0,
+              productCount: 1,
+              slug: "dorado",
+              swatchColor: "#d4af37",
+            },
+            {
+              id: 99,
+              nameEn: null,
+              nameEs: "Lila",
+              position: 1,
+              productCount: 0,
+              slug: "lila",
+              swatchColor: null,
+            },
+          ],
+        },
+      ])
+    );
+    release();
+
+    expect(
+      await screen.findByRole("button", { name: "Lila", pressed: true })
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Gold" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
   test.each([
     [
       "adds the new value and chooses it",
@@ -2089,9 +2329,15 @@ describe("ProductWizard: search and sharing", () => {
     ).not.toBeInTheDocument();
     await user.clear(title);
     await user.type(title, "Collar");
+    const description = screen.getByRole("textbox", { name: "Description" });
+    await user.clear(description);
+    await user.type(description, "Cadena de acero dorado.");
 
     expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
       "Collar · LR Market"
+    );
+    expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
+      "Cadena de acero dorado."
     );
     expect(screen.getByTestId("store-share-preview")).toHaveTextContent(
       "Collar"
