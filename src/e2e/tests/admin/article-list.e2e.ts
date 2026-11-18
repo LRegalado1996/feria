@@ -182,19 +182,20 @@ test.describe("the article list", () => {
     await expectDialogRemoved(page, list.sheet());
 
     // Removing a chip widens the list by that filter alone: without the
-    // availability the color still keeps only the gold ring, without the
-    // color both rings show; "Limpiar todo" keeps the search.
-    await list
-      .chips()
-      .getByRole("link", { name: "Quitar filtro: Disponibilidad: Disponible" })
-      .click();
-    await expect(page).not.toHaveURL(/availability=/u);
-    await list.expectTitles([`Anillo oro ${tag}`]);
+    // color the availability still keeps only the gold ring (the silver one
+    // cannot be bought), without the availability both rings show;
+    // "Limpiar todo" keeps the search.
     await list
       .chips()
       .getByRole("link", { name: `Quitar filtro: Color ${tag}: Dorado` })
       .click();
     await expect(page).not.toHaveURL(/f\./u);
+    await list.expectTitles([`Anillo oro ${tag}`]);
+    await list
+      .chips()
+      .getByRole("link", { name: "Quitar filtro: Disponibilidad: Disponible" })
+      .click();
+    await expect(page).not.toHaveURL(/availability=/u);
     await list.expectTitles([`Anillo plata ${tag}`, `Anillo oro ${tag}`]);
     await list.chips().getByRole("link", { name: "Limpiar todo" }).click();
     await expect(page).toHaveURL(new RegExp(`\\?q=${tag}$`, "u"));
@@ -204,7 +205,26 @@ test.describe("the article list", () => {
       `Anillo oro ${tag}`,
     ]);
 
-    // A group's slug stands for every category in it.
+    // A category keeps to its own articles, and a group's slug stands for
+    // every category in it, never another group's: a draft of the search
+    // in another group shows in neither.
+    const others = await db.seed.createCategory({
+      nameEs: `Otros ${tag}`,
+      slug: `otros-${tag}`,
+    });
+    const earrings = await db.seed.createCategory({
+      nameEs: `Aros ${tag}`,
+      parentId: others.id,
+      slug: `aros-${tag}`,
+    });
+    await db.seed.createArticle({
+      categoryId: earrings.id,
+      title: `Borrador aro ${tag}`,
+    });
+    await list.goto(`?q=${tag}&status=draft`);
+    await list.expectTitles([`Borrador aro ${tag}`, `Borrador ${tag}`]);
+    await list.goto(`?q=${tag}&category=anillos-${tag}&status=draft`);
+    await list.expectTitles([`Borrador ${tag}`]);
     await list.goto(`?q=${tag}&category=joyas-${tag}&status=draft`);
     await list.expectTitles([`Borrador ${tag}`]);
   });
