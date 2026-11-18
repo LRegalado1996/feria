@@ -28,7 +28,10 @@ vi.mock("@/lib/orpc/client", () => {
       "items" in json &&
       Array.isArray(json.items)
     ) {
-      for (const item of json.items) {
+      // `Array.isArray` leaves `any[]`; as `unknown[]` each row is narrowed.
+      const items: unknown[] = json.items;
+
+      for (const item of items) {
         if (
           typeof item === "object" &&
           item !== null &&
