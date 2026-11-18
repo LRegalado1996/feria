@@ -43,6 +43,14 @@ export const IMAGE_PURPOSE_MAX_BYTES = {
   product: 4_000_000,
 } as const satisfies Record<ImagePurpose, number>;
 
+/**
+ * The largest file the browser agrees to prepare at all (FER-017): a phone's
+ * photo is a few megabytes, so anything past this is refused at once, with
+ * its reason, before it is decoded. What travels is the prepared photo,
+ * held to its purpose's cap above.
+ */
+export const IMAGE_SOURCE_MAX_BYTES = 25_000_000;
+
 /** How long a client token lets the browser upload: a slow connection's minutes. */
 export const UPLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
 

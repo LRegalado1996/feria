@@ -1,9 +1,6 @@
-import { ORPCError } from "@orpc/client";
 import { useMutation } from "@tanstack/react-query";
-import { put } from "@vercel/blob/client";
 import { useEffect, useRef, useState } from "react";
 
-import { ERROR_WHYS } from "@/lib/errors";
 import { reportError } from "@/lib/errors/client";
 import { orpc } from "@/lib/orpc/client";
 import {
@@ -16,6 +13,7 @@ import {
   prepareImage,
   UnreadableImageError,
 } from "@/lib/upload/prepare-image";
+import { isUploadsNotConfigured, sendImage } from "@/lib/upload/send-image";
 
 /** Why an upload stopped: only `failed` is worth retrying as it is. */
 export type ImageUploadFailure =
@@ -23,25 +21,6 @@ export type ImageUploadFailure =
   | "notConfigured"
   | "tooLarge"
   | "unreadable";
-
-/**
- * The server has no Blob store to sign for (FER-051): no retry can succeed
- * until someone configures it, so the uploader says so instead.
- */
-function isUploadsNotConfigured(error: unknown): boolean {
-  if (!(error instanceof ORPCError) || error.code !== "SERVICE_UNAVAILABLE") {
-    return false;
-  }
-
-  const data: unknown = error.data;
-
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "why" in data &&
-    data.why === ERROR_WHYS.UPLOADS_NOT_CONFIGURED
-  );
-}
 
 export type ImageUploadState =
   | { status: "cancelled" }
@@ -131,22 +110,16 @@ export function useImageUpload({
       return;
     }
 
-    // The SDK can report progress after the transfer settled, resolved or
-    // failed: once it has, a report would take the photo back to
-    // "uploading", hiding Retry and keeping the form's Save shut.
-    let settled = false;
-    const uploaded = await put(pathname, prepared.blob, {
-      abortSignal: attempt.controller.signal,
-      access: "public",
-      contentType: prepared.contentType,
-      onUploadProgress: ({ percentage }) => {
-        if (!settled && isCurrent(attempt)) {
-          update({ percent: percentage, status: "uploading" });
+    const url = await sendImage({
+      onProgress: (percent) => {
+        if (isCurrent(attempt)) {
+          update({ percent, status: "uploading" });
         }
       },
+      pathname,
+      prepared,
+      signal: attempt.controller.signal,
       token,
-    }).finally(() => {
-      settled = true;
     });
 
     if (!isCurrent(attempt)) {
@@ -154,11 +127,7 @@ export function useImageUpload({
     }
 
     update({ status: "done" });
-    onUploaded({
-      height: prepared.height,
-      url: uploaded.url,
-      width: prepared.width,
-    });
+    onUploaded({ height: prepared.height, url, width: prepared.width });
   }
 
   async function run(attempt: Attempt) {
@@ -167,7 +136,9 @@ export function useImageUpload({
 
       if (!prepared) {
         update({ status: "preparing" });
-        prepared = await prepareImage(attempt.file);
+        prepared = await prepareImage(attempt.file, {
+          maxBytes: IMAGE_PURPOSE_MAX_BYTES[purpose],
+        });
         attempt.prepared = prepared;
       }
 
