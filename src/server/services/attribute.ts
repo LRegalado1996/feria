@@ -522,8 +522,9 @@ export async function deleteAttributeValue(
 
 /**
  * Replaces the values an article carries with `valueIds`, for a writer that
- * already holds the article's row lock (`saveProduct`, FER-017). Every value
- * must be the store's: one of another store's filter, or one deleted
+ * already holds the article's row lock (`createProduct`, `updateProduct`,
+ * FER-017). Every value must be the store's: one of another store's filter,
+ * or one deleted
  * meanwhile, is refused, never attached. Each is locked `share` to the end of
  * the transaction, so a value being deleted at the same time either is gone
  * (refused here) or waits for this write. A pair the article keeps is left as
