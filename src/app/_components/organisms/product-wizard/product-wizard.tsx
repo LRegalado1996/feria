@@ -596,6 +596,7 @@ function WizardEditor({
   const photosHeading = useRef<HTMLHeadingElement>(null);
   const moreButton = useRef<HTMLButtonElement>(null);
   const askedFromMenu = useRef(false);
+  const fieldsAfterClose = useRef(false);
   const successHeading = useRef<HTMLHeadingElement>(null);
   const stepAtCreation = useRef<WizardStep>("photos");
   const categories = useStoreCategories();
@@ -991,6 +992,15 @@ function WizardEditor({
   };
 
   const onUnpublish = async (articleId: number) => {
+    // Its unsaved changes become the draft's: a value the draft cannot hold
+    // (a third decimal) is corrected first, never rounded on its way. The
+    // field takes focus once the dialog has handed it back.
+    if (!(await form.trigger())) {
+      fieldsAfterClose.current = true;
+      setConfirming(null);
+      return;
+    }
+
     setBusy(true);
 
     try {
@@ -1020,8 +1030,13 @@ function WizardEditor({
     setBusy(true);
 
     try {
-      // A first photo's save may still be creating the draft: wait for it,
+      // A photo on its way would create the draft once it lands: stop them
+      // all. A first photo's save may already be creating it: wait for it,
       // or the draft would land after the person discarded it.
+      for (const item of queue.items) {
+        queue.remove(item.key);
+      }
+
       await flush();
       const saved = currentId();
 
@@ -1435,6 +1450,15 @@ function WizardEditor({
           setConfirming(null);
         }}
         onCloseAutoFocus={(event) => {
+          // Refused for a field: focus goes to the first one that fails.
+          if (fieldsAfterClose.current) {
+            fieldsAfterClose.current = false;
+            askedFromMenu.current = false;
+            event.preventDefault();
+            void checkFields();
+            return;
+          }
+
           // Asked from the menu, focus goes back to its button while it is
           // there (back to draft takes it away; the dialog then decides).
           const more = moreButton.current;

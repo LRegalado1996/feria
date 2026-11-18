@@ -598,6 +598,33 @@ describe("ProductWizard: a new article", () => {
     expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:local-a");
   });
 
+  test("discarding stops the photos on their way, so none creates the draft afterwards", async () => {
+    const { setQueued, user } = setup({ article: null });
+    await onStep("Article photos");
+    setQueued([
+      {
+        key: "photo-1",
+        name: "a.jpg",
+        preview: "blob:a",
+        state: { percent: 30, status: "uploading" },
+      },
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Discard draft" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Discard draft",
+      })
+    );
+
+    await waitFor(() => {
+      expect(navigation.push).toHaveBeenCalledExactlyOnceWith(
+        "/en/admin/products"
+      );
+    });
+    expect(queue.remove).toHaveBeenCalledExactlyOnceWith("photo-1");
+  });
+
   test("discards an article never saved by going back to the list", async () => {
     const { remove, user } = setup({ article: null });
     await onStep("Article photos");
@@ -1435,6 +1462,28 @@ describe("ProductWizard: a published article", () => {
     expect(
       within(screen.getByTestId("product-card-preview")).queryByRole("link")
     ).not.toBeInTheDocument();
+  });
+
+  test("does not move back to draft with a change the draft cannot hold, and takes the person to it", async () => {
+    const { unpublish, update, user } = setup({
+      article: published(),
+      kept: { baseUpdatedAt: UPDATED_AT, values: withPrice(12.345) },
+    });
+    await onStep("Article photos");
+
+    await chooseFromMenu(user, "Move to draft");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Yes, move to draft",
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("textbox", { name: "Price" })).toHaveFocus();
+    });
+    expect(unpublish).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem("feria:product-edit:12")).not.toBeNull();
   });
 
   test("moving back to draft with nothing changed saves nothing", async () => {
