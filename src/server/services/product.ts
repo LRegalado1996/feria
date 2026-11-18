@@ -926,9 +926,10 @@ function listWhere(
  * (`listOrder`), with how many match (counted up to
  * `STORE_PRODUCTS_COUNT_CAP`, `totalCapped` past it) and how many pages
  * that makes. A page past the last answers no rows and the same total, so
- * the screen can say so; past the cap the last is `ceil(cap / limit)`. Each article with its cover (its first photo),
- * the title that names it in `locale`, its price, status, availability and
- * category; the prices are in the store's currency, answered beside them.
+ * the screen can say so; past the cap the last is `ceil(cap / limit)`. Each
+ * article with its cover (its first photo), the title that names it in
+ * `locale`, its price, status, availability and category; the prices are in
+ * the store's currency, answered beside them.
  * One snapshot, so the count, the page and its rows agree.
  */
 export async function listStoreProducts(
