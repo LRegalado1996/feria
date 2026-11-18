@@ -190,7 +190,7 @@ describe("prepareImage", () => {
     ["a PNG", "image/png"],
     ["a WebP", "image/webp"],
   ])(
-    "keeps the transparency of %s as WebP with its alpha, painting nothing under it",
+    "keeps the transparency of %s as WebP with its alpha, painting nothing under it and reading no pixel",
     async (_case, type) => {
       const { context, encoded, file } = setup({ alpha: 0, type });
 
@@ -198,12 +198,8 @@ describe("prepareImage", () => {
 
       expect(prepared.contentType).toBe("image/webp");
       expect(encoded()).toEqual(["image/webp"]);
-      expect(context.getImageData).toHaveBeenCalledExactlyOnceWith(
-        0,
-        0,
-        2400,
-        1800
-      );
+      // WebP keeps the alpha anyway: reading the whole canvas would be waste.
+      expect(context.getImageData).not.toHaveBeenCalled();
       expect(context).not.toHaveProperty("fillStyle");
     }
   );
@@ -230,7 +226,7 @@ describe("prepareImage", () => {
   ])(
     "where WebP cannot be written, %s",
     async (_case, alpha, contentType, calls) => {
-      const { encoded, file } = setup({
+      const { context, encoded, file } = setup({
         alpha,
         encodes: ["image/jpeg"],
         type: "image/png",
@@ -238,6 +234,12 @@ describe("prepareImage", () => {
 
       await expect(prepareImage(file)).resolves.toMatchObject({ contentType });
       expect(encoded()).toEqual(calls);
+      expect(context.getImageData).toHaveBeenCalledExactlyOnceWith(
+        0,
+        0,
+        2400,
+        1800
+      );
     }
   );
 

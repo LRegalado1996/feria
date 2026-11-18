@@ -131,8 +131,8 @@ async function encodePng(
  * article's main photo, cut out by hand to sit on the storefront's grey
  * tile, FER-017) keeps them: WebP with its alpha, or PNG where WebP cannot
  * be written, never JPEG, which has no transparency. A PNG over `maxBytes`
- * is drawn smaller until it fits. A JPEG file has no transparency, so its
- * pixels are not inspected.
+ * is drawn smaller until it fits. The pixels are inspected only where WebP
+ * cannot be written, and never for a JPEG file, which has no transparency.
  *
  * Whatever the browser can decode is accepted, so an iPhone's HEIC works
  * where Safari reads it; elsewhere the picker hands over a JPEG already.
@@ -153,14 +153,16 @@ export async function prepareImage(
 
   try {
     const drawing = draw(bitmap, maxSide);
-    const transparent = file.type !== "image/jpeg" && hasTransparency(drawing);
     const webp = await encode(drawing.canvas, "image/webp");
 
+    // WebP keeps an alpha channel whatever the pixels hold, so they are
+    // read (a whole canvas, up to 2400 by 2400) only to choose between
+    // PNG and JPEG.
     if (webp?.type === "image/webp") {
       return prepared(webp, "image/webp", drawing);
     }
 
-    if (transparent) {
+    if (file.type !== "image/jpeg" && hasTransparency(drawing)) {
       return await encodePng(bitmap, drawing, maxBytes);
     }
 
