@@ -121,8 +121,11 @@ test.describe("the article list", () => {
       sheet.getByRole("button", { name: "Cerrar filtros" })
     ).toBeFocused();
 
-    // Escape drops a choice and gives focus back to "Filtros".
-    await sheet.getByRole("radio", { name: "Borrador" }).check();
+    // Escape drops a choice and gives focus back to "Filtros". The radio is
+    // hidden inside its pill: the keyboard reaches it.
+    await sheet.getByRole("radio", { name: "Borrador" }).focus();
+    await page.keyboard.press("Space");
+    await expect(sheet.getByRole("radio", { name: "Borrador" })).toBeChecked();
     await page.keyboard.press("Escape");
     await expectDialogRemoved(page, sheet);
     await expect(list.filtersButton()).toBeFocused();
@@ -178,11 +181,20 @@ test.describe("the article list", () => {
     await page.keyboard.press("Escape");
     await expectDialogRemoved(page, list.sheet());
 
-    // Removing a chip widens the list; "Limpiar todo" keeps the search.
+    // Removing a chip widens the list by that filter alone: without the
+    // availability the color still keeps only the gold ring, without the
+    // color both rings show; "Limpiar todo" keeps the search.
     await list
       .chips()
       .getByRole("link", { name: "Quitar filtro: Disponibilidad: Disponible" })
       .click();
+    await expect(page).not.toHaveURL(/availability=/u);
+    await list.expectTitles([`Anillo oro ${tag}`]);
+    await list
+      .chips()
+      .getByRole("link", { name: `Quitar filtro: Color ${tag}: Dorado` })
+      .click();
+    await expect(page).not.toHaveURL(/f\./u);
     await list.expectTitles([`Anillo plata ${tag}`, `Anillo oro ${tag}`]);
     await list.chips().getByRole("link", { name: "Limpiar todo" }).click();
     await expect(page).toHaveURL(new RegExp(`\\?q=${tag}$`, "u"));
@@ -327,7 +339,11 @@ test.describe("the article list on a phone", () => {
     await list.openFilters();
     const box = await list.sheet().boundingBox();
     expect(box?.width).toBe(390);
-    await list.sheet().getByRole("radio", { name: "Borrador" }).check();
+    // A tap on the pill, the radio's label, chooses it.
+    await list.statusChoice("Borrador").click();
+    await expect(
+      list.sheet().getByRole("radio", { name: "Borrador" })
+    ).toBeChecked();
     await list.sheet().getByRole("button", { name: "Aplicar" }).click();
     await expectDialogRemoved(page, list.sheet());
     await list.expectTitles([`Borrador ${tag}`]);

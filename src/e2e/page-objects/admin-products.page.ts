@@ -51,6 +51,16 @@ export class AdminProductsPage extends AdminPage {
       .getByRole("checkbox", { name: value, exact: true });
   }
 
+  /**
+   * A status's pill in the sheet: the label a finger taps, around a radio
+   * hidden for the eye.
+   */
+  statusChoice(name: string): Locator {
+    return this.sheet()
+      .getByRole("group", { name: "Estado" })
+      .getByText(name, { exact: true });
+  }
+
   /** Opens the filter sheet: the first harmless open after a load. */
   async openFilters(): Promise<void> {
     await this.clickUntilVisible(this.filtersButton(), this.sheet());
@@ -79,7 +89,9 @@ export class AdminProductsPage extends AdminPage {
     return this.list()
       .getByRole("columnheader")
       .filter({
-        has: this.sortHeader(sort),
+        // `has` resolves from each header: a locator of its own, not the
+        // list's (`sortHeader`), which no header holds.
+        has: this.page.getByTestId(`sort-${sort}`),
       });
   }
 
