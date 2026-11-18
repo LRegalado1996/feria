@@ -45,6 +45,12 @@ export const articles: Dictionary["articles"] = {
       close: "Close filters",
       description:
         "Choose which articles to see. The list changes when you tap Apply.",
+      limitCategories:
+        "Up to {count} categories at once: remove one to choose another.",
+      limitFilters:
+        "Up to {count} filters at once: clear another to use this one.",
+      limitValues:
+        "Up to {count} values per filter: remove one to choose another.",
       matches: "{count} articles match",
       matchesCapped: "Over {count} articles match",
       matchesNone: "No article matches",

@@ -45,6 +45,12 @@ export const articles = {
       clear: "Limpiar",
       close: "Cerrar filtros",
       description: "Elegí qué artículos ver. La lista cambia al tocar Aplicar.",
+      limitCategories:
+        "Hasta {count} categorías a la vez: quitá una para elegir otra.",
+      limitFilters:
+        "Hasta {count} filtros a la vez: quitá los valores de otro para usar este.",
+      limitValues:
+        "Hasta {count} valores por filtro: quitá uno para elegir otro.",
       matches: "Coinciden {count} artículos",
       matchesCapped: "Coinciden más de {count} artículos",
       matchesNone: "Ningún artículo coincide",

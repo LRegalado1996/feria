@@ -422,6 +422,111 @@ describe("ProductFilterPanel", () => {
     );
   });
 
+  test("refuses a category past the twenty the address keeps, and says why, until one is removed", async () => {
+    const many = Array.from({ length: 21 }, (_, index) =>
+      makeStoreCategory({
+        id: 100 + index,
+        nameEn: `Category ${index + 1}`,
+        nameEs: `Categoría ${index + 1}`,
+        position: index,
+        slug: `category-${index + 1}`,
+      })
+    );
+    const { open, user } = setup({
+      categories: many,
+      query: makeQuery({
+        categories: many.slice(0, 19).map((category) => category.slug),
+      }),
+    });
+    const sheet = await open();
+    const box = (position: number) =>
+      within(
+        within(sheet).getByTestId(`filter-category-category-${position}`)
+      ).getByRole("checkbox");
+    expect(within(sheet).queryByTestId("filter-limit")).toBeNull();
+
+    // The twentieth is still taken; then the twenty-first is refused.
+    await user.click(box(20));
+    expect(box(20)).toBeChecked();
+    expect(box(21)).toBeDisabled();
+    expect(box(1)).toBeEnabled();
+    expect(within(sheet).getByTestId("filter-limit")).toHaveTextContent(
+      "Up to 20 categories at once: remove one to choose another."
+    );
+
+    await user.click(box(1));
+    expect(box(21)).toBeEnabled();
+    expect(within(sheet).queryByTestId("filter-limit")).toBeNull();
+  });
+
+  test("refuses a value past the twenty a filter keeps, and a filter past the ten the address keeps", async () => {
+    const values = Array.from({ length: 21 }, (_, index) =>
+      makeValue(index + 1, `value-${index + 1}`, {
+        nameEn: `Value ${index + 1}`,
+        nameEs: `Valor ${index + 1}`,
+      })
+    );
+    const filters: ListAttribute[] = Array.from({ length: 11 }, (_, index) => ({
+      id: 200 + index,
+      nameEn: `Filter ${index + 1}`,
+      nameEs: `Filtro ${index + 1}`,
+      position: index,
+      slug: `filter-${index + 1}`,
+      values:
+        index === 0
+          ? values
+          : [
+              makeValue(300 + index, "only", {
+                nameEn: `Only ${index + 1}`,
+                nameEs: `Único ${index + 1}`,
+              }),
+            ],
+    }));
+    const { open } = setup({
+      attributes: filters,
+      query: makeQuery({
+        filters: [
+          {
+            attribute: "filter-1",
+            values: values.slice(0, 20).map((value) => value.slug),
+          },
+          ...filters.slice(1, 10).map((filter) => ({
+            attribute: filter.slug,
+            values: ["only"],
+          })),
+        ],
+      }),
+    });
+    const sheet = await open();
+    const group = (name: string) => within(sheet).getByRole("group", { name });
+
+    // Twenty values of the first filter: its twenty-first is refused.
+    expect(
+      within(group("Filter 1")).getByRole("checkbox", { name: "Value 21" })
+    ).toBeDisabled();
+    expect(
+      within(group("Filter 1")).getByRole("checkbox", { name: "Value 20" })
+    ).toBeEnabled();
+    expect(
+      within(group("Filter 1")).getByTestId("filter-limit")
+    ).toHaveTextContent(
+      "Up to 20 values per filter: remove one to choose another."
+    );
+    // Ten filters in use: an eleventh takes nothing, the tenth still does.
+    expect(
+      within(group("Filter 11")).getByRole("checkbox", { name: "Only 11" })
+    ).toBeDisabled();
+    expect(
+      within(group("Filter 11")).getByTestId("filter-limit")
+    ).toHaveTextContent(
+      "Up to 10 filters at once: clear another to use this one."
+    );
+    expect(
+      within(group("Filter 10")).getByRole("checkbox", { name: "Only 10" })
+    ).toBeEnabled();
+    expect(within(group("Filter 10")).queryByTestId("filter-limit")).toBeNull();
+  });
+
   test("Escape drops the choice: the sheet opens again on the address's selection", async () => {
     const { button, open, user } = setup({
       query: makeQuery({ status: "draft" }),

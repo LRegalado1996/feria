@@ -37,6 +37,8 @@ import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useProducts } from "@/lib/hooks/product";
 import { interpolate } from "@/lib/i18n/interpolate";
 import {
+  CATALOG_FILTER_VALUES_MAX,
+  CATALOG_FILTERS_MAX,
   PRODUCT_AVAILABILITIES,
   PRODUCT_STATUSES,
 } from "@/lib/schemas/catalog";
@@ -115,6 +117,15 @@ function Section({
       </legend>
       {children}
     </fieldset>
+  );
+}
+
+/** Why no more can be chosen in a section, under its choices. */
+function LimitNote({ children }: { children: string }) {
+  return (
+    <p className="text-xs text-muted-foreground" data-testid="filter-limit">
+      {children}
+    </p>
   );
 }
 
@@ -252,135 +263,194 @@ function PanelForm({
           <FormField
             control={form.control}
             name="categories"
-            render={({ field }) => (
-              <Section legend={copy.filters.category}>
-                {listedCategories.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {copy.filters.noCategories}
-                  </p>
-                ) : (
-                  <ul className="grid gap-0.5">
-                    {groups.map((group) => {
-                      const inside = listedCategories.filter(
-                        (category) => category.parentId === group.id
-                      );
+            render={({ field }) => {
+              // The address keeps this many (`readProductsQuery`): past it a
+              // choice is refused here, never dropped on "Aplicar".
+              const categoriesFull =
+                field.value.length >= CATALOG_FILTER_VALUES_MAX;
 
-                      return (
-                        <li key={group.id}>
-                          {[group, ...inside].map((category) => (
-                            <label
-                              className={cn(
-                                "flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm hover:bg-accent md:min-h-9",
-                                category !== group && "ml-6",
-                                FOCUS_WITHIN
-                              )}
-                              data-testid={`filter-category-${category.slug}`}
-                              key={category.id}
-                            >
-                              <input
-                                checked={field.value.includes(category.slug)}
-                                className="size-4 shrink-0 accent-primary"
-                                name={field.name}
-                                onChange={() => {
-                                  field.onChange(
-                                    toggled(field.value, category.slug)
-                                  );
-                                }}
-                                type="checkbox"
-                                value={category.slug}
-                              />
-                              <span
+              return (
+                <Section legend={copy.filters.category}>
+                  {listedCategories.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {copy.filters.noCategories}
+                    </p>
+                  ) : (
+                    <ul className="grid gap-0.5">
+                      {groups.map((group) => {
+                        const inside = listedCategories.filter(
+                          (category) => category.parentId === group.id
+                        );
+
+                        return (
+                          <li key={group.id}>
+                            {[group, ...inside].map((category) => (
+                              <label
                                 className={cn(
-                                  "min-w-0 flex-1 truncate",
-                                  inside.length > 0 &&
-                                    category === group &&
-                                    "font-medium"
+                                  "flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm hover:bg-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 md:min-h-9",
+                                  category !== group && "ml-6",
+                                  FOCUS_WITHIN
                                 )}
+                                data-testid={`filter-category-${category.slug}`}
+                                key={category.id}
                               >
-                                {nameIn(category, locale)}
-                              </span>
-                              <span className="text-xs text-muted-foreground tabular-nums">
-                                {formatInteger(
-                                  category === group
-                                    ? inside.reduce(
-                                        (sum, one) => sum + one.productCount,
-                                        group.productCount
-                                      )
-                                    : category.productCount,
-                                  locale
-                                )}
-                              </span>
-                            </label>
-                          ))}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </Section>
-            )}
+                                <input
+                                  checked={field.value.includes(category.slug)}
+                                  className="size-4 shrink-0 accent-primary"
+                                  disabled={
+                                    categoriesFull &&
+                                    !field.value.includes(category.slug)
+                                  }
+                                  name={field.name}
+                                  onChange={() => {
+                                    field.onChange(
+                                      toggled(field.value, category.slug)
+                                    );
+                                  }}
+                                  type="checkbox"
+                                  value={category.slug}
+                                />
+                                <span
+                                  className={cn(
+                                    "min-w-0 flex-1 truncate",
+                                    inside.length > 0 &&
+                                      category === group &&
+                                      "font-medium"
+                                  )}
+                                >
+                                  {nameIn(category, locale)}
+                                </span>
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                  {formatInteger(
+                                    category === group
+                                      ? inside.reduce(
+                                          (sum, one) => sum + one.productCount,
+                                          group.productCount
+                                        )
+                                      : category.productCount,
+                                    locale
+                                  )}
+                                </span>
+                              </label>
+                            ))}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {categoriesFull ? (
+                    <LimitNote>
+                      {interpolate(copy.filters.limitCategories, {
+                        count: formatInteger(CATALOG_FILTER_VALUES_MAX, locale),
+                      })}
+                    </LimitNote>
+                  ) : null}
+                </Section>
+              );
+            }}
           />
           <FormField
             control={form.control}
             name="values"
-            render={({ field }) => (
-              <>
-                {(attributes ?? [])
-                  .filter((attribute) => attribute.values.length > 0)
-                  .map((attribute) => (
-                    <Section
-                      key={attribute.id}
-                      legend={nameIn(attribute, locale)}
-                    >
-                      <div
-                        className="flex flex-wrap gap-2"
-                        data-testid={`filter-attribute-${attribute.slug}`}
-                      >
-                        {attribute.values.map((option) => {
-                          const token = valueToken(attribute.slug, option.slug);
-                          const chosen = field.value.includes(token);
+            render={({ field }) => {
+              const listed = (attributes ?? []).filter(
+                (attribute) => attribute.values.length > 0
+              );
+              const chosenIn = (attribute: ListAttribute) =>
+                attribute.values.filter((option) =>
+                  field.value.includes(valueToken(attribute.slug, option.slug))
+                ).length;
+              // The address keeps this many filters and values of each.
+              const filtersFull =
+                listed.filter((attribute) => chosenIn(attribute) > 0).length >=
+                CATALOG_FILTERS_MAX;
 
-                          return (
-                            <label
-                              className={cn(
-                                "inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border px-3 text-sm transition-colors md:min-h-8",
-                                chosen
-                                  ? "border-foreground bg-foreground text-background"
-                                  : "bg-card hover:bg-accent",
-                                FOCUS_WITHIN
-                              )}
-                              key={option.id}
-                            >
-                              <input
-                                checked={chosen}
-                                className="sr-only"
-                                name={field.name}
-                                onChange={() => {
-                                  field.onChange(toggled(field.value, token));
-                                }}
-                                type="checkbox"
-                                value={token}
-                              />
-                              {option.swatchColor ? (
-                                <span
-                                  aria-hidden
-                                  className="size-3.5 shrink-0 rounded-full border border-border"
-                                  style={{
-                                    backgroundColor: option.swatchColor,
+              return (
+                <>
+                  {listed.map((attribute) => {
+                    const chosenHere = chosenIn(attribute);
+                    const valuesFull = chosenHere >= CATALOG_FILTER_VALUES_MAX;
+                    const filterClosed = filtersFull && chosenHere === 0;
+
+                    return (
+                      <Section
+                        key={attribute.id}
+                        legend={nameIn(attribute, locale)}
+                      >
+                        <div
+                          className="flex flex-wrap gap-2"
+                          data-testid={`filter-attribute-${attribute.slug}`}
+                        >
+                          {attribute.values.map((option) => {
+                            const token = valueToken(
+                              attribute.slug,
+                              option.slug
+                            );
+                            const chosen = field.value.includes(token);
+
+                            return (
+                              <label
+                                className={cn(
+                                  "inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border px-3 text-sm transition-colors has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 md:min-h-8",
+                                  chosen
+                                    ? "border-foreground bg-foreground text-background"
+                                    : "bg-card hover:bg-accent",
+                                  FOCUS_WITHIN
+                                )}
+                                key={option.id}
+                              >
+                                <input
+                                  checked={chosen}
+                                  className="sr-only"
+                                  disabled={
+                                    !chosen && (valuesFull || filterClosed)
+                                  }
+                                  name={field.name}
+                                  onChange={() => {
+                                    field.onChange(toggled(field.value, token));
                                   }}
+                                  type="checkbox"
+                                  value={token}
                                 />
-                              ) : null}
-                              <span className="truncate">
-                                {nameIn(option, locale)}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </Section>
-                  ))}
-              </>
-            )}
+                                {option.swatchColor ? (
+                                  <span
+                                    aria-hidden
+                                    className="size-3.5 shrink-0 rounded-full border border-border"
+                                    style={{
+                                      backgroundColor: option.swatchColor,
+                                    }}
+                                  />
+                                ) : null}
+                                <span className="truncate">
+                                  {nameIn(option, locale)}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {valuesFull || filterClosed ? (
+                          <LimitNote>
+                            {interpolate(
+                              valuesFull
+                                ? copy.filters.limitValues
+                                : copy.filters.limitFilters,
+                              {
+                                count: formatInteger(
+                                  valuesFull
+                                    ? CATALOG_FILTER_VALUES_MAX
+                                    : CATALOG_FILTERS_MAX,
+                                  locale
+                                ),
+                              }
+                            )}
+                          </LimitNote>
+                        ) : null}
+                      </Section>
+                    );
+                  })}
+                </>
+              );
+            }}
           />
         </SheetBody>
         <SheetFooter className="grid gap-3">
