@@ -874,7 +874,7 @@ describe("ProductWizard: autosave", () => {
       expect(update).toHaveBeenCalledExactlyOnceWith(
         savedValues(article, (values) => ({
           ...values,
-          images: values.images.toReversed(),
+          images: [required(values.images[1]), required(values.images[0])],
         }))
       );
     });
