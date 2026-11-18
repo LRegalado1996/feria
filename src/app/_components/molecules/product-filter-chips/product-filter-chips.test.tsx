@@ -240,6 +240,47 @@ describe("ProductFilterChips", () => {
     expect(name).toHaveFocus();
   });
 
+  test("a value saved after its filter's form was closed and opened again leaves the new form as it is", async () => {
+    const onChange = vi.fn<(ids: number[]) => void>();
+    let answer = (_created: { id: number; result: "saved" }): void => undefined;
+    const onCreateValue = vi.fn(
+      async () =>
+        await new Promise<{ id: number; result: "saved" }>((resolve) => {
+          answer = resolve;
+        })
+    );
+    const user = userEvent.setup();
+    renderWithI18n(
+      <ProductFilterChips
+        attributes={[makeAttribute()]}
+        onChange={onChange}
+        onCreateValue={onCreateValue}
+        value={[]}
+      />
+    );
+    const opener = screen.getByRole("button", { name: "Add to Color" });
+    await user.click(opener);
+    const first = screen.getByRole("form", { name: "New Color value" });
+    await user.type(within(first).getByLabelText(/^Name in Spanish/u), "Rosa");
+    await user.click(within(first).getByRole("button", { name: "Add" }));
+
+    // Closed by its button and opened again while the save is on its way.
+    await user.click(opener);
+    await user.click(opener);
+    const name = within(
+      screen.getByRole("form", { name: "New Color value" })
+    ).getByLabelText(/^Name in Spanish/u);
+    await user.type(name, "Coral");
+    await act(async () => {
+      answer({ id: 99, result: "saved" });
+      await Promise.resolve();
+    });
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([99]);
+    expect(name).toHaveValue("Coral");
+    expect(name).toHaveFocus();
+  });
+
   test("keeps the form open with the reason when the name is taken, choosing nothing", async () => {
     const { filter, onChange, user } = setup({
       created: { result: "duplicate" },

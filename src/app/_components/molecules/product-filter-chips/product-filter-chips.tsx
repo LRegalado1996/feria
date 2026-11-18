@@ -54,14 +54,20 @@ function ProductFilterChips({
   const { articles } = useDictionary();
   const copy = articles.wizard.details;
   const en = useLocale() === "en";
-  const [adding, setAdding] = useState<number | null>(null);
+  // The form open now, and which opening of it: a save from an earlier
+  // opening (the person reopened it meanwhile) closes nothing.
+  const [adding, setAdding] = useState<{
+    attributeId: number;
+    opening: number;
+  } | null>(null);
+  const openings = useRef(0);
   const formTitle = useId();
   const openers = useRef(new Map<number, HTMLButtonElement>());
   // The choice as it is now: a value being added is chosen once the store
   // answers, on top of whatever was tapped while it was on its way.
   const latest = useRef(value);
-  // The form open now: a save that ends after another was opened closes
-  // nothing and takes no focus.
+  // The form open now: a save that ends after another was opened, or after
+  // this one was opened again, closes nothing and takes no focus.
   const open = useRef(adding);
 
   useEffect(() => {
@@ -91,8 +97,8 @@ function ProductFilterChips({
     );
   };
 
-  const close = (attributeId: number) => {
-    if (open.current !== attributeId) {
+  const close = (attributeId: number, opening: number) => {
+    if (open.current?.opening !== opening) {
       return;
     }
 
@@ -147,9 +153,17 @@ function ProductFilterChips({
                 );
               })}
               <Button
-                aria-expanded={adding === attribute.id}
+                aria-expanded={adding?.attributeId === attribute.id}
                 onClick={() => {
-                  setAdding(adding === attribute.id ? null : attribute.id);
+                  openings.current += 1;
+                  setAdding(
+                    adding?.attributeId === attribute.id
+                      ? null
+                      : {
+                          attributeId: attribute.id,
+                          opening: openings.current,
+                        }
+                  );
                 }}
                 ref={(node) => {
                   if (node) {
@@ -166,8 +180,11 @@ function ProductFilterChips({
                 {interpolate(copy.addValue, { filter: filterName })}
               </Button>
             </div>
-            {adding === attribute.id ? (
-              <div className="grid gap-3 rounded-lg border bg-muted/40 p-3">
+            {adding?.attributeId === attribute.id ? (
+              <div
+                className="grid gap-3 rounded-lg border bg-muted/40 p-3"
+                key={adding.opening}
+              >
                 <p className="text-sm font-medium" id={formTitle}>
                   {interpolate(copy.addValueName, { filter: filterName })}
                 </p>
@@ -175,7 +192,7 @@ function ProductFilterChips({
                   focusOnOpen
                   labelledBy={formTitle}
                   onCancel={() => {
-                    close(attribute.id);
+                    close(attribute.id, adding.opening);
                   }}
                   onSave={async (values) => {
                     const { id, result } = await onCreateValue(
@@ -187,7 +204,7 @@ function ProductFilterChips({
                       if (id !== undefined && !latest.current.includes(id)) {
                         onChange([...latest.current, id]);
                       }
-                      close(attribute.id);
+                      close(attribute.id, adding.opening);
                     }
 
                     return result;
