@@ -188,8 +188,10 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const locale = useLocale();
   const now = useNow(renderedAt);
   const products = useProducts(productsListInput(query, locale));
-  const categories = useStoreCategories().data ?? [];
-  const attributes = useStoreAttributes().data ?? [];
+  // `undefined` until read: the filter panel keeps the address's selection
+  // rather than drop it as unknown to a list it has not got.
+  const categories = useStoreCategories().data;
+  const attributes = useStoreAttributes().data;
   const page = products.data;
   const filtersButton = useRef<HTMLButtonElement>(null);
   const table = useRef<HTMLTableElement>(null);
@@ -208,8 +210,8 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   }, [shownPage]);
 
   const chips = activeFilterChips(query, {
-    attributes,
-    categories,
+    attributes: attributes ?? [],
+    categories: categories ?? [],
     copy,
     locale,
   });

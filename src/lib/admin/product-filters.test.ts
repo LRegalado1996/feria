@@ -326,6 +326,46 @@ describe("filter form values", () => {
     });
   });
 
+  test.each([
+    ["neither list is read", false, false, ["relojes"], ["rojo", "dorado"]],
+    ["only the filters are read", false, true, ["relojes"], ["dorado"]],
+    ["only the categories are read", true, false, [], ["rojo", "dorado"]],
+  ])(
+    "while %s, applying keeps the address's slugs no list can vouch for, less those the form let go",
+    (_case, categoriesRead, attributesRead, kept, colors) => {
+      const { attributes, categories } = setup();
+      const query = makeQuery({
+        categories: ["relojes", "aros"],
+        filters: [
+          { attribute: "color", values: ["rojo", "dorado"] },
+          { attribute: "talle", values: ["s"] },
+        ],
+        page: 3,
+      });
+
+      expect(
+        applyFilterForm(
+          query,
+          {
+            ...filterFormValues(query),
+            // Let go in the form: a category and a whole filter.
+            categories: ["relojes"],
+            values: ["color:rojo", "color:dorado"],
+          },
+          {
+            attributes: attributesRead ? attributes : undefined,
+            categories: categoriesRead ? categories : undefined,
+          }
+        )
+      ).toEqual({
+        ...query,
+        categories: kept,
+        filters: [{ attribute: "color", values: colors }],
+        page: 1,
+      });
+    }
+  );
+
   test("applying the empty form clears every filter", () => {
     const { attributes, categories } = setup();
     const query = makeQuery({

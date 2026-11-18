@@ -12,8 +12,10 @@ import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { ProductList } from "./product-list";
 
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, replace: vi.fn() }),
 }));
 
 // The shared client mock (`@/test/mocks/orpc-client`) reads the JSON alone,
@@ -184,8 +186,11 @@ const REFUSAL = {
 
 // A link followed in a test goes nowhere: the screen is given its next
 // address by hand, as the page would hand it over.
+// Only a link's click: a button's prevented would never open its sheet.
 function stayOnPage(event: MouseEvent) {
-  event.preventDefault();
+  if (event.target instanceof Element && event.target.closest("a[href]")) {
+    event.preventDefault();
+  }
 }
 
 afterEach(() => {
@@ -198,11 +203,14 @@ afterEach(() => {
  */
 function setup({
   answer = () => makePage([makeItem(9), makeItem(8)]),
+  listsFail = false,
   locale = "en",
   query = makeQuery(),
   refuses = false,
 }: {
   answer?: (input: unknown) => ReturnType<typeof makePage>;
+  /** Whether the store's categories and filters fail to load. */
+  listsFail?: boolean;
   locale?: Locale;
   query?: ProductsQuery;
   refuses?: boolean;
@@ -214,8 +222,12 @@ function setup({
     refuses
       ? createOrpcErrorHandler("product.list", REFUSAL)
       : createOrpcHandler("product.list", list),
-    createOrpcHandler("category.list", () => CATEGORIES),
-    createOrpcHandler("attribute.list", () => ATTRIBUTES)
+    listsFail
+      ? createOrpcErrorHandler("category.list", REFUSAL)
+      : createOrpcHandler("category.list", () => CATEGORIES),
+    listsFail
+      ? createOrpcErrorHandler("attribute.list", REFUSAL)
+      : createOrpcHandler("attribute.list", () => ATTRIBUTES)
   );
   window.addEventListener("click", stayOnPage, true);
   const view = renderWithI18n(
@@ -443,6 +455,29 @@ describe("ProductList", () => {
     ]);
     expect(screen.getByTestId("product-filters-button")).toHaveAccessibleName(
       "Filters, 2 active"
+    );
+  });
+
+  test("with the store's categories and filters unread, applying the filters keeps the address's own", async () => {
+    const { user } = setup({
+      listsFail: true,
+      query: makeQuery({
+        categories: ["anillos"],
+        filters: [{ attribute: "color", values: ["dorado"] }],
+      }),
+    });
+    await screen.findByTestId("product-row-9");
+
+    await user.click(screen.getByTestId("product-filters-button"));
+    await user.click(
+      within(screen.getByTestId("product-filters-sheet")).getByRole("button", {
+        name: "Apply",
+      })
+    );
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      "/en/admin/products?category=anillos&f.color=dorado",
+      { scroll: false }
     );
   });
 

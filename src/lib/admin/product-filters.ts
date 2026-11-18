@@ -168,7 +168,10 @@ export function filterFormValues(query: ProductsQuery): FilterFormValues {
  * `query` with the panel's fields in place of its filters, from the first
  * page; the search and the order stay. The categories and the filter
  * values come in the store's order, so one selection is always one
- * address; one the store does not have is dropped.
+ * address; one the store does not have is dropped. A list not read yet, or
+ * whose read failed (`undefined`), cannot tell which slugs the store has:
+ * the address's own then stay as they were, less those the form let go
+ * ("Limpiar"), rather than every one being dropped as unknown.
  */
 export function applyFilterForm(
   query: ProductsQuery,
@@ -177,27 +180,32 @@ export function applyFilterForm(
     attributes,
     categories,
   }: {
-    attributes: readonly ListAttribute[];
-    categories: readonly ListCategory[];
+    attributes: readonly ListAttribute[] | undefined;
+    categories: readonly ListCategory[] | undefined;
   }
 ): ProductsQuery {
+  const kept = (attribute: string, slugs: readonly string[]) =>
+    slugs.filter((slug) => values.values.includes(valueToken(attribute, slug)));
+  const filters = attributes
+    ? attributes.map((attribute) => ({
+        attribute: attribute.slug,
+        values: kept(
+          attribute.slug,
+          attribute.values.map((value) => value.slug)
+        ),
+      }))
+    : query.filters.map((filter) => ({
+        attribute: filter.attribute,
+        values: kept(filter.attribute, filter.values),
+      }));
+
   return {
     ...query,
     availability: values.availability === "" ? null : values.availability,
-    categories: categories
-      .map((category) => category.slug)
-      .filter((slug) => values.categories.includes(slug)),
-    filters: attributes.flatMap((attribute) => {
-      const chosen = attribute.values
-        .map((value) => value.slug)
-        .filter((slug) =>
-          values.values.includes(valueToken(attribute.slug, slug))
-        );
-
-      return chosen.length > 0
-        ? [{ attribute: attribute.slug, values: chosen }]
-        : [];
-    }),
+    categories: (
+      categories?.map((category) => category.slug) ?? query.categories
+    ).filter((slug) => values.categories.includes(slug)),
+    filters: filters.filter((filter) => filter.values.length > 0),
     page: 1,
     status: values.status === "" ? null : values.status,
   };

@@ -45,8 +45,12 @@ import { formatInteger } from "@/lib/utils/format";
 export interface ProductFilterPanelProps {
   /** How many filter values narrow the list now (`activeFilterChips`). */
   activeCount: number;
-  attributes: readonly ListAttribute[];
-  categories: readonly ListCategory[];
+  /**
+   * The store's filters and categories, `undefined` while not read (or
+   * failed): the address's own selection then stays as it is on "Aplicar".
+   */
+  attributes: readonly ListAttribute[] | undefined;
+  categories: readonly ListCategory[] | undefined;
   className?: string;
   /** The list's selection in the address, already read. */
   query: ProductsQuery;
@@ -148,7 +152,10 @@ function PanelForm({
   const draft = applyFilterForm(query, values, { attributes, categories });
   // How many the draft would show: one row read, its total kept.
   const counted = useProducts(productsListInput(draft, locale, 1));
-  const groups = categories.filter((category) => category.parentId === null);
+  const listedCategories = categories ?? [];
+  const groups = listedCategories.filter(
+    (category) => category.parentId === null
+  );
 
   let matches = copy.filters.matches;
 
@@ -234,14 +241,14 @@ function PanelForm({
             name="categories"
             render={({ field }) => (
               <Section legend={copy.filters.category}>
-                {categories.length === 0 ? (
+                {listedCategories.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     {copy.filters.noCategories}
                   </p>
                 ) : (
                   <ul className="grid gap-0.5">
                     {groups.map((group) => {
-                      const inside = categories.filter(
+                      const inside = listedCategories.filter(
                         (category) => category.parentId === group.id
                       );
 
@@ -305,7 +312,7 @@ function PanelForm({
             name="values"
             render={({ field }) => (
               <>
-                {attributes
+                {(attributes ?? [])
                   .filter((attribute) => attribute.values.length > 0)
                   .map((attribute) => (
                     <Section

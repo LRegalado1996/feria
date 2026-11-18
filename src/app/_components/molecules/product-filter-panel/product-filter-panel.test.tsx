@@ -115,6 +115,7 @@ function setup({
   activeCount = 0,
   attributes = ATTRIBUTES,
   categories = CATEGORIES,
+  listsRead = true,
   locale = "en",
   query = makeQuery(),
   total = 7,
@@ -123,6 +124,8 @@ function setup({
   activeCount?: number;
   attributes?: ListAttribute[];
   categories?: typeof CATEGORIES;
+  /** Whether the store's categories and filters have been read. */
+  listsRead?: boolean;
   locale?: Locale;
   query?: ProductsQuery;
   total?: number;
@@ -133,8 +136,8 @@ function setup({
   renderWithI18n(
     <ProductFilterPanel
       activeCount={activeCount}
-      attributes={attributes}
-      categories={categories}
+      attributes={listsRead ? attributes : undefined}
+      categories={listsRead ? categories : undefined}
       className="custom"
       query={query}
     />,
@@ -377,6 +380,36 @@ describe("ProductFilterPanel", () => {
       expect(screen.queryByTestId("product-filters-sheet")).toBeNull();
     });
     expect(button()).toHaveFocus();
+  });
+
+  test("before the store's categories and filters are read, Apply and the count keep the address's own", async () => {
+    const { list, open, user } = setup({
+      listsRead: false,
+      query: makeQuery({
+        categories: ["anillos"],
+        filters: [{ attribute: "color", values: ["dorado"] }],
+        q: "aro",
+      }),
+    });
+    const sheet = await open();
+    await user.click(within(sheet).getByRole("radio", { name: "Published" }));
+
+    await waitFor(() => {
+      expect(list).toHaveBeenLastCalledWith({
+        categories: ["anillos"],
+        filters: [{ attribute: "color", values: ["dorado"] }],
+        limit: 1,
+        locale: "en",
+        q: "aro",
+        status: "published",
+      });
+    });
+    await user.click(within(sheet).getByRole("button", { name: "Apply" }));
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      "/en/admin/products?q=aro&status=published&category=anillos&f.color=dorado",
+      { scroll: false }
+    );
   });
 
   test("Escape drops the choice: the sheet opens again on the address's selection", async () => {
