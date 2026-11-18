@@ -1,6 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { createRef } from "react";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 
 import type { FilterChip } from "@/lib/admin/product-filters";
 import { EMPTY_PRODUCTS_QUERY } from "@/lib/admin/products";
@@ -34,6 +34,18 @@ function hrefOf(chip: FilterChip) {
   return `/en/admin/products?without=${chip.id}`;
 }
 
+// A chip followed in a test goes nowhere: the list is handed its next chips
+// by hand, as the page would hand them over.
+function stayOnPage(event: MouseEvent) {
+  if (event.target instanceof Element && event.target.closest("a[href]")) {
+    event.preventDefault();
+  }
+}
+
+afterEach(() => {
+  window.removeEventListener("click", stayOnPage, true);
+});
+
 function setup({
   chips = [STATUS, GOLD],
   locale = "en",
@@ -53,11 +65,15 @@ function setup({
       />
     </>
   );
+  window.addEventListener("click", stayOnPage, true);
   const view = renderWithI18n(ui(chips), { locale });
+  const list = () => screen.getByTestId("product-active-filters");
 
   return {
     fallback: () => required(fallbackFocus.current),
-    list: () => screen.getByTestId("product-active-filters"),
+    /** The first chip's link. */
+    firstChip: () => required(within(list()).getAllByRole("link")[0]),
+    list,
     rerender: (shown: FilterChip[]) => {
       view.rerender(ui(shown));
     },
@@ -106,8 +122,8 @@ describe("ProductActiveFilters", () => {
   });
 
   test("once a chip is followed and the chips change, focus goes to the first chip left", () => {
-    const { list, rerender } = setup();
-    fireEvent.click(required(list().querySelector("li")));
+    const { firstChip, rerender } = setup();
+    fireEvent.click(firstChip());
 
     rerender([GOLD]);
 
@@ -119,8 +135,8 @@ describe("ProductActiveFilters", () => {
   });
 
   test("once the last chip is gone, focus goes to the fallback", () => {
-    const { fallback, list, rerender } = setup({ chips: [GOLD] });
-    fireEvent.click(required(list().querySelector("li")));
+    const { fallback, firstChip, rerender } = setup({ chips: [GOLD] });
+    fireEvent.click(firstChip());
 
     rerender([]);
 
@@ -140,9 +156,29 @@ describe("ProductActiveFilters", () => {
     expect(document.body).toHaveFocus();
   });
 
+  test.each([
+    ["beside the chips", false, {}],
+    ["on a chip opened in a new tab", true, { ctrlKey: true }],
+    ["on a chip opened in a new window", true, { shiftKey: true }],
+  ])(
+    "a click %s follows none: chips that change later move no focus",
+    (_case, onChip, modifiers) => {
+      const { fallback, firstChip, list, rerender } = setup();
+      fallback().focus();
+
+      fireEvent.click(
+        onChip ? firstChip() : required(list().querySelector("li")),
+        modifiers
+      );
+      rerender([GOLD]);
+
+      expect(fallback()).toHaveFocus();
+    }
+  );
+
   test("a render with the same chips after a click keeps waiting for them to change", () => {
-    const { fallback, list, rerender } = setup({ chips: [GOLD] });
-    fireEvent.click(required(list().querySelector("li")));
+    const { fallback, firstChip, rerender } = setup({ chips: [GOLD] });
+    fireEvent.click(firstChip());
 
     rerender([GOLD]);
     rerender([]);

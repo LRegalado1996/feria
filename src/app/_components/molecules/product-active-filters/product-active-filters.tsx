@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import Link from "next/link";
 import { type RefObject, useEffect, useRef } from "react";
 
+import { followedLink } from "@/lib/admin/followed-link";
 import type { FilterChip } from "@/lib/admin/product-filters";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -66,8 +67,11 @@ function ProductActiveFilters({
       className={cn("flex flex-wrap items-center gap-2", className)}
       data-slot="product-active-filters"
       data-testid="product-active-filters"
-      onClickCapture={() => {
-        removing.current = true;
+      onClickCapture={(event) => {
+        // Only a chip followed in this tab changes the chips here.
+        if (followedLink(event)) {
+          removing.current = true;
+        }
       }}
       ref={list}
     >

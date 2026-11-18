@@ -16,6 +16,7 @@ import { ProductListRow } from "@/app/_components/molecules/product-list-row";
 import { ProductSearch } from "@/app/_components/molecules/product-search";
 import { ProductSortMenu } from "@/app/_components/molecules/product-sort-menu";
 import type { Dictionary } from "@/content";
+import { followedLink } from "@/lib/admin/followed-link";
 import { activeFilterChips } from "@/lib/admin/product-filters";
 import {
   isNarrowed,
@@ -303,24 +304,11 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1"
               data-testid="product-list-foot"
               onClickCapture={(event) => {
-                const link =
-                  event.target instanceof Element
-                    ? event.target.closest("a[href]")
-                    : null;
-                // Armed only by a plain click on another page: the current
-                // page's own link, or one opened in another tab, changes
-                // nothing here, and a flag left armed would steal focus on a
-                // later sort or chip.
-                const plain =
-                  event.button === 0 &&
-                  !event.altKey &&
-                  !event.ctrlKey &&
-                  !event.metaKey &&
-                  !event.shiftKey;
+                const link = followedLink(event);
 
+                // The current page's own link changes nothing either.
                 if (
                   link !== null &&
-                  plain &&
                   link.getAttribute("href") !== productsPath(locale, query)
                 ) {
                   paging.current = true;
