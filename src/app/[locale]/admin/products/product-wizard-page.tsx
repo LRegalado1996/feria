@@ -18,6 +18,7 @@ import { readLocale } from "@/lib/i18n/read-locale";
 import { catchNotFound } from "@/lib/orpc/catch-not-found";
 import { caller, getQueryClient, orpc } from "@/lib/orpc/server";
 import { siteOrigin } from "@/lib/seo/origin";
+import { readBlobStore } from "@/server/api/utils/blob-store";
 
 /**
  * The wizard's pages on a phone: the on-screen keyboard shrinks the page
@@ -100,6 +101,9 @@ export async function ProductWizardResolver({
       >
         <ProductWizard
           articleId={id}
+          // Without a Blob store no photo can be stored: the wizard says so
+          // before any is chosen.
+          canUpload={readBlobStore() !== null}
           host={new URL(siteOrigin()).host}
           store={{
             currencyCode: store.currencyCode,

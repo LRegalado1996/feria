@@ -13,6 +13,8 @@ export interface ProductPublishGapsProps {
   className?: string;
   /** What publishing still needs, in the rule's order. */
   gaps: readonly PublishGap[];
+  /** Its heading's level where it sits: under a step's, or the page's. */
+  headingLevel?: "h2" | "h3";
   /** Takes the person to the field that fills `gap`. */
   onJump: (gap: PublishGap) => void;
 }
@@ -26,6 +28,7 @@ export interface ProductPublishGapsProps {
 function ProductPublishGaps({
   className,
   gaps,
+  headingLevel: Heading = "h3",
   onJump,
 }: ProductPublishGapsProps) {
   const copy = useDictionary().articles.wizard.gaps;
@@ -59,13 +62,13 @@ function ProductPublishGaps({
       data-slot="product-publish-gaps"
       data-testid="product-publish-gaps"
     >
-      <h3
+      <Heading
         className="flex items-center gap-2 text-sm font-semibold"
         id={titleId}
       >
         <CircleAlert aria-hidden className="size-4 shrink-0" />
         {copy.heading}
-      </h3>
+      </Heading>
       <ul className="grid gap-1">
         {gaps.map((gap) => (
           <li key={gap}>

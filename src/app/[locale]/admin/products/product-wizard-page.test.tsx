@@ -60,6 +60,7 @@ const mocks = vi.hoisted(() => {
     }),
     requireAdmin: vi.fn<typeof RequireAdmin>(),
     shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
+    blobStore: vi.fn((): unknown => null),
     store: vi.fn(async (): Promise<unknown> => null),
     wizardProps: vi.fn<(props: ProductWizardProps) => void>(),
   };
@@ -71,6 +72,11 @@ vi.mock("server-only", () => ({}));
 // The session check has its own tests; here it answers with the login, or
 // sends the visitor to the sign-in page the way the real one does.
 vi.mock("@/lib/admin/access", () => ({ requireAdmin: mocks.requireAdmin }));
+
+// Whether the deployment has its Blob store, from its token.
+vi.mock("@/server/api/utils/blob-store", () => ({
+  readBlobStore: mocks.blobStore,
+}));
 
 vi.mock("@/lib/seo/origin", () => ({
   siteOrigin: () => "https://lrmarket.uy",
@@ -154,6 +160,7 @@ type Boundary = ReactElement<{
  */
 function setup({
   article = "found",
+  canUpload = true,
   id,
   listsFail = false,
   locale = "en",
@@ -161,6 +168,7 @@ function setup({
   store = makeStore(),
 }: {
   article?: "fails" | "found" | "missing";
+  canUpload?: boolean;
   id?: string;
   listsFail?: boolean;
   locale?: string;
@@ -198,6 +206,11 @@ function setup({
   mocks.categories.mockImplementation(async () => await list([{ id: 4 }]));
   mocks.attributes.mockImplementation(async () => await list([{ id: 5 }]));
   mocks.store.mockResolvedValue(store);
+  mocks.blobStore.mockReturnValue(
+    canUpload
+      ? { host: "store.public.blob.vercel-storage.com", namespace: "local" }
+      : null
+  );
   const page: Boundary = ProductWizardPage({
     params: Promise.resolve(id === undefined ? { locale } : { id, locale }),
   });
@@ -312,6 +325,7 @@ describe("ProductWizardPage", () => {
       });
       expect(mocks.wizardProps).toHaveBeenCalledExactlyOnceWith({
         articleId: 12,
+        canUpload: true,
         host: "lrmarket.uy",
         store: {
           currencyCode: "UYU",
@@ -327,6 +341,16 @@ describe("ProductWizardPage", () => {
       );
     }
   );
+
+  test("tells the wizard a deployment without its Blob store cannot take photos", async () => {
+    const { show } = setup({ canUpload: false });
+
+    await show();
+
+    expect(mocks.wizardProps).toHaveBeenCalledWith(
+      expect.objectContaining({ articleId: null, canUpload: false })
+    );
+  });
 
   test("opens a new article reading no article", async () => {
     const { show } = setup();

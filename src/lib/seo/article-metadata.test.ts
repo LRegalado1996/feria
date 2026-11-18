@@ -11,8 +11,6 @@ function makeArticle(
 ) {
   return {
     description: "Plata 925, hecho a mano.",
-    seoDescription: null,
-    seoTitle: null,
     title: "Anillo de plata",
     ...overrides,
   };
@@ -49,23 +47,22 @@ describe("excerpt", () => {
 });
 
 describe("articleSearchTexts", () => {
-  test("prefers the article's own search title and description", () => {
-    expect(
-      articleSearchTexts(
-        makeArticle({
-          seoDescription: "El anillo que buscabas.",
-          seoTitle: "Anillo 925",
-        }),
-        STORE
-      )
-    ).toEqual({
-      description: "El anillo que buscabas.",
-      pageTitle: "Anillo 925 · LR Market",
-      title: "Anillo 925",
+  test("reads no search texts an earlier wizard stored", () => {
+    // As the article's page hands it over: its row, old columns included.
+    const stored = {
+      ...makeArticle(),
+      seoDescription: "El anillo que buscabas.",
+      seoTitle: "Anillo 925",
+    };
+
+    expect(articleSearchTexts(stored, STORE)).toEqual({
+      description: "Plata 925, hecho a mano.",
+      pageTitle: "Anillo de plata · LR Market",
+      title: "Anillo de plata",
     });
   });
 
-  test("falls back to the title and the start of the description", () => {
+  test("takes the title and the start of the description", () => {
     expect(articleSearchTexts(makeArticle(), STORE)).toEqual({
       description: "Plata 925, hecho a mano.",
       pageTitle: "Anillo de plata · LR Market",

@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   APP_TIME_ZONE,
+  formatCurrencySign,
   formatDate,
   formatList,
   formatInteger,
@@ -76,6 +77,17 @@ describe("formatRelativeTime", () => {
     expect(formatRelativeTime(new Date(NOW), NOW + 10 * MINUTE, "en")).toBe(
       "10 minutes ago"
     );
+  });
+});
+
+describe("formatCurrencySign", () => {
+  test.each([
+    ["UYU", "es", "$"],
+    ["USD", "es", "US$"],
+    ["UYU", "en", "UYU"],
+    ["USD", "en", "USD"],
+  ] as const)("writes %s in %s as %s", (currency, locale, sign) => {
+    expect(formatCurrencySign(currency, locale)).toBe(sign);
   });
 });
 

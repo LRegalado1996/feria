@@ -67,17 +67,20 @@ export const articles = {
       heading: "Datos del artículo",
       languages: "Idioma de los textos",
       price: "Precio",
-      priceHint: "En {currency}. Podés escribir 12,50 o 12.50.",
+      // Said after the price's name; the field shows the currency's sign.
+      priceCurrency: "En {currency}.",
+      currencies: {
+        UYU: "pesos uruguayos",
+        USD: "dólares",
+      },
+      // Previews only (Lucas, 2026-11-18): no texts of their own.
       seo: {
-        description: "Descripción para buscadores",
         google: "Así se ve en Google",
-        hint: "Si los dejás vacíos, usamos el título y el comienzo de la descripción.",
-        length: "{count} de {max}",
+        heading: "Búsqueda y compartir",
+        hint: "Se arma solo con el título, la descripción y la foto principal.",
         share: "Así se ve al compartir el enlace",
         shareNoPhoto:
           "Por ahora la tarjeta para compartir muestra la foto solo si está guardada en este sitio.",
-        summary: "Búsqueda y compartir",
-        title: "Título para buscadores",
       },
       spanish: "Español",
       title: "Título",
@@ -92,8 +95,6 @@ export const articles = {
       priceNegative: "El precio no puede ser negativo.",
       priceTooHigh: "El precio es demasiado alto.",
       publishFailed: "No pudimos publicarlo. Probá de nuevo.",
-      seoDescriptionTooLong: "Usá hasta 160 caracteres.",
-      seoTitleTooLong: "Usá hasta 70 caracteres.",
       titleTooLong: "Usá hasta 120 caracteres.",
       unpublishFailed: "No pudimos pasarlo a borrador. Probá de nuevo.",
       valueDuplicate: "Ya hay un valor con ese nombre.",
@@ -169,8 +170,10 @@ export const articles = {
       },
       remove: "Quitar: {photo}",
       retry: "Reintentar: {photo}",
-      retryShort: "Reintentar",
       uploading: "Subiendo… {percent}",
+      retryShort: "Reintentar",
+      unavailable:
+        "Por ahora no se pueden subir fotos: la subida no está configurada en este servidor.",
       waiting: "En espera",
     },
     previous: "Atrás",

@@ -16,7 +16,13 @@ function setup({
   count = 0,
   locale = "en",
   refusals = [],
-}: { count?: number; locale?: Locale; refusals?: PhotoRefusal[] } = {}) {
+  unavailable,
+}: {
+  count?: number;
+  locale?: Locale;
+  refusals?: PhotoRefusal[];
+  unavailable?: boolean;
+} = {}) {
   const onFiles = vi.fn<(files: File[]) => void>();
   const user = userEvent.setup();
   renderWithI18n(
@@ -25,6 +31,7 @@ function setup({
       max={8}
       onFiles={onFiles}
       refusals={refusals}
+      unavailable={unavailable}
     />,
     { locale }
   );
@@ -35,6 +42,38 @@ function setup({
 }
 
 describe("ProductPhotoDrop", () => {
+  test.each([
+    [
+      "en",
+      "Photos can't be uploaded for now: uploads aren't set up on this server.",
+    ],
+    [
+      "es",
+      "Por ahora no se pueden subir fotos: la subida no está configurada en este servidor.",
+    ],
+  ] as const)(
+    "in %s, says up front that this server cannot store photos, and takes none",
+    async (locale, said) => {
+      const { input, user, zone } = setup({ locale, unavailable: true });
+      const click = vi.spyOn(input, "click");
+
+      expect(screen.getByTestId("product-photo-unavailable")).toHaveTextContent(
+        said
+      );
+      expect(zone).toBeDisabled();
+      expect(zone).toHaveAccessibleDescription(new RegExp(`^${said}`, "u"));
+      await user.click(zone);
+      expect(click).not.toHaveBeenCalled();
+    }
+  );
+
+  test("says nothing of uploads where the server stores photos", () => {
+    const { zone } = setup();
+
+    expect(screen.queryByTestId("product-photo-unavailable")).toBeNull();
+    expect(zone).toBeEnabled();
+  });
+
   test("is one button that says what to do, how many photos there are, and the hint", () => {
     const { zone } = setup({ count: 2 });
 

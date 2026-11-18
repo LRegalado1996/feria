@@ -13,8 +13,10 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   type ReactNode,
+  type Ref,
   type RefObject,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -23,6 +25,7 @@ import {
   type FieldPath,
   type UseFormReturn,
   useForm,
+  useFormContext,
   useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
@@ -35,11 +38,15 @@ import type {
   AttributeFormSaved,
 } from "@/app/_components/molecules/attribute-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
-import { Form } from "@/app/_components/molecules/form";
+import { Form, FormField } from "@/app/_components/molecules/form";
 import {
   ProductDetailsForm,
   type TextLanguage,
 } from "@/app/_components/molecules/product-details-form";
+import {
+  ProductFilterChips,
+  type ProductFilterChipsProps,
+} from "@/app/_components/molecules/product-filter-chips";
 import { ProductPhotoDrop } from "@/app/_components/molecules/product-photo-drop";
 import { ProductPhotoGrid } from "@/app/_components/molecules/product-photo-grid";
 import { ProductPublishGaps } from "@/app/_components/molecules/product-publish-gaps";
@@ -48,6 +55,7 @@ import {
   type ProductSaveState,
   ProductSaveStatus,
 } from "@/app/_components/molecules/product-save-status";
+import { ProductSeoPreview } from "@/app/_components/molecules/product-seo-preview";
 import { ProductWizardSteps } from "@/app/_components/molecules/product-wizard-steps";
 import type { StoreArticleMainData } from "@/app/_components/molecules/store-article-main";
 import { StoreArticlePreview } from "@/app/_components/molecules/store-article-preview";
@@ -59,10 +67,13 @@ import {
   restoreProductEdits,
 } from "@/lib/admin/product-edits";
 import {
+  readWizardMode,
+  wizardStepPath,
+} from "@/lib/admin/product-wizard-mode";
+import {
   newProductPath,
   productPath,
   productsPath,
-  readWizardStep,
   WIZARD_STEPS,
   type WizardStep,
 } from "@/lib/admin/products";
@@ -134,6 +145,11 @@ export interface ProductWizardProps {
    * step once that ticket hands it in. Nothing shows while it is left out.
    */
   assistant?: ReactNode;
+  /**
+   * Whether this server can store photos (a Blob store): without one the
+   * photos' zone says so up front and takes none.
+   */
+  canUpload: boolean;
   /** This site's host, as a search result writes it. */
   host: string;
   store: ProductWizardStore;
@@ -159,12 +175,8 @@ const GAP_PLACES = {
 const CHECKED_FIELDS = [
   "es.title",
   "es.description",
-  "es.seoTitle",
-  "es.seoDescription",
   "en.title",
   "en.description",
-  "en.seoTitle",
-  "en.seoDescription",
   "categoryId",
   "price",
 ] as const satisfies readonly FieldPath<ProductFormValues>[];
@@ -342,12 +354,15 @@ function previewOf({
 }
 
 /**
- * The article wizard (FER-017): photos, details, review, then published.
- * The step lives in the address (`?step=details`), so back, forward and a
- * reload land where the person was. Each fresh visit to a new article
- * starts blank (`bfcacheId`); an article opens once its read arrived, and
- * only once React owns the page, since a published article's unsaved
- * changes come from this browser's storage.
+ * The article wizard (FER-017). A new article is loaded in three steps,
+ * photos, details, review, then published; an article opened from the list
+ * is one screen with everything on it (Lucas, 2026-11-18). The address
+ * decides which (`readWizardMode`): the journey's step lives in it
+ * (`?step=details`), so back, forward and a reload land where the person
+ * was. Each fresh visit to a new article starts blank (`bfcacheId`); an
+ * article opens once its read arrived, and only once React owns the page,
+ * since a published article's unsaved changes come from this browser's
+ * storage.
  */
 function ProductWizard(props: ProductWizardProps) {
   const { bfcacheId } = useRouter();
@@ -400,6 +415,7 @@ function ProductWizard(props: ProductWizardProps) {
     <WizardEditor
       article={product.data ?? null}
       assistant={props.assistant}
+      canUpload={props.canUpload}
       host={props.host}
       // A new article starts blank on every fresh visit and keeps its state
       // across back and forward; an existing one is keyed by its id.
@@ -410,32 +426,46 @@ function ProductWizard(props: ProductWizardProps) {
 }
 
 /**
- * Where the step is and how to move it: the address's `?step=`, a pushed
- * history entry per move (Next keeps its router in step with it), and the
- * side the new step slides in from.
+ * How the article shows and how to move through it: the mode its address
+ * gives (`readWizardMode`), and for the journey a pushed history entry per
+ * step (Next keeps its router in step with it) and the side the new step
+ * slides in from.
  */
-function useWizardStep(id: number | null, locale: Locale) {
+function useWizardMode({
+  id,
+  isNew,
+  isPublished,
+  locale,
+}: {
+  id: number | null;
+  /**
+   * The wizard opened on a new article: its journey goes on in steps once
+   * the draft exists too, before the router has read the draft's address.
+   */
+  isNew: boolean;
+  isPublished: boolean;
+  locale: Locale;
+}) {
   const searchParams = useSearchParams();
-  const step = readWizardStep(searchParams.get("step"));
+  const mode = readWizardMode({
+    isNew,
+    isPublished,
+    step: searchParams.get("step"),
+  });
+  const step = mode.kind === "steps" ? mode.step : null;
   const [direction, setDirection] = useState<"back" | "next">("next");
 
   return {
     direction,
     goTo: (next: WizardStep) => {
       setDirection(
-        WIZARD_STEPS.indexOf(next) < WIZARD_STEPS.indexOf(step)
+        step !== null && WIZARD_STEPS.indexOf(next) < WIZARD_STEPS.indexOf(step)
           ? "back"
           : "next"
       );
-      const query = next === "photos" ? "" : `?step=${next}`;
-      window.history.pushState(
-        null,
-        "",
-        id === null
-          ? `${newProductPath(locale)}${query}`
-          : productPath(id, locale, next)
-      );
+      window.history.pushState(null, "", wizardStepPath(id, locale, next));
     },
+    mode,
     step,
   };
 }
@@ -443,7 +473,8 @@ function useWizardStep(id: number | null, locale: Locale) {
 /**
  * A changed step brings focus to its heading, or to the field a gap or a
  * failed check led to (on another step, or in the other language), so a
- * keyboard and a screen reader start where the eye does.
+ * keyboard and a screen reader start where the eye does. On the single
+ * screen (`step` null) only the language moves.
  */
 function useStepFocus({
   form,
@@ -454,7 +485,7 @@ function useStepFocus({
   form: ProductForm;
   heading: RefObject<HTMLHeadingElement | null>;
   language: TextLanguage;
-  step: WizardStep;
+  step: WizardStep | null;
 }) {
   const shown = useRef({ language, step });
   const pending = useRef<FieldPath<ProductFormValues> | null>(null);
@@ -502,10 +533,11 @@ function useFormValues(form: ProductForm): ProductFormValues {
 function WizardEditor({
   article,
   assistant,
+  canUpload,
   host,
   store,
 }: Omit<ProductWizardProps, "articleId"> & { article: StoreProduct | null }) {
-  const { articles } = useDictionary();
+  const { articles, storefront } = useDictionary();
   const copy = articles.wizard;
   const locale = useLocale();
   const router = useRouter();
@@ -549,6 +581,7 @@ function WizardEditor({
   const shownPreviews = useRef(previews);
   const lastQueued = useRef<string | null>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
+  const photosHeading = useRef<HTMLHeadingElement>(null);
   const successHeading = useRef<HTMLHeadingElement>(null);
   const stepAtCreation = useRef<WizardStep>("photos");
   const categories = useStoreCategories();
@@ -566,17 +599,22 @@ function WizardEditor({
       window.history.replaceState(
         null,
         "",
-        productPath(created, locale, stepAtCreation.current)
+        wizardStepPath(created, locale, stepAtCreation.current)
       );
     },
   });
   const { flush, id, retry: retrySave, saveNow, schedule } = autosave;
-  const { direction, goTo: goToStep, step } = useWizardStep(id, locale);
   const { currency, isPublished, slug, storePath, updatedAt } = factsOf(
     useProduct(id).data ?? article,
     store.currencyCode,
     locale
   );
+  const {
+    direction,
+    goTo: goToStep,
+    mode,
+    step,
+  } = useWizardMode({ id, isNew: article === null, isPublished, locale });
   const categoryRows = categories.data ?? [];
   /** Says what happened to a photo, by its place ("Foto 2"). */
   const say = (
@@ -610,7 +648,9 @@ function WizardEditor({
   const canLeavePhotos = values.images.length > 0 || uploading;
 
   useEffect(() => {
-    stepAtCreation.current = step;
+    if (step !== null) {
+      stepAtCreation.current = step;
+    }
   }, [step]);
 
   const focusOnceShown = useStepFocus({
@@ -705,13 +745,18 @@ function WizardEditor({
     goToStep(next);
   };
 
-  /** Focuses `field`, on its step and in its language, once it shows. */
+  /**
+   * Focuses `field`, on its step (the single screen shows them all) and in
+   * its language, once it shows.
+   */
   const focusField = (
     field: FieldPath<ProductFormValues>,
     target: WizardStep,
     fieldLanguage?: TextLanguage
   ) => {
-    if (target === step && (!fieldLanguage || fieldLanguage === language)) {
+    const shown = step === null || target === step;
+
+    if (shown && (!fieldLanguage || fieldLanguage === language)) {
       form.setFocus(field);
       return;
     }
@@ -722,7 +767,7 @@ function WizardEditor({
       setLanguage(fieldLanguage);
     }
 
-    if (target !== step) {
+    if (!shown) {
       goTo(target);
     }
   };
@@ -736,9 +781,10 @@ function WizardEditor({
         place.step,
         "language" in place ? place.language : undefined
       );
-    } else if (place.step === step) {
-      stepHeading.current?.focus();
+    } else if (step === null) {
+      photosHeading.current?.focus();
     } else {
+      // Only the review lists what is missing: the photos are elsewhere.
       goTo(place.step);
     }
   };
@@ -801,7 +847,16 @@ function WizardEditor({
 
     if (gaps.length > 0 || uploading || id === null) {
       markGaps(gaps);
-      stepHeading.current?.focus();
+      const [first] = gaps;
+
+      // The review lists what is missing under its heading; the single
+      // screen takes the person to the first field that misses.
+      if (step !== null) {
+        stepHeading.current?.focus();
+      } else if (first) {
+        jumpTo(first);
+      }
+
       return;
     }
 
@@ -815,6 +870,8 @@ function WizardEditor({
         setBaseline(form.getValues());
         dropProductEdits(id);
         setJustPublished(true);
+        // The journey ended: a reload opens the article's single screen.
+        window.history.replaceState(null, "", productPath(id, locale));
       }
     } catch (error) {
       refused(error, "Product.publish", copy.errors.publishFailed);
@@ -982,84 +1039,142 @@ function WizardEditor({
     untitled: copy.titleNew,
     values,
   });
+  // The search texts in the language on screen; the storefront in English
+  // shows the Spanish ones while there are none.
+  const searchLanguage: TextLanguage =
+    language === "en" && !hasTexts(values.en) ? "es" : language;
+  const searchTexts = values[searchLanguage];
+
+  const photosSection = (
+    <PhotosStep
+      canLeave={canLeavePhotos}
+      canUpload={canUpload}
+      copy={copy}
+      gap={photoGap}
+      images={values.images}
+      onAdd={(files) => {
+        const refusedFiles = queue.add(files, values.images.length);
+        setRefusals(refusedFiles);
+        const left = refusedFiles.reduce(
+          (sum, refusal) =>
+            sum + (refusal.kind === "tooMany" ? refusal.count : 1),
+          0
+        );
+        const taken = files.length - left;
+
+        if (taken > 0) {
+          setAnnouncement(
+            taken === 1
+              ? copy.photos.announce.addedOne
+              : interpolate(copy.photos.announce.added, {
+                  count: taken,
+                })
+          );
+        }
+      }}
+      onMakeMain={(index) => {
+        movePhoto(index, 0);
+      }}
+      onMove={movePhoto}
+      onRemove={(index) => {
+        const held = form.getValues("images");
+        form.setValue(
+          "images",
+          held.filter((_, at) => at !== index),
+          { shouldDirty: true }
+        );
+        say(copy.photos.announce.removed, index);
+      }}
+      onRemoveQueued={(key) => {
+        const position = queue.items.findIndex((item) => item.key === key);
+        queue.remove(key);
+        say(copy.photos.announce.cancelled, values.images.length + position);
+      }}
+      onRetry={(key) => {
+        queue.retry(key);
+      }}
+      previews={previews}
+      queued={queue.items}
+      refusals={refusals}
+    />
+  );
+  const detailsSection = (
+    <ProductDetailsForm
+      assistant={assistant}
+      categories={categoryRows}
+      currency={currency}
+      language={language}
+      onLanguageChange={setLanguage}
+    />
+  );
+  const filtersSection = (
+    <FiltersField
+      attributes={attributes.data ?? []}
+      hint={copy.details.filtersHint}
+      onCreateValue={onCreateValue}
+    />
+  );
+  const searchSection = (
+    <ProductSeoPreview
+      copy={copy.details.seo}
+      currency={currency}
+      description={searchTexts.description}
+      host={host}
+      lang={searchLanguage}
+      locale={locale}
+      mainPhotoUrl={values.images[0]?.url ?? null}
+      price={values.price}
+      slug={slug}
+      store={{ name: store.name, tagline: store.taglines[language] }}
+      title={searchTexts.title}
+    />
+  );
+  const discardDraft = isPublished ? null : (
+    <div className="border-t pt-4">
+      <Button
+        className="text-destructive"
+        onClick={() => {
+          setConfirming("discardDraft");
+        }}
+        type="button"
+        variant="ghost"
+      >
+        <Trash2 aria-hidden />
+        {copy.draft.discard}
+      </Button>
+    </div>
+  );
+  const publishedNotice = isPublished ? (
+    <PublishedNotice
+      copy={copy}
+      dirty={dirty}
+      notice={restored.kind === "none" ? null : restored.kind}
+      onAsk={setConfirming}
+      storePath={storePath}
+    />
+  ) : null;
 
   /** The step on screen, under its heading. */
-  const stepBody = () => {
-    if (step === "photos") {
-      return (
-        <PhotosStep
-          canLeave={canLeavePhotos}
-          copy={copy}
-          gap={photoGap}
-          images={values.images}
-          onAdd={(files) => {
-            const refusedFiles = queue.add(files, values.images.length);
-            setRefusals(refusedFiles);
-            const left = refusedFiles.reduce(
-              (sum, refusal) =>
-                sum + (refusal.kind === "tooMany" ? refusal.count : 1),
-              0
-            );
-            const taken = files.length - left;
-
-            if (taken > 0) {
-              setAnnouncement(
-                taken === 1
-                  ? copy.photos.announce.addedOne
-                  : interpolate(copy.photos.announce.added, {
-                      count: taken,
-                    })
-              );
-            }
-          }}
-          onMakeMain={(index) => {
-            movePhoto(index, 0);
-          }}
-          onMove={movePhoto}
-          onRemove={(index) => {
-            const held = form.getValues("images");
-            form.setValue(
-              "images",
-              held.filter((_, at) => at !== index),
-              { shouldDirty: true }
-            );
-            say(copy.photos.announce.removed, index);
-          }}
-          onRemoveQueued={(key) => {
-            const position = queue.items.findIndex((item) => item.key === key);
-            queue.remove(key);
-            say(
-              copy.photos.announce.cancelled,
-              values.images.length + position
-            );
-          }}
-          onRetry={(key) => {
-            queue.retry(key);
-          }}
-          previews={previews}
-          queued={queue.items}
-          refusals={refusals}
-        />
-      );
+  const stepBody = (shown: WizardStep) => {
+    if (shown === "photos") {
+      return photosSection;
     }
 
-    if (step === "details") {
+    if (shown === "details") {
       return (
-        <ProductDetailsForm
-          assistant={assistant}
-          attributes={attributes.data ?? []}
-          categories={categoryRows}
-          currency={currency}
-          language={language}
-          onCreateValue={onCreateValue}
-          onLanguageChange={setLanguage}
-          seo={{
-            host,
-            slug,
-            storeName: store.name,
-            taglines: store.taglines,
-          }}
-        />
+        <>
+          {detailsSection}
+          <WizardSection heading={copy.details.filters} level="h3">
+            {filtersSection}
+          </WizardSection>
+          <WizardSection
+            className="max-w-3xl"
+            heading={copy.details.seo.heading}
+            level="h3"
+          >
+            {searchSection}
+          </WizardSection>
+        </>
       );
     }
 
@@ -1076,6 +1191,95 @@ function WizardEditor({
         }}
         preview={preview}
       />
+    );
+  };
+
+  const body = () => {
+    if (mode.kind === "steps") {
+      return (
+        <div className="grid gap-5">
+          <ProductWizardSteps
+            current={mode.step}
+            isReachable={(target) => target === "photos" || canLeavePhotos}
+            onSelect={goTo}
+          />
+          <div
+            className={cn(
+              "grid min-w-0 gap-5",
+              direction === "next"
+                ? "motion-safe:animate-wizard-step-next"
+                : "motion-safe:animate-wizard-step-back"
+            )}
+            data-testid={`product-step-${mode.step}`}
+            key={mode.step}
+          >
+            <h2
+              className="text-base font-semibold outline-none md:text-lg"
+              ref={stepHeading}
+              tabIndex={-1}
+            >
+              {copy[mode.step].heading}
+            </h2>
+            {stepBody(mode.step)}
+            {discardDraft}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <ArticleScreen
+        aside={
+          <>
+            <WizardCard
+              heading={copy.review.card}
+              testId="product-card-preview"
+            >
+              <StoreArticlePreview
+                article={preview}
+                className="mx-auto"
+                copy={storefront}
+                // Never the article's address: a draft's page would be
+                // fetched ahead (a link prefetches) and kept as not found
+                // once it is published.
+                href="#preview"
+                locale={locale}
+                view="card"
+              />
+            </WizardCard>
+            <WizardCard
+              heading={copy.details.seo.heading}
+              testId="product-search-preview"
+            >
+              {searchSection}
+            </WizardCard>
+          </>
+        }
+      >
+        {publishedNotice ?? (
+          <ProductPublishGaps gaps={gaps} headingLevel="h2" onJump={jumpTo} />
+        )}
+        <WizardCard
+          heading={copy.photos.heading}
+          headingRef={photosHeading}
+          testId="product-section-photos"
+        >
+          {photosSection}
+        </WizardCard>
+        <WizardCard
+          heading={copy.details.heading}
+          testId="product-section-details"
+        >
+          {detailsSection}
+        </WizardCard>
+        <WizardCard
+          heading={copy.details.filters}
+          testId="product-section-filters"
+        >
+          {filtersSection}
+        </WizardCard>
+        {discardDraft}
+      </ArticleScreen>
     );
   };
 
@@ -1119,7 +1323,7 @@ function WizardEditor({
             />
           )
         }
-        title={article ? copy.titleEdit : copy.titleNew}
+        title={mode.kind === "steps" ? copy.titleNew : copy.titleEdit}
       >
         <output
           aria-live="polite"
@@ -1137,58 +1341,7 @@ function WizardEditor({
             title={preview.title}
           />
         ) : (
-          <Form {...form}>
-            <div className="grid gap-5">
-              <ProductWizardSteps
-                current={step}
-                isReachable={(target) => target === "photos" || canLeavePhotos}
-                onSelect={goTo}
-              />
-              {isPublished ? (
-                <PublishedNotice
-                  copy={copy}
-                  dirty={dirty}
-                  notice={restored.kind === "none" ? null : restored.kind}
-                  onAsk={setConfirming}
-                  storePath={storePath}
-                />
-              ) : null}
-              <div
-                className={cn(
-                  "grid min-w-0 gap-5",
-                  direction === "next"
-                    ? "motion-safe:animate-wizard-step-next"
-                    : "motion-safe:animate-wizard-step-back"
-                )}
-                data-testid={`product-step-${step}`}
-                key={step}
-              >
-                <h2
-                  className="text-base font-semibold outline-none md:text-lg"
-                  ref={stepHeading}
-                  tabIndex={-1}
-                >
-                  {copy[step].heading}
-                </h2>
-                {stepBody()}
-                {isPublished ? null : (
-                  <div className="border-t pt-4">
-                    <Button
-                      className="text-destructive"
-                      onClick={() => {
-                        setConfirming("discardDraft");
-                      }}
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 aria-hidden />
-                      {copy.draft.discard}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </Form>
+          <Form {...form}>{body()}</Form>
         )}
       </AdminPage>
       <WizardConfirm
@@ -1205,10 +1358,11 @@ function WizardEditor({
 }
 
 /**
- * The step's main action, in the top bar from `md` up and under the thumb
- * on a phone (`AdminPage`): "Atrás" past the first step, then "Continuar",
- * "Publicar" on the review, or for a published article "Guardar cambios" at
- * every step. Publishing waits, `aria-disabled` so it still says why when
+ * The main action, in the top bar from `md` up and under the thumb on a
+ * phone (`AdminPage`). On the journey "Atrás" past the first step, then
+ * "Continuar", "Publicar" on the review; on the single screen (`step`
+ * null) "Publicar" for a draft and "Guardar cambios" for a published
+ * article. Publishing waits, `aria-disabled` so it still says why when
  * pressed, while something is missing or a photo travels.
  */
 function WizardActions({
@@ -1233,12 +1387,12 @@ function WizardActions({
   onPublish: () => void;
   onSave: () => void;
   published: boolean;
-  step: WizardStep;
+  step: WizardStep | null;
   uploading: boolean;
 }) {
-  const at = WIZARD_STEPS.indexOf(step);
-  const previous = WIZARD_STEPS[at - 1];
-  const next = WIZARD_STEPS[at + 1];
+  const at = step === null ? -1 : WIZARD_STEPS.indexOf(step);
+  const previous = at > 0 ? WIZARD_STEPS[at - 1] : undefined;
+  const next = at === -1 ? undefined : WIZARD_STEPS[at + 1];
   let main: ReactNode;
 
   if (published) {
@@ -1376,9 +1530,10 @@ function PublishedNotice({
   );
 }
 
-/** The first step: the drop zone, the main photo's question, the tiles. */
+/** The photos: the drop zone, the main photo's question, the tiles. */
 function PhotosStep({
   canLeave,
+  canUpload,
   copy,
   gap,
   images,
@@ -1393,6 +1548,7 @@ function PhotosStep({
   refusals,
 }: {
   canLeave: boolean;
+  canUpload: boolean;
   copy: WizardCopy;
   gap: boolean;
   images: ProductFormValues["images"];
@@ -1413,6 +1569,7 @@ function PhotosStep({
         max={PRODUCT_IMAGES_MAX}
         onFiles={onAdd}
         refusals={refusals}
+        unavailable={!canUpload}
       />
       {gap && images.length === 0 ? (
         <p className="text-sm text-destructive" role="alert">
@@ -1445,6 +1602,125 @@ function PhotosStep({
         <p className="text-xs text-muted-foreground">{copy.photos.needOne}</p>
       )}
     </>
+  );
+}
+
+/**
+ * An article opened from the list (Lucas, 2026-11-18): everything on one
+ * screen. On a phone its cards stack in the order a person fills them
+ * (photos, details, filters), the store's previews last; from `lg` up the
+ * form is on the left and the previews stay in view on the right.
+ */
+function ArticleScreen({
+  aside,
+  children,
+}: {
+  aside: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start"
+      data-testid="product-screen"
+    >
+      <div className="grid min-w-0 gap-5">{children}</div>
+      <div className="grid min-w-0 gap-5 lg:sticky lg:top-20">{aside}</div>
+    </div>
+  );
+}
+
+/** One of the single screen's cards: its heading, then what it holds. */
+function WizardCard({
+  children,
+  heading,
+  headingRef,
+  testId,
+}: {
+  children: ReactNode;
+  heading: string;
+  /** Makes the heading a focus target (a missing photo leads to it). */
+  headingRef?: Ref<HTMLHeadingElement>;
+  testId: string;
+}) {
+  const headingId = useId();
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="grid min-w-0 gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+      data-testid={testId}
+    >
+      <h2
+        className="text-base font-semibold outline-none"
+        id={headingId}
+        ref={headingRef}
+        tabIndex={headingRef ? -1 : undefined}
+      >
+        {heading}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/** A part of a journey's step, under a heading of its own. */
+function WizardSection({
+  children,
+  className,
+  heading,
+  level,
+}: {
+  children: ReactNode;
+  className?: string;
+  heading: string;
+  level: "h3";
+}) {
+  const headingId = useId();
+  const Heading = level;
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className={cn("grid min-w-0 gap-3", className)}
+    >
+      <Heading className="text-sm font-semibold" id={headingId}>
+        {heading}
+      </Heading>
+      {children}
+    </section>
+  );
+}
+
+/** The store's filters for the article, as chips, under their hint. */
+function FiltersField({
+  attributes,
+  hint,
+  onCreateValue,
+}: {
+  attributes: ProductFilterChipsProps["attributes"];
+  hint: string;
+  onCreateValue: ProductFilterChipsProps["onCreateValue"];
+}) {
+  const form = useFormContext<ProductFormValues>();
+
+  return (
+    <div className="grid min-w-0 gap-3">
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      <FormField
+        control={form.control}
+        name="attributeValueIds"
+        render={({ field }) => (
+          <ProductFilterChips
+            attributes={attributes}
+            onChange={(ids) => {
+              field.onChange(ids);
+            }}
+            onCreateValue={onCreateValue}
+            value={field.value}
+          />
+        )}
+      />
+    </div>
   );
 }
 

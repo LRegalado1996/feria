@@ -15,7 +15,7 @@ import {
   toProductValues,
 } from "./product-form";
 
-const BLANK = { description: "", seoDescription: "", seoTitle: "", title: "" };
+const BLANK = { description: "", title: "" };
 
 describe("emptyProductForm", () => {
   test("starts with no photo, no texts, no price, available", () => {
@@ -39,7 +39,7 @@ describe("emptyProductForm", () => {
 });
 
 describe("productFormValues", () => {
-  test("restores every field of a stored article, the price in whole units", () => {
+  test("restores every field of a stored article, the price in whole units, its old search texts left behind", () => {
     const article = makeStoreProduct({
       translations: [
         {
@@ -62,18 +62,8 @@ describe("productFormValues", () => {
     expect(productFormValues(article)).toEqual({
       attributeValueIds: [31],
       categoryId: "4",
-      en: {
-        description: "Silver.",
-        seoDescription: "",
-        seoTitle: "",
-        title: "Silver ring",
-      },
-      es: {
-        description: "Plata.",
-        seoDescription: "Anillo 925",
-        seoTitle: "Anillo",
-        title: "Anillo de plata",
-      },
+      en: { description: "Silver.", title: "Silver ring" },
+      es: { description: "Plata.", title: "Anillo de plata" },
       images: [
         {
           height: 900,
@@ -106,7 +96,7 @@ describe("hasTexts", () => {
     ["nothing", BLANK, false],
     ["only spaces", { ...BLANK, description: "   " }, false],
     ["a title", { ...BLANK, title: "Ring" }, true],
-    ["only a search description", { ...BLANK, seoDescription: "x" }, true],
+    ["only a description", { ...BLANK, description: "x" }, true],
   ])("is %s → %s", (_case, texts, expected) => {
     expect(hasTexts(texts)).toBe(expected);
   });
@@ -118,12 +108,7 @@ describe("toProductValues", () => {
       toProductValues(
         makeProductForm({
           attributeValueIds: [9, 3, 31],
-          es: {
-            description: "  Plata 925. ",
-            seoDescription: " ",
-            seoTitle: "",
-            title: " Anillo ",
-          },
+          es: { description: "  Plata 925. ", title: " Anillo " },
           price: 12.5,
         })
       )
@@ -163,18 +148,24 @@ describe("toProductValues", () => {
     );
   });
 
-  test("sends English after Spanish once any English text is typed", () => {
+  test("sends English after Spanish once any English text is typed, never a search text", () => {
     const values = toProductValues(
-      makeProductForm({ en: { ...BLANK, seoTitle: "Ring" } })
+      makeProductForm({ en: { ...BLANK, description: "Silver." } })
     );
 
     expect(values.translations).toEqual([
-      expect.objectContaining({ locale: "es" }),
       {
-        description: "",
+        description: "Plata 925.",
+        locale: "es",
+        seoDescription: null,
+        seoTitle: null,
+        title: "Anillo de plata",
+      },
+      {
+        description: "Silver.",
         locale: "en",
         seoDescription: null,
-        seoTitle: "Ring",
+        seoTitle: null,
         title: "",
       },
     ]);
@@ -242,8 +233,6 @@ describe("createProductFormSchema", () => {
     priceDecimals: "two decimals",
     priceNegative: "negative",
     priceTooHigh: "too high",
-    seoDescriptionTooLong: "seo description too long",
-    seoTitleTooLong: "seo title too long",
     titleTooLong: "title too long",
   };
 
@@ -272,22 +261,26 @@ describe("createProductFormSchema", () => {
       "title too long",
     ],
     [
-      "an English search title of 71",
-      makeProductForm({ en: { ...BLANK, seoTitle: "a".repeat(71) } }),
-      "seo title too long",
-    ],
-    [
-      "a search description of 161",
-      makeProductForm({ es: { ...BLANK, seoDescription: "a".repeat(161) } }),
-      "seo description too long",
-    ],
-    [
       "a description of 4001",
       makeProductForm({ es: { ...BLANK, description: "a".repeat(4001) } }),
       "description too long",
     ],
   ])("reads %s → %s", (_case, values, expected) => {
     expect(messageFor(values)).toBe(expected);
+  });
+
+  test("keeps no search texts, even from a copy saved before they went", () => {
+    // As a published article's changes kept in this browser hold them.
+    const kept = {
+      description: "Plata.",
+      seoTitle: "Anillo 925",
+      title: "Anillo",
+    };
+    const parsed = createProductFormSchema().parse(
+      makeProductForm({ es: kept })
+    );
+
+    expect(parsed.es).toEqual({ description: "Plata.", title: "Anillo" });
   });
 
   test("refuses a ninth photo and a category that is not an id", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus } from "lucide-react";
+import { CircleAlert, ImagePlus } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
 import { useDictionary } from "@/lib/hooks/i18n";
@@ -17,6 +17,11 @@ export interface ProductPhotoDropProps {
   onFiles: (files: File[]) => void;
   /** The files refused last time, and why. */
   refusals: readonly PhotoRefusal[];
+  /**
+   * This server cannot store photos (no Blob store): said once, over the
+   * zone, which takes nothing, rather than after each photo fails.
+   */
+  unavailable?: boolean;
 }
 
 /**
@@ -25,7 +30,8 @@ export interface ProductPhotoDropProps {
  * library), and on a computer a drop zone for photos dragged onto it. It
  * says how many there are of how many fit, and shrinks once there are
  * some; full, it says why it takes no more. A refused file is named with
- * its reason in an alert under it.
+ * its reason in an alert under it. On a server that cannot store photos it
+ * says so up front, in an amber panel, and takes none.
  */
 function ProductPhotoDrop({
   className,
@@ -33,11 +39,13 @@ function ProductPhotoDrop({
   max,
   onFiles,
   refusals,
+  unavailable = false,
 }: ProductPhotoDropProps) {
   const copy = useDictionary().articles.wizard.photos;
   const input = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const hintId = useId();
+  const unavailableId = useId();
   const full = count >= max;
 
   const said = (refusal: PhotoRefusal) => {
@@ -52,15 +60,26 @@ function ProductPhotoDrop({
 
   return (
     <div className={cn("grid gap-2", className)} data-slot="product-photo-drop">
+      {unavailable ? (
+        <p
+          // amber-900 on amber-50: 8.9:1; amber-100 on amber-950: 12:1.
+          className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+          data-testid="product-photo-unavailable"
+          id={unavailableId}
+        >
+          <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+          {copy.unavailable}
+        </p>
+      ) : null}
       <button
-        aria-describedby={hintId}
+        aria-describedby={unavailable ? `${unavailableId} ${hintId}` : hintId}
         className={cn(
           "flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-card px-4 text-center transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60",
           count === 0 ? "min-h-56 md:min-h-64" : "min-h-24",
           over && "border-foreground bg-accent"
         )}
         data-testid="product-photo-drop"
-        disabled={full}
+        disabled={full || unavailable}
         onClick={() => input.current?.click()}
         onDragLeave={() => {
           setOver(false);

@@ -18,53 +18,6 @@ import {
   type TextLanguage,
 } from "./product-details-form";
 
-// Intl separates a currency from its amount with a no-break space.
-const NBSP = " ";
-
-const BLOB_PHOTO = {
-  height: 900,
-  url: "https://store.public.blob.vercel-storage.com/local/product/11111111-1111-4111-8111-111111111111.webp",
-  width: 900,
-};
-const OWN_PHOTO = { height: 900, url: "/seed/ring-2.jpg", width: 900 };
-
-const BLANK = { description: "", seoDescription: "", seoTitle: "", title: "" };
-
-type StoreAttribute = ProductDetailsFormProps["attributes"][number];
-
-function makeAttribute(
-  overrides: Partial<StoreAttribute> = {}
-): StoreAttribute {
-  return {
-    id: 5,
-    nameEn: "Color",
-    nameEs: "Color",
-    position: 0,
-    slug: "color",
-    values: [
-      {
-        id: 31,
-        nameEn: "Gold",
-        nameEs: "Dorado",
-        position: 0,
-        productCount: 2,
-        slug: "dorado",
-        swatchColor: "#d4af37",
-      },
-      {
-        id: 32,
-        nameEn: "Silver",
-        nameEs: "Plateado",
-        position: 1,
-        productCount: 0,
-        slug: "plateado",
-        swatchColor: null,
-      },
-    ],
-    ...overrides,
-  };
-}
-
 /** Bijouterie, a group holding Anillos, and Burbujeros on its own. */
 const CATEGORIES = [
   makeStoreCategory({
@@ -97,25 +50,22 @@ const CATEGORIES = [
 function setup({
   assistant,
   categories = CATEGORIES,
+  currency = "UYU",
   language = "es",
   locale = "en",
-  taglines = { en: "Jewellery at the fair.", es: "Bijouterie en la feria." },
   values = makeProductForm(),
 }: {
   assistant?: ProductDetailsFormProps["assistant"];
   categories?: ProductDetailsFormProps["categories"];
+  currency?: ProductDetailsFormProps["currency"];
   language?: TextLanguage;
   locale?: Locale;
-  taglines?: ProductDetailsFormProps["seo"]["taglines"];
   values?: ProductFormValues;
 } = {}) {
   const handle: { form: UseFormReturn<ProductFormValues> | null } = {
     form: null,
   };
   const onLanguageChange = vi.fn<(language: TextLanguage) => void>();
-  const onCreateValue = vi.fn(
-    async () => await Promise.resolve({ result: "saved" as const })
-  );
 
   function Harness({ shown }: { shown: TextLanguage }) {
     const form = useForm<ProductFormValues>({ defaultValues: values });
@@ -128,18 +78,10 @@ function setup({
       <Form {...form}>
         <ProductDetailsForm
           assistant={assistant}
-          attributes={[makeAttribute()]}
           categories={categories}
-          currency="UYU"
+          currency={currency}
           language={shown}
-          onCreateValue={onCreateValue}
           onLanguageChange={onLanguageChange}
-          seo={{
-            host: "lrmarket.uy",
-            slug: "anillo-de-plata",
-            storeName: "LR Market",
-            taglines,
-          }}
         />
       </Form>
     );
@@ -288,13 +230,52 @@ describe("ProductDetailsForm", () => {
     }
   );
 
-  test("says the store's currency under the price", () => {
-    setup();
+  test.each([
+    ["es", "UYU", "$", "En pesos uruguayos."],
+    ["es", "USD", "US$", "En dólares."],
+    ["en", "UYU", "UYU", "In Uruguayan pesos."],
+    ["en", "USD", "USD", "In US dollars."],
+  ] as const)(
+    "in %s, shows %s inside the price field as %s, its name said as %j",
+    (locale, currency, sign, said) => {
+      setup({ currency, locale });
+      const price = screen.getByRole("textbox", {
+        description: said,
+        name: DICTIONARIES[locale].articles.wizard.details.price,
+      });
 
-    expect(
-      screen.getByText("In UYU. You can type 12,50 or 12.50.")
-    ).toBeVisible();
+      expect(screen.getByTestId("product-price-currency")).toHaveTextContent(
+        sign
+      );
+      expect(screen.getByTestId("product-price-currency")).toHaveAttribute(
+        "aria-hidden",
+        "true"
+      );
+      // The figure starts after the sign, however long the sign is.
+      expect(price).toHaveClass(sign.length > 1 ? "pl-14" : "pl-7");
+    }
+  );
+
+  test("writes no note on how to type the price", () => {
+    setup({ locale: "es" });
+
+    expect(screen.queryByText(/Podés escribir/u)).not.toBeInTheDocument();
   });
+
+  test.each([
+    ["the description", "textbox", "Description"],
+    ["the category", "combobox", "Category"],
+  ] as const)(
+    "draws %s on the fields' own surface, never the page's",
+    (_case, role, name) => {
+      setup();
+
+      expect(screen.getByRole(role, { name })).toHaveClass(
+        "bg-background",
+        "dark:bg-input/30"
+      );
+    }
+  );
 
   test("marks the article available or not", async () => {
     const { form, user } = setup();
@@ -304,159 +285,6 @@ describe("ProductDetailsForm", () => {
     );
 
     expect(form().isAvailable).toBe(false);
-  });
-
-  test("chooses filter values by tapping them", async () => {
-    const { form, user } = setup();
-
-    await user.click(screen.getByRole("button", { name: "Silver" }));
-    await user.click(screen.getByRole("button", { name: "Gold" }));
-
-    expect(form().attributeValueIds).toEqual([32]);
-  });
-
-  test("counts what the search texts hold, trimmed, against their limits", async () => {
-    const { user } = setup();
-    await user.click(screen.getByText("Search and sharing"));
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Search engine title" }),
-      "  Anillo 925 "
-    );
-
-    expect(screen.getByText("10 of 70")).toBeVisible();
-    expect(screen.getByText("0 of 160")).toBeVisible();
-  });
-
-  test("previews the Google result with the page's defaults: the title and store, the start of the description", () => {
-    setup();
-
-    const google = screen.getByTestId("product-seo-preview-google");
-
-    expect(google).toHaveTextContent(
-      [
-        "LR Market",
-        "lrmarket.uy › productos › anillo-de-plata",
-        "Anillo de plata · LR Market",
-        "Plata 925.",
-      ].join("")
-    );
-  });
-
-  test("previews the article's own search texts once typed", async () => {
-    const { user } = setup();
-    await user.click(screen.getByText("Search and sharing"));
-
-    await user.type(
-      screen.getByRole("textbox", { name: "Search engine title" }),
-      "Anillo 925"
-    );
-    await user.type(
-      screen.getByRole("textbox", { name: "Search engine description" }),
-      "El que buscabas."
-    );
-
-    expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
-      "Anillo 925 · LR MarketEl que buscabas."
-    );
-  });
-
-  test.each([
-    ["es", "Bijouterie en la feria."],
-    ["en", "Jewellery at the fair."],
-  ] as const)(
-    "describes an article without a description by the store's tagline in %s",
-    (language, tagline) => {
-      setup({
-        language,
-        values: makeProductForm({
-          en: { ...BLANK, title: "Silver ring" },
-          es: { ...BLANK, title: "Anillo de plata" },
-        }),
-      });
-
-      expect(
-        screen.getByTestId("product-seo-preview-google")
-      ).toHaveTextContent(tagline);
-    }
-  );
-
-  test("previews the Spanish texts on the English tab while English has none, as the store does", () => {
-    setup({ language: "en" });
-
-    expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
-      "Anillo de plata · LR Market"
-    );
-    expect(screen.getByTestId("store-share-preview")).toHaveTextContent(
-      "Anillo de plata"
-    );
-  });
-
-  test("previews the English texts on the English tab once there are some", () => {
-    setup({
-      language: "en",
-      values: makeProductForm({ en: { ...BLANK, title: "Silver ring" } }),
-    });
-
-    expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
-      "Silver ring · LR Market"
-    );
-  });
-
-  test.each([
-    // The no-break space Intl puts after the currency, read as a plain one.
-    ["es", "LR MarketAnillo de plata$ 1.290"],
-    ["en", "LR MarketAnillo de plataUYU 1,290"],
-  ] as const)("in %s, the share card writes the price %s", (locale, price) => {
-    setup({ locale });
-
-    expect(
-      screen
-        .getByTestId("store-share-preview")
-        .textContent?.replaceAll(NBSP, " ")
-    ).toBe(price);
-  });
-
-  test("leaves the price off the share card while there is none", () => {
-    setup({ values: makeProductForm({ price: null }) });
-
-    expect(screen.getByTestId("store-share-preview")).not.toHaveTextContent(
-      "UYU"
-    );
-  });
-
-  test("draws a photo of this site on the share card, and says nothing of it", () => {
-    setup({ values: makeProductForm({ images: [OWN_PHOTO] }) });
-
-    expect(screen.getByTestId("store-share-preview-photo")).toHaveStyle({
-      backgroundImage: 'url("/seed/ring-2.jpg")',
-    });
-    expect(
-      screen.queryByText(
-        DICTIONARIES.en.articles.wizard.details.seo.shareNoPhoto
-      )
-    ).toBeNull();
-  });
-
-  test("leaves an uploaded photo off the share card, as its renderer does, and says why", () => {
-    setup({ values: makeProductForm({ images: [BLOB_PHOTO] }) });
-
-    expect(
-      screen.getByTestId("store-share-preview-photo").style.backgroundImage
-    ).toBe("");
-    expect(
-      screen.getByText(DICTIONARIES.en.articles.wizard.details.seo.shareNoPhoto)
-    ).toBeInTheDocument();
-  });
-
-  test("says nothing of the share card's photo while there is no photo", () => {
-    setup({ values: makeProductForm({ images: [] }) });
-
-    expect(
-      screen.queryByText(
-        DICTIONARIES.en.articles.wizard.details.seo.shareNoPhoto
-      )
-    ).toBeNull();
   });
 
   test.each([
@@ -474,6 +302,18 @@ describe("ProductDetailsForm", () => {
     expect(
       screen.queryAllByRole("button", { name: "Fill with AI" })
     ).toHaveLength(count);
+  });
+
+  test("has no search texts to fill in, nor filters: the wizard places those", () => {
+    setup();
+
+    expect(
+      screen.queryByRole("textbox", { name: /search engine/iu })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gold" })).toBeNull();
+    expect(
+      screen.getAllByRole("textbox").map((box) => box.getAttribute("name"))
+    ).toEqual(["es.title", "es.description", "price"]);
   });
 
   test("reads in Spanish on a Spanish page", () => {

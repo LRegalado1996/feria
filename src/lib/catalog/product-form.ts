@@ -18,8 +18,6 @@ export type ProductFormTexts = ProductFormValues["es"];
 
 const BLANK_TEXTS: ProductFormTexts = {
   description: "",
-  seoDescription: "",
-  seoTitle: "",
   title: "",
 };
 
@@ -51,13 +49,9 @@ export function productFormValues(
   const texts = (locale: Locale): ProductFormTexts => {
     const row = article.translations.find((text) => text.locale === locale);
 
+    // Its search texts are not the form's: they come from these two.
     return row
-      ? {
-          description: row.description,
-          seoDescription: row.seoDescription ?? "",
-          seoTitle: row.seoTitle ?? "",
-          title: row.title,
-        }
+      ? { description: row.description, title: row.title }
       : { ...BLANK_TEXTS };
   };
 
@@ -86,16 +80,18 @@ export function hasTexts(texts: ProductFormTexts): boolean {
 
 /**
  * What the form holds as `product.create` and `product.update` take it: the
- * price in minor units, the texts trimmed (a blank search text is none), the
- * category's id or none, and the English texts only when there are some, as
- * the server keeps them (a language with no text is no language).
+ * price in minor units, the texts trimmed, the category's id or none, and
+ * the English texts only when there are some, as the server keeps them (a
+ * language with no text is no language). The search texts are always none:
+ * an article's come from its title and description (Lucas, 2026-11-18), so
+ * a save clears any an earlier version of the wizard stored.
  */
 export function toProductValues(form: ProductFormValues): CreateProductValues {
   const row = (locale: Locale, texts: ProductFormTexts) => ({
     description: texts.description.trim(),
     locale,
-    seoDescription: texts.seoDescription.trim() || null,
-    seoTitle: texts.seoTitle.trim() || null,
+    seoDescription: null,
+    seoTitle: null,
     title: texts.title.trim(),
   });
 

@@ -10,18 +10,42 @@ import { ProductPublishGaps } from "./product-publish-gaps";
 
 function setup({
   gaps = ["image", "price", "englishTitle"],
+  headingLevel,
   locale = "en",
-}: { gaps?: PublishGap[]; locale?: Locale } = {}) {
+}: {
+  gaps?: PublishGap[];
+  headingLevel?: "h2" | "h3";
+  locale?: Locale;
+} = {}) {
   const onJump = vi.fn<(gap: PublishGap) => void>();
   const user = userEvent.setup();
-  renderWithI18n(<ProductPublishGaps gaps={gaps} onJump={onJump} />, {
-    locale,
-  });
+  renderWithI18n(
+    <ProductPublishGaps
+      gaps={gaps}
+      headingLevel={headingLevel}
+      onJump={onJump}
+    />,
+    { locale }
+  );
 
   return { onJump, user };
 }
 
 describe("ProductPublishGaps", () => {
+  test.each([
+    [undefined, 3],
+    ["h2", 2],
+  ] as const)(
+    "with the heading level %s, heads the list at level %s",
+    (headingLevel, level) => {
+      setup({ headingLevel });
+
+      expect(
+        screen.getByRole("heading", { name: "To publish it still needs:" })
+      ).toHaveProperty("tagName", `H${level}`);
+    }
+  );
+
   test("lists what is missing under its heading, each a button to its field", () => {
     setup();
 

@@ -1,50 +1,70 @@
 import { StoreSharePreview } from "@/app/_components/molecules/store-share-preview";
 import type { Dictionary } from "@/content";
+import type { Locale } from "@/lib/i18n/config";
+import { PRICE_MINOR_UNITS } from "@/lib/schemas/catalog";
+import { articleSearchTexts } from "@/lib/seo/article-metadata";
 import { cn } from "@/lib/utils";
+import { type Currency, formatPrice } from "@/lib/utils/format";
 
 export interface ProductSeoPreviewProps {
   className?: string;
   copy: Dictionary["articles"]["wizard"]["details"]["seo"];
-  /** What the search result shows under the title, or nothing. */
-  description: string | undefined;
-  /** The address as a search result writes it: the host and the path. */
-  displayUrl: string;
-  /** The page's title as the tab and the result show it, store included. */
-  pageTitle: string;
-  /** The share card's photo: one on this site only, as the card draws. */
-  sharePhotoUrl: string | null;
-  /** The article has a main photo the share card cannot draw. */
-  sharePhotoLeftOut: boolean;
-  sharePrice: string | null;
-  shareTitle: string;
-  storeName: string;
+  currency: Currency;
+  /** The article's description, as typed. */
+  description: string;
+  /** This site's host, as a search result writes it. */
+  host: string;
+  /** The language the texts are written in. */
+  lang: string;
+  locale: Locale;
+  /** The address of the article's main photo, or `null` while it has none. */
+  mainPhotoUrl: string | null;
+  /** The price in whole units, as the form holds it, or `null`. */
+  price: number | null;
+  /** The article's address segment, once it has one. */
+  slug: string | null;
+  store: { name: string; tagline: string | undefined };
+  /** The article's title, as typed. */
+  title: string;
 }
 
 /**
  * How the article will look outside the store (FER-017): as a Google result
  * (the store's name, the address, the title and the description, cut where
- * a result cuts them) and as the card a chat draws for its link. Fed the
- * same texts the article's page writes into its metadata
- * (`articleSearchTexts`), so an empty field shows the default the page
- * really uses.
+ * a result cuts them) and as the card a chat draws for its link. Nothing to
+ * fill in: both come from the title, the description and the main photo,
+ * read through the same `articleSearchTexts` the article's page writes its
+ * metadata with, so the preview says what the page will say.
  */
 function ProductSeoPreview({
   className,
   copy,
+  currency,
   description,
-  displayUrl,
-  pageTitle,
-  sharePhotoLeftOut,
-  sharePhotoUrl,
-  sharePrice,
-  shareTitle,
-  storeName,
+  host,
+  lang,
+  locale,
+  mainPhotoUrl,
+  price,
+  slug,
+  store,
+  title,
 }: ProductSeoPreviewProps) {
+  // An untitled draft shows an ellipsis where its title will go.
+  const search = articleSearchTexts(
+    { description: description.trim(), title: title.trim() || "…" },
+    store
+  );
+  // The card's renderer fetches only a photo on this site (`ownUrl()`).
+  const sharePhotoUrl = mainPhotoUrl?.startsWith("/") ? mainPhotoUrl : null;
+
   return (
     <div
-      className={cn("grid gap-4 md:grid-cols-2", className)}
+      className={cn("grid gap-4", className)}
       data-slot="product-seo-preview"
+      data-testid="product-seo-preview"
     >
+      <p className="text-xs text-muted-foreground">{copy.hint}</p>
       <figure className="grid min-w-0 content-start gap-2">
         <figcaption className="text-xs text-muted-foreground">
           {copy.google}
@@ -52,15 +72,19 @@ function ProductSeoPreview({
         <div
           className="grid min-w-0 gap-0.5 rounded-lg border bg-background p-3"
           data-testid="product-seo-preview-google"
+          // The result is in the texts' language, its caption the admin's.
+          lang={lang}
         >
-          <p className="truncate text-xs">{storeName}</p>
-          <p className="truncate text-xs text-muted-foreground">{displayUrl}</p>
-          <p className="mt-1 line-clamp-1 text-base font-medium text-blue-800 dark:text-blue-300">
-            {pageTitle}
+          <p className="truncate text-xs">{store.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {`${host} › productos › ${slug ?? "…"}`}
           </p>
-          {description ? (
+          <p className="mt-1 line-clamp-1 text-base font-medium text-blue-800 dark:text-blue-300">
+            {search.pageTitle}
+          </p>
+          {search.description ? (
             <p className="line-clamp-2 text-sm text-muted-foreground">
-              {description}
+              {search.description}
             </p>
           ) : null}
         </div>
@@ -71,11 +95,19 @@ function ProductSeoPreview({
         </figcaption>
         <StoreSharePreview
           photoUrl={sharePhotoUrl}
-          price={sharePrice}
-          storeName={storeName}
-          title={shareTitle}
+          price={
+            price === null
+              ? null
+              : formatPrice(
+                  Math.round(price * PRICE_MINOR_UNITS),
+                  currency,
+                  locale
+                )
+          }
+          storeName={store.name}
+          title={search.title}
         />
-        {sharePhotoLeftOut ? (
+        {mainPhotoUrl !== null && sharePhotoUrl === null ? (
           <p className="text-xs text-muted-foreground">{copy.shareNoPhoto}</p>
         ) : null}
       </figure>

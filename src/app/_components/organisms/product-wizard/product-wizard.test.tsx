@@ -188,6 +188,8 @@ const REFUSED = {
 interface SetupOptions {
   /** The article on the server, or `null` for a new one. */
   article?: StoreProduct | null;
+  /** Whether the server can store photos. */
+  canUpload?: boolean;
   /** `product.get`: answers, refuses, or never answers. */
   get?: "answers" | "fails" | "hangs";
   locale?: Locale;
@@ -211,6 +213,7 @@ interface SetupOptions {
 
 function setup({
   article = makeDraft(),
+  canUpload = true,
   get = "answers",
   kept,
   locale = "en",
@@ -330,6 +333,7 @@ function setup({
   const view = renderWithI18n(
     <ProductWizard
       articleId={article ? 12 : null}
+      canUpload={canUpload}
       host="lrmarket.uy"
       store={STORE}
     />,
@@ -435,7 +439,7 @@ describe("ProductWizard: a new article", () => {
     ).toBeVisible();
   });
 
-  test("creates the draft from the first photo, and the address becomes the article's without starting over", async () => {
+  test("creates the draft from the first photo, and the address becomes the draft's journey without starting over", async () => {
     const { arrive, create, replaceState } = setup({ article: null });
     await onStep("Article photos");
     const wizard = screen.getByTestId("product-wizard");
@@ -464,11 +468,16 @@ describe("ProductWizard: a new article", () => {
       expect(replaceState).toHaveBeenLastCalledWith(
         null,
         "",
-        "/en/admin/products/12"
+        "/en/admin/products/12?step=photos"
       );
     });
     expect(window.location.pathname).toBe("/en/admin/products/12");
     expect(screen.getByTestId("product-wizard")).toBe(wizard);
+    // Still the journey: its steps, not the article's single screen.
+    expect(
+      screen.getByRole("navigation", { name: "Steps to load the article" })
+    ).toBeVisible();
+    expect(screen.queryByTestId("product-screen")).not.toBeInTheDocument();
     expect(document.querySelector("output.sr-only")).toHaveTextContent(
       "Photo 1 uploaded."
     );
@@ -587,7 +596,7 @@ describe("ProductWizard: a new article", () => {
 
 describe("ProductWizard: steps", () => {
   test("moves through the steps in the address and brings focus to each heading", async () => {
-    const { user } = setup();
+    const { user } = setup({ url: "/en/admin/products/12?step=photos" });
     await onStep("Article photos");
 
     await user.click(screen.getByTestId("product-next"));
@@ -611,8 +620,10 @@ describe("ProductWizard: steps", () => {
       screen.getByRole("button", { name: "Step 1 of 3: Photos" })
     );
     expect(await onStep("Article photos")).toHaveFocus();
+    // The first step keeps its name: an address without one is the
+    // article's single screen.
     expect(window.location.pathname).toBe("/en/admin/products/12");
-    expect(window.location.search).toBe("");
+    expect(window.location.search).toBe("?step=photos");
   });
 
   test("a new article's steps stay on the new article's address", async () => {
@@ -825,10 +836,10 @@ describe("ProductWizard: publishing", () => {
       article: makeReadyDraft({
         translations: [
           {
-            description: "",
+            description: "a".repeat(4001),
             locale: "es",
             seoDescription: null,
-            seoTitle: "a".repeat(71),
+            seoTitle: null,
             title: "Anillo",
           },
         ],
@@ -842,7 +853,9 @@ describe("ProductWizard: publishing", () => {
     await onStep("Article details");
     expect(publish).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(screen.getByLabelText("Search engine title")).toHaveFocus();
+      expect(
+        screen.getByRole("textbox", { name: "Description" })
+      ).toHaveFocus();
     });
   });
 
@@ -1489,5 +1502,301 @@ describe("ProductWizard: details", () => {
     expect(screen.getByRole("textbox", { name: "Title" })).toHaveValue(
       "a".repeat(121)
     );
+  });
+});
+
+describe("ProductWizard: one screen for an article from the list", () => {
+  /** The level-2 headings in the order they read. */
+  const headings = () =>
+    screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+
+  test("shows a draft with everything on one screen: what is missing, photos, details, filters, then the store's previews, no steps", async () => {
+    setup();
+    await screen.findByTestId("product-screen");
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Edit article" })
+    ).toBeVisible();
+    expect(await screen.findByRole("button", { name: "Gold" })).toBeVisible();
+    expect(headings()).toEqual([
+      "To publish it still needs:",
+      "Article photos",
+      "Article details",
+      "Filters",
+      "Card in the store",
+      "Search and sharing",
+    ]);
+    expect(
+      screen.queryByRole("navigation", { name: "Steps to load the article" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveValue(
+      "Anillo de plata"
+    );
+    expect(screen.getByTestId("preview-card")).toBeInTheDocument();
+    expect(screen.getByTestId("product-publish")).toHaveTextContent("Publish");
+    expect(screen.queryByTestId("product-next")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Discard draft" })).toBeVisible();
+  });
+
+  test("an unknown step is the single screen too", async () => {
+    setup({ url: "/en/admin/products/12?step=everything" });
+
+    expect(await screen.findByTestId("product-screen")).toBeVisible();
+  });
+
+  test("a draft reloaded mid-journey stays on its step, in the journey's words", async () => {
+    setup({ url: "/en/admin/products/12?step=details" });
+
+    expect(await onStep("Article details")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "New article" })
+    ).toBeVisible();
+    expect(
+      screen.getByRole("navigation", { name: "Steps to load the article" })
+    ).toBeVisible();
+    expect(screen.queryByTestId("product-screen")).not.toBeInTheDocument();
+  });
+
+  test("autosaves a draft's change on the single screen", async () => {
+    const article = makeDraft();
+    const { pause, update, user } = setup({ article });
+    const title = await screen.findByRole("textbox", { name: "Title" });
+
+    await user.type(title, "!");
+    await pause();
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledExactlyOnceWith(
+        savedValues(article, (values) => ({
+          ...values,
+          es: { ...values.es, title: "Anillo de plata!" },
+        }))
+      );
+    });
+  });
+
+  test("publishing with something missing takes the person to the first field that misses, and marks it", async () => {
+    const { publish, user } = setup();
+    await screen.findByTestId("product-screen");
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "Category" })).toHaveFocus();
+    });
+    expect(screen.getByText("Choose a category to publish.")).toBeVisible();
+    expect(screen.getByText("Set the price to publish.")).toBeVisible();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  test("publishing without a photo brings focus to the photos' heading", async () => {
+    const { user } = setup({ article: makeReadyDraft({ images: [] }) });
+    await screen.findByTestId("product-screen");
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Article photos" })
+    ).toHaveFocus();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Upload at least one photo to publish."
+    );
+  });
+
+  test("publishes a ready draft and keeps the success on screen, at the article's own address", async () => {
+    const { publish, replaceState, user } = setup({
+      article: makeReadyDraft(),
+    });
+    await screen.findByTestId("product-screen");
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Published!" })
+    ).toBeVisible();
+    expect(publish).toHaveBeenCalledExactlyOnceWith({ id: 12 });
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/en/admin/products/12"
+    );
+    expect(screen.queryByTestId("product-screen")).not.toBeInTheDocument();
+  });
+
+  test("publishing from the journey ends it: the address drops its step", async () => {
+    const { replaceState, user } = setup({
+      article: makeReadyDraft(),
+      url: "/en/admin/products/12?step=review",
+    });
+    await onStep("Check how it looks");
+
+    await user.click(screen.getByTestId("product-publish"));
+
+    expect(
+      await screen.findByRole("heading", { name: "Published!" })
+    ).toBeVisible();
+    expect(replaceState).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/en/admin/products/12"
+    );
+  });
+
+  test("shows a published article on the single screen even on a step's address, with its save, discard and back to draft", async () => {
+    setup({
+      article: makeStoreProduct(),
+      url: "/en/admin/products/12?step=review",
+    });
+
+    expect(await screen.findByTestId("product-screen")).toBeVisible();
+    expect(headings()).toEqual([
+      "Article photos",
+      "Article details",
+      "Filters",
+      "Card in the store",
+      "Search and sharing",
+    ]);
+    expect(screen.getByTestId("product-published-notice")).toBeVisible();
+    expect(screen.getByTestId("product-save-changes")).toHaveTextContent(
+      "Save changes"
+    );
+    expect(screen.getByRole("button", { name: "Move to draft" })).toBeVisible();
+    expect(screen.queryByTestId("product-publish")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Discard draft" })
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe("ProductWizard: search and sharing", () => {
+  test("has no search texts to fill in, and previews the result from the title and the description as they are typed", async () => {
+    const { user } = setup();
+    const title = await screen.findByRole("textbox", { name: "Title" });
+
+    expect(
+      screen.queryByRole("textbox", { name: /search engine/iu })
+    ).not.toBeInTheDocument();
+    await user.clear(title);
+    await user.type(title, "Collar");
+
+    expect(screen.getByTestId("product-seo-preview-google")).toHaveTextContent(
+      "Collar · LR Market"
+    );
+    expect(screen.getByTestId("store-share-preview")).toHaveTextContent(
+      "Collar"
+    );
+  });
+
+  test.each([
+    [
+      "while English has none, the Spanish texts, as the store shows them",
+      [],
+      "Anillo de plata · LR Market",
+      "es",
+    ],
+    [
+      "once English has some, the English ones",
+      [
+        {
+          description: "",
+          locale: "en" as const,
+          seoDescription: null,
+          seoTitle: null,
+          title: "Silver ring",
+        },
+      ],
+      "Silver ring · LR Market",
+      "en",
+    ],
+  ])(
+    "on the English tab, previews %s",
+    async (_case, english, pageTitle, lang) => {
+      const article = makeDraft();
+      const { user } = setup({
+        article: makeDraft({
+          translations: [...article.translations, ...english],
+        }),
+      });
+
+      await user.click(
+        await screen.findByRole("tab", { name: "English (optional)" })
+      );
+
+      const google = screen.getByTestId("product-seo-preview-google");
+      expect(google).toHaveTextContent(pageTitle);
+      expect(google).toHaveAttribute("lang", lang);
+    }
+  );
+
+  test("saving an article clears the search texts an earlier wizard stored", async () => {
+    const article = makeDraft({
+      translations: [
+        {
+          description: "Plata 925.",
+          locale: "es",
+          seoDescription: "El anillo que buscabas.",
+          seoTitle: "Anillo 925",
+          title: "Anillo de plata",
+        },
+      ],
+    });
+    const { pause, update, user } = setup({ article });
+
+    await user.type(await screen.findByRole("textbox", { name: "Title" }), "!");
+    await pause();
+
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledOnce();
+    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        translations: [
+          {
+            description: "Plata 925.",
+            locale: "es",
+            seoDescription: null,
+            seoTitle: null,
+            title: "Anillo de plata!",
+          },
+        ],
+      })
+    );
+  });
+});
+
+describe("ProductWizard: photos", () => {
+  test("says up front, where photos come in, that this server cannot store them, and takes none", async () => {
+    setup({ article: null, canUpload: false });
+    await onStep("Article photos");
+
+    expect(screen.getByTestId("product-photo-unavailable")).toHaveTextContent(
+      "Photos can't be uploaded for now: uploads aren't set up on this server."
+    );
+    expect(screen.getByTestId("product-photo-drop")).toBeDisabled();
+  });
+
+  test("a first photo that fails creates no draft and leaves the person free to discard it", async () => {
+    const { create, pause, setQueued, user } = setup({ article: null });
+    await onStep("Article photos");
+
+    setQueued([
+      {
+        key: "photo-1",
+        name: "a.jpg",
+        preview: "blob:a",
+        state: { reason: "notConfigured", status: "failed" },
+      },
+    ]);
+    await pause();
+
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByTestId("product-next")).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Discard: Photo 1" }));
+    expect(queue.remove).toHaveBeenCalledExactlyOnceWith("photo-1");
   });
 });

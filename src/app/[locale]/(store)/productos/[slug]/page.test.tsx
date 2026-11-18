@@ -570,7 +570,7 @@ describe("generateMetadata", () => {
     ["es", "/productos/anillo-de-plata"],
     ["en", "/en/productos/anillo-de-plata"],
   ] as const)(
-    "in %s, prefers the article's own search title and description, with both addresses, after which the store's name",
+    "in %s, takes the title and the description, never search texts stored apart, with both addresses, after which the store's name",
     async (locale, canonical) => {
       const { metadata } = setup({
         article: makeArticle({
@@ -589,15 +589,15 @@ describe("generateMetadata", () => {
             "x-default": "/productos/anillo-de-plata",
           },
         },
-        description: "El anillo de plata que buscabas.",
+        description: "Plata 925, hecho a mano.",
         openGraph: {
-          description: "El anillo de plata que buscabas.",
+          description: "Plata 925, hecho a mano.",
           siteName: "Sample Store",
-          title: "Anillo de plata 925",
+          title: "Anillo de plata",
           type: "website",
           url: canonical,
         },
-        title: { absolute: "Anillo de plata 925 · Sample Store" },
+        title: { absolute: "Anillo de plata · Sample Store" },
       });
     }
   );

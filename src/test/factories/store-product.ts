@@ -45,12 +45,7 @@ export function makeStoreProduct(
 export function makeProductForm(
   overrides: Partial<ProductFormValues> = {}
 ): ProductFormValues {
-  const blank = {
-    description: "",
-    seoDescription: "",
-    seoTitle: "",
-    title: "",
-  };
+  const blank = { description: "", title: "" };
 
   return {
     attributeValueIds: [31],

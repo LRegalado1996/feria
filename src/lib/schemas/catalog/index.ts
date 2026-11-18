@@ -283,8 +283,6 @@ export interface ProductFormMessages {
   priceDecimals: string;
   priceNegative: string;
   priceTooHigh: string;
-  seoDescriptionTooLong: string;
-  seoTitleTooLong: string;
   titleTooLong: string;
 }
 
@@ -298,8 +296,9 @@ export const PRICE_MINOR_UNITS = 100;
  * only on its way out; it may not carry more decimals than the cents hold,
  * which would be rounded silently. The category is the `<select>`'s value,
  * `""` for none. A blank text is a draft's right: what publishing needs is
- * `resolvePublishGaps`'s, not this schema's. Without messages (a local copy
- * read back from the browser, FER-017) zod's own are kept.
+ * `resolvePublishGaps`'s, not this schema's. No search texts: an article's
+ * come from its title and description (Lucas, 2026-11-18). Without messages
+ * (a local copy read back from the browser, FER-017) zod's own are kept.
  */
 export function createProductFormSchema(messages?: ProductFormMessages) {
   const texts = z.object({
@@ -307,14 +306,6 @@ export function createProductFormSchema(messages?: ProductFormMessages) {
       .string()
       .trim()
       .max(PRODUCT_DESCRIPTION_MAX_LENGTH, messages?.descriptionTooLong),
-    seoDescription: z
-      .string()
-      .trim()
-      .max(PRODUCT_SEO_DESCRIPTION_MAX_LENGTH, messages?.seoDescriptionTooLong),
-    seoTitle: z
-      .string()
-      .trim()
-      .max(PRODUCT_SEO_TITLE_MAX_LENGTH, messages?.seoTitleTooLong),
     title: z
       .string()
       .trim()

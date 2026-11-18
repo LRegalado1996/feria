@@ -72,8 +72,8 @@ async function load(params: ArticlePageProps["params"]) {
 
 /**
  * The article's own title and description for search engines and chat
- * previews: its SEO fields, else its title and the start of its
- * description; the canonical address and one per language.
+ * previews: its title and the start of its description
+ * (`articleSearchTexts`); the canonical address and one per language.
  */
 export async function generateMetadata({
   params,
