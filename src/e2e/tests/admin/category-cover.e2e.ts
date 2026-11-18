@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-
-import type { Page, Request } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { type DbFixture, expect, test, uniqueTag } from "../../fixtures";
+import { interceptBlobStore, seedPhoto } from "../../fixtures/blob-store";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
@@ -15,66 +13,7 @@ import { AdminPage } from "../../page-objects/admin.page";
 // file, which lives nowhere. The token and the save are the app's own.
 test.use({ storageState: { cookies: [], origins: [] } });
 
-const PHOTO = path.join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "..",
-  "public",
-  "seed",
-  "ring-2.jpg"
-);
-
-/**
- * The address the store gives an upload, as Vercel's API answers it: the
- * client token names the store, the request the pathname the server chose.
- */
-function uploadedUrl(request: Request): string {
-  const token = request.headers().authorization ?? "";
-  const storeId = /vercel_blob_client_([A-Za-z0-9]+)_/.exec(token)?.[1] ?? "";
-  const pathname = new URL(request.url()).searchParams.get("pathname") ?? "";
-
-  return `https://${storeId.toLowerCase()}.public.blob.vercel-storage.com/${pathname}`;
-}
-
-/**
- * Answers the browser's uploads and the image optimizer's requests for an
- * uploaded file, and counts the uploads.
- */
-async function interceptBlobStore(page: Page) {
-  const uploads: string[] = [];
-  const photo = readFileSync(PHOTO);
-
-  await page.route("https://vercel.com/api/blob/**", async (route) => {
-    const url = uploadedUrl(route.request());
-    uploads.push(url);
-    const pathname = new URL(url).pathname.slice(1);
-
-    await route.fulfill({
-      json: {
-        contentDisposition: `inline; filename="${path.basename(pathname)}"`,
-        contentType: "image/webp",
-        downloadUrl: `${url}?download=1`,
-        etag: '"e2e"',
-        pathname,
-        url,
-      },
-    });
-  });
-  await page.route(
-    (url) =>
-      url.pathname === "/_next/image" &&
-      (url.searchParams.get("url") ?? "").includes(
-        ".public.blob.vercel-storage.com/"
-      ),
-    async (route) => {
-      await route.fulfill({ body: photo, contentType: "image/jpeg" });
-    }
-  );
-
-  return { uploads };
-}
+const PHOTO = seedPhoto("ring-2.jpg");
 
 /** A category of its own with one article, signed in, on the screen. */
 async function setup({ db, page }: { db: DbFixture["db"]; page: Page }) {

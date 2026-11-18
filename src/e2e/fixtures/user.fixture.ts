@@ -40,6 +40,8 @@ export interface Identity {
  * created them, for the db fixture to delete at teardown.
  */
 export interface CreatedRows {
+  /** Articles the wizard created from their first photo (FER-017). */
+  articleIds: number[];
   categoryIds: number[];
   filterIds: number[];
   filterValueIds: number[];
@@ -176,6 +178,7 @@ const CREATING = {
   "/api/orpc/attribute/createValue": "filterValueIds",
   "/api/orpc/category/create": "categoryIds",
   "/api/orpc/order/create": "orderTokens",
+  "/api/orpc/product/create": "articleIds",
 } as const;
 
 function isCreating(pathname: string): pathname is keyof typeof CREATING {
@@ -281,6 +284,7 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
   createdRows: async ({}, use) => {
     await use({
+      articleIds: [],
       categoryIds: [],
       filterIds: [],
       filterValueIds: [],
