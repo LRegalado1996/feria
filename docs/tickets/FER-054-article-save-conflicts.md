@@ -14,6 +14,8 @@ An article is saved whole ([FER-017](FER-017-article-wizard.md): `product.update
 - `product.update` takes the `updatedAt` the browser started from and, under the article's row lock, refuses with `CONFLICT` when the article changed since. A refused save keeps what was typed.
 - The wizard says so and offers to load the article as it is now; a draft's autosave stops until the person chooses.
 - A photo address the article no longer holds and the save did not just upload is refused, so a stale tab cannot bring back a deleted file.
+- A stale save cannot drop photos another tab added since: with the precondition above it is refused, never applied with the photos it did not know.
+- A published article's copy kept in this browser is keyed to the version its form was loaded from, not to a newer one a background read brings, so a reload after another tab's save drops the copy instead of restoring old values over the new article.
 - Unit and integration tests on both sides of the check (same `updatedAt`, an older one); an e2e with two pages on one article.
 
 ## Acceptance criteria
