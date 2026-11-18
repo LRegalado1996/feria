@@ -296,11 +296,17 @@ function PhotoTile({
         </Button>
       </div>
       <div className="flex min-w-0 flex-wrap items-center justify-between">
+        {/* `aria-disabled`, never `disabled`, at either end: a move that
+            lands a photo there would disable the focused button and drop
+            focus to the page, as the main photo's star avoids too. */}
         <Button
+          aria-disabled={first || undefined}
           aria-label={interpolate(copy.moveEarlier, { photo: name })}
-          disabled={first}
+          className="aria-disabled:opacity-50"
           onClick={() => {
-            onMove(-1);
+            if (!first) {
+              onMove(-1);
+            }
           }}
           size="icon"
           type="button"
@@ -325,10 +331,13 @@ function PhotoTile({
           <Star aria-hidden className={cn(first && "fill-current")} />
         </Button>
         <Button
+          aria-disabled={last || undefined}
           aria-label={interpolate(copy.moveLater, { photo: name })}
-          disabled={last}
+          className="aria-disabled:opacity-50"
           onClick={() => {
-            onMove(1);
+            if (!last) {
+              onMove(1);
+            }
           }}
           size="icon"
           type="button"

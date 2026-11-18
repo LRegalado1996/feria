@@ -124,14 +124,25 @@ describe("ProductPhotoGrid", () => {
     ["the first photo later", 0, "Move later: Photo 1", false],
     ["the last photo later", 2, "Move later: Photo 3", true],
     ["the last photo earlier", 2, "Move earlier: Photo 3", false],
-  ])("moving %s is disabled: %s", (_case, index, name, disabled) => {
-    const { tile } = setup();
+  ])(
+    "moving %s is refused: %s, and the button stays focusable",
+    async (_case, index, name, refused) => {
+      const { spies, tile, user } = setup();
+      const button = tile(index).getByRole("button", { name });
 
-    expect(tile(index).getByRole("button", { name })).toHaveProperty(
-      "disabled",
-      disabled
-    );
-  });
+      // Never `disabled`: a move that lands a photo at an end would drop
+      // the focused button's focus to the page.
+      expect(button).toHaveProperty("disabled", false);
+      expect(button.getAttribute("aria-disabled")).toBe(
+        refused ? "true" : null
+      );
+
+      await user.click(button);
+
+      // The middle place is the one either allowed move lands on.
+      expect(spies.onMove.mock.calls).toEqual(refused ? [] : [[index, 1]]);
+    }
+  );
 
   test("moves a photo one place with its buttons", async () => {
     const { spies, tile, user } = setup();
