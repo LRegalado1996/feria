@@ -36,6 +36,11 @@ function makePrepared(size = 800_000) {
   };
 }
 
+/** What the queue asks the token for, for a photo prepared at `size`. */
+function makeTokenInput(size = 800_000) {
+  return { contentType: "image/webp", purpose: "product", size };
+}
+
 function makeFile(
   name: string,
   { size, type = "image/jpeg" } = {} as {
@@ -50,6 +55,18 @@ function makeFile(
   }
 
   return file;
+}
+
+/**
+ * Resolves once every continuation already queued has run: a macrotask
+ * runs only on an empty microtask queue. Awaited after the signal that set
+ * the continuation going (an answer that reached the queue, a promise the
+ * test settled), never in place of one.
+ */
+async function drained() {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }
 
 interface PutOptions {
@@ -151,10 +168,28 @@ function setup({
     .spyOn(URL, "revokeObjectURL")
     .mockImplementation(() => undefined);
   const onUploaded = vi.fn<(photo: QueuedPhotoUploaded) => void>();
+  const wrapper = createQueryWrapper();
+  const mutations = wrapper.queryClient.getMutationCache();
   const { result, unmount } = renderHook(
     () => usePhotoQueue({ onUploaded, purpose: "product" }),
-    { wrapper: createQueryWrapper() }
+    { wrapper }
   );
+  /**
+   * Resolves once a token's answer reached the queue, over HTTP: asked
+   * before the answer is given, so it cannot miss it.
+   */
+  const tokenAnswered = async () =>
+    await new Promise<void>((resolve) => {
+      const stop = mutations.subscribe((event) => {
+        if (event.mutation?.state.status === "success") {
+          stop();
+          resolve();
+        }
+      });
+    });
+  /** The tokens the queue has asked for so far, answered or not. */
+  const tokensAsked = () =>
+    mutations.getAll().map((mutation) => mutation.state.variables);
   const upload = async (index: number) => {
     await waitFor(() => {
       expect(uploads[index]).toBeDefined();
@@ -177,7 +212,9 @@ function setup({
     onUploaded,
     result,
     revokeObjectURL,
+    tokenAnswered,
     tokenRequests,
+    tokensAsked,
     unmount,
     upload,
     uploads,
@@ -198,11 +235,7 @@ describe("usePhotoQueue", () => {
       ["c.jpg", "blob:preview-3"],
     ]);
     const first = await upload(0);
-    expect(tokenRequests).toHaveBeenCalledExactlyOnceWith({
-      contentType: "image/webp",
-      purpose: "product",
-      size: 800_000,
-    });
+    expect(tokenRequests).toHaveBeenCalledExactlyOnceWith(makeTokenInput());
     expect(uploads).toHaveLength(1);
     expect(result.current.items[1]?.state).toEqual({ status: "waiting" });
 
@@ -328,8 +361,9 @@ describe("usePhotoQueue", () => {
   });
 
   test("keeps a failed photo with its reason, reports it, and retries it prepared as it was", async () => {
-    const { add, result, upload } = setup();
-    add([makeFile("a.jpg")], 1);
+    const { add, result, tokenRequests, upload } = setup();
+    const file = makeFile("a.jpg");
+    add([file], 1);
     const first = await upload(0);
 
     act(() => {
@@ -352,7 +386,14 @@ describe("usePhotoQueue", () => {
     });
 
     await upload(1);
-    expect(mocks.prepareImage).toHaveBeenCalledOnce();
+    // Prepared once, within the article photo's own cap; a fresh token each.
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file, {
+      maxBytes: 4_000_000,
+    });
+    expect(tokenRequests.mock.calls).toEqual([
+      [makeTokenInput()],
+      [makeTokenInput()],
+    ]);
   });
 
   test.each([
@@ -360,21 +401,36 @@ describe("usePhotoQueue", () => {
       "a file the browser cannot read, unreported",
       { prepared: new UnreadableImageError() },
       "unreadable",
-      false,
+      [],
     ],
     [
       "a server without its store, reported once",
       { token: "notConfigured" as const },
       "notConfigured",
-      true,
+      [
+        [
+          expect.objectContaining({
+            code: "SERVICE_UNAVAILABLE",
+            message: "No token",
+          }),
+          {
+            action: "Product.upload_photo",
+            context: {
+              prepared: true,
+              purpose: "product",
+              reason: "notConfigured",
+            },
+          },
+        ],
+      ],
     ],
     [
       "a photo still too heavy once prepared",
       { prepared: makePrepared(4_000_001) },
       "tooLarge",
-      false,
+      [],
     ],
-  ])("fails %s, with no retry", async (_case, options, reason, reported) => {
+  ])("fails %s, with no retry", async (_case, options, reason, reports) => {
     const { add, result } = setup(options);
     add([makeFile("a.jpg")], 1);
 
@@ -384,7 +440,7 @@ describe("usePhotoQueue", () => {
         status: "failed",
       });
     });
-    expect(vi.mocked(reportError)).toHaveBeenCalledTimes(reported ? 1 : 0);
+    expect(vi.mocked(reportError).mock.calls).toEqual(reports);
 
     act(() => {
       result.current.retry(required(result.current.items[0]).key);
@@ -443,27 +499,24 @@ describe("usePhotoQueue", () => {
   });
 
   test("a token that arrives after the photo was removed sends nothing", async () => {
-    const { add, giveToken, result, tokenRequests, uploads } = setup({
-      holdsToken: true,
-    });
+    const { add, giveToken, result, tokenAnswered, tokenRequests, uploads } =
+      setup({ holdsToken: true });
     add([makeFile("a.jpg")], 1);
     await waitFor(() => {
-      expect(tokenRequests).toHaveBeenCalledOnce();
+      expect(tokenRequests).toHaveBeenCalledExactlyOnceWith(makeTokenInput());
     });
 
     act(() => {
       result.current.remove(required(result.current.items[0]).key);
     });
+    const answered = tokenAnswered();
     giveToken();
+    await answered;
+    await drained();
 
-    await waitFor(() => {
-      expect(result.current.items).toEqual([]);
-    });
-    // A macrotask: the token's answer has landed by then.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    expect(result.current.items).toEqual([]);
     expect(uploads).toHaveLength(0);
+    expect(mocks.put).not.toHaveBeenCalled();
   });
 
   test("removing the first photo while its token is awaited starts the next at once", async () => {
@@ -471,7 +524,7 @@ describe("usePhotoQueue", () => {
     // The article has no photo: the first one travels alone.
     add([makeFile("a.jpg"), makeFile("b.jpg")]);
     await waitFor(() => {
-      expect(tokenRequests).toHaveBeenCalledOnce();
+      expect(tokenRequests).toHaveBeenCalledExactlyOnceWith(makeTokenInput());
     });
 
     act(() => {
@@ -480,19 +533,21 @@ describe("usePhotoQueue", () => {
 
     // The token never answers, and the second photo asks for its own.
     await waitFor(() => {
-      expect(tokenRequests).toHaveBeenCalledTimes(2);
+      expect(tokenRequests.mock.calls).toEqual([
+        [makeTokenInput()],
+        [makeTokenInput()],
+      ]);
     });
     expect(result.current.items.map((item) => item.name)).toEqual(["b.jpg"]);
   });
 
   test("a photo removed while it is prepared asks for no token", async () => {
-    const { add, result, tokenRequests } = setup();
+    const { add, result, tokenRequests, tokensAsked } = setup();
     let finishPreparing = (_value: unknown): void => undefined;
-    mocks.prepareImage.mockReturnValue(
-      new Promise((resolve) => {
-        finishPreparing = resolve;
-      })
-    );
+    const preparing = new Promise((resolve) => {
+      finishPreparing = resolve;
+    });
+    mocks.prepareImage.mockReturnValue(preparing);
     add([makeFile("a.jpg")], 1);
     await waitFor(() => {
       expect(result.current.items[0]?.state).toEqual({ status: "preparing" });
@@ -502,11 +557,13 @@ describe("usePhotoQueue", () => {
       result.current.remove(required(result.current.items[0]).key);
     });
     finishPreparing(makePrepared());
-    // A macrotask: the prepared photo has been handed back by then.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    // The queue awaited this promise first, so it went on before this does.
+    await preparing;
+    await drained();
 
+    // A token is asked for in the very step the queue goes on, before any
+    // request leaves: none was.
+    expect(tokensAsked()).toEqual([]);
     expect(tokenRequests).not.toHaveBeenCalled();
   });
 
@@ -521,9 +578,7 @@ describe("usePhotoQueue", () => {
     act(() => {
       first.finish();
     });
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await drained();
 
     expect(onUploaded).not.toHaveBeenCalled();
     expect(result.current.items).toEqual([]);
