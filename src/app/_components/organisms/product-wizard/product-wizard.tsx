@@ -601,6 +601,29 @@ function WizardEditor({
     () => new Map()
   );
   const shownPreviews = useRef(previews);
+  /** Frees the thumbnails of photos the form no longer holds. */
+  const forgetPreviews = (kept: readonly { url: string }[]) => {
+    const urls = new Set(kept.map((image) => image.url));
+    const dropped = [...previews].filter(([url]) => !urls.has(url));
+
+    if (dropped.length === 0) {
+      return;
+    }
+
+    for (const [, preview] of dropped) {
+      URL.revokeObjectURL(preview);
+    }
+
+    setPreviews((was) => {
+      const next = new Map(was);
+
+      for (const [url] of dropped) {
+        next.delete(url);
+      }
+
+      return next;
+    });
+  };
   const lastQueued = useRef<string | null>(null);
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const photosHeading = useRef<HTMLHeadingElement>(null);
@@ -995,6 +1018,7 @@ function WizardEditor({
   const onDiscardChanges = (articleId: number) => {
     dropProductEdits(articleId);
     form.reset(baseline);
+    forgetPreviews(baseline.images);
     setDirty(false);
     setRestored({ kind: "none" });
     setConfirming(null);
@@ -1158,12 +1182,9 @@ function WizardEditor({
       }}
       onMove={movePhoto}
       onRemove={(index) => {
-        const held = form.getValues("images");
-        form.setValue(
-          "images",
-          held.filter((_, at) => at !== index),
-          { shouldDirty: true }
-        );
+        const kept = form.getValues("images").filter((_, at) => at !== index);
+        form.setValue("images", kept, { shouldDirty: true });
+        forgetPreviews(kept);
         say(copy.photos.announce.removed, index);
       }}
       onRemoveQueued={(key) => {

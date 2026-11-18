@@ -649,6 +649,20 @@ describe("ProductWizard: a new article", () => {
     expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:local-a");
   });
 
+  test("frees a removed photo's thumbnail at once, and only its own", async () => {
+    const { arrive, user } = setup({ article: null });
+    await onStep("Article photos");
+    const revoke = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+    arrive(PHOTO_A, "blob:local-a");
+    arrive(PHOTO_B, "blob:local-b");
+
+    await user.click(screen.getByRole("button", { name: "Remove: Photo 1" }));
+
+    expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:local-a");
+  });
+
   test("discarding stops the photos on their way, so none creates the draft afterwards", async () => {
     const { setQueued, user } = setup({ article: null });
     await onStep("Article photos");
@@ -1600,6 +1614,24 @@ describe("ProductWizard: a published article", () => {
     expect(unpublish).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
     expect(window.localStorage.getItem("feria:product-edit:12")).not.toBeNull();
+  });
+
+  test("discarding the changes frees the thumbnail of a photo uploaded meanwhile", async () => {
+    const { arrive, user } = setup({ article: published() });
+    await onStep("Article photos");
+    const revoke = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+    arrive(PHOTO_B, "blob:local-b");
+
+    await chooseFromMenu(user, "Discard changes");
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Yes, discard",
+      })
+    );
+
+    expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:local-b");
   });
 
   test("moving back to draft with nothing changed saves nothing", async () => {
