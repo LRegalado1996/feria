@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
@@ -155,6 +155,40 @@ describe("ProductFilterChips", () => {
     expect(screen.queryByRole("form", { name: "New Color value" })).toBeNull();
     expect(opener).toHaveFocus();
     expect(opener).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("a value added while chips were tapped joins the choice as it is then, not as it was", async () => {
+    const onChange = vi.fn<(ids: number[]) => void>();
+    let answer = (_created: { id: number; result: "saved" }): void => undefined;
+    const onCreateValue = vi.fn(
+      async () =>
+        await new Promise<{ id: number; result: "saved" }>((resolve) => {
+          answer = resolve;
+        })
+    );
+    const user = userEvent.setup();
+    const chips = (value: number[]) => (
+      <ProductFilterChips
+        attributes={[makeAttribute()]}
+        onChange={onChange}
+        onCreateValue={onCreateValue}
+        value={value}
+      />
+    );
+    const { rerender } = renderWithI18n(chips([32]));
+    await user.click(screen.getByRole("button", { name: "Add to Color" }));
+    const form = screen.getByRole("form", { name: "New Color value" });
+    await user.type(within(form).getByLabelText(/^Name in Spanish/u), "Rosa");
+    await user.click(within(form).getByRole("button", { name: "Add" }));
+
+    // Gold tapped while the store had not answered yet.
+    rerender(chips([32, 31]));
+    await act(async () => {
+      answer({ id: 99, result: "saved" });
+      await Promise.resolve();
+    });
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([32, 31, 99]);
   });
 
   test("keeps the form open with the reason when the name is taken, choosing nothing", async () => {

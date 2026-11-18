@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Plus } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/app/_components/atoms/button";
 import {
@@ -57,6 +57,13 @@ function ProductFilterChips({
   const [adding, setAdding] = useState<number | null>(null);
   const formTitle = useId();
   const openers = useRef(new Map<number, HTMLButtonElement>());
+  // The choice as it is now: a value being added is chosen once the store
+  // answers, on top of whatever was tapped while it was on its way.
+  const latest = useRef(value);
+
+  useEffect(() => {
+    latest.current = value;
+  }, [value]);
 
   if (attributes.length === 0) {
     return (
@@ -166,8 +173,8 @@ function ProductFilterChips({
                     );
 
                     if (result === "saved") {
-                      if (id !== undefined) {
-                        onChange([...value, id]);
+                      if (id !== undefined && !latest.current.includes(id)) {
+                        onChange([...latest.current, id]);
                       }
                       close(attribute.id);
                     }
