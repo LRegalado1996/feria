@@ -31,8 +31,11 @@ const LOADED = {
   whatsappNumber: "+59899123456",
 };
 
+/** The store as `store.update` answers it: what was sent, its id and its currency. */
+const SAVED = { ...INPUT, currencyCode: "UYU" as const, id: 7 };
+
 function setup({ fails = false }: { fails?: boolean } = {}) {
-  const update = vi.fn((_input: unknown) => ({ ...INPUT, id: 7 }));
+  const update = vi.fn((_input: unknown) => SAVED);
   server.use(
     fails
       ? createOrpcErrorHandler("store.update", {
@@ -58,16 +61,10 @@ describe("useUpdateStoreSettings", () => {
   test("sends every setting, and the saved store becomes the screen's copy", async () => {
     const { queryClient, result, update } = setup();
 
-    await expect(result.current.mutateAsync(INPUT)).resolves.toEqual({
-      ...INPUT,
-      id: 7,
-    });
+    await expect(result.current.mutateAsync(INPUT)).resolves.toEqual(SAVED);
 
     expect(update).toHaveBeenCalledExactlyOnceWith(INPUT);
-    expect(queryClient.getQueryData(storeSettingsKey())).toEqual({
-      ...INPUT,
-      id: 7,
-    });
+    expect(queryClient.getQueryData(storeSettingsKey())).toEqual(SAVED);
   });
 
   test("a read answered before the save and landing after it never puts the old settings back", async () => {
@@ -90,10 +87,7 @@ describe("useUpdateStoreSettings", () => {
     }
     await stale;
 
-    expect(queryClient.getQueryData(storeSettingsKey())).toEqual({
-      ...INPUT,
-      id: 7,
-    });
+    expect(queryClient.getQueryData(storeSettingsKey())).toEqual(SAVED);
   });
 
   test("rejects a refused save with its code, keeps the copy it had, and leaves the report to the screen", async () => {
