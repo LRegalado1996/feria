@@ -134,6 +134,10 @@ export function usePhotoQueue({
     attempts.current.get(key)?.controller.abort();
     attempts.current.delete(key);
     waiting.current = waiting.current.filter((other) => other !== key);
+    // Its place is free at once: preparing and asking for a token cannot be
+    // aborted, and one that never answers would hold the queue (the first
+    // photo travels alone).
+    active.current.delete(key);
     const preview = previews.current.get(key);
     previews.current.delete(key);
 

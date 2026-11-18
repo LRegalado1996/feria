@@ -466,6 +466,25 @@ describe("usePhotoQueue", () => {
     expect(uploads).toHaveLength(0);
   });
 
+  test("removing the first photo while its token is awaited starts the next at once", async () => {
+    const { add, result, tokenRequests } = setup({ holdsToken: true });
+    // The article has no photo: the first one travels alone.
+    add([makeFile("a.jpg"), makeFile("b.jpg")]);
+    await waitFor(() => {
+      expect(tokenRequests).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      result.current.remove(required(result.current.items[0]).key);
+    });
+
+    // The token never answers, and the second photo asks for its own.
+    await waitFor(() => {
+      expect(tokenRequests).toHaveBeenCalledTimes(2);
+    });
+    expect(result.current.items.map((item) => item.name)).toEqual(["b.jpg"]);
+  });
+
   test("a photo removed while it is prepared asks for no token", async () => {
     const { add, result, tokenRequests } = setup();
     let finishPreparing = (_value: unknown): void => undefined;
