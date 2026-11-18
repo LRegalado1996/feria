@@ -22,7 +22,7 @@ import {
   reorderAttributes,
   reorderAttributeValues,
   resolveCatalogFilters,
-  setProductAttributeValues,
+  replaceProductAttributeValues,
   updateAttributeValue,
 } from "./attribute";
 
@@ -38,7 +38,6 @@ const FIND_SQL = '("attribute"."id" = $1 and "attribute"."storeId" = $2)';
 const FIND_VALUE_SQL =
   '("attribute_value"."id" = $1 and "attribute"."storeId" = $2)';
 const VALUES_OF_SQL = '"attribute_value"."attributeId" = $1';
-const ARTICLE_SQL = '("product"."id" = $1 and "product"."storeId" = $2)';
 const OWN_VALUES_PREFIX =
   '("attribute"."storeId" = $1 and "attribute_value"."id" in (';
 
@@ -76,20 +75,17 @@ function makeValueNames(
  * an answer reaches only the query it is for:
  * - `own`: the store's filter ids, found (and row-locked) by id in the store;
  * - `ownValues`: the store's value ids, each with its filter's id;
- * - `articles`: the store's article ids;
  * - `existing`: what the store's filter list (`slug`, `position`, `id`) holds;
  * - `existingValues`: what the values of one of `own` hold;
  * - `taken`: whether the duplicate-name check finds another row.
  */
 function setup({
-  articles = [],
   existing = [],
   existingValues = [],
   own = [],
   ownValues = {},
   taken = false,
 }: {
-  articles?: number[];
   existing?: { id?: number; position?: number; slug?: string }[];
   existingValues?: { id?: number; position?: number; slug?: string }[];
   own?: number[];
@@ -130,14 +126,6 @@ function setup({
       attributeId !== undefined
     ) {
       return await Promise.resolve([{ attributeId, id }]);
-    }
-
-    if (
-      sql === ARTICLE_SQL &&
-      storeId === STORE_ID &&
-      articles.includes(id ?? 0)
-    ) {
-      return await Promise.resolve([{ id }]);
     }
 
     if (sql.startsWith(OWN_VALUES_PREFIX) && params[0] === STORE_ID) {
@@ -974,87 +962,68 @@ describe("deleteAttributeValue", () => {
   );
 });
 
-describe("setProductAttributeValues", () => {
-  async function set(
+describe("replaceProductAttributeValues", () => {
+  async function replace(
     db: MockDb,
-    {
-      productId = 9,
-      valueIds = [21, 22],
-    }: { productId?: number; valueIds?: number[] } = {}
+    { valueIds = [21, 22] }: { valueIds?: number[] } = {}
   ) {
-    return await setProductAttributeValues(db as never, {
-      productId,
+    await replaceProductAttributeValues(db as never, {
+      productId: 9,
       storeId: STORE_ID,
       valueIds,
     });
   }
 
-  test("refuses an article of another store, writing nothing", async () => {
-    const { db, selectWheres } = setup({
-      articles: [8],
-      ownValues: { 21: 5, 22: 5 },
-    });
-
-    await expect(set(db)).rejects.toMatchObject({
-      code: "NOT_FOUND",
-      message: "Article not found",
-    });
-    expect(selectWheres()).toEqual([
-      { params: [9, STORE_ID], sql: ARTICLE_SQL },
-    ]);
-    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(product);
-    expect(db.$.delete).not.toHaveBeenCalled();
-    expect(db.$.insert).not.toHaveBeenCalled();
-  });
-
   test("refuses a value of another store's filter, never attaching it", async () => {
-    const { db, selectWheres } = setup({ articles: [9], ownValues: { 21: 5 } });
+    const { db, selectWheres } = setup({ ownValues: { 21: 5 } });
 
-    await expect(set(db, { valueIds: [21, 99] })).rejects.toMatchObject(
+    await expect(replace(db, { valueIds: [21, 99] })).rejects.toMatchObject(
       VALUE_NOT_FOUND
     );
-    expect(selectWheres()[1]).toEqual({
-      params: [STORE_ID, 21, 99],
-      sql: `${OWN_VALUES_PREFIX}$2, $3))`,
-    });
+    expect(selectWheres()).toEqual([
+      { params: [STORE_ID, 21, 99], sql: `${OWN_VALUES_PREFIX}$2, $3))` },
+    ]);
     expect(db.$.delete).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalled();
   });
 
-  test("replaces what the article carried with the store's values", async () => {
-    const { db, locks } = setup({ articles: [9], ownValues: { 21: 5, 22: 6 } });
+  test("keeps the pairs the article still carries, drops the others and adds the new ones", async () => {
+    const { db, locks } = setup({ ownValues: { 21: 5, 22: 6 } });
 
-    await expect(set(db)).resolves.toEqual({ id: 9, valueIds: [21, 22] });
+    await replace(db);
 
-    // The article is held to write, its values to keep until attached.
-    expect(locks()).toEqual([["update"], ["share", { of: attributeValue }]]);
+    // Each value held until attached, so a deletion meanwhile waits.
+    expect(locks()).toEqual([["share", { of: attributeValue }]]);
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(productAttributeValue);
     expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
-      params: [9],
-      sql: '"product_attribute_value"."productId" = $1',
+      params: [9, 21, 22],
+      sql: '("product_attribute_value"."productId" = $1 and "product_attribute_value"."attributeValueId" not in ($2, $3))',
     });
     expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(productAttributeValue);
     expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith([
       { attributeValueId: 21, productId: 9 },
       { attributeValueId: 22, productId: 9 },
     ]);
-    expect(db.$["delete.where"].mock.invocationCallOrder[0] ?? 0).toBeLessThan(
-      db.$["insert.values"].mock.invocationCallOrder[0] ?? 0
-    );
+    // A pair already there is left as it is, not inserted twice.
+    expect(db.$["insert.onConflictDoNothing"]).toHaveBeenCalledExactlyOnceWith({
+      target: [
+        productAttributeValue.productId,
+        productAttributeValue.attributeValueId,
+      ],
+    });
   });
 
   test("takes every value off with an empty list, checking and inserting none", async () => {
-    const { db, selectWheres } = setup({ articles: [9] });
+    const { db, selectWheres } = setup();
 
-    await expect(set(db, { valueIds: [] })).resolves.toEqual({
-      id: 9,
-      valueIds: [],
-    });
+    await replace(db, { valueIds: [] });
 
-    expect(selectWheres()).toEqual([
-      { params: [9, STORE_ID], sql: ARTICLE_SQL },
-    ]);
+    expect(selectWheres()).toEqual([]);
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(productAttributeValue);
+    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
+      params: [9],
+      sql: '"product_attribute_value"."productId" = $1',
+    });
     expect(db.$.insert).not.toHaveBeenCalled();
   });
 });

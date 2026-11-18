@@ -103,4 +103,24 @@ describe("writeToCatalog", () => {
     );
     expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
+
+  test.each([
+    ["drops", true, [[7]]],
+    ["keeps", false, []],
+  ])(
+    "%s the cache as the committed result says it shows on the storefront",
+    async (_case, shown, calls) => {
+      const { context, write } = setup();
+      const shows = vi.fn((_result: { id: number; storeId: number }) => shown);
+
+      await expect(writeToCatalog(context, write, shows)).resolves.toEqual({
+        id: 11,
+        storeId: 7,
+      });
+
+      // Asked about what the write committed, not before it ran.
+      expect(shows).toHaveBeenCalledExactlyOnceWith({ id: 11, storeId: 7 });
+      expect(invalidateCatalogCache.mock.calls).toEqual(calls);
+    }
+  );
 });

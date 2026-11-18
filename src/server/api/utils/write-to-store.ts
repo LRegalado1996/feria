@@ -28,14 +28,21 @@ export async function writeToStore<T>(
 /**
  * `writeToStore` for a write a shopper can see (an article's texts, price,
  * photos, availability or publication; a category's name): once it
- * committed, the store's cached article pages are dropped (FER-024).
+ * committed, the store's cached article pages are dropped (FER-024). A write
+ * that only sometimes reaches the storefront says when with `shows`, read
+ * from what it committed: an article's save drops them only when the article
+ * is published, so a draft's autosave (FER-017) never empties the cache.
  */
 export async function writeToCatalog<T>(
   context: StoreWriteContext,
-  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>,
+  shows: (result: T) => boolean = () => true
 ): Promise<T> {
   const result = await writeToStore(context, write);
-  invalidateCatalogCache(context.store.id);
+
+  if (shows(result)) {
+    invalidateCatalogCache(context.store.id);
+  }
 
   return result;
 }

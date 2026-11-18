@@ -10,7 +10,7 @@ import {
   store,
   storeTranslation,
 } from "@/server/db/schema";
-import { createProduct, publishProduct } from "@/server/services/catalog";
+import { createProduct, publishProduct } from "@/server/services/product";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
@@ -78,8 +78,11 @@ async function makeArticle(
   { publish = true } = {}
 ) {
   const row = await createProduct(db, {
+    blobStore: null,
     storeId,
     values: {
+      attributeValueIds: [],
+      images: [],
       categoryId,
       isAvailable: true,
       priceAmount: 69_000,

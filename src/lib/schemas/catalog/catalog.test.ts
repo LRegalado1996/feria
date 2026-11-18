@@ -15,6 +15,7 @@ import {
   createCategoryPageFormSchema,
   createCategorySchema,
   createProductSchema,
+  updateProductSchema,
   deleteAttributeSchema,
   deleteAttributeValueSchema,
   deleteCategorySchema,
@@ -26,8 +27,8 @@ import {
   reorderAttributesSchema,
   reorderAttributeValuesSchema,
   reorderCategoriesSchema,
-  reorderProductImagesSchema,
-  setProductAttributeValuesSchema,
+  listStoreProductsSchema,
+  productIdSchema,
   SWATCH_COLOR_PATTERN,
   updateAttributeValueSchema,
   updateCategoryPageSchema,
@@ -44,9 +45,22 @@ function makeTranslation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const UPLOAD = "https://store9.public.blob.vercel-storage.com/qa/product";
+
+function makeImage(overrides: Record<string, unknown> = {}) {
+  return {
+    height: 1600,
+    url: `${UPLOAD}/a.webp`,
+    width: 1200,
+    ...overrides,
+  };
+}
+
 function makeProduct(overrides: Record<string, unknown> = {}) {
   return {
+    attributeValueIds: [],
     categoryId: 1,
+    images: [makeImage()],
     isAvailable: true,
     priceAmount: 129_000,
     translations: [makeTranslation()],
@@ -88,7 +102,9 @@ describe("createProductSchema", () => {
   });
 
   test.each([
-    ["a blank title", { title: "   " }, false],
+    // A draft is created from its first photo, before it has a name.
+    ["a blank title", { title: "   " }, true],
+    ["no title", { title: "" }, true],
     ["a title of 120 characters", { title: "x".repeat(120) }, true],
     ["a title of 121 characters", { title: "x".repeat(121) }, false],
     ["an SEO title of 70 characters", { seoTitle: "x".repeat(70) }, true],
@@ -117,6 +133,174 @@ describe("createProductSchema", () => {
     expect(
       accepts(makeProduct({ translations: [makeTranslation(overrides)] }))
     ).toBe(accepted);
+  });
+
+  test("keeps a blank Spanish row: a draft not named yet still has its texts", () => {
+    const parsed = createProductSchema.parse(
+      makeProduct({
+        translations: [makeTranslation({ description: " ", title: "   " })],
+      })
+    );
+
+    expect(parsed.translations).toEqual([
+      {
+        description: "",
+        locale: "es",
+        seoDescription: null,
+        seoTitle: null,
+        title: "",
+      },
+    ]);
+  });
+
+  test.each([
+    [
+      "drops an English row with no text at all",
+      { description: "  ", seoDescription: "", seoTitle: " ", title: "" },
+      ["es"],
+    ],
+    [
+      "keeps an English row holding only a description",
+      { description: "Gold chain", title: "" },
+      ["es", "en"],
+    ],
+    [
+      "keeps an English row holding only an SEO title",
+      { description: "", seoTitle: "Chain", title: "" },
+      ["es", "en"],
+    ],
+    [
+      "keeps an English row holding only an SEO description",
+      { description: "", seoDescription: "A chain", title: "" },
+      ["es", "en"],
+    ],
+    [
+      "keeps an English row holding only a title",
+      { description: "", title: "Chain" },
+      ["es", "en"],
+    ],
+  ])("%s", (_case, english, locales) => {
+    const parsed = createProductSchema.parse(
+      makeProduct({
+        translations: [
+          makeTranslation(),
+          makeTranslation({ locale: "en", ...english }),
+        ],
+      })
+    );
+
+    expect(parsed.translations.map((row) => row.locale)).toEqual(locales);
+  });
+
+  test.each([
+    ["no photo", [], true],
+    ["eight photos", Array.from({ length: 8 }, (_, index) => index), true],
+    ["nine photos", Array.from({ length: 9 }, (_, index) => index), false],
+  ])("%s is accepted: %s", (_case, photos, accepted) => {
+    expect(
+      accepts(
+        makeProduct({
+          images: photos.map((index) =>
+            makeImage({ url: `${UPLOAD}/${index}.webp` })
+          ),
+        })
+      )
+    ).toBe(accepted);
+  });
+
+  test.each([
+    ["an upload's address", `${UPLOAD}/a.webp`, true],
+    ["a path on this site, as the seed stores one", "/seed/ring-1.jpg", true],
+    ["a site path with a folder", "/seed/rings/ring-1.jpg", true],
+    ["another site's address over HTTP", "http://cdn.example.com/a.jpg", false],
+    ["an address with no scheme", "//cdn.example.com/a.jpg", false],
+    ["a relative path", "seed/ring-1.jpg", false],
+    ["a site path with a query", "/seed/ring-1.jpg?v=1", false],
+    ["a site path with a space", "/seed/ring 1.jpg", false],
+    ["a data address", "data:image/png;base64,iVBORw0KGgo=", false],
+    ["a site path of 500 characters", `/${"a".repeat(499)}`, true],
+    ["a site path of 501 characters", `/${"a".repeat(500)}`, false],
+    ["nothing", "", false],
+  ])("a photo at %s is accepted: %s", (_case, url, accepted) => {
+    expect(accepts(makeProduct({ images: [makeImage({ url })] }))).toBe(
+      accepted
+    );
+  });
+
+  test.each([
+    ["the largest side", { height: 2400, width: 2400 }, true],
+    ["one pixel over it", { width: 2401 }, false],
+    ["no height", { height: 0 }, false],
+  ])("a photo with %s is accepted: %s", (_case, overrides, accepted) => {
+    expect(accepts(makeProduct({ images: [makeImage(overrides)] }))).toBe(
+      accepted
+    );
+  });
+
+  test("names a photo given twice in its message, the address read as a URL writes it", () => {
+    const result = createProductSchema.safeParse(
+      makeProduct({
+        images: [
+          makeImage(),
+          makeImage({
+            url: `${UPLOAD.replace("store9", "STORE9")}/a.webp`,
+          }),
+        ],
+      })
+    );
+
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      "Each photo at most once",
+    ]);
+  });
+
+  test("keeps the photos in the order given, each address as a URL writes it", () => {
+    const parsed = createProductSchema.parse(
+      makeProduct({
+        images: [
+          makeImage({
+            url: `HTTPS://STORE9.public.blob.vercel-storage.com/qa/product/b.webp`,
+          }),
+          makeImage({ url: "/seed/ring-1.jpg" }),
+        ],
+      })
+    );
+
+    expect(parsed.images.map((image) => image.url)).toEqual([
+      `${UPLOAD}/b.webp`,
+      "/seed/ring-1.jpg",
+    ]);
+  });
+
+  test.each([
+    ["none", [], true],
+    ["50 values", Array.from({ length: 50 }, (_, index) => index + 1), true],
+    ["51 values", Array.from({ length: 51 }, (_, index) => index + 1), false],
+    ["a value twice", [21, 21], false],
+    ["an id sent as text", ["21"], false],
+    ["an id of 0", [0], false],
+  ])(
+    "filter values: %s is accepted: %s",
+    (_case, attributeValueIds, accepted) => {
+      expect(accepts(makeProduct({ attributeValueIds }))).toBe(accepted);
+    }
+  );
+
+  test("names a repeated filter value in its message", () => {
+    expect(
+      createProductSchema
+        .safeParse(makeProduct({ attributeValueIds: [21, 21] }))
+        .error?.issues.map((issue) => issue.message)
+    ).toEqual(["Each value at most once"]);
+  });
+
+  test.each([
+    ["photos", "images"],
+    ["filter values", "attributeValueIds"],
+  ])("refuses an article without its %s list", (_case, field) => {
+    const { [field as "images"]: _left, ...rest } = makeProduct();
+
+    expect(accepts(rest)).toBe(false);
   });
 
   test("trims the texts and stores a blank SEO field as none", () => {
@@ -279,19 +463,69 @@ describe("listRelatedProductsSchema", () => {
   });
 });
 
-describe("reorderProductImagesSchema", () => {
-  test.each([
-    [[3, 1, 2], true],
-    [[1, 1], false],
-    [[], false],
-    [[true], false],
-  ])("image ids %j are accepted: %s", (imageIds, accepted) => {
+describe("updateProductSchema", () => {
+  test("reads the article's id from the path, beside the whole article", () => {
     expect(
-      reorderProductImagesSchema.safeParse({
-        id: 1,
-        imageIds,
-      }).success
-    ).toBe(accepted);
+      updateProductSchema.parse({ ...makeProduct(), id: "5" })
+    ).toMatchObject({ id: 5, images: [makeImage()] });
+  });
+
+  test.each([["0"], [""], ["x"]])("refuses an article id of %j", (id) => {
+    expect(
+      updateProductSchema.safeParse({ ...makeProduct(), id }).success
+    ).toBe(false);
+  });
+});
+
+describe("productIdSchema", () => {
+  test("reads the id from the path as a number", () => {
+    expect(productIdSchema.parse({ id: "12" })).toEqual({ id: 12 });
+  });
+});
+
+describe("listStoreProductsSchema", () => {
+  const cursor = { id: 4, updatedAt: "2026-11-17T10:00:00.123Z" };
+
+  test("defaults the page to 24, with no cursor", () => {
+    expect(listStoreProductsSchema.parse({})).toEqual({ limit: 24 });
+  });
+
+  test.each([
+    ["1", 1, true],
+    ["48", 48, true],
+    ["0", undefined, false],
+    ["49", undefined, false],
+    ["", undefined, false],
+  ])("a page size of %j reads as %s", (limit, parsed, accepted) => {
+    const result = listStoreProductsSchema.safeParse({ limit });
+
+    expect(result.success).toBe(accepted);
+    expect(result.data?.limit).toBe(parsed);
+  });
+
+  test("takes a cursor whole, its id from a query string", () => {
+    expect(
+      listStoreProductsSchema.parse({ cursor: { ...cursor, id: "4" } })
+    ).toEqual({ cursor, limit: 24 });
+  });
+
+  test.each([
+    ["no id", { updatedAt: cursor.updatedAt }],
+    ["no date", { id: 4 }],
+    [
+      "a date without its offset",
+      { ...cursor, updatedAt: "2026-11-17T10:00:00" },
+    ],
+    ["a day without a time", { ...cursor, updatedAt: "2026-11-17" }],
+    [
+      "year 0, which Postgres has not",
+      { ...cursor, updatedAt: "0000-01-01T00:00:00Z" },
+    ],
+    ["an id of 0", { ...cursor, id: 0 }],
+  ])("refuses a cursor with %s", (_case, broken) => {
+    expect(listStoreProductsSchema.safeParse({ cursor: broken }).success).toBe(
+      false
+    );
   });
 });
 
@@ -934,44 +1168,6 @@ describe("createAttributeValueSchema and updateAttributeValueSchema", () => {
       nameEs: "Dorado",
       swatchColor: null,
     });
-  });
-});
-
-describe("setProductAttributeValuesSchema", () => {
-  const ids = (length: number) =>
-    Array.from({ length }, (_, index) => index + 1);
-
-  test.each([
-    ["none", [], true],
-    ["50 values", ids(50), true],
-    ["51 values", ids(51), false],
-    ["a value twice", [21, 21], false],
-    ["an id sent as text", ["21"], false],
-    ["an id of 0", [0], false],
-  ])("%s is accepted: %s", (_case, valueIds, accepted) => {
-    expect(
-      setProductAttributeValuesSchema.safeParse({
-        id: "5",
-        valueIds,
-      }).success
-    ).toBe(accepted);
-  });
-
-  test("names a repeated value in its message", () => {
-    expect(
-      setProductAttributeValuesSchema
-        .safeParse({ id: 5, valueIds: [21, 21] })
-        .error?.issues.map((issue) => issue.message)
-    ).toEqual(["Each value at most once"]);
-  });
-
-  test("reads the article's id from the path", () => {
-    expect(
-      setProductAttributeValuesSchema.parse({
-        id: "5",
-        valueIds: [21, 22],
-      })
-    ).toEqual({ id: 5, valueIds: [21, 22] });
   });
 });
 

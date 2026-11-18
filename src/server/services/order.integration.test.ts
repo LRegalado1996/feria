@@ -20,8 +20,8 @@ import {
   store,
   user,
 } from "@/server/db/schema";
-import { createProduct, publishProduct } from "@/server/services/catalog";
 import { createCategory } from "@/server/services/category";
+import { createProduct, publishProduct } from "@/server/services/product";
 import { theStoreId, uniqueTag } from "@/server/test/one-store";
 import {
   backendPid,
@@ -159,8 +159,11 @@ async function makeArticle(
   }
 ) {
   const row = await createProduct(db, {
+    blobStore: null,
     storeId,
     values: {
+      attributeValueIds: [],
+      images: [],
       categoryId: await categoryOf(storeId),
       isAvailable: true,
       priceAmount,
