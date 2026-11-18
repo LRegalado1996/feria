@@ -18,11 +18,19 @@ const UPDATED_AT = "2026-11-15T09:30:00.000Z";
 const STARTED_AT = "2026-11-16T10:00:00.000Z";
 const NOW = new Date("2026-11-16T11:00:00.000Z");
 
-/** A browser storage, or one that refuses every call with `refuses`. */
+/**
+ * A browser storage, or one that refuses every call with `refuses`, or
+ * reads but refuses every write with `refusesWrites`.
+ */
 function setup({
   refuses,
+  refusesWrites,
   stored,
-}: { refuses?: Error; stored?: Record<string, string> } = {}) {
+}: {
+  refuses?: Error;
+  refusesWrites?: Error;
+  stored?: Record<string, string>;
+} = {}) {
   const items = new Map(Object.entries(stored ?? {}));
   const localStorage = {
     getItem: vi.fn((key: string) => {
@@ -38,8 +46,10 @@ function setup({
       items.delete(key);
     }),
     setItem: vi.fn((key: string, value: string) => {
-      if (refuses) {
-        throw refuses;
+      const refusal = refuses ?? refusesWrites;
+
+      if (refusal) {
+        throw refusal;
       }
       items.set(key, value);
     }),
@@ -112,15 +122,31 @@ describe("keepProductEdits", () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
-  test("reports a browser that refuses to store it, and goes on", () => {
+  test("reports a browser that reads but refuses to store it, and goes on", () => {
     const refusal = new DOMException("full", "QuotaExceededError");
-    setup({ refuses: refusal });
+    const { items, localStorage } = setup({
+      refusesWrites: refusal,
+      stored: { "feria:product-edit:12": stored() },
+    });
 
-    keepProductEdits(12, UPDATED_AT, makeProductForm());
+    keepProductEdits(12, UPDATED_AT, makeProductForm(), NOW);
 
+    expect(localStorage.getItem).toHaveBeenCalledExactlyOnceWith(
+      "feria:product-edit:12"
+    );
+    expect(localStorage.setItem).toHaveBeenCalledExactlyOnceWith(
+      "feria:product-edit:12",
+      JSON.stringify({
+        baseUpdatedAt: UPDATED_AT,
+        startedAt: STARTED_AT,
+        values: makeProductForm(),
+        version: 2,
+      })
+    );
     expect(reportError).toHaveBeenCalledExactlyOnceWith(refusal, {
       action: "Product.keep_local_edits",
     });
+    expect(items.get("feria:product-edit:12")).toBe(stored());
   });
 });
 
