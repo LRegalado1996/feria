@@ -33,15 +33,15 @@ export const productRouter = {
     .handler(
       async ({ context, input }) =>
         await listStoreProducts(context.db, {
-          cursor: input.cursor,
-          limit: input.limit,
+          ...input,
           storeId: context.store.id,
         })
     )
     .route({
       method: "GET",
       path: "/admin/products",
-      summary: "The store's articles, drafts too, most recently changed first",
+      summary:
+        "A numbered page of the store's articles, drafts too: searched, filtered and sorted",
       tags: ["products"],
     }),
 

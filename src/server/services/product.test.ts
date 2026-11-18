@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
+import { STORE_PRODUCTS_COUNT_CAP } from "@/lib/schemas/catalog";
 import {
+  category,
   product,
   productImage,
   productTranslation,
@@ -13,6 +15,7 @@ import {
   renderQuery,
   renderSql,
 } from "@/server/test/render-sql";
+import { required } from "@/test/required";
 
 import {
   createProduct,
@@ -27,14 +30,19 @@ import {
 
 // Its own queries are `attribute.test.ts`'s: here only that every save hands
 // it the article and the values, inside the same transaction.
-const { replaceProductAttributeValues } = vi.hoisted(() => ({
-  replaceProductAttributeValues: vi.fn(async () => {
-    await Promise.resolve();
-  }),
-}));
+const { replaceProductAttributeValues, resolveCatalogFilters } = vi.hoisted(
+  () => ({
+    replaceProductAttributeValues: vi.fn(async () => {
+      await Promise.resolve();
+    }),
+    // The list's filters resolve to value ids there (`attribute.test.ts`).
+    resolveCatalogFilters: vi.fn<() => Promise<number[][]>>(),
+  })
+);
 
 vi.mock("@/server/services/attribute", () => ({
   replaceProductAttributeValues,
+  resolveCatalogFilters,
 }));
 
 const STORE_ID = 3;
@@ -1207,103 +1215,422 @@ function listedRow(id: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** A fragment's SQL, or `null` for one holding a subquery the double built. */
+function sqlOrNull(fragment: unknown): string | null {
+  try {
+    return renderSql(fragment);
+  } catch {
+    return null;
+  }
+}
+
+const STORE_WHERE = '"store"."id" = $1';
+const GROUPS_WHERE =
+  '("category_group"."storeId" = $1 and "category_group"."slug" in ($2, $3))';
+
 describe("listStoreProducts", () => {
-  async function list(
-    db: MockDb,
-    options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
-  ) {
-    return await listStoreProducts(db as never, {
-      limit: 2,
-      storeId: STORE_ID,
-      ...options,
-    });
-  }
-
-  function answerCurrency(db: MockDb) {
-    db.$["select.where"].mockImplementation(async (where: unknown) =>
-      renderSql(where) === '"store"."id" = $1'
-        ? await Promise.resolve([{ currencyCode: "USD" }])
-        : await Promise.resolve([])
-    );
-  }
-
-  test("reads the store's articles, drafts too, newest change first, one row past the page", async () => {
+  /**
+   * A store in USD whose matching articles count `total`, whose page holds
+   * the ids `pageIds`, read back as `rows` (in no order), and whose
+   * categories asked for resolve to `categoryIds`.
+   */
+  function setupList({
+    categoryIds = [],
+    pageIds = [],
+    rows = [],
+    storeFound = true,
+    total = 0,
+    valueGroups = [],
+  }: {
+    categoryIds?: number[];
+    pageIds?: number[];
+    rows?: ReturnType<typeof listedRow>[];
+    storeFound?: boolean;
+    total?: number;
+    valueGroups?: number[][];
+  } = {}) {
     const { db } = setup();
-    answerCurrency(db);
+    resolveCatalogFilters.mockResolvedValue(valueGroups);
+    db.$["select.where"].mockImplementation(async (where: unknown) => {
+      const text = sqlOrNull(where);
 
-    await list(db);
+      if (text === STORE_WHERE) {
+        return await Promise.resolve(
+          storeFound ? [{ currencyCode: "USD" }] : []
+        );
+      }
 
-    const config = configOf(db.query.product.findMany);
-    expect(renderQuery(config.where)).toEqual({
+      // The categories' read holds the groups' subquery, which the double
+      // cannot render: the only `where` that does not.
+      return await Promise.resolve(
+        text === null ? categoryIds.map((id) => ({ id })) : []
+      );
+    });
+    // The count reads from the page's subquery, not from a table.
+    db.$["select.from"].mockImplementation((source: unknown) =>
+      source === product || source === store || source === category
+        ? []
+        : [{ total }]
+    );
+    required(db.$["select.offset"]).mockResolvedValue(
+      pageIds.map((id) => ({ id }))
+    );
+    db.query.product.findMany.mockResolvedValue(rows);
+
+    const list = async (
+      options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
+    ) =>
+      await listStoreProducts(db as never, {
+        limit: 2,
+        locale: "es",
+        page: 1,
+        sort: "updated",
+        storeId: STORE_ID,
+        ...options,
+      });
+    /** The `where` the count and the page were read with. */
+    const listWheres = () =>
+      db.$["select.where"].mock.calls
+        .map(([where]) => sqlOrNull(where))
+        .filter(
+          (text) =>
+            text !== null &&
+            text !== STORE_WHERE &&
+            !text.includes("category_group")
+        );
+    /**
+     * The `where` the count and the page were read with (one object, so
+     * the first is both), as SQL and parameters.
+     */
+    const pageWhere = () =>
+      renderQuery(
+        db.$["select.where"].mock.calls.find(([where]) =>
+          sqlOrNull(where)?.includes('"product"."storeId"')
+        )?.[0]
+      );
+    const order = () => db.$["select.orderBy"].mock.calls[0] ?? [];
+
+    return { db, list, listWheres, order, pageWhere };
+  }
+
+  test("reads the count, the page and its rows in one read-only snapshot", async () => {
+    const { db, list } = setupList();
+
+    await list();
+
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function),
+      { accessMode: "read only", isolationLevel: "repeatable read" }
+    );
+  });
+
+  test("reads the store's articles, drafts too, newest change first, the id breaking ties", async () => {
+    const { db, list, listWheres, order } = setupList();
+
+    await list();
+
+    expect(listWheres()).toEqual([
+      '"product"."storeId" = $1',
+      '"product"."storeId" = $1',
+    ]);
+    expect(renderOrderBy(order())).toBe(
+      '"product"."updatedAt" desc, "product"."id" desc'
+    );
+    expect(db.$["select.from"]).toHaveBeenCalledWith(store);
+    expect(resolveCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      filters: [],
+      storeId: STORE_ID,
+    });
+  });
+
+  test("counts the matches up to one past the cap, in a subquery of the same rows", async () => {
+    const { db, list } = setupList();
+
+    await list();
+
+    expect(db.$["select.limit"].mock.calls[0]).toEqual([
+      STORE_PRODUCTS_COUNT_CAP + 1,
+    ]);
+    expect(db.$["select.as"]).toHaveBeenCalledExactlyOnceWith("matching");
+  });
+
+  test.each([
+    [1, 24, 0],
+    [2, 24, 24],
+    [5, 10, 40],
+  ])("reads page %i of %i rows from offset %i", async (page, limit, offset) => {
+    const { db, list } = setupList();
+
+    await list({ limit, page });
+
+    expect(db.$["select.limit"].mock.calls[1]).toEqual([limit]);
+    expect(db.$["select.offset"]).toHaveBeenCalledExactlyOnceWith(offset);
+  });
+
+  test("narrows by status, availability, categories, title and the store's filters together", async () => {
+    const { list, pageWhere } = setupList({
+      categoryIds: [9, 11],
+      valueGroups: [[21, 22], [31]],
+    });
+
+    await list({
+      availability: "unavailable",
+      categories: ["anillos", "bijouterie"],
+      filters: [
+        { attribute: "color", values: ["dorado", "violeta"] },
+        { attribute: "material", values: ["plata"] },
+      ],
+      q: "aro",
+      status: "draft",
+    });
+
+    expect(pageWhere()).toEqual({
+      params: [STORE_ID, "draft", false, 9, 11, "%aro%", 21, 22, 31],
+      sql:
+        '("product"."storeId" = $1 and "product"."status" = $2 and "product"."isAvailable" = $3 and "product"."categoryId" in ($4, $5) and ' +
+        'exists (select 1 from "product_translation" as "searched" where ("searched"."productId" = "product"."id" and unaccent("searched"."title") ilike unaccent($6))) and ' +
+        'exists (select 1 from "product_attribute_value" where ("product_attribute_value"."productId" = "product"."id" and "product_attribute_value"."attributeValueId" in ($7, $8))) and ' +
+        'exists (select 1 from "product_attribute_value" where ("product_attribute_value"."productId" = "product"."id" and "product_attribute_value"."attributeValueId" in ($9))))',
+    });
+  });
+
+  test.each([
+    ["available", true],
+    ["unavailable", false],
+  ] as const)("narrows to %s articles", async (availability, isAvailable) => {
+    const { list, pageWhere } = setupList();
+
+    await list({ availability });
+
+    expect(pageWhere()).toEqual({
+      params: [STORE_ID, isAvailable],
+      sql: '("product"."storeId" = $1 and "product"."isAvailable" = $2)',
+    });
+  });
+
+  test("searches the title with its wildcards and escape taken literally", async () => {
+    const { list, pageWhere } = setupList();
+
+    await list({ q: String.raw`50%_off\x` });
+
+    expect(pageWhere().params).toEqual([STORE_ID, String.raw`%50\%\_off\\x%`]);
+  });
+
+  test("resolves the categories asked for by slug in the store, a group standing for the categories in it", async () => {
+    const { db, list } = setupList({ categoryIds: [9] });
+
+    await list({ categories: ["anillos", "bijouterie"] });
+
+    expect(db.$["select.from"]).toHaveBeenCalledWith(category);
+    expect(
+      db.$["select.where"].mock.calls
+        .map(([where]) => sqlOrNull(where))
+        .filter((text) => text?.includes("category_group"))
+    ).toEqual([GROUPS_WHERE]);
+    expect(
+      renderQuery(
+        db.$["select.where"].mock.calls.find(
+          ([where]) => sqlOrNull(where) === GROUPS_WHERE
+        )?.[0]
+      ).params
+    ).toEqual([STORE_ID, "anillos", "bijouterie"]);
+  });
+
+  test("ignores categories the store has none of, rather than narrowing to nothing", async () => {
+    const { list, pageWhere } = setupList({ categoryIds: [] });
+
+    await list({ categories: ["relojes"] });
+
+    expect(pageWhere()).toEqual({
       params: [STORE_ID],
       sql: '"product"."storeId" = $1',
     });
-    expect(renderOrderBy(config.orderBy)).toBe(
-      '"product"."updatedAt" desc, "product"."id" desc'
-    );
-    expect(config.limit).toBe(3);
+  });
+
+  test("reads no category without any asked for", async () => {
+    const { db, list } = setupList();
+
+    await list({ categories: [] });
+
+    expect(db.$["select.from"]).not.toHaveBeenCalledWith(category);
+  });
+
+  test("hands the filters asked for to their resolution, in the store", async () => {
+    const { db, list } = setupList();
+    const filters = [{ attribute: "color", values: ["dorado"] }];
+
+    await list({ filters });
+
+    expect(resolveCatalogFilters).toHaveBeenCalledExactlyOnceWith(db, {
+      filters,
+      storeId: STORE_ID,
+    });
+  });
+
+  test.each([
+    ["updated", "asc", '"product"."updatedAt" asc, "product"."id" asc'],
+    ["updated", "desc", '"product"."updatedAt" desc, "product"."id" desc'],
+    [
+      "price",
+      "asc",
+      '"product"."priceAmount" asc nulls last, "product"."id" asc',
+    ],
+    [
+      "price",
+      "desc",
+      '"product"."priceAmount" desc nulls last, "product"."id" desc',
+    ],
+    ["status", "asc", '"product"."status" asc, "product"."id" asc'],
+    ["status", "desc", '"product"."status" desc, "product"."id" desc'],
+  ] as const)("sorts by %s %s", async (sort, dir, expected) => {
+    const { list, order } = setupList();
+
+    await list({ dir, sort });
+
+    expect(renderOrderBy(order())).toBe(expected);
+  });
+
+  test.each([
+    ["updated", '"product"."updatedAt" desc, "product"."id" desc'],
+    ["price", '"product"."priceAmount" asc nulls last, "product"."id" asc'],
+    ["status", '"product"."status" asc, "product"."id" asc'],
+  ] as const)(
+    "sorts by %s in its own first direction when none is asked",
+    async (sort, expected) => {
+      const { list, order } = setupList();
+
+      await list({ sort });
+
+      expect(renderOrderBy(order())).toBe(expected);
+    }
+  );
+
+  const titleIn = (n: number) =>
+    `(select nullif(btrim("titled"."title"), '') from "product_translation" as "titled" where ("titled"."productId" = "product"."id" and "titled"."locale" = $${n}))`;
+  const categoryIn = (n: number) =>
+    `(select nullif(btrim("named"."name"), '') from "category_translation" as "named" where ("named"."categoryId" = "product"."categoryId" and "named"."locale" = $${n}))`;
+
+  test.each([
+    ["title", "asc", "es", [titleIn(1), titleIn(2)], ["es", "en"]],
+    ["title", "desc", "en", [titleIn(1), titleIn(2)], ["en", "es"]],
+    ["category", "asc", "es", [categoryIn(1)], ["es"]],
+    ["category", "desc", "en", [categoryIn(1), categoryIn(2)], ["en", "es"]],
+  ] as const)(
+    "sorts by %s %s in %s by the text the row shows, lowercased and without accents, gaps last",
+    async (sort, dir, locale, reads, languages) => {
+      const { list, order } = setupList();
+
+      await list({ dir, locale, sort });
+
+      const [key, tieBreak] = order();
+      expect(renderQuery(key)).toEqual({
+        params: languages,
+        sql: `lower(unaccent(coalesce(${reads.join(", ")}))) ${dir} nulls last`,
+      });
+      expect(renderSql(tieBreak)).toBe(`"product"."id" ${dir}`);
+    }
+  );
+
+  test("answers the page in its ids' order, its count, its pages and the store's currency", async () => {
+    const { db, list } = setupList({
+      pageIds: [5, 3],
+      rows: [listedRow(3), listedRow(5)],
+      total: 5,
+    });
+
+    const page = await list({ page: 2 });
+
+    expect(page).toMatchObject({
+      currencyCode: "USD",
+      limit: 2,
+      page: 2,
+      pageCount: 3,
+      total: 5,
+      totalCapped: false,
+    });
+    expect(page.items.map((item) => item.id)).toEqual([5, 3]);
+    expect(renderQuery(configOf(db.query.product.findMany).where)).toEqual({
+      params: [5, 3],
+      sql: '"product"."id" in ($1, $2)',
+    });
+  });
+
+  test("leaves out an id of the page whose row is gone by the time it is read", async () => {
+    const { list } = setupList({
+      pageIds: [5, 4, 3],
+      rows: [listedRow(3), listedRow(5)],
+      total: 3,
+    });
+
+    const page = await list({ limit: 3 });
+
+    expect(page.items.map((item) => item.id)).toEqual([5, 3]);
+  });
+
+  test("reads each row's cover, its first photo, and its texts", async () => {
+    const { db, list } = setupList({ pageIds: [5], rows: [listedRow(5)] });
+
+    await list();
+
+    const config = configOf(db.query.product.findMany);
     expect(config.with?.images?.limit).toBe(1);
     expect(renderOrderBy(config.with?.images?.orderBy)).toBe(
       '"product_image"."position" asc, "product_image"."id" asc'
     );
-    expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
-  });
-
-  test("continues after the cursor's change and id, both", async () => {
-    const { db } = setup();
-    answerCurrency(db);
-
-    await list(db, {
-      cursor: { id: 40, updatedAt: "2026-11-17T09:30:00.456Z" },
-    });
-
-    expect(renderQuery(configOf(db.query.product.findMany).where)).toEqual({
-      params: [
-        STORE_ID,
-        "2026-11-17T09:30:00.456Z",
-        "2026-11-17T09:30:00.456Z",
-        40,
-      ],
-      sql: '("product"."storeId" = $1 and ("product"."updatedAt" < $2 or ("product"."updatedAt" = $3 and "product"."id" < $4)))',
-    });
-  });
-
-  test("answers a full page with the next cursor at its last row when one more follows", async () => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue([
-      listedRow(5),
-      listedRow(4, { updatedAt: new Date("2026-11-16T08:00:00.000Z") }),
-      listedRow(3),
-    ]);
-
-    const page = await list(db);
-
-    expect(page.items.map((item) => item.id)).toEqual([5, 4]);
-    expect(page.nextCursor).toEqual({
-      id: 4,
-      updatedAt: "2026-11-16T08:00:00.000Z",
-    });
-    expect(page.currencyCode).toBe("USD");
   });
 
   test.each([
-    ["a page that ends the list", [listedRow(5), listedRow(4)]],
-    ["an empty list", []],
-  ])("has no next cursor for %s", async (_case, rows) => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue(rows);
+    ["nothing matches", 0, 0, 0, false],
+    ["a match", 1, 1, 1, false],
+    ["exactly a page", 2, 1, 2, false],
+    ["one past a page", 3, 2, 3, false],
+    [
+      "the cap",
+      STORE_PRODUCTS_COUNT_CAP,
+      STORE_PRODUCTS_COUNT_CAP / 2,
+      STORE_PRODUCTS_COUNT_CAP,
+      false,
+    ],
+    [
+      "one past the cap",
+      STORE_PRODUCTS_COUNT_CAP + 1,
+      STORE_PRODUCTS_COUNT_CAP / 2,
+      STORE_PRODUCTS_COUNT_CAP,
+      true,
+    ],
+  ])(
+    "with %s (%i counted) has %i pages and a total of %i, capped: %s",
+    async (_case, counted, pageCount, total, totalCapped) => {
+      const { list } = setupList({ total: counted });
 
-    await expect(list(db)).resolves.toMatchObject({ nextCursor: null });
+      await expect(list()).resolves.toMatchObject({
+        pageCount,
+        total,
+        totalCapped,
+      });
+    }
+  );
+
+  test("answers a page past the last with no rows and the whole count, reading no row", async () => {
+    const { db, list } = setupList({ pageIds: [], total: 3 });
+
+    await expect(list({ page: 9 })).resolves.toMatchObject({
+      items: [],
+      page: 9,
+      pageCount: 2,
+      total: 3,
+    });
+    expect(db.query.product.findMany).not.toHaveBeenCalled();
   });
 
-  test("shows each article by its cover, its Spanish title and its category in both languages", async () => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue([listedRow(5)]);
+  test("shows each article by its cover, its title and its category in both languages", async () => {
+    const { list } = setupList({
+      pageIds: [5],
+      rows: [listedRow(5)],
+      total: 1,
+    });
 
-    await expect(list(db)).resolves.toEqual({
+    await expect(list()).resolves.toEqual({
       currencyCode: "USD",
       items: [
         {
@@ -1319,12 +1646,31 @@ describe("listStoreProducts", () => {
           updatedAt: UPDATED_AT,
         },
       ],
-      nextCursor: null,
+      limit: 2,
+      page: 1,
+      pageCount: 1,
+      total: 1,
+      totalCapped: false,
     });
   });
 
   test.each([
+    ["es", "its Spanish title", "Artículo 5", "es"],
+    ["en", "its English title on an English page", "Article 5", "en"],
+  ] as const)(
+    "in %s names an article by %s",
+    async (locale, _case, title, lang) => {
+      const { list } = setupList({ pageIds: [5], rows: [listedRow(5)] });
+
+      const [item] = (await list({ locale })).items;
+
+      expect([item?.title, item?.titleLang]).toEqual([title, lang]);
+    }
+  );
+
+  test.each([
     [
+      "es",
       "the English title where the Spanish one is blank",
       [
         { locale: "es", title: " " },
@@ -1333,41 +1679,55 @@ describe("listStoreProducts", () => {
       "Chain",
       "en",
     ],
-    ["none for a blank draft", [{ locale: "es", title: "" }], null, null],
     [
-      "none where English is blank too",
+      "en",
+      "the Spanish title where the English one is blank",
+      [
+        { locale: "en", title: "" },
+        { locale: "es", title: "Cadena" },
+      ],
+      "Cadena",
+      "es",
+    ],
+    ["es", "none for a blank draft", [{ locale: "es", title: "" }], null, null],
+    [
+      "en",
+      "none where both are blank",
       [
         { locale: "es", title: "" },
-        { locale: "en", title: "" },
+        { locale: "en", title: "  " },
       ],
       null,
       null,
     ],
-  ])("names an article by %s", async (_case, translations, title, lang) => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue([
-      listedRow(5, { translations }),
-    ]);
+  ] as const)(
+    "in %s names an article by %s",
+    async (locale, _case, translations, title, lang) => {
+      const { list } = setupList({
+        pageIds: [5],
+        rows: [listedRow(5, { translations })],
+      });
 
-    const [item] = (await list(db)).items;
+      const [item] = (await list({ locale })).items;
 
-    expect([item?.title, item?.titleLang]).toEqual([title, lang]);
-  });
+      expect([item?.title, item?.titleLang]).toEqual([title, lang]);
+    }
+  );
 
   test("shows a draft without a photo, a category or a price as having none", async () => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue([
-      listedRow(5, {
-        category: null,
-        images: [],
-        priceAmount: null,
-        status: "draft",
-      }),
-    ]);
+    const { list } = setupList({
+      pageIds: [5],
+      rows: [
+        listedRow(5, {
+          category: null,
+          images: [],
+          priceAmount: null,
+          status: "draft",
+        }),
+      ],
+    });
 
-    const [item] = (await list(db)).items;
+    const [item] = (await list()).items;
 
     expect(item).toMatchObject({
       category: null,
@@ -1378,16 +1738,17 @@ describe("listStoreProducts", () => {
   });
 
   test("names a category without an English name by none, and one without names by nothing", async () => {
-    const { db } = setup();
-    answerCurrency(db);
-    db.query.product.findMany.mockResolvedValue([
-      listedRow(5, {
-        category: { id: 9, translations: [{ locale: "es", name: "Aros" }] },
-      }),
-      listedRow(4, { category: { id: 8, translations: [] } }),
-    ]);
+    const { list } = setupList({
+      pageIds: [5, 4],
+      rows: [
+        listedRow(5, {
+          category: { id: 9, translations: [{ locale: "es", name: "Aros" }] },
+        }),
+        listedRow(4, { category: { id: 8, translations: [] } }),
+      ],
+    });
 
-    const { items } = await list(db);
+    const { items } = await list();
 
     expect(items.map((item) => item.category)).toEqual([
       { id: 9, nameEn: null, nameEs: "Aros" },
@@ -1396,9 +1757,9 @@ describe("listStoreProducts", () => {
   });
 
   test("answers NOT_FOUND when the store itself is missing", async () => {
-    const { db } = setup();
+    const { list } = setupList({ storeFound: false });
 
-    await expect(list(db)).rejects.toMatchObject({
+    await expect(list()).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Store not found",
     });

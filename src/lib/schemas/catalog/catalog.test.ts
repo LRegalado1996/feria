@@ -28,7 +28,10 @@ import {
   reorderAttributeValuesSchema,
   reorderCategoriesSchema,
   listStoreProductsSchema,
+  CATALOG_FILTER_VALUES_MAX,
   productIdSchema,
+  SEARCH_MAX_LENGTH,
+  STORE_PRODUCTS_COUNT_CAP,
   SWATCH_COLOR_PATTERN,
   updateAttributeValueSchema,
   updateCategoryPageSchema,
@@ -484,10 +487,32 @@ describe("productIdSchema", () => {
 });
 
 describe("listStoreProductsSchema", () => {
-  const cursor = { id: 4, updatedAt: "2026-11-17T10:00:00.123Z" };
+  test("reads the first page of 24, most recent change first, in the page's language", () => {
+    expect(listStoreProductsSchema.parse({ locale: "es" })).toEqual({
+      limit: 24,
+      locale: "es",
+      page: 1,
+      sort: "updated",
+    });
+  });
 
-  test("defaults the page to 24, with no cursor", () => {
-    expect(listStoreProductsSchema.parse({})).toEqual({ limit: 24 });
+  test.each([undefined, "fr", ""])("refuses a language of %j", (locale) => {
+    expect(listStoreProductsSchema.safeParse({ locale }).success).toBe(false);
+  });
+
+  test.each([
+    ["1", 1, true],
+    ["2", 2, true],
+    [STORE_PRODUCTS_COUNT_CAP, STORE_PRODUCTS_COUNT_CAP, true],
+    [STORE_PRODUCTS_COUNT_CAP + 1, undefined, false],
+    ["0", undefined, false],
+    ["", undefined, false],
+    ["1.5", undefined, false],
+  ])("a page of %j reads as %s", (page, parsed, accepted) => {
+    const result = listStoreProductsSchema.safeParse({ locale: "en", page });
+
+    expect(result.success).toBe(accepted);
+    expect(result.data?.page).toBe(parsed);
   });
 
   test.each([
@@ -497,35 +522,86 @@ describe("listStoreProductsSchema", () => {
     ["49", undefined, false],
     ["", undefined, false],
   ])("a page size of %j reads as %s", (limit, parsed, accepted) => {
-    const result = listStoreProductsSchema.safeParse({ limit });
+    const result = listStoreProductsSchema.safeParse({ limit, locale: "en" });
 
     expect(result.success).toBe(accepted);
     expect(result.data?.limit).toBe(parsed);
   });
 
-  test("takes a cursor whole, its id from a query string", () => {
+  test.each([
+    ["  anillo  ", "anillo", true],
+    ["   ", undefined, true],
+    ["a".repeat(SEARCH_MAX_LENGTH), "a".repeat(SEARCH_MAX_LENGTH), true],
+    ["a".repeat(SEARCH_MAX_LENGTH + 1), undefined, false],
+  ])("a search of %j reads as %j", (q, parsed, accepted) => {
+    const result = listStoreProductsSchema.safeParse({ locale: "es", q });
+
+    expect(result.success).toBe(accepted);
+    expect(result.data?.q).toBe(parsed);
+  });
+
+  test("takes a whole selection: sort, direction, status, availability, categories and filters", () => {
     expect(
-      listStoreProductsSchema.parse({ cursor: { ...cursor, id: "4" } })
-    ).toEqual({ cursor, limit: 24 });
+      listStoreProductsSchema.parse({
+        availability: "unavailable",
+        categories: ["anillos", "bijouterie"],
+        dir: "desc",
+        filters: [{ attribute: "color", values: ["dorado", "violeta"] }],
+        locale: "en",
+        sort: "price",
+        status: "draft",
+      })
+    ).toEqual({
+      availability: "unavailable",
+      categories: ["anillos", "bijouterie"],
+      dir: "desc",
+      filters: [{ attribute: "color", values: ["dorado", "violeta"] }],
+      limit: 24,
+      locale: "en",
+      page: 1,
+      sort: "price",
+      status: "draft",
+    });
   });
 
   test.each([
-    ["no id", { updatedAt: cursor.updatedAt }],
-    ["no date", { id: 4 }],
+    ["an unknown sort", { sort: "position" }],
+    ["an unknown direction", { dir: "up" }],
+    ["an unknown status", { status: "archived" }],
+    ["an unknown availability", { availability: "yes" }],
+    ["a category that is no slug", { categories: ["Anillos"] }],
     [
-      "a date without its offset",
-      { ...cursor, updatedAt: "2026-11-17T10:00:00" },
+      "more categories than the limit",
+      {
+        categories: Array.from(
+          { length: CATALOG_FILTER_VALUES_MAX + 1 },
+          (_, index) => `c-${index}`
+        ),
+      },
     ],
-    ["a day without a time", { ...cursor, updatedAt: "2026-11-17" }],
     [
-      "year 0, which Postgres has not",
-      { ...cursor, updatedAt: "0000-01-01T00:00:00Z" },
+      "a filter value that is no slug",
+      { filters: [{ attribute: "color", values: ["Dorado"] }] },
     ],
-    ["an id of 0", { ...cursor, id: 0 }],
-  ])("refuses a cursor with %s", (_case, broken) => {
-    expect(listStoreProductsSchema.safeParse({ cursor: broken }).success).toBe(
-      false
+    [
+      "a filter without values",
+      { filters: [{ attribute: "color", values: [] }] },
+    ],
+  ])("refuses %s", (_case, input) => {
+    expect(
+      listStoreProductsSchema.safeParse({ locale: "es", ...input }).success
+    ).toBe(false);
+  });
+
+  test("takes as many categories as the limit", () => {
+    const categories = Array.from(
+      { length: CATALOG_FILTER_VALUES_MAX },
+      (_, index) => `c-${index}`
     );
+
+    expect(
+      listStoreProductsSchema.parse({ categories, locale: "es" }).categories
+    ).toEqual(categories);
   });
 });
 

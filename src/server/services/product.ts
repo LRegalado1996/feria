@@ -5,13 +5,13 @@ import {
   desc,
   eq,
   inArray,
-  lt,
   ne,
   notInArray,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { alias, type PgColumn } from "drizzle-orm/pg-core";
 
 import { isOwnBlobUrl } from "@/lib/blob/paths";
 import {
@@ -20,24 +20,33 @@ import {
   resolvePublishGaps,
 } from "@/lib/catalog/publish-gaps";
 import { LOCALES, type Locale } from "@/lib/i18n/config";
-import type {
-  CreateProductValues,
-  ProductImageValues,
-  ProductTranslationValues,
-  StoreProductCursor,
-  UpdateProductValues,
+import {
+  type CreateProductValues,
+  type ListStoreProductsValues,
+  type ProductImageValues,
+  type ProductTranslationValues,
+  type SortDirection,
+  STORE_PRODUCT_SORT_DIRECTIONS,
+  STORE_PRODUCTS_COUNT_CAP,
+  type StoreProductSort,
+  type UpdateProductValues,
 } from "@/lib/schemas/catalog";
 import { firstFreeSlug, slugify } from "@/lib/utils/slugify";
 import type { DatabaseClient } from "@/server/db";
 import {
   category,
+  categoryTranslation,
   product,
   productAttributeValue,
   productImage,
   productTranslation,
   store,
 } from "@/server/db/schema";
-import { replaceProductAttributeValues } from "@/server/services/attribute";
+import {
+  replaceProductAttributeValues,
+  resolveCatalogFilters,
+} from "@/server/services/attribute";
+import { carriesOneOf, likePattern } from "@/server/services/catalog";
 import type { BlobStore } from "@/server/services/upload";
 
 /**
@@ -728,16 +737,23 @@ export async function getStoreProduct(
 
 export type StoreProduct = Awaited<ReturnType<typeof getStoreProduct>>;
 
+/** The page's language first, then the others in their order. */
+function languagesFrom(locale: Locale): Locale[] {
+  return [locale, ...LOCALES.filter((other) => other !== locale)];
+}
+
 /**
- * The text that names an article in the admin's list: its Spanish title,
- * else its title in another language, else none (a blank draft).
+ * The text that names an article in the admin's list: its title in the
+ * page's language, else in another language, else none (a blank draft).
+ * The list's title sort reads the same (`titleKey`).
  */
 function listTitle(
-  translations: readonly { locale: Locale; title: string }[]
+  translations: readonly { locale: Locale; title: string }[],
+  locale: Locale
 ): { lang: Locale; title: string } | null {
-  for (const locale of LOCALES) {
+  for (const language of languagesFrom(locale)) {
     const text = translations.find(
-      (row) => row.locale === locale && row.title.trim() !== ""
+      (row) => row.locale === language && row.title.trim() !== ""
     );
 
     if (text) {
@@ -748,90 +764,307 @@ function listTitle(
   return null;
 }
 
-/** The rows after `cursor` in the admin list's order, newest change first. */
-function beforeCursor(cursor: StoreProductCursor) {
-  const updatedAt = new Date(cursor.updatedAt);
+/**
+ * Whether one of the article's titles, in any language, holds `search`,
+ * blind to case and accents ("nandu" finds "Ñandú"), its wildcards taken
+ * literally: the storefront search's rule (`catalog.ts`), on titles only.
+ */
+function titleMatches(search: string): SQL {
+  const text = alias(productTranslation, "searched");
+  const fromText = sql`${productTranslation} as ${sql.identifier("searched")}`;
 
-  return or(
-    lt(product.updatedAt, updatedAt),
-    and(eq(product.updatedAt, updatedAt), lt(product.id, cursor.id))
+  return sql`exists (select 1 from ${fromText} where ${and(
+    eq(text.productId, product.id),
+    sql`unaccent(${text.title}) ilike unaccent(${likePattern(search)})`
+  )})`;
+}
+
+/**
+ * The first non-blank of a text in `locales`' order, each language's read by
+ * `read`: what the list shows, lowercased and without accents, so "Ñandú"
+ * sorts with the n's and "anillo" with "Aros".
+ */
+function textKey(
+  locales: readonly Locale[],
+  read: (language: Locale) => SQL
+): SQL {
+  return sql`lower(unaccent(coalesce(${sql.join(
+    locales.map((language) => sql`(${read(language)})`),
+    sql`, `
+  )})))`;
+}
+
+/** The title the row shows (`listTitle`), as a sort key. */
+function titleKey(locale: Locale): SQL {
+  const text = alias(productTranslation, "titled");
+  const fromText = sql`${productTranslation} as ${sql.identifier("titled")}`;
+
+  return textKey(
+    languagesFrom(locale),
+    (language) =>
+      sql`select nullif(btrim(${text.title}), '') from ${fromText} where ${and(
+        eq(text.productId, product.id),
+        eq(text.locale, language)
+      )}`
   );
 }
 
 /**
- * A page of the store's articles for the admin's list (FER-017), drafts and
- * published, the most recently changed first: each with its cover (its first
- * photo), the title that names it, its price, status, availability and
- * category. Keyset pagination on `updatedAt` and the id, which the cursor
- * carries whole, so a page never repeats or skips a row that did not change
- * meanwhile. The prices are in the store's currency, answered beside them.
+ * The category's name the row shows, as a sort key: in the page's
+ * language, else the Spanish one (`nameIn` in `product-list-row`).
+ */
+function categoryKey(locale: Locale): SQL {
+  const name = alias(categoryTranslation, "named");
+  const fromName = sql`${categoryTranslation} as ${sql.identifier("named")}`;
+
+  return textKey(
+    locale === "es" ? ["es"] : [locale, "es"],
+    (language) =>
+      sql`select nullif(btrim(${name.name}), '') from ${fromName} where ${and(
+        eq(name.categoryId, product.categoryId),
+        eq(name.locale, language)
+      )}`
+  );
+}
+
+/**
+ * The admin list's order (FER-019): the column's key in `dir`, then the id
+ * the same way, so the order is total and a page never repeats or skips a
+ * row. An article without the key (no title, no category, no price) comes
+ * last whichever the direction: the gaps gather at the end.
+ */
+function listOrder(
+  sort: StoreProductSort,
+  dir: SortDirection,
+  locale: Locale
+): SQL[] {
+  const by = dir === "asc" ? asc : desc;
+  const direction = dir === "asc" ? sql`asc` : sql`desc`;
+  const last = (key: SQL | PgColumn) => sql`${key} ${direction} nulls last`;
+  const keys: Record<StoreProductSort, SQL> = {
+    category: last(categoryKey(locale)),
+    price: last(product.priceAmount),
+    status: by(product.status),
+    title: last(titleKey(locale)),
+    updated: by(product.updatedAt),
+  };
+
+  return [keys[sort], by(product.id)];
+}
+
+/**
+ * The store's categories `slugs` names, a group standing for itself and the
+ * categories in it (FER-043). A slug the store does not have names none.
+ */
+async function resolveCategoryIds(
+  db: DatabaseClient,
+  { slugs, storeId }: StoreScope & { slugs: readonly string[] }
+): Promise<number[]> {
+  if (slugs.length === 0) {
+    return [];
+  }
+
+  const group = alias(category, "category_group");
+  const rows = await db
+    .select({ id: category.id })
+    .from(category)
+    .where(
+      and(
+        eq(category.storeId, storeId),
+        or(
+          inArray(category.slug, [...slugs]),
+          inArray(
+            category.parentId,
+            db
+              .select({ id: group.id })
+              .from(group)
+              .where(
+                and(eq(group.storeId, storeId), inArray(group.slug, [...slugs]))
+              )
+          )
+        )
+      )
+    );
+
+  return rows.map((row) => row.id);
+}
+
+/** What narrows the admin's list, its slugs already resolved to ids. */
+interface ListNarrowing extends Pick<
+  ListStoreProductsValues,
+  "availability" | "q" | "status"
+> {
+  /** Empty: no category narrows it (none asked, or none the store has). */
+  categoryIds: readonly number[];
+  /** One group of value ids per filter (`resolveCatalogFilters`). */
+  valueGroups: readonly number[][];
+}
+
+/** The rows of the store the narrowing keeps. */
+function listWhere(
+  storeId: number,
+  { availability, categoryIds, q, status, valueGroups }: ListNarrowing
+) {
+  return and(
+    eq(product.storeId, storeId),
+    status === undefined ? undefined : eq(product.status, status),
+    availability === undefined
+      ? undefined
+      : eq(product.isAvailable, availability === "available"),
+    categoryIds.length === 0
+      ? undefined
+      : inArray(product.categoryId, [...categoryIds]),
+    q === undefined ? undefined : titleMatches(q),
+    ...valueGroups.map((group) => carriesOneOf(group))
+  );
+}
+
+/**
+ * One numbered page of the store's articles for the admin's list (FER-017,
+ * FER-019), drafts and published: searched by title, narrowed by status,
+ * availability, categories and the store's filters, in a column's order
+ * (`listOrder`), with how many match (counted up to
+ * `STORE_PRODUCTS_COUNT_CAP`, `totalCapped` past it) and how many pages
+ * that makes. A page past the last answers no rows and the same total, so
+ * the screen can say so. Each article with its cover (its first photo),
+ * the title that names it in `locale`, its price, status, availability and
+ * category; the prices are in the store's currency, answered beside them.
+ * One snapshot, so the count, the page and its rows agree.
  */
 export async function listStoreProducts(
   db: DatabaseClient,
   {
-    cursor,
+    availability,
+    categories = [],
+    dir,
+    filters = [],
     limit,
+    locale,
+    page,
+    q,
+    sort,
+    status,
     storeId,
-  }: StoreScope & { cursor?: StoreProductCursor; limit: number }
+  }: StoreScope &
+    Omit<ListStoreProductsValues, "categories" | "filters"> &
+    Partial<Pick<ListStoreProductsValues, "categories" | "filters">>
 ) {
-  const rows = await db.query.product.findMany({
-    columns: {
-      id: true,
-      isAvailable: true,
-      priceAmount: true,
-      slug: true,
-      status: true,
-      updatedAt: true,
-    },
-    // One row past the page tells whether another page follows.
-    limit: limit + 1,
-    orderBy: [desc(product.updatedAt), desc(product.id)],
-    where: and(
-      eq(product.storeId, storeId),
-      cursor ? beforeCursor(cursor) : undefined
-    ),
-    with: {
-      category: {
-        columns: { id: true },
-        with: { translations: { columns: { locale: true, name: true } } },
-      },
-      images: {
-        columns: { height: true, url: true, width: true },
-        limit: 1,
-        orderBy: [asc(productImage.position), asc(productImage.id)],
-      },
-      translations: { columns: { locale: true, title: true } },
-    },
-  });
-  const page = rows.slice(0, limit);
-  const last = page.at(-1);
-
-  return {
-    currencyCode: await storeCurrency(db, storeId),
-    items: page.map(({ category: found, images, translations, ...row }) => {
-      const named = listTitle(translations);
-      const nameOf = (locale: Locale) =>
-        found?.translations.find((text) => text.locale === locale)?.name;
+  return await db.transaction(
+    async (tx) => {
+      const currencyCode = await storeCurrency(tx, storeId);
+      const categoryIds = await resolveCategoryIds(tx, {
+        slugs: categories,
+        storeId,
+      });
+      const valueGroups = await resolveCatalogFilters(tx, {
+        filters,
+        storeId,
+      });
+      // Asked for categories the store has none of: ignored, like an
+      // unknown filter value, rather than narrowing the list to nothing.
+      const where = listWhere(storeId, {
+        availability,
+        categoryIds,
+        q,
+        status,
+        valueGroups,
+      });
+      const matching = tx
+        .select({ id: product.id })
+        .from(product)
+        .where(where)
+        .limit(STORE_PRODUCTS_COUNT_CAP + 1)
+        .as("matching");
+      const [counted] = await tx
+        .select({ total: sql<number>`count(*)::int` })
+        .from(matching);
+      const ids = (
+        await tx
+          .select({ id: product.id })
+          .from(product)
+          .where(where)
+          .orderBy(
+            ...listOrder(
+              sort,
+              dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
+              locale
+            )
+          )
+          .limit(limit)
+          .offset((page - 1) * limit)
+      ).map((row) => row.id);
+      const rows =
+        ids.length === 0
+          ? []
+          : await tx.query.product.findMany({
+              columns: {
+                id: true,
+                isAvailable: true,
+                priceAmount: true,
+                slug: true,
+                status: true,
+                updatedAt: true,
+              },
+              where: inArray(product.id, ids),
+              with: {
+                category: {
+                  columns: { id: true },
+                  with: {
+                    translations: { columns: { locale: true, name: true } },
+                  },
+                },
+                images: {
+                  columns: { height: true, url: true, width: true },
+                  limit: 1,
+                  orderBy: [asc(productImage.position), asc(productImage.id)],
+                },
+                translations: { columns: { locale: true, title: true } },
+              },
+            });
+      // The page's order is the ids' (the read by id has none of its own).
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      // `count(*)` always answers its one row.
+      const counting = counted?.total ?? 0;
+      const total = Math.min(counting, STORE_PRODUCTS_COUNT_CAP);
 
       return {
-        ...row,
-        category: found
-          ? {
-              id: found.id,
-              nameEn: nameOf("en") ?? null,
-              nameEs: nameOf("es") ?? "",
-            }
-          : null,
-        cover: images[0] ?? null,
-        title: named?.title ?? null,
-        titleLang: named?.lang ?? null,
-      };
-    }),
-    nextCursor:
-      rows.length > limit && last
-        ? { id: last.id, updatedAt: last.updatedAt.toISOString() }
-        : null,
-  };
-}
+        currencyCode,
+        items: ids.flatMap((id) => {
+          const found = byId.get(id);
 
-export type StoreProductPage = Awaited<ReturnType<typeof listStoreProducts>>;
+          if (!found) {
+            return [];
+          }
+
+          const { category: inCategory, images, translations, ...row } = found;
+          const named = listTitle(translations, locale);
+          const nameOf = (language: Locale) =>
+            inCategory?.translations.find((text) => text.locale === language)
+              ?.name;
+
+          return [
+            {
+              ...row,
+              category: inCategory
+                ? {
+                    id: inCategory.id,
+                    nameEn: nameOf("en") ?? null,
+                    nameEs: nameOf("es") ?? "",
+                  }
+                : null,
+              cover: images[0] ?? null,
+              title: named?.title ?? null,
+              titleLang: named?.lang ?? null,
+            },
+          ];
+        }),
+        limit,
+        page,
+        pageCount: Math.ceil(total / limit),
+        total,
+        totalCapped: counting > STORE_PRODUCTS_COUNT_CAP,
+      };
+    },
+    { accessMode: "read only", isolationLevel: "repeatable read" }
+  );
+}

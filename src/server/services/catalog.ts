@@ -237,8 +237,11 @@ export type CategoryPage = NonNullable<
   Awaited<ReturnType<typeof getCategoryPage>>
 >;
 
-/** `%`, `_` and the escape itself, taken literally inside an ILIKE. */
-function likePattern(search: string): string {
+/**
+ * `%`, `_` and the escape itself, taken literally inside an ILIKE. The
+ * admin's article search uses it too (`product.ts`).
+ */
+export function likePattern(search: string): string {
   return `%${search.replaceAll(/[\\%_]/gu, (char) => `\\${char}`)}%`;
 }
 
@@ -289,9 +292,10 @@ function inCategory(slug: string): SQL {
 
 /**
  * Whether the article carries one of `valueIds` (FER-033): the values of one
- * filter are alternatives, and each filter adds its own condition.
+ * filter are alternatives, and each filter adds its own condition. The
+ * admin's article list narrows the same way (`product.ts`).
  */
-function carriesOneOf(valueIds: number[]): SQL {
+export function carriesOneOf(valueIds: number[]): SQL {
   return sql`exists (select 1 from ${productAttributeValue} where ${and(
     eq(productAttributeValue.productId, product.id),
     inArray(productAttributeValue.attributeValueId, valueIds)

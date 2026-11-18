@@ -5,25 +5,104 @@ export const articles = {
       available: "Disponible",
       unavailable: "No disponible",
     },
+    // The chips over the list, one per active filter value (FER-019).
+    chips: {
+      clearAll: "Limpiar todo",
+      label: "Filtros activos",
+      remove: "Quitar filtro: {filter}",
+      value: "{filter}: {value}",
+    },
     columns: {
       article: "Artículo",
       category: "Categoría",
+      photo: "Foto",
       price: "Precio",
       status: "Estado",
+      updated: "Modificado",
     },
+    count: "{count} artículos",
+    countCapped: "Más de {count} artículos",
+    countOne: "1 artículo",
     empty:
       "Todavía no hay artículos. Empezá por las fotos: en un minuto queda publicado.",
+    emptyPage: {
+      message: "No hay artículos en esta página.",
+      first: "Ir a la primera página",
+    },
     errors: {
       load: "No pudimos cargar los artículos.",
-      loadMore: "No pudimos cargar más artículos.",
+    },
+    // The side panel the "Filtros" button opens (FER-019): nothing changes
+    // until "Aplicar".
+    filters: {
+      all: "Todos",
+      apply: "Aplicar",
+      availability: "Disponibilidad",
+      button: "Filtros",
+      buttonActive: "Filtros, {count} activos",
+      buttonActiveOne: "Filtros, 1 activo",
+      category: "Categoría",
+      clear: "Limpiar",
+      close: "Cerrar filtros",
+      description: "Elegí qué artículos ver. La lista cambia al tocar Aplicar.",
+      matches: "Coinciden {count} artículos",
+      matchesCapped: "Coinciden más de {count} artículos",
+      matchesNone: "Ningún artículo coincide",
+      matchesOne: "Coincide 1 artículo",
+      noCategories: "Todavía no hay categorías.",
+      status: "Estado",
+      title: "Filtros",
     },
     label: "Artículos de la tienda",
-    loadMore: "Cargar más",
-    loadingMore: "Cargando…",
     new: "Nuevo artículo",
+    noMatches: {
+      clear: "Limpiar búsqueda y filtros",
+      message: "Ningún artículo coincide con la búsqueda o los filtros.",
+    },
     noCategory: "Sin categoría",
     noPhoto: "Sin foto",
     noPrice: "Sin precio",
+    // The list's pages (FER-019), at its foot.
+    pages: {
+      range: "{from}–{to} de {total}",
+      rangeCapped: "{from}–{to} de más de {total}",
+      showing: "Mostrando {from}–{to} de {total} artículos",
+      showingCapped: "Mostrando {from}–{to} de más de {total} artículos",
+    },
+    search: {
+      clear: "Borrar la búsqueda",
+      label: "Buscar artículos",
+      placeholder: "Buscar por título…",
+    },
+    // The columns' order (FER-019): the headers on a computer, "Ordenar" on
+    // a phone. Each option says the column and which way it goes.
+    sort: {
+      apply: "Ordenar: {option}",
+      button: "Ordenar",
+      current: "Orden actual: {option}",
+      options: {
+        category: {
+          asc: "Categoría, de la A a la Z",
+          desc: "Categoría, de la Z a la A",
+        },
+        price: {
+          asc: "Precio, de menor a mayor",
+          desc: "Precio, de mayor a menor",
+        },
+        status: {
+          asc: "Estado, borradores primero",
+          desc: "Estado, publicados primero",
+        },
+        title: {
+          asc: "Título, de la A a la Z",
+          desc: "Título, de la Z a la A",
+        },
+        updated: {
+          asc: "Modificado, los más viejos primero",
+          desc: "Modificado, los más recientes primero",
+        },
+      },
+    },
     status: {
       draft: "Borrador",
       published: "Publicado",
