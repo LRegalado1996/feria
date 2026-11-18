@@ -7,7 +7,7 @@ import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
 import type { Locale } from "@/lib/i18n/config";
 import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
-import { createOrpcHandler, server } from "@/test/msw";
+import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { ProductFilterPanel } from "./product-filter-panel";
@@ -94,6 +94,15 @@ function makeQuery(overrides: Partial<ProductsQuery> = {}): ProductsQuery {
   return { ...EMPTY_PRODUCTS_QUERY, ...overrides };
 }
 
+/** A count that never comes. */
+const HANG = () => undefined;
+
+const COUNT_REFUSAL = {
+  code: "INTERNAL_SERVER_ERROR",
+  message: "Internal server error",
+  status: 500,
+};
+
 /** What `product.list` answers for the count: `total` matches. */
 function makeCount(total: number, totalCapped = false) {
   return {
@@ -115,6 +124,7 @@ function setup({
   activeCount = 0,
   attributes = ATTRIBUTES,
   categories = CATEGORIES,
+  categoriesFailed = false,
   listsRead = true,
   locale = "en",
   query = makeQuery(),
@@ -124,6 +134,8 @@ function setup({
   activeCount?: number;
   attributes?: ListAttribute[];
   categories?: typeof CATEGORIES;
+  /** Whether the categories' read failed (they are then unread). */
+  categoriesFailed?: boolean;
   /** Whether the store's categories and filters have been read. */
   listsRead?: boolean;
   locale?: Locale;
@@ -132,17 +144,23 @@ function setup({
   totalCapped?: boolean;
 } = {}) {
   const list = vi.fn(() => makeCount(total, totalCapped));
+  const retry = vi.fn();
   server.use(createOrpcHandler("product.list", list));
-  renderWithI18n(
+  const panel = (shown: ProductsQuery) => (
     <ProductFilterPanel
       activeCount={activeCount}
       attributes={listsRead ? attributes : undefined}
-      categories={listsRead ? categories : undefined}
+      categories={listsRead && !categoriesFailed ? categories : undefined}
+      categoriesFailed={categoriesFailed}
       className="custom"
-      query={query}
-    />,
-    { locale, wrapper: createQueryWrapper() }
+      onRetryCategories={retry}
+      query={shown}
+    />
   );
+  const view = renderWithI18n(panel(query), {
+    locale,
+    wrapper: createQueryWrapper(),
+  });
   const user = userEvent.setup();
   const button = () => screen.getByTestId("product-filters-button");
   const sheet = () => screen.getByTestId("product-filters-sheet");
@@ -150,10 +168,17 @@ function setup({
   return {
     button,
     list,
+    /** What the foot says of the count, whole. */
+    matches: () => screen.getByTestId("filter-matches").textContent,
     open: async () => {
       await user.click(button());
       return sheet();
     },
+    /** The address changing under the panel (back, forward). */
+    rerender: (shown: ProductsQuery) => {
+      view.rerender(panel(shown));
+    },
+    retry,
     sheet,
     user,
   };
@@ -265,6 +290,39 @@ describe("ProductFilterPanel", () => {
     expect(within(sheet).queryByRole("group", { name: "Talle" })).toBeNull();
   });
 
+  test("says the categories failed to load, with a retry, never that there are none", async () => {
+    const { open, retry, user } = setup({ categoriesFailed: true });
+
+    const sheet = await open();
+    const category = within(sheet).getByRole("group", { name: "Category" });
+
+    expect(within(category).getByRole("alert")).toHaveTextContent(
+      "We couldn't load the categories."
+    );
+    expect(
+      within(category).queryByText("There are no categories yet.")
+    ).toBeNull();
+    await user.click(
+      within(category).getByRole("button", { name: "Try again" })
+    );
+    expect(retry).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  test("holds the categories' place while they load, never saying there are none", async () => {
+    const { open } = setup({ listsRead: false });
+
+    const sheet = await open();
+    const category = within(sheet).getByRole("group", { name: "Category" });
+
+    expect(
+      within(category).getByTestId("filter-categories-pending")
+    ).toHaveAttribute("aria-busy", "true");
+    expect(
+      within(category).queryByText("There are no categories yet.")
+    ).toBeNull();
+    expect(within(category).queryByRole("alert")).toBeNull();
+  });
+
   test("says when the store has no categories yet", async () => {
     const { open } = setup({ categories: [] });
 
@@ -319,14 +377,49 @@ describe("ProductFilterPanel", () => {
     [7, false, "7 articles match"],
     [10_000, true, "Over 10,000 articles match"],
   ])("says %i matches (capped: %s) as %j", async (total, totalCapped, said) => {
-    const { open } = setup({ total, totalCapped });
+    const { matches, open } = setup({ total, totalCapped });
 
     await open();
 
-    // The output is there, empty, before the count arrives: wait for its words.
+    // The output is there, empty, before the count arrives: wait for its
+    // words, all of them ("17 articles match" is not "7").
     await waitFor(() => {
-      expect(screen.getByTestId("filter-matches")).toHaveTextContent(said);
+      expect(matches()).toBe(said);
     });
+  });
+
+  test("shows no count while the new choice's comes, and says when it cannot count, Apply still there", async () => {
+    const { matches, open, user } = setup({ total: 7 });
+    const sheet = await open();
+    await waitFor(() => {
+      expect(matches()).toBe("7 articles match");
+    });
+
+    // The next choice's count is on its way: the last one is not it.
+    server.use(
+      createOrpcHandler(
+        "product.list",
+        async () => await new Promise<ReturnType<typeof makeCount>>(HANG)
+      )
+    );
+    await user.click(within(sheet).getByRole("radio", { name: "Published" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("filter-matches")).toHaveAttribute(
+        "aria-busy",
+        "true"
+      );
+    });
+    expect(matches()).toBe("");
+
+    server.use(createOrpcErrorHandler("product.list", COUNT_REFUSAL));
+    await user.click(within(sheet).getByRole("radio", { name: "Draft" }));
+
+    await waitFor(() => {
+      expect(matches()).toBe(
+        "We couldn't count the articles. You can still apply the filters."
+      );
+    });
+    expect(within(sheet).getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
   test("Clear empties the choice without changing the list", async () => {
@@ -459,6 +552,28 @@ describe("ProductFilterPanel", () => {
     expect(within(sheet).queryByTestId("filter-limit")).toBeNull();
   });
 
+  test("counts against the twenty only the categories the store still has", async () => {
+    const { open } = setup({
+      // An old bookmark: twenty categories the store no longer has.
+      query: makeQuery({
+        categories: Array.from(
+          { length: 20 },
+          (_, index) => `gone-${index + 1}`
+        ),
+      }),
+    });
+
+    const sheet = await open();
+
+    expect(
+      within(sheet)
+        .getAllByRole("checkbox")
+        .filter((box) => box.closest("[data-testid^='filter-category-']"))
+        .map((box) => box.matches(":disabled"))
+    ).toEqual([false, false, false, false]);
+    expect(within(sheet).queryByTestId("filter-limit")).toBeNull();
+  });
+
   test("refuses a value past the twenty a filter keeps, and a filter past the ten the address keeps", async () => {
     const values = Array.from({ length: 21 }, (_, index) =>
       makeValue(index + 1, `value-${index + 1}`, {
@@ -482,15 +597,17 @@ describe("ProductFilterPanel", () => {
               }),
             ],
     }));
-    const { open } = setup({
+    // One below each limit: nineteen values of the first filter, nine
+    // filters in use.
+    const { open, user } = setup({
       attributes: filters,
       query: makeQuery({
         filters: [
           {
             attribute: "filter-1",
-            values: values.slice(0, 20).map((value) => value.slug),
+            values: values.slice(0, 19).map((value) => value.slug),
           },
-          ...filters.slice(1, 10).map((filter) => ({
+          ...filters.slice(1, 9).map((filter) => ({
             attribute: filter.slug,
             values: ["only"],
           })),
@@ -499,32 +616,54 @@ describe("ProductFilterPanel", () => {
     });
     const sheet = await open();
     const group = (name: string) => within(sheet).getByRole("group", { name });
+    const box = (filter: string, name: string) =>
+      within(group(filter)).getByRole("checkbox", { name });
+    expect(within(sheet).queryByTestId("filter-limit")).toBeNull();
 
-    // Twenty values of the first filter: its twenty-first is refused.
-    expect(
-      within(group("Filter 1")).getByRole("checkbox", { name: "Value 21" })
-    ).toBeDisabled();
-    expect(
-      within(group("Filter 1")).getByRole("checkbox", { name: "Value 20" })
-    ).toBeEnabled();
+    // The twentieth value is still taken; then the twenty-first is refused.
+    await user.click(box("Filter 1", "Value 20"));
+    expect(box("Filter 1", "Value 20")).toBeChecked();
+    expect(box("Filter 1", "Value 21")).toBeDisabled();
     expect(
       within(group("Filter 1")).getByTestId("filter-limit")
     ).toHaveTextContent(
       "Up to 20 values per filter: remove one to choose another."
     );
-    // Ten filters in use: an eleventh takes nothing, the tenth still does.
-    expect(
-      within(group("Filter 11")).getByRole("checkbox", { name: "Only 11" })
-    ).toBeDisabled();
+    // The tenth filter is still taken; then an eleventh takes nothing.
+    expect(box("Filter 11", "Only 11")).toBeEnabled();
+    await user.click(box("Filter 10", "Only 10"));
+    expect(box("Filter 10", "Only 10")).toBeChecked();
+    expect(box("Filter 11", "Only 11")).toBeDisabled();
     expect(
       within(group("Filter 11")).getByTestId("filter-limit")
     ).toHaveTextContent(
       "Up to 10 filters at once: clear another to use this one."
     );
-    expect(
-      within(group("Filter 10")).getByRole("checkbox", { name: "Only 10" })
-    ).toBeEnabled();
     expect(within(group("Filter 10")).queryByTestId("filter-limit")).toBeNull();
+  });
+
+  test("an address changed under the open sheet (back, forward) starts the choice again from it", async () => {
+    const { open, rerender, user } = setup({
+      query: makeQuery({ status: "draft" }),
+    });
+    const sheet = await open();
+    await user.click(within(sheet).getByRole("checkbox", { name: "Gold" }));
+
+    rerender(makeQuery({ status: "published" }));
+
+    await waitFor(() => {
+      expect(
+        within(sheet).getByRole("radio", { name: "Published" })
+      ).toBeChecked();
+    });
+    expect(
+      within(sheet).getByRole("checkbox", { name: "Gold" })
+    ).not.toBeChecked();
+    await user.click(within(sheet).getByRole("button", { name: "Apply" }));
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      "/en/admin/products?status=published",
+      { scroll: false }
+    );
   });
 
   test("Escape drops the choice: the sheet opens again on the address's selection", async () => {
@@ -566,7 +705,7 @@ describe("ProductFilterPanel", () => {
       within(sheet).getByRole("button", { name: "Cerrar filtros" })
     ).toBeVisible();
     await waitFor(() => {
-      expect(screen.getByTestId("filter-matches")).toHaveTextContent(
+      expect(screen.getByTestId("filter-matches").textContent).toBe(
         "Coincide 1 artículo"
       );
     });

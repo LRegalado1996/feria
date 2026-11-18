@@ -234,6 +234,13 @@ function setup({
     heal: () => {
       server.use(createOrpcHandler("product.list", list));
     },
+    /** From now on the store's categories and filters are read. */
+    healLists: () => {
+      server.use(
+        createOrpcHandler("category.list", () => CATEGORIES),
+        createOrpcHandler("attribute.list", () => ATTRIBUTES)
+      );
+    },
     list,
     /** The router's `push`, which the filter panel's "Aplicar" calls. */
     push,
@@ -621,6 +628,26 @@ describe("ProductList", () => {
     expect(screen.queryByText(EMPTY_STORE)).toBeNull();
     expect(screen.queryByTestId("product-list-count")).toBeNull();
     expect(screen.queryByTestId("product-list-foot")).toBeNull();
+  });
+
+  test("says the categories failed in the filters, and reads them again on retry", async () => {
+    const { healLists, user } = setup({ listsFail: true });
+    await screen.findByTestId("product-row-9");
+
+    await user.click(screen.getByTestId("product-filters-button"));
+    const sheet = screen.getByTestId("product-filters-sheet");
+    await waitFor(() => {
+      expect(within(sheet).getByRole("alert")).toHaveTextContent(
+        "We couldn't load the categories."
+      );
+    });
+    healLists();
+    await user.click(within(sheet).getByRole("button", { name: "Try again" }));
+
+    expect(
+      await within(sheet).findByRole("checkbox", { name: /Rings/u })
+    ).toBeVisible();
+    expect(within(sheet).queryByRole("alert")).toBeNull();
   });
 
   test("speaks Spanish", async () => {

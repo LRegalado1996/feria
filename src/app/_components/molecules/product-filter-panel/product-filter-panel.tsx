@@ -2,10 +2,11 @@
 
 import { SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, type Ref, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
+import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { Form, FormField } from "@/app/_components/molecules/form";
 import {
   Sheet,
@@ -54,7 +55,14 @@ export interface ProductFilterPanelProps {
    */
   attributes: readonly ListAttribute[] | undefined;
   categories: readonly ListCategory[] | undefined;
+  /**
+   * Whether the categories' read failed (`categories` is then
+   * `undefined`): the panel says so with a retry, never "no categories".
+   */
+  categoriesFailed: boolean;
   className?: string;
+  /** Reads the categories again after a failure. */
+  onRetryCategories: () => void;
   /** The list's selection in the address, already read. */
   query: ProductsQuery;
   /** The "Filtros" button, for focus to come back to. */
@@ -140,17 +148,38 @@ function toggled(list: readonly string[], item: string): string[] {
 function PanelForm({
   attributes,
   categories,
+  categoriesFailed,
   onApplied,
+  onRetryCategories,
   query,
-}: Pick<ProductFilterPanelProps, "attributes" | "categories" | "query"> & {
+}: Pick<
+  ProductFilterPanelProps,
+  | "attributes"
+  | "categories"
+  | "categoriesFailed"
+  | "onRetryCategories"
+  | "query"
+> & {
   onApplied: () => void;
 }) {
-  const copy = useDictionary().articles.list;
+  const { articles, common } = useDictionary();
+  const copy = articles.list;
   const locale = useLocale();
   const router = useRouter();
   const form = useForm<FilterFormValues>({
     defaultValues: filterFormValues(query),
   });
+  // The address changed under the open sheet (back, forward): the choice
+  // starts again from it, or "Aplicar" would write the old one back.
+  const address = productsPath(locale, query);
+  const startedFrom = useRef(address);
+
+  useEffect(() => {
+    if (startedFrom.current !== address) {
+      startedFrom.current = address;
+      form.reset(filterFormValues(query));
+    }
+  }, [address, form, query]);
   const [status, availability, chosenCategories, chosenValues] = useWatch({
     control: form.control,
     name: ["status", "availability", "categories", "values"],
@@ -189,6 +218,20 @@ function PanelForm({
     matches = copy.filters.matchesNone;
   } else if (counted.data?.total === 1) {
     matches = copy.filters.matchesOne;
+  }
+
+  // The last choice's count is not this one's: nothing shows while it
+  // comes, and a count that failed says so (Apply still works).
+  let said: string | null = null;
+
+  if (counted.isPlaceholderData) {
+    said = null;
+  } else if (counted.data) {
+    said = interpolate(matches, {
+      count: formatInteger(counted.data.total, locale),
+    });
+  } else if (counted.isError) {
+    said = copy.filters.matchesUnavailable;
   }
 
   return (
@@ -265,17 +308,57 @@ function PanelForm({
             name="categories"
             render={({ field }) => {
               // The address keeps this many (`readProductsQuery`): past it a
-              // choice is refused here, never dropped on "Aplicar".
-              const categoriesFull =
-                field.value.length >= CATALOG_FILTER_VALUES_MAX;
+              // choice is refused here, never dropped on "Aplicar". Once the
+              // categories are read, a slug the store no longer has is not
+              // one of them: "Aplicar" drops it anyway.
+              const chosen =
+                categories === undefined
+                  ? field.value
+                  : field.value.filter((slug) =>
+                      categories.some((category) => category.slug === slug)
+                    );
+              const categoriesFull = chosen.length >= CATALOG_FILTER_VALUES_MAX;
+              let unlisted: ReactNode = null;
+
+              if (categoriesFailed) {
+                unlisted = (
+                  <div className="grid justify-items-start gap-2" role="alert">
+                    <p className="text-sm">{copy.filters.categoriesFailed}</p>
+                    <Button
+                      onClick={() => {
+                        onRetryCategories();
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {common.tryAgain}
+                    </Button>
+                  </div>
+                );
+              } else if (categories === undefined) {
+                unlisted = (
+                  <div
+                    aria-busy="true"
+                    className="grid gap-2"
+                    data-testid="filter-categories-pending"
+                  >
+                    <span className="sr-only">{common.loading}</span>
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                );
+              } else if (categories.length === 0) {
+                unlisted = (
+                  <p className="text-sm text-muted-foreground">
+                    {copy.filters.noCategories}
+                  </p>
+                );
+              }
 
               return (
                 <Section legend={copy.filters.category}>
-                  {listedCategories.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      {copy.filters.noCategories}
-                    </p>
-                  ) : (
+                  {unlisted ?? (
                     <ul className="grid gap-0.5">
                       {groups.map((group) => {
                         const inside = listedCategories.filter(
@@ -460,11 +543,7 @@ function PanelForm({
             className="text-xs text-muted-foreground"
             data-testid="filter-matches"
           >
-            {counted.data
-              ? interpolate(matches, {
-                  count: formatInteger(counted.data.total, locale),
-                })
-              : null}
+            {said}
           </output>
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -500,7 +579,9 @@ function ProductFilterPanel({
   activeCount,
   attributes,
   categories,
+  categoriesFailed,
   className,
+  onRetryCategories,
   query,
   ref,
 }: ProductFilterPanelProps) {
@@ -551,9 +632,11 @@ function ProductFilterPanel({
         <PanelForm
           attributes={attributes}
           categories={categories}
+          categoriesFailed={categoriesFailed}
           onApplied={() => {
             setOpen(false);
           }}
+          onRetryCategories={onRetryCategories}
           query={query}
         />
       </SheetContent>

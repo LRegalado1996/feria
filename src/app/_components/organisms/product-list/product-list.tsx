@@ -191,7 +191,8 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const products = useProducts(productsListInput(query, locale));
   // `undefined` until read: the filter panel keeps the address's selection
   // rather than drop it as unknown to a list it has not got.
-  const categories = useStoreCategories().data;
+  const categoriesRead = useStoreCategories();
+  const categories = categoriesRead.data;
   const attributes = useStoreAttributes().data;
   const page = products.data;
   const filtersButton = useRef<HTMLButtonElement>(null);
@@ -253,6 +254,10 @@ function ProductList({ query, renderedAt }: ProductListProps) {
                 activeCount={chips.length}
                 attributes={attributes}
                 categories={categories}
+                categoriesFailed={categoriesRead.isError && !categories}
+                onRetryCategories={() => {
+                  void categoriesRead.refetch();
+                }}
                 query={query}
                 ref={filtersButton}
               />

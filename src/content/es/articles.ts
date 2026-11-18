@@ -41,6 +41,7 @@ export const articles = {
       button: "Filtros",
       buttonActive: "Filtros, {count} activos",
       buttonActiveOne: "Filtros, 1 activo",
+      categoriesFailed: "No pudimos cargar las categorías.",
       category: "Categoría",
       clear: "Limpiar",
       close: "Cerrar filtros",
@@ -55,6 +56,8 @@ export const articles = {
       matchesCapped: "Coinciden más de {count} artículos",
       matchesNone: "Ningún artículo coincide",
       matchesOne: "Coincide 1 artículo",
+      matchesUnavailable:
+        "No pudimos contar los artículos. Igual podés aplicar los filtros.",
       noCategories: "Todavía no hay categorías.",
       status: "Estado",
       title: "Filtros",

@@ -40,6 +40,7 @@ export const articles: Dictionary["articles"] = {
       button: "Filters",
       buttonActive: "Filters, {count} active",
       buttonActiveOne: "Filters, 1 active",
+      categoriesFailed: "We couldn't load the categories.",
       category: "Category",
       clear: "Clear",
       close: "Close filters",
@@ -55,6 +56,8 @@ export const articles: Dictionary["articles"] = {
       matchesCapped: "Over {count} articles match",
       matchesNone: "No article matches",
       matchesOne: "1 article matches",
+      matchesUnavailable:
+        "We couldn't count the articles. You can still apply the filters.",
       noCategories: "There are no categories yet.",
       status: "Status",
       title: "Filters",
