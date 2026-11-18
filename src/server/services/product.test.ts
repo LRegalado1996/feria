@@ -1075,6 +1075,7 @@ describe("getStoreProduct", () => {
     await getStoreProduct(db as never, { id: 7, storeId: STORE_ID });
 
     const config = configOf(db.query.product.findFirst);
+    expect(db.query.product.findFirst).toHaveBeenCalledExactlyOnceWith(config);
     expect(renderQuery(config.where)).toEqual({
       params: [7, STORE_ID],
       sql: ARTICLE_SQL,
