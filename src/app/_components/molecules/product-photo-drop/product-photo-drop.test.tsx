@@ -131,6 +131,33 @@ describe("ProductPhotoDrop", () => {
     expect(zone.className).not.toContain("border-foreground");
   });
 
+  test("takes several dropped photos in their order", () => {
+    const { onFiles, zone } = setup({ count: 6 });
+    const files = [makeFile("a.jpg"), makeFile("b.jpg")];
+
+    fireEvent.drop(zone, { dataTransfer: { files } });
+
+    expect(onFiles).toHaveBeenCalledExactlyOnceWith(files);
+  });
+
+  test.each([
+    ["full", { count: 8 }],
+    ["on a server that stores no photos", { unavailable: true }],
+  ] as const)(
+    "takes nothing dropped or picked while %s, nor marks a hover",
+    (_case, options) => {
+      const { input, onFiles, zone } = setup(options);
+      const files = [makeFile("a.jpg")];
+
+      fireEvent.dragOver(zone, { dataTransfer: { files } });
+      expect(zone.className).not.toContain("border-foreground");
+      fireEvent.drop(zone, { dataTransfer: { files } });
+      fireEvent.change(input, { target: { files } });
+
+      expect(onFiles).not.toHaveBeenCalled();
+    }
+  );
+
   test.each([
     [0, "min-h-56"],
     [1, "min-h-24"],
@@ -167,6 +194,21 @@ describe("ProductPhotoDrop", () => {
       "Up to 8 photos fit: 2 were left out.",
     ]);
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  test("says a reason once when two files of one name are refused alike", () => {
+    setup({
+      refusals: [
+        { kind: "notImage", name: "notes.pdf" },
+        { kind: "notImage", name: "notes.pdf" },
+      ],
+    });
+
+    expect(
+      screen.getAllByRole("listitem").map((item) => item.textContent)
+    ).toEqual([
+      "“notes.pdf” is not a photo. Choose a JPEG, PNG, WebP or HEIC.",
+    ]);
   });
 
   test("says nothing went wrong when nothing was refused", () => {

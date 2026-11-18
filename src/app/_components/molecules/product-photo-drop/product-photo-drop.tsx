@@ -47,6 +47,7 @@ function ProductPhotoDrop({
   const hintId = useId();
   const unavailableId = useId();
   const full = count >= max;
+  const closed = full || unavailable;
 
   const said = (refusal: PhotoRefusal) => {
     if (refusal.kind === "tooMany") {
@@ -79,19 +80,25 @@ function ProductPhotoDrop({
           over && "border-foreground bg-accent"
         )}
         data-testid="product-photo-drop"
-        disabled={full || unavailable}
+        disabled={closed}
         onClick={() => input.current?.click()}
         onDragLeave={() => {
           setOver(false);
         }}
         onDragOver={(event) => {
+          // Always prevented, so a file dropped on a closed zone is not
+          // opened by the browser in place of the admin.
           event.preventDefault();
-          setOver(true);
+          setOver(!closed);
         }}
         onDrop={(event) => {
           event.preventDefault();
           setOver(false);
-          onFiles([...event.dataTransfer.files]);
+
+          // A disabled button still hears a drop.
+          if (!closed) {
+            onFiles([...event.dataTransfer.files]);
+          }
         }}
         type="button"
       >
@@ -133,7 +140,7 @@ function ProductPhotoDrop({
           // The same photos can be chosen again after a removal.
           event.currentTarget.value = "";
 
-          if (files.length > 0) {
+          if (files.length > 0 && !closed) {
             onFiles(files);
           }
         }}
@@ -147,8 +154,10 @@ function ProductPhotoDrop({
           data-testid="product-photo-refusals"
           role="alert"
         >
-          {refusals.map((refusal) => (
-            <li key={said(refusal)}>{said(refusal)}</li>
+          {/* Each reason once: two files of one name refused alike say
+              the same thing. */}
+          {[...new Set(refusals.map(said))].map((sentence) => (
+            <li key={sentence}>{sentence}</li>
           ))}
         </ul>
       ) : null}
