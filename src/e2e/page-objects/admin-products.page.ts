@@ -40,6 +40,17 @@ export class AdminProductsPage extends AdminPage {
     return this.page.getByRole("dialog", { name: "Filtros" });
   }
 
+  /**
+   * A value's checkbox in the sheet, inside its own filter (keyed by the
+   * filter's slug): the sheet lists every filter of the store, whose values
+   * parallel specs name alike ("Dorado").
+   */
+  filterValue(attribute: string, value: string): Locator {
+    return this.sheet()
+      .getByTestId(`filter-attribute-${attribute}`)
+      .getByRole("checkbox", { name: value, exact: true });
+  }
+
   /** Opens the filter sheet: the first harmless open after a load. */
   async openFilters(): Promise<void> {
     await this.clickUntilVisible(this.filtersButton(), this.sheet());

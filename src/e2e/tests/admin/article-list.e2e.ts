@@ -139,7 +139,7 @@ test.describe("the article list", () => {
     await page.keyboard.press("Space");
     await sheet.getByRole("radio", { name: "Disponible", exact: true }).focus();
     await page.keyboard.press("Space");
-    await sheet.getByRole("checkbox", { name: "Dorado" }).focus();
+    await list.filterValue(color, "Dorado").focus();
     await page.keyboard.press("Space");
     await expect(sheet.getByTestId("filter-matches")).toHaveText(
       "Coincide 1 artículo"
@@ -174,9 +174,7 @@ test.describe("the article list", () => {
     await expect(
       list.sheet().getByRole("checkbox", { name: `Anillos ${tag}` })
     ).toBeChecked();
-    await expect(
-      list.sheet().getByRole("checkbox", { name: "Dorado" })
-    ).toBeChecked();
+    await expect(list.filterValue(color, "Dorado")).toBeChecked();
     await page.keyboard.press("Escape");
     await expectDialogRemoved(page, list.sheet());
 
