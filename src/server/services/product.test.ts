@@ -1260,9 +1260,14 @@ describe("listStoreProducts", () => {
     db.$["select.where"].mockImplementation(async (where: unknown) => {
       const text = sqlOrNull(where);
 
+      // Only this store's row: another id bound to the same SQL finds none.
       if (text === STORE_WHERE) {
+        const { params } = renderQuery(where);
+
         return await Promise.resolve(
-          storeFound ? [{ currencyCode: "USD" }] : []
+          storeFound && params.length === 1 && params[0] === STORE_ID
+            ? [{ currencyCode: "USD" }]
+            : []
         );
       }
 
@@ -1367,6 +1372,10 @@ describe("listStoreProducts", () => {
 
   test("counts the matches up to one past the cap, in a subquery of the same rows", async () => {
     const { db, list } = setupList();
+    // What awaiting the `matching` subquery reads, so the count's source
+    // can be told from any other.
+    const matching = { subquery: "matching" };
+    required(db.$["select.as"]).mockReturnValue(matching);
 
     await list();
 
@@ -1374,6 +1383,21 @@ describe("listStoreProducts", () => {
       STORE_PRODUCTS_COUNT_CAP + 1,
     ]);
     expect(db.$["select.as"]).toHaveBeenCalledExactlyOnceWith("matching");
+    // The count's projection, and that it reads that subquery.
+    expect(
+      db.$.select.mock.calls.flatMap(([fields]) =>
+        typeof fields === "object" && fields !== null && "total" in fields
+          ? [renderSql(fields.total)]
+          : []
+      )
+    ).toEqual(["count(*)::int"]);
+    const sources: unknown[] = db.$["select.from"].mock.calls
+      .map(([source]) => source)
+      .filter(
+        (source) =>
+          source !== product && source !== store && source !== category
+      );
+    expect(await Promise.all(sources)).toEqual([matching]);
   });
 
   test.each([
