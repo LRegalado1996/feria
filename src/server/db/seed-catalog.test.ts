@@ -11,6 +11,7 @@ import {
   store,
   storeTranslation,
 } from "@/server/db/schema";
+import type * as productService from "@/server/services/product";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -23,8 +24,14 @@ import {
   seedCatalogPages,
 } from "./seed-catalog";
 
+// The seed reads only these fields of a created article.
 const { createProduct, publishProduct } = vi.hoisted(() => ({
-  createProduct: vi.fn(),
+  createProduct:
+    vi.fn<
+      (
+        ...args: Parameters<typeof productService.createProduct>
+      ) => Promise<{ id: number; slug: string; status: "draft" }>
+    >(),
   publishProduct: vi.fn(async (_tx: unknown, input: { id: number }) => ({
     id: input.id,
     slug: "x",
@@ -139,9 +146,7 @@ describe("seedCatalog", () => {
         (slug) => 201 + SEED_COLORS.findIndex((color) => color.slug === slug)
       );
     const given = createProduct.mock.calls.map(
-      ([, input]) =>
-        (input as { values: { attributeValueIds: number[] } }).values
-          .attributeValueIds
+      ([, input]) => input.values.attributeValueIds
     );
     expect(given).toEqual(
       SEED_ARTICLES.map((article) => valueIds(article.colors))
