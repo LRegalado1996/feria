@@ -28,6 +28,7 @@ import {
   valueToken,
 } from "@/lib/admin/product-filters";
 import {
+  EMPTY_PRODUCTS_QUERY,
   type ProductsQuery,
   productsListInput,
   productsPath,
@@ -150,8 +151,20 @@ function PanelForm({
     values: chosenValues,
   };
   const draft = applyFilterForm(query, values, { attributes, categories });
-  // How many the draft would show: one row read, its total kept.
-  const counted = useProducts(productsListInput(draft, locale, 1));
+  // How many the draft would show: one row read, its total kept. The order
+  // changes no count, so it is read in the default one: one cache entry
+  // whatever the list's sort, and no sort key looked up per row.
+  const counted = useProducts(
+    productsListInput(
+      {
+        ...draft,
+        dir: EMPTY_PRODUCTS_QUERY.dir,
+        sort: EMPTY_PRODUCTS_QUERY.sort,
+      },
+      locale,
+      1
+    )
+  );
   const listedCategories = categories ?? [];
   const groups = listedCategories.filter(
     (category) => category.parentId === null

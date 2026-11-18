@@ -277,9 +277,16 @@ describe("ProductFilterPanel", () => {
     ).toBeVisible();
   });
 
-  test("counts what the choice would show, one row read, the categories in the store's order", async () => {
+  test("counts what the choice would show, one row read in the default order, the categories in the store's order", async () => {
     const { list, open, user } = setup({
-      query: makeQuery({ categories: ["aros"], page: 4, q: "aro" }),
+      // The list's own order: a count needs none.
+      query: makeQuery({
+        categories: ["aros"],
+        dir: "desc",
+        page: 4,
+        q: "aro",
+        sort: "price",
+      }),
     });
     const sheet = await open();
     await waitFor(() => {
