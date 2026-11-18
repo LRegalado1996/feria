@@ -191,6 +191,55 @@ describe("ProductFilterChips", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith([32, 31, 99]);
   });
 
+  test("a value saved after another filter's form was opened leaves that form as it is", async () => {
+    const onChange = vi.fn<(ids: number[]) => void>();
+    let answer = (_created: { id: number; result: "saved" }): void => undefined;
+    const onCreateValue = vi.fn(
+      async () =>
+        await new Promise<{ id: number; result: "saved" }>((resolve) => {
+          answer = resolve;
+        })
+    );
+    const user = userEvent.setup();
+    renderWithI18n(
+      <ProductFilterChips
+        attributes={[
+          makeAttribute(),
+          makeAttribute({
+            id: 2,
+            nameEn: "Material",
+            nameEs: "Material",
+            slug: "material",
+            values: [makeValue(41, "Plata")],
+          }),
+        ]}
+        onChange={onChange}
+        onCreateValue={onCreateValue}
+        value={[]}
+      />
+    );
+    await user.click(screen.getByRole("button", { name: "Add to Color" }));
+    const color = screen.getByRole("form", { name: "New Color value" });
+    await user.type(within(color).getByLabelText(/^Name in Spanish/u), "Rosa");
+    await user.click(within(color).getByRole("button", { name: "Add" }));
+
+    await user.click(screen.getByRole("button", { name: "Add to Material" }));
+    const material = screen.getByRole("form", { name: "New Material value" });
+    const name = within(material).getByLabelText(/^Name in Spanish/u);
+    await user.type(name, "Oro");
+    await act(async () => {
+      answer({ id: 99, result: "saved" });
+      await Promise.resolve();
+    });
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith([99]);
+    expect(
+      screen.getByRole("form", { name: "New Material value" })
+    ).toBeInTheDocument();
+    expect(name).toHaveValue("Oro");
+    expect(name).toHaveFocus();
+  });
+
   test("keeps the form open with the reason when the name is taken, choosing nothing", async () => {
     const { filter, onChange, user } = setup({
       created: { result: "duplicate" },

@@ -60,10 +60,17 @@ function ProductFilterChips({
   // The choice as it is now: a value being added is chosen once the store
   // answers, on top of whatever was tapped while it was on its way.
   const latest = useRef(value);
+  // The form open now: a save that ends after another was opened closes
+  // nothing and takes no focus.
+  const open = useRef(adding);
 
   useEffect(() => {
     latest.current = value;
   }, [value]);
+
+  useEffect(() => {
+    open.current = adding;
+  }, [adding]);
 
   if (attributes.length === 0) {
     return (
@@ -85,6 +92,10 @@ function ProductFilterChips({
   };
 
   const close = (attributeId: number) => {
+    if (open.current !== attributeId) {
+      return;
+    }
+
     setAdding(null);
     openers.current.get(attributeId)?.focus();
   };
