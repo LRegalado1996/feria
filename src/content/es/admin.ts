@@ -328,6 +328,58 @@ export const admin = {
       title: "¿No se pudo entregar el pedido?",
     },
   },
+  // The company's settings (FER-014): what the store says about itself and
+  // how a shopper reaches it.
+  settings: {
+    contact: "Contacto y redes",
+    currencies: {
+      UYU: "Pesos uruguayos (UYU)",
+      USD: "Dólares estadounidenses (USD)",
+    },
+    currency: "Moneda",
+    currencyHint:
+      "Es la moneda de todos los precios de la tienda. No se cambia desde el panel.",
+    description:
+      "Lo que la tienda dice de sí misma y cómo te encuentran. Los cambios se ven en la tienda apenas los guardás.",
+    errors: {
+      descriptionRequired: "Escribí la descripción.",
+      descriptionTooLong: "Usá hasta 600 caracteres.",
+      instagramInvalid:
+        "Pegá el enlace completo de Instagram, por ejemplo https://instagram.com/tu-tienda",
+      linkTooLong: "El enlace es demasiado largo.",
+      load: "No pudimos cargar los ajustes.",
+      nameRequired: "Escribí el nombre de la tienda.",
+      nameTooLong: "Usá hasta 80 caracteres.",
+      save: "No pudimos guardar los ajustes. Lo que escribiste sigue acá: probá de nuevo.",
+      taglineRequired: "Escribí la frase.",
+      taglineTooLong: "Usá hasta 120 caracteres.",
+      tiktokInvalid:
+        "Pegá el enlace completo de TikTok, por ejemplo https://tiktok.com/@tu-tienda",
+      whatsappInvalid:
+        "No es un número de WhatsApp que podamos usar. Escribilo como 099 123 456 o, si es de otro país, con su código: +54 9 11 1234 5678.",
+    },
+    fields: {
+      descriptionEn: "Descripción en inglés",
+      descriptionEs: "Descripción en español",
+      instagramUrl: "Enlace de Instagram",
+      name: "Nombre de la tienda",
+      socialHint: "Si lo dejás vacío, la tienda no lo muestra.",
+      taglineEn: "Frase en inglés",
+      taglineEs: "Frase en español",
+      tiktokUrl: "Enlace de TikTok",
+      whatsappHint:
+        "Escribilo como quieras: 099 123 456 o +598 99 123 456. Lo guardamos con el código del país. Si lo dejás vacío, la tienda no muestra WhatsApp.",
+      whatsappNumber: "Número de WhatsApp",
+    },
+    identity: "La tienda",
+    pending: "Guardando…",
+    saved: "Ajustes guardados.",
+    submit: "Guardar",
+    texts: "Textos",
+    textsHint:
+      "La frase va arriba del nombre en el inicio, y la descripción debajo.",
+    title: "Ajustes",
+  },
   shell: {
     closeMenu: "Cerrar el menú",
     menu: "Menú",

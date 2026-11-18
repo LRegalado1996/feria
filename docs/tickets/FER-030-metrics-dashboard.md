@@ -14,7 +14,7 @@ One page tells Lucas how the store is doing and whether the AI feature earns its
 `/admin/metrics`, with a date range in the URL, in the admin shell and cards of [FER-040](FER-040-admin-redesign.md). One store since [FER-038](FER-038-single-store.md): no store filter, no per-store split.
 
 - **Articles:** most viewed; views over time; articles with many views and no orders; published, draft and unavailable counts.
-- **Orders:** count and total amount over time; split by status; share with phone confirmed; undeliverable rate; average order value; top articles by units ordered. Totals and averages are per currency: an order keeps the currency it was placed in, and the store can change currency (FER-014), so a range may hold pesos and dollars. They are never added together or converted.
+- **Orders:** count and total amount over time; split by status; share with phone confirmed; undeliverable rate; average order value; top articles by units ordered. Totals and averages are per currency: an order keeps the currency it was placed in, and the store's currency, though fixed per store and not editable from the admin (FER-014), can be changed by hand in the database, so a range may hold pesos and dollars. They are never added together or converted.
 - **Funnel:** store visits, article views, orders.
 - **AI usage:** generations per user, tokens and cost over time, success rate, share of generated articles that were published, average cost per published article.
 - **Adoption:** articles created per week, time since each login's last sign-in.

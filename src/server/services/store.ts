@@ -17,11 +17,11 @@ function storeNotFound() {
 
 /**
  * The columns a person sets, named one by one: a write never spreads its
- * input into the row, so a key the schema did not list cannot reach the table.
+ * input into the row, so a key the schema did not list cannot reach the
+ * table. The currency is never one of them (FER-014): it is fixed per store.
  */
 function toStoreRow(values: UpdateStoreValues) {
   return {
-    currencyCode: values.currencyCode,
     instagramUrl: values.instagramUrl,
     name: values.name,
     tiktokUrl: values.tiktokUrl,
@@ -82,7 +82,8 @@ export async function getStore(db: DatabaseClient) {
 
 /**
  * Replaces everything a person can set on the store, texts included: a
- * language left out of `translations` loses its text. The row is locked
+ * language left out of `translations` loses its text. The currency stays as
+ * it is, and comes back with the rest. The row is locked
  * first and every write names its id, all in one transaction, so a reader
  * never sees the new name with the old texts.
  */

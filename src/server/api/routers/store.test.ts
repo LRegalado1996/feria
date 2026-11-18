@@ -48,7 +48,6 @@ const SIGNED_OUT = { code: "UNAUTHORIZED", message: "Unauthorized" };
 
 function makeInput(overrides: Record<string, unknown> = {}) {
   return {
-    currencyCode: "UYU",
     instagramUrl: null,
     name: "Sample Store",
     tiktokUrl: null,
@@ -58,10 +57,11 @@ function makeInput(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The store's row as Postgres hands it back, with the currency it keeps. */
 function makeRow(overrides: Record<string, unknown> = {}) {
   const { translations: _translations, ...columns } = makeInput(overrides);
 
-  return { ...columns, id: 7 };
+  return { ...columns, currencyCode: "UYU", id: 7 };
 }
 
 /**
@@ -142,7 +142,6 @@ describe("store.update", () => {
     });
 
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      currencyCode: "UYU",
       instagramUrl: null,
       name: "Renamed",
       tiktokUrl: null,
@@ -153,17 +152,18 @@ describe("store.update", () => {
       params: [7],
     });
     expect(invalidateStoreCache).toHaveBeenCalledExactlyOnceWith();
-    // Its articles show its currency.
+    // The catalog's cover reads its description out of the store's texts.
     expect(invalidateCatalogCache).toHaveBeenCalledExactlyOnceWith(7);
   });
 
-  test("never writes a color, an address or a default mark, even when a stale client sends one", async () => {
+  test("never writes the currency, a color, an address or a default mark, even when a client sends one", async () => {
     const { db, update } = setup();
     db.$["update.returning"].mockResolvedValue([makeRow()]);
 
     await update(
       makeInput({
         colorAccent: "#ff0000",
+        currencyCode: "USD",
         isDefault: true,
         logoUrl: "https://example.com/logo.png",
         slug: "another-address",
@@ -171,7 +171,6 @@ describe("store.update", () => {
     );
 
     expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
-      currencyCode: "UYU",
       instagramUrl: null,
       name: "Sample Store",
       tiktokUrl: null,
@@ -226,7 +225,7 @@ describe("store.update", () => {
 
   test.each([
     ["a name of spaces", { name: "   " }],
-    ["a currency the store cannot sell in", { currencyCode: "EUR" }],
+    ["a WhatsApp number in local form", { whatsappNumber: "099 123 456" }],
     ["a link that is not https", { instagramUrl: "http://instagram.com/x" }],
   ])(
     "refuses %s before reading the login or touching the store",

@@ -24,10 +24,11 @@ export const STORE_TEXTS = {
  * reads it proves it came from the store. TikTok is left out, so the footer
  * shows that a store without a link has none. A spec that needs other
  * settings is a `*.serial.e2e.ts` and changes them through `storeEdit`,
- * which writes these back when the test ends.
+ * which writes these back when the test ends. The currency is not a setting
+ * (FER-014: fixed per store, never written through the API): the store the
+ * migrations create is in pesos, and the specs read prices in pesos.
  */
 export const STORE_SETTINGS = {
-  currencyCode: "UYU",
   instagramUrl: "https://instagram.com/e2e-market",
   name: "E2E Market",
   tiktokUrl: null,

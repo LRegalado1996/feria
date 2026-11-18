@@ -257,7 +257,7 @@ export const storefront = {
     shop: "Tienda",
     skipToContent: "Saltar al contenido",
     // Under the footer's logo, in Pepe's own words (Lucas, 2026-11-18,
-    // FER-044), until the company settings (FER-014) may make it editable.
+    // FER-044). It stays code: the company settings (FER-014) do not edit it.
     story: {
       signature: "Pepe",
       text: "Hace más de 20 años que mi familia arma su puesto en la feria navideña. Empecé ayudando a mis padres y hace unos 10 años tengo el mío. Vendimos de todo: zapatos, ropa, juguetes, perfumes. Este año venimos con bijouterie y pistolas de burbujas: pasá por el puesto 86 o pedí desde acá.",

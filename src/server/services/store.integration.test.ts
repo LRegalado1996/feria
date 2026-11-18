@@ -75,14 +75,13 @@ async function setup() {
 
   snapshots.push({ columns, id, texts: await textsOf(id) });
 
-  return { id };
+  return { currencyCode: columns.currencyCode, id };
 }
 
 function makeValues(
   overrides: Partial<UpdateStoreValues> = {}
 ): UpdateStoreValues {
   return {
-    currencyCode: "USD",
     instagramUrl: "https://instagram.com/sample",
     name: "Integration Store",
     tiktokUrl: null,
@@ -125,11 +124,11 @@ async function textsOf(storeId: number) {
 
 describe("the store's row", () => {
   test("is the one store the site reads, with its texts", async () => {
-    const { id } = await setup();
+    const { currencyCode, id } = await setup();
     await updateStore(db, makeValues({ translations: [SPANISH] }));
 
     await expect(findStore(db)).resolves.toEqual({
-      currencyCode: "USD",
+      currencyCode,
       id,
       instagramUrl: "https://instagram.com/sample",
       name: "Integration Store",
@@ -173,13 +172,12 @@ describe("the store's row", () => {
 
 describe("updateStore", () => {
   test("replaces the columns and the texts: one rewritten, one removed, one added", async () => {
-    const { id } = await setup();
+    const { currencyCode, id } = await setup();
     await updateStore(db, makeValues({ translations: [SPANISH] }));
 
     const updated = await updateStore(
       db,
       makeValues({
-        currencyCode: "UYU",
         name: "Renamed",
         translations: [{ ...ENGLISH, tagline: "Hello again" }],
         whatsappNumber: null,
@@ -187,7 +185,7 @@ describe("updateStore", () => {
     );
 
     expect(updated).toEqual({
-      currencyCode: "UYU",
+      currencyCode,
       id,
       instagramUrl: "https://instagram.com/sample",
       name: "Renamed",
@@ -196,6 +194,25 @@ describe("updateStore", () => {
       whatsappNumber: null,
     });
     expect(await textsOf(id)).toEqual([{ ...ENGLISH, tagline: "Hello again" }]);
+  });
+
+  test("never changes the currency, whatever the values carry: it is fixed per store", async () => {
+    const { id } = await setup();
+    // Set by hand, as the only way to change it is (FER-014).
+    await db.update(store).set({ currencyCode: "USD" }).where(eq(store.id, id));
+
+    // A variable, not a literal: TypeScript lets a key the type does not
+    // list ride along, as a request's body can carry one.
+    const values = { ...makeValues(), currencyCode: "UYU" };
+    const updated = await updateStore(db, values);
+
+    expect(updated.currencyCode).toBe("USD");
+    await expect(
+      db.query.store.findFirst({
+        columns: { currencyCode: true },
+        where: eq(store.id, id),
+      })
+    ).resolves.toEqual({ currencyCode: "USD" });
   });
 
   test("rewrites a text in place: the same row, with the new words", async () => {
