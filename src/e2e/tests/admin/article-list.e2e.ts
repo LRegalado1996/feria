@@ -337,8 +337,15 @@ test.describe("the article list on a phone", () => {
     ]);
 
     await list.openFilters();
-    const box = await list.sheet().boundingBox();
-    expect(box?.width).toBe(390);
+    // The sheet slides in from the right: measured mid-slide its box is
+    // off by a sliver, so wait for it to rest across the whole screen.
+    await expect
+      .poll(async () => {
+        const box = await list.sheet().boundingBox();
+
+        return box && { width: box.width, x: box.x };
+      })
+      .toEqual({ width: 390, x: 0 });
     // A tap on the pill, the radio's label, chooses it.
     await list.statusChoice("Borrador").click();
     await expect(
