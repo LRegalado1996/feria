@@ -144,7 +144,7 @@ function setup({
   totalCapped?: boolean;
 } = {}) {
   const list = vi.fn(() => makeCount(total, totalCapped));
-  const retry = vi.fn();
+  const retry = vi.fn<() => void>();
   server.use(createOrpcHandler("product.list", list));
   const panel = (shown: ProductsQuery) => (
     <ProductFilterPanel

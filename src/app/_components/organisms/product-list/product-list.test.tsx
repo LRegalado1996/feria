@@ -532,13 +532,13 @@ describe("ProductList", () => {
     "a click on %s moves nothing, nor arms its page, reached later another way, to steal focus",
     async (_case, name, held, destination) => {
       const { navigate, user } = setup({
-        answer: (input) => {
+        answer: async (input) => {
           const asked =
             typeof input === "object" && input !== null ? input : {};
 
           if ("sort" in asked) {
             // Never answers: the list stays on page 2's rows meanwhile.
-            return new Promise<ReturnType<typeof makePage>>(HANG);
+            return await new Promise<ReturnType<typeof makePage>>(HANG);
           }
 
           return "page" in asked
