@@ -1,6 +1,7 @@
 import type { ReactNode, Ref } from "react";
 
 import { AdminMenuButton } from "@/app/_components/molecules/admin-menu";
+import { AdminPrimaryAction } from "@/app/_components/molecules/admin-primary-action";
 import { cn } from "@/lib/utils";
 
 export interface AdminPageProps {
@@ -15,8 +16,8 @@ export interface AdminPageProps {
   /**
    * The screen's main action: at the end of the top bar from `md` up, and in
    * a bar along the bottom of a phone's screen, under the thumb, while the
-   * page scrolls. One element in both places, so it has one state and one
-   * name.
+   * page scrolls, and above the keyboard while typing (FER-053). One element
+   * in both places, so it has one state and one name.
    */
   primaryAction?: ReactNode;
   /** The page's one heading. */
@@ -65,13 +66,7 @@ function AdminPage({
           </h1>
           {actions}
           {primaryAction ? (
-            <div
-              className="fixed inset-x-0 bottom-0 z-20 border-t border-sidebar-border bg-sidebar px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:static md:z-auto md:ml-auto md:border-0 md:bg-transparent md:p-0"
-              data-slot="admin-primary-action"
-              data-testid="admin-primary-action"
-            >
-              {primaryAction}
-            </div>
+            <AdminPrimaryAction>{primaryAction}</AdminPrimaryAction>
           ) : null}
         </div>
         {notice ? (
