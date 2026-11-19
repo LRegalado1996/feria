@@ -122,18 +122,26 @@ function NoRows({ page, query }: { page: ProductsPage; query: ProductsQuery }) {
   );
 }
 
-/** The four states a read can be in before it has rows to show. */
+/**
+ * The four states a read can be in before it has rows to show. An earlier
+ * selection's answer kept on screen while this one's comes holds its rows,
+ * marked busy; one without rows (a search that matched nothing, cleared)
+ * has none to hold, so the skeleton stands in for them.
+ */
 function ReadState({
   products,
 }: {
   products: Pick<
     ReturnType<typeof useProducts>,
-    "isError" | "isPending" | "refetch"
+    "data" | "isError" | "isPending" | "isPlaceholderData" | "refetch"
   >;
 }) {
   const { articles, common } = useDictionary();
 
-  if (products.isPending) {
+  if (
+    products.isPending ||
+    (products.isPlaceholderData && products.data?.items.length === 0)
+  ) {
     return (
       <div
         aria-busy="true"
@@ -197,6 +205,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const page = products.data;
   const filtersButton = useRef<HTMLButtonElement>(null);
   const table = useRef<HTMLTableElement>(null);
+  const foot = useRef<HTMLDivElement>(null);
   const rangeId = useId();
   // The address a step of the pages led to: that page takes focus once it
   // shows, and no other selection does.
@@ -214,8 +223,18 @@ function ProductList({ query, renderedAt }: ProductListProps) {
     }
 
     // Disarmed even when the page has no table (past the end), and when
-    // another selection replaced the step's before it showed.
-    if (paging.current === here) {
+    // another selection replaced the step's before it showed. Focus moves
+    // only while the person still waits on the pages (on the body, which
+    // the foot's link left while the page came, the table or the foot):
+    // one who went on to the search keeps typing there.
+    const active = document.activeElement;
+    const waiting =
+      active === null ||
+      active === document.body ||
+      (table.current?.contains(active) ?? false) ||
+      (foot.current?.contains(active) ?? false);
+
+    if (paging.current === here && waiting) {
       table.current?.focus();
     }
 
@@ -229,6 +248,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
     locale,
   });
   const summary = settled ? summaryOf(settled, copy, locale) : null;
+  const hasTable = page !== undefined && page.items.length > 0;
 
   return (
     <section data-slot="product-list" data-testid="product-list">
@@ -261,7 +281,12 @@ function ProductList({ query, renderedAt }: ProductListProps) {
                 query={query}
                 ref={filtersButton}
               />
-              <ProductSortMenu className="xl:hidden" query={query} />
+              {/* From `xl` up the table's headers sort; without a table
+                  (no matches, past the last page) "Ordenar" stays. */}
+              <ProductSortMenu
+                className={hasTable ? "xl:hidden" : undefined}
+                query={query}
+              />
             </div>
           </div>
           <ProductActiveFilters
@@ -283,7 +308,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
           {settled && settled.items.length === 0 ? (
             <NoRows page={settled} query={query} />
           ) : null}
-          {page && page.items.length > 0 ? (
+          {hasTable ? (
             <table
               aria-busy={products.isPlaceholderData || undefined}
               aria-describedby={rangeId}
@@ -320,6 +345,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
             <div
               className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-1"
               data-testid="product-list-foot"
+              ref={foot}
               onClickCapture={(event) => {
                 const link = followedLink(event);
 

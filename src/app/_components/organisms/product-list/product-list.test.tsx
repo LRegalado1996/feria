@@ -9,6 +9,7 @@ import type { Locale } from "@/lib/i18n/config";
 import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
+import { required } from "@/test/required";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { ProductList } from "./product-list";
@@ -202,7 +203,9 @@ function setup({
   query = makeQuery(),
   refuses = false,
 }: {
-  answer?: (input: unknown) => ReturnType<typeof makePage>;
+  answer?: (
+    input: unknown
+  ) => ReturnType<typeof makePage> | Promise<ReturnType<typeof makePage>>;
   /** Whether the store's categories and filters fail to load. */
   listsFail?: boolean;
   locale?: Locale;
@@ -338,9 +341,10 @@ describe("ProductList", () => {
           }),
       });
 
-      expect(await screen.findByTestId("product-list-count")).toHaveTextContent(
-        said
-      );
+      // All of it: "149 articles" is not "49".
+      expect(
+        (await screen.findByTestId("product-list-count")).textContent
+      ).toBe(said);
     }
   );
 
@@ -519,47 +523,68 @@ describe("ProductList", () => {
   });
 
   test.each([
-    ["the current page's own link", "Page 2", null],
-    ["another page opened in a new tab", "Page 1", "Control"],
-    ["another page opened in a new window", "Page 1", "Shift"],
-  ])(
-    "a click on %s moves nothing, nor arms a later page change to steal focus",
-    async (_case, name, held) => {
+    // On page 2 already: the list goes elsewhere (its answer still on its
+    // way) and comes back to the link's own page, as back would bring it.
+    ["the current page's own link", "Page 2", null, 2],
+    ["another page opened in a new tab", "Page 1", "Control", 1],
+    ["another page opened in a new window", "Page 1", "Shift", 1],
+  ] as const)(
+    "a click on %s moves nothing, nor arms its page, reached later another way, to steal focus",
+    async (_case, name, held, destination) => {
       const { navigate, user } = setup({
-        answer: (input) =>
-          typeof input === "object" && input !== null && "page" in input
+        answer: (input) => {
+          const asked =
+            typeof input === "object" && input !== null ? input : {};
+
+          if ("sort" in asked) {
+            // Never answers: the list stays on page 2's rows meanwhile.
+            return new Promise<ReturnType<typeof makePage>>(HANG);
+          }
+
+          return "page" in asked
             ? makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 })
-            : makePage([makeItem(9)], { pageCount: 2, total: 25 }),
+            : makePage([makeItem(9)], { pageCount: 2, total: 25 });
+        },
         query: makeQuery({ page: 2 }),
       });
       await screen.findByTestId("product-row-30");
+      const link = screen.getByRole("link", { name });
 
       if (held) {
         await user.keyboard(`{${held}>}`);
       }
 
-      await user.click(screen.getByRole("link", { name }));
+      await user.click(link);
 
       if (held) {
         await user.keyboard(`{/${held}}`);
       }
 
-      // A sort brings the first page back: no step of the pages asked for it.
       navigate(makeQuery({ sort: "price" }));
+      navigate(makeQuery({ page: destination }));
 
-      expect(await screen.findByTestId("product-row-9")).toBeVisible();
+      expect(
+        await screen.findByTestId(`product-row-${destination === 2 ? 30 : 9}`)
+      ).toBeVisible();
       expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
     }
   );
 
   test("a step to a page that comes back empty is spent: a later page change keeps focus where it is", async () => {
+    // Page 2 is empty until it is filled again.
+    let pageTwoFilled = false;
+    const refill = () => {
+      pageTwoFilled = true;
+    };
     const { navigate, user } = setup({
       answer: (input) => {
         const asked = typeof input === "object" && input !== null ? input : {};
 
         if ("page" in asked) {
           // Emptied meanwhile: the store lost the articles of page 2.
-          return makePage([], { page: 2, pageCount: 1, total: 24 });
+          return pageTwoFilled
+            ? makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 })
+            : makePage([], { page: 2, pageCount: 1, total: 24 });
         }
 
         return makePage([makeItem("sort" in asked ? 12 : 9)], {
@@ -580,21 +605,29 @@ describe("ProductList", () => {
 
     expect(await screen.findByTestId("product-row-12")).toBeVisible();
     expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+
+    // Back on page 2 another way, its rows there again: the step was spent.
+    refill();
+    navigate(makeQuery({ page: 2 }));
+
+    expect(await screen.findByTestId("product-row-30")).toBeVisible();
+    expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
   });
 
   test("a step of the pages replaced by another selection before it showed takes no focus there", async () => {
     const { navigate, user } = setup({
-      answer: (input) =>
-        makePage(
-          [
-            makeItem(
-              typeof input === "object" && input !== null && "sort" in input
-                ? 12
-                : 9
-            ),
-          ],
-          { pageCount: 2, total: 25 }
-        ),
+      answer: (input) => {
+        const asked = typeof input === "object" && input !== null ? input : {};
+
+        if ("page" in asked) {
+          return makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 });
+        }
+
+        return makePage([makeItem("sort" in asked ? 12 : 9)], {
+          pageCount: 2,
+          total: 25,
+        });
+      },
     });
     await screen.findByTestId("product-row-9");
 
@@ -604,6 +637,32 @@ describe("ProductList", () => {
 
     expect(await screen.findByTestId("product-row-12")).toBeVisible();
     expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+
+    // Its page reached later another way: the replaced step is gone.
+    navigate(makeQuery({ page: 2 }));
+
+    expect(await screen.findByTestId("product-row-30")).toBeVisible();
+    expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+  });
+
+  test("a step of the pages leaves focus where the person moved it while the page came", async () => {
+    const { navigate, user } = setup({
+      answer: (input) =>
+        typeof input === "object" && input !== null && "page" in input
+          ? makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 })
+          : makePage([makeItem(9)], { pageCount: 2, total: 25 }),
+    });
+    await screen.findByTestId("product-row-9");
+
+    await user.click(screen.getByRole("link", { name: "Page 2" }));
+    // On to the search before page 2 shows.
+    screen.getByRole("searchbox", { name: "Search articles" }).focus();
+    navigate(makeQuery({ page: 2 }));
+
+    expect(await screen.findByTestId("product-row-30")).toBeVisible();
+    expect(
+      screen.getByRole("searchbox", { name: "Search articles" })
+    ).toHaveFocus();
   });
 
   test("while another selection loads, says nothing of it from the last one's answer", async () => {
@@ -625,10 +684,65 @@ describe("ProductList", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("product-list-no-matches")).toBeNull();
     });
+    // Nothing of the last answer to hold: the skeleton holds the place.
+    expect(screen.getByTestId("product-list-skeleton")).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
     expect(screen.queryByText(EMPTY_STORE)).toBeNull();
     expect(screen.queryByTestId("product-list-count")).toBeNull();
     expect(screen.queryByTestId("product-list-foot")).toBeNull();
   });
+
+  test("while another selection loads, keeps the last one's rows, marked busy, without a skeleton", async () => {
+    const { navigate } = setup();
+    await screen.findByTestId("product-row-9");
+    server.use(
+      createOrpcHandler(
+        "product.list",
+        async () => await new Promise<ReturnType<typeof makePage>>(HANG)
+      )
+    );
+
+    navigate(makeQuery({ q: "aro" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("product-list-table")).toHaveAttribute(
+        "aria-busy",
+        "true"
+      );
+    });
+    expect(screen.getByTestId("product-row-9")).toBeVisible();
+    expect(screen.queryByTestId("product-list-skeleton")).toBeNull();
+  });
+
+  test.each([
+    [
+      "no article matches",
+      () => makePage([], { pageCount: 0, total: 0 }),
+      null,
+    ],
+    [
+      "the page is past the last",
+      () => makePage([], { page: 9, pageCount: 2, total: 25 }),
+      null,
+    ],
+    ["the table shows", () => makePage([makeItem(9)]), "xl:hidden"],
+  ])(
+    "when %s, the toolbar's sort hides from xl up only beside the table's headers",
+    async (_case, answer, hidden) => {
+      setup({ answer, query: makeQuery({ page: 9, q: "aro" }) });
+      await screen.findByTestId("product-list-count");
+
+      const menu = required(
+        screen
+          .getByTestId("product-list-toolbar")
+          .querySelector("[data-slot='product-sort-menu']")
+      );
+
+      expect(menu.classList.contains("xl:hidden")).toBe(hidden !== null);
+    }
+  );
 
   test("says the categories failed in the filters, and reads them again on retry", async () => {
     const { healLists, user } = setup({ listsFail: true });
@@ -660,7 +774,7 @@ describe("ProductList", () => {
       locale: "es",
     });
 
-    expect(await screen.findByTestId("product-list-count")).toHaveTextContent(
+    expect((await screen.findByTestId("product-list-count")).textContent).toBe(
       "25 artículos"
     );
     expect(screen.getByRole("heading", { name: "Artículos" })).toBeVisible();
