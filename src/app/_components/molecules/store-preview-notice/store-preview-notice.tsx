@@ -57,14 +57,21 @@ function StorePreviewNotice({ className }: StorePreviewNoticeProps) {
     // A status, announced as it appears: an `output`.
     <output
       className={cn(
-        "flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-store-foreground px-4 py-2 text-center text-sm text-store-background",
+        // One row on a phone, as tall as the link's 44 px: the home's cover
+        // under the header stays nearly a screen tall (FER-022).
+        "flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-store-foreground px-4 py-0.5 text-center text-sm text-store-background sm:py-2",
         className
       )}
       data-slot="store-preview-notice"
       data-testid="store-preview-notice"
     >
       <Lock aria-hidden="true" className="size-4 shrink-0" />
-      <span>{comingSoon.previewNotice.message}</span>
+      {/* The whole notice for every reader at every width; a phone's eye
+          gets the short one, as the announcement bar does. */}
+      <span className="max-sm:sr-only">{comingSoon.previewNotice.message}</span>
+      <span aria-hidden="true" className="sm:hidden">
+        {comingSoon.previewNotice.short}
+      </span>
       {/* A plain link: the admin is another app, nothing to fetch ahead. */}
       <a
         className="inline-flex min-h-11 items-center font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-store-background md:min-h-0"

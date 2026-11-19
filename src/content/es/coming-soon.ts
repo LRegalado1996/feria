@@ -95,6 +95,9 @@ export const comingSoon = {
     link: "Administrar Próximamente",
     message:
       "La tienda está cerrada al público. La ves porque iniciaste sesión.",
+    // What a phone shows of it, on one line with the link (FER-022: the
+    // home's cover stays nearly a screen tall under it).
+    short: "Cerrada al público.",
   },
   // The card on the settings screen that leads to the admin's screen.
   settingsCard: {

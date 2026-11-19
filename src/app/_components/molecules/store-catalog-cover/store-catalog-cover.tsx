@@ -1,6 +1,7 @@
-import { getImageProps } from "next/image";
 import type { ReactNode } from "react";
 
+import { StorePicture } from "@/app/_components/atoms/store-picture";
+import { STORE_COVER_HEIGHT } from "@/app/_components/molecules/store-banner";
 import type { CatalogCover } from "@/lib/catalog/cover";
 import { cn } from "@/lib/utils";
 
@@ -11,9 +12,6 @@ export interface StoreCatalogCoverProps {
   cover: CatalogCover;
 }
 
-/** The phone's image below `md` (768 px), the computer's from there up. */
-const COMPUTER_MEDIA = "(min-width: 768px)";
-
 /**
  * A catalog page's cover (FER-043, FER-044), after the collection pages of
  * the reference store: a photo the whole width of the window, right under
@@ -23,62 +21,36 @@ const COMPUTER_MEDIA = "(min-width: 768px)";
  * filter bar and a hint of the first row of articles below): 17.5rem on a
  * phone, 20rem from `md` up, never under 20rem in all, so a window turned
  * sideways still shows a photo. `svh`, the window with the phone's
- * toolbars shown, so the hint survives them. Art direction: a `<picture>`
- * whose phone image shows below `md` and whose computer image shows from
- * there up, and on a phone too when there is no phone image. The box has
- * its height before the photo arrives, and the photo is cropped to fill
- * it. It is the page's largest image: fetched first, never lazily. The one
- * gradient the storefront allows rises from the bottom so the white title
- * reads on any photo.
+ * toolbars shown, so the hint survives them. Art direction
+ * (`atoms/store-picture`): the phone image below `md`, the computer image
+ * from there up, and on a phone too when there is no phone image. The box
+ * has its height before the photo arrives, and the photo is cropped to
+ * fill it. It is the page's largest image: fetched first, never lazily.
+ * The one gradient the storefront allows rises from the bottom so the
+ * white title reads on any photo.
  */
 function StoreCatalogCover({
   children,
   className,
   cover,
 }: StoreCatalogCoverProps) {
-  const common = {
-    alt: cover.alt,
-    fetchPriority: "high",
-    loading: "eager",
-    sizes: "100vw",
-  } as const;
-  const {
-    props: { srcSet: computer },
-  } = getImageProps({
-    ...common,
-    height: cover.computer.height,
-    src: cover.computer.url,
-    width: cover.computer.width,
-  });
-  const phone = cover.phone ?? cover.computer;
-  const { props: image } = getImageProps({
-    ...common,
-    height: phone.height,
-    src: phone.url,
-    width: phone.width,
-  });
-
   return (
     <div
       className={cn(
-        "relative h-[calc(100svh-17.5rem)] min-h-80 w-full overflow-hidden bg-store-contrast text-store-background md:h-[calc(100svh-20rem)]",
+        "relative w-full overflow-hidden bg-store-contrast text-store-background",
+        STORE_COVER_HEIGHT,
         className
       )}
       data-slot="store-catalog-cover"
       data-testid="store-catalog-cover"
     >
-      <picture>
-        {cover.phone ? (
-          <source media={COMPUTER_MEDIA} srcSet={computer} />
-        ) : null}
-        {/* Its props are next/image's own, made by `getImageProps`. */}
-        <img
-          {...image}
-          alt={cover.alt}
-          className="absolute inset-0 size-full object-cover"
-          data-testid="store-catalog-cover-image"
-        />
-      </picture>
+      <StorePicture
+        alt={cover.alt}
+        computer={cover.computer}
+        data-testid="store-catalog-cover-image"
+        phone={cover.phone}
+        priority
+      />
       {/* The one gradient of the storefront: legibility, not decoration. */}
       <div
         aria-hidden="true"

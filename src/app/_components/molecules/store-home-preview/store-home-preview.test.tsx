@@ -179,7 +179,19 @@ describe("StoreHomePreview", () => {
     expect(banner).toHaveAccessibleName(
       "Burbujeros para toda la familia Ver burbujeros"
     );
-    expect(cover.firstElementChild).toHaveAttribute("lang", "es");
+    // Its words are the banner's own, in the banner's language.
+    expect(
+      within(cover).getByRole("heading", {
+        level: 3,
+        name: "Burbujeros para toda la familia",
+      })
+    ).toHaveAttribute("lang", "es");
+    expect(within(cover).getByText("Ver burbujeros")).toHaveAttribute(
+      "lang",
+      "es"
+    );
+    // A banner's height, not the home's nearly-a-screen cover.
+    expect(banner).toHaveAttribute("data-size", "row");
     expect(cover).toHaveTextContent("And 2 more in the cover.");
     expect(cover).not.toHaveTextContent("Joyas");
   });
@@ -243,6 +255,7 @@ describe("StoreHomePreview", () => {
     ).toEqual([
       "Best sellers",
       "Anillo sello",
+      "En la feria",
       "Aros",
       "Aro",
       "Featured",
