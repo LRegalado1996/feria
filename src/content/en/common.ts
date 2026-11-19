@@ -16,6 +16,16 @@ export const common: Dictionary["common"] = {
   moreActions: "More actions",
   moreActionsForRow: "More actions: {row}",
   notifications: "Notifications",
+  pagination: {
+    ellipsis: "More pages",
+    label: "Pages",
+    next: "Next",
+    nextPage: "Next page",
+    page: "Page {page}",
+    pageOf: "Page {page} of {count}",
+    previous: "Previous",
+    previousPage: "Previous page",
+  },
   numberInput: {
     decimal: "This field takes whole numbers only.",
     unreadable:

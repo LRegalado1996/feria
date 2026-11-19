@@ -43,7 +43,11 @@ const services = vi.hoisted(() => ({
   listStoreProducts: vi.fn(async () => ({
     currencyCode: "UYU",
     items: [{ id: 5 }],
-    nextCursor: null,
+    limit: 10,
+    page: 2,
+    pageCount: 3,
+    total: 25,
+    totalCapped: false,
   })),
   publishProduct: vi.fn(async () => ({
     id: 13,
@@ -395,38 +399,74 @@ describe("product router", () => {
     expect(services.withAdmin).not.toHaveBeenCalled();
   });
 
-  test("lists the store's articles a page at a time, from the cursor given", async () => {
+  test("lists a numbered page of the store's articles as the input asks, the store from the login", async () => {
     const { db, run } = setup();
-    const cursor = { id: 9, updatedAt: "2026-11-17T10:00:00.123Z" };
+    const selection = {
+      availability: "unavailable",
+      categories: ["anillos"],
+      dir: "desc",
+      filters: [{ attribute: "color", values: ["dorado"] }],
+      locale: "en",
+      q: "aro",
+      sort: "price",
+      status: "draft",
+    };
 
-    await expect(run("list", { cursor, limit: "10" })).resolves.toEqual({
+    await expect(
+      run("list", { ...selection, limit: "10", page: "2" })
+    ).resolves.toEqual({
       currencyCode: "UYU",
       items: [{ id: 5 }],
-      nextCursor: null,
+      limit: 10,
+      page: 2,
+      pageCount: 3,
+      total: 25,
+      totalCapped: false,
     });
 
     expect(services.listStoreProducts).toHaveBeenCalledExactlyOnceWith(db, {
-      cursor,
+      ...selection,
       limit: 10,
+      page: 2,
       storeId: 7,
     });
   });
 
-  test("lists the first page of 24 when asked nothing", async () => {
+  test("lists the first page of 24, most recent change first, when asked only the language", async () => {
     const { db, run } = setup();
 
-    await run("list", {});
+    await run("list", { locale: "es" });
 
     expect(services.listStoreProducts).toHaveBeenCalledExactlyOnceWith(db, {
-      cursor: undefined,
       limit: 24,
+      locale: "es",
+      page: 1,
+      sort: "updated",
       storeId: 7,
     });
   });
 
   test.each([
+    ["no language", {}],
+    ["page 0", { locale: "es", page: 0 }],
+    ["an unknown sort", { locale: "es", sort: "position" }],
+    ["a category that is no slug", { categories: ["Anillos"], locale: "es" }],
+  ])(
+    "refuses a list with %s as BAD_REQUEST, before the read",
+    async (_case, input) => {
+      const { run } = setup();
+
+      await expect(run("list", input)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Input validation failed",
+      });
+      expect(services.listStoreProducts).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
     ["get", { id: 5 }, services.getStoreProduct],
-    ["list", {}, services.listStoreProducts],
+    ["list", { locale: "es" }, services.listStoreProducts],
   ] as const)(
     "%s by a login the database no longer has is UNAUTHORIZED, before the read",
     async (name, input, service) => {

@@ -1,1 +1,1 @@
-export { ProductList } from "./product-list";
+export { ProductList, type ProductListProps } from "./product-list";

@@ -1,6 +1,7 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { ListStoreProductsInput } from "@/lib/schemas/catalog";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
@@ -26,23 +27,36 @@ function makeItem(id: number, title: string | null) {
   };
 }
 
-const CURSOR = { id: 2, updatedAt: "2026-11-15T02:00:00.000Z" };
-const FIRST_PAGE = {
-  currencyCode: "UYU",
-  items: [makeItem(2, "Anillo")],
-  nextCursor: CURSOR,
-};
-const LAST_PAGE = {
-  currencyCode: "UYU",
-  items: [makeItem(1, null)],
-  nextCursor: null,
-};
+/** The page the server answers for `page`: one article, numbered by it. */
+function makePage(page: number) {
+  return {
+    currencyCode: "UYU",
+    items: [makeItem(page, `Anillo ${page}`)],
+    limit: 24,
+    page,
+    pageCount: 3,
+    total: 49,
+    totalCapped: false,
+  };
+}
 
-function setup({ fails = false } = {}) {
-  const list = vi.fn((input: unknown) =>
-    typeof input === "object" && input !== null && "cursor" in input
-      ? LAST_PAGE
-      : FIRST_PAGE
+/** The hook over `product.list`, which answers the page asked for. */
+function setup({
+  fails = false,
+  input = { locale: "es" },
+}: {
+  fails?: boolean;
+  input?: ListStoreProductsInput;
+} = {}) {
+  const list = vi.fn((asked: unknown) =>
+    makePage(
+      typeof asked === "object" &&
+        asked !== null &&
+        "page" in asked &&
+        typeof asked.page === "number"
+        ? asked.page
+        : 1
+    )
   );
   server.use(
     fails
@@ -54,43 +68,64 @@ function setup({ fails = false } = {}) {
       : createOrpcHandler("product.list", list)
   );
   const wrapper = createQueryWrapper();
-  const { result } = renderHook(() => useProducts(), { wrapper });
+  const view = renderHook(
+    ({ asked }: { asked: ListStoreProductsInput }) => useProducts(asked),
+    { initialProps: { asked: input }, wrapper }
+  );
 
-  return { list, queryClient: wrapper.queryClient, result };
+  return {
+    list,
+    queryClient: wrapper.queryClient,
+    /** The same hook asked for `asked` instead. */
+    ask: (asked: ListStoreProductsInput) => {
+      view.rerender({ asked });
+    },
+    result: view.result,
+  };
 }
 
 describe("useProducts", () => {
-  test("reads the first page of the store's articles, with no cursor", async () => {
-    const { list, result } = setup();
+  test("reads the page asked for, sending the input as it is given", async () => {
+    const { list, result } = setup({
+      input: { locale: "en", page: 2, q: "aro", sort: "price" },
+    });
 
     await waitFor(() => {
-      expect(result.current.data?.pages).toEqual([FIRST_PAGE]);
+      expect(result.current.data).toEqual(makePage(2));
     });
-    expect(list).toHaveBeenCalledExactlyOnceWith({});
-    expect(result.current.hasNextPage).toBe(true);
+    expect(list).toHaveBeenCalledExactlyOnceWith({
+      locale: "en",
+      page: 2,
+      q: "aro",
+      sort: "price",
+    });
   });
 
-  test("asks for the next page from the last one's cursor, and stops at the end", async () => {
-    const { list, result } = setup();
+  test("keeps the last page on screen while another one loads", async () => {
+    const { ask, list, result } = setup();
     await waitFor(() => {
-      expect(result.current.hasNextPage).toBe(true);
+      expect(result.current.data).toEqual(makePage(1));
     });
 
-    await act(async () => {
-      await result.current.fetchNextPage();
-    });
+    ask({ locale: "es", page: 3 });
 
-    expect(list).toHaveBeenLastCalledWith({ cursor: CURSOR });
+    expect(result.current.data).toEqual(makePage(1));
+    expect(result.current.isPlaceholderData).toBe(true);
     await waitFor(() => {
-      expect(result.current.data?.pages).toEqual([FIRST_PAGE, LAST_PAGE]);
+      expect(result.current.data).toEqual(makePage(3));
     });
-    expect(result.current.hasNextPage).toBe(false);
+    expect(result.current.isPlaceholderData).toBe(false);
+    expect(list).toHaveBeenLastCalledWith({ locale: "es", page: 3 });
   });
 
-  test("files its pages under the list's key", async () => {
-    const { queryClient, result } = setup();
+  test("files every page under the prefix a save invalidates", async () => {
+    const { ask, queryClient, result } = setup();
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.data).toEqual(makePage(1));
+    });
+    ask({ locale: "es", page: 2, status: "draft" });
+    await waitFor(() => {
+      expect(result.current.data).toEqual(makePage(2));
     });
 
     expect(
@@ -98,7 +133,7 @@ describe("useProducts", () => {
         .getQueryCache()
         .findAll({ queryKey: productsKey() })
         .map((query) => query.state.data)
-    ).toEqual([{ pageParams: [undefined], pages: [FIRST_PAGE] }]);
+    ).toEqual([makePage(1), makePage(2)]);
   });
 
   test("fails with the server's code when the list is refused", async () => {

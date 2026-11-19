@@ -548,52 +548,559 @@ describe("the admin's reads", () => {
       message: "Article not found",
     });
   });
+});
 
-  test("list pages through drafts and published articles, newest change first, ties broken by id, never repeating one", async () => {
+/** A category of the store, named in Spanish (and English), in a group or not. */
+async function insertCategory({
+  nameEn,
+  nameEs,
+  parentId = null,
+  slug,
+  storeId,
+}: {
+  nameEn?: string;
+  nameEs: string;
+  parentId?: number | null;
+  slug: string;
+  storeId: number;
+}) {
+  const [row] = await db
+    .insert(category)
+    .values({ parentId, position: 0, slug, storeId })
+    .returning();
+
+  if (!row) {
+    throw new Error("no category");
+  }
+
+  created.categoryIds.push(row.id);
+  await db
+    .insert(categoryTranslation)
+    .values([
+      { categoryId: row.id, locale: "es" as const, name: nameEs },
+      ...(nameEn
+        ? [{ categoryId: row.id, locale: "en" as const, name: nameEn }]
+        : []),
+    ]);
+
+  return row;
+}
+
+/** A filter of the store with `values`, their ids by slug. */
+async function insertFilter(
+  slug: string,
+  values: readonly string[],
+  storeId: number
+) {
+  const [row] = await db
+    .insert(attribute)
+    .values({ position: 0, slug, storeId })
+    .returning();
+
+  if (!row) {
+    throw new Error("no filter");
+  }
+
+  created.attributeIds.push(row.id);
+  const rows = await db
+    .insert(attributeValue)
+    .values(
+      values.map((value, position) => ({
+        attributeId: row.id,
+        position,
+        slug: value,
+      }))
+    )
+    .returning({ id: attributeValue.id, slug: attributeValue.slug });
+  const idOf = (value: string) => {
+    const found = rows.find((one) => one.slug === value);
+
+    if (!found) {
+      throw new Error(`no value ${value}`);
+    }
+
+    return found.id;
+  };
+
+  return { idOf, slug: row.slug };
+}
+
+/** Sets each article's last change, so the default order is known. */
+async function changedAt(changes: readonly [number, string][]) {
+  for (const [id, at] of changes) {
+    await db
+      .update(product)
+      .set({ updatedAt: new Date(at) })
+      .where(eq(product.id, id));
+  }
+}
+
+describe("the admin's list (FER-019)", () => {
+  /**
+   * Three articles of this test, every title holding its tag: A published
+   * in a group's category, gold; B a draft, unavailable, in another of the
+   * group's categories, purple and small; C published in a category in no
+   * group, gold and small. Two filters of this test, color and size.
+   */
+  async function setupCatalog() {
+    const base = await setup();
+    const { create, storeId, tag } = base;
+    const group = await insertCategory({
+      nameEs: `Bijouterie ${tag}`,
+      slug: `bijouterie-${tag}`,
+      storeId,
+    });
+    const rings = await insertCategory({
+      nameEs: `Anillos ${tag}`,
+      parentId: group.id,
+      slug: `anillos-${tag}`,
+      storeId,
+    });
+    const earrings = await insertCategory({
+      nameEs: `Aros ${tag}`,
+      parentId: group.id,
+      slug: `aros-${tag}`,
+      storeId,
+    });
+    const color = await insertFilter(
+      `color-${tag}`,
+      ["dorado", "violeta"],
+      storeId
+    );
+    const size = await insertFilter(`talle-${tag}`, ["s", "m"], storeId);
+    const a = await create({
+      attributeValueIds: [color.idOf("dorado")],
+      categoryId: rings.id,
+      translations: [spanish(`Anillo A ${tag}`)],
+    });
+    const b = await create({
+      attributeValueIds: [color.idOf("violeta"), size.idOf("s")],
+      categoryId: earrings.id,
+      isAvailable: false,
+      translations: [spanish(`Aro B ${tag}`)],
+    });
+    const c = await create({
+      attributeValueIds: [color.idOf("dorado"), size.idOf("s")],
+      translations: [spanish(`Cadena C ${tag}`)],
+    });
+    await publishProduct(db, { id: a.id, storeId });
+    await publishProduct(db, { id: c.id, storeId });
+    await changedAt([
+      [a.id, "2999-01-03T00:00:00.000Z"],
+      [b.id, "2999-01-02T00:00:00.000Z"],
+      [c.id, "2999-01-01T00:00:00.000Z"],
+    ]);
+    const names = new Map([
+      [a.id, "A"],
+      [b.id, "B"],
+      [c.id, "C"],
+    ]);
+    const list = async (
+      options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
+    ) =>
+      await listStoreProducts(db, {
+        limit: 24,
+        locale: "es",
+        page: 1,
+        q: tag,
+        sort: "updated",
+        storeId,
+        ...options,
+      });
+    /** The page's articles by their letters, in its order. */
+    const listed = async (
+      options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
+    ) => (await list(options)).items.map((item) => names.get(item.id) ?? "?");
+
+    return { ...base, color, earrings, group, list, listed, rings, size };
+  }
+
+  test("searches the titles in either language, blind to case and accents", async () => {
     const { create, storeId, tag } = await setup();
-    const blank = await create({ images: [], translations: [spanish("")] });
-    const older = await create({ translations: [spanish(`Viejo ${tag}`)] });
-    const tied = await create({ translations: [spanish(`Empate ${tag}`)] });
-    await publishProduct(db, { id: tied.id, storeId });
-    // Later than anything else in the store, so these lead the list; two
-    // at the same instant, which only the id orders.
-    const later = new Date("2999-01-01T00:00:00.000Z");
-    await db
-      .update(product)
-      .set({ updatedAt: later })
-      .where(inArray(product.id, [blank.id, tied.id]));
-    await db
-      .update(product)
-      .set({ updatedAt: new Date("2998-01-01T00:00:00.000Z") })
-      .where(eq(product.id, older.id));
+    const rhea = await create({
+      translations: [
+        spanish(`Collar Ñandú ${tag}`),
+        english(`Rhea necklace ${tag}`),
+      ],
+    });
+    await create({ translations: [spanish(`Pulsera ${tag}`)] });
+    const search = async (q: string) =>
+      (
+        await listStoreProducts(db, {
+          limit: 24,
+          locale: "es",
+          page: 1,
+          q,
+          sort: "updated",
+          storeId,
+        })
+      ).items.map((item) => item.id);
 
-    const first = await listStoreProducts(db, { limit: 2, storeId });
-    const second = await listStoreProducts(db, {
-      cursor: first.nextCursor ?? undefined,
-      limit: 2,
+    expect(await search(`NANDU ${tag}`)).toEqual([rhea.id]);
+    expect(await search(`necklace ${tag}`)).toEqual([rhea.id]);
+    expect(await search(`collar ñandú ${tag}`)).toEqual([rhea.id]);
+  });
+
+  test("takes a search's wildcards literally", async () => {
+    const { create, storeId, tag } = await setup();
+    const literal = await create({
+      translations: [spanish(`50%_off ${tag}`)],
+    });
+    // What `50%_off` matches as a pattern: 50, anything, one character, off.
+    await create({ translations: [spanish(`50xyoff ${tag}`)] });
+    await create({ translations: [spanish(`50 off ${tag}`)] });
+    // One escape lost at a time: `%` as anything finds the first, `_` as
+    // any one character the second.
+    await create({ translations: [spanish(`50xy_off ${tag}`)] });
+    await create({ translations: [spanish(`50%Xoff ${tag}`)] });
+
+    const { items, total } = await listStoreProducts(db, {
+      limit: 24,
+      locale: "es",
+      page: 1,
+      q: `50%_off ${tag}`,
+      sort: "updated",
       storeId,
     });
 
-    const ids = blank.id > tied.id ? [blank.id, tied.id] : [tied.id, blank.id];
-    expect(first.items.map((item) => item.id)).toEqual(ids);
-    expect(first.nextCursor).toEqual({
-      id: ids[1],
-      updatedAt: "2999-01-01T00:00:00.000Z",
+    expect(items.map((item) => item.id)).toEqual([literal.id]);
+    expect(total).toBe(1);
+  });
+
+  test("lists every article of the search, drafts too, the latest change first", async () => {
+    const { listed } = await setupCatalog();
+
+    expect(await listed()).toEqual(["A", "B", "C"]);
+  });
+
+  test.each([
+    ["drafts", { status: "draft" }, ["B"]],
+    ["published", { status: "published" }, ["A", "C"]],
+    ["unavailable", { availability: "unavailable" }, ["B"]],
+    ["available", { availability: "available" }, ["A", "C"]],
+    [
+      "published and available",
+      { availability: "available", status: "published" },
+      ["A", "C"],
+    ],
+    [
+      "drafts and available",
+      { availability: "available", status: "draft" },
+      [],
+    ],
+  ] as const)("narrows to %s", async (_case, options, expected) => {
+    const { listed } = await setupCatalog();
+
+    expect(await listed(options)).toEqual(expected);
+  });
+
+  test("narrows to a category, to several, and to a group with every category in it", async () => {
+    const { earrings, group, listed, rings, tag } = await setupCatalog();
+
+    expect(await listed({ categories: [rings.slug] })).toEqual(["A"]);
+    expect(await listed({ categories: [rings.slug, earrings.slug] })).toEqual([
+      "A",
+      "B",
+    ]);
+    expect(await listed({ categories: [group.slug] })).toEqual(["A", "B"]);
+    expect(await listed({ categories: [`cadenas-${tag}`] })).toEqual(["C"]);
+  });
+
+  test("ignores a category the store does not have, alone or beside one it has", async () => {
+    const { listed, rings, tag } = await setupCatalog();
+
+    expect(await listed({ categories: [`relojes-${tag}`] })).toEqual([
+      "A",
+      "B",
+      "C",
+    ]);
+    expect(
+      await listed({ categories: [`relojes-${tag}`, rings.slug] })
+    ).toEqual(["A"]);
+  });
+
+  test("a filter's values are alternatives and different filters narrow each other", async () => {
+    const { color, listed, size } = await setupCatalog();
+
+    expect(
+      await listed({ filters: [{ attribute: color.slug, values: ["dorado"] }] })
+    ).toEqual(["A", "C"]);
+    expect(
+      await listed({
+        filters: [{ attribute: color.slug, values: ["dorado", "violeta"] }],
+      })
+    ).toEqual(["A", "B", "C"]);
+    expect(
+      await listed({
+        filters: [
+          { attribute: color.slug, values: ["dorado"] },
+          { attribute: size.slug, values: ["s"] },
+        ],
+      })
+    ).toEqual(["C"]);
+  });
+
+  test("combines a category, a filter, a status and the search", async () => {
+    const {
+      category: chains,
+      color,
+      create,
+      group,
+      listed,
+      rings,
+      tag,
+    } = await setupCatalog();
+    // Drafts that only one of the four leaves out, each read as "?": outside
+    // the group, without the search's tag, of another color.
+    await create({
+      attributeValueIds: [color.idOf("violeta")],
+      categoryId: chains.id,
+      translations: [spanish(`Fuera del grupo ${tag}`)],
     });
-    expect(second.items[0]?.id).toBe(older.id);
-    // Whatever else of the store follows, never an article of page one.
-    const firstIds = new Set(first.items.map((item) => item.id));
-    expect(second.items.filter((item) => firstIds.has(item.id))).toEqual([]);
-    expect(first.items.find((item) => item.id === blank.id)).toMatchObject({
-      cover: null,
-      status: "draft",
-      title: null,
+    await create({
+      attributeValueIds: [color.idOf("violeta")],
+      categoryId: rings.id,
+      translations: [spanish("Sin la etiqueta")],
     });
-    expect(first.items.find((item) => item.id === tied.id)).toMatchObject({
-      status: "published",
-      title: `Empate ${tag}`,
-      titleLang: "es",
+    await create({
+      attributeValueIds: [color.idOf("dorado")],
+      categoryId: rings.id,
+      translations: [spanish(`Otro color ${tag}`)],
     });
+
+    expect(
+      await listed({
+        categories: [group.slug],
+        filters: [{ attribute: color.slug, values: ["violeta"] }],
+        status: "draft",
+      })
+    ).toEqual(["B"]);
+    expect(
+      await listed({
+        categories: [group.slug],
+        filters: [{ attribute: color.slug, values: ["violeta"] }],
+        status: "published",
+      })
+    ).toEqual([]);
+  });
+
+  test("pages through the matches: the count, the pages, the last and one past it", async () => {
+    const { list, listed } = await setupCatalog();
+
+    await expect(list({ limit: 2 })).resolves.toMatchObject({
+      limit: 2,
+      page: 1,
+      pageCount: 2,
+      total: 3,
+      totalCapped: false,
+    });
+    expect(await listed({ limit: 2 })).toEqual(["A", "B"]);
+    expect(await listed({ limit: 2, page: 2 })).toEqual(["C"]);
+    await expect(list({ limit: 2, page: 3 })).resolves.toMatchObject({
+      items: [],
+      pageCount: 2,
+      total: 3,
+    });
+    await expect(list({ limit: 3 })).resolves.toMatchObject({ pageCount: 1 });
+    await expect(
+      list({ status: "draft", availability: "available" })
+    ).resolves.toMatchObject({
+      items: [],
+      pageCount: 0,
+      total: 0,
+    });
+  });
+
+  test("breaks a tie by the id, so pages of unchanged matches never repeat or skip an article", async () => {
+    const { create, storeId, tag } = await setup();
+    const ids: number[] = [];
+
+    for (const letter of ["a", "b", "c", "d", "e"]) {
+      ids.push(
+        (await create({ translations: [spanish(`${letter} ${tag}`)] })).id
+      );
+    }
+
+    await changedAt(ids.map((id) => [id, "2999-01-01T00:00:00.000Z"]));
+    const pageOf = async (page: number) =>
+      (
+        await listStoreProducts(db, {
+          limit: 2,
+          locale: "es",
+          page,
+          q: tag,
+          sort: "updated",
+          storeId,
+        })
+      ).items.map((item) => item.id);
+
+    const newestFirst = [...ids];
+    newestFirst.sort((x, y) => y - x);
+
+    expect([
+      ...(await pageOf(1)),
+      ...(await pageOf(2)),
+      ...(await pageOf(3)),
+    ]).toEqual(newestFirst);
+  });
+});
+
+describe("the admin's list order (FER-019)", () => {
+  /**
+   * Three articles of this test, found by a filter value of their own: T1
+   * "Ábaco", $300, in "Cadenas", published; T2 "banana" (English
+   * "Aardvark", which sorts before "Ábaco" where "banana" sorts after),
+   * $100, in "Anillos" ("Rings"), a draft; T3 a blank draft without a price
+   * or a category. Changed T1, T3, T2, the latest first.
+   */
+  async function setupOrder() {
+    const { category: chains, create, storeId, tag } = await setup();
+    const rings = await insertCategory({
+      nameEn: "Rings",
+      nameEs: "Anillos",
+      slug: `anillos-${tag}`,
+      storeId,
+    });
+    const own = await insertFilter(`propio-${tag}`, ["si"], storeId);
+    const mine = [own.idOf("si")];
+    // `setup`'s category is "Cadenas <tag>", which sorts after "Anillos".
+    const t1 = await create({
+      attributeValueIds: mine,
+      categoryId: chains.id,
+      priceAmount: 30_000,
+      translations: [spanish("Ábaco")],
+    });
+    const t2 = await create({
+      attributeValueIds: mine,
+      categoryId: rings.id,
+      priceAmount: 10_000,
+      translations: [spanish("banana"), english("Aardvark")],
+    });
+    const t3 = await create({
+      attributeValueIds: mine,
+      categoryId: null,
+      images: [],
+      priceAmount: null,
+      translations: [spanish("")],
+    });
+    await publishProduct(db, { id: t1.id, storeId });
+    await changedAt([
+      [t1.id, "2999-01-03T00:00:00.000Z"],
+      [t2.id, "2999-01-01T00:00:00.000Z"],
+      [t3.id, "2999-01-02T00:00:00.000Z"],
+    ]);
+    const names = new Map([
+      [t1.id, "T1"],
+      [t2.id, "T2"],
+      [t3.id, "T3"],
+    ]);
+    const listed = async (
+      options: Partial<Parameters<typeof listStoreProducts>[1]> = {}
+    ) =>
+      (
+        await listStoreProducts(db, {
+          filters: [{ attribute: own.slug, values: ["si"] }],
+          limit: 24,
+          locale: "es",
+          page: 1,
+          sort: "updated",
+          storeId,
+          ...options,
+        })
+      ).items.map((item) => names.get(item.id) ?? "?");
+    // Both drafts tie on the status: the id decides, the same way.
+    const drafts = t2.id < t3.id ? ["T2", "T3"] : ["T3", "T2"];
+
+    return { drafts, listed };
+  }
+
+  test.each([
+    ["updated", "desc", "es", ["T1", "T3", "T2"]],
+    ["updated", "asc", "es", ["T2", "T3", "T1"]],
+    ["title", "asc", "es", ["T1", "T2", "T3"]],
+    ["title", "desc", "es", ["T2", "T1", "T3"]],
+    ["title", "asc", "en", ["T2", "T1", "T3"]],
+    ["price", "asc", "es", ["T2", "T1", "T3"]],
+    ["price", "desc", "es", ["T1", "T2", "T3"]],
+    ["category", "asc", "es", ["T2", "T1", "T3"]],
+    ["category", "desc", "es", ["T1", "T2", "T3"]],
+    // In English "Rings" sorts after "Cadenas", which has no English name.
+    ["category", "asc", "en", ["T1", "T2", "T3"]],
+    ["category", "desc", "en", ["T2", "T1", "T3"]],
+  ] as const)(
+    "sorts by %s %s in %s, an article without the key last",
+    async (sort, dir, locale, expected) => {
+      const { listed } = await setupOrder();
+
+      expect(await listed({ dir, locale, sort })).toEqual(expected);
+    }
+  );
+
+  test("sorts the title in English by the English one, else the Spanish one", async () => {
+    const { listed } = await setupOrder();
+
+    // T2 is "Aardvark" in English: before "Ábaco", where "banana" is after.
+    expect(await listed({ dir: "desc", locale: "en", sort: "title" })).toEqual([
+      "T1",
+      "T2",
+      "T3",
+    ]);
+  });
+
+  test("a title of whitespace alone is blank to the sort, as to the row: the next language's decides", async () => {
+    const { create, storeId, tag } = await setup();
+    const own = await insertFilter(`propio-${tag}`, ["si"], storeId);
+    // "Zorro" in English is a tab: the row shows "Zorro", and so it sorts.
+    const fox = await create({
+      attributeValueIds: [own.idOf("si")],
+      translations: [spanish("Zorro"), english("\t\n")],
+    });
+    const donkey = await create({
+      attributeValueIds: [own.idOf("si")],
+      translations: [spanish("Burro"), english("Donkey")],
+    });
+
+    const page = await listStoreProducts(db, {
+      filters: [{ attribute: own.slug, values: ["si"] }],
+      limit: 24,
+      locale: "en",
+      page: 1,
+      sort: "title",
+      storeId,
+    });
+
+    expect(
+      page.items.map((item) => [item.id, item.title, item.titleLang])
+    ).toEqual([
+      [donkey.id, "Donkey", "en"],
+      [fox.id, "Zorro", "es"],
+    ]);
+  });
+
+  test.each([
+    ["asc", "drafts first"],
+    ["desc", "published first"],
+  ] as const)(
+    "sorts by status %s, %s, ties broken by the id",
+    async (dir, _order) => {
+      const { drafts, listed } = await setupOrder();
+      const reversed = [...drafts];
+      reversed.reverse();
+
+      expect(await listed({ dir, sort: "status" })).toEqual(
+        dir === "asc" ? [...drafts, "T1"] : ["T1", ...reversed]
+      );
+    }
+  );
+
+  test("sorts before it pages, and narrows before it sorts", async () => {
+    const { listed } = await setupOrder();
+
+    expect(await listed({ limit: 1, page: 2, sort: "price" })).toEqual(["T1"]);
+    expect(
+      await listed({ limit: 1, page: 1, sort: "price", status: "published" })
+    ).toEqual(["T1"]);
+    expect(await listed({ limit: 2, page: 2, sort: "title" })).toEqual(["T3"]);
   });
 });
 

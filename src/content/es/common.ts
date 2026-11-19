@@ -16,6 +16,17 @@ export const common = {
   moreActions: "Más acciones",
   moreActionsForRow: "Más acciones: {row}",
   notifications: "Notificaciones",
+  // A list's numbered pages (`molecules/pagination`).
+  pagination: {
+    ellipsis: "Más páginas",
+    label: "Páginas",
+    next: "Siguiente",
+    nextPage: "Página siguiente",
+    page: "Página {page}",
+    pageOf: "Página {page} de {count}",
+    previous: "Anterior",
+    previousPage: "Página anterior",
+  },
   numberInput: {
     decimal: "Este campo no lleva decimales.",
     unreadable:

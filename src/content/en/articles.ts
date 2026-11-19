@@ -7,25 +7,108 @@ export const articles: Dictionary["articles"] = {
       available: "Available",
       unavailable: "Not available",
     },
+    chips: {
+      clearAll: "Clear all",
+      label: "Active filters",
+      remove: "Remove filter: {filter}",
+      value: "{filter}: {value}",
+    },
     columns: {
       article: "Article",
       category: "Category",
+      photo: "Photo",
       price: "Price",
       status: "Status",
+      updated: "Updated",
     },
+    count: "{count} articles",
+    countCapped: "Over {count} articles",
+    countOne: "1 article",
     empty:
       "No articles yet. Start with the photos: it is published in a minute.",
+    emptyPage: {
+      message: "There are no articles on this page.",
+      first: "Go to the first page",
+    },
     errors: {
       load: "We couldn't load the articles.",
-      loadMore: "We couldn't load more articles.",
+    },
+    filters: {
+      all: "All",
+      apply: "Apply",
+      availability: "Availability",
+      button: "Filters",
+      buttonActive: "Filters, {count} active",
+      buttonActiveOne: "Filters, 1 active",
+      categoriesFailed: "We couldn't load the categories.",
+      category: "Category",
+      clear: "Clear",
+      close: "Close filters",
+      description:
+        "Choose which articles to see. The list changes when you tap Apply.",
+      limitCategories:
+        "Up to {count} categories at once: remove one to choose another.",
+      limitFilters:
+        "Up to {count} filters at once: clear another to use this one.",
+      limitValues:
+        "Up to {count} values per filter: remove one to choose another.",
+      matches: "{count} articles match",
+      matchesCapped: "Over {count} articles match",
+      matchesNone: "No article matches",
+      matchesOne: "1 article matches",
+      matchesUnavailable:
+        "We couldn't count the articles. You can still apply the filters.",
+      noCategories: "There are no categories yet.",
+      status: "Status",
+      title: "Filters",
     },
     label: "Store articles",
-    loadMore: "Load more",
-    loadingMore: "Loading…",
     new: "New article",
+    noMatches: {
+      clear: "Clear search and filters",
+      message: "No article matches the search or the filters.",
+    },
     noCategory: "No category",
     noPhoto: "No photo",
     noPrice: "No price",
+    pages: {
+      range: "{from}–{to} of {total}",
+      rangeCapped: "{from}–{to} of over {total}",
+      showing: "Showing {from}–{to} of {total} articles",
+      showingCapped: "Showing {from}–{to} of over {total} articles",
+    },
+    search: {
+      clear: "Clear the search",
+      label: "Search articles",
+      placeholder: "Search by title…",
+    },
+    sort: {
+      apply: "Sort: {option}",
+      button: "Sort",
+      current: "Current order: {option}",
+      options: {
+        category: {
+          asc: "Category, A to Z",
+          desc: "Category, Z to A",
+        },
+        price: {
+          asc: "Price, low to high",
+          desc: "Price, high to low",
+        },
+        status: {
+          asc: "Status, drafts first",
+          desc: "Status, published first",
+        },
+        title: {
+          asc: "Article, A to Z",
+          desc: "Article, Z to A",
+        },
+        updated: {
+          asc: "Updated, oldest first",
+          desc: "Updated, newest first",
+        },
+      },
+    },
     status: {
       draft: "Draft",
       published: "Published",

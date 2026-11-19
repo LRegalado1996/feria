@@ -349,31 +349,91 @@ export type ProductFormValues = z.infer<
 >;
 
 /**
- * The keyset cursor of the admin's article list: the last row's `updatedAt`
- * and id, the whole of the list's order.
+ * The columns the admin's article list sorts by (FER-019): the last change
+ * (the default), the title and the category's name in the page's language,
+ * the price and the status.
  */
-export const storeProductCursorSchema = z.object({
-  id: idSchema,
-  // Postgres has no year 0, so a cursor from it would fail in the database.
-  updatedAt: z.iso
-    .datetime({ offset: true })
-    .refine((value) => !value.startsWith("0000"), {
-      message: "Not a date a row can have",
-    }),
-});
+export const STORE_PRODUCT_SORTS = [
+  "updated",
+  "title",
+  "category",
+  "price",
+  "status",
+] as const;
 
-export type StoreProductCursor = z.infer<typeof storeProductCursorSchema>;
+export type StoreProductSort = (typeof STORE_PRODUCT_SORTS)[number];
 
-/** The admin's articles (FER-017), drafts and published, a page at a time. */
+export const SORT_DIRECTIONS = ["asc", "desc"] as const;
+
+export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+/** The order the admin's list opens in: the most recent change first. */
+export const DEFAULT_STORE_PRODUCT_SORT: StoreProductSort = "updated";
+
+/**
+ * Each column's first direction, what a sort without `dir` means: the most
+ * recent change first, A to Z, the cheapest first, drafts first.
+ */
+export const STORE_PRODUCT_SORT_DIRECTIONS = {
+  category: "asc",
+  price: "asc",
+  status: "asc",
+  title: "asc",
+  updated: "desc",
+} as const satisfies Record<StoreProductSort, SortDirection>;
+
+/** Whether an article can be bought, as the admin's list filters it. */
+export const PRODUCT_AVAILABILITIES = ["available", "unavailable"] as const;
+
+export type ProductAvailability = (typeof PRODUCT_AVAILABILITIES)[number];
+
+/**
+ * How far the admin's list counts its matches (`docs/agents/database.md`:
+ * count capped): past it, the total reads "10.000+" and the pages stop at
+ * `ceil(cap / limit)`, so the service answers a page past that one with no
+ * rows, like any page past the last. It bounds the page number too: at one
+ * row a page, the cap is the last page there can be.
+ */
+export const STORE_PRODUCTS_COUNT_CAP = 10_000;
+
+/**
+ * The admin's articles (FER-017, FER-019), drafts and published, one
+ * numbered page at a time (Lucas chose numbered pages over endless scrolling,
+ * 2026-11-18), searched by title, narrowed by status, availability,
+ * categories (a group's slug stands for all of it) and the store's filters,
+ * sorted by a column. Unknown category, filter or value slugs are ignored,
+ * as the storefront ignores them: an old bookmark filters less, never fails.
+ * `locale` is the page's language, which the title and the category sort by.
+ */
 export const listStoreProductsSchema = z.object({
-  cursor: storeProductCursorSchema.optional(),
+  availability: z.enum(PRODUCT_AVAILABILITIES).optional(),
+  categories: z
+    .array(catalogSlugSchema)
+    .max(CATALOG_FILTER_VALUES_MAX)
+    .optional(),
+  dir: z.enum(SORT_DIRECTIONS).optional(),
+  filters: catalogFiltersSchema.optional(),
   limit: z.coerce
     .number()
     .int()
     .min(1)
     .max(PRODUCTS_PAGE_SIZE_MAX)
     .default(PRODUCTS_PAGE_SIZE),
+  locale: localeSchema,
+  page: z.coerce.number().int().min(1).max(STORE_PRODUCTS_COUNT_CAP).default(1),
+  // Blank is no search, not a search for nothing.
+  q: z
+    .string()
+    .trim()
+    .max(SEARCH_MAX_LENGTH)
+    .transform((value) => (value === "" ? undefined : value))
+    .optional(),
+  sort: z.enum(STORE_PRODUCT_SORTS).default(DEFAULT_STORE_PRODUCT_SORT),
+  status: z.enum(PRODUCT_STATUSES).optional(),
 });
+
+export type ListStoreProductsInput = z.input<typeof listStoreProductsSchema>;
+export type ListStoreProductsValues = z.infer<typeof listStoreProductsSchema>;
 
 export type ListProductsValues = z.infer<typeof listProductsSchema>;
 export type ProductCursor = z.infer<typeof productCursorSchema>;
