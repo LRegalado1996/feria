@@ -22,6 +22,14 @@ export class StorePage extends BasePage {
     return this.getByTestId("store-home").filter({ visible: true }).first();
   }
 
+  /**
+   * The strip a signed-in admin sees over the store while it is closed to
+   * the public (FER-034).
+   */
+  getPreviewNotice(): Locator {
+    return this.getByTestId("store-preview-notice").filter({ visible: true });
+  }
+
   /** The canvas every store page is painted on, in the theme's background. */
   getTheme(): Locator {
     return this.getByTestId("store-theme");

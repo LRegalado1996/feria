@@ -6,7 +6,7 @@ export {
   STORE_SETTINGS,
   STORE_TEXTS,
 } from "./store-settings";
-export type { StoreEdit } from "./store.fixture";
+export type { ComingSoonEdit, StoreEdit } from "./store.fixture";
 // `test` comes from the last link of the chain (user → db → store), so a
 // spec that imports it gets every fixture.
 export { test } from "./store.fixture";

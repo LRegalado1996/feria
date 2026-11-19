@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 import { useId } from "react";
 import { toast } from "sonner";
 
@@ -7,8 +9,9 @@ import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { AdminPage } from "@/app/_components/molecules/admin-page";
 import { SettingsForm } from "@/app/_components/molecules/settings-form";
+import { comingSoonAdminPath } from "@/lib/coming-soon/paths";
 import { reportError } from "@/lib/errors/client";
-import { useDictionary } from "@/lib/hooks/i18n";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useStoreSettings, useUpdateStoreSettings } from "@/lib/hooks/store";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 
@@ -26,7 +29,9 @@ const SKELETON_CARDS = [
  * leaves the form as it was typed.
  */
 function SettingsManager() {
-  const { admin, common } = useDictionary();
+  const { admin, comingSoon, common } = useDictionary();
+  const locale = useLocale();
+  const comingSoonHeadingId = useId();
   const copy = admin.settings;
   const settings = useStoreSettings();
   const update = useUpdateStoreSettings();
@@ -53,6 +58,28 @@ function SettingsManager() {
         title={copy.title}
       >
         <p className="text-sm text-muted-foreground">{copy.description}</p>
+        {/* The coming-soon page's own screen (FER-034) lives under the
+            settings: a section of its own would not fit a phone's menu. */}
+        <section
+          aria-labelledby={comingSoonHeadingId}
+          className="flex min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 text-card-foreground sm:flex-row sm:items-center sm:justify-between md:p-5"
+          data-testid="settings-coming-soon"
+        >
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold" id={comingSoonHeadingId}>
+              {comingSoon.settingsCard.title}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {comingSoon.settingsCard.description}
+            </p>
+          </div>
+          <Button asChild className="w-full sm:w-auto" variant="outline">
+            <Link href={comingSoonAdminPath(locale)}>
+              {comingSoon.settingsCard.link}
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        </section>
         {settings.isPending ? (
           <div
             aria-busy="true"

@@ -24,7 +24,7 @@ The store is live on its own domain and has been checked the way a stranger with
   - Database backups and point-in-time restore confirmed in Neon.
   - AI Gateway spend limit set.
   - Seed and test accounts absent from production.
-- Launch itself: set `STOREFRONT_LAUNCHED` on in production and redeploy, replacing the coming-soon page (FER-034) with the store.
+- Launch itself: take the coming-soon page down from the admin (`/admin/settings/coming-soon`, FER-034), which opens the store to the public within seconds; no deploy.
 - Generate the final QR code for the print pieces in FER-007.
 
 ## Acceptance criteria

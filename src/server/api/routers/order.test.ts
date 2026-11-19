@@ -33,7 +33,9 @@ const services = vi.hoisted(() => ({
   getOrderByToken: vi.fn(async () => ({ code: "ABCDE" })),
   // Vercel BotID's verdict; its own rules are `utils/bot-check.test.ts`'s.
   isBotRequest: vi.fn<() => Promise<boolean>>(),
-  isStorefrontLaunchedFor: vi.fn(),
+  // Whether the request is a signed-in admin's; its own rules are
+  // `better-auth/admin-request.test.ts`'s.
+  isAdminRequest: vi.fn<(headers: Headers) => Promise<boolean>>(),
   listOrders: vi.fn(async () => ({ items: [{ id: 70 }], nextCursor: null })),
   // The request's wide-event logger: `set` is what lands on its log line.
   logSet: vi.fn<(fields: unknown) => void>(),
@@ -43,6 +45,8 @@ const services = vi.hoisted(() => ({
     const ip = headers.get("x-real-ip");
     return ip === null ? null : `key-of:${ip}`;
   }),
+  // The coming-soon switch as the cache reads it (FER-034).
+  readComingSoon: vi.fn<() => Promise<{ published: boolean }>>(),
   withAdmin: vi.fn(
     async (
       _db: unknown,
@@ -77,9 +81,12 @@ vi.mock("@/server/api/utils/logger", () => ({
   safeRequestLogger: () => ({ set: services.logSet }),
 }));
 
-vi.mock("@/lib/env/launch", () => ({
-  isStorefrontLaunchedFor: services.isStorefrontLaunchedFor,
-  LAUNCH_OVERRIDE_HEADER: "x-e2e-storefront-launched",
+vi.mock("@/server/cache/coming-soon", () => ({
+  readComingSoon: services.readComingSoon,
+}));
+
+vi.mock("@/server/better-auth/admin-request", () => ({
+  isAdminRequest: services.isAdminRequest,
 }));
 
 vi.mock("@/server/services/access", () => ({
@@ -118,6 +125,7 @@ function makeOrderInput(overrides: Record<string, unknown> = {}) {
  * row there unless told not.
  */
 function setup({
+  adminRequest = false,
   bot = false,
   headers = {},
   launched = true,
@@ -125,6 +133,8 @@ function setup({
   signedIn = false,
   storeExists = true,
 }: {
+  /** Whether the server vouches for the request as a signed-in admin's. */
+  adminRequest?: boolean;
   bot?: boolean;
   headers?: Record<string, string>;
   launched?: boolean;
@@ -136,7 +146,8 @@ function setup({
     ? createMockContext()
     : createUnauthenticatedMockContext();
   mockCtx.headers = new Headers(headers);
-  services.isStorefrontLaunchedFor.mockReturnValue(launched);
+  services.readComingSoon.mockResolvedValue({ published: !launched });
+  services.isAdminRequest.mockResolvedValue(adminRequest);
   services.isBotRequest.mockResolvedValue(bot);
   services.findAdminStore.mockResolvedValue(isLogin ? STORE : null);
   services.getStore.mockImplementation(async () => {
@@ -184,19 +195,16 @@ const STORE_NOT_FOUND = { code: "NOT_FOUND", message: "Store not found" };
 describe("order router: the shopper's side", () => {
   test("creates the order in the store, its currency and client key from the server", async () => {
     const { ctx, db, run } = setup({
-      headers: {
-        "x-e2e-storefront-launched": "true",
-        "x-real-ip": "203.0.113.7",
-      },
+      headers: { "x-real-ip": "203.0.113.7" },
     });
 
     await expect(
       run("create", makeOrderInput({ items: [{ productId: 11, quantity: 2 }] }))
     ).resolves.toEqual({ code: "ABCDE", token: "the-token" });
 
-    expect(services.isStorefrontLaunchedFor).toHaveBeenCalledExactlyOnceWith(
-      "true"
-    );
+    expect(services.readComingSoon).toHaveBeenCalledExactlyOnceWith();
+    // Open, nobody's session is looked up.
+    expect(services.isAdminRequest).not.toHaveBeenCalled();
     expect(services.getStore).toHaveBeenCalledExactlyOnceWith(db);
     expect(services.orderClientKey).toHaveBeenCalledExactlyOnceWith(
       ctx.headers
@@ -233,9 +241,7 @@ describe("order router: the shopper's side", () => {
   ])(
     "refuses a request carrying %s as tampered, before reading anything",
     async (_what, forged) => {
-      const { run } = setup({
-        headers: { "x-e2e-storefront-launched": "true" },
-      });
+      const { run } = setup();
 
       await expect(run("create", makeOrderInput(forged))).rejects.toMatchObject(
         { code: "BAD_REQUEST" }
@@ -250,9 +256,6 @@ describe("order router: the shopper's side", () => {
 
     await run("create", makeOrderInput());
 
-    expect(services.isStorefrontLaunchedFor).toHaveBeenCalledExactlyOnceWith(
-      null
-    );
     expect(services.createOrder).toHaveBeenCalledExactlyOnceWith(
       db,
       expect.objectContaining({ clientKey: null })
@@ -261,16 +264,36 @@ describe("order router: the shopper's side", () => {
     expect(orderLogFields()).toEqual([{ order: { clientLimit: "skipped" } }]);
   });
 
-  test("a closed storefront takes no order, before reading the login", async () => {
-    const { run } = setup({ launched: false });
+  test("a closed storefront takes no order from the public, before reading the store", async () => {
+    const { ctx, run } = setup({
+      headers: { "x-real-ip": "203.0.113.7" },
+      launched: false,
+    });
 
     await expect(run("create", makeOrderInput())).rejects.toMatchObject(
       STORE_NOT_FOUND
+    );
+    // The server, not the request, says whether it is an admin's.
+    expect(services.isAdminRequest).toHaveBeenCalledExactlyOnceWith(
+      ctx.headers
     );
     expect(services.getStore).not.toHaveBeenCalled();
     expect(services.createOrder).not.toHaveBeenCalled();
     // Closed answers the same to everyone: no bot check is spent on it.
     expect(services.isBotRequest).not.toHaveBeenCalled();
+  });
+
+  test("a closed storefront takes an order from a signed-in admin trying it out", async () => {
+    const { db, run } = setup({ adminRequest: true, launched: false });
+
+    await expect(run("create", makeOrderInput())).resolves.toEqual({
+      code: "ABCDE",
+      token: "the-token",
+    });
+    expect(services.createOrder).toHaveBeenCalledExactlyOnceWith(
+      db,
+      expect.objectContaining({ storeId: 7 })
+    );
   });
 
   test("refuses an order BotID judges a bot's, before reading the store or anything else", async () => {

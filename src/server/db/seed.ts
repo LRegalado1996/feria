@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { type AccountAuth, createAccount } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
 import { user } from "@/server/db/schema";
+import { addComingSoonIfMissing } from "@/server/services/coming-soon";
 import { addMissingStoreTexts, findStore } from "@/server/services/store";
 
 import { seedCatalog, seedCatalogPages } from "./seed-catalog";
@@ -104,7 +105,8 @@ async function ensureAccount(
 }
 
 /**
- * Development data: the store's texts and its sample catalog, and on a local
+ * Development data: the store's texts, its sample catalog and an open store
+ * (the coming-soon page unpublished), and on a local
  * database a login that can sign in. Safe to run again: whatever already
  * exists is left alone.
  */
@@ -131,6 +133,12 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
     storeId: store.id,
     translations: SEED_STORE_TEXTS,
   });
+  // A fresh database is closed behind the coming-soon page (FER-034); local
+  // work and the e2e see the store. A choice already made is left alone.
+  const openedStore = await addComingSoonIfMissing(db, {
+    published: false,
+    storeId: store.id,
+  });
   // In one transaction: a seed that fails half-way leaves no half catalog,
   // and the next run (which skips a store that has categories) starts over.
   // The catalog's pages (FER-043) come after it, and also reach a catalog
@@ -151,5 +159,6 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
     createdArticles,
     createdStoreTexts,
     home,
+    openedStore,
   };
 }

@@ -22,7 +22,7 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 - **Hiding a control is not authorization.** The server checks with the same predicate the UI uses, on every path to the capability (list, detail, export, batch) and on reads too: a figure hidden in the UI is still in the payload.
 - **Re-derive a role that gates a mutation inside the write transaction,** under a row lock (resolve → lock → commit in `docs/agents/database.md`): the role in the request context is a snapshot.
 - **Public URLs carry an opaque random token** in its own unique column, never a sequential id. Rotate it when the link is re-sent.
-- `src/proxy.ts` stamps request ids on `/api`. If it ever redirects, it does so on session-cookie presence only, with a 307; pages and procedures do the real checks.
+- `src/proxy.ts` stamps request ids on `/api`, and makes one access decision: whether a page request may see the store while the coming-soon page is published (FER-034, `docs/agents/nextjs.md` § Proxy). That decision rests on a session the proxy validates itself (`isAdminRequest`, `src/server/better-auth/admin-request.ts`: the token looked up in the database past the cookie cache, the login re-read), never on a cookie's presence, and fails closed (a failed check is no admin; an unreadable switch is closed). The cookie it sets for the admin's notice (`lr-store-preview`) only draws that notice and grants nothing. Every other check is per page and per procedure, and the admin and the API are never behind the switch.
 - Test authorization by calling the procedure as a less-privileged user. A missing ownership check found in review is fixed in the same PR.
 
 ## Uploads (FER-011)
@@ -35,7 +35,7 @@ Detail behind `AGENTS.md` § Safety and permissions. Read it before you add a pr
 ## Scheduled jobs
 
 - **A cron route checks `CRON_SECRET` itself.** Vercel calls each `crons` path of `vercel.json` with `Authorization: Bearer <CRON_SECRET>`; the route compares it in constant time (`isCronRequest`, `src/server/api/utils/cron.ts`) and answers 401 otherwise. With no secret configured it answers 503 and does nothing: it never runs open. The production build refuses to start without the secret (`src/env.js`), since production is where Vercel runs crons.
-- **A cron route is outside the proxy's language and launch rules** (it lives under `/api`), and lives in `src/app/api/cron/<job>/route.ts`, wrapped in `withEvlog`: its log line carries the job, the outcome and counts, never a file name or a row.
+- **A cron route is outside the proxy's language and coming-soon rules** (it lives under `/api`), and lives in `src/app/api/cron/<job>/route.ts`, wrapped in `withEvlog`: its log line carries the job, the outcome and counts, never a file name or a row.
 
 ## Encode for every sink
 
@@ -72,7 +72,7 @@ Some SDKs return `{ error }` instead of throwing (Resend's `emails.send`): wrap 
 - **Never one bucket for unknown clients:** one client could lock everyone out. Key by the holder of the secret, and take the IP from the platform (`ipAddress()` from `@vercel/functions`), never a raw `x-forwarded-for`.
 - Security limiters fail closed; failing open on a store outage is for low-risk paths only, and logged.
 - **The one switch that turns Better Auth's limiter off** is `E2E_DISABLE_AUTH_RATE_LIMIT=true`, set only in Playwright's `webServer.env` and ignored when `VERCEL_ENV` is `production` (`isAuthRateLimitDisabled` in `src/server/better-auth/config.ts`). Never set it on a deploy.
-- **The launch switch has one test-only override**, guarded the same way: `E2E_STOREFRONT_LAUNCH_OVERRIDE=true` lets the `x-e2e-storefront-launched` request header open or close the store for that request (`isStorefrontLaunchedFor` in `src/lib/env/launch.ts`). It is set only in Playwright's `webServer.env` and ignored when `VERCEL_ENV` is `production`: there a visitor's header can never open the store. The switch hides pages, it authorizes nothing: the API and the admin are reachable while the store is closed and check the session themselves.
+- **The coming-soon switch has no test-only override** (FER-034): it is a row in the database, flipped only by `comingSoon.setPublished`, an `adminProcedure`, and e2e drives that same procedure and the admin's screen (`src/e2e/AGENTS.md`). No header, variable or cookie a visitor sends can open the closed store. The switch hides pages, it authorizes nothing: the API and the admin are reachable while the store is closed and check the session themselves; `order.create` refuses a closed store's orders but an admin's.
 
 ## Secrets
 

@@ -76,7 +76,7 @@ You need Docker (Docker Desktop or OrbStack), the Node version in [`.nvmrc`](.nv
 
 ```bash
 pnpm wt:provision   # installs dependencies and writes this worktree's .env; starts no containers
-pnpm db:seed        # starts this worktree's Postgres, migrates it (which creates the store, LR Market), adds its texts, the sample catalog (Burbujeros, then Bijouterie with its four categories, 49 articles and a Color filter) and one login: test@example.com, password123
+pnpm db:seed        # starts this worktree's Postgres, migrates it (which creates the store, LR Market), adds its texts, the sample catalog (Burbujeros, then Bijouterie with its four categories, 49 articles and a Color filter), opens the store (the coming-soon page unpublished) and one login: test@example.com, password123
 pnpm db:create-superadmin  # the first login of a fresh database (qa, production): reads SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD, refused once any login exists
 pnpm dev            # next dev on this worktree's own port
 pnpm wt:ports       # prints that port, the Postgres port and the app URL (it is not 3000)
@@ -202,8 +202,7 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
    | `NEXT_PUBLIC_SENTRY_DSN`                    | the `feria` project's     | the same DSN              | not set            | not set                         |
    | `SENTRY_ORG`, `SENTRY_PROJECT`              | `pepe-sas-uy`, `feria`    | the same                  | not set            | not set                         |
    | `SENTRY_AUTH_TOKEN`                         | one token                 | the same token            | set, unused        | not set                         |
-   | `STOREFRONT_LAUNCHED`                       | not set until launch day  | not set                   | not set            | not set                         |
-   - `STOREFRONT_LAUNCHED` is the launch switch: unset, production sends every storefront address to the coming-soon page and every other environment is open. Launch is setting it to `true` in Production and redeploying.
+   - The coming-soon page is not a variable: an admin publishes it or takes it down from the admin (`/admin/settings/coming-soon`, FER-034). A database that has never been seeded keeps the store closed until then, so production and QA open the store from their own admin; `pnpm db:seed` opens a local one.
    - Why production and QA read a dedicated database variable: [`docs/agents/database.md`](docs/agents/database.md) § Preview databases. Previews must never share a real database: the Neon integration gives each preview deployment its own branch of `feria-db-qa`, and a preview is deployed only for a PR labeled `deploy:preview`.
    - Sentry (project `feria` in the `pepe-sas-uy` organization) reports production as `production` and QA as `qa`. A pull request's preview has no DSN and never reports, so a closed branch cannot leave an issue open ([`docs/agents/observability.md`](docs/agents/observability.md) § Sentry). `SENTRY_AUTH_TOKEN` only uploads source maps during the build.
    - Vercel AI Gateway needs no variable on a deployment: it authenticates with the OIDC token Vercel injects. The project has a budget of USD 5 per month (`vercel ai-gateway budgets list`); at the limit the calls stop until the next month.

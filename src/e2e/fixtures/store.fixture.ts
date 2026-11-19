@@ -1,8 +1,16 @@
 import type { APIRequestContext } from "@playwright/test";
 import { z } from "zod";
 
+import type { UpdateComingSoonValues } from "../../lib/schemas/coming-soon";
 import type { SaveHomeLayoutValues } from "../../lib/schemas/home";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
+import {
+  DEFAULT_COMING_SOON,
+  type Storefront,
+  waitForStorefront,
+  writeComingSoonTexts,
+  writeStorefront,
+} from "./coming-soon";
 import { test as dbTest } from "./db.fixture";
 import {
   STORE_ANNOUNCEMENT,
@@ -30,7 +38,21 @@ export interface StoreEdit {
   update: (changes: Partial<UpdateStoreValues>) => Promise<void>;
 }
 
+/** Changes to the coming-soon page for one test of the `closed` project. */
+export interface ComingSoonEdit {
+  /** Flips the switch as an admin, and waits until the public sees it. */
+  setStorefront: (storefront: Storefront) => Promise<void>;
+  /** Writes the page's texts and day as an admin. */
+  update: (values: UpdateComingSoonValues) => Promise<void>;
+}
+
 export interface StoreFixtures {
+  /**
+   * See `ComingSoonEdit`. The page's empty texts and the closed store are
+   * written back when the test ends, whatever it did. Only a
+   * `*.closed.e2e.ts` spec may ask for it.
+   */
+  comingSoonEdit: ComingSoonEdit;
   /**
    * For a spec that changes the home's curation (FER-020), which every
    * spec's storefront shows: when the test ends, whatever it did, the
@@ -101,6 +123,13 @@ async function readHome(request: APIRequestContext): Promise<HomeSnapshot> {
 }
 
 export interface StoreWorkerFixtures {
+  /**
+   * The position of the coming-soon switch while this worker's tests run:
+   * `open` everywhere but the `closed` project (FER-034).
+   */
+  storefront: Storefront;
+  /** Puts the switch where `storefront` says, before the worker's tests. */
+  storefrontSwitch: Storefront;
   /** The settings the store holds while this worker's tests run. */
   storeSettings: typeof STORE_SETTINGS;
 }
@@ -108,7 +137,86 @@ export interface StoreWorkerFixtures {
 /** What only one test at a time may do: the serial project's specs. */
 const SERIAL_SPEC = ".serial.e2e.ts";
 
+/** What sees the store closed: the `closed` project's specs, run alone. */
+const CLOSED_SPEC = ".closed.e2e.ts";
+
 export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
+  storefront: ["open", { option: true, scope: "worker" }],
+
+  // Before any test of the worker: a fresh database (CI's) is closed, since
+  // no row reads as published, so every project but `closed` opens it, and
+  // `closed` closes it with the dictionary's texts. The `closed` project
+  // runs alone and first, and opens the store again when its worker ends, so
+  // no other spec ever sees it closed.
+  storefrontSwitch: [
+    async ({ playwright, storefront, workerUser }, use) => {
+      const baseURL = workerBaseURL();
+      const admin = await playwright.request.newContext({
+        baseURL,
+        ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+        storageState: workerUser.storageState,
+      });
+
+      try {
+        if (storefront === "closed") {
+          await writeComingSoonTexts(admin, DEFAULT_COMING_SOON);
+        }
+
+        await writeStorefront(admin, storefront);
+        await waitForStorefront(baseURL, storefront);
+        await use(storefront);
+
+        if (storefront === "closed") {
+          await writeStorefront(admin, "open");
+          await waitForStorefront(baseURL, "open");
+        }
+      } finally {
+        await admin.dispose();
+      }
+    },
+    { auto: true, scope: "worker" },
+  ],
+
+  comingSoonEdit: async (
+    { baseURL, playwright, storefront, workerUser },
+    use,
+    testInfo
+  ) => {
+    // The other projects run in parallel and read the open store.
+    if (!testInfo.file.endsWith(CLOSED_SPEC) || storefront !== "closed") {
+      throw new Error(
+        `Only a *.closed.e2e.ts spec may change the coming-soon page: ${testInfo.file}`
+      );
+    }
+
+    const url = requireBaseURL(baseURL);
+    const admin = await playwright.request.newContext({
+      baseURL: url,
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      storageState: workerUser.storageState,
+    });
+
+    try {
+      await use({
+        setStorefront: async (position) => {
+          await writeStorefront(admin, position);
+          await waitForStorefront(url, position);
+        },
+        update: async (values) => {
+          await writeComingSoonTexts(admin, values);
+        },
+      });
+    } finally {
+      // Whatever the test did or failed to do, the next one reads these.
+      try {
+        await writeComingSoonTexts(admin, DEFAULT_COMING_SOON);
+        await writeStorefront(admin, "closed");
+        await waitForStorefront(url, "closed");
+      } finally {
+        await admin.dispose();
+      }
+    }
+  },
   // Before any test of the worker, whatever the spec: the values are the same
   // in every worker, so one starting while another runs changes nothing it
   // reads, and the edit drops whatever an earlier run left cached.

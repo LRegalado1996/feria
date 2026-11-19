@@ -26,7 +26,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-003](FER-003-ci-and-previews.md)          | CI, preview deployments and error reporting           | P0       | done        |
 | [FER-004](FER-004-i18n-foundation.md)          | Spanish and English with a toggle                     | P0       | done        |
 | [FER-005](FER-005-design-system.md)            | Storefront design system                              | P0       | done        |
-| [FER-034](FER-034-coming-soon-page.md)         | Coming-soon page on production                        | P0       | in progress |
+| [FER-034](FER-034-coming-soon-page.md)         | Coming-soon page, managed from the admin              | P0       | in progress |
 | [FER-036](FER-036-slack-apps.md)               | GitHub and Vercel apps post to Slack                  | P2       | todo        |
 | [FER-046](FER-046-e2e-head-metadata-helper.md) | Read a page's head in e2e tests without CSS selectors | P2       | todo        |
 | [FER-047](FER-047-integration-tests-setup.md)  | Integration tests take their rows from `setup()`      | P2       | todo        |

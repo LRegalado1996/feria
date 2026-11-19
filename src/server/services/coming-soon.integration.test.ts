@@ -1,0 +1,277 @@
+import { randomUUID } from "node:crypto";
+
+import { call } from "@orpc/server";
+import { eq, inArray } from "drizzle-orm";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import { comingSoonRouter } from "@/server/api/routers/coming-soon";
+import { createAccount } from "@/server/better-auth/accounts";
+import { isAdminRequest } from "@/server/better-auth/admin-request";
+import { auth } from "@/server/better-auth/config";
+import { db } from "@/server/db";
+import { comingSoon, comingSoonTranslation, user } from "@/server/db/schema";
+import { theStoreId } from "@/server/test/one-store";
+
+import {
+  addComingSoonIfMissing,
+  findComingSoon,
+  isComingSoonPublished,
+  setComingSoonPublished,
+  updateComingSoon,
+} from "./coming-soon";
+
+vi.mock("@/env", () => ({
+  env: { DATABASE_URL: process.env.DATABASE_URL, NODE_ENV: "test" },
+}));
+
+// Next's tag cache only exists inside a Next request.
+vi.mock("@/server/cache/coming-soon", () => ({
+  invalidateComingSoonCache: () => undefined,
+}));
+
+type Row = typeof comingSoon.$inferSelect;
+type TextRow = typeof comingSoonTranslation.$inferSelect;
+
+// The page is one row for the store, shared by every file of this worker
+// (and seeded unpublished when the database the clone came from was). Each
+// test changes it freely; `setup()` keeps it as it was for the cleanup.
+const snapshots: { page: Row | undefined; texts: TextRow[] }[] = [];
+// The logins this file created, deleted after each test with their sessions.
+const createdUserIds: string[] = [];
+
+afterEach(async () => {
+  await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
+
+  for (const { page, texts } of snapshots.splice(0)) {
+    // Deleting the page deletes its texts; both come back as they were.
+    await db.delete(comingSoon);
+
+    if (page) {
+      await db.insert(comingSoon).values(page);
+    }
+
+    if (texts.length > 0) {
+      await db.insert(comingSoonTranslation).values(texts);
+    }
+  }
+});
+
+/** The store's id, the page as it is now kept, and none from here on. */
+async function setup() {
+  const storeId = await theStoreId(db);
+  const [page] = await db.select().from(comingSoon);
+  const texts = await db.select().from(comingSoonTranslation);
+  snapshots.push({ page, texts });
+  // Every test starts where production does the day this ships: no row.
+  await db.delete(comingSoon);
+
+  return { storeId };
+}
+
+/** A login that can sign in, with the cookies its sign-in set. */
+async function signIn() {
+  const email = `coming-soon-${randomUUID()}@example.test`;
+  const password = "synthetic-pass-123";
+  const account = await createAccount(auth, db, {
+    email,
+    name: "Coming Soon Test",
+    password,
+  });
+  createdUserIds.push(account.id);
+  const { headers } = await auth.api.signInEmail({
+    body: { email, password },
+    returnHeaders: true,
+  });
+  const cookie = headers
+    .getSetCookie()
+    .map((line) => line.split(";")[0])
+    .join("; ");
+
+  return { cookie, userId: account.id };
+}
+
+describe("the coming-soon page in the database", () => {
+  test("a database the migrations just reached is closed: no row reads as published", async () => {
+    await setup();
+
+    await expect(isComingSoonPublished(db)).resolves.toBe(true);
+    await expect(findComingSoon(db)).resolves.toEqual({
+      countdownTo: null,
+      published: true,
+      translations: [],
+    });
+  });
+
+  test("the first save of texts keeps the page published; the switch alone opens the store", async () => {
+    const { storeId } = await setup();
+
+    await updateComingSoon(db, storeId, {
+      countdownTo: "2026-12-20",
+      translations: [
+        {
+          eyebrow: null,
+          headline: "Abrimos",
+          lead: null,
+          locale: "es",
+          marquee: null,
+        },
+      ],
+    });
+    await expect(isComingSoonPublished(db)).resolves.toBe(true);
+
+    await expect(setComingSoonPublished(db, storeId, false)).resolves.toEqual({
+      published: false,
+    });
+    await expect(isComingSoonPublished(db)).resolves.toBe(false);
+    // The flip left the texts and the day as they were.
+    await expect(findComingSoon(db)).resolves.toEqual({
+      countdownTo: "2026-12-20",
+      published: false,
+      translations: [
+        {
+          eyebrow: null,
+          headline: "Abrimos",
+          lead: null,
+          locale: "es",
+          marquee: null,
+        },
+      ],
+    });
+  });
+
+  test("a save replaces the texts language by language, and one left out is gone", async () => {
+    const { storeId } = await setup();
+
+    await updateComingSoon(db, storeId, {
+      countdownTo: null,
+      translations: [
+        {
+          eyebrow: "Feria · 5 de diciembre",
+          headline: "Abrimos",
+          lead: "Hola",
+          locale: "es",
+          marquee: null,
+        },
+        {
+          eyebrow: null,
+          headline: "Opening",
+          lead: null,
+          locale: "en",
+          marquee: "Jewelry",
+        },
+      ],
+    });
+    const saved = await updateComingSoon(db, storeId, {
+      countdownTo: "2027-01-02",
+      translations: [
+        {
+          eyebrow: "Feria · 2 de enero",
+          headline: null,
+          lead: "Chau",
+          locale: "es",
+          marquee: "Bijou",
+        },
+      ],
+    });
+
+    expect(saved).toEqual({
+      countdownTo: "2027-01-02",
+      published: true,
+      translations: [
+        {
+          eyebrow: "Feria · 2 de enero",
+          headline: null,
+          lead: "Chau",
+          locale: "es",
+          marquee: "Bijou",
+        },
+      ],
+    });
+    await expect(findComingSoon(db)).resolves.toEqual(saved);
+    await expect(
+      db.select({ id: comingSoon.id }).from(comingSoon)
+    ).resolves.toHaveLength(1);
+  });
+
+  test("the database refuses a text past its limit, whatever writes it", async () => {
+    const { storeId } = await setup();
+    const [page] = await db
+      .insert(comingSoon)
+      .values({ storeId })
+      .returning({ id: comingSoon.id });
+
+    await expect(
+      db.insert(comingSoonTranslation).values({
+        comingSoonId: page?.id ?? 0,
+        headline: "x".repeat(51),
+        locale: "es",
+      })
+    ).rejects.toMatchObject({
+      cause: { constraint: "coming_soon_translation_headline_length" },
+    });
+  });
+
+  test("the seed's insert opens a fresh store and never undoes a choice", async () => {
+    const { storeId } = await setup();
+
+    await expect(
+      addComingSoonIfMissing(db, { published: false, storeId })
+    ).resolves.toBe(true);
+    await expect(isComingSoonPublished(db)).resolves.toBe(false);
+
+    await setComingSoonPublished(db, storeId, true);
+    await expect(
+      addComingSoonIfMissing(db, { published: false, storeId })
+    ).resolves.toBe(false);
+    await expect(isComingSoonPublished(db)).resolves.toBe(true);
+  });
+});
+
+describe("who may see and flip it", () => {
+  test("a signed-in login is vouched for by its session in the database; a forged or removed one is not", async () => {
+    await setup();
+    const { cookie, userId } = await signIn();
+
+    await expect(isAdminRequest(new Headers({ cookie }))).resolves.toBe(true);
+    await expect(
+      isAdminRequest(
+        new Headers({ cookie: "better-auth.session_token=forged.signature" })
+      )
+    ).resolves.toBe(false);
+
+    await db.delete(user).where(eq(user.id, userId));
+    await expect(isAdminRequest(new Headers({ cookie }))).resolves.toBe(false);
+  });
+
+  test("the switch's procedure refuses a signed-out caller and a removed login, and flips it for a login", async () => {
+    await setup();
+    const { userId } = await signIn();
+    const as = (session: { user: { id: string } } | null) => ({
+      context: { db, headers: new Headers(), session } as never,
+    });
+
+    await expect(
+      call(comingSoonRouter.setPublished, { published: false }, as(null))
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(isComingSoonPublished(db)).resolves.toBe(true);
+
+    await expect(
+      call(
+        comingSoonRouter.setPublished,
+        { published: false },
+        as({ user: { id: userId } })
+      )
+    ).resolves.toEqual({ published: false });
+    await expect(isComingSoonPublished(db)).resolves.toBe(false);
+
+    await db.delete(user).where(eq(user.id, userId));
+    await expect(
+      call(
+        comingSoonRouter.setPublished,
+        { published: true },
+        as({ user: { id: userId } })
+      )
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(isComingSoonPublished(db)).resolves.toBe(false);
+  });
+});

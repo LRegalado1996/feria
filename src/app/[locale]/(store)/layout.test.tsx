@@ -22,6 +22,11 @@ vi.mock("@/app/_components/organisms/store-theme", () => ({
   },
 }));
 
+// The notice has its own tests; here it only marks where the layout puts it.
+vi.mock("@/app/_components/molecules/store-preview-notice", () => ({
+  StorePreviewNotice: () => <div data-testid="store-preview-notice" />,
+}));
+
 const { default: StoreLayout, viewport } = layoutModule;
 
 function setup() {
@@ -35,11 +40,13 @@ function setup() {
 }
 
 describe("StoreLayout", () => {
-  test("puts the page, frame and all, straight on the store's canvas", () => {
+  test("puts the page, frame and all, straight on the store's canvas, under the admin's notice of a closed store", () => {
     const { theme } = setup();
 
-    expect(theme).toContainElement(screen.getByText("Page content"));
-    expect(theme.firstElementChild).toBe(screen.getByText("Page content"));
+    expect([...theme.children]).toEqual([
+      screen.getByTestId("store-preview-notice"),
+      screen.getByText("Page content"),
+    ]);
   });
 
   test("the canvas is a full-height column, handed no colors: they are code", () => {
