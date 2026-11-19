@@ -71,6 +71,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-054](FER-054-article-save-conflicts.md)          | Saving one article from two tabs                   | P2       | todo        |
 | [FER-055](FER-055-photo-grid-swipe.md)                | Swiping over the wizard's photos scrolls           | P2       | todo        |
 | [FER-056](FER-056-list-search-and-filters-race.md)    | A pending search and "Aplicar" can lose each other | P2       | todo        |
+| [FER-057](FER-057-article-list-review-follow-ups.md)  | Follow-ups from the article list's last review     | P1       | todo        |
 
 ### M4 Storefront and orders
 
