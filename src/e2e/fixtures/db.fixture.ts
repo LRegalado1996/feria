@@ -326,6 +326,7 @@ export const test = userTest.extend<DbFixture>({
           await Promise.all(createdRows.pending);
           await deleteCreated(db, {
             ...seeded,
+            articleIds: [...seeded.articleIds, ...createdRows.articleIds],
             categoryIds: [...seeded.categoryIds, ...createdRows.categoryIds],
             filterIds: [...seeded.filterIds, ...createdRows.filterIds],
             filterValueIds: createdRows.filterValueIds,

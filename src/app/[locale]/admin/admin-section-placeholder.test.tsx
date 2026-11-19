@@ -41,7 +41,7 @@ async function makeParams(locale: string) {
 /** The placeholder of `section` in `locale`, with a session or without. */
 function setup({
   locale = "en",
-  section = "products",
+  section = "home",
   signedIn = true,
 }: {
   locale?: string;
@@ -99,7 +99,6 @@ describe("AdminSectionPlaceholder", () => {
 
 describe("AdminSectionPlaceholderResolver", () => {
   test.each([
-    ["en", "products", "/en/admin/products"],
     ["en", "metrics", "/en/admin/metrics"],
     ["es", "home", "/admin/home"],
     ["es", "users", "/admin/users"],
@@ -115,7 +114,6 @@ describe("AdminSectionPlaceholderResolver", () => {
   );
 
   test.each([
-    ["en", "products", "Articles", "Coming soon"],
     ["en", "metrics", "Metrics", "Coming soon"],
     ["es", "home", "Inicio", "Próximamente"],
     ["es", "users", "Usuarios", "Próximamente"],

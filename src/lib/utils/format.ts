@@ -129,6 +129,19 @@ export function formatPrice(
   );
 }
 
+/**
+ * How a price's currency is written beside its figure, as `formatPrice`
+ * writes it: `$` and `US$` in Spanish, `UYU` and `USD` in English. For a
+ * field that takes an amount and shows its currency inside it.
+ */
+export function formatCurrencySign(currency: Currency, locale: Locale): string {
+  return (
+    priceFormat(INTL_LOCALES[locale], currency, "0")
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? currency
+  );
+}
+
 const integerFormat = cached(
   (tag: string) => new Intl.NumberFormat(tag, { maximumFractionDigits: 0 })
 );

@@ -1,0 +1,168 @@
+"use client";
+
+import { CircleAlert, ImagePlus } from "lucide-react";
+import { useId, useRef, useState } from "react";
+
+import { useDictionary } from "@/lib/hooks/i18n";
+import type { PhotoRefusal } from "@/lib/hooks/upload";
+import { interpolate } from "@/lib/i18n/interpolate";
+import { cn } from "@/lib/utils";
+
+export interface ProductPhotoDropProps {
+  className?: string;
+  /** How many photos the article holds or has on their way. */
+  count: number;
+  max: number;
+  /** The files chosen or dropped, in their order. */
+  onFiles: (files: File[]) => void;
+  /** The files refused last time, and why. */
+  refusals: readonly PhotoRefusal[];
+  /**
+   * This server cannot store photos (no Blob store): said once, over the
+   * zone, which takes nothing, rather than after each photo fails.
+   */
+  unavailable?: boolean;
+}
+
+/**
+ * Where an article's photos come in (FER-017): one large button that opens
+ * the device's picker, several at once (a phone offers its camera or its
+ * library), and on a computer a drop zone for photos dragged onto it. It
+ * says how many there are of how many fit, and shrinks once there are
+ * some; full, it says why it takes no more. A refused file is named with
+ * its reason in an alert under it. On a server that cannot store photos it
+ * says so up front, in an amber panel, and takes none.
+ */
+function ProductPhotoDrop({
+  className,
+  count,
+  max,
+  onFiles,
+  refusals,
+  unavailable = false,
+}: ProductPhotoDropProps) {
+  const copy = useDictionary().articles.wizard.photos;
+  const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const hintId = useId();
+  const unavailableId = useId();
+  const full = count >= max;
+  const closed = full || unavailable;
+
+  const said = (refusal: PhotoRefusal) => {
+    if (refusal.kind === "tooMany") {
+      return refusal.count === 1
+        ? copy.refused.tooManyOne
+        : interpolate(copy.refused.tooMany, { count: refusal.count });
+    }
+
+    return interpolate(copy.refused[refusal.kind], { name: refusal.name });
+  };
+
+  return (
+    <div className={cn("grid gap-2", className)} data-slot="product-photo-drop">
+      {unavailable ? (
+        <p
+          // amber-900 on amber-50: 8.9:1; amber-100 on amber-950: 12:1.
+          className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+          data-testid="product-photo-unavailable"
+          id={unavailableId}
+        >
+          <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+          {copy.unavailable}
+        </p>
+      ) : null}
+      <button
+        aria-describedby={unavailable ? `${unavailableId} ${hintId}` : hintId}
+        className={cn(
+          "flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-card px-4 text-center transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60",
+          count === 0 ? "min-h-56 md:min-h-64" : "min-h-24",
+          over && "border-foreground bg-accent"
+        )}
+        data-testid="product-photo-drop"
+        disabled={closed}
+        onClick={() => input.current?.click()}
+        onDragLeave={() => {
+          setOver(false);
+        }}
+        onDragOver={(event) => {
+          // Always prevented, so a file dropped on a closed zone is not
+          // opened by the browser in place of the admin.
+          event.preventDefault();
+          setOver(!closed);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+
+          // A disabled button still hears a drop.
+          if (!closed) {
+            onFiles([...event.dataTransfer.files]);
+          }
+        }}
+        type="button"
+      >
+        <ImagePlus
+          aria-hidden
+          className={cn(
+            "text-muted-foreground",
+            count === 0 ? "size-12" : "size-6"
+          )}
+        />
+        <span className="text-base font-medium">
+          {full ? (
+            copy.full
+          ) : (
+            <>
+              <span className="md:hidden">{copy.drop}</span>
+              <span className="hidden md:inline">{copy.dropDesktop}</span>
+            </>
+          )}
+        </span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {interpolate(copy.count, { count, max })}
+        </span>
+      </button>
+      <p className="text-xs text-muted-foreground" id={hintId}>
+        {copy.hint}
+      </p>
+      {/* Reached through the button, which names it. `image/*` lets a phone
+          offer its camera and its library, and an iPhone hand over a JPEG
+          of a HEIC photo. */}
+      <input
+        accept="image/*"
+        aria-hidden
+        className="sr-only"
+        data-testid="product-photo-input"
+        multiple
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          // The same photos can be chosen again after a removal.
+          event.currentTarget.value = "";
+
+          if (files.length > 0 && !closed) {
+            onFiles(files);
+          }
+        }}
+        ref={input}
+        tabIndex={-1}
+        type="file"
+      />
+      {refusals.length > 0 ? (
+        <ul
+          className="grid gap-1 text-sm text-destructive"
+          data-testid="product-photo-refusals"
+          role="alert"
+        >
+          {/* Each reason once: two files of one name refused alike say
+              the same thing. */}
+          {[...new Set(refusals.map(said))].map((sentence) => (
+            <li key={sentence}>{sentence}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+export { ProductPhotoDrop };

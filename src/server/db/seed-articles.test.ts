@@ -190,7 +190,9 @@ describe("SEED_ARTICLES", () => {
       expect(article.colors.filter((slug) => !colors.has(slug))).toEqual([]);
       expect(
         createProductSchema.safeParse({
+          attributeValueIds: [],
           categoryId: 1,
+          images: [],
           isAvailable: article.isAvailable,
           priceAmount: article.priceAmount,
           translations: (["es", "en"] as const).map((locale) => ({

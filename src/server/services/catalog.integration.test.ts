@@ -1,7 +1,7 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { type DatabaseClient, db } from "@/server/db";
+import { db } from "@/server/db";
 import {
   category,
   categoryTranslation,
@@ -12,19 +12,18 @@ import {
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
-  createProduct,
-  deleteProduct,
   getPublishedProduct,
   listCartProducts,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
-  publishProduct,
-  reorderProductImages,
-  setProductAvailability,
-  unpublishProduct,
-  updateProduct,
 } from "./catalog";
+import {
+  createProduct,
+  deleteProduct,
+  publishProduct,
+  setProductAvailability,
+} from "./product";
 
 vi.mock("@/env", () => ({
   env: {
@@ -89,35 +88,44 @@ interface ArticleOptions {
 
 /** An article through the service, with images, published unless told not to. */
 async function makeArticle(storeId: number, options: ArticleOptions) {
-  const row = await createProduct(db, {
-    storeId,
-    values: {
-      categoryId: options.categoryId,
-      isAvailable: true,
-      priceAmount:
-        options.priceAmount === undefined ? 129_000 : options.priceAmount,
-      translations: [
-        {
-          description: options.description ?? "",
-          locale: "es",
-          seoDescription: null,
-          seoTitle: null,
-          title: options.title,
+  // One transaction, as the router's: a failed write of its contents leaves
+  // no draft behind that teardown could not find.
+  const row = await db.transaction(
+    async (tx) =>
+      await createProduct(tx, {
+        // The photos are the site's files, inserted below: no upload to check.
+        blobStore: null,
+        storeId,
+        values: {
+          attributeValueIds: [],
+          categoryId: options.categoryId,
+          images: [],
+          isAvailable: true,
+          priceAmount:
+            options.priceAmount === undefined ? 129_000 : options.priceAmount,
+          translations: [
+            {
+              description: options.description ?? "",
+              locale: "es",
+              seoDescription: null,
+              seoTitle: null,
+              title: options.title,
+            },
+            ...(options.en
+              ? [
+                  {
+                    description: options.en.description,
+                    locale: "en" as const,
+                    seoDescription: null,
+                    seoTitle: null,
+                    title: options.en.title,
+                  },
+                ]
+              : []),
+          ],
         },
-        ...(options.en
-          ? [
-              {
-                description: options.en.description,
-                locale: "en" as const,
-                seoDescription: null,
-                seoTitle: null,
-                title: options.en.title,
-              },
-            ]
-          : []),
-      ],
-    },
-  });
+      })
+  );
   created.productIds.push(row.id);
 
   for (let position = 0; position < (options.images ?? 1); position += 1) {
@@ -690,452 +698,5 @@ describe("cart products", () => {
     expect(items.map(({ id, isAvailable }) => ({ id, isAvailable }))).toEqual([
       { id: soldOut.id, isAvailable: false },
     ]);
-  });
-});
-
-describe("store-scoped writes", () => {
-  test("slugs come from the Spanish title, stay unique in the store, and stop following it once published", async () => {
-    const { chains, storeId, tag } = await setup();
-    const first = await makeArticle(storeId, {
-      categoryId: chains.id,
-      publish: false,
-      title: `Collar Ñandú ${tag}`,
-    });
-    const second = await makeArticle(storeId, {
-      categoryId: chains.id,
-      publish: false,
-      title: `Collar Ñandú ${tag}`,
-    });
-
-    expect([first.slug, second.slug]).toEqual([
-      `collar-nandu-${tag}`,
-      `collar-nandu-${tag}-2`,
-    ]);
-
-    const rename = async (title: string) =>
-      await updateProduct(db, {
-        storeId,
-        values: {
-          categoryId: chains.id,
-          id: second.id,
-          isAvailable: true,
-          priceAmount: 1000,
-          translations: [
-            {
-              description: "",
-              locale: "es",
-              seoDescription: null,
-              seoTitle: null,
-              title,
-            },
-          ],
-        },
-      });
-
-    expect((await rename(`Pulsera ${tag}`)).slug).toBe(`pulsera-${tag}`);
-
-    await publishProduct(db, { id: second.id, storeId });
-    expect((await rename(`Otra cosa ${tag}`)).slug).toBe(`pulsera-${tag}`);
-  });
-
-  test("publishing is refused until it has an image, a category and a price, and says what is missing", async () => {
-    const storeId = await theStoreId(db);
-    const bare = await makeArticle(storeId, {
-      categoryId: null,
-      images: 0,
-      priceAmount: null,
-      publish: false,
-      title: `Sin nada ${uniqueTag()}`,
-    });
-
-    await expect(
-      publishProduct(db, { id: bare.id, storeId })
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message:
-        "The article cannot be published yet. Missing: image, category, price",
-    });
-  });
-
-  test("the first publication stamps the date once; unpublishing hides it and keeps the date", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      title: `Cadena ${tag}`,
-    });
-    const dateOf = async () =>
-      (await db.query.product.findFirst({ where: eq(product.id, article.id) }))
-        ?.publishedAt;
-    const firstDate = await dateOf();
-
-    await unpublishProduct(db, { id: article.id, storeId });
-    expect((await list(storeId, { category: chains.slug })).items).toEqual([]);
-
-    await publishProduct(db, { id: article.id, storeId });
-    expect(await dateOf()).toEqual(firstDate);
-  });
-
-  test("a category the store no longer has cannot be attached, through the service or the database", async () => {
-    const { storeId, tag } = await setup();
-    const gone = await makeCategory(storeId, `viejas-${tag}`, {
-      es: `Viejas ${tag}`,
-    });
-    await db.delete(category).where(eq(category.id, gone.id));
-
-    await expect(
-      makeArticle(storeId, {
-        categoryId: gone.id,
-        publish: false,
-        title: `X ${tag}`,
-      })
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "Category not found",
-    });
-    await expect(
-      db
-        .insert(product)
-        .values({ categoryId: gone.id, slug: `x-${tag}`, storeId })
-    ).rejects.toMatchObject({
-      cause: { constraint: "product_store_category_fk" },
-    });
-  });
-
-  test("a category with articles cannot be deleted", async () => {
-    const { chains, storeId, tag } = await setup();
-    await makeArticle(storeId, {
-      categoryId: chains.id,
-      title: `Cadena ${tag}`,
-    });
-
-    await expect(
-      db.delete(category).where(eq(category.id, chains.id))
-    ).rejects.toMatchObject({
-      cause: { constraint: "product_store_category_fk" },
-    });
-  });
-
-  test("deleting an article answers its images' addresses and leaves no image row", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      images: 2,
-      title: `Cadena ${tag}`,
-    });
-
-    const deleted = await deleteProduct(db, { id: article.id, storeId });
-
-    expect(deleted.id).toBe(article.id);
-    // In no order: the article's images are read only to delete their files.
-    expect(new Set(deleted.imageUrls)).toEqual(
-      new Set(["/seed/test-0.jpg", "/seed/test-1.jpg"])
-    );
-    expect(deleted.imageUrls).toHaveLength(2);
-    await expect(
-      db
-        .select({ id: productImage.id })
-        .from(productImage)
-        .where(eq(productImage.productId, article.id))
-    ).resolves.toEqual([]);
-  });
-
-  test("an article the store no longer has is NOT_FOUND for every write", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      title: `Cadena ${tag}`,
-    });
-    await deleteProduct(db, { id: article.id, storeId });
-    const scope = { id: article.id, storeId };
-    const notFound = { code: "NOT_FOUND", message: "Article not found" };
-
-    await expect(publishProduct(db, scope)).rejects.toMatchObject(notFound);
-    await expect(unpublishProduct(db, scope)).rejects.toMatchObject(notFound);
-    await expect(
-      setProductAvailability(db, { ...scope, isAvailable: false })
-    ).rejects.toMatchObject(notFound);
-    await expect(deleteProduct(db, scope)).rejects.toMatchObject(notFound);
-    await expect(
-      reorderProductImages(db, { ...scope, imageIds: [1] })
-    ).rejects.toMatchObject(notFound);
-  });
-
-  test("reorders the images in one go, and refuses a list that is not all of them", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      images: 3,
-      title: `Cadena ${tag}`,
-    });
-    // Last image first: the new order.
-    const reversed = (
-      await db.query.productImage.findMany({
-        orderBy: desc(productImage.position),
-        where: eq(productImage.productId, article.id),
-      })
-    ).map((image) => image.id);
-
-    await reorderProductImages(db, {
-      id: article.id,
-      imageIds: reversed,
-      storeId,
-    });
-    const [cover] = (await list(storeId, { category: chains.slug })).items;
-    expect(cover?.cover?.url).toBe("/seed/test-2.jpg");
-
-    await expect(
-      reorderProductImages(db, {
-        id: article.id,
-        imageIds: reversed.slice(1),
-        storeId,
-      })
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "Give every image of the article, once each",
-    });
-  });
-
-  test("an edit that takes a published article's price away is refused", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      title: `Cadena ${tag}`,
-    });
-
-    await expect(
-      updateProduct(db, {
-        storeId,
-        values: {
-          categoryId: chains.id,
-          id: article.id,
-          isAvailable: true,
-          priceAmount: null,
-          translations: [
-            {
-              description: "",
-              locale: "es",
-              seoDescription: null,
-              seoTitle: null,
-              title: `Cadena ${tag}`,
-            },
-          ],
-        },
-      })
-    ).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "The article cannot be published yet. Missing: price",
-    });
-  });
-});
-
-/** A promise and the function that settles it, for ordering two writers. */
-function deferred<T = undefined>() {
-  let settle: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((resolve) => {
-    settle = resolve;
-  });
-
-  return { promise, resolve: settle };
-}
-
-/**
- * Waits until some query on this database waits on another's lock. Enough
- * where the outcome itself shows which lock was waited on.
- */
-async function waitUntilBlocked() {
-  for (let attempt = 0; attempt < 2000; attempt += 1) {
-    const result = await db.execute<{ blocked: number }>(sql`
-      select count(*)::int as blocked
-      from pg_stat_activity
-      where datname = current_database()
-        and cardinality(pg_blocking_pids(pid)) > 0
-    `);
-
-    if ((result.rows[0]?.blocked ?? 0) > 0) {
-      return;
-    }
-  }
-
-  throw new Error("The second writer never waited");
-}
-
-/** The server process running this transaction's statements. */
-async function backendPid(tx: DatabaseClient) {
-  const result = await tx.execute<{ pid: number }>(
-    sql`select pg_backend_pid() as pid`
-  );
-  const pid = result.rows[0]?.pid;
-
-  if (pid === undefined) {
-    throw new Error("The backend has no process id");
-  }
-
-  return pid;
-}
-
-/**
- * Waits until the `waiter` process waits on an advisory lock that the
- * `holder` process holds. Only the slug lock is advisory here: a wait on the
- * `(storeId, slug)` unique index, which a writer without the lock would hit,
- * is a different wait and never satisfies this.
- */
-async function waitUntilAdvisoryBlocked(waiter: number, holder: number) {
-  for (let attempt = 0; attempt < 2000; attempt += 1) {
-    const result = await db.execute<{ waiting: boolean }>(sql`
-      select exists (
-        select 1 from pg_locks
-        where pid = ${waiter} and locktype = 'advisory' and not granted
-      ) and ${holder} = any(pg_blocking_pids(${waiter})) as waiting
-    `);
-
-    if (result.rows[0]?.waiting) {
-      return;
-    }
-  }
-
-  throw new Error("The second writer never waited on the first's slug lock");
-}
-
-function draftValues(title: string) {
-  return {
-    categoryId: null,
-    isAvailable: true,
-    priceAmount: null,
-    translations: [
-      {
-        description: "",
-        locale: "es" as const,
-        seoDescription: null,
-        seoTitle: null,
-        title,
-      },
-    ],
-  };
-}
-
-describe("slug allocation under two writers", () => {
-  test("a second article with the same title waits for the first one's slug and takes the next", async () => {
-    const storeId = await theStoreId(db);
-    const tag = uniqueTag();
-    const held = deferred();
-    const allocated = deferred();
-    const firstPid = deferred<number>();
-    const secondPid = deferred<number>();
-    const register = <T extends { id: number }>(row: T) => {
-      created.productIds.push(row.id);
-
-      return row;
-    };
-
-    const first = db.transaction(async (tx) => {
-      firstPid.resolve(await backendPid(tx));
-      const row = await createProduct(tx, {
-        storeId,
-        values: draftValues(`Collar Gemelo ${tag}`),
-      });
-      allocated.resolve(undefined);
-      await held.promise;
-
-      return register(row);
-    });
-    await allocated.promise;
-    const second = db.transaction(async (tx) => {
-      secondPid.resolve(await backendPid(tx));
-
-      return register(
-        await createProduct(tx, {
-          storeId,
-          values: draftValues(`Collar Gemelo ${tag}`),
-        })
-      );
-    });
-
-    try {
-      await waitUntilAdvisoryBlocked(
-        await secondPid.promise,
-        await firstPid.promise
-      );
-    } finally {
-      held.resolve(undefined);
-      await Promise.allSettled([first, second]);
-    }
-
-    const [a, b] = await Promise.all([first, second]);
-    expect([a.slug, b.slug]).toEqual([
-      `collar-gemelo-${tag}`,
-      `collar-gemelo-${tag}-2`,
-    ]);
-  });
-});
-
-describe("an edit and a publication of the same article", () => {
-  test("the publication waits for the edit's row lock, then refuses the price the edit took away", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      publish: false,
-      title: `Cadena ${tag}`,
-    });
-    const held = deferred();
-    const locked = deferred();
-
-    // The edit clears a field publishing needs: only a publication that
-    // waited for it (the row lock) reads the cleared price and refuses.
-    const edit = db.transaction(async (tx) => {
-      const updated = await updateProduct(tx, {
-        storeId,
-        values: {
-          categoryId: chains.id,
-          id: article.id,
-          isAvailable: true,
-          priceAmount: null,
-          translations: [
-            {
-              description: "",
-              locale: "es",
-              seoDescription: null,
-              seoTitle: null,
-              title: `Cadena ${tag}`,
-            },
-          ],
-        },
-      });
-      locked.resolve(undefined);
-      await held.promise;
-
-      return updated;
-    });
-    await Promise.race([locked.promise, edit]);
-    const publication = publishProduct(db, { id: article.id, storeId });
-
-    try {
-      await waitUntilBlocked();
-    } finally {
-      held.resolve(undefined);
-      await Promise.allSettled([edit, publication]);
-    }
-
-    await expect(edit).resolves.toMatchObject({ id: article.id });
-    await expect(publication).rejects.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "The article cannot be published yet. Missing: price",
-    });
-  });
-
-  test("control: a publication after the edit committed waits on nothing", async () => {
-    const { chains, storeId, tag } = await setup();
-    const article = await makeArticle(storeId, {
-      categoryId: chains.id,
-      publish: false,
-      title: `Cadena ${tag}`,
-    });
-
-    await expect(
-      publishProduct(db, { id: article.id, storeId })
-    ).resolves.toEqual({
-      id: article.id,
-      slug: `cadena-${tag}`,
-      status: "published",
-    });
   });
 });

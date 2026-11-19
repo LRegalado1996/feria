@@ -11,6 +11,7 @@ import {
   store,
   storeTranslation,
 } from "@/server/db/schema";
+import type * as productService from "@/server/services/product";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -23,8 +24,14 @@ import {
   seedCatalogPages,
 } from "./seed-catalog";
 
+// The seed reads only these fields of a created article.
 const { createProduct, publishProduct } = vi.hoisted(() => ({
-  createProduct: vi.fn(),
+  createProduct:
+    vi.fn<
+      (
+        ...args: Parameters<typeof productService.createProduct>
+      ) => Promise<{ id: number; slug: string; status: "draft" }>
+    >(),
   publishProduct: vi.fn(async (_tx: unknown, input: { id: number }) => ({
     id: input.id,
     slug: "x",
@@ -32,33 +39,22 @@ const { createProduct, publishProduct } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("@/server/services/catalog", () => ({ createProduct, publishProduct }));
+vi.mock("@/server/services/product", () => ({ createProduct, publishProduct }));
 
 // The filter's own queries are `src/server/services/attribute.test.ts`'s:
 // here the seed only has to call them with the right values, in order.
-const { createAttribute, createAttributeValue, setProductAttributeValues } =
-  vi.hoisted(() => ({
-    createAttribute: vi.fn(async () => ({
-      id: 50,
-      position: 0,
-      slug: "color",
-    })),
-    createAttributeValue: vi.fn(),
-    setProductAttributeValues: vi.fn(
-      async (
-        _tx: unknown,
-        input: { productId: number; valueIds: number[] }
-      ) => ({
-        id: input.productId,
-        valueIds: input.valueIds,
-      })
-    ),
-  }));
+const { createAttribute, createAttributeValue } = vi.hoisted(() => ({
+  createAttribute: vi.fn(async () => ({
+    id: 50,
+    position: 0,
+    slug: "color",
+  })),
+  createAttributeValue: vi.fn(),
+}));
 
 vi.mock("@/server/services/attribute", () => ({
   createAttribute,
   createAttributeValue,
-  setProductAttributeValues,
 }));
 
 function setup({ hasCategories = false } = {}) {
@@ -139,7 +135,7 @@ describe("seedCatalog", () => {
   });
 
   test("gives each published article the ids of its colors", async () => {
-    const { db, run } = setup();
+    const { run } = setup();
 
     await run();
 
@@ -149,27 +145,15 @@ describe("seedCatalog", () => {
       slugs.map(
         (slug) => 201 + SEED_COLORS.findIndex((color) => color.slug === slug)
       );
-    expect(setProductAttributeValues.mock.calls).toEqual(
-      SEED_ARTICLES.map((article, index) => [
-        db,
-        {
-          productId: 101 + index,
-          storeId: 7,
-          valueIds: valueIds(article.colors),
-        },
-      ])
+    const given = createProduct.mock.calls.map(
+      ([, input]) => input.values.attributeValueIds
+    );
+    expect(given).toEqual(
+      SEED_ARTICLES.map((article) => valueIds(article.colors))
     );
     // The first three: the crystal bubble gun, the hearts chain, the
     // solitaire ring.
-    expect(
-      setProductAttributeValues.mock.calls
-        .slice(0, 3)
-        .map(([, input]) => input.valueIds)
-    ).toEqual([[209], [202], [201]]);
-    // An article is published before its colors are set.
-    expect(publishProduct.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
-      setProductAttributeValues.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(given.slice(0, 3)).toEqual([[209], [202], [201]]);
   });
 
   test("creates the launch categories in order, the bubble guns before the Bijouterie group, named in both languages", async () => {
@@ -252,9 +236,13 @@ describe("seedCatalog", () => {
 
     expect(createProduct).toHaveBeenCalledTimes(SEED_ARTICLES.length);
     expect(createProduct).toHaveBeenNthCalledWith(1, db, {
+      blobStore: null,
       storeId: 7,
       values: {
+        attributeValueIds: [209],
         categoryId: 1,
+        // Inserted after it, as files of the site: no upload.
+        images: [],
         isAvailable: true,
         priceAmount: 69_000,
         translations: [

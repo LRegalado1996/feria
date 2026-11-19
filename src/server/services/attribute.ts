@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
@@ -521,28 +521,23 @@ export async function deleteAttributeValue(
 }
 
 /**
- * Replaces the values an article carries. The article and every value must
- * be the store's: a value of another store's filter is refused, never
- * attached.
+ * Replaces the values an article carries with `valueIds`, for a writer that
+ * already holds the article's row lock (`createProduct`, `updateProduct`,
+ * FER-017). Every value must be the store's: one of another store's filter,
+ * or one deleted
+ * meanwhile, is refused, never attached. Each is locked `share` to the end of
+ * the transaction, so a value being deleted at the same time either is gone
+ * (refused here) or waits for this write. A pair the article keeps is left as
+ * it is: an autosave that changed nothing rewrites nothing.
  */
-export async function setProductAttributeValues(
+export async function replaceProductAttributeValues(
   tx: DatabaseClient,
   {
     productId,
     storeId,
     valueIds,
-  }: StoreScope & { productId: number; valueIds: number[] }
+  }: StoreScope & { productId: number; valueIds: readonly number[] }
 ) {
-  const [article] = await tx
-    .select({ id: product.id })
-    .from(product)
-    .where(and(eq(product.id, productId), eq(product.storeId, storeId)))
-    .for("update");
-
-  if (!article) {
-    throw new ORPCError("NOT_FOUND", { message: "Article not found" });
-  }
-
   if (valueIds.length > 0) {
     const own = await tx
       .select({ id: attributeValue.id })
@@ -551,7 +546,7 @@ export async function setProductAttributeValues(
       .where(
         and(
           eq(attribute.storeId, storeId),
-          inArray(attributeValue.id, valueIds)
+          inArray(attributeValue.id, [...valueIds])
         )
       )
       .for("share", { of: attributeValue });
@@ -563,18 +558,28 @@ export async function setProductAttributeValues(
 
   await tx
     .delete(productAttributeValue)
-    .where(eq(productAttributeValue.productId, article.id));
+    .where(
+      and(
+        eq(productAttributeValue.productId, productId),
+        valueIds.length > 0
+          ? notInArray(productAttributeValue.attributeValueId, [...valueIds])
+          : undefined
+      )
+    );
 
   if (valueIds.length > 0) {
-    await tx.insert(productAttributeValue).values(
-      valueIds.map((attributeValueId) => ({
-        attributeValueId,
-        productId: article.id,
-      }))
-    );
+    await tx
+      .insert(productAttributeValue)
+      .values(
+        valueIds.map((attributeValueId) => ({ attributeValueId, productId }))
+      )
+      .onConflictDoNothing({
+        target: [
+          productAttributeValue.productId,
+          productAttributeValue.attributeValueId,
+        ],
+      });
   }
-
-  return { id: article.id, valueIds };
 }
 
 // ── Public ───────────────────────────────────────────────────────────────

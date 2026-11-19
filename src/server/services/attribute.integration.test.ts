@@ -3,12 +3,13 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { type DatabaseClient, db } from "@/server/db";
 import { attribute, category, product, productImage } from "@/server/db/schema";
+import { listPublishedProducts } from "@/server/services/catalog";
+import { createCategory } from "@/server/services/category";
 import {
   createProduct,
-  listPublishedProducts,
   publishProduct,
-} from "@/server/services/catalog";
-import { createCategory } from "@/server/services/category";
+  updateProduct,
+} from "@/server/services/product";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 import {
   backendPid,
@@ -27,7 +28,6 @@ import {
   listCatalogFilters,
   listStoreAttributes,
   resolveCatalogFilters,
-  setProductAttributeValues,
 } from "./attribute";
 
 vi.mock("@/env", () => ({
@@ -116,23 +116,31 @@ async function setup() {
     valueIds: number[],
     publish = true
   ) => {
-    const row = await createProduct(db, {
-      storeId,
-      values: {
-        categoryId,
-        isAvailable: true,
-        priceAmount: 1000,
-        translations: [
-          {
-            description: "",
-            locale: "es",
-            seoDescription: null,
-            seoTitle: null,
-            title: `${title} ${tag}`,
+    // One transaction, as the router's: a failed filter-value write leaves
+    // no article behind that teardown could not find.
+    const row = await inTx(
+      async (tx) =>
+        await createProduct(tx, {
+          blobStore: null,
+          storeId,
+          values: {
+            attributeValueIds: valueIds,
+            images: [],
+            categoryId,
+            isAvailable: true,
+            priceAmount: 1000,
+            translations: [
+              {
+                description: "",
+                locale: "es",
+                seoDescription: null,
+                seoTitle: null,
+                title: `${title} ${tag}`,
+              },
+            ],
           },
-        ],
-      },
-    });
+        })
+    );
     created.productIds.push(row.id);
     await db.insert(productImage).values({
       height: 100,
@@ -145,15 +153,6 @@ async function setup() {
     if (publish) {
       await publishProduct(db, { id: row.id, storeId });
     }
-
-    await inTx(
-      async (tx) =>
-        await setProductAttributeValues(tx, {
-          productId: row.id,
-          storeId,
-          valueIds,
-        })
-    );
 
     return row;
   };
@@ -373,10 +372,27 @@ describe("filter management", () => {
     await expect(
       inTx(
         async (tx) =>
-          await setProductAttributeValues(tx, {
-            productId: own.id,
+          await updateProduct(tx, {
+            blobStore: null,
             storeId,
-            valueIds: [purple.id, gold.id],
+            values: {
+              attributeValueIds: [purple.id, gold.id],
+              categoryId: necklaces.id,
+              id: own.id,
+              // The photo the article holds, kept as it is.
+              images: [{ height: 100, url: "/seed/ring-1.jpg", width: 100 }],
+              isAvailable: true,
+              priceAmount: 1000,
+              translations: [
+                {
+                  description: "",
+                  locale: "es",
+                  seoDescription: null,
+                  seoTitle: null,
+                  title: `Collar ${tag}`,
+                },
+              ],
+            },
           })
       )
     ).rejects.toMatchObject({

@@ -177,7 +177,9 @@ describe("useImageUpload", () => {
     });
     const first = await upload();
 
-    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file);
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file, {
+      maxBytes: 5_000_000,
+    });
     expect(tokenRequests).toHaveBeenCalledExactlyOnceWith({
       contentType: "image/webp",
       purpose: "cover",
@@ -311,7 +313,9 @@ describe("useImageUpload", () => {
         width: 2400,
       });
     });
-    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file);
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file, {
+      maxBytes: 5_000_000,
+    });
     expect(tokenRequests.mock.calls).toEqual([
       [{ contentType: "image/webp", purpose: "cover", size: 900_000 }],
       [{ contentType: "image/webp", purpose: "cover", size: 900_000 }],
@@ -370,7 +374,9 @@ describe("useImageUpload", () => {
       result.current.retry();
     });
 
-    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file);
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file, {
+      maxBytes: 5_000_000,
+    });
     expect(result.current.state).toEqual({
       reason: "notConfigured",
       status: "failed",
@@ -582,7 +588,9 @@ describe("useImageUpload", () => {
     act(() => {
       result.current.retry();
     });
-    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file);
+    expect(mocks.prepareImage).toHaveBeenCalledExactlyOnceWith(file, {
+      maxBytes: 5_000_000,
+    });
     expect(tokenRequests).not.toHaveBeenCalled();
     expect(reportError).not.toHaveBeenCalled();
   });

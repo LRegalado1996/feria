@@ -1,4 +1,5 @@
 import { admin } from "./admin";
+import { articles } from "./articles";
 import { auth } from "./auth";
 import { comingSoon } from "./coming-soon";
 import { common } from "./common";
@@ -19,6 +20,7 @@ import { theme } from "./theme";
  */
 export const es = {
   admin,
+  articles,
   auth,
   comingSoon,
   common,

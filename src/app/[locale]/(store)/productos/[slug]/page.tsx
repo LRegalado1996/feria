@@ -12,8 +12,8 @@ import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readLocale } from "@/lib/i18n/read-locale";
+import { articleSearchTexts } from "@/lib/seo/article-metadata";
 import { absoluteUrl } from "@/lib/seo/origin";
-import { storeTitle } from "@/lib/seo/store-metadata";
 import {
   breadcrumbList,
   productWithOffer,
@@ -32,9 +32,6 @@ import { couldBeArticle } from "./article-address";
 interface ArticlePageProps {
   params: Promise<{ locale: string; slug: string }>;
 }
-
-/** What a search result shows under the title, at most this long. */
-const DESCRIPTION_MAX = 160;
 
 // Static output made on an article's first visit and kept: the response
 // waits for the read, so a draft or a deleted article is a real 404
@@ -73,24 +70,10 @@ async function load(params: ArticlePageProps["params"]) {
   return article ? { article, locale, store } : null;
 }
 
-/** `text` cut at a word to fit a search result, with an ellipsis. */
-function excerpt(text: string): string {
-  const flat = text.replaceAll(/\s+/gu, " ").trim();
-
-  if (flat.length <= DESCRIPTION_MAX) {
-    return flat;
-  }
-
-  const cut = flat.slice(0, DESCRIPTION_MAX - 1);
-  const space = cut.lastIndexOf(" ");
-
-  return `${space > 0 ? cut.slice(0, space) : cut}…`;
-}
-
 /**
  * The article's own title and description for search engines and chat
- * previews: its SEO fields, else its title and the start of its
- * description; the canonical address and one per language.
+ * previews: its title and the start of its description
+ * (`articleSearchTexts`); the canonical address and one per language.
  */
 export async function generateMetadata({
   params,
@@ -102,12 +85,10 @@ export async function generateMetadata({
   }
 
   const { article, locale, store } = found;
-  const title = article.seoTitle ?? article.title;
-  const description =
-    article.seoDescription ??
-    (article.description
-      ? excerpt(article.description)
-      : pickTranslation(store.translations, locale)?.tagline);
+  const { description, pageTitle, title } = articleSearchTexts(article, {
+    name: store.name,
+    tagline: pickTranslation(store.translations, locale)?.tagline,
+  });
 
   const path = articlePath(article.slug);
 
@@ -121,7 +102,7 @@ export async function generateMetadata({
       type: "website",
       url: localizePath(path, locale),
     },
-    title: { absolute: storeTitle(title, store.name) },
+    title: { absolute: pageTitle },
   };
 }
 

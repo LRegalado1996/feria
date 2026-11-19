@@ -7,7 +7,8 @@ import { headerCategories } from "@/lib/catalog/navigation";
 import type { UpdateCategoryPageValues } from "@/lib/schemas/catalog";
 import { db } from "@/server/db";
 import { category, product, store } from "@/server/db/schema";
-import { createProduct, listCategories } from "@/server/services/catalog";
+import { listCategories } from "@/server/services/catalog";
+import { createProduct } from "@/server/services/product";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
@@ -56,8 +57,11 @@ const add = async (
 
 async function addArticle(storeId: number, categoryId: number, title: string) {
   const row = await createProduct(db, {
+    blobStore: null,
     storeId,
     values: {
+      attributeValueIds: [],
+      images: [],
       categoryId,
       isAvailable: true,
       priceAmount: 1000,

@@ -93,6 +93,20 @@ describe("Input (text)", () => {
     expect(input).toHaveClass("h-11", "md:h-9");
   });
 
+  // The owner's review (FER-017, 2026-11-18): a transparent field on the
+  // admin's grey canvas looked disabled.
+  test("draws its own surface, apart from the page, and a muted one when disabled", () => {
+    const { input } = setupText({ disabled: true });
+
+    expect(input).toHaveClass(
+      "bg-background",
+      "dark:bg-input/30",
+      "disabled:bg-muted",
+      "disabled:opacity-50"
+    );
+    expect(input).not.toHaveClass("bg-transparent");
+  });
+
   test("shows its invalid state through aria-invalid", () => {
     const { input } = setupText({ "aria-invalid": true });
 

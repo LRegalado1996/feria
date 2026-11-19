@@ -1,6 +1,6 @@
+import { readRowId } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
-import { INT4_MAX } from "@/lib/schemas/catalog";
 import {
   ORDER_SEARCH_MAX_LENGTH,
   ORDER_STATUSES,
@@ -74,15 +74,8 @@ export function orderPath(id: number, locale: Locale, from: OrdersQuery = {}) {
 
 /**
  * An order's id from its page's address, or `null` when the segment cannot
- * be one (not a whole positive number in plain digits, or past what the
- * column holds), so a made-up address costs no query.
+ * be one, so a made-up address costs no query (`readRowId`).
  */
 export function readOrderId(segment: string): number | null {
-  if (!/^[1-9]\d*$/u.test(segment)) {
-    return null;
-  }
-
-  const id = Number(segment);
-
-  return id <= INT4_MAX ? id : null;
+  return readRowId(segment);
 }

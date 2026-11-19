@@ -39,6 +39,8 @@ export const PRODUCT_SEO_TITLE_MAX_LENGTH = 70;
 export const PRODUCT_SEO_DESCRIPTION_MAX_LENGTH = 160;
 /** 999 999,99 in either currency, far above any article and inside int4. */
 export const PRODUCT_PRICE_MAX = 99_999_999;
+/** The filter values one article carries at most (FER-033). */
+export const PRODUCT_ATTRIBUTE_VALUES_MAX = 50;
 export const SEARCH_MAX_LENGTH = 100;
 export const PRODUCTS_PAGE_SIZE = 24;
 export const CATALOG_FILTERS_MAX = 10;
@@ -167,20 +169,80 @@ const optionalText = (max: number) =>
     .transform((value) => (value === "" ? null : value))
     .nullable();
 
+/**
+ * An article's texts in one language. The title may be blank: a draft exists
+ * from its first photo on, before anyone named it (FER-017). Publishing needs
+ * the Spanish one, and the title of any other language the article has
+ * (`resolvePublishGaps`).
+ */
 export const productTranslationSchema = z.object({
   description: z.string().trim().max(PRODUCT_DESCRIPTION_MAX_LENGTH),
   locale: localeSchema,
   seoDescription: optionalText(PRODUCT_SEO_DESCRIPTION_MAX_LENGTH),
   seoTitle: optionalText(PRODUCT_SEO_TITLE_MAX_LENGTH),
-  title: z.string().trim().min(1).max(PRODUCT_TITLE_MAX_LENGTH),
+  title: z.string().trim().max(PRODUCT_TITLE_MAX_LENGTH),
 });
 
+export type ProductTranslationValues = z.infer<typeof productTranslationSchema>;
+
+/** Whether a language's texts hold nothing at all: no text in that language. */
+function isBlankTranslation(row: ProductTranslationValues): boolean {
+  return (
+    row.title === "" &&
+    row.description === "" &&
+    row.seoTitle === null &&
+    row.seoDescription === null
+  );
+}
+
+/** At most this many photos per article (FER-017); the first is its cover. */
+export const PRODUCT_IMAGES_MAX = 8;
+
 /**
- * An article's editable fields. Spanish is required (it names the slug and
- * is the fallback for every other language); each language at most once.
+ * A path on this site, as a photo saved before uploads has it (the seed's
+ * `/seed/<file>`): one slash, then no second one, no query and no spaces.
+ */
+const SITE_PATH_PATTERN = /^\/[\w.-][\w./-]*$/u;
+
+/**
+ * One of the article's photos, in the order the article shows them. A photo
+ * the article already has is sent back as it is stored, which for one saved
+ * before uploads is a path on this site; a new one is an upload's address,
+ * which the service checks is this deployment's own (`isOwnBlobUrl`).
+ */
+export const productImageInputSchema = uploadedImageSchema.extend({
+  url: z.union([
+    uploadedImageSchema.shape.url,
+    z.string().max(500).regex(SITE_PATH_PATTERN),
+  ]),
+});
+
+export type ProductImageValues = z.infer<typeof productImageInputSchema>;
+
+/**
+ * An article's editable fields, everything the wizard (FER-017) holds, so
+ * one write saves the whole article. Spanish is required (it names the slug
+ * and is the fallback for every other language); each language at most once,
+ * and one holding no text at all is no text in that language, dropped. The
+ * photos come in their order, each once; the filter values replace the ones
+ * the article had.
  */
 const productFieldsSchema = z.object({
+  attributeValueIds: z
+    .array(bodyIdSchema)
+    .max(PRODUCT_ATTRIBUTE_VALUES_MAX)
+    .refine((ids) => new Set(ids).size === ids.length, {
+      message: "Each value at most once",
+    }),
   categoryId: bodyIdSchema.nullable(),
+  images: z
+    .array(productImageInputSchema)
+    .max(PRODUCT_IMAGES_MAX)
+    .refine(
+      (images) =>
+        new Set(images.map((image) => image.url)).size === images.length,
+      { message: "Each photo at most once" }
+    ),
   isAvailable: z.boolean(),
   priceAmount: z.number().int().min(0).max(PRODUCT_PRICE_MAX).nullable(),
   translations: z
@@ -192,8 +254,11 @@ const productFieldsSchema = z.object({
       { message: "Each language at most once" }
     )
     .refine((rows) => rows.some((row) => row.locale === "es"), {
-      message: "The Spanish title is required",
-    }),
+      message: "The Spanish texts are required",
+    })
+    .transform((rows) =>
+      rows.filter((row) => row.locale === "es" || !isBlankTranslation(row))
+    ),
 });
 
 export const createProductSchema = z.object(productFieldsSchema.shape);
@@ -212,14 +277,102 @@ export const setProductAvailabilitySchema = productIdSchema.extend({
   isAvailable: z.boolean(),
 });
 
-/** Every image of the article, once each, in the new order. */
-export const reorderProductImagesSchema = productIdSchema.extend({
-  imageIds: z
-    .array(bodyIdSchema)
-    .min(1)
-    .refine((ids) => new Set(ids).size === ids.length, {
-      message: "Each image at most once",
+/** The messages the article wizard (FER-017) shows under its fields. */
+export interface ProductFormMessages {
+  descriptionTooLong: string;
+  priceDecimals: string;
+  priceNegative: string;
+  priceTooHigh: string;
+  titleTooLong: string;
+}
+
+/** Cents per unit of either currency the store sells in. */
+export const PRICE_MINOR_UNITS = 100;
+
+/**
+ * The article wizard's own schema (FER-017), its messages in the page's
+ * language: every field as the form holds it. The price is in whole units
+ * as typed (`12.5`), `null` while blank or refused, and becomes minor units
+ * only on its way out; it may not carry more decimals than the cents hold,
+ * which would be rounded silently. The category is the `<select>`'s value,
+ * `""` for none. A blank text is a draft's right: what publishing needs is
+ * `resolvePublishGaps`'s, not this schema's. No search texts: an article's
+ * come from its title and description (Lucas, 2026-11-18). Without messages
+ * (a local copy read back from the browser, FER-017) zod's own are kept.
+ */
+export function createProductFormSchema(messages?: ProductFormMessages) {
+  const texts = z.object({
+    description: z
+      .string()
+      .trim()
+      .max(PRODUCT_DESCRIPTION_MAX_LENGTH, messages?.descriptionTooLong),
+    title: z
+      .string()
+      .trim()
+      .max(PRODUCT_TITLE_MAX_LENGTH, messages?.titleTooLong),
+  });
+
+  return z.object({
+    attributeValueIds: z.array(bodyIdSchema).max(PRODUCT_ATTRIBUTE_VALUES_MAX),
+    categoryId: z.string().regex(/^\d*$/u),
+    en: texts,
+    es: texts,
+    // A photo the article holds, as `product.get` answered it, or a new
+    // upload: the server checks the address, so only the shape counts here.
+    images: z
+      .array(
+        z.object({
+          height: z.number().int().positive(),
+          url: z.string().min(1).max(500),
+          width: z.number().int().positive(),
+        })
+      )
+      .max(PRODUCT_IMAGES_MAX),
+    isAvailable: z.boolean(),
+    price: z
+      .number()
+      .min(0, messages?.priceNegative)
+      .max(PRODUCT_PRICE_MAX / PRICE_MINOR_UNITS, messages?.priceTooHigh)
+      .refine(
+        (value) => {
+          const cents = value * PRICE_MINOR_UNITS;
+          return Math.abs(cents - Math.round(cents)) < 1e-6;
+        },
+        { message: messages?.priceDecimals }
+      )
+      .nullable(),
+  });
+}
+
+export type ProductFormValues = z.infer<
+  ReturnType<typeof createProductFormSchema>
+>;
+
+/**
+ * The keyset cursor of the admin's article list: the last row's `updatedAt`
+ * and id, the whole of the list's order.
+ */
+export const storeProductCursorSchema = z.object({
+  id: idSchema,
+  // Postgres has no year 0, so a cursor from it would fail in the database.
+  updatedAt: z.iso
+    .datetime({ offset: true })
+    .refine((value) => !value.startsWith("0000"), {
+      message: "Not a date a row can have",
     }),
+});
+
+export type StoreProductCursor = z.infer<typeof storeProductCursorSchema>;
+
+/** The admin's articles (FER-017), drafts and published, a page at a time. */
+export const listStoreProductsSchema = z.object({
+  cursor: storeProductCursorSchema.optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PRODUCTS_PAGE_SIZE_MAX)
+    .default(PRODUCTS_PAGE_SIZE),
 });
 
 export type ListProductsValues = z.infer<typeof listProductsSchema>;
@@ -431,7 +584,6 @@ export const RESERVED_ATTRIBUTE_SLUGS = [
 export const SWATCH_COLOR_PATTERN = /^#[0-9a-f]{6}$/;
 
 export const ATTRIBUTE_NAME_MAX_LENGTH = 60;
-export const PRODUCT_ATTRIBUTE_VALUES_MAX = 50;
 
 export const listCatalogFiltersSchema = publicCatalogSchema.extend({});
 
@@ -509,14 +661,4 @@ export const reorderAttributeValuesSchema = z.object({
 
 export const deleteAttributeValueSchema = z.object({
   id: idSchema,
-});
-
-/** Every value the article carries, replacing what it had. */
-export const setProductAttributeValuesSchema = productIdSchema.extend({
-  valueIds: z
-    .array(bodyIdSchema)
-    .max(PRODUCT_ATTRIBUTE_VALUES_MAX)
-    .refine((ids) => new Set(ids).size === ids.length, {
-      message: "Each value at most once",
-    }),
 });

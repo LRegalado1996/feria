@@ -12,10 +12,9 @@ import {
 import {
   createAttribute,
   createAttributeValue,
-  setProductAttributeValues,
 } from "@/server/services/attribute";
-import { createProduct, publishProduct } from "@/server/services/catalog";
 import { lockStoreCategories } from "@/server/services/category";
+import { createProduct, publishProduct } from "@/server/services/product";
 
 import { SEED_ARTICLES, SEED_PHOTOS } from "./seed-articles";
 
@@ -243,9 +242,17 @@ export async function seedCatalog(
 
   for (const article of SEED_ARTICLES) {
     const created = await createProduct(tx, {
+      // The seed's photos are files of the site (`/seed/...`), inserted
+      // below: no upload, so no Blob store to check one against.
+      blobStore: null,
       storeId,
       values: {
+        attributeValueIds: article.colors.flatMap((slug) => {
+          const id = colorIds.get(slug);
+          return id === undefined ? [] : [id];
+        }),
         categoryId: categoryIds.get(article.category) ?? null,
+        images: [],
         isAvailable: article.isAvailable,
         priceAmount: article.priceAmount,
         translations: (["es", "en"] as const).map((locale) => ({
@@ -281,14 +288,6 @@ export async function seedCatalog(
     }
 
     await publishProduct(tx, { id: created.id, storeId });
-    await setProductAttributeValues(tx, {
-      productId: created.id,
-      storeId,
-      valueIds: article.colors.flatMap((slug) => {
-        const id = colorIds.get(slug);
-        return id === undefined ? [] : [id];
-      }),
-    });
   }
 
   return SEED_ARTICLES.length;
