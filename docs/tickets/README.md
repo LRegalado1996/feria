@@ -70,6 +70,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)   | The bottom bar stays above the iPhone keyboard     | P1       | todo        |
 | [FER-054](FER-054-article-save-conflicts.md)          | Saving one article from two tabs                   | P2       | todo        |
 | [FER-055](FER-055-photo-grid-swipe.md)                | Swiping over the wizard's photos scrolls           | P2       | todo        |
+| [FER-056](FER-056-list-search-and-filters-race.md)    | A pending search and "Aplicar" can lose each other | P2       | todo        |
 
 ### M4 Storefront and orders
 
