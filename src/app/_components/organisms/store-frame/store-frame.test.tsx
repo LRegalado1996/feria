@@ -112,6 +112,23 @@ describe("StoreFrame", () => {
     expect(bar()?.nextElementSibling).toBe(header);
   });
 
+  test("makes the bar's words a link when the announcement has one (FER-020)", async () => {
+    const words = deferred<StoreAnnouncement | null>();
+    const { bar } = await setup({ announcement: words.promise });
+
+    await words.settle({
+      href: "/productos",
+      lang: "es",
+      text: "Encontranos en la feria, del 5/12 al 5/1",
+    });
+
+    expect(
+      within(bar() ?? document.body).getByRole("link", {
+        name: "Encontranos en la feria, del 5/12 al 5/1",
+      })
+    ).toHaveAttribute("href", "/productos");
+  });
+
   test("leaves the bar out when the store has nothing to say", async () => {
     const words = deferred<StoreAnnouncement | null>();
     const { bar } = await setup({ announcement: words.promise });

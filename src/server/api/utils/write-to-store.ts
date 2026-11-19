@@ -1,4 +1,5 @@
 import { invalidateCatalogCache } from "@/server/cache/catalog";
+import { invalidateHomeCache } from "@/server/cache/home";
 import type { DatabaseClient } from "@/server/db";
 import { withAdmin } from "@/server/services/access";
 
@@ -43,6 +44,22 @@ export async function writeToCatalog<T>(
   if (shows(result)) {
     invalidateCatalogCache(context.store.id);
   }
+
+  return result;
+}
+
+/**
+ * `writeToStore` for a write to the home's curation (FER-020): the
+ * announcement, a banner, the home's order. Once it committed, the store's
+ * cached announcement and home are dropped, so the storefront shows it on
+ * the next visit.
+ */
+export async function writeToHome<T>(
+  context: StoreWriteContext,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+): Promise<T> {
+  const result = await writeToStore(context, write);
+  invalidateHomeCache(context.store.id);
 
   return result;
 }

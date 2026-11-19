@@ -111,13 +111,18 @@ export class StorePage extends BasePage {
   }
 
   /**
-   * The lime line above the header (FER-039): the fair and the stall until
-   * FER-020, the whole notice from `lg` up and a short one on a phone.
+   * The lime line above the header (FER-039): the store's announcement
+   * (FER-020), the whole notice from `lg` up and a short one on a phone.
    */
   getAnnouncementBar(): Locator {
     return this.getByTestId("store-announcement-bar").filter({
       visible: true,
     });
+  }
+
+  /** The bar's link, when the announcement has one (FER-020). */
+  getAnnouncementLink(): Locator {
+    return this.getAnnouncementBar().getByTestId("store-announcement-bar-link");
   }
 
   /** The bar's whole notice, in the HTML at every width. */

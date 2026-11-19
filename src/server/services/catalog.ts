@@ -354,7 +354,7 @@ function orderOf(sort: ProductSort) {
  * `locale` (or the language they have), the cover (first image by position)
  * and the price with the store's currency.
  */
-async function loadCards(
+export async function loadCards(
   db: DatabaseClient,
   {
     currencyCode,

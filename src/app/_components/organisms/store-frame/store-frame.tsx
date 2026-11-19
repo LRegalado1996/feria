@@ -12,8 +12,10 @@ import {
 export interface StoreAnnouncement {
   lang: string;
   /** Shown instead of `text` on a phone, to the eye only. */
-  short?: string;
+  short?: string | null;
   text: string;
+  /** Where the words lead, already in the page's language (FER-020). */
+  href?: string | null;
 }
 
 export type StoreFrameProps = Omit<StoreHeaderProps, "className"> & {
@@ -36,7 +38,7 @@ function Announcement({
   const said = use(announcement);
 
   return said ? (
-    <StoreAnnouncementBar lang={said.lang} short={said.short}>
+    <StoreAnnouncementBar href={said.href} lang={said.lang} short={said.short}>
       {said.text}
     </StoreAnnouncementBar>
   ) : null;

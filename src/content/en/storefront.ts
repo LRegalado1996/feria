@@ -156,7 +156,9 @@ export const storefront: Dictionary["storefront"] = {
     title: "Catalog",
   },
   home: {
+    bestSellers: "Best sellers",
     browse: "See the catalog",
+    featured: "Featured",
   },
   cover: {
     goTo: "Show cover {current}",
@@ -196,12 +198,6 @@ export const storefront: Dictionary["storefront"] = {
     viewAllOf: "See all: {title}",
   },
   shell: {
-    // The bar above the header until FER-020 lets the store write its own.
-    // The short one is for a phone, where the whole one would not fit.
-    announcement: {
-      full: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
-      short: "Paseo Prado Fair · Stall 86",
-    },
     cartCount: "Cart, {count} items",
     cartCountOne: "Cart, 1 item",
     cartEmpty: "Cart, empty",

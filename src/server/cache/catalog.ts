@@ -15,8 +15,11 @@ import {
   listRelatedPool,
 } from "@/server/services/catalog";
 
-/** Every cached read of one store's published articles. */
-function catalogTag(storeId: number): string {
+/**
+ * Every cached read of one store's published articles, and the home's
+ * (FER-020), which shows them.
+ */
+export function catalogTag(storeId: number): string {
   return `catalog:${storeId}`;
 }
 

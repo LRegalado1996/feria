@@ -80,6 +80,42 @@ describe("StoreAnnouncementBar", () => {
     ).not.toHaveClass("max-lg:sr-only");
   });
 
+  test("without a link, is only words", () => {
+    setup();
+
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  test("with a path of the site, its words are one link there, named by the whole notice", () => {
+    const { bar } = setup({
+      children: "Encontranos en la feria, del 5/12 al 5/1",
+      href: "/en/productos",
+      short: "En la feria",
+    });
+
+    const link = screen.getByRole("link", {
+      name: "Encontranos en la feria, del 5/12 al 5/1",
+    });
+    expect(link).toHaveAttribute("href", "/en/productos");
+    expect(link).not.toHaveAttribute("rel");
+    expect(link).toHaveClass("underline");
+    // Both versions inside the one link.
+    expect(
+      link.querySelector('[data-slot="store-announcement-bar-short"]')
+    ).toHaveTextContent(/^En la feria$/u);
+    expect(bar.querySelectorAll("a")).toHaveLength(1);
+  });
+
+  test("with an address elsewhere, is a plain link that does not hand over the page", () => {
+    setup({ href: "https://instagram.com/lr-market" });
+
+    const link = screen.getByRole("link", {
+      name: "Burbujeros y joyas en la feria",
+    });
+    expect(link).toHaveAttribute("href", "https://instagram.com/lr-market");
+    expect(link).toHaveAttribute("rel", "noopener");
+  });
+
   test("keeps a caller's class", () => {
     const { bar } = setup({ className: "sticky" });
 

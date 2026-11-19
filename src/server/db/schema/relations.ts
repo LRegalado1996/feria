@@ -14,6 +14,15 @@ import {
   productImageTranslation,
   productTranslation,
 } from "./catalog";
+import {
+  announcement,
+  announcementTranslation,
+  banner,
+  bannerTranslation,
+  featuredProduct,
+  homeSection,
+  rankingEntry,
+} from "./home";
 import { customerOrder, orderItem, orderStatusEvent } from "./order";
 import { store, storeTranslation } from "./store";
 
@@ -199,6 +208,78 @@ export const orderStatusEventRelations = relations(
     order: one(customerOrder, {
       fields: [orderStatusEvent.orderId],
       references: [customerOrder.id],
+    }),
+  })
+);
+
+export const announcementRelations = relations(
+  announcement,
+  ({ many, one }) => ({
+    store: one(store, {
+      fields: [announcement.storeId],
+      references: [store.id],
+    }),
+    translations: many(announcementTranslation),
+  })
+);
+
+export const announcementTranslationRelations = relations(
+  announcementTranslation,
+  ({ one }) => ({
+    announcement: one(announcement, {
+      fields: [announcementTranslation.announcementId],
+      references: [announcement.id],
+    }),
+  })
+);
+
+export const bannerRelations = relations(banner, ({ many, one }) => ({
+  linkCategory: one(category, {
+    fields: [banner.linkCategoryId],
+    references: [category.id],
+  }),
+  linkProduct: one(product, {
+    fields: [banner.linkProductId],
+    references: [product.id],
+  }),
+  store: one(store, { fields: [banner.storeId], references: [store.id] }),
+  translations: many(bannerTranslation),
+}));
+
+export const bannerTranslationRelations = relations(
+  bannerTranslation,
+  ({ one }) => ({
+    banner: one(banner, {
+      fields: [bannerTranslation.bannerId],
+      references: [banner.id],
+    }),
+  })
+);
+
+export const homeSectionRelations = relations(homeSection, ({ one }) => ({
+  banner: one(banner, {
+    fields: [homeSection.bannerId],
+    references: [banner.id],
+  }),
+  category: one(category, {
+    fields: [homeSection.categoryId],
+    references: [category.id],
+  }),
+}));
+
+export const rankingEntryRelations = relations(rankingEntry, ({ one }) => ({
+  product: one(product, {
+    fields: [rankingEntry.productId],
+    references: [product.id],
+  }),
+}));
+
+export const featuredProductRelations = relations(
+  featuredProduct,
+  ({ one }) => ({
+    product: one(product, {
+      fields: [featuredProduct.productId],
+      references: [product.id],
     }),
   })
 );

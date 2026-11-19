@@ -46,6 +46,16 @@ describe("createUploadTokenSchema", () => {
       { purpose: "product", size: 4_000_001 },
       false,
     ],
+    [
+      "exactly a home banner's cap",
+      { purpose: "banner", size: 5_000_000 },
+      true,
+    ],
+    [
+      "a home banner one byte over it",
+      { purpose: "banner", size: 5_000_001 },
+      false,
+    ],
     ["one byte", { size: 1 }, true],
     ["an empty file", { size: 0 }, false],
     ["a fractional size", { size: 10.5 }, false],

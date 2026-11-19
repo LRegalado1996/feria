@@ -1,0 +1,351 @@
+import { call } from "@orpc/server";
+import { describe, expect, test, vi } from "vitest";
+
+import {
+  createMockContext,
+  createUnauthenticatedMockContext,
+} from "@/server/test/context";
+
+import { homeRouter } from "./home";
+
+// The router is input → the admin's login and store → service, writes inside
+// the login's re-check, then the home's cache dropped. The queries are
+// `src/server/services/home.test.ts`'s.
+
+// The handle `withAdmin` hands its write: distinct from the client, so a
+// write that went through the outer client instead would be caught.
+const { BLOB_STORE, OLD_PHOTO, TX } = vi.hoisted(() => ({
+  BLOB_STORE: {
+    host: "store9.public.blob.vercel-storage.com",
+    namespace: "qa",
+    token: "vercel_blob_rw_Store9_s3cretPart",
+  },
+  OLD_PHOTO:
+    "https://store9.public.blob.vercel-storage.com/qa/banner/11111111-1111-4111-8111-111111111111.webp",
+  TX: { handle: "the write's transaction" },
+}));
+
+const IMAGE = {
+  height: 1067,
+  url: "https://store9.public.blob.vercel-storage.com/qa/banner/22222222-2222-4222-8222-222222222222.webp",
+  width: 1600,
+};
+
+const services = vi.hoisted(() => ({
+  createBanner: vi.fn(async () => ({ id: 9 })),
+  deleteBanner: vi.fn(async () => ({ discardedImageUrls: [OLD_PHOTO], id: 9 })),
+  discardBlobs: vi.fn<(db: unknown, urls: readonly string[]) => void>(),
+  findAdminStore: vi.fn(),
+  getHomeCuration: vi.fn(async () => ({ today: "2026-12-04" })),
+  invalidateHomeCache: vi.fn<(storeId: number) => void>(),
+  readBlobStore: vi.fn(() => BLOB_STORE),
+  saveAnnouncement: vi.fn(async () => ({ id: 3 })),
+  saveHomeLayout: vi.fn(async () => ({ sections: [] })),
+  updateBanner: vi.fn(async () => ({ discardedImageUrls: [OLD_PHOTO], id: 9 })),
+  withAdmin: vi.fn(
+    async (
+      _db: unknown,
+      _userId: unknown,
+      write: (handle: unknown) => Promise<unknown>
+    ) => await write(TX)
+  ),
+}));
+
+vi.mock("@/server/services/home", () => ({
+  createBanner: services.createBanner,
+  deleteBanner: services.deleteBanner,
+  getHomeCuration: services.getHomeCuration,
+  saveAnnouncement: services.saveAnnouncement,
+  saveHomeLayout: services.saveHomeLayout,
+  updateBanner: services.updateBanner,
+}));
+
+// The files' deletion after the response is `blob-store.test.ts`'s.
+vi.mock("@/server/api/utils/blob-store", () => ({
+  discardBlobs: services.discardBlobs,
+  readBlobStore: services.readBlobStore,
+}));
+
+vi.mock("@/server/services/access", () => ({
+  findAdminStore: services.findAdminStore,
+  withAdmin: services.withAdmin,
+}));
+
+// Next's cache only exists inside a Next render: the home's invalidation is
+// spied on, its cached reads are `src/server/cache/home.test.ts`'s.
+vi.mock("@/server/cache/home", () => ({
+  invalidateHomeCache: services.invalidateHomeCache,
+}));
+
+vi.mock("@/server/cache/catalog", () => ({
+  invalidateCatalogCache: vi.fn(),
+}));
+
+vi.mock("@/env", () => ({
+  env: { DATABASE_URL: process.env.DATABASE_URL, NODE_ENV: "test" },
+}));
+
+vi.mock("@/server/better-auth", () => ({
+  auth: { api: { getSession: vi.fn(async () => null) } },
+}));
+
+const STORE = { id: 7 };
+const USER_ID = "test-user-id";
+// Built, so no `javascript:` literal sits in the source.
+const SCRIPT_URL = ["javascript", "alert(1)"].join(":");
+
+function makeAnnouncementInput(overrides: Record<string, unknown> = {}) {
+  return {
+    endsOn: null,
+    isActive: true,
+    linkUrl: " /productos ",
+    shortTextEn: "",
+    shortTextEs: null,
+    startsOn: "2026-12-05",
+    textEn: null,
+    textEs: " Encontranos en la feria ",
+    ...overrides,
+  };
+}
+
+function makeBannerInput(overrides: Record<string, unknown> = {}) {
+  return {
+    ctaLabelEn: null,
+    ctaLabelEs: null,
+    endsOn: null,
+    image: IMAGE,
+    imagePhone: null,
+    isActive: true,
+    link: { categoryId: 4, kind: "category" },
+    placement: "rows",
+    rowsIndex: 2,
+    startsOn: null,
+    titleEn: null,
+    titleEs: "Burbujas",
+    ...overrides,
+  };
+}
+
+/**
+ * A signed-in admin working on the store (or a login the database no longer
+ * has, or nobody).
+ */
+function setup({
+  isLogin = true,
+  signedIn = true,
+}: { isLogin?: boolean; signedIn?: boolean } = {}) {
+  const { mockCtx } = signedIn
+    ? createMockContext()
+    : createUnauthenticatedMockContext();
+  services.findAdminStore.mockResolvedValue(isLogin ? STORE : null);
+  const options = { context: mockCtx as never };
+  const run = async (
+    name: keyof typeof homeRouter,
+    input: unknown
+  ): Promise<unknown> =>
+    await call(homeRouter[name] as never, input as never, options);
+
+  return { db: mockCtx.db, run };
+}
+
+describe("home router", () => {
+  test("reads the store's curation on the business day, outside any write", async () => {
+    // 02:00 UTC is still December 4 in Montevideo.
+    vi.setSystemTime(new Date("2026-12-05T02:00:00Z"));
+    const { db, run } = setup();
+
+    await expect(run("get", undefined)).resolves.toEqual({
+      today: "2026-12-04",
+    });
+
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID
+    );
+    expect(services.getHomeCuration).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+      today: "2026-12-04",
+    });
+    expect(services.withAdmin).not.toHaveBeenCalled();
+    expect(services.invalidateHomeCache).not.toHaveBeenCalled();
+  });
+
+  test("saves the announcement in the store, trimmed and blanks as none, then drops the cached home", async () => {
+    const { db, run } = setup();
+
+    await expect(
+      run("saveAnnouncement", makeAnnouncementInput())
+    ).resolves.toEqual({ id: 3 });
+
+    expect(services.withAdmin).toHaveBeenCalledExactlyOnceWith(
+      db,
+      USER_ID,
+      expect.any(Function)
+    );
+    expect(services.saveAnnouncement).toHaveBeenCalledExactlyOnceWith(TX, {
+      storeId: 7,
+      values: {
+        endsOn: null,
+        isActive: true,
+        linkUrl: "/productos",
+        shortTextEn: null,
+        shortTextEs: null,
+        startsOn: "2026-12-05",
+        textEn: null,
+        textEs: "Encontranos en la feria",
+      },
+    });
+    expect(services.invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+    expect(
+      services.invalidateHomeCache.mock.invocationCallOrder[0]
+    ).toBeGreaterThan(
+      services.saveAnnouncement.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("adds a banner with this deployment's Blob store, then drops the cached home", async () => {
+    const { run } = setup();
+
+    await expect(run("createBanner", makeBannerInput())).resolves.toEqual({
+      id: 9,
+    });
+
+    expect(services.createBanner).toHaveBeenCalledExactlyOnceWith(TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values: makeBannerInput(),
+    });
+    expect(services.invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+    expect(services.discardBlobs).not.toHaveBeenCalled();
+  });
+
+  test("edits a banner by id, then drops the cached home and its replaced photo's file", async () => {
+    const { db, run } = setup();
+    const { image: _image, ...input } = makeBannerInput();
+
+    await expect(
+      run("updateBanner", { ...input, id: "9", imagePhone: null })
+    ).resolves.toEqual({ id: 9 });
+
+    expect(services.updateBanner).toHaveBeenCalledExactlyOnceWith(TX, {
+      blobStore: BLOB_STORE,
+      storeId: 7,
+      values: { ...input, id: 9, imagePhone: null },
+    });
+    expect(services.invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+    // The dropped file goes once the write committed.
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
+      OLD_PHOTO,
+    ]);
+    expect(services.discardBlobs.mock.invocationCallOrder[0]).toBeGreaterThan(
+      services.updateBanner.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  test("deletes a banner by id, then drops the cached home and its photos' files", async () => {
+    const { db, run } = setup();
+
+    await expect(run("deleteBanner", { id: "9" })).resolves.toEqual({ id: 9 });
+
+    expect(services.deleteBanner).toHaveBeenCalledExactlyOnceWith(TX, {
+      id: 9,
+      storeId: 7,
+    });
+    expect(services.invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+    expect(services.discardBlobs).toHaveBeenCalledExactlyOnceWith(db, [
+      OLD_PHOTO,
+    ]);
+  });
+
+  test("saves the home's order in the store, then drops the cached home", async () => {
+    const { run } = setup();
+    const layout = {
+      coverBannerIds: [2, 1],
+      featuredProductIds: [],
+      rankingProductIds: [40],
+      sections: [{ kind: "featured" }, { categoryId: 4, kind: "category" }],
+    };
+
+    await expect(run("saveLayout", layout)).resolves.toEqual({ sections: [] });
+
+    expect(services.saveHomeLayout).toHaveBeenCalledExactlyOnceWith(TX, {
+      storeId: 7,
+      values: layout,
+    });
+    expect(services.invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  test("keeps the cache when a write fails", async () => {
+    const { run } = setup();
+    services.deleteBanner.mockRejectedValueOnce(new Error("Banner gone"));
+
+    await expect(run("deleteBanner", { id: 9 })).rejects.toThrow("Banner gone");
+    expect(services.invalidateHomeCache).not.toHaveBeenCalled();
+    expect(services.discardBlobs).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["get", undefined, services.getHomeCuration],
+    ["deleteBanner", { id: 9 }, services.deleteBanner],
+    ["saveAnnouncement", makeAnnouncementInput(), services.saveAnnouncement],
+  ] as const)(
+    "%s by a login the database no longer has is UNAUTHORIZED, before the service",
+    async (name, input, service) => {
+      const { run } = setup({ isLogin: false });
+
+      await expect(run(name, input)).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      });
+      expect(services.withAdmin).not.toHaveBeenCalled();
+      expect(service).not.toHaveBeenCalled();
+      expect(services.invalidateHomeCache).not.toHaveBeenCalled();
+    }
+  );
+
+  test("a signed-out caller is UNAUTHORIZED, before the login is read", async () => {
+    const { run } = setup({ signedIn: false });
+
+    await expect(run("createBanner", makeBannerInput())).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    });
+    expect(services.findAdminStore).not.toHaveBeenCalled();
+    expect(services.createBanner).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["saveAnnouncement", makeAnnouncementInput({ linkUrl: SCRIPT_URL })],
+    ["saveAnnouncement", makeAnnouncementInput({ textEs: "  " })],
+    [
+      "createBanner",
+      makeBannerInput({ link: { kind: "url", url: "//evil.example" } }),
+    ],
+    [
+      "createBanner",
+      makeBannerInput({ image: { ...IMAGE, url: "http://x.com/a.webp" } }),
+    ],
+    ["updateBanner", { ...makeBannerInput(), id: "0" }],
+    ["deleteBanner", { id: "" }],
+    [
+      "saveLayout",
+      {
+        coverBannerIds: [],
+        featuredProductIds: [1],
+        rankingProductIds: [],
+        sections: [],
+      },
+    ],
+  ] as const)(
+    "refuses invalid %s input before reading the login",
+    async (name, input) => {
+      const { run } = setup();
+
+      await expect(run(name, input)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Input validation failed",
+      });
+      expect(services.findAdminStore).not.toHaveBeenCalled();
+    }
+  );
+});

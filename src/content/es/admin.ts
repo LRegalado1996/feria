@@ -330,6 +330,188 @@ export const admin = {
   },
   // The company's settings (FER-014): what the store says about itself and
   // how a shopper reaches it.
+  // The home's curation (FER-020).
+  home: {
+    announcement: {
+      errors: {
+        dateInvalid: "Elegí una fecha del calendario.",
+        endBeforeStart: "El último día va igual o después del primero.",
+        linkInvalid:
+          "Escribí una página de la tienda, como /productos, o un enlace completo que empiece con https://",
+        linkTooLong: "El enlace es demasiado largo.",
+        save: "No pudimos guardar el anuncio. Lo que escribiste sigue acá: probá de nuevo.",
+        shortNeedsText: "Escribí primero el texto en inglés.",
+        shortTooLong: "Usá hasta 40 caracteres.",
+        textRequired: "Escribí el texto del anuncio.",
+        textTooLong: "Usá hasta 120 caracteres.",
+      },
+      fields: {
+        daysHint:
+          "Opcional. Los dos días cuentan; fuera de esas fechas el anuncio no se muestra, sin que tengas que tocar nada.",
+        endsOn: "Hasta",
+        isActive: "Mostrar el anuncio",
+        linkHint:
+          "Opcional. Una página de la tienda, como /productos, o un enlace completo que empiece con https://",
+        linkUrl: "Enlace",
+        shortHint:
+          "Lo que se ve en un celular, donde el texto entero no entra en una línea. Si la dejás vacía, el celular muestra el texto entero.",
+        shortTextEn: "Versión corta en inglés",
+        shortTextEs: "Versión corta en español",
+        startsOn: "Desde",
+        textEn: "Texto en inglés",
+        textEs: "Texto en español",
+      },
+      hint: "La línea verde arriba de todo, en cada página de la tienda.",
+      pending: "Guardando…",
+      saved: "Anuncio guardado.",
+      submit: "Guardar anuncio",
+      title: "Anuncio",
+    },
+    bannerForm: {
+      cancel: "Cancelar",
+      close: "Cerrar",
+      created: "Banner agregado.",
+      createTitle: "Nuevo banner",
+      description:
+        "Una foto grande con su título y un botón, en la portada o entre dos filas.",
+      editTitle: "Editar banner",
+      errors: {
+        articleRequired: "Elegí el artículo.",
+        categoryRequired: "Elegí la categoría.",
+        ctaNeedsTitle: "Escribí primero el título en inglés.",
+        ctaTooLong: "Usá hasta 24 caracteres.",
+        dateInvalid: "Elegí una fecha del calendario.",
+        endBeforeStart: "El último día va igual o después del primero.",
+        imageRequired: "Elegí la foto para computadora.",
+        linkInvalid:
+          "Escribí una página de la tienda, como /productos, o un enlace completo que empiece con https://",
+        linkTooLong: "El enlace es demasiado largo.",
+        save: "No pudimos guardar el banner. Lo que escribiste sigue acá: probá de nuevo.",
+        titleRequired: "Escribí el título.",
+        titleTooLong: "Usá hasta 60 caracteres.",
+      },
+      fields: {
+        choose: "Elegí…",
+        cropComputer: "En una computadora",
+        cropHint:
+          "La foto llena todo el ancho y se recorta para que entre: así queda en cada pantalla.",
+        cropPhone: "En un celular",
+        cropTitle: "Cómo se recorta",
+        ctaHint: "Si lo dejás vacío, el botón dice «Comprar ahora».",
+        ctaLabelEn: "Botón en inglés",
+        ctaLabelEs: "Botón en español",
+        daysHint:
+          "Opcional. Los dos días cuentan; fuera de esas fechas el banner no se muestra, sin que tengas que tocar nada.",
+        endsOn: "Hasta",
+        image: "Foto para computadora",
+        imageHint:
+          "Apaisada, como mínimo de 1600 px de ancho. JPEG, PNG o WebP.",
+        imagePhone: "Foto para celular",
+        imagePhoneHint:
+          "Opcional. Vertical; si no hay, el celular recorta la de computadora.",
+        imagePhoneNeedsComputer: "Primero elegí la foto para computadora.",
+        isActive: "Mostrar el banner",
+        linkCategoryId: "Categoría",
+        linkKind: "Lleva a",
+        linkKinds: {
+          category: "Una categoría",
+          none: "Ningún lado",
+          product: "Un artículo",
+          url: "Una dirección",
+        },
+        linkProductId: "Artículo",
+        linkUrl: "Dirección",
+        linkUrlHint:
+          "Una página de la tienda, como /productos, o un enlace completo que empiece con https://",
+        placement: "Dónde va",
+        placements: { cover: "En la portada", rows: "Entre dos filas" },
+        rowsFirst: "Antes de la primera fila",
+        rowsIndex: "Después de",
+        startsOn: "Desde",
+        titleEn: "Título en inglés",
+        titleEs: "Título en español",
+      },
+      pending: "Guardando…",
+      saved: "Banner guardado.",
+      submit: "Guardar banner",
+      waitUpload: "Esperá a que termine de subir la foto.",
+    },
+    banners: {
+      add: "Nuevo banner",
+      delete: "Borrar banner: {title}",
+      deleteConfirm: "Borrar",
+      deleted: "Banner borrado.",
+      deleteDescription:
+        "Se borran «{title}» y sus fotos. No se puede deshacer.",
+      deletePending: "Borrando…",
+      deleteTitle: "¿Borrar el banner?",
+      edit: "Editar banner: {title}",
+      empty:
+        "Todavía no hay banners. Agregá uno para la portada o para ir entre dos filas.",
+      errors: {
+        delete: "No pudimos borrar el banner. Probá de nuevo.",
+      },
+      hint: "Fotos grandes con un título y un botón. Van en la portada, el carrusel de arriba de todo, o entre dos filas de artículos.",
+      linkUnpublished:
+        "El artículo al que lleva no está publicado: el banner se muestra sin enlace.",
+      placements: { cover: "Portada", rows: "Entre filas" },
+      title: "Banners",
+    },
+    description:
+      "Lo que muestra el inicio de la tienda: el anuncio de arriba, los banners con fotos y el orden de las filas de artículos.",
+    errors: {
+      load: "No pudimos cargar el inicio.",
+    },
+    layout: {
+      add: "Agregar",
+      addArticle: "Artículo para agregar",
+      bannerRow: "Banner: {title}",
+      bestSellers: "Más vendidos",
+      bestSellersHint:
+        "Elegí y ordená hasta 10 artículos. Los elegís vos: no salen de los pedidos.",
+      categoryEmpty: "Sin artículos publicados: no aparece",
+      cover: "Portada",
+      coverEmpty: "No hay banners en la portada.",
+      coverHint: "El orden en que pasan los banners del carrusel de arriba.",
+      down: "Bajar: {name}",
+      errors: {
+        featuredCount: "Elegí ninguno, o de 2 a 4 artículos destacados.",
+        save: "No pudimos guardar el orden. Tus cambios siguen acá: probá de nuevo.",
+      },
+      featured: "Destacados",
+      featuredHint: "Elegí de 2 a 4 artículos, o ninguno.",
+      full: "Ya hay {max}: quitá uno para agregar otro.",
+      hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados y los banners entre filas.",
+      none: "Ninguno todavía.",
+      pending: "Guardando…",
+      remove: "Quitar: {name}",
+      rows: "Filas",
+      rowsHint: "Una fila sin artículos para mostrar no aparece en la tienda.",
+      saved: "Orden guardado.",
+      submit: "Guardar orden",
+      title: "Orden del inicio",
+      untitled: "Sin título",
+      up: "Subir: {name}",
+      warnings: {
+        unavailable:
+          "Está agotado: no aparece en la tienda hasta que vuelva a estar disponible.",
+        unpublished: "No está publicado: no aparece en la tienda.",
+      },
+    },
+    preview: {
+      coverMore: "Y {count} más en la portada.",
+      empty: "Con lo que elegiste, el inicio todavía no muestra nada.",
+      hint: "Así se ve el inicio con lo que elegiste, antes de guardar: muestra lo que hoy aparece en la tienda.",
+      title: "Vista previa",
+    },
+    status: {
+      ended: "Terminó",
+      off: "Apagado",
+      scheduled: "Programado",
+      showing: "Se muestra",
+    },
+    title: "Inicio",
+  },
   settings: {
     contact: "Contacto y redes",
     currencies: {

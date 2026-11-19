@@ -1,0 +1,665 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
+import Image from "next/image";
+import { useId, useRef, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
+
+import { Button } from "@/app/_components/atoms/button";
+import { Skeleton } from "@/app/_components/atoms/skeleton";
+import { AdminPage } from "@/app/_components/molecules/admin-page";
+import {
+  AnnouncementForm,
+  announcementFields,
+} from "@/app/_components/molecules/announcement-form";
+import {
+  BannerForm,
+  type BannerFormBanner,
+} from "@/app/_components/molecules/banner-form";
+import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
+import {
+  HomeLayoutEditor,
+  type HomeLayoutEntry,
+} from "@/app/_components/molecules/home-layout-editor";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/app/_components/molecules/sheet";
+import { StoreHomePreview } from "@/app/_components/molecules/store-home-preview";
+import { reportError } from "@/lib/errors/client";
+import { previewHomeContent } from "@/lib/home/preview";
+import { scheduleStatus } from "@/lib/home/schedule";
+import {
+  type HomeCurationData,
+  useCreateBanner,
+  useDeleteBanner,
+  useHomeCuration,
+  useSaveAnnouncement,
+  useSaveHomeLayout,
+  useUpdateBanner,
+} from "@/lib/hooks/home";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
+import type { Locale } from "@/lib/i18n/config";
+import { interpolate } from "@/lib/i18n/interpolate";
+import {
+  type AnnouncementFormFields,
+  type BannerFormValues,
+  createAnnouncementFormSchema,
+  createHomeLayoutFormSchema,
+  type HomeLayoutFormFields,
+  type HomeSection,
+  type SaveAnnouncementValues,
+  type SaveHomeLayoutValues,
+} from "@/lib/schemas/home";
+import type { UploadedImage } from "@/lib/schemas/upload";
+
+type Banner = HomeCurationData["banners"][number];
+
+/** The cards the screen fills, as their skeleton holds their place. */
+const SKELETON_CARDS = [
+  ["announcement", "h-72"],
+  ["banners", "h-48"],
+  ["layout", "h-96"],
+] as const;
+
+/** The order form's fields for what the server holds. */
+function layoutFieldsOf(data: HomeCurationData): HomeLayoutFormFields {
+  return {
+    cover: data.coverBannerIds.map((bannerId) => ({ bannerId })),
+    featured: data.featuredProductIds.map((productId) => ({ productId })),
+    featuredPick: "",
+    ranking: data.rankingProductIds.map((productId) => ({ productId })),
+    rankingPick: "",
+    sections: data.sections.map((section) => ({ section })),
+  };
+}
+
+/** A text in `locale`, else the Spanish one. */
+function textIn(texts: { en: string | null; es: string }, locale: Locale) {
+  return locale === "en" && texts.en !== null ? texts.en : texts.es;
+}
+
+/** Whether two images are the same file (or both none). */
+function sameImage(one: UploadedImage | null, other: UploadedImage | null) {
+  return one?.url === other?.url;
+}
+
+/**
+ * A banner of the list: its photo, its title, where it goes, whether it
+ * shows today, a warning when its article is not published, and its edit
+ * and delete buttons, named with its title.
+ */
+function BannerRow({
+  banner,
+  locale,
+  onDelete,
+  onEdit,
+  today,
+  unpublishedLink,
+}: {
+  banner: Banner;
+  locale: Locale;
+  onDelete: (opener: HTMLButtonElement) => void;
+  onEdit: (opener: HTMLButtonElement) => void;
+  today: string;
+  unpublishedLink: boolean;
+}) {
+  const copy = useDictionary().admin.home;
+  const title = textIn({ en: banner.titleEn, es: banner.titleEs }, locale);
+  const status = scheduleStatus(banner, today);
+
+  return (
+    <li
+      className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0"
+      data-testid="home-banner-row"
+    >
+      <div className="relative aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-md border bg-muted">
+        <Image
+          alt=""
+          className="object-cover"
+          fill
+          sizes="5rem"
+          src={banner.image.url}
+        />
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="truncate text-sm font-medium">{title}</p>
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{copy.banners.placements[banner.placement]}</span>
+          <span
+            className={
+              status === "showing"
+                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                : "rounded-full bg-muted px-2 py-0.5 text-muted-foreground"
+            }
+            data-testid="home-banner-status"
+          >
+            {copy.status[status]}
+          </span>
+        </p>
+        {unpublishedLink ? (
+          <p
+            className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+            data-testid="home-layout-warning"
+          >
+            <TriangleAlert
+              aria-hidden="true"
+              className="mt-px size-3.5 shrink-0"
+            />
+            {copy.banners.linkUnpublished}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center">
+        <Button
+          aria-label={interpolate(copy.banners.edit, { title })}
+          onClick={(event) => {
+            onEdit(event.currentTarget);
+          }}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label={interpolate(copy.banners.delete, { title })}
+          onClick={(event) => {
+            onDelete(event.currentTarget);
+          }}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The screen once the home is read: the announcement's card, the banners'
+ * card with its side sheet, the order's cards and the preview, which reads
+ * both forms as they are typed.
+ */
+function CurationScreen({ data }: { data: HomeCurationData }) {
+  const { admin, storefront } = useDictionary();
+  const locale = useLocale();
+  const copy = admin.home;
+  const layoutId = useId();
+  // Before React owns the page, a press would submit the form the
+  // browser's way, its fields in the address.
+  const hydrated = useHydrated();
+  const saveAnnouncement = useSaveAnnouncement();
+  const saveLayout = useSaveHomeLayout();
+  const createBanner = useCreateBanner();
+  const updateBanner = useUpdateBanner();
+  const deleteBanner = useDeleteBanner();
+  const announcementForm = useForm<
+    AnnouncementFormFields,
+    unknown,
+    SaveAnnouncementValues
+  >({
+    defaultValues: announcementFields(data.announcement),
+    resolver: zodResolver(
+      createAnnouncementFormSchema(copy.announcement.errors)
+    ),
+  });
+  const layoutSchema = createHomeLayoutFormSchema(copy.layout.errors);
+  const layoutForm = useForm<
+    HomeLayoutFormFields,
+    unknown,
+    SaveHomeLayoutValues
+  >({
+    // Follows the server's answer (a banner added, a category deleted)
+    // without dropping what was moved and not saved yet.
+    resetOptions: { keepDirtyValues: true },
+    resolver: zodResolver(layoutSchema),
+    values: layoutFieldsOf(data),
+  });
+  // `null` closed; `{ banner: null }` a new banner.
+  const [editing, setEditing] = useState<{ banner: Banner | null } | null>(
+    null
+  );
+  const [deleting, setDeleting] = useState<Banner | null>(null);
+  // What opened the sheet or the dialog: focus goes back to it, or to the
+  // "new banner" button once its banner is gone.
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const articles = new Map(data.articles.map((row) => [row.id, row]));
+  const banners = new Map(data.banners.map((row) => [row.id, row]));
+  const categories = new Map(data.categories.map((row) => [row.id, row]));
+  const articleName = (id: number) => {
+    const article = articles.get(id);
+    const name = article
+      ? textIn({ en: article.titleEn, es: article.titleEs }, locale)
+      : "";
+
+    return name.trim() === "" ? copy.layout.untitled : name;
+  };
+  const bannerTitle = (id: number) => {
+    const banner = banners.get(id);
+
+    return banner
+      ? textIn({ en: banner.titleEn, es: banner.titleEs }, locale)
+      : copy.layout.untitled;
+  };
+  const bannerNote = (id: number) => {
+    const banner = banners.get(id);
+    const status = banner ? scheduleStatus(banner, data.today) : "off";
+
+    return status === "showing" ? null : copy.status[status];
+  };
+  const publishedIn = new Set(
+    data.articles.flatMap((row) =>
+      row.status === "published" && row.categoryId !== null
+        ? [row.categoryId]
+        : []
+    )
+  );
+  const describeArticle = (id: number): HomeLayoutEntry => {
+    const article = articles.get(id);
+    let warning: string | null = null;
+
+    if (article?.status !== "published") {
+      warning = copy.layout.warnings.unpublished;
+    } else if (!article.isAvailable) {
+      warning = copy.layout.warnings.unavailable;
+    }
+
+    return { name: articleName(id), note: null, warning };
+  };
+  const describeSection = (section: HomeSection): HomeLayoutEntry => {
+    if (section.kind === "category") {
+      const category = categories.get(section.categoryId);
+
+      return {
+        name: category
+          ? textIn({ en: category.nameEn, es: category.nameEs }, locale)
+          : copy.layout.untitled,
+        note: publishedIn.has(section.categoryId)
+          ? null
+          : copy.layout.categoryEmpty,
+        warning: null,
+      };
+    }
+
+    if (section.kind === "banner") {
+      return {
+        name: interpolate(copy.layout.bannerRow, {
+          title: bannerTitle(section.bannerId),
+        }),
+        note: bannerNote(section.bannerId),
+        warning: null,
+      };
+    }
+
+    return {
+      name:
+        section.kind === "best_sellers"
+          ? copy.layout.bestSellers
+          : copy.layout.featured,
+      note: null,
+      warning: null,
+    };
+  };
+  const announcementDraft = useWatch({ control: announcementForm.control });
+  const layoutDraft = useWatch({ control: layoutForm.control });
+  const announcementRead = createAnnouncementFormSchema(
+    copy.announcement.errors
+  ).safeParse(announcementDraft);
+  const layoutRead = layoutSchema.safeParse(layoutDraft);
+  const preview = previewHomeContent(
+    data,
+    {
+      announcement: announcementRead.success ? announcementRead.data : null,
+      layout: layoutRead.success
+        ? layoutRead.data
+        : {
+            coverBannerIds: data.coverBannerIds,
+            featuredProductIds: data.featuredProductIds,
+            rankingProductIds: data.rankingProductIds,
+            sections: data.sections,
+          },
+    },
+    locale
+  );
+  // The sequence under the cover, the banner being edited left out: where a
+  // banner between rows can go.
+  const rowsFor = (banner: Banner | null) => {
+    const sections = data.sections.filter(
+      (section) => section.kind !== "banner" || section.bannerId !== banner?.id
+    );
+    const at = banner
+      ? data.sections.findIndex(
+          (section) =>
+            section.kind === "banner" && section.bannerId === banner.id
+        )
+      : -1;
+
+    return {
+      names: sections.map((section) => describeSection(section).name),
+      rowsIndex: at === -1 ? null : at,
+    };
+  };
+
+  const closeSheet = () => {
+    setEditing(null);
+  };
+
+  const saveBanner = async (values: BannerFormValues) => {
+    const banner = editing?.banner ?? null;
+
+    try {
+      if (banner) {
+        await updateBanner.mutateAsync({
+          ...values,
+          id: banner.id,
+          image: sameImage(values.image, banner.image)
+            ? undefined
+            : values.image,
+          imagePhone: sameImage(values.imagePhone, banner.imagePhone)
+            ? undefined
+            : values.imagePhone,
+        });
+        toast.success(copy.bannerForm.saved);
+      } else {
+        await createBanner.mutateAsync(values);
+        toast.success(copy.bannerForm.created);
+      }
+
+      closeSheet();
+      return true;
+    } catch (error) {
+      reportError(error, {
+        action: banner ? "Home.update_banner" : "Home.create_banner",
+      });
+      return false;
+    }
+  };
+
+  // The dialog closes either way: a refused deletion says why in a toast.
+  const removeBanner = async (banner: Banner) => {
+    try {
+      await deleteBanner.mutateAsync({ id: banner.id });
+      toast.success(copy.banners.deleted);
+    } catch (error) {
+      reportError(error, { action: "Home.delete_banner" });
+      toast.error(copy.banners.errors.delete);
+    }
+
+    setDeleting(null);
+  };
+
+  const editingRows = rowsFor(editing?.banner ?? null);
+  const formBanner: BannerFormBanner | null = editing?.banner ?? null;
+
+  return (
+    <AdminPage
+      primaryAction={
+        <Button
+          className="w-full md:w-auto"
+          data-testid="home-layout-submit"
+          disabled={!hydrated || saveLayout.isPending}
+          form={layoutId}
+          type="submit"
+        >
+          {saveLayout.isPending ? copy.layout.pending : copy.layout.submit}
+        </Button>
+      }
+      title={copy.title}
+    >
+      <p className="text-sm text-muted-foreground">{copy.description}</p>
+      <AnnouncementForm
+        form={announcementForm}
+        onSave={async (values) => {
+          try {
+            await saveAnnouncement.mutateAsync(values);
+            toast.success(copy.announcement.saved);
+            return true;
+          } catch (error) {
+            reportError(error, { action: "Home.save_announcement" });
+            toast.error(copy.announcement.errors.save);
+            return false;
+          }
+        }}
+      />
+      <section
+        aria-labelledby={`${layoutId}-banners`}
+        className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+        data-testid="home-banners"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 basis-60 space-y-1">
+            <h2 className="text-sm font-semibold" id={`${layoutId}-banners`}>
+              {copy.banners.title}
+            </h2>
+            <p className="text-xs text-muted-foreground">{copy.banners.hint}</p>
+          </div>
+          <Button
+            data-testid="home-banner-add"
+            onClick={(event) => {
+              opener.current = event.currentTarget;
+              setEditing({ banner: null });
+            }}
+            ref={addButton}
+            type="button"
+            variant="outline"
+          >
+            <Plus aria-hidden="true" />
+            {copy.banners.add}
+          </Button>
+        </div>
+        {data.banners.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{copy.banners.empty}</p>
+        ) : (
+          <ul className="divide-y">
+            {data.banners.map((banner) => (
+              <BannerRow
+                banner={banner}
+                key={banner.id}
+                locale={locale}
+                onDelete={(button) => {
+                  opener.current = button;
+                  setDeleting(banner);
+                }}
+                onEdit={(button) => {
+                  opener.current = button;
+                  setEditing({ banner });
+                }}
+                today={data.today}
+                unpublishedLink={
+                  banner.link.kind === "product" && banner.href === null
+                }
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+      <HomeLayoutEditor
+        choices={data.articles
+          .filter((row) => row.status === "published")
+          .map((row) => ({ id: row.id, name: articleName(row.id) }))}
+        describeArticle={describeArticle}
+        describeBanner={(id) => ({
+          name: bannerTitle(id),
+          note: bannerNote(id),
+          warning: null,
+        })}
+        describeSection={describeSection}
+        form={layoutForm}
+        id={layoutId}
+        onSave={async (values) => {
+          try {
+            await saveLayout.mutateAsync(values);
+            toast.success(copy.layout.saved);
+            return true;
+          } catch (error) {
+            reportError(error, { action: "Home.save_layout" });
+            toast.error(copy.layout.errors.save);
+            return false;
+          }
+        }}
+      />
+      <section
+        aria-labelledby={`${layoutId}-preview`}
+        className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+        data-testid="home-preview"
+      >
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold" id={`${layoutId}-preview`}>
+            {copy.preview.title}
+          </h2>
+          <p className="text-xs text-muted-foreground">{copy.preview.hint}</p>
+        </div>
+        <StoreHomePreview
+          className="rounded-md border"
+          content={preview}
+          copy={storefront}
+          locale={locale}
+          words={{
+            coverMore: copy.preview.coverMore,
+            empty: copy.preview.empty,
+          }}
+        />
+      </section>
+      <Sheet
+        onOpenChange={(open) => {
+          if (!open) {
+            closeSheet();
+          }
+        }}
+        open={editing !== null}
+      >
+        <SheetContent
+          data-testid="home-banner-sheet"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            (opener.current ?? addButton.current)?.focus();
+          }}
+        >
+          <SheetHeader closeLabel={copy.bannerForm.close}>
+            <SheetTitle>
+              {editing?.banner
+                ? copy.bannerForm.editTitle
+                : copy.bannerForm.createTitle}
+            </SheetTitle>
+            <SheetDescription>{copy.bannerForm.description}</SheetDescription>
+          </SheetHeader>
+          {editing ? (
+            <BannerForm
+              articles={data.articles.map((row) => ({
+                id: row.id,
+                label: articleName(row.id),
+              }))}
+              banner={formBanner}
+              categories={data.categories.map((row) => ({
+                id: row.id,
+                label: textIn({ en: row.nameEn, es: row.nameEs }, locale),
+              }))}
+              key={editing.banner?.id ?? "new"}
+              onCancel={closeSheet}
+              onSave={saveBanner}
+              rows={editingRows.names}
+              rowsIndex={editingRows.rowsIndex}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
+      <ConfirmDialog
+        confirmLabel={copy.banners.deleteConfirm}
+        description={interpolate(copy.banners.deleteDescription, {
+          title: deleting ? bannerTitle(deleting.id) : "",
+        })}
+        isPending={deleteBanner.isPending}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          // The deleted banner's button is gone: the list's own button.
+          const target = opener.current?.isConnected
+            ? opener.current
+            : addButton.current;
+          target?.focus();
+        }}
+        onConfirm={() => {
+          // The dialog only asks while a banner is chosen.
+          if (deleting) {
+            void removeBanner(deleting);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+          }
+        }}
+        open={deleting !== null}
+        pendingLabel={copy.banners.deletePending}
+        title={copy.banners.deleteTitle}
+      />
+    </AdminPage>
+  );
+}
+
+/**
+ * The home's curation screen (FER-020) in the admin's shell and cards: the
+ * announcement bar, the photo banners, the home's order and a preview of
+ * the home with what is chosen, before it is saved. Reads the home with
+ * `home.get` (prefetched by the page), shows its skeleton while it comes
+ * and a retry when it fails.
+ */
+function HomeCuration() {
+  const { admin, common } = useDictionary();
+  const copy = admin.home;
+  const curation = useHomeCuration();
+
+  if (curation.data) {
+    return (
+      <section data-slot="home-curation" data-testid="home-curation">
+        <CurationScreen data={curation.data} />
+      </section>
+    );
+  }
+
+  return (
+    <section data-slot="home-curation" data-testid="home-curation">
+      <AdminPage title={copy.title}>
+        {curation.isError ? (
+          <div
+            className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
+            role="alert"
+          >
+            <p className="text-sm">{copy.errors.load}</p>
+            <Button
+              onClick={() => {
+                void curation.refetch();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {common.tryAgain}
+            </Button>
+          </div>
+        ) : (
+          <div
+            aria-busy="true"
+            className="space-y-6"
+            data-testid="home-curation-skeleton"
+          >
+            <span className="sr-only">{common.loading}</span>
+            {SKELETON_CARDS.map(([card, height]) => (
+              <Skeleton className={`${height} w-full rounded-lg`} key={card} />
+            ))}
+          </div>
+        )}
+      </AdminPage>
+    </section>
+  );
+}
+
+export { HomeCuration };
