@@ -116,8 +116,13 @@ export class AdminProductsPage extends AdminPage {
     return this.list().getByRole("navigation", { name: "Páginas" });
   }
 
-  /** Waits for the rows to be exactly `titles`, in order. */
+  /**
+   * Waits for the rows to be exactly `titles`, in order, once the list's
+   * answer has settled: while a new selection's is on its way the last
+   * rows stay, the table `aria-busy`, and could already read as `titles`.
+   */
   async expectTitles(titles: string[]): Promise<void> {
+    await expect(this.table()).not.toHaveAttribute("aria-busy", "true");
     await expect(this.list().getByTestId("product-row-title")).toHaveText(
       titles
     );
