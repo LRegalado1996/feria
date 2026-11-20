@@ -1978,6 +1978,22 @@ function makeSpotlightValues(
   };
 }
 
+/** Whether a relational read's options carry a filter. */
+function hasWhere(query: unknown): query is { where: unknown } {
+  return typeof query === "object" && query !== null && "where" in query;
+}
+
+/** The filter the first call of a relational read sent, as SQL. */
+function whereSent(read: MockDatabase["query"][string]["findMany"]) {
+  const [query] = read.mock.calls[0] ?? [];
+
+  if (!hasWhere(query)) {
+    throw new Error("The read sent no filter, or was never made");
+  }
+
+  return renderQuery(query.where);
+}
+
 describe("the spotlights on a page", () => {
   function setup({
     spotlights = [
@@ -2052,11 +2068,33 @@ describe("the spotlights on a page", () => {
         },
       },
     ]);
-    const [query] = db.query.spotlight.findMany.mock.calls[0] ?? [];
-    expect(renderQuery((query as { where: unknown }).where)).toEqual({
-      params: [STORE_ID],
-      sql: '"spotlight"."storeId" = $1',
+    // Only the spotlights the page places, of the store.
+    expect(whereSent(db.query.spotlight.findMany)).toEqual({
+      params: [STORE_ID, 51, 52, 53],
+      sql: '("spotlight"."storeId" = $1 and "spotlight"."id" in ($2, $3, $4))',
     });
+    // Their articles' cards are read published only: the draft 22 is asked
+    // for and can never come back.
+    expect(whereSent(db.query.product.findMany)).toEqual({
+      params: [20, 21, 22, "published"],
+      sql: '("product"."id" in ($1, $2, $3) and "product"."status" = $4)',
+    });
+  });
+
+  test("a page that places no spotlight reads none", async () => {
+    const { db, read } = setup();
+    db.query.pageSection.findMany.mockResolvedValue([
+      {
+        bannerId: null,
+        categoryId: null,
+        kind: "featured",
+        spotlightId: null,
+      },
+    ]);
+
+    await read("es");
+
+    expect(db.query.spotlight.findMany).not.toHaveBeenCalled();
   });
 
   test("a spotlight with no words shows none", async () => {
