@@ -5,7 +5,12 @@ import { ORPCError } from "@orpc/client";
 import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import {
+  type DeepPartial,
+  useForm,
+  useFormState,
+  useWatch,
+} from "react-hook-form";
 import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -81,6 +86,45 @@ function layoutFieldsOf(data: HomeCurationData): HomeLayoutFormFields {
     rankingPick: "",
     sections: data.sections.map((section) => ({ section })),
   };
+}
+
+/**
+ * The order the preview shows: the one typed when it reads; else the lists
+ * that read as typed and the saved one in place of each that does not (one
+ * featured article waiting for its second keeps a reordered cover); else
+ * the saved order.
+ */
+function previewLayout(
+  schema: ReturnType<typeof createHomeLayoutFormSchema>,
+  draft: DeepPartial<HomeLayoutFormFields>,
+  data: HomeCurationData
+): SaveHomeLayoutValues {
+  const read = schema.safeParse(draft);
+
+  if (read.success) {
+    return read.data;
+  }
+
+  const refused = new Set(read.error.issues.map((issue) => issue.path[0]));
+  const saved = layoutFieldsOf(data);
+  const mended = { ...draft };
+
+  for (const name of ["cover", "featured", "ranking", "sections"] as const) {
+    if (refused.has(name)) {
+      mended[name] = saved[name];
+    }
+  }
+
+  const reread = schema.safeParse(mended);
+
+  return reread.success
+    ? reread.data
+    : {
+        coverBannerIds: data.coverBannerIds,
+        featuredProductIds: data.featuredProductIds,
+        rankingProductIds: data.rankingProductIds,
+        sections: data.sections,
+      };
 }
 
 /** A text in `locale`, else the Spanish one. */
@@ -226,14 +270,17 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   });
   // The home the order form last followed.
   const followed = useRef(data);
+  const savingLayout = saveLayout.isPending;
 
   // The server's home changed under the form (a banner added, moved or
   // deleted from the side sheet): its order becomes the form's defaults,
   // and an order moved and not saved yet is kept over it, less what is gone.
+  // A save in flight owns the form until it settles: a reset now would
+  // unlock its lists, and the save's own reset would then undo any move.
   useEffect(() => {
     const previous = followed.current;
 
-    if (previous === data) {
+    if (previous === data || savingLayout) {
       return;
     }
 
@@ -250,12 +297,45 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
 
     layoutForm.reset(next);
 
-    for (const name of ["cover", "featured", "ranking", "sections"] as const) {
-      if (!sameLayoutList(lists[name], next[name])) {
-        layoutForm.setValue(name, lists[name], { shouldDirty: true });
-      }
+    // The draft goes in by a reset too: a `setValue` right after a reset
+    // never reaches the lists on screen, whose field arrays register again
+    // only on their next render.
+    if (
+      (["cover", "featured", "ranking", "sections"] as const).some(
+        (name) => !sameLayoutList(lists[name], next[name])
+      )
+    ) {
+      layoutForm.reset({ ...next, ...lists }, { keepDefaultValues: true });
     }
-  }, [data, layoutForm]);
+  }, [data, layoutForm, savingLayout]);
+
+  const { isDirty: announcementDirty } = useFormState({
+    control: announcementForm.control,
+  });
+  // The announcement the form last followed.
+  const followedAnnouncement = useRef(data.announcement);
+  const savingAnnouncement = saveAnnouncement.isPending;
+
+  // The saved announcement changed (another tab, another admin): an
+  // untouched form shows it; one with edits keeps them until they are saved
+  // or undone. Not while a save is in flight, which resets the form itself.
+  useEffect(() => {
+    if (
+      followedAnnouncement.current === data.announcement ||
+      announcementDirty ||
+      savingAnnouncement
+    ) {
+      return;
+    }
+
+    followedAnnouncement.current = data.announcement;
+    announcementForm.reset(announcementFields(data.announcement));
+  }, [
+    announcementDirty,
+    announcementForm,
+    data.announcement,
+    savingAnnouncement,
+  ]);
   // `null` closed; `{ banner: null }` a new banner.
   const [editing, setEditing] = useState<{ banner: Banner | null } | null>(
     null
@@ -350,19 +430,11 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   const announcementRead = createAnnouncementFormSchema(
     copy.announcement.errors
   ).safeParse(announcementDraft);
-  const layoutRead = layoutSchema.safeParse(layoutDraft);
   const preview = previewHomeContent(
     data,
     {
       announcement: announcementRead.success ? announcementRead.data : null,
-      layout: layoutRead.success
-        ? layoutRead.data
-        : {
-            coverBannerIds: data.coverBannerIds,
-            featuredProductIds: data.featuredProductIds,
-            rankingProductIds: data.rankingProductIds,
-            sections: data.sections,
-          },
+      layout: previewLayout(layoutSchema, layoutDraft, data),
     },
     locale
   );
