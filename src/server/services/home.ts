@@ -62,7 +62,10 @@ interface OnDay {
   today: string;
 }
 
-// A snapshot: every read of one answer sees the same commit.
+// A snapshot: every read of one answer sees the same commit. Only on the
+// top-level client: inside a caller's transaction Drizzle opens a savepoint,
+// which ignores these options, so `getHomeContent` and `getHomeCuration`
+// take `db` itself (the home's cache and `home.get` both do).
 const SNAPSHOT = {
   accessMode: "read only",
   isolationLevel: "repeatable read",
@@ -293,7 +296,8 @@ async function readCategoryRows(db: DatabaseClient, storeId: number) {
  * What the storefront's home shows on `today` in `locale` (FER-020, the
  * read FER-022's home is built on): see `HomeContent` for what each part
  * holds and what is left out. The articles are the catalog's cards, with
- * the store's currency. One read-only snapshot.
+ * the store's currency. One read-only snapshot, given the top-level `db`
+ * (see `SNAPSHOT`).
  */
 export async function getHomeContent(
   db: DatabaseClient,
@@ -399,7 +403,7 @@ function textIn<Row extends { locale: Locale }>(
  * curated rows' article ids, and the store's categories and articles, from
  * which the screen picks, warns about articles that cannot be bought, and
  * draws its preview. `today` is the business day the screen's statuses are
- * read on.
+ * read on. Given the top-level `db`, like `getHomeContent`.
  */
 export async function getHomeCuration(
   db: DatabaseClient,
