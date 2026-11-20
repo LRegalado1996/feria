@@ -477,6 +477,8 @@ export const admin = {
       errors: {
         featuredCount: "Elegí ninguno, o de 2 a 4 artículos destacados.",
         save: "No pudimos guardar el orden. Tus cambios siguen acá: probá de nuevo.",
+        repeated:
+          "Hay una fila o un banner repetido. Recargá la página para ver el orden guardado.",
       },
       featured: "Destacados",
       featuredHint: "Elegí de 2 a 4 artículos, o ninguno.",

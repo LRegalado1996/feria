@@ -648,15 +648,22 @@ export interface HomeLayoutFormFields {
 
 /**
  * The home order form's fields, read into what `home.saveLayout` takes,
- * with the page's words for the one rule a person can break by hand: the
- * featured articles are none or two to four (the lists cap the rest).
+ * with the page's words for the one rule a person can break by hand (the
+ * featured articles are none or two to four; the lists cap the rest) and
+ * for a cover or rows that list an entry twice, which the lists never do
+ * by hand but the save would refuse.
  */
 export function createHomeLayoutFormSchema(messages: {
   featuredCount: string;
+  repeated: string;
 }) {
   return z
     .object({
-      cover: z.array(z.object({ bannerId: bodyIdSchema })),
+      cover: z
+        .array(z.object({ bannerId: bodyIdSchema }))
+        .refine((rows) => unique(rows.map((row) => row.bannerId)), {
+          error: messages.repeated,
+        }),
       featured: z
         .array(z.object({ productId: bodyIdSchema }))
         .refine(
@@ -668,7 +675,14 @@ export function createHomeLayoutFormSchema(messages: {
       featuredPick: z.string(),
       ranking: z.array(z.object({ productId: bodyIdSchema })).max(RANKING_MAX),
       rankingPick: z.string(),
-      sections: z.array(z.object({ section: homeSectionSchema })),
+      sections: z
+        .array(z.object({ section: homeSectionSchema }))
+        .refine(
+          (rows) => unique(rows.map((row) => homeSectionKey(row.section))),
+          {
+            error: messages.repeated,
+          }
+        ),
     })
     .transform((fields): SaveHomeLayoutValues => ({
       coverBannerIds: fields.cover.map((row) => row.bannerId),

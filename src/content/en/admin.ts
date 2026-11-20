@@ -462,6 +462,8 @@ export const admin: Dictionary["admin"] = {
       errors: {
         featuredCount: "Choose none, or 2 to 4 featured articles.",
         save: "We couldn't save the order. Your changes are still here: try again.",
+        repeated:
+          "A row or a banner is listed twice. Reload the page to see the saved order.",
       },
       featured: "Featured",
       featuredHint: "Choose 2 to 4 articles, or none.",

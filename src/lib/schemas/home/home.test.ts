@@ -607,7 +607,10 @@ describe("createBannerFormSchema", () => {
 });
 
 describe("createHomeLayoutFormSchema", () => {
-  const schema = createHomeLayoutFormSchema({ featuredCount: "featuredCount" });
+  const schema = createHomeLayoutFormSchema({
+    featuredCount: "featuredCount",
+    repeated: "repeated",
+  });
 
   function makeFields(
     overrides: Partial<HomeLayoutFormFields> = {}
@@ -655,5 +658,35 @@ describe("createHomeLayoutFormSchema", () => {
     expect(refusals(result)).toEqual(
       accepted ? [] : [["featured", "featuredCount"]]
     );
+  });
+
+  test.each<[string, Partial<HomeLayoutFormFields>, string[][]]>([
+    [
+      "a banner twice in the cover",
+      { cover: [{ bannerId: 3 }, { bannerId: 3 }] },
+      [["cover", "repeated"]],
+    ],
+    [
+      "a row twice",
+      {
+        sections: [
+          { section: { categoryId: 2, kind: "category" } },
+          { section: { categoryId: 2, kind: "category" } },
+        ],
+      },
+      [["sections", "repeated"]],
+    ],
+    [
+      "a category and a banner of the same id",
+      {
+        sections: [
+          { section: { categoryId: 2, kind: "category" } },
+          { section: { bannerId: 2, kind: "banner" } },
+        ],
+      },
+      [],
+    ],
+  ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
+    expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
   });
 });

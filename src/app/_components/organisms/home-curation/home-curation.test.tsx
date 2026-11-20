@@ -425,6 +425,57 @@ describe("HomeCuration", () => {
     });
   });
 
+  test("an order moved and not saved keeps its order when a banner in it is deleted, and saves without it", async () => {
+    const { loaded, spies, user } = setup();
+    await loaded();
+    const moveDown = () =>
+      user.click(
+        screen.getByRole("button", { name: "Move down: Best sellers" })
+      );
+
+    await moveDown();
+    await moveDown();
+    spies.get.mockReturnValue(
+      makeData({
+        banners: [makeData().banners[0] ?? makeHomeBanner()],
+        sections: [
+          { kind: "best_sellers" },
+          { categoryId: 4, kind: "category" },
+          { kind: "featured" },
+          { bannerId: 99, kind: "banner" },
+          { categoryId: 99, kind: "category" },
+        ],
+      })
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Delete banner: Feria" })
+    );
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+    expect(await screen.findByText("Banner deleted.")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.queryByText("Banner: Feria")).toBeNull();
+    });
+    await user.click(
+      within(screen.getByTestId("admin-primary-action")).getByRole("button", {
+        name: "Save order",
+      })
+    );
+
+    expect(await screen.findByText("Order saved.")).toBeVisible();
+    expect(spies.saveLayout).toHaveBeenCalledExactlyOnceWith({
+      coverBannerIds: [31],
+      featuredProductIds: [],
+      rankingProductIds: [22, 23, 99],
+      sections: [
+        { categoryId: 4, kind: "category" },
+        { kind: "best_sellers" },
+        { kind: "featured" },
+        { bannerId: 99, kind: "banner" },
+        { categoryId: 99, kind: "category" },
+      ],
+    });
+  });
+
   test("a failed order says so and is reported", async () => {
     const { loaded, user } = setup({ write: "fail" });
     await loaded();

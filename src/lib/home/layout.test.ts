@@ -4,8 +4,11 @@ import type { HomeSection } from "@/lib/schemas/home";
 
 import {
   DEFAULT_ROWS_INDEX,
+  followServerLayout,
+  followServerOrder,
   placeHomeSection,
   resolveHomeSections,
+  sameLayoutList,
 } from "./layout";
 
 const BEST: HomeSection = { kind: "best_sellers" };
@@ -103,5 +106,220 @@ describe("placeHomeSection", () => {
 
   test("by default a banner goes after the first row", () => {
     expect(DEFAULT_ROWS_INDEX).toBe(1);
+  });
+});
+
+describe("followServerOrder", () => {
+  const key = (letter: string) => letter;
+
+  test("an order that was not moved becomes the server's, its new order included", () => {
+    expect(
+      followServerOrder(
+        {
+          draft: ["a", "b", "c"],
+          next: ["c", "a", "d"],
+          previous: ["a", "b", "c"],
+        },
+        key
+      )
+    ).toEqual(["c", "a", "d"]);
+  });
+
+  test("a moved order keeps its order, less what the server dropped", () => {
+    expect(
+      followServerOrder(
+        { draft: ["c", "a", "b"], next: ["a", "c"], previous: ["a", "b", "c"] },
+        key
+      )
+    ).toEqual(["c", "a"]);
+  });
+
+  test("a moved order takes what is new at the server's index", () => {
+    expect(
+      followServerOrder(
+        {
+          draft: ["c", "b", "a"],
+          next: ["x", "a", "b", "y", "c", "z"],
+          previous: ["a", "b", "c"],
+        },
+        key
+      )
+    ).toEqual(["x", "c", "b", "y", "a", "z"]);
+  });
+
+  test("each entry is the server's own", () => {
+    const fresh = { id: "a", title: "new" };
+
+    expect(
+      followServerOrder(
+        {
+          draft: [
+            { id: "b", title: "b" },
+            { id: "a", title: "old" },
+          ],
+          next: [fresh, { id: "b", title: "b" }],
+          previous: [
+            { id: "a", title: "old" },
+            { id: "b", title: "b" },
+          ],
+        },
+        (item) => item.id
+      )[1]
+    ).toBe(fresh);
+  });
+});
+
+describe("followServerLayout", () => {
+  function makeLists(
+    overrides: Partial<Parameters<typeof followServerLayout>[0]["next"]> = {}
+  ) {
+    return {
+      cover: [{ bannerId: 1 }, { bannerId: 2 }],
+      featured: [{ productId: 5 }, { productId: 6 }],
+      ranking: [{ productId: 7 }, { productId: 8 }],
+      sections: [
+        { section: BEST },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+      ...overrides,
+    };
+  }
+
+  test("an untouched form becomes the server's", () => {
+    const next = makeLists({ cover: [{ bannerId: 2 }], ranking: [] });
+
+    expect(
+      followServerLayout(
+        { draft: makeLists(), next, previous: makeLists() },
+        new Set([5, 6])
+      )
+    ).toEqual(next);
+  });
+
+  test("a deleted banner leaves the moved rows, the rest keeps the draft's order", () => {
+    const draft = makeLists({
+      sections: [
+        { section: makeCategory(4) },
+        { section: BEST },
+        { section: makeBanner(3) },
+        { section: FEATURED },
+      ],
+    });
+    const next = makeLists({
+      sections: [
+        { section: BEST },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+    });
+
+    expect(
+      followServerLayout(
+        { draft, next, previous: makeLists() },
+        new Set([5, 6, 7, 8])
+      ).sections
+    ).toEqual([
+      { section: makeCategory(4) },
+      { section: BEST },
+      { section: FEATURED },
+    ]);
+  });
+
+  test("a banner new between rows goes where the server placed it in a moved order", () => {
+    const draft = makeLists({
+      sections: [
+        { section: FEATURED },
+        { section: BEST },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+      ],
+    });
+    const next = makeLists({
+      sections: [
+        { section: BEST },
+        { section: makeBanner(9) },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+    });
+
+    expect(
+      followServerLayout(
+        { draft, next, previous: makeLists() },
+        new Set([5, 6, 7, 8])
+      ).sections
+    ).toEqual([
+      { section: FEATURED },
+      { section: makeBanner(9) },
+      { section: BEST },
+      { section: makeBanner(3) },
+      { section: makeCategory(4) },
+    ]);
+  });
+
+  test("a banner moved from the cover to the rows leaves the moved cover and joins the moved rows", () => {
+    const draft = makeLists({
+      cover: [{ bannerId: 2 }, { bannerId: 1 }],
+      sections: [
+        { section: makeCategory(4) },
+        { section: BEST },
+        { section: makeBanner(3) },
+        { section: FEATURED },
+      ],
+    });
+    const next = makeLists({
+      cover: [{ bannerId: 2 }],
+      sections: [
+        { section: BEST },
+        { section: makeBanner(1) },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+    });
+
+    const lists = followServerLayout(
+      { draft, next, previous: makeLists() },
+      new Set([5, 6, 7, 8])
+    );
+
+    expect(lists.cover).toEqual([{ bannerId: 2 }]);
+    expect(lists.sections).toEqual([
+      { section: makeCategory(4) },
+      { section: makeBanner(1) },
+      { section: BEST },
+      { section: makeBanner(3) },
+      { section: FEATURED },
+    ]);
+  });
+
+  test("a moved curated row keeps its order, less the articles that are gone, and an article taken out stays out", () => {
+    const draft = makeLists({
+      featured: [{ productId: 6 }, { productId: 5 }],
+      ranking: [{ productId: 8 }],
+    });
+
+    const lists = followServerLayout(
+      { draft, next: makeLists(), previous: makeLists() },
+      new Set([5, 7, 8])
+    );
+
+    expect(lists.featured).toEqual([{ productId: 5 }]);
+    expect(lists.ranking).toEqual([{ productId: 8 }]);
+  });
+});
+
+describe("sameLayoutList", () => {
+  test.each([
+    [[{ bannerId: 1 }, { bannerId: 2 }], true],
+    [[{ bannerId: 2 }, { bannerId: 1 }], false],
+    [[{ bannerId: 1 }], false],
+  ])("compares %j with the same entries in order: %s", (other, same) => {
+    expect(sameLayoutList([{ bannerId: 1 }, { bannerId: 2 }], other)).toBe(
+      same
+    );
   });
 });

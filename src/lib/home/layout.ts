@@ -1,4 +1,8 @@
-import { type HomeSection, homeSectionKey } from "@/lib/schemas/home";
+import {
+  type HomeLayoutFormFields,
+  type HomeSection,
+  homeSectionKey,
+} from "@/lib/schemas/home";
 
 /** What the home's sequence can hold: the store's categories and banners. */
 export interface HomeLayoutTargets {
@@ -86,3 +90,119 @@ export function placeHomeSection(
 
 /** Where a banner new between rows goes when no place is given: after the first row. */
 export const DEFAULT_ROWS_INDEX = 1;
+
+/** One ordered list as the server held it, as it is drafted, and as the server holds it now. */
+export interface OrderVersions<T> {
+  draft: readonly T[];
+  next: readonly T[];
+  previous: readonly T[];
+}
+
+function sameOrder<T>(
+  one: readonly T[],
+  other: readonly T[],
+  keyOf: (item: T) => string
+): boolean {
+  return (
+    one.length === other.length &&
+    one.every((item, index) => {
+      const twin = other[index];
+      return twin !== undefined && keyOf(item) === keyOf(twin);
+    })
+  );
+}
+
+/**
+ * An ordered list that follows the server without losing an order drafted
+ * and not saved yet. Untouched, it is the server's. Drafted, it keeps the
+ * draft's order for what the server still holds (each entry as the server
+ * holds it now), drops what the server no longer holds, and places what is
+ * new on the server at the server's index. Merging per position instead
+ * would keep a deleted banner or list one twice, which the save refuses.
+ */
+export function followServerOrder<T>(
+  { draft, next, previous }: OrderVersions<T>,
+  keyOf: (item: T) => string
+): T[] {
+  if (sameOrder(draft, previous, keyOf)) {
+    return [...next];
+  }
+
+  const current = new Map(next.map((item) => [keyOf(item), item]));
+  const drafted = new Set(draft.map(keyOf));
+  const merged = draft.flatMap((item): T[] => {
+    const fresh = current.get(keyOf(item));
+    return fresh === undefined ? [] : [fresh];
+  });
+
+  for (const [index, item] of next.entries()) {
+    if (!drafted.has(keyOf(item))) {
+      merged.splice(Math.min(index, merged.length), 0, item);
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * A curated row that follows the server: the server's when untouched, else
+ * the draft less the articles that no longer exist. An article taken out in
+ * the draft stays out, though the server still ranks it.
+ */
+function followCuratedRow(
+  { draft, next, previous }: OrderVersions<{ productId: number }>,
+  articleIds: ReadonlySet<number>
+): { productId: number }[] {
+  const keyOf = (row: { productId: number }) => String(row.productId);
+
+  return sameOrder(draft, previous, keyOf)
+    ? [...next]
+    : draft.filter((row) => articleIds.has(row.productId));
+}
+
+type LayoutLists = Pick<
+  HomeLayoutFormFields,
+  "cover" | "featured" | "ranking" | "sections"
+>;
+
+/**
+ * The home order form's lists once the server's home changed under it (a
+ * banner added, moved or deleted from the side sheet): see
+ * `followServerOrder` for the cover and the rows, `followCuratedRow` for
+ * the best sellers and the featured articles.
+ */
+export function followServerLayout(
+  {
+    draft,
+    next,
+    previous,
+  }: {
+    draft: LayoutLists;
+    next: LayoutLists;
+    previous: LayoutLists;
+  },
+  articleIds: ReadonlySet<number>
+): LayoutLists {
+  const versions = <K extends keyof LayoutLists>(name: K) => ({
+    draft: draft[name],
+    next: next[name],
+    previous: previous[name],
+  });
+
+  return {
+    cover: followServerOrder(versions("cover"), (row) => String(row.bannerId)),
+    featured: followCuratedRow(versions("featured"), articleIds),
+    ranking: followCuratedRow(versions("ranking"), articleIds),
+    sections: followServerOrder(versions("sections"), (row) =>
+      homeSectionKey(row.section)
+    ),
+  };
+}
+
+/** Whether two of the order form's lists name the same entries in the same order. */
+export function sameLayoutList(
+  one: LayoutLists[keyof LayoutLists],
+  other: LayoutLists[keyof LayoutLists]
+): boolean {
+  return JSON.stringify(one) === JSON.stringify(other);
+}

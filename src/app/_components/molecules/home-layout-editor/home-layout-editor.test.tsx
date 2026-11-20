@@ -296,6 +296,35 @@ describe("HomeLayoutEditor", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  test.each([
+    [
+      "home-layout-cover",
+      makeFields({ cover: [{ bannerId: 31 }, { bannerId: 31 }] }),
+    ],
+    [
+      "home-layout-rows",
+      makeFields({
+        sections: [
+          { section: { kind: "best_sellers" } },
+          { section: { kind: "best_sellers" } },
+        ],
+      }),
+    ],
+  ])(
+    "%s says it lists an entry twice, saving nothing",
+    async (testId, fields) => {
+      const { card, onSave, submit } = setup({ fields });
+
+      await submit();
+
+      expect(await within(card(testId)).findByRole("alert")).toHaveTextContent(
+        /^A row or a banner is listed twice\. Reload the page to see the saved order\.$/u
+      );
+      expect(screen.getAllByRole("alert")).toHaveLength(1);
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
   test("once saved, holds the saved order as its start, the pickers cleared", async () => {
     const { card, names, onSave, submit, user } = setup({
       fields: makeFields({ featured: [{ productId: 5 }, { productId: 6 }] }),

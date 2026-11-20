@@ -319,6 +319,9 @@ function HomeLayoutEditor({
   const { errors, isSubmitting } = useFormState({ control: form.control });
   const featuredError =
     errors.featured?.message ?? errors.featured?.root?.message;
+  const coverError = errors.cover?.message ?? errors.cover?.root?.message;
+  const sectionsError =
+    errors.sections?.message ?? errors.sections?.root?.message;
 
   const submit = async (values: SaveHomeLayoutValues) => {
     if (await onSave(values)) {
@@ -369,6 +372,11 @@ function HomeLayoutEditor({
                 />
               ))}
             </List>
+            {coverError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {coverError}
+              </p>
+            ) : null}
           </LayoutCard>
           <LayoutCard
             hint={`${copy.hint} ${copy.rowsHint}`}
@@ -389,6 +397,11 @@ function HomeLayoutEditor({
                 />
               ))}
             </List>
+            {sectionsError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {sectionsError}
+              </p>
+            ) : null}
           </LayoutCard>
           <LayoutCard
             hint={copy.bestSellersHint}

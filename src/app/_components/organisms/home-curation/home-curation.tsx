@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -32,6 +32,7 @@ import {
 } from "@/app/_components/molecules/sheet";
 import { StoreHomePreview } from "@/app/_components/molecules/store-home-preview";
 import { reportError } from "@/lib/errors/client";
+import { followServerLayout, sameLayoutList } from "@/lib/home/layout";
 import { previewHomeContent } from "@/lib/home/preview";
 import { scheduleStatus } from "@/lib/home/schedule";
 import {
@@ -218,12 +219,41 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
     unknown,
     SaveHomeLayoutValues
   >({
-    // Follows the server's answer (a banner added, a category deleted)
-    // without dropping what was moved and not saved yet.
-    resetOptions: { keepDirtyValues: true },
+    defaultValues: layoutFieldsOf(data),
     resolver: zodResolver(layoutSchema),
-    values: layoutFieldsOf(data),
   });
+  // The home the order form last followed.
+  const followed = useRef(data);
+
+  // The server's home changed under the form (a banner added, moved or
+  // deleted from the side sheet): its order becomes the form's defaults,
+  // and an order moved and not saved yet is kept over it, less what is gone.
+  useEffect(() => {
+    const previous = followed.current;
+
+    if (previous === data) {
+      return;
+    }
+
+    followed.current = data;
+    const next = layoutFieldsOf(data);
+    const lists = followServerLayout(
+      {
+        draft: layoutForm.getValues(),
+        next,
+        previous: layoutFieldsOf(previous),
+      },
+      new Set(data.articles.map((row) => row.id))
+    );
+
+    layoutForm.reset(next);
+
+    for (const name of ["cover", "featured", "ranking", "sections"] as const) {
+      if (!sameLayoutList(lists[name], next[name])) {
+        layoutForm.setValue(name, lists[name], { shouldDirty: true });
+      }
+    }
+  }, [data, layoutForm]);
   // `null` closed; `{ banner: null }` a new banner.
   const [editing, setEditing] = useState<{ banner: Banner | null } | null>(
     null
