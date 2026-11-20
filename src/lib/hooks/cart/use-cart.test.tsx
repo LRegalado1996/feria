@@ -788,4 +788,16 @@ describe("useCart", () => {
 
     expect(renderToString(<Count />)).toBe("<span>0</span>");
   });
+
+  test("readCart reads the stored cart as it is now, before React renders again", async () => {
+    const { cart, result, storage } = await setup({
+      stored: JSON.stringify([makeItem(4, 2)]),
+    });
+
+    // Written past the hook, as another tab does before its event arrives.
+    storage.setItem(KEY, JSON.stringify([makeItem(4, 5)]));
+
+    expect(result.current.items).toEqual([makeItem(4, 2)]);
+    expect(cart.readCart()).toEqual([makeItem(4, 5)]);
+  });
 });

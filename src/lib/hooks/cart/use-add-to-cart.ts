@@ -5,7 +5,7 @@ import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 
-import { useCart } from "./use-cart";
+import { readCart, useCart } from "./use-cart";
 import { useCartPanel } from "./use-cart-panel";
 
 /** One press of an "Agregar al carrito". */
@@ -20,6 +20,11 @@ export interface AddToCartRequest {
   title: string;
 }
 
+/** The units of an article the browser's cart holds right now. */
+function storedUnits(productId: number): number {
+  return readCart().find((item) => item.productId === productId)?.quantity ?? 0;
+}
+
 /**
  * Adding an article to the cart, as every "Agregar al carrito" of the
  * store does it (FER-024, FER-045; the home's spotlight, FER-059): the
@@ -31,16 +36,18 @@ export interface AddToCartRequest {
  */
 export function useAddToCart(): (request: AddToCartRequest) => string {
   const { storefront } = useDictionary();
-  const { add, items } = useCart();
+  const { add } = useCart();
   const panel = useCartPanel();
 
   return ({ priceAmount, productId, quantity, returnFocus, title }) => {
-    const had =
-      items.find((item) => item.productId === productId)?.quantity ?? 0;
+    // Read from the stored cart around the change, not the last render:
+    // another tab may have changed it since, and the units it took are
+    // what the change made of what was there.
+    const had = storedUnits(productId);
     const outcome = add(productId, quantity, priceAmount);
     // The cart keeps at most the cap of one article: when it took fewer
     // than chosen, the shopper is told how many, not "added".
-    const added = Math.min(quantity, CART_QUANTITY_MAX - had);
+    const added = storedUnits(productId) - had;
 
     let text = addOutcomeMessage(outcome, storefront.catalog);
 

@@ -123,6 +123,14 @@ export function parseCart(raw: string | null): Cart {
 }
 
 /**
+ * The cart as stored at this moment, past React's last render: a tab that
+ * changed it a moment ago is seen before this one renders again.
+ */
+export function readCart(): Cart {
+  return parseCart(readRaw());
+}
+
+/**
  * Saves a cart, or refuses one that would not parse back (a bad quantity
  * would otherwise empty the whole cart on the next read). Answers whether
  * it was saved.

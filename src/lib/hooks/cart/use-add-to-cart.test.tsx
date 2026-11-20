@@ -114,6 +114,49 @@ describe("useAddToCart", () => {
     });
   });
 
+  test.each([
+    [
+      "took fewer away",
+      10,
+      9,
+      3,
+      "Added 1: with them you have 10, the most an order takes.",
+    ],
+    [
+      "added more",
+      8,
+      9,
+      3,
+      "Added 1: with them you have 10, the most an order takes.",
+    ],
+    [
+      "took fewer away, leaving room",
+      10,
+      6,
+      3,
+      "You added Fish bubble gun to your cart.",
+    ],
+  ])(
+    "counts the units the stored cart took, not the last render's, when another tab %s",
+    (_case, rendered, stored, quantity, message) => {
+      const { add, open } = setup({
+        cart: [{ productId: 42, quantity: rendered }],
+      });
+      // Written past the hook, as another tab does before its event arrives.
+      localStorage.setItem(
+        KEY,
+        JSON.stringify([{ productId: 42, quantity: stored }])
+      );
+
+      add(42, quantity);
+
+      expect(open).toHaveBeenCalledExactlyOnceWith({
+        added: { message, productId: 42 },
+        returnFocus: expect.any(HTMLButtonElement),
+      });
+    }
+  );
+
   test("outside a store page's frame, says what it did beside the button", () => {
     const { add, stored } = setup({ inFrame: false });
 
