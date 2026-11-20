@@ -169,18 +169,56 @@ describe("HomeLayoutEditor", () => {
     );
   });
 
-  test("cannot move the first entry up nor the last one down; the buttons say which entry", () => {
+  test("the first entry's up and the last one's down are aria-disabled, the others are not; the buttons say which entry", () => {
     setup();
 
+    const state = (name: string) =>
+      screen.getByRole("button", { name }).getAttribute("aria-disabled");
+
+    expect(state("Move up: Best sellers")).toBe("true");
+    expect(state("Move down: Best sellers")).toBeNull();
+    expect(state("Move up: Featured")).toBeNull();
+    expect(state("Move down: Featured")).toBe("true");
     expect(
-      screen.getByRole("button", { name: "Move up: Best sellers" })
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Move down: Best sellers" })
-    ).toBeEnabled();
-    expect(
-      screen.getByRole("button", { name: "Move down: Featured" })
-    ).toBeDisabled();
+      screen.getByRole("button", { name: "Move up: Featured" })
+    ).toHaveClass("aria-disabled:opacity-50");
+  });
+
+  test("moving an entry to the bottom keeps focus on its button, and pressing it there does nothing", async () => {
+    const { names, user } = setup();
+    const down = screen.getByRole("button", { name: "Move down: Rings" });
+
+    await user.click(down);
+
+    expect(names("home-layout-rows")).toEqual([
+      "Best sellers",
+      "Banner: Fair",
+      "Featured",
+      "Rings",
+    ]);
+    expect(down).toHaveFocus();
+    expect(down).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Enter}");
+    expect(names("home-layout-rows")).toEqual([
+      "Best sellers",
+      "Banner: Fair",
+      "Featured",
+      "Rings",
+    ]);
+    expect(down).toHaveFocus();
+  });
+
+  test("moving an entry to the top keeps focus on its button, and pressing it there does nothing", async () => {
+    const { names, user } = setup();
+    const up = screen.getByRole("button", { name: "Move up: Banner 32" });
+
+    await user.click(up);
+
+    expect(names("home-layout-cover")).toEqual(["Banner 32", "Banner 31"]);
+    expect(up).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(names("home-layout-cover")).toEqual(["Banner 32", "Banner 31"]);
+    expect(up).toHaveFocus();
   });
 
   test("moves the rows, the cover and the best sellers, and saves the new order", async () => {

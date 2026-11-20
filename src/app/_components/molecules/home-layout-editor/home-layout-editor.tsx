@@ -102,7 +102,9 @@ function LayoutCard({
 /**
  * One entry of an ordered list: its name, its note or warning, and its
  * buttons, each named with the entry ("Subir: Anillos"). The first can't
- * go up nor the last down: those buttons are disabled.
+ * go up nor the last down: those buttons are `aria-disabled` and ignore a
+ * press, not `disabled`, so the one that moved an entry to an end keeps
+ * focus.
  */
 function LayoutItem({
   entry,
@@ -151,10 +153,13 @@ function LayoutItem({
       </div>
       <div className="flex shrink-0 items-center">
         <Button
+          aria-disabled={index === 0 || undefined}
           aria-label={named(copy.up)}
-          disabled={index === 0}
+          className="aria-disabled:opacity-50"
           onClick={() => {
-            onMove(index, index - 1);
+            if (index > 0) {
+              onMove(index, index - 1);
+            }
           }}
           size="icon-sm"
           type="button"
@@ -163,10 +168,13 @@ function LayoutItem({
           <ArrowUp aria-hidden="true" />
         </Button>
         <Button
+          aria-disabled={index === last || undefined}
           aria-label={named(copy.down)}
-          disabled={index === last}
+          className="aria-disabled:opacity-50"
           onClick={() => {
-            onMove(index, index + 1);
+            if (index < last) {
+              onMove(index, index + 1);
+            }
           }}
           size="icon-sm"
           type="button"
