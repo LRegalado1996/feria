@@ -1190,6 +1190,7 @@ describe("createBanner", () => {
 
     await expect(create(makeCreateValues(), null)).rejects.toMatchObject({
       code: "BAD_REQUEST",
+      message: "A banner photo must be one uploaded to this store",
     });
   });
 
@@ -1537,7 +1538,16 @@ describe("deleteBanner", () => {
       discardedImageUrls: ["https://x/c.webp", "https://x/p.webp"],
       id: 3,
     });
+    const [lock] = db.$.execute.mock.calls[0] ?? [];
+    expect(renderQuery(lock)).toEqual({
+      params: [`home:${String(STORE_ID)}`],
+      sql: "select pg_advisory_xact_lock(hashtext($1))",
+    });
     expect(db.$.execute).toHaveBeenCalledOnce();
+    // The lock comes first: the delete never runs without it.
+    expect(db.$.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      db.$.delete.mock.invocationCallOrder[0] ?? 0
+    );
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(banner);
     expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
       params: [3, STORE_ID],

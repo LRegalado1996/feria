@@ -231,6 +231,33 @@ describe("shellOf", () => {
     expect(connection).not.toHaveBeenCalled();
   });
 
+  test("does not answer before its announcement is read, then hands that announcement", async () => {
+    const { store } = setup();
+    let answer: (value: HomeAnnouncement) => void = () => undefined;
+    readAnnouncement.mockReturnValueOnce(
+      new Promise<HomeAnnouncement>((resolve) => {
+        answer = resolve;
+      })
+    );
+    const state = { answered: false };
+
+    const shell = shellOf(store, "es").then((value) => {
+      state.answered = true;
+      return value;
+    });
+    await settle();
+
+    expect(state.answered).toBe(false);
+    answer(makeAnnouncement({ href: null, text: "Cerrado por feriado" }));
+    await expect((await shell).announcement).resolves.toEqual({
+      href: null,
+      lang: "es",
+      short: "En la feria · 5/12 al 5/1",
+      text: "Cerrado por feriado",
+    });
+    expect(state.answered).toBe(true);
+  });
+
   test("from a page that read its categories as of now, those, reading no cached list (FER-043)", async () => {
     setup();
     const aros = {

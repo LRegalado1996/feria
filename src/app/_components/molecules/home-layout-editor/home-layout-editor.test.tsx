@@ -378,8 +378,19 @@ describe("HomeLayoutEditor", () => {
     );
     await submit();
 
+    // The picker's article is not added: only what the lists hold is saved.
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        coverBannerIds: [31, 32],
+        featuredProductIds: [5, 6],
+        rankingProductIds: [3],
+        sections: [
+          { kind: "best_sellers" },
+          { bannerId: 33, kind: "banner" },
+          { categoryId: 4, kind: "category" },
+          { kind: "featured" },
+        ],
+      });
     });
     expect(names("home-layout-best-sellers")).toEqual(["Article 3"]);
     expect(names("home-layout-featured")).toEqual(["Article 5", "Article 6"]);
@@ -399,9 +410,24 @@ describe("HomeLayoutEditor", () => {
     await submit();
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        coverBannerIds: [31, 32],
+        featuredProductIds: [],
+        rankingProductIds: [3, 4],
+        sections: [
+          { bannerId: 33, kind: "banner" },
+          { kind: "best_sellers" },
+          { categoryId: 4, kind: "category" },
+          { kind: "featured" },
+        ],
+      });
     });
-    expect(names("home-layout-rows")?.[1]).toBe("Best sellers");
+    expect(names("home-layout-rows")).toEqual([
+      "Banner: Fair",
+      "Best sellers",
+      "Rings",
+      "Featured",
+    ]);
   });
 
   test("speaks Spanish on a Spanish page", () => {

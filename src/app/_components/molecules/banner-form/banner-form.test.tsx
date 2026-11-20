@@ -449,7 +449,8 @@ describe("BannerForm", () => {
   );
 
   test("waits while a photo is on its way, saying why, and takes the save once it lands", async () => {
-    const { onSave, submit, user } = setup({ banner: makeBanner() });
+    const banner = makeBanner();
+    const { onSave, submit, user } = setup({ banner });
     const save = screen.getByTestId("banner-form-submit");
 
     await user.click(screen.getByRole("button", { name: "start Phone photo" }));
@@ -466,22 +467,40 @@ describe("BannerForm", () => {
     ).toBeNull();
     await submit();
 
+    // The upload stopped: the photos it had are the ones saved.
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        ctaLabelEn: null,
+        ctaLabelEs: "Ver joyas",
+        endsOn: "2027-01-05",
+        image: banner.image,
+        imagePhone: banner.imagePhone,
+        isActive: true,
+        link: { categoryId: 6, kind: "category" },
+        placement: "rows",
+        rowsIndex: 1,
+        startsOn: "2026-12-05",
+        titleEn: "Jewelry",
+        titleEs: "Joyas",
+      });
     });
   });
 
   test("says a failed save under the form and keeps what was typed", async () => {
-    const { submit } = setup({ banner: makeBanner(), outcome: "failed" });
+    const { submit, user } = setup({
+      banner: makeBanner(),
+      outcome: "failed",
+    });
+    const title = screen.getByRole("textbox", { name: "Title in Spanish" });
 
+    await user.clear(title);
+    await user.type(title, "Joyas de fiesta");
     await submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We couldn't save the banner. What you wrote is still here: try again."
     );
-    expect(
-      screen.getByRole("textbox", { name: "Title in Spanish" })
-    ).toHaveValue("Joyas");
+    expect(title).toHaveValue("Joyas de fiesta");
   });
 
   test("says the cover is full when the save is refused for it, and keeps the form", async () => {

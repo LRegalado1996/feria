@@ -183,7 +183,16 @@ describe("AnnouncementForm", () => {
     await submit();
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        endsOn: "2027-01-05",
+        isActive: true,
+        linkUrl: "/productos",
+        shortTextEn: null,
+        shortTextEs: "En la feria · 5/12 al 5/1",
+        startsOn: "2026-12-05",
+        textEn: "Find us at the fair",
+        textEs: "Nuevo anuncio",
+      });
     });
     expect(field("Text in Spanish")).toHaveValue("  Nuevo anuncio  ");
   });

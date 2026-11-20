@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type {
@@ -763,6 +763,8 @@ describe("saving the home's order", () => {
     await onEmptyHome(async (tx, storeId) => {
       const one = await addCategory(tx, storeId);
       const two = await addCategory(tx, storeId);
+      // Left out of the save: it comes after what was saved.
+      const three = await addCategory(tx, storeId);
       const a = await addArticle(tx, { categoryId: one.id, storeId });
       const b = await addArticle(tx, { categoryId: two.id, storeId });
       const c = await addArticle(tx, { categoryId: two.id, storeId });
@@ -815,11 +817,27 @@ describe("saving the home's order", () => {
         { bannerId: null, categoryId: one.id, kind: "category", position: 3 },
         { bannerId: null, categoryId: null, kind: "best_sellers", position: 4 },
       ]);
-      // The store's other categories, left out, come after, numbered on.
+      // The store's other categories, left out, come after, numbered on, in
+      // the categories' own order: the one made last, last.
       expect(saved.map((row) => row.position)).toEqual(
         saved.map((_row, index) => index)
       );
       expect(saved.slice(5).every((row) => row.kind === "category")).toBe(true);
+      const [{ others = 0 } = {}] = await tx
+        .select({ others: sql<number>`count(*)::int` })
+        .from(category)
+        .where(
+          and(
+            eq(category.storeId, storeId),
+            notInArray(category.id, [one.id, two.id, three.id])
+          )
+        );
+      expect(saved.at(-1)).toEqual({
+        bannerId: null,
+        categoryId: three.id,
+        kind: "category",
+        position: 5 + others,
+      });
       const curation = await getHomeCuration(tx, { storeId, today: TODAY });
       expect(curation.rankingProductIds).toEqual([b.id, a.id, c.id]);
       expect(curation.featuredProductIds).toEqual([c.id, a.id]);
@@ -860,17 +878,35 @@ function deferred() {
   return { promise, resolve: settle };
 }
 
-/** Waits until some query on this database waits on another's lock. */
-async function waitUntilBlocked() {
+/** The id of the backend running `tx`, to tell its lock waits from others'. */
+async function backendOf(tx: DatabaseClient) {
+  const result = await tx.execute<{ pid: number }>(
+    sql`select pg_backend_pid() as pid`
+  );
+
+  return result.rows[0]?.pid ?? 0;
+}
+
+/**
+ * Waits until the backend `pid` waits on the store's home lock: an
+ * advisory lock not granted, whose key is `hashtext('home:<storeId>')`.
+ * Any other wait (a row lock, another store's home) does not count.
+ */
+async function waitUntilBlocked(pid: number, storeId: number) {
+  const key = `home:${String(storeId)}`;
+
   for (let attempt = 0; attempt < 2000; attempt += 1) {
-    const result = await db.execute<{ blocked: number }>(sql`
-      select count(*)::int as blocked
-      from pg_stat_activity
-      where datname = current_database()
-        and cardinality(pg_blocking_pids(pid)) > 0
+    const result = await db.execute<{ waiting: number }>(sql`
+      select count(*)::int as waiting
+      from pg_locks
+      where locktype = 'advisory'
+        and not granted
+        and pid = ${pid}
+        and objsubid = 1
+        and objid::bigint = (hashtext(${key})::bigint & 4294967295)
     `);
 
-    if ((result.rows[0]?.blocked ?? 0) > 0) {
+    if ((result.rows[0]?.waiting ?? 0) > 0) {
       return;
     }
   }
@@ -952,18 +988,24 @@ async function setupTwoWriters() {
       }
     });
   });
-  const shelf = await addCategory(db, storeId);
-  committed.categoryIds.push(shelf.id);
-  const articles = [];
+  // One commit: nothing is left behind half made, and the ids are recorded
+  // for the teardown only once they exist.
+  const made = await db.transaction(async (tx) => {
+    const shelf = await addCategory(tx, storeId);
+    const ids: number[] = [];
 
-  for (let index = 0; index < 3; index += 1) {
-    const article = await addArticle(db, { categoryId: shelf.id, storeId });
-    committed.productIds.push(article.id);
-    articles.push(article.id);
-  }
+    for (let index = 0; index < 3; index += 1) {
+      ids.push((await addArticle(tx, { categoryId: shelf.id, storeId })).id);
+    }
+
+    return { articles: ids, shelfId: shelf.id };
+  });
+  committed.categoryIds.push(made.shelfId);
+  committed.productIds.push(...made.articles);
 
   return {
-    articles,
+    articles: made.articles,
+    storeId,
     // The store's curated rows now, by the ids this test ranked.
     ranked: async () =>
       (
@@ -988,7 +1030,7 @@ async function setupTwoWriters() {
 
 describe("the home's order under two writers", () => {
   test("a save started while another holds the home's lock waits for it, then writes its own order whole", async () => {
-    const { articles, ranked, save } = await setupTwoWriters();
+    const { articles, ranked, save, storeId } = await setupTwoWriters();
     const [a = 0, b = 0, c = 0] = articles;
     const held = deferred();
     const locked = deferred();
@@ -1001,15 +1043,29 @@ describe("the home's order under two writers", () => {
     });
     // A first writer that fails never signals: its failure ends the wait.
     await Promise.race([locked.promise, first]);
-    const second = db.transaction(async (tx) => await save(tx, [c, a]));
+    const pid: { resolve: (value: number) => void } = {
+      resolve: () => undefined,
+    };
+    const secondPid = new Promise<number>((resolve) => {
+      pid.resolve = resolve;
+    });
+    const second = db.transaction(async (tx) => {
+      pid.resolve(await backendOf(tx));
+      return await save(tx, [c, a]);
+    });
+    const settled: { results: PromiseSettledResult<unknown>[] } = {
+      results: [],
+    };
 
+    // Both writers end before the teardown, whatever the wait does.
     try {
-      await waitUntilBlocked();
+      await waitUntilBlocked(await secondPid, storeId);
     } finally {
       held.resolve(undefined);
+      settled.results = await Promise.allSettled([first, second]);
     }
 
-    const results = await Promise.allSettled([first, second]);
+    const { results } = settled;
 
     expect(results.map((result) => result.status)).toEqual([
       "fulfilled",
