@@ -480,3 +480,52 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
 
   await expect(run).rejects.toThrow(ROLLED_BACK);
 });
+
+test("places the banners it adds between rows after an order the home page already has", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+    const [{ homePageId } = { homePageId: 0 }] = await tx
+      .select({ homePageId: store.homePageId })
+      .from(store)
+      .where(eq(store.id, storeId));
+    // An order saved with no banner: the curated rows, featured first.
+    await tx.insert(pageSection).values([
+      { kind: "featured", pageId: homePageId, position: 0, storeId },
+      { kind: "best_sellers", pageId: homePageId, position: 4, storeId },
+    ]);
+
+    expect((await runSeed(tx)).home.banners).toBe(5);
+    const sections = await tx.query.pageSection.findMany({
+      columns: { kind: true, position: true },
+      orderBy: asc(pageSection.position),
+      where: eq(pageSection.pageId, homePageId),
+      with: {
+        banner: {
+          columns: {},
+          with: {
+            translations: {
+              columns: { title: true },
+              where: eq(bannerTranslation.locale, "es"),
+            },
+          },
+        },
+      },
+    });
+    expect(
+      sections.map((row) => [
+        row.position,
+        row.banner?.translations[0]?.title ?? row.kind,
+      ])
+    ).toEqual([
+      [0, "featured"],
+      [4, "best_sellers"],
+      [5, "Encontranos en la feria"],
+      [6, "Aros para todos los días"],
+    ]);
+
+    throw new Error(ROLLED_BACK);
+  });
+
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});

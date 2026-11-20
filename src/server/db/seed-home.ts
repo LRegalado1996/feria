@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import type { PageSection, SaveAnnouncementValues } from "@/lib/schemas/page";
 import type { DatabaseClient } from "@/server/db";
@@ -264,12 +264,14 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   });
 
   const pageId = await findHomePageId(tx, { storeId });
-  const anySection = await tx.query.pageSection.findFirst({
-    columns: { id: true },
+  // The home page's last saved section, if it has any.
+  const lastSection = await tx.query.pageSection.findFirst({
+    columns: { position: true },
+    orderBy: [desc(pageSection.position)],
     where: eq(pageSection.pageId, pageId),
   });
   const categories =
-    anyBanner && anySection
+    anyBanner && lastSection
       ? []
       : await tx
           .select({ id: category.id, slug: category.slug })
@@ -304,9 +306,23 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
     added.banners = SEED_COVER_BANNERS.length + SEED_ROW_BANNERS.length;
   }
 
-  // An order the admin saved stays, banners or not: the banners added
-  // above then come after it, as any banner new since the last save does.
-  if (!anySection) {
+  // An order the admin saved stays, banners or not: the banners between
+  // rows added above go after it, since a banner shows between the rows
+  // only where a section places it (FER-058).
+  if (lastSection) {
+    if (rowBannerIds.length > 0) {
+      await tx.insert(pageSection).values(
+        rowBannerIds.map((bannerId, index) => ({
+          bannerId,
+          categoryId: null,
+          kind: "banner" as const,
+          pageId,
+          position: lastSection.position + 1 + index,
+          storeId,
+        }))
+      );
+    }
+  } else {
     const listed = SEED_SEQUENCE.flatMap((entry): PageSection[] => {
       if ("curated" in entry) {
         return [{ kind: entry.curated }];
