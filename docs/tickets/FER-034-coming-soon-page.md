@@ -2,7 +2,7 @@
 
 - **Milestone:** M0 Foundation
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-002, FER-005, FER-013, FER-014
 
 ## Goal
@@ -38,9 +38,7 @@ The page uses the FER-006 logo. Lucas asked for it to be fun: the headline rises
 
 The e2e suite drives the real switch: the `closed` project's worker publishes the page through the admin's API before its specs (`*.closed.e2e.ts`) and takes it down after them, every other project's worker makes sure it is down, and a test that edits the page or flips it asks for `comingSoonEdit`, which writes the closed, empty page back (`src/e2e/AGENTS.md`). There is no test-only override left in the app.
 
-Still open, and the ticket is not done until it holds:
-
-- **Lighthouse.** The two scores have not been measured (the tool is not a dependency of the repo). Someone else measures the deployed coming-soon page on mobile later and fixes what falls under 95.
+Lighthouse, measured locally on 2026-11-19 (Lucas's decision that day: measure locally to close the ticket, the production measurement later): Lighthouse 13.6.0 run one-off outside the repo, its mobile profile with its simulated throttling, against a production build (`next start`) of the home stack with the page published, as a visitor with no session, the median of three runs. `/coming-soon`: performance 100, accessibility 100, best practices 100. SEO is 66 by design: the page is `noindex` while the store is closed, the one audit it fails. **Still owed:** the same measurement on the deployed page.
 
 Settled: "`/admin` still signs in" with the page published is checked by `src/e2e/tests/coming-soon/coming-soon.closed.e2e.ts` (the sign-in form, then the store with its strip).
 
