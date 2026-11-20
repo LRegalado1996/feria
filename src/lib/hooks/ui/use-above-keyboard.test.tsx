@@ -37,8 +37,11 @@ function Bar() {
 function setup({
   barBottom,
   field = { bottom: 300, top: 260 },
+  inDialog,
   visualViewport = true,
 }: {
+  /** The field sits in a dialog of this role, over the page and its bar. */
+  inDialog?: "alertdialog" | "dialog";
   /** Where the bar's bottom sits when it is not fixed to the screen's. */
   barBottom?: number;
   field?: { bottom: number; top: number };
@@ -77,7 +80,14 @@ function setup({
     () =>
       new DOMRect(0, field.top - layout.scrollY, 300, field.bottom - field.top)
   );
-  document.body.append(input);
+  if (inDialog) {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", inDialog);
+    dialog.append(input);
+    document.body.append(dialog);
+  } else {
+    document.body.append(input);
+  }
 
   const view = render(<Bar />);
   const bar = view.getByTestId("bar");
@@ -138,8 +148,10 @@ const CLOSED = { inset: "", keyboard: undefined };
 afterEach(() => {
   vi.restoreAllMocks();
   // The field each setup() adds to the page, outside Testing Library's root.
-  for (const input of document.body.querySelectorAll("input")) {
-    input.remove();
+  for (const added of document.body.querySelectorAll(
+    "body > input, body > [role]"
+  )) {
+    added.remove();
   }
 });
 
@@ -298,6 +310,47 @@ describe("useAboveKeyboard", () => {
       flushFrame();
 
       expect(scrollBy).toHaveBeenCalledExactlyOnceWith({ top: distance });
+    }
+  );
+
+  test.each(["dialog", "alertdialog"] as const)(
+    "scrolls nothing for a field in a %s, which the bar under it never covers",
+    (inDialog) => {
+      // The field the bar covers in the first case above, 60 px short.
+      const { flushFrame, focusField, scrollBy, viewportChanges } = setup({
+        field: { bottom: 480, top: 440 },
+        inDialog,
+      });
+      flushFrame();
+
+      focusField();
+      viewportChanges("resize", { height: 500 });
+      flushFrame();
+
+      expect(scrollBy).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    // Safari panned the visible part (300 to 800) down to the layout's bottom
+    // for a field there: the bar, at 728, rides the keyboard without moving
+    // and covers the field, 70 px short of its room.
+    ["with the keyboard open", { scale: 1 }, [[{ top: 70 }]]],
+    // The same visible part from pinch zoom: no keyboard, nothing moves.
+    ["under pinch zoom", { scale: 2 }, []],
+  ])(
+    "reveals a field under a bar that the keyboard does not displace %s",
+    (_case, { scale }, scrolls) => {
+      const { flushFrame, focusField, scrollBy, viewportChanges } = setup({
+        field: { bottom: 790, top: 750 },
+      });
+      flushFrame();
+
+      focusField();
+      viewportChanges("resize", { height: 500, offsetTop: 300, scale });
+      flushFrame();
+
+      expect(scrollBy.mock.calls).toEqual(scrolls);
     }
   );
 

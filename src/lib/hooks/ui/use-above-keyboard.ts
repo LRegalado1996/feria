@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 /** The CSS variable that carries how far the keyboard reaches into the bar. */
 const KEYBOARD_INSET_VARIABLE = "--keyboard-inset";
 
+/** Dialogs, whose fields the bar under them never covers. */
+const MODAL_SELECTOR = '[role="dialog"], [role="alertdialog"]';
+
 /** Room kept between a focused field and the top of the bar. */
 const FIELD_GAP_PX = 8;
 
@@ -45,6 +48,22 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
     );
   }
 
+  // Whether a keyboard takes part of the screen: it covers the bar (`next`),
+  // or Safari panned the visible part down to the layout's bottom to show a
+  // field there, so the bar sits right on the keyboard and can still hide
+  // the field Safari brought into view. Under pinch zoom the visible part is
+  // shorter with no keyboard at all.
+  function keyboardShown(bar: DOMRect, next: number) {
+    if (next > 0) {
+      return true;
+    }
+
+    return (
+      Math.abs(viewport.scale - 1) <= SCALE_TOLERANCE &&
+      Math.round(viewport.height) < Math.round(bar.bottom + inset)
+    );
+  }
+
   // How far the page must scroll for the bar, once it ends where the visible
   // part does, to leave the focused element uncovered; never so far that the
   // element's top leaves the visible part.
@@ -54,6 +73,13 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
     // With nothing focused the active element is the body, whose top is never
     // below the visible top, so it scrolls nothing.
     if (!(focused instanceof HTMLElement) || element.contains(focused)) {
+      return 0;
+    }
+
+    // A field in a dialog (a side sheet, a confirmation) sits above the
+    // overlay that covers the bar, so the bar never hides it, and scrolling
+    // the page would only move what is behind the dialog.
+    if (focused.closest(MODAL_SELECTOR)) {
       return 0;
     }
 
@@ -71,7 +97,10 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
     // Every read before any write, so the frame lays the page out once.
     const bar = element.getBoundingClientRect();
     const next = measure(bar);
-    const distance = revealPending && next > 0 ? revealDistance(bar.height) : 0;
+    const distance =
+      revealPending && keyboardShown(bar, next)
+        ? revealDistance(bar.height)
+        : 0;
     revealPending = false;
 
     if (next !== inset) {
