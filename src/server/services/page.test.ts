@@ -1984,7 +1984,7 @@ function hasWhere(query: unknown): query is { where: unknown } {
 }
 
 /** The filter the first call of a relational read sent, as SQL. */
-function whereSent(read: MockDatabase["query"][string]["findMany"]) {
+function whereSent(read: MockDatabase["query"]["spotlight"]["findMany"]) {
   const [query] = read.mock.calls[0] ?? [];
 
   if (!hasWhere(query)) {
