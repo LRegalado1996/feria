@@ -1,6 +1,7 @@
 import type { Viewport } from "next";
 import type { ReactNode } from "react";
 
+import { StorePreviewNotice } from "@/app/_components/molecules/store-preview-notice";
 import { StoreTheme } from "@/app/_components/organisms/store-theme";
 import { STORE_THEME } from "@/styles/theme";
 
@@ -22,6 +23,9 @@ export const viewport: Viewport = { themeColor: STORE_THEME.contrast };
 export default function StoreLayout({ children }: StoreLayoutProps) {
   return (
     <StoreTheme className="flex min-h-dvh flex-col" data-testid="store-theme">
+      {/* Only an admin's view of the closed store shows it (FER-034), drawn
+          in the browser: this layout's output stays the same for all. */}
+      <StorePreviewNotice />
       {children}
     </StoreTheme>
   );

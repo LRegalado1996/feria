@@ -89,6 +89,8 @@ describe("database client", () => {
         "bannerTranslation",
         "category",
         "categoryTranslation",
+        "comingSoon",
+        "comingSoonTranslation",
         "customerOrder",
         "featuredProduct",
         "homeSection",

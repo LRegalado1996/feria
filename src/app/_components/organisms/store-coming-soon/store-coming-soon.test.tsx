@@ -1,6 +1,11 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import {
+  resolveComingSoonContent,
+  type StoredComingSoon,
+  type StoreSocialLinks,
+} from "@/lib/coming-soon/content";
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
@@ -22,13 +27,29 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-function setup({ locale = "en" }: { locale?: Locale } = {}) {
+/** Nothing saved: every text the dictionary's, counting to the fair. */
+const UNSAVED: StoredComingSoon = { countdownTo: null, translations: [] };
+
+function setup({
+  locale = "en",
+  store = null,
+  stored = UNSAVED,
+}: {
+  locale?: Locale;
+  store?: StoreSocialLinks | null;
+  stored?: StoredComingSoon;
+} = {}) {
   stubIntersectionObserver();
   stubReducedMotion(false);
+  const copy = DICTIONARIES[locale].comingSoon;
 
-  renderWithI18n(<StoreComingSoon copy={DICTIONARIES[locale].comingSoon} />, {
-    locale,
-  });
+  renderWithI18n(
+    <StoreComingSoon
+      content={resolveComingSoonContent(copy, stored, locale, store)}
+      copy={copy}
+    />,
+    { locale }
+  );
 
   return { page: screen.getByTestId("coming-soon-page") };
 }
@@ -156,6 +177,58 @@ describe("StoreComingSoon", () => {
       ).toBeInTheDocument();
     }
   );
+
+  test("shows what an admin wrote: the eyebrow, the headline's lines, the text under it and the band's phrases after the brand", () => {
+    const { page } = setup({
+      locale: "es",
+      store: {
+        instagramUrl: "https://instagram.com/e2e-market",
+        tiktokUrl: null,
+      },
+      stored: {
+        countdownTo: "2026-12-20",
+        translations: [
+          {
+            eyebrow: "Feria · desde el 20 de diciembre",
+            headline: "Abrimos\nel sábado",
+            lead: "Te esperamos en la feria.",
+            locale: "es",
+            marquee: "Bijou\nBurbujas",
+          },
+        ],
+      },
+    });
+    const heading = within(page).getByRole("heading", { level: 1 });
+    const lines = [
+      ...heading.querySelectorAll('[data-slot="store-heading-line-text"]'),
+    ];
+
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "Abrimos",
+      "el sábado",
+    ]);
+    // The second line takes the accent, as the dictionary's does.
+    expect(lines[1]).toHaveClass("text-store-accent");
+    // A long word breaks inside the phone's width instead of widening it.
+    expect(heading).toHaveClass("[overflow-wrap:anywhere]");
+    expect(within(page).getByTestId("coming-soon-lead")).toHaveTextContent(
+      "Te esperamos en la feria."
+    );
+    expect(
+      within(page).getByText("Feria · desde el 20 de diciembre")
+    ).toBeInTheDocument();
+    // The store's Instagram; the brand's TikTok, the store having none.
+    expect(
+      within(page).getByRole("link", { name: "Seguinos en Instagram" })
+    ).toHaveAttribute("href", "https://instagram.com/e2e-market");
+    expect(
+      within(page).getByRole("link", { name: "Seguinos en TikTok" })
+    ).toHaveAttribute("href", "https://www.tiktok.com/@lrmarket");
+    expect(
+      page.querySelector('[data-slot="store-marquee-track"]')?.firstElementChild
+        ?.textContent
+    ).toBe("LR MarketBijouBurbujas");
+  });
 
   test("holds the countdown's height while it streams in, so nothing below it jumps", () => {
     setup();

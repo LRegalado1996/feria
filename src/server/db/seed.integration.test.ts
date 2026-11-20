@@ -10,6 +10,7 @@ import {
   banner,
   bannerTranslation,
   category,
+  comingSoon,
   featuredProduct,
   homeSection,
   product,
@@ -19,6 +20,7 @@ import {
   storeTranslation,
   user,
 } from "@/server/db/schema";
+import { isComingSoonPublished } from "@/server/services/coming-soon";
 import { theStoreId } from "@/server/test/one-store";
 
 import { SEED_USER, seed } from "./seed";
@@ -43,16 +45,17 @@ async function runSeed(tx: DatabaseClient) {
 }
 
 /**
- * The store as a fresh database has it: no texts, no catalog and no home
- * curation (FER-020). Articles first, since a category that still has one
- * cannot be deleted; they take the curated rows with them. The home's
- * sequence goes whole, its curated places included: the seed keeps one it
- * finds.
+ * The store as a fresh database has it: no texts, no catalog, no home
+ * curation (FER-020) and no coming-soon page (so closed, FER-034).
+ * Articles first, since a category that still has one cannot be deleted;
+ * they take the curated rows with them. The home's sequence goes whole, its
+ * curated places included: the seed keeps one it finds.
  */
 async function emptyStore(tx: DatabaseClient, storeId: number) {
   await tx.delete(announcement).where(eq(announcement.storeId, storeId));
   await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
   await tx.delete(banner).where(eq(banner.storeId, storeId));
+  await tx.delete(comingSoon).where(eq(comingSoon.storeId, storeId));
   await tx.delete(product).where(eq(product.storeId, storeId));
   await tx.delete(attribute).where(eq(attribute.storeId, storeId));
   await tx.delete(category).where(eq(category.storeId, storeId));
@@ -74,13 +77,17 @@ test("leaves one login with its credential, and a second run creates nothing", a
     const second = await runSeed(tx);
 
     expect(first.createdAccounts).toEqual([SEED_USER.email]);
+    expect(first.openedStore).toBe(true);
     expect(second).toEqual({
       catalogPages: { covers: 0, grouped: 0, groups: 0 },
       createdAccounts: [],
       createdArticles: 0,
       createdStoreTexts: [],
       home: { announcement: false, banners: 0, featured: 0, ranking: 0 },
+      openedStore: false,
     });
+    // A seeded database shows the store: the coming-soon page is unpublished.
+    await expect(isComingSoonPublished(tx)).resolves.toBe(false);
     expect(
       await tx.query.user.findMany({
         columns: { email: true },

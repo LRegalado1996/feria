@@ -7,6 +7,12 @@ export {
   verification,
 } from "./auth";
 export {
+  comingSoon,
+  comingSoonRelations,
+  comingSoonTranslation,
+  comingSoonTranslationRelations,
+} from "./coming-soon";
+export {
   announcement,
   announcementTranslation,
   banner,

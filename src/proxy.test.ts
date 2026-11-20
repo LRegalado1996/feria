@@ -5,8 +5,39 @@ import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
 import { LOCALES } from "@/lib/i18n/config";
+import type * as StorefrontSwitch from "@/server/cache/storefront-switch";
+import { SWITCH_TIMEOUT_MS } from "@/server/cache/storefront-switch";
 
 import { config, proxy } from "./proxy";
+
+const mocks = vi.hoisted(() => ({
+  captureExceptionWithScope: vi.fn<
+    (error: unknown, scope: { action: string }) => string | null
+  >(() => null),
+  // Signed out unless a test says otherwise: the public.
+  isAdminRequest: vi.fn<(headers: Headers) => Promise<boolean>>(
+    async () => await Promise.resolve(false)
+  ),
+  // Open unless a test closes it: the language rules run on their own.
+  isStorefrontClosed: vi.fn<() => Promise<boolean>>(
+    async () => await Promise.resolve(false)
+  ),
+}));
+
+// The switch's own read and its fail-safe are `storefront-switch.test.ts`'s;
+// the session check is `admin-request.test.ts`'s. The time limit stays real.
+vi.mock("@/server/cache/storefront-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof StorefrontSwitch>()),
+  isStorefrontClosed: mocks.isStorefrontClosed,
+}));
+
+vi.mock("@/server/better-auth/admin-request", () => ({
+  isAdminRequest: mocks.isAdminRequest,
+}));
+
+vi.mock("@/lib/sentry", () => ({
+  captureExceptionWithScope: mocks.captureExceptionWithScope,
+}));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ORIGIN = "http://localhost:3000";
@@ -146,8 +177,32 @@ describe("proxy: the launch switch", () => {
     requestId: null,
   });
 
-  function close() {
-    vi.stubEnv("STOREFRONT_LAUNCHED", "false");
+  /**
+   * The switch's position and who asks: the public by default, or a request
+   * the server vouches for as a signed-in admin's, or one whose check fails.
+   */
+  function setup({
+    admin = false,
+    closed = true,
+  }: { admin?: boolean | Error; closed?: boolean } = {}) {
+    mocks.isStorefrontClosed.mockResolvedValue(closed);
+    if (admin instanceof Error) {
+      mocks.isAdminRequest.mockRejectedValue(admin);
+    } else {
+      mocks.isAdminRequest.mockResolvedValue(admin);
+    }
+  }
+
+  /** The notice's cookie as the response sets or clears it, or `null`. */
+  async function previewCookie(
+    path: string,
+    headers: Record<string, string> = {}
+  ) {
+    const response = await proxy(
+      new NextRequest(`${ORIGIN}${path}`, { headers })
+    );
+
+    return response.headers.get("set-cookie");
   }
 
   test.each([
@@ -163,7 +218,7 @@ describe("proxy: the launch switch", () => {
   ])(
     "closed, temporarily redirects %s to %s, in its language and without its query",
     async (path, target) => {
-      close();
+      setup();
 
       expect(await route(path)).toEqual(redirect(target));
     }
@@ -176,7 +231,7 @@ describe("proxy: the launch switch", () => {
   ])(
     "closed, still serves %s (rewritten to %s like any Spanish page)",
     async (path, rewritten) => {
-      close();
+      setup();
 
       expect(await route(path)).toMatchObject({
         status: 200,
@@ -189,7 +244,7 @@ describe("proxy: the launch switch", () => {
   test.each(["/en/coming-soon", "/en/admin", "/en/admin/orders"])(
     "closed, still lets %s through",
     async (path) => {
-      close();
+      setup();
 
       expect(await route(path)).toMatchObject({
         status: 200,
@@ -206,7 +261,7 @@ describe("proxy: the launch switch", () => {
     // Vercel's cron calls it on production, which is closed until launch.
     "/api/cron/clean-up-blobs",
   ])("closed, never touches %s", async (path) => {
-    close();
+    setup();
 
     expect(await route(path)).toMatchObject({
       status: 200,
@@ -221,32 +276,182 @@ describe("proxy: the launch switch", () => {
     ["/es/coming-soon", "/"],
     ["/en/coming-soon", "/en"],
   ])("open, the coming-soon page %s leads home to %s", async (path, target) => {
+    setup({ closed: false });
+
     expect(await route(path)).toEqual(redirect(target));
   });
 
-  test("is closed on production until the variable says otherwise", async () => {
-    vi.stubEnv("VERCEL_ENV", "production");
+  test.each(["/", "/productos/collar", "/en", "/design"])(
+    "open, serves %s to the public without asking who they are",
+    async (path) => {
+      setup({ closed: false });
 
-    expect(await route("/")).toEqual(redirect("/coming-soon"));
+      expect(await route(path)).toMatchObject({ redirectedTo: null });
+      expect(mocks.isAdminRequest).not.toHaveBeenCalled();
+    }
+  );
 
-    vi.stubEnv("STOREFRONT_LAUNCHED", "true");
+  test("closed, the redirect is kept by no cache: it depends on the switch and on who asks", async () => {
+    setup();
 
-    expect(await route("/")).toMatchObject({
+    const response = await proxy(new NextRequest(`${ORIGIN}/productos`));
+
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  test.each([
+    ["/", "/es"],
+    [
+      "/productos/collar-de-perlas?color=dorado",
+      "/es/productos/collar-de-perlas?color=dorado",
+    ],
+    ["/design", "/es/design"],
+  ])(
+    "closed, lets a signed-in admin see %s (rewritten to %s), and marks it for the notice",
+    async (path, rewritten) => {
+      setup({ admin: true });
+
+      expect(
+        await route(path, { cookie: "better-auth.session_token=t" })
+      ).toEqual({
+        status: 200,
+        redirectedTo: null,
+        rewrittenTo: `${ORIGIN}${rewritten}`,
+        passedThrough: false,
+        requestId: null,
+      });
+      expect(await previewCookie(path)).toBe(
+        "lr-store-preview=1; Path=/; SameSite=lax"
+      );
+    }
+  );
+
+  test("closed, an admin reading English passes through in English", async () => {
+    setup({ admin: true });
+
+    expect(await route("/en/productos")).toMatchObject({
+      passedThrough: true,
       redirectedTo: null,
-      rewrittenTo: `${ORIGIN}/es`,
     });
   });
 
-  test("a browser test's header decides for its request on a server that opted in, and for nobody else", async () => {
-    const header = { "x-e2e-storefront-launched": "false" };
+  test("closed, the server decides who is an admin, from the request's own headers", async () => {
+    setup({ admin: false });
+    const headers = { cookie: "better-auth.session_token=forged" };
 
-    // Not opted in: a visitor's header changes nothing.
-    expect(await route("/", header)).toMatchObject({ redirectedTo: null });
+    // A session cookie the server does not vouch for opens nothing.
+    expect(await route("/", headers)).toEqual(redirect("/coming-soon"));
+    expect(mocks.isAdminRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Headers)
+    );
+    expect(mocks.isAdminRequest.mock.calls[0]?.[0].get("cookie")).toBe(
+      "better-auth.session_token=forged"
+    );
+  });
 
-    vi.stubEnv("E2E_STOREFRONT_LAUNCH_OVERRIDE", "true");
+  test("closed, a session check that fails is reported and shows the coming-soon page", async () => {
+    const outage = new Error("connection refused");
+    setup({ admin: outage });
 
-    expect(await route("/", header)).toEqual(redirect("/coming-soon"));
-    expect(await route("/")).toMatchObject({ redirectedTo: null });
+    expect(await route("/")).toEqual(redirect("/coming-soon"));
+    expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      outage,
+      { action: "ComingSoon.check_admin" }
+    );
+  });
+
+  test("closed, an admin check answering just inside the switch's time limit lets the admin in", async () => {
+    vi.useFakeTimers();
+    setup();
+    mocks.isAdminRequest.mockImplementationOnce(
+      async () =>
+        await new Promise<boolean>((resolve) => {
+          setTimeout(() => {
+            resolve(true);
+          }, SWITCH_TIMEOUT_MS - 1);
+        })
+    );
+
+    const routed = route("/");
+    await vi.advanceTimersByTimeAsync(SWITCH_TIMEOUT_MS - 1);
+
+    expect(await routed).toMatchObject({
+      passedThrough: false,
+      rewrittenTo: `${ORIGIN}/es`,
+    });
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+  });
+
+  test("closed, an admin check that outlasts the switch's time limit is reported and shows the coming-soon page", async () => {
+    vi.useFakeTimers();
+    setup();
+    mocks.isAdminRequest.mockImplementationOnce(
+      async () => await new Promise<boolean>(() => {})
+    );
+
+    const routed = route("/");
+    await vi.advanceTimersByTimeAsync(SWITCH_TIMEOUT_MS - 1);
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await routed).toEqual(redirect("/coming-soon"));
+    expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      new Error(`The admin session check took over ${SWITCH_TIMEOUT_MS} ms`),
+      { action: "ComingSoon.check_admin" }
+    );
+  });
+
+  test("closed, a cookie set by hand opens nothing and is cleared", async () => {
+    setup({ admin: false });
+
+    expect(await route("/", { cookie: "lr-store-preview=1" })).toEqual(
+      redirect("/coming-soon")
+    );
+    expect(await previewCookie("/", { cookie: "lr-store-preview=1" })).toBe(
+      "lr-store-preview=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    );
+  });
+
+  test("open, the notice's cookie is cleared from a store page that still carries it", async () => {
+    setup({ closed: false });
+
+    expect(await previewCookie("/", { cookie: "lr-store-preview=1" })).toBe(
+      "lr-store-preview=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    );
+    // A page without it gets no cookie at all.
+    expect(await previewCookie("/")).toBeNull();
+  });
+
+  test("the admin's pages leave the notice's cookie as it is and never read the switch", async () => {
+    setup();
+
+    expect(
+      await previewCookie("/admin/settings/coming-soon", {
+        cookie: "lr-store-preview=1",
+      })
+    ).toBeNull();
+    expect(mocks.isStorefrontClosed).not.toHaveBeenCalled();
+  });
+
+  test("closed, the coming-soon page itself is shown to everyone, asking no one who they are", async () => {
+    setup();
+
+    expect(await route("/coming-soon")).toMatchObject({ redirectedTo: null });
+    expect(mocks.isAdminRequest).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["/coming-soon", "/es/coming-soon"],
+    ["/en/coming-soon", null],
+  ])("open, a signed-in admin may preview %s", async (path, rewritten) => {
+    setup({ admin: true, closed: false });
+
+    expect(await route(path)).toMatchObject({
+      redirectedTo: null,
+      rewrittenTo: rewritten === null ? null : `${ORIGIN}${rewritten}`,
+    });
+    // A preview of the page is not the closed store: no notice.
+    expect(await previewCookie(path)).toBeNull();
   });
 });
 

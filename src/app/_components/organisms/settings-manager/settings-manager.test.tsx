@@ -234,6 +234,35 @@ describe("SettingsManager", () => {
     expect(saveButton()).toBeEnabled();
   });
 
+  test.each([
+    [
+      "en",
+      "Coming soon",
+      "Manage the coming-soon page",
+      "/en/admin/settings/coming-soon",
+    ],
+    [
+      "es",
+      "Próximamente",
+      "Administrar Próximamente",
+      "/admin/settings/coming-soon",
+    ],
+  ] as const)(
+    "in %s, leads to the coming-soon page's screen from a card of its own, whatever the settings' state",
+    (locale, title, link, href) => {
+      setup({ get: "hang", locale });
+      const card = screen.getByTestId("settings-coming-soon");
+
+      expect(
+        within(card).getByRole("heading", { level: 2, name: title })
+      ).toBeVisible();
+      expect(within(card).getByRole("link", { name: link })).toHaveAttribute(
+        "href",
+        href
+      );
+    }
+  );
+
   test("in Spanish, reads and saves in Spanish", async () => {
     const { saveButton, user } = setup({ locale: "es" });
     await screen.findByTestId("settings-form");

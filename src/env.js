@@ -36,10 +36,6 @@ export const env = createEnv({
       process.env.VERCEL_ENV === "production"
         ? z.string().min(16)
         : z.string().min(16).optional(),
-    // The launch switch (FER-034, src/lib/env/launch.ts). Unset: production
-    // is closed behind the coming-soon page and everything else is open.
-    // `true` in production opens the store; `false` closes any environment.
-    STOREFRONT_LAUNCHED: z.enum(["true", "false"]).optional(),
     // Vercel Blob (uploaded images, FER-011). Production has its own store;
     // qa, previews and local runs share a second one, each in its own folder.
     // Unset, nothing can be uploaded (the token request answers 500) and no
@@ -79,7 +75,6 @@ export const env = createEnv({
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
     HEALTH_SECRET: process.env.HEALTH_SECRET,
     CRON_SECRET: process.env.CRON_SECRET,
-    STOREFRONT_LAUNCHED: process.env.STOREFRONT_LAUNCHED,
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
   },

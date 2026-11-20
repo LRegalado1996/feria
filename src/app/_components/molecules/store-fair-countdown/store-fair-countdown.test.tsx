@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
+import { FAIR_OPENS_AT } from "@/lib/brand/fair";
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
@@ -21,7 +22,8 @@ const THREE_WEEKS_BEFORE = "2026-11-14T15:00:00.000Z";
 async function setup({
   locale = "en",
   now = THREE_WEEKS_BEFORE,
-}: { locale?: Locale; now?: string } = {}) {
+  opensAt = FAIR_OPENS_AT,
+}: { locale?: Locale; now?: string; opensAt?: Date } = {}) {
   vi.setSystemTime(new Date(now));
   stubIntersectionObserver();
   stubReducedMotion(false);
@@ -31,6 +33,7 @@ async function setup({
       {await StoreFairCountdown({
         className: "min-h-24",
         copy: DICTIONARIES[locale].comingSoon.countdown,
+        opensAt,
       })}
     </div>,
     { locale }
@@ -105,4 +108,14 @@ describe("StoreFairCountdown", () => {
       expect(countdown).not.toBeInTheDocument();
     }
   );
+
+  test("counts to the day it is given, not to the fair", async () => {
+    const { figure, label } = await setup({
+      now: THREE_WEEKS_BEFORE,
+      opensAt: new Date("2026-11-17T03:00:00.000Z"),
+    });
+
+    expect(figure).toBe("3");
+    expect(label).toBe("days until the fair");
+  });
 });

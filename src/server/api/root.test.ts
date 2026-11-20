@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 
 import { appRouter } from "./root";
+import { comingSoonRouter } from "./routers/coming-soon";
 import { homeRouter } from "./routers/home";
 import { orderRouter } from "./routers/order";
 import { storeRouter } from "./routers/store";
@@ -21,12 +22,14 @@ test("mounts each domain router at its own key, and nothing else", () => {
     "attribute",
     "catalog",
     "category",
+    "comingSoon",
     "home",
     "order",
     "product",
     "store",
     "upload",
   ]);
+  expect(appRouter.comingSoon).toBe(comingSoonRouter);
   expect(appRouter.home).toBe(homeRouter);
   expect(appRouter.order).toBe(orderRouter);
   expect(appRouter.store).toBe(storeRouter);

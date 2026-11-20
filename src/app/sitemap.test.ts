@@ -10,15 +10,15 @@ const mocks = vi.hoisted(() => ({
     await Promise.resolve();
   }),
   findIndexableStore: vi.fn(),
-  isStorefrontLaunched: vi.fn<() => boolean>(),
   listIndexableArticles: vi.fn(),
   listIndexableCategories: vi.fn(),
+  readComingSoon: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({ connection: mocks.connection }));
 
-vi.mock("@/lib/env/launch", () => ({
-  isStorefrontLaunched: mocks.isStorefrontLaunched,
+vi.mock("@/server/cache/coming-soon", () => ({
+  readComingSoon: mocks.readComingSoon,
 }));
 
 vi.mock("@/server/services/seo", () => ({
@@ -76,7 +76,11 @@ function setup({
   store?: { id: number; updatedAt: Date } | null;
 } = {}) {
   vi.stubEnv("BETTER_AUTH_URL", ORIGIN);
-  mocks.isStorefrontLaunched.mockReturnValue(launched);
+  mocks.readComingSoon.mockResolvedValue({
+    countdownTo: null,
+    published: !launched,
+    translations: [],
+  });
   mocks.findIndexableStore.mockResolvedValue(store);
   mocks.listIndexableArticles.mockResolvedValue(articles);
   mocks.listIndexableCategories.mockResolvedValue(categories);
@@ -141,10 +145,11 @@ describe("sitemap", () => {
     expect(mocks.findIndexableStore).toHaveBeenCalledExactlyOnceWith(db);
   });
 
-  test("lists nothing while the storefront is closed, reading no store", async () => {
+  test("lists nothing while the coming-soon page is published, reading no store", async () => {
     setup({ launched: false });
 
     await expect(sitemap()).resolves.toEqual([]);
+    expect(mocks.readComingSoon).toHaveBeenCalledExactlyOnceWith();
     expect(mocks.findIndexableStore).not.toHaveBeenCalled();
   });
 

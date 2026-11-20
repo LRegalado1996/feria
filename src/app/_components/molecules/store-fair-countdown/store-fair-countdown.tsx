@@ -2,13 +2,15 @@ import { connection } from "next/server";
 
 import { StoreCountUp } from "@/app/_components/atoms/store-count-up";
 import type { Dictionary } from "@/content";
-import { daysUntilFair } from "@/lib/brand/fair";
+import { daysUntil } from "@/lib/brand/fair";
 import { cn } from "@/lib/utils";
 
 export interface StoreFairCountdownProps {
   className?: string;
   /** The label after the figure, for one day and for more. */
   copy: Dictionary["comingSoon"]["countdown"];
+  /** The instant it counts to: the fair's opening, or the admin's day. */
+  opensAt: Date;
 }
 
 /** Reading the clock is request-time IO, hence `connection()`. */
@@ -18,16 +20,17 @@ async function readRequestInstant() {
 }
 
 /**
- * The days left until the fair, as a figure that counts up. A server
- * component that reads the request's clock, so it goes inside a `<Suspense>`
- * and the page around it stays prerendered. From the opening day on there is
- * nothing to count, and it renders nothing.
+ * The days left until `opensAt` (the fair's opening unless an admin chose
+ * another day, FER-034), as a figure that counts up. A server component that
+ * reads the request's clock, so it goes inside a `<Suspense>`. From that
+ * instant on there is nothing to count, and it renders nothing.
  */
 async function StoreFairCountdown({
   className,
   copy,
+  opensAt,
 }: StoreFairCountdownProps) {
-  const days = daysUntilFair(await readRequestInstant());
+  const days = daysUntil(opensAt, await readRequestInstant());
 
   if (days === 0) {
     return null;

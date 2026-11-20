@@ -9,20 +9,26 @@ import { StoreFairCountdown } from "@/app/_components/molecules/store-fair-count
 import { StoreLocaleToggle } from "@/app/_components/molecules/store-locale-toggle";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import type { Dictionary } from "@/content";
-import { BRAND_NAME } from "@/lib/brand/logo";
-import { SOCIAL_LINKS } from "@/lib/brand/social";
+import type { ComingSoonContent } from "@/lib/coming-soon/content";
 
 export interface StoreComingSoonProps {
-  /** The page's text, in the language of the URL. */
+  /**
+   * What an admin may change (FER-034): the eyebrow, the headline, the text
+   * under it, the band and the day counted to, already resolved against the
+   * dictionary; and the social links, the store's or the brand's.
+   */
+  content: ComingSoonContent;
+  /** The page's fixed text, in the language of the URL. */
   copy: Dictionary["comingSoon"];
 }
 
 /**
- * The whole coming-soon screen: what every storefront address leads to until
- * the store opens, on the store's moss with its full logo. One composition
- * for a phone and a wide screen: the headline scales, nothing is rearranged.
+ * The whole coming-soon screen: what every storefront address leads to while
+ * the store is closed, on the store's moss with its full logo. One
+ * composition for a phone and a wide screen: the headline scales, nothing is
+ * rearranged, and a long word breaks rather than widen the page.
  */
-function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
+function StoreComingSoon({ content, copy: comingSoon }: StoreComingSoonProps) {
   return (
     <div
       className="relative flex min-h-screen flex-col bg-store-contrast text-store-background"
@@ -39,16 +45,18 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
 
       <main className="relative z-10 flex flex-1 flex-col justify-center gap-8 px-4 py-10 md:px-8">
         <div className="flex flex-col gap-4">
-          <StoreEyebrow tone="contrast">{comingSoon.eyebrow}</StoreEyebrow>
+          <StoreEyebrow tone="contrast">{content.eyebrow}</StoreEyebrow>
           <StoreHeading
             accentLine={1}
             as="h1"
-            className="text-store-background"
-            lines={[comingSoon.title.lineOne, comingSoon.title.lineTwo]}
+            className="[overflow-wrap:anywhere] text-store-background"
+            lines={content.headline}
             size="hero"
           />
         </div>
-        <p className="max-w-prose text-lg">{comingSoon.lead}</p>
+        <p className="max-w-prose text-lg" data-testid="coming-soon-lead">
+          {content.lead}
+        </p>
         {/* The fallback holds the count's height while it streams in, so
             nothing below it jumps. */}
         <Suspense
@@ -59,12 +67,13 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
           <StoreFairCountdown
             className="min-h-24"
             copy={comingSoon.countdown}
+            opensAt={content.opensAt}
           />
         </Suspense>
         <ul className="flex flex-col gap-2 sm:flex-row sm:gap-8">
           <li>
             <StoreArrowLink
-              href={SOCIAL_LINKS.instagram}
+              href={content.social.instagram}
               rel="noopener noreferrer"
               target="_blank"
               tone="contrast"
@@ -74,7 +83,7 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
           </li>
           <li>
             <StoreArrowLink
-              href={SOCIAL_LINKS.tiktok}
+              href={content.social.tiktok}
               rel="noopener noreferrer"
               target="_blank"
               tone="contrast"
@@ -87,12 +96,7 @@ function StoreComingSoon({ copy: comingSoon }: StoreComingSoonProps) {
 
       <StoreMarquee
         className="relative z-10"
-        items={[
-          BRAND_NAME,
-          comingSoon.marquee.products,
-          comingSoon.marquee.fair,
-          comingSoon.marquee.dates,
-        ]}
+        items={content.marquee}
         tone="accent"
       />
     </div>

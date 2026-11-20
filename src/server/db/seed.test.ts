@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { updateStoreSchema } from "@/lib/schemas/store";
-import { storeTranslation } from "@/server/db/schema";
+import { comingSoon, storeTranslation } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -113,6 +113,7 @@ describe("seed", () => {
         createdArticles: 11,
         createdStoreTexts: ["es", "en"],
         home: HOME,
+        openedStore: true,
       });
     }
   );
@@ -159,6 +160,7 @@ describe("seed", () => {
       createdArticles: 11,
       createdStoreTexts: ["es", "en"],
       home: HOME,
+      openedStore: true,
     });
     expect(createAccount).not.toHaveBeenCalled();
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
@@ -173,12 +175,32 @@ describe("seed", () => {
     });
 
     expect(db.$.insert).toHaveBeenCalledWith(storeTranslation);
-    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith(
+    expect(db.$["insert.values"]).toHaveBeenCalledWith(
       SEED_STORE_TEXTS.map((text) => ({ ...text, storeId: STORE_ID }))
     );
-    expect(db.$["insert.onConflictDoNothing"]).toHaveBeenCalledExactlyOnceWith({
+    expect(db.$["insert.onConflictDoNothing"]).toHaveBeenCalledWith({
       target: [storeTranslation.storeId, storeTranslation.locale],
     });
+  });
+
+  test("opens the store: the coming-soon page unpublished, never over a choice already made", async () => {
+    const { db, run } = setup();
+    db.$["insert.returning"]
+      .mockResolvedValueOnce([{ locale: "es" }])
+      .mockResolvedValueOnce([]);
+
+    // The store already had its page: the seed says so and changes nothing.
+    await expect(run("development")).resolves.toMatchObject({
+      openedStore: false,
+    });
+    expect(db.$.insert.mock.calls).toEqual([[storeTranslation], [comingSoon]]);
+    expect(db.$["insert.values"].mock.calls[1]).toEqual([
+      { published: false, storeId: STORE_ID },
+    ]);
+    expect(db.$["insert.onConflictDoNothing"].mock.calls[1]).toEqual([
+      { target: comingSoon.storeId },
+    ]);
+    expect(db.$.update).not.toHaveBeenCalled();
   });
 
   test("loads the sample catalog into the store, inside a transaction", async () => {

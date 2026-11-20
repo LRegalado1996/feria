@@ -1,10 +1,6 @@
 import { ORPCError } from "@orpc/server";
 
 import {
-  isStorefrontLaunchedFor,
-  LAUNCH_OVERRIDE_HEADER,
-} from "@/lib/env/launch";
-import {
   changeOrderStatusSchema,
   createOrderSchema,
   getOrderByTokenSchema,
@@ -16,6 +12,8 @@ import { isBotRequest } from "@/server/api/utils/bot-check";
 import { orderClientKey } from "@/server/api/utils/client-key";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 import { writeToStore } from "@/server/api/utils/write-to-store";
+import { isAdminRequest } from "@/server/better-auth/admin-request";
+import { readComingSoon } from "@/server/cache/coming-soon";
 import {
   changeOrderStatus,
   countOrders,
@@ -35,9 +33,12 @@ export const orderRouter = {
   create: publicProcedure
     .input(createOrderSchema)
     .handler(async ({ context, input }) => {
-      // A closed storefront takes no orders, whatever reaches the API.
+      // A closed storefront (FER-034) takes orders only from a signed-in
+      // admin trying it out, whatever else reaches the API. The switch is
+      // the cached read an admin's flip invalidates at once.
       if (
-        !isStorefrontLaunchedFor(context.headers.get(LAUNCH_OVERRIDE_HEADER))
+        (await readComingSoon()).published &&
+        !(await isAdminRequest(context.headers))
       ) {
         throw new ORPCError("NOT_FOUND", { message: "Store not found" });
       }

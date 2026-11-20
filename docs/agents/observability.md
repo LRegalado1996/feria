@@ -34,7 +34,7 @@ An issue is something a developer must fix. Everything else is a breadcrumb or n
 
 ## Logging
 
-- **One wide event per request** (evlog, `src/lib/evlog.ts`). A route handler is wrapped in `withEvlog`; `/api/orpc` and `/api/health` are. `src/proxy.ts` stamps `x-request-id` on every `/api` request and does nothing else: no database, no auth decision.
+- **One wide event per request** (evlog, `src/lib/evlog.ts`). A route handler is wrapped in `withEvlog`; `/api/orpc` and `/api/health` are. `src/proxy.ts` stamps `x-request-id` on every `/api` request and does nothing else to it. On page requests it reads the coming-soon switch and, while the page is published, checks an admin session (FER-034, `docs/agents/nextjs.md` § Proxy); a failure of either is reported with `captureExceptionWithScope` (`ComingSoon.read_switch`, `ComingSoon.check_admin`) and fails closed.
 - **Add to the event, don't print:** `safeRequestLogger()?.set({ category: { op: "create", id } })` from `@/server/api/utils/logger`. It is `undefined` outside a wrapped request (the RSC `caller`, scripts, tests), so the call is safe anywhere. No `console.log` per call; the timing middleware already records `{ orpc: { procedure, durationMs } }`, and the error interceptor the `outcome`.
 - **Ids, enums, counts and booleans only.** Never spread a request body, form values or a row into the event; never log free text a user typed. Namespace each domain under its own key (`order: { … }`) and never set a key evlog reserves (`audit`, `status`, `level`, `service`, `duration`, `durationMs`).
 - **Redaction runs before the console write:** `redact.transform` is `sanitizeForLog`, on top of evlog's built-in masks. A new drain or transport reuses it.
