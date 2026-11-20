@@ -1055,7 +1055,7 @@ describe("HomeCuration", () => {
       finish = resolve;
     });
     server.use(
-      createOrpcHandler("home.deleteBanner", async () => {
+      createOrpcHandler("page.deleteBanner", async () => {
         await held;
         return { id: 31 };
       })
