@@ -19,7 +19,7 @@ function setup() {
   );
   tx.$.execute.mockImplementation(async () => {
     order.push("limit");
-    return await Promise.resolve(undefined);
+    await Promise.resolve();
   });
   const run = vi.fn(async (handle: unknown) => {
     order.push("read");
