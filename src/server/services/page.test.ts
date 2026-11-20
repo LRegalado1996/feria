@@ -23,7 +23,7 @@ import {
   store,
 } from "@/server/db/schema";
 import { createMockDatabase, type MockDatabase } from "@/server/test/context";
-import { renderQuery } from "@/server/test/render-sql";
+import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 
 import {
   createBanner,
@@ -466,6 +466,10 @@ describe("getPageContent", () => {
       sql: '("product"."storeId" = $1 and "product"."status" = $2)',
     });
     expect(readsOf(db).tables).toEqual([product]);
+    // The first twelve of each category are the store's first twelve.
+    expect(
+      db.$["select.orderBy"].mock.calls.map((terms) => renderOrderBy(terms))
+    ).toEqual(['"product"."position" asc, "product"."id" asc']);
   });
 
   test("an empty store's page holds nothing", async () => {

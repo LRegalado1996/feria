@@ -169,6 +169,32 @@ describe("writeToPages", () => {
     expect(invalidateCatalogCache).not.toHaveBeenCalled();
   });
 
+  test("drops the cache only once the transaction ended, not once its write ran", async () => {
+    const { context, write } = setup();
+    let commit: () => void = () => undefined;
+    const committed = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    // The write ran; its transaction has not committed yet.
+    withAdmin.mockImplementationOnce(async (_db, _userId, run) => {
+      const result = await run(TX);
+      await committed;
+      return result;
+    });
+
+    const pending = writeToPages(context, write);
+    // Every promise that can settle before the commit has settled.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidatePagesCache).not.toHaveBeenCalled();
+    commit();
+    await expect(pending).resolves.toEqual({ id: 11, storeId: 7 });
+    expect(invalidatePagesCache).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
   test("keeps the cache when the write fails, and lets the failure reject the call", async () => {
     const { context, write } = setup();
     write.mockRejectedValueOnce(new Error("Banner not found"));

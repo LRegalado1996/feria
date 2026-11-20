@@ -8,7 +8,12 @@ import { createORPCContext } from "@/server/api/orpc";
 import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
-import { announcement, user } from "@/server/db/schema";
+import {
+  announcement,
+  category,
+  categoryTranslation,
+  user,
+} from "@/server/db/schema";
 import { findHomePageId } from "@/server/services/page";
 import { theStoreId } from "@/server/test/one-store";
 
@@ -31,10 +36,41 @@ vi.mock("next/cache", () => ({
 
 // The logins this file created; deleting one deletes its sessions.
 const createdUserIds: string[] = [];
+// The categories this file created; deleting one deletes its texts.
+const createdCategoryIds: number[] = [];
 
 afterEach(async () => {
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
+  await db
+    .delete(category)
+    .where(inArray(category.id, createdCategoryIds.splice(0)));
 });
+
+/** A category of the store, with its Spanish name, made by this file. */
+async function addCategory() {
+  const slug = `page-router-${randomUUID()}`;
+  const [made] = await db
+    .insert(category)
+    .values({
+      parentId: null,
+      position: 10_000,
+      slug,
+      storeId: await theStoreId(db),
+    })
+    .returning({ id: category.id });
+
+  if (!made) {
+    throw new Error("Inserting a category returned no row");
+  }
+
+  createdCategoryIds.push(made.id);
+  const name = `Categoría ${slug}`;
+  await db
+    .insert(categoryTranslation)
+    .values({ categoryId: made.id, locale: "es", name });
+
+  return { id: made.id, name, slug };
+}
 
 /** An announcement a refused write would have saved. */
 function makeAnnouncement() {
@@ -101,7 +137,11 @@ async function setup({ signedIn = true }: { signedIn?: boolean } = {}) {
   };
 }
 
-/** The store's announcement texts now, to see a refused write left none. */
+/**
+ * The store's announcement texts now, to see a refused write left none.
+ * The store holds one announcement, shared by every file; a refused text
+ * is a fresh UUID, so only this test's write could have put it there.
+ */
 async function savedTexts() {
   const found = await db.query.announcement.findFirst({
     columns: {},
@@ -151,15 +191,30 @@ describe("the pages' procedures against the database", () => {
     const homePageId = await findHomePageId(db, {
       storeId: await theStoreId(db),
     });
+    const shelf = await addCategory();
 
     const curation = await get(homePageId);
 
     expect(curation.pageId).toBe(homePageId);
     expect(curation.today).toBe("2026-12-05");
     expect(curation.currencyCode).toBe("UYU");
-    // The sequence always holds the two curated rows.
-    expect(curation.sections).toContainEqual({ kind: "best_sellers" });
-    expect(curation.sections).toContainEqual({ kind: "featured" });
+    expect(
+      curation.categories.filter((entry) => entry.id === shelf.id)
+    ).toEqual([
+      {
+        id: shelf.id,
+        nameEn: null,
+        nameEs: shelf.name,
+        path: `/${shelf.slug}`,
+      },
+    ]);
+    // Never placed, it still has its one place in the sequence.
+    expect(
+      curation.sections.filter(
+        (section) =>
+          section.kind === "category" && section.categoryId === shelf.id
+      )
+    ).toEqual([{ categoryId: shelf.id, kind: "category" }]);
   });
 
   test("a page the store does not have is NOT_FOUND", async () => {

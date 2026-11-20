@@ -358,7 +358,12 @@ function BannerForm({
                         {fields[name]}
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} autoComplete="off" lang={lang} />
+                        <Input
+                          {...field}
+                          autoComplete="off"
+                          lang={lang}
+                          required={name === "titleEs"}
+                        />
                       </FormControl>
                       {name.startsWith("cta") ? (
                         <FormDescription>{fields.ctaHint}</FormDescription>
@@ -402,7 +407,7 @@ function BannerForm({
                         : fields.linkCategoryId}
                     </FormLabel>
                     <FormControl>
-                      <select {...field} className={SELECT_CLASS}>
+                      <select {...field} className={SELECT_CLASS} required>
                         <option value="">{fields.choose}</option>
                         {(linkKind === "product" ? articles : categories).map(
                           (choice) => (
@@ -426,7 +431,12 @@ function BannerForm({
                   <FormItem className="min-w-0">
                     <FormLabel required>{fields.linkUrl}</FormLabel>
                     <FormControl>
-                      <Input {...field} autoComplete="off" inputMode="url" />
+                      <Input
+                        {...field}
+                        autoComplete="off"
+                        inputMode="url"
+                        required
+                      />
                     </FormControl>
                     <FormDescription>{fields.linkUrlHint}</FormDescription>
                     <FormMessage />

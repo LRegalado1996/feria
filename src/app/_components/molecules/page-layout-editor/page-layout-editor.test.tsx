@@ -98,6 +98,10 @@ function Harness({
       <button form="home-layout" type="submit">
         Save order
       </button>
+      {/* Whether the form differs from its start: a save makes it the start. */}
+      <output data-testid="home-layout-dirty">
+        {String(form.formState.isDirty)}
+      </output>
     </>
   );
 }
@@ -126,6 +130,7 @@ function setup({
 
   return {
     card,
+    dirty: () => screen.getByTestId("home-layout-dirty").textContent,
     names,
     onSave,
     submit: async () => {
@@ -364,7 +369,7 @@ describe("PageLayoutEditor", () => {
   );
 
   test("once saved, holds the saved order as its start, the pickers cleared", async () => {
-    const { card, names, onSave, submit, user } = setup({
+    const { card, dirty, names, onSave, submit, user } = setup({
       fields: makeFields({ featured: [{ productId: 5 }, { productId: 6 }] }),
     });
     const best = within(card("home-layout-best-sellers"));
@@ -376,6 +381,7 @@ describe("PageLayoutEditor", () => {
       }),
       "9"
     );
+    expect(dirty()).toBe("true");
     await submit();
 
     // The picker's article is not added: only what the lists hold is saved.
@@ -399,10 +405,11 @@ describe("PageLayoutEditor", () => {
         name: "Article to add",
       })
     ).toHaveValue("");
+    expect(dirty()).toBe("false");
   });
 
   test("keeps the order when the save fails", async () => {
-    const { names, onSave, submit, user } = setup({ saves: false });
+    const { dirty, names, onSave, submit, user } = setup({ saves: false });
 
     await user.click(
       screen.getByRole("button", { name: "Move down: Best sellers" })
@@ -428,6 +435,7 @@ describe("PageLayoutEditor", () => {
       "Rings",
       "Featured",
     ]);
+    expect(dirty()).toBe("true");
   });
 
   test("speaks Spanish on a Spanish page", () => {

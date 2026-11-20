@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
+import type { Database } from "@/server/db";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -57,5 +58,21 @@ describe("withStatementTimeout", () => {
     await expect(withStatementTimeout(db as never, 4000, run)).rejects.toBe(
       cancelled
     );
+  });
+
+  test("takes the top-level client only: in a caller's transaction, the limit would outlive its savepoint", () => {
+    // Proven by `pnpm typecheck`, which fails on an unused `@ts-expect-error`:
+    // widen the parameter back to a transaction handle and the suite goes red.
+    const insideATransaction = async (
+      handle: Parameters<Parameters<Database["transaction"]>[0]>[0]
+    ) =>
+      await withStatementTimeout(
+        // @ts-expect-error -- a transaction handle runs it as a savepoint
+        handle,
+        4000,
+        async () => await Promise.resolve(null)
+      );
+
+    expect(insideATransaction).toBeTypeOf("function");
   });
 });
