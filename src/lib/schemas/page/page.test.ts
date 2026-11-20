@@ -901,6 +901,7 @@ describe("pages (FER-060)", () => {
     ["admin", false],
     ["en", false],
     ["cart", false],
+    ["llms", false],
   ])("isPageSlug(%j) is %s", (slug, expected) => {
     expect(isPageSlug(slug)).toBe(expected);
   });

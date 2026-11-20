@@ -123,7 +123,7 @@ describe("one address space: pages, groups and categories (FER-060)", () => {
     });
   });
 
-  test.each(["productos", "admin", "en", "cart", "llms.txt"])(
+  test.each(["productos", "admin", "en", "cart", "llms"])(
     "a page cannot take %s, a path the site answers itself",
     async (slug) => {
       await rolledBack(async (tx, storeId) => {
