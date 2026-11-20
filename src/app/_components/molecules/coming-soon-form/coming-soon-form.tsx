@@ -177,9 +177,12 @@ function ComingSoonForm({
   const submit = async (values: UpdateComingSoonValues) => {
     const saved = await onSave(values);
 
-    // A failure keeps everything typed: the screen says it failed.
+    // A failure keeps everything typed: the screen says it failed. A save
+    // turns off `resetOptions`' keepDirtyValues, which `reset` inherits:
+    // what was saved is no longer this admin's edit, so a later read with
+    // another admin's newer text must replace it, not be ignored.
     if (saved !== null) {
-      form.reset(fieldsOf(saved));
+      form.reset(fieldsOf(saved), { keepDirtyValues: false });
     }
   };
 

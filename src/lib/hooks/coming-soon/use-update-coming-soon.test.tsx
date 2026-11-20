@@ -46,7 +46,7 @@ async function setup({
 } = {}) {
   const stored: { page: typeof LOADED | typeof SAVED } = { page: LOADED };
   const update = vi.fn((_input: unknown) => SAVED);
-  const get = vi.fn(() => stored.page);
+  const get = vi.fn((_input: unknown) => stored.page);
   server.use(
     createOrpcHandler("comingSoon.get", get),
     fails
@@ -170,7 +170,7 @@ describe("useUpdateComingSoon", () => {
 
     await save().mutateAsync(INPUT);
 
-    expect(get).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(queryClient.getQueryData(comingSoonKey())).toEqual({
       ...SAVED,
       published: false,
