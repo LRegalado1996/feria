@@ -65,7 +65,12 @@ function StorePicture({
   return (
     <picture data-slot="store-picture">
       {phone ? (
-        <source media={STORE_PICTURE_COMPUTER_MEDIA} srcSet={computerSrcSet} />
+        // A <source> reads its own `sizes` (100vw without one), never the img's.
+        <source
+          media={STORE_PICTURE_COMPUTER_MEDIA}
+          sizes={sizes}
+          srcSet={computerSrcSet}
+        />
       ) : null}
       <img
         {...image}

@@ -73,20 +73,23 @@ test("as the page's priority image, is fetched first and never lazily", () => {
 });
 
 test("fills its box at the widths it is given, the whole window by default, with its own words and a caller's class", () => {
-  const { image } = setup();
+  const { image, sources } = setup();
 
   expect(image).toHaveAttribute("sizes", "100vw");
+  expect(required(sources[0])).toHaveAttribute("sizes", "100vw");
   expect(image).toHaveAttribute("alt", "Anillo sello");
   expect(image).toHaveAttribute("data-testid", "picture-image");
   expect(image).toHaveClass("absolute", "inset-0", "size-full", "object-cover");
 
-  const { image: narrow } = setup({
+  const { image: narrow, sources: narrowSources } = setup({
     alt: "",
     className: "opacity-60",
     sizes: "50vw",
   });
 
   expect(narrow).toHaveAttribute("sizes", "50vw");
+  // The computer's photo is chosen at the same width as the phone's.
+  expect(required(narrowSources[0])).toHaveAttribute("sizes", "50vw");
   expect(narrow).toHaveAttribute("alt", "");
   expect(narrow).toHaveClass("opacity-60", "object-cover");
 });
