@@ -308,6 +308,10 @@ export const test = userTest.extend<DbFixture>({
               throw new Error("Inserting a banner returned no row");
             }
 
+            // Recorded first, so a failure below still deletes it (its
+            // places cascade with it).
+            seeded.bannerIds.push(created.id);
+
             // Placed last on the home page (FER-058) until its order is
             // saved: last of the cover, or after the rest of its blocks.
             const [own] = await db
@@ -333,7 +337,6 @@ export const test = userTest.extend<DbFixture>({
                   storeId,
                 }));
 
-            seeded.bannerIds.push(created.id);
             await db.insert(bannerTranslation).values([
               {
                 bannerId: created.id,
