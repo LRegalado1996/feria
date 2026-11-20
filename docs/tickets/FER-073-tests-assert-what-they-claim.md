@@ -25,7 +25,7 @@ The home stack's reviews (#68 to #76, 2026-11-20) fixed the cases CodeRabbit rai
 
 ## Acceptance criteria
 
-- The ratchet holds the count at or below today's and reaches zero; no integration test or E2E teardown deletes or rewrites a row it did not create.
+- The ratchet holds the count at or below today's and reaches zero; no integration test or E2E teardown deletes or rewrites a row it did not create, except the serial E2E fixtures that restore the shared store state their spec changed on purpose (`homeEdit` putting back the hidden articles and banners, the layout, the announcement and the home page; `storeEdit` putting back `STORE_SETTINGS`), which `src/e2e/AGENTS.md` § "Shared state runs alone" allows.
 
 ## Reporting
 

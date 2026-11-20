@@ -2,11 +2,14 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
+import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
 import type { PageFormValues } from "@/lib/schemas/page";
 import { renderWithI18n } from "@/test/i18n";
 
 import { PageForm, type PageFormOutcome, type PageFormPage } from "./page-form";
+
+vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
 function makePage(overrides: Partial<PageFormPage> = {}): PageFormPage {
   return {
@@ -32,14 +35,21 @@ function setup({
 }: {
   cancel?: boolean;
   locale?: Locale;
-  outcome?: PageFormOutcome | "hang";
+  outcome?: PageFormOutcome | "hang" | "throw";
   page?: PageFormPage | null;
 } = {}) {
   const onSave = vi.fn(
-    async (_values: PageFormValues): Promise<PageFormOutcome> =>
-      outcome === "hang"
-        ? await new Promise<never>(() => {})
-        : await Promise.resolve(outcome)
+    async (_values: PageFormValues): Promise<PageFormOutcome> => {
+      if (outcome === "hang") {
+        return await new Promise<never>(() => {});
+      }
+
+      if (outcome === "throw") {
+        throw new Error("Network down");
+      }
+
+      return await Promise.resolve(outcome);
+    }
   );
   const onCancel = vi.fn<() => void>();
   const screenFor = (shown: PageFormPage | null) => (
@@ -187,7 +197,17 @@ describe("PageForm", () => {
     await user.type(field("Name in Spanish"), "Mío");
     await submit();
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledOnce();
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        isPublished: true,
+        nameEn: "Gifts",
+        nameEs: "Mío",
+        seoDescriptionEn: null,
+        seoDescriptionEs: "Para regalar.",
+        seoTitleEn: null,
+        seoTitleEs: null,
+        showInHeader: true,
+        slug: "regalos",
+      });
     });
     refresh(makePage({ nameEs: "Mío" }));
 
@@ -195,6 +215,38 @@ describe("PageForm", () => {
     refresh(makePage({ nameEs: "Suyo" }));
 
     expect(field("Name in Spanish")).toHaveValue("Suyo");
+  });
+
+  test("a save rebases on the page as last read: a read equal to an earlier one still replaces what was sent", async () => {
+    const { field, refresh, submit, user } = setup({ page: makePage() });
+    await user.clear(field("Name in Spanish"));
+    await user.type(field("Name in Spanish"), "Mío");
+    await submit();
+    await waitFor(() => {
+      expect(screen.getByTestId("page-form-submit")).toBeEnabled();
+    });
+
+    // The stored page came back as it was before the save (another admin's
+    // save landed over it): the same values the form was first given.
+    refresh(makePage());
+
+    expect(field("Name in Spanish")).toHaveValue("Regalos");
+  });
+
+  test("a newer read while a save travels keeps the controls waiting", async () => {
+    const { field, refresh, submit, user } = setup({
+      outcome: "hang",
+      page: makePage(),
+    });
+    await user.clear(field("Name in Spanish"));
+    await user.type(field("Name in Spanish"), "Mío");
+    await submit();
+
+    refresh(makePage({ nameEn: "Gifts again" }));
+
+    expect(screen.getByTestId("page-form-submit")).toBeDisabled();
+    expect(screen.getByTestId("page-form-submit")).toHaveTextContent("Saving…");
+    expect(field("Name in English")).toBeDisabled();
   });
 
   test("a failed save keeps the admin's edit: a newer page read still leaves it", async () => {
@@ -271,6 +323,22 @@ describe("PageForm", () => {
       "We could not save the page. What you typed is still here: try again."
     );
     expect(field("Name in Spanish")).toHaveValue("Regalos");
+  });
+
+  test("a save whose handler throws is reported, said, and hands the controls back", async () => {
+    const { field, submit } = setup({ outcome: "throw", page: makePage() });
+
+    await submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We could not save the page. What you typed is still here: try again."
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      new Error("Network down"),
+      { action: "Pages.save_settings" }
+    );
+    expect(screen.getByTestId("page-form-submit")).toBeEnabled();
+    expect(field("Name in Spanish")).toBeEnabled();
   });
 
   test("while saving, the fields and the buttons wait", async () => {

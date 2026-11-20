@@ -1,8 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useId, useState } from "react";
-import { useForm, useFormState } from "react-hook-form";
+import { useEffect, useId, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Input } from "@/app/_components/atoms/input";
@@ -15,6 +15,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/app/_components/molecules/form";
+import { reportError } from "@/lib/errors/client";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import {
@@ -128,32 +129,56 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
   const fields = copy.fields;
   const formId = useId();
   const [failed, setFailed] = useState(false);
+  // Its own flag, not the form's `isSubmitting`: a newer read resets the
+  // form while a save travels, and a reset clears `isSubmitting`, which
+  // would hand the controls back mid-save.
+  const [saving, setSaving] = useState(false);
   const form = useForm<PageFormFields, unknown, PageFormValues>({
-    resetOptions: { keepDirtyValues: true },
+    defaultValues: fieldsOf(page),
     resolver: zodResolver(createPageFormSchema(copy.errors)),
-    // Follows the stored page when a read brings a newer one (another
-    // admin's save), keeping what this admin is typing: a field left as it
-    // was would otherwise send the older value back and undo theirs.
-    values: fieldsOf(page),
   });
-  const { isSubmitting } = useFormState({ control: form.control });
+  // The page as last read, for a save to rebase on.
+  const received = useRef(page);
+
+  // Follows every read of the stored page (another admin's save, this
+  // admin's own save coming back), keeping what this admin is typing: a
+  // field left as it was would otherwise send the older value back and
+  // undo theirs. Keyed on each read, not on its values: react-hook-form's
+  // own `values` skips a read equal to one it applied before, which left a
+  // saved form on what it sent when the stored page came back as before.
+  useEffect(() => {
+    received.current = page;
+    form.reset(fieldsOf(page), { keepDirtyValues: true });
+  }, [form, page]);
+
   const isHome = page?.isHome ?? false;
   const submitLabel = page ? copy.submitEdit : copy.submitCreate;
 
   const submit = async (values: PageFormValues) => {
     setFailed(false);
-    const outcome = await onSave(values);
+    setSaving(true);
+    let outcome: PageFormOutcome;
+
+    try {
+      outcome = await onSave(values);
+    } catch (error) {
+      // The caller answers its own failures; one that slips through is
+      // still a failed save, said here, never controls left waiting.
+      reportError(error, { action: "Pages.save_settings" });
+      outcome = "failed";
+    }
+
+    setSaving(false);
 
     if (outcome === "taken") {
       form.setError("slug", { message: copy.errors.slugTaken });
     }
 
-    // What was saved is no longer this admin's edit, so a later read with
-    // another admin's newer value must replace it, not be kept: a save
-    // turns off the keepDirtyValues that `reset` inherits from
-    // `resetOptions`.
+    // What was saved is no longer this admin's edit: the clean start is
+    // the page as last read (the save's own answer once it is back), so a
+    // later read with another admin's newer value replaces it.
     if (outcome === "saved") {
-      form.reset(form.getValues(), { keepDirtyValues: false });
+      form.reset(fieldsOf(received.current), { keepDirtyValues: false });
     }
 
     setFailed(outcome === "failed");
@@ -172,10 +197,7 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
           void form.handleSubmit(submit)(event);
         }}
       >
-        <fieldset
-          className="flex min-w-0 flex-col gap-5"
-          disabled={isSubmitting}
-        >
+        <fieldset className="flex min-w-0 flex-col gap-5" disabled={saving}>
           <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
@@ -326,14 +348,14 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
         <div className="flex flex-wrap gap-2">
           <Button
             data-testid="page-form-submit"
-            disabled={isSubmitting}
+            disabled={saving}
             type="submit"
           >
-            {isSubmitting ? copy.pending : submitLabel}
+            {saving ? copy.pending : submitLabel}
           </Button>
           {onCancel ? (
             <Button
-              disabled={isSubmitting}
+              disabled={saving}
               onClick={() => {
                 onCancel();
               }}

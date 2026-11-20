@@ -17,9 +17,11 @@ Found on 2026-11-20 while reviewing FER-034 (#69), whose coming-soon form got th
 
 - The same pattern as `molecules/coming-soon-form`: follow a newer read for untouched fields, keep the edited ones, and after a save stop treating the saved ones as edited.
 
+- The coming-soon form (`molecules/coming-soon-form`, FER-034) already follows a newer read, but keeps its pending state in react-hook-form's `isSubmitting`, which a reset during a save clears (react-hook-form 7.91's `_reset` sets it false): a read that lands while a save travels hands the controls back mid-save. Keep the pending state in its own flag, as `molecules/page-form` does since #76 (FER-060's review).
+
 ## Acceptance criteria
 
-- Unit tests: a newer read replaces an untouched field and leaves an edited one; after a save, a newer read replaces the field that was saved.
+- Unit tests: a newer read replaces an untouched field and leaves an edited one; after a save, a newer read replaces the field that was saved; in both forms, a read that lands while a save travels leaves the controls waiting.
 
 ## Reporting
 
