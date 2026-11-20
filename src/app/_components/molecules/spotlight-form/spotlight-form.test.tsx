@@ -160,6 +160,23 @@ describe("SpotlightForm", () => {
     }
   );
 
+  test.each([
+    [
+      "Label in Spanish",
+      "Optional. The green pill above the name, such as “New”.",
+    ],
+    [
+      "Label in English",
+      "Optional. The green pill above the name, such as “New”.",
+    ],
+    ["Phrase in Spanish", "Optional. A short line under the price."],
+    ["Phrase in English", "Optional. A short line under the price."],
+  ])("%s is described by its hint", (name, hint) => {
+    const { field } = setup();
+
+    expect(field(name)).toHaveAccessibleDescription(hint);
+  });
+
   test("an edit opens on its article, words and place, its words in their languages", () => {
     const { field, select } = setup({
       rowsIndex: 2,

@@ -170,14 +170,12 @@ function SpotlightForm({
                       <FormControl>
                         <Input {...field} autoComplete="off" lang={lang} />
                       </FormControl>
+                      <FormDescription>{fields.labelHint}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               ))}
-              <p className="text-xs text-muted-foreground sm:col-span-2">
-                {fields.labelHint}
-              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {(
@@ -201,14 +199,12 @@ function SpotlightForm({
                           rows={2}
                         />
                       </FormControl>
+                      <FormDescription>{fields.phraseHint}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               ))}
-              <p className="text-xs text-muted-foreground sm:col-span-2">
-                {fields.phraseHint}
-              </p>
             </div>
             <FormField
               control={form.control}
