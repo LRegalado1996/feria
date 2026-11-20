@@ -37,16 +37,7 @@ test.describe("Home curation", () => {
     await expect(home.preview().getByText(text)).toBeAttached();
 
     const store = new StorePage(page);
-
-    for (const [width, height, shown] of [
-      [1440, 900, text],
-      [390, 844, short],
-    ] as const) {
-      await page.setViewportSize({ height, width });
-      await store.goto();
-
-      await expect(store.getAnnouncementFull()).toHaveText(text);
-      await expect(store.getAnnouncementBar()).toContainText(shown);
+    const showsTheLink = async () => {
       await expect(store.getAnnouncementLink()).toHaveAttribute(
         "href",
         "/productos"
@@ -54,7 +45,27 @@ test.describe("Home curation", () => {
       // Its name is the whole line at every width.
       await expect(store.getAnnouncementLink()).toHaveAccessibleName(text);
       expect(await store.announcementLines()).toBe(1);
-    }
+    };
+
+    // A computer sees the whole line; the short one is not drawn.
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await store.goto();
+    await expect(store.getAnnouncementFull()).toHaveText(text);
+    await expect(store.getAnnouncementFull()).toBeVisible();
+    await expect(store.getAnnouncementFull()).not.toHaveCSS("width", "1px");
+    await expect(store.getAnnouncementShort()).toBeHidden();
+    await showsTheLink();
+
+    // A phone sees the short line; the whole one stays in the page for
+    // screen readers, one pixel wide (`sr-only`), which Playwright still
+    // counts as visible.
+    await page.setViewportSize({ height: 844, width: 390 });
+    await store.goto();
+    await expect(store.getAnnouncementShort()).toHaveText(short);
+    await expect(store.getAnnouncementShort()).toBeVisible();
+    await expect(store.getAnnouncementFull()).toHaveText(text);
+    await expect(store.getAnnouncementFull()).toHaveCSS("width", "1px");
+    await showsTheLink();
   });
 
   test("an announcement switched off leaves the storefront without a bar", async ({
