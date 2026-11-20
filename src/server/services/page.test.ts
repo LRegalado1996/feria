@@ -2264,6 +2264,26 @@ describe("createSpotlight", () => {
   });
 });
 
+/** What an upsert writes over the row it meets, as SQL per column. */
+function conflictUpdate(options: unknown): Record<string, string> {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    !("set" in options) ||
+    typeof options.set !== "object" ||
+    options.set === null
+  ) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(options.set).map(([column, value]) => [
+      column,
+      renderQuery(value).sql,
+    ])
+  );
+}
+
 describe("updateSpotlight", () => {
   function setup({
     saved = SAVED,
@@ -2293,7 +2313,9 @@ describe("updateSpotlight", () => {
   test("changes its article and words, and keeps its place on the page when none is given", async () => {
     const { db, update } = setup({ saved: ON_PAGE });
 
-    await expect(update({ productId: 40 })).resolves.toEqual({ id: 51 });
+    await expect(
+      update({ labelEs: "Oferta", phraseEs: "Solo hoy", productId: 40 })
+    ).resolves.toEqual({ id: 51 });
 
     expect(advisoryLocks(db, "select")).toEqual({
       before: true,
@@ -2307,6 +2329,17 @@ describe("updateSpotlight", () => {
     expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
       spotlightTranslation,
     ]);
+    // The new words go in, and over the words the language already has.
+    expect(db.$["insert.values"].mock.calls[0]?.[0]).toEqual([
+      { label: "Oferta", locale: "es", phrase: "Solo hoy", spotlightId: 51 },
+    ]);
+    expect(
+      conflictUpdate(db.$["insert.onConflictDoUpdate"].mock.calls[0]?.[0])
+    ).toEqual({
+      label: 'excluded."label"',
+      phrase: 'excluded."phrase"',
+      updatedAt: 'excluded."updatedAt"',
+    });
   });
 
   test("given a place, moves there", async () => {
@@ -2413,7 +2446,7 @@ describe("savePageLayout with spotlights", () => {
   }
 
   test("keeps a spotlight of the page where it is listed", async () => {
-    const { save } = setup();
+    const { db, save } = setup();
 
     await expect(
       save([
@@ -2428,6 +2461,19 @@ describe("savePageLayout with spotlights", () => {
         { kind: "spotlight", spotlightId: 51 },
         { categoryId: 11, kind: "category" },
       ],
+    });
+    // Written back where it was listed: the rewrite deleted its old place.
+    const sectionsWrite = db.$.insert.mock.calls.findIndex(
+      ([table]) => table === pageSection
+    );
+    expect(insertedRows(db, sectionsWrite)).toContainEqual({
+      bannerId: null,
+      categoryId: null,
+      kind: "spotlight",
+      pageId: PAGE_ID,
+      position: 3,
+      spotlightId: 51,
+      storeId: STORE_ID,
     });
   });
 
