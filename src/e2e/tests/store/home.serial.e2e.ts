@@ -17,6 +17,9 @@ import type { HomeEdit } from "../../fixtures/store.fixture";
 import { AdminHomePage } from "../../page-objects/admin-home.page";
 import { StorePage } from "../../page-objects/store.page";
 
+/** How long a cover banner stays (`COVER_DELAY_MS` in molecules/store-cover-carousel). */
+const COVER_DELAY_MS = 6000;
+
 // FER-022. The storefront's home shows the store's one curation, which every
 // spec reads, so this spec is serial: each test sets what it shows through
 // `homeEdit` (whose end saves the order back, deletes the banners added and
@@ -308,14 +311,36 @@ test.describe("The storefront's home", () => {
     await pause.click();
     await expect(pause).toHaveAttribute("aria-pressed", "false");
 
-    const second = cover.getByRole("link", {
-      name: `${titles.coverTwo} Comprar ahora`,
+    // Focus in the cover and a pointer over it hold it too (WCAG 2.2.2), so
+    // both leave it before it is watched.
+    const letGo = async () => {
+      await pause.blur();
+      await page.mouse.move(0, 0);
+    };
+    const dotOne = cover.getByRole("button", { name: "Ver la portada 1" });
+    const dotTwo = cover.getByRole("button", { name: "Ver la portada 2" });
+    await letGo();
+    // Playing, it moves on to the second banner by itself.
+    await expect(dotTwo).toHaveAttribute("aria-current", "true", {
+      timeout: COVER_DELAY_MS * 2,
     });
-    await cover.getByRole("button", { name: "Ver la portada 2" }).click();
-    await expect(second).toBeInViewport();
-    await expect(
-      cover.getByRole("button", { name: "Ver la portada 2" })
-    ).toHaveAttribute("aria-current", "true");
+
+    await pause.click();
+    await expect(pause).toHaveAttribute("aria-pressed", "true");
+    await letGo();
+    // Paused, a whole turn of the cover and a margin pass with the second
+    // banner still shown: only time can show that it stays.
+    await page.waitForTimeout(COVER_DELAY_MS + 1500);
+    // e2e-elapsed-time: one turn of the cover plus a margin; the dot must not move.
+    await expect(dotTwo).toHaveAttribute("aria-current", "true");
+
+    // A dot shows its banner.
+    const first = cover.getByRole("link", {
+      name: `${titles.cover} Comprar ahora`,
+    });
+    await dotOne.click();
+    await expect(first).toBeInViewport();
+    await expect(dotOne).toHaveAttribute("aria-current", "true");
     await store.expectNoHorizontalScroll();
   });
 
