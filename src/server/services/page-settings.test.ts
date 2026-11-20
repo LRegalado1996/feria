@@ -307,7 +307,13 @@ describe("createPage", () => {
     await expect(
       createPage(tx, { storeId: STORE_ID, values: makeValues() })
     ).rejects.toThrow("Inserting a page returned no row");
-    expect(db.$.insert).toHaveBeenCalledOnce();
+    expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(page);
+    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
+      isPublished: true,
+      showInHeader: false,
+      slug: "regalos",
+      storeId: STORE_ID,
+    });
   });
 });
 
@@ -369,7 +375,16 @@ describe("updatePage", () => {
     });
 
     expect(readsOf(db).tables).toEqual([store, page]);
-    expect(db.$.update).toHaveBeenCalledOnce();
+    expect(db.$.update).toHaveBeenCalledExactlyOnceWith(page);
+    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
+      isPublished: true,
+      showInHeader: false,
+      slug: "regalos",
+    });
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      params: [PAGE_ID, STORE_ID],
+      sql: '("page"."id" = $1 and "page"."storeId" = $2)',
+    });
   });
 
   test("the home stays published: unpublishing it is BAD_REQUEST, writing nothing", async () => {
