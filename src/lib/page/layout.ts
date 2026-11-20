@@ -33,20 +33,13 @@ function sectionTargetExists(
   section: PageSection,
   { banners, categories, spotlights }: SectionTargets
 ): boolean {
-  switch (section.kind) {
-    case "banner": {
-      return banners.has(section.bannerId);
-    }
-    case "category": {
-      return categories.has(section.categoryId);
-    }
-    case "spotlight": {
-      return spotlights.has(section.spotlightId);
-    }
-    default: {
-      return true;
-    }
-  }
+  return (
+    (section.kind === "category" && categories.has(section.categoryId)) ||
+    (section.kind === "banner" && banners.has(section.bannerId)) ||
+    (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
+    section.kind === "best_sellers" ||
+    section.kind === "featured"
+  );
 }
 
 /**
