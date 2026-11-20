@@ -301,8 +301,9 @@
  * of its own, which Safari would make the stretched link's containing
  * block). A letter of the display face is about 0.97em wide, so a tenth of
  * the column keeps a word of ten letters on one line in any column wider
- * than 200 px, the admin's narrow preview included. About 36 px on a
- * 390 px phone, 57 px at 1440 px.
+ * than about 12 root ems (194 px at a 16 px root), the admin's narrow
+ * preview included: narrower, the 1.25rem floor wins and the word breaks.
+ * About 36 px on a 390 px phone, 57 px at 1440 px.
  */
 @utility store-display-spotlight {
   font-size: clamp(1.25rem, var(--spotlight-column, 100cqi) / 10, 4rem);
