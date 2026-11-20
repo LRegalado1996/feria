@@ -12,6 +12,7 @@ import {
   useCarousel,
 } from "@/app/_components/molecules/carousel";
 import { StoreBanner } from "@/app/_components/molecules/store-banner";
+import type { CoverImage } from "@/lib/catalog/cover";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { usePrefersReducedMotion } from "@/lib/hooks/ui";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -22,17 +23,60 @@ export const COVER_DELAY_MS = 6000;
 
 /** One banner of the cover. */
 export interface StoreCoverBanner {
-  /** Built by the caller with `localizePath()`. */
-  href: string;
+  /** Built by the caller with `localizePath()`; `null` for no link. */
+  href: string | null;
   /** Stable across renders: the banner's own id. */
   id: string;
-  src: string;
+  /** The computer's photo, and the phone's when it has no crop of its own. */
+  image: CoverImage;
+  /** The language of its title and its own words. */
+  lang?: string;
+  /** Its phone crop (FER-020), shown below `md`. */
+  phoneImage?: CoverImage | null;
+  /** Its button's own words, or `null` for the page's "Comprar ahora". */
+  shopNow?: string | null;
   title: string;
 }
 
 export interface StoreCoverCarouselProps {
   banners: readonly StoreCoverBanner[];
   className?: string;
+  /** The level the banners' titles take in the page's outline. */
+  headingLevel?: "h2" | "h3";
+}
+
+/**
+ * One banner as the cover shows it: as tall as the cover, its own words or
+ * the page's "Comprar ahora". Only the first is the page's priority image.
+ */
+function CoverBanner({
+  banner,
+  className,
+  headingLevel,
+  priority,
+  shopNow,
+}: {
+  banner: StoreCoverBanner;
+  className?: string;
+  headingLevel?: "h2" | "h3";
+  priority: boolean;
+  shopNow: string;
+}) {
+  return (
+    <StoreBanner
+      className={className}
+      headingLevel={headingLevel}
+      href={banner.href}
+      image={banner.image}
+      lang={banner.lang}
+      phoneImage={banner.phoneImage}
+      priority={priority}
+      shopNow={banner.shopNow ?? shopNow}
+      shopNowLang={banner.shopNow ? banner.lang : undefined}
+      size="cover"
+      title={banner.title}
+    />
+  );
 }
 
 /**
@@ -60,7 +104,13 @@ interface Holds {
  * while nothing holds it (WCAG 2.2.2), and says the new banner politely
  * once it is still.
  */
-function RotatingCover({ banners }: { banners: readonly StoreCoverBanner[] }) {
+function RotatingCover({
+  banners,
+  headingLevel,
+}: {
+  banners: readonly StoreCoverBanner[];
+  headingLevel?: "h2" | "h3";
+}) {
   const { storefront } = useDictionary();
   const copy = storefront.cover;
   const { api, scrollTo, selectedIndex } = useCarousel();
@@ -154,19 +204,20 @@ function RotatingCover({ banners }: { banners: readonly StoreCoverBanner[] }) {
             key={banner.id}
             total={banners.length}
           >
-            <StoreBanner
-              href={banner.href}
+            <CoverBanner
+              banner={banner}
+              headingLevel={headingLevel}
               priority={index === 0}
               shopNow={storefront.banner.shopNow}
-              src={banner.src}
-              title={banner.title}
             />
           </CarouselItem>
         ))}
       </CarouselContent>
-      {/* Top right: the title and its link sit at the bottom left. */}
+      {/* The title and its link sit at the bottom left: on a phone, whose
+          title can take the whole width, the controls go top right; from
+          `md` up, bottom right, across from the title. */}
       <div
-        className="absolute top-3 right-3 flex items-center rounded-full bg-store-contrast p-0.5 md:top-5 md:right-7"
+        className="absolute top-3 right-3 flex items-center rounded-full bg-store-contrast p-0.5 md:top-auto md:right-7 md:bottom-7.5"
         data-slot="store-cover-carousel-controls"
       >
         {banners.map((banner, index) => {
@@ -221,7 +272,8 @@ function RotatingCover({ banners }: { banners: readonly StoreCoverBanner[] }) {
 function CoverCarousel({
   banners,
   className,
-}: Required<StoreCoverCarouselProps>) {
+  headingLevel,
+}: StoreCoverCarouselProps) {
   const copy = useDictionary().storefront.cover;
 
   // Embla keeps the plugin it was first handed: one made again with the
@@ -234,7 +286,7 @@ function CoverCarousel({
       opts={{ loop: true }}
       plugins={[createAutoplay(AUTOPLAY_OPTIONS)]}
     >
-      <RotatingCover banners={banners} />
+      <RotatingCover banners={banners} headingLevel={headingLevel} />
     </Carousel>
   );
 }
@@ -244,11 +296,14 @@ function CoverCarousel({
  * their own every few seconds, with a dot for each and a pause button. It
  * holds still while hovered, focused or touched, and never moves under
  * reduced motion, where it has no pause button to offer. One banner shows
- * still, without controls; none, nothing. The home places it (FER-022).
+ * still, without controls; none, nothing. Each banner is as tall as the
+ * cover (`STORE_COVER_HEIGHT`), with its phone crop on a phone, and only the
+ * first is the page's priority image. The home places it (FER-022).
  */
 function StoreCoverCarousel({
   banners,
-  className = "",
+  className,
+  headingLevel,
 }: StoreCoverCarouselProps) {
   const shopNow = useDictionary().storefront.banner.shopNow;
   const [only] = banners;
@@ -259,18 +314,23 @@ function StoreCoverCarousel({
 
   if (banners.length === 1) {
     return (
-      <StoreBanner
+      <CoverBanner
+        banner={only}
         className={className}
-        href={only.href}
+        headingLevel={headingLevel}
         priority
         shopNow={shopNow}
-        src={only.src}
-        title={only.title}
       />
     );
   }
 
-  return <CoverCarousel banners={banners} className={className} />;
+  return (
+    <CoverCarousel
+      banners={banners}
+      className={className}
+      headingLevel={headingLevel}
+    />
+  );
 }
 
 export { StoreCoverCarousel };

@@ -1,9 +1,11 @@
 import type { APIRequestContext } from "@playwright/test";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { UpdateComingSoonValues } from "../../lib/schemas/coming-soon";
 import type { SaveHomeLayoutValues } from "../../lib/schemas/home";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
+import { banner, product } from "../../server/db/schema";
 import {
   DEFAULT_COMING_SOON,
   type Storefront,
@@ -46,6 +48,26 @@ export interface ComingSoonEdit {
   update: (values: UpdateComingSoonValues) => Promise<void>;
 }
 
+/** The home's curation for one serial test (FER-020, FER-022). */
+export interface HomeEdit {
+  /** The run's announcement, which the test's end writes back. */
+  announcement: typeof STORE_ANNOUNCEMENT;
+  /**
+   * Leaves the home nothing to show until the test ends (FER-022's empty
+   * store): every published article of the store becomes a draft and every
+   * banner on is switched off, then the home's cached read is dropped.
+   * The test's end puts each back as it was, before the order is saved.
+   */
+  hideEverything: () => Promise<void>;
+  /** The home's order as `home.get` reads it now. */
+  read: () => Promise<HomeSnapshot>;
+  /**
+   * Saves the home's order whole through `home.saveLayout`, as an admin,
+   * which drops the home's cached read; it must succeed.
+   */
+  saveLayout: (values: SaveHomeLayoutValues) => Promise<void>;
+}
+
 export interface StoreFixtures {
   /**
    * See `ComingSoonEdit`. The page's empty texts and the closed store are
@@ -55,14 +77,14 @@ export interface StoreFixtures {
   comingSoonEdit: ComingSoonEdit;
   /**
    * For a spec that changes the home's curation (FER-020), which every
-   * spec's storefront shows: when the test ends, whatever it did, the
-   * banners it added are deleted (those `home.get` lists that it did not
-   * list as the test started), the home's order is saved back as it was,
-   * and the run's announcement (`STORE_ANNOUNCEMENT`) is written back.
-   * Only a `*.serial.e2e.ts` spec may ask for it; it gives the announcement
-   * it writes back.
+   * spec's storefront shows: when the test ends, whatever it did, what
+   * `hideEverything` hid shows again, the banners it added are deleted
+   * (those `home.get` lists that it did not list as the test started), the
+   * home's order is saved back as it was, and the run's announcement
+   * (`STORE_ANNOUNCEMENT`) is written back. Only a `*.serial.e2e.ts` spec
+   * may ask for it.
    */
-  homeEdit: typeof STORE_ANNOUNCEMENT;
+  homeEdit: HomeEdit;
   /**
    * See `StoreEdit`. The run's settings are written back when the test ends,
    * whatever it did. Only a `*.serial.e2e.ts` spec may ask for it.
@@ -71,7 +93,7 @@ export interface StoreFixtures {
 }
 
 /** What `home.get` answers that the home's teardown puts back. */
-interface HomeSnapshot extends SaveHomeLayoutValues {
+export interface HomeSnapshot extends SaveHomeLayoutValues {
   banners: { id: number }[];
 }
 
@@ -241,7 +263,7 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
     { auto: true, scope: "worker" },
   ],
 
-  homeEdit: async ({ baseURL, playwright, workerUser }, use, testInfo) => {
+  homeEdit: async ({ baseURL, db, playwright, workerUser }, use, testInfo) => {
     // A parallel spec reads the home's bar while this one would change it.
     if (!testInfo.file.endsWith(SERIAL_SPEC)) {
       throw new Error(
@@ -256,12 +278,67 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
     });
     const before = await readHome(request);
     const kept = new Set(before.banners.map((row) => row.id));
+    const hidden: { articleIds: number[]; bannerIds: number[] } = {
+      articleIds: [],
+      bannerIds: [],
+    };
+    const saveLayout = async (values: SaveHomeLayoutValues) => {
+      await callHome(request, "saveLayout", values);
+    };
 
     try {
-      await use(STORE_ANNOUNCEMENT);
+      await use({
+        announcement: STORE_ANNOUNCEMENT,
+        hideEverything: async () => {
+          const articles = await db.drizzle
+            .update(product)
+            .set({ status: "draft" })
+            .where(
+              and(
+                eq(product.storeId, db.storeId),
+                eq(product.status, "published")
+              )
+            )
+            .returning({ id: product.id });
+          hidden.articleIds.push(...articles.map((row) => row.id));
+          const banners = await db.drizzle
+            .update(banner)
+            .set({ isActive: false })
+            .where(
+              and(eq(banner.storeId, db.storeId), eq(banner.isActive, true))
+            )
+            .returning({ id: banner.id });
+          hidden.bannerIds.push(...banners.map((row) => row.id));
+          // Saving the order as it is drops the home's cached read.
+          const now = await readHome(request);
+          await saveLayout({
+            coverBannerIds: now.coverBannerIds,
+            featuredProductIds: now.featuredProductIds,
+            rankingProductIds: now.rankingProductIds,
+            sections: now.sections,
+          });
+        },
+        read: async () => await readHome(request),
+        saveLayout,
+      });
     } finally {
       // Whatever the test did or failed to do, the next one reads these.
       try {
+        // Shown again before the order is saved, which drops the cache.
+        if (hidden.articleIds.length > 0) {
+          await db.drizzle
+            .update(product)
+            .set({ status: "published" })
+            .where(inArray(product.id, hidden.articleIds));
+        }
+
+        if (hidden.bannerIds.length > 0) {
+          await db.drizzle
+            .update(banner)
+            .set({ isActive: true })
+            .where(inArray(banner.id, hidden.bannerIds));
+        }
+
         const after = await readHome(request);
 
         for (const { id } of after.banners.filter((row) => !kept.has(row.id))) {

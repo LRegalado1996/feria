@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 import {
   expect,
   STORE_SETTINGS,
@@ -14,11 +12,6 @@ import { StorePage } from "../../page-objects/store.page";
 // parallel one. `storeEdit` writes the run's settings (`STORE_SETTINGS`) back
 // when each test ends.
 test.use({ storageState: { cookies: [], origins: [] } });
-
-/** The home's intro, where the tagline and the name are. */
-function introOf(page: Page) {
-  return page.getByTestId("store-intro-header").filter({ visible: true });
-}
 
 test.describe("Editing the store", () => {
   test("an edit through the API reaches the cached storefront at once: name, texts and links", async ({
@@ -41,7 +34,10 @@ test.describe("Editing the store", () => {
 
     await expect(storePage.getHeading(1)).toHaveText("Puesto Editado");
     await expect(page).toHaveTitle("Puesto Editado");
-    await expect(introOf(page).getByText("Texto nuevo")).toBeVisible();
+    // The tagline describes the home's share card (its name is the h1).
+    await expect
+      .poll(async () => await storePage.readMeta("og:description"))
+      .toBe("Texto nuevo");
     const footer = storePage.getFooter();
     // The footer tells Pepe's story, never the tagline (FER-044); the
     // store's name signs its copyright.
@@ -65,7 +61,9 @@ test.describe("Editing the store", () => {
     await expect(
       footer.getByRole("link", { name: `Instagram de ${STORE_SETTINGS.name}` })
     ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);
-    await expect(storePage.getDescription()).toHaveCount(0);
+    await expect
+      .poll(async () => await storePage.readMeta("description"))
+      .toBeNull();
     await expect(footer).not.toContainText("Texto nuevo");
   });
 
@@ -155,7 +153,9 @@ test.describe("Editing the store", () => {
     await storePage.goto();
 
     await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
-    await expect(introOf(page).getByText(STORE_TEXTS.es.tagline)).toBeVisible();
+    await expect
+      .poll(async () => await storePage.readMeta("og:description"))
+      .toBe(STORE_TEXTS.es.tagline);
   });
 
   test("a signed-out caller cannot edit the store", async ({

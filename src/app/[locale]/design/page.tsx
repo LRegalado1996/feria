@@ -37,6 +37,13 @@ interface DesignPageProps {
   params: Promise<{ locale: string }>;
 }
 
+/** The banner's sample photo, also one of the cover's. */
+const EARRINGS_PHOTO = {
+  height: 1200,
+  url: "/seed/earrings-2.jpg",
+  width: 1200,
+};
+
 interface SampleArticle {
   amount: number;
   currency: Currency;
@@ -188,19 +195,21 @@ export default async function DesignPage({ params }: DesignPageProps) {
     {
       href: "#cover",
       id: "bubbles",
-      src: "/seed/bubble-gun-1.jpg",
+      image: { height: 899, url: "/seed/bubble-gun-1.jpg", width: 1199 },
       title: sample.banners.bubbles,
     },
     {
       href: "#cover",
       id: "earrings",
-      src: "/seed/earrings-2.jpg",
+      image: EARRINGS_PHOTO,
       title: sample.banners.earrings,
     },
     {
       href: "#cover",
       id: "rings",
-      src: "/seed/ring-2.jpg",
+      image: { height: 800, url: "/seed/ring-2.jpg", width: 1200 },
+      // A phone shows its own crop (FER-022).
+      phoneImage: { height: 800, url: "/seed/ring-2-phone.jpg", width: 800 },
       title: sample.banners.rings,
     },
   ];
@@ -430,8 +439,8 @@ export default async function DesignPage({ params }: DesignPageProps) {
         </h2>
         <StoreBanner
           href="#cover"
+          image={EARRINGS_PHOTO}
           shopNow={storefront.banner.shopNow}
-          src="/seed/earrings-2.jpg"
           title={sample.banners.earrings}
         />
       </section>

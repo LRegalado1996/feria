@@ -23,8 +23,9 @@ export type StoreIntroProps = Omit<ComponentProps<"div">, "children"> & {
 /**
  * A store introducing itself on the white page, under the moss header
  * (FER-039): its tagline, its name as the page's `h1` in the wide face, its
- * description and the way into its catalog, a lime pill. What the home
- * shows until it has its real sections (FER-022).
+ * description and the way into its catalog, the main pill. What the home
+ * shows while the store has nothing else to show: no banner and no
+ * article published (`organisms/store-home`, FER-022).
  */
 function StoreIntro({
   browse,

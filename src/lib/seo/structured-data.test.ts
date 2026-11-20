@@ -3,8 +3,11 @@ import { describe, expect, test } from "vitest";
 import {
   breadcrumbList,
   collectionPage,
+  itemList,
   productWithOffer,
+  STORE_LOGO_PATH,
   storeOrganization,
+  webSite,
 } from "./structured-data";
 
 function makeStore(
@@ -249,4 +252,59 @@ describe("productWithOffer", () => {
       url: "https://feria.example/lr-market/products/cadena",
     });
   });
+});
+
+describe("webSite", () => {
+  test("names the site with its home, in the page's language", () => {
+    expect(
+      webSite({
+        locale: "en",
+        name: "LR Market",
+        url: "https://feria.example/en",
+      })
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      inLanguage: "en",
+      name: "LR Market",
+      url: "https://feria.example/en",
+    });
+  });
+});
+
+describe("itemList", () => {
+  test("lists a row's articles under its name, numbered from 1 in their order", () => {
+    expect(
+      itemList({
+        items: [
+          { name: "Anillo sello", url: "https://feria.example/productos/a" },
+          { name: "Cadena", url: "https://feria.example/productos/c" },
+        ],
+        name: "Más vendidos",
+      })
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          name: "Anillo sello",
+          position: 1,
+          url: "https://feria.example/productos/a",
+        },
+        {
+          "@type": "ListItem",
+          name: "Cadena",
+          position: 2,
+          url: "https://feria.example/productos/c",
+        },
+      ],
+      name: "Más vendidos",
+      numberOfItems: 2,
+    });
+  });
+});
+
+test("the brand's logo is the full logo among the brand files the site serves", () => {
+  expect(STORE_LOGO_PATH).toBe("/brand/lr-market-logo.svg");
 });

@@ -49,17 +49,15 @@ test.describe("Company settings", () => {
     );
   });
 
-  test("a changed tagline shows in the home's intro on the next visit", async ({
+  test("a changed tagline describes the home's share card on the next visit", async ({
     page,
     storeEdit: _restoresTheSettings,
   }) => {
     const tagline = `Joyas nuevas ${uniqueTag()}`;
     const store = new StorePage(page);
-    const intro = page
-      .getByTestId("store-intro-header")
-      .filter({ visible: true });
+    const shared = async () => await store.readMeta("og:description");
     await store.goto();
-    await expect(intro.getByText(STORE_TEXTS.es.tagline)).toBeVisible();
+    await expect.poll(shared).toBe(STORE_TEXTS.es.tagline);
     const settings = new AdminSettingsPage(page);
     await settings.open();
     const field = settings.field("Frase en español");
@@ -69,8 +67,7 @@ test.describe("Company settings", () => {
     await settings.save({ name: STORE_SETTINGS.name });
 
     await store.goto();
-    await expect(intro.getByText(tagline)).toBeVisible();
-    await expect(intro.getByText(STORE_TEXTS.es.tagline)).toHaveCount(0);
+    await expect.poll(shared).toBe(tagline);
   });
 
   test("a number the form cannot read is refused under its field, and nothing is sent", async ({

@@ -28,6 +28,8 @@ The production store is full and looks alive on opening day.
 
 Photo tips for the stall: daylight, plain background, one photo of the article in use. Good photos do more for the AI's output than any prompt change.
 
+**The home's content (2026-11-19, decided by Lucas).** With FER-022 the storefront's home shows what `/admin/home` curates. In local development and in QA the seed's demo content fills it (`pnpm db:seed`: three cover banners, two between rows, the rows' order, eight best sellers and four featured, FER-020), so the home can be reviewed there as it will look. Production gets none of it: the real announcement, banners, best sellers and featured articles remain for Lucas to load by hand, so this ticket stays open until he has.
+
 ## Reporting
 
 Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.

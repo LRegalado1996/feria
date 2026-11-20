@@ -32,19 +32,23 @@ function makeBanners(count: number): StoreCoverBanner[] {
   return Array.from({ length: count }, (_, index) => ({
     href: `/products?category=c${index}`,
     id: `banner-${index}`,
-    src: `/seed/banner-${index}.jpg`,
+    image: { height: 800, url: `/seed/banner-${index}.jpg`, width: 1200 },
     title: `Portada ${index + 1}`,
   }));
 }
 
 function setup({
   api = true,
+  banners,
   count = 3,
+  headingLevel,
   locale = "es",
   reduced = false,
 }: {
   api?: boolean;
+  banners?: StoreCoverBanner[];
   count?: number;
+  headingLevel?: "h2" | "h3";
   locale?: Locale;
   reduced?: boolean;
 } = {}) {
@@ -57,7 +61,11 @@ function setup({
     api ? embla.hook : [embla.ref, undefined]
   );
   const view = renderWithI18n(
-    <StoreCoverCarousel banners={makeBanners(count)} className="mt-0" />,
+    <StoreCoverCarousel
+      banners={banners ?? makeBanners(count)}
+      className="mt-0"
+      headingLevel={headingLevel}
+    />,
     { locale }
   );
 
@@ -155,9 +163,103 @@ describe("StoreCoverCarousel", () => {
   test("loads the first banner's photo first, the others lazily", () => {
     setup();
 
-    const photos = document.querySelectorAll("img");
-    expect(photos[0]).not.toHaveAttribute("loading", "lazy");
-    expect(photos[1]).toHaveAttribute("loading", "lazy");
+    const photos = [...document.querySelectorAll("img")];
+    expect(photos.map((photo) => photo.getAttribute("loading"))).toEqual([
+      "eager",
+      "lazy",
+      "lazy",
+    ]);
+    expect(photos[0]).toHaveAttribute("fetchpriority", "high");
+    expect(photos[1]).not.toHaveAttribute("fetchpriority");
+  });
+
+  test.each([1, 3])(
+    "with %i banner(s), each is as tall as the cover, nearly a screen, its title a heading at the level asked",
+    (count) => {
+      setup({ count, headingLevel: "h2" });
+
+      const banners = [
+        ...document.querySelectorAll<HTMLElement>('[data-slot="store-banner"]'),
+      ];
+      expect(banners.map((banner) => banner.dataset.size)).toEqual(
+        Array.from({ length: count }, () => "cover")
+      );
+      expect(banners[0]).toHaveClass(
+        "h-[calc(100svh-17.5rem)]",
+        "md:h-[calc(100svh-20rem)]"
+      );
+      expect(
+        screen
+          .getAllByRole("heading", { level: 2 })
+          .map((heading) => heading.textContent)
+      ).toEqual(
+        Array.from({ length: count }, (_, index) => `Portada ${index + 1}`)
+      );
+    }
+  );
+
+  test("shows a banner's phone crop on a phone, its own words in its language, and no button without a link", () => {
+    setup({
+      banners: [
+        {
+          href: "/bijouterie",
+          id: "jewelry",
+          image: { height: 800, url: "/seed/ring-3.jpg", width: 1200 },
+          lang: "es",
+          phoneImage: {
+            height: 800,
+            url: "/seed/ring-3-phone.jpg",
+            width: 800,
+          },
+          shopNow: "Ver las joyas",
+          title: "Joyas para regalar",
+        },
+        {
+          href: null,
+          id: "fair",
+          image: { height: 800, url: "/seed/bubbles-1.jpg", width: 1200 },
+          lang: "es",
+          shopNow: null,
+          title: "En la feria",
+        },
+      ],
+      locale: "en",
+    });
+
+    const jewelry = screen.getByRole("link", {
+      name: "Joyas para regalar Ver las joyas",
+    });
+    expect(jewelry.querySelector("img")?.getAttribute("src")).toContain(
+      encodeURIComponent("/seed/ring-3-phone.jpg")
+    );
+    expect(jewelry.querySelector("source")?.getAttribute("srcset")).toContain(
+      encodeURIComponent("/seed/ring-3.jpg")
+    );
+    expect(screen.getByText("Joyas para regalar")).toHaveAttribute(
+      "lang",
+      "es"
+    );
+    expect(screen.getByText("Ver las joyas")).toHaveAttribute("lang", "es");
+    expect(screen.getAllByRole("link")).toEqual([jewelry]);
+    expect(screen.getByText("En la feria")).toHaveAttribute("lang", "es");
+  });
+
+  test("a banner without words of its own takes the page's, in the page's language", () => {
+    setup({
+      banners: [
+        {
+          href: "/burbujeros",
+          id: "bubbles",
+          image: { height: 800, url: "/seed/bubbles-1.jpg", width: 1200 },
+          lang: "es",
+          shopNow: null,
+          title: "Burbujeros",
+        },
+      ],
+      locale: "en",
+    });
+
+    expect(screen.getByText("Shop now")).not.toHaveAttribute("lang");
   });
 
   test("its banners are not announced while it rotates, and politely once it is paused", async () => {

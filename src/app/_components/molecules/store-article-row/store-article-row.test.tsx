@@ -85,6 +85,22 @@ describe("StoreArticleRow", () => {
     ).toBeVisible();
   });
 
+  test("marks its heading with the language it is in, only when told", () => {
+    setup({ locale: "en", titleLang: "es" });
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Novedades" })
+    ).toHaveAttribute("lang", "es");
+  });
+
+  test("leaves its heading in the page's language by default", () => {
+    setup();
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Novedades" })
+    ).not.toHaveAttribute("lang");
+  });
+
   test.each([
     ["es", "Ver todo", "Ver todo: Novedades"],
     ["en", "See all", "See all: Novedades"],

@@ -87,6 +87,7 @@ export const comingSoon: Dictionary["comingSoon"] = {
     link: "Manage the coming-soon page",
     message:
       "The store is closed to the public. You see it because you are signed in.",
+    short: "Store closed.",
   },
   settingsCard: {
     description:

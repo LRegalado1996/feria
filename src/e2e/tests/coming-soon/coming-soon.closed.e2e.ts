@@ -289,7 +289,8 @@ test.describe("Published: the public sees only the coming-soon page", () => {
     await new AdminPage(page).waitForLoad();
     const store = new StorePage(page);
     await store.goto();
-    await expect(store.getHeader()).toContainText(STORE_SETTINGS.name);
+    // The store's name is the home's h1 whatever the home shows (FER-022).
+    await expect(store.getHeading(1)).toHaveText(STORE_SETTINGS.name);
     await expect(store.getPreviewNotice()).toContainText(
       "La tienda está cerrada al público. La ves porque iniciaste sesión."
     );

@@ -30,6 +30,11 @@ export interface StoreArticleRowProps {
   items: readonly { content: ReactNode; id: string }[];
   /** The row's heading, which names its carousel too. */
   title: string;
+  /**
+   * The language of its heading, when it may differ from the page's (a
+   * category with no English name on an English page, FER-022).
+   */
+  titleLang?: string;
   /** Where "Ver todo" leads; without it there is no such link. */
   viewAllHref?: string;
   /**
@@ -93,6 +98,7 @@ function StoreArticleRow({
   headingLevel: Heading = "h2",
   items,
   title,
+  titleLang,
   viewAllHref,
   viewAllOf = title,
 }: StoreArticleRowProps) {
@@ -104,7 +110,10 @@ function StoreArticleRow({
       data-slot="store-article-row"
     >
       <div className="mb-4 flex items-baseline justify-between gap-4 md:mb-5.5">
-        <Heading className="font-display store-display-section leading-display font-extrabold wrap-anywhere uppercase">
+        <Heading
+          className="font-display store-display-section leading-display font-extrabold wrap-anywhere uppercase"
+          lang={titleLang}
+        >
           {title}
         </Heading>
         {viewAllHref ? (

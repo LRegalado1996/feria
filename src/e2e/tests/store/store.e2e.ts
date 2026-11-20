@@ -1,5 +1,3 @@
-import type { Page } from "@playwright/test";
-
 import { STORE_THEME } from "../../../styles/theme";
 import {
   expect,
@@ -16,17 +14,11 @@ const BINGBOT =
 
 // The store's home (FER-038: the site is one store, at `/`), with the run's
 // settings (`STORE_SETTINGS`). Specs that change them are
-// `store-settings.serial.e2e.ts`.
+// `store-settings.serial.e2e.ts`. What the home shows under its header is the
+// curation every spec shares, and parallel specs add articles to it, so this
+// spec asserts only what holds whatever it shows; the sections themselves
+// are `home.serial.e2e.ts` (FER-022).
 test.use({ storageState: { cookies: [], origins: [] } });
-
-/**
- * The home's intro, where the tagline is checked: the footer repeats it
- * (FER-021). The visible one, since a page left by a language switch stays
- * mounted, hidden.
- */
-function introOf(page: Page) {
-  return page.getByTestId("store-intro-header").filter({ visible: true });
-}
 
 /** A theme color as the browser computes it: `#f2f3f0` is `rgb(242, 243, 240)`. */
 function rgb(hex: string) {
@@ -58,18 +50,6 @@ test.describe("Store pages", () => {
       "background-color",
       rgb(STORE_THEME.contrast)
     );
-    // The store's name in ink on the page, never the accent on white.
-    await expect(storePage.getHeader()).toHaveCSS(
-      "background-color",
-      rgb(STORE_THEME.background)
-    );
-    await expect(
-      storePage.getHeading(1).getByText(STORE_SETTINGS.name)
-    ).toHaveCSS("color", rgb(STORE_THEME.foreground));
-    await expect(storePage.getDescription()).toHaveCSS(
-      "color",
-      rgb(STORE_THEME.foreground)
-    );
   });
 
   test("shows the store in Spanish at / and in English under /en, each declaring the other", async ({
@@ -80,21 +60,25 @@ test.describe("Store pages", () => {
     await storePage.goto();
 
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
-    await expect(introOf(page).getByText(STORE_TEXTS.es.tagline)).toBeVisible();
-    await expect(storePage.getDescription()).toHaveText(
-      STORE_TEXTS.es.description
-    );
+    await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
     await expect(page).toHaveTitle(STORE_SETTINGS.name);
+    // Next streams the metadata into the body for a browser: read it once
+    // it is there.
+    await expect
+      .poll(async () => await storePage.readMeta("description"))
+      .toBe(STORE_TEXTS.es.description);
+    expect(await storePage.readMeta("og:description")).toBe(
+      STORE_TEXTS.es.tagline
+    );
 
     await storePage.gotoEnglish();
 
     await expect(page.locator("html")).toHaveAttribute("lang", "en");
-    await expect(introOf(page).getByText(STORE_TEXTS.en.tagline)).toBeVisible();
-    await expect(storePage.getDescription()).toHaveText(
-      STORE_TEXTS.en.description
-    );
     await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
     await expect(page).toHaveTitle(STORE_SETTINGS.name);
+    await expect
+      .poll(async () => await storePage.readMeta("description"))
+      .toBe(STORE_TEXTS.en.description);
     await expect(
       page.locator('link[rel="alternate"][hreflang="es"]')
     ).toHaveAttribute("href", /^https?:\/\/[^/]+\/?$/u);
@@ -107,8 +91,9 @@ test.describe("Store pages", () => {
   // A crawler that reads only the HTML, such as Bingbot, sees only what the
   // server wrote in place: a boundary's content that a script would reveal
   // never shows to it, so the home and its footer must sit behind none
-  // (docs/agents/nextjs.md § Store pages).
-  test("a crawler that runs no script finds the whole home in the HTML: the store's intro and its footer", async ({
+  // (docs/agents/nextjs.md § Store pages). The sections are checked the same
+  // way in `home.serial.e2e.ts`, where the test sets them.
+  test("a crawler that runs no script finds the whole home in the HTML: the store's name, what it shows and its footer", async ({
     baseURL,
     browser,
   }) => {
@@ -126,9 +111,7 @@ test.describe("Store pages", () => {
       await storePage.goto();
 
       await expect(storePage.getHeading(1)).toHaveText(STORE_SETTINGS.name);
-      await expect(
-        introOf(page).getByText(STORE_TEXTS.es.tagline)
-      ).toBeVisible();
+      await expect(storePage.getHomeView()).toBeAttached();
       await expect(
         storePage.getFooter().getByRole("link", {
           name: `Instagram de ${STORE_SETTINGS.name}`,

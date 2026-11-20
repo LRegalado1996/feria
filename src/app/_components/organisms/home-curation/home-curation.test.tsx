@@ -355,7 +355,7 @@ describe("HomeCuration", () => {
     );
     expect(
       preview.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)
-    ).toEqual(["Rings", "Signet ring", "Cadena corona"]);
+    ).toEqual(["Bubble guns", "Rings", "Signet ring", "Cadena corona"]);
   });
 
   test("the preview shows the announcement as it is typed, before it is saved", async () => {

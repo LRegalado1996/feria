@@ -63,6 +63,26 @@ describe("StorePreviewNotice", () => {
   );
 
   test.each([
+    ["en", "Store closed."],
+    ["es", "Cerrada al público."],
+  ] as const)(
+    "in %s, a phone's eye gets the short notice on one row with the link, every reader the whole one",
+    (locale, short) => {
+      const { notice } = setup({ cookies: ["lr-store-preview=1"], locale });
+
+      const visible = within(required(notice)).getByText(short);
+      expect(visible).toHaveAttribute("aria-hidden", "true");
+      expect(visible).toHaveClass("sm:hidden");
+      expect(
+        within(required(notice)).getByText(/^(The store|La tienda)/u)
+      ).toHaveClass("max-sm:sr-only");
+      // On a phone the row is about the link's own 44 px.
+      expect(notice).toHaveClass("py-0.5");
+      expect(notice).toHaveClass("sm:py-2");
+    }
+  );
+
+  test.each([
     ["no cookie", []],
     ["other cookies only", ["other=1"]],
     ["a cookie that only starts alike", ["lr-store-preview-old=1"]],

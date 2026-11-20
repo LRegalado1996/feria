@@ -1,4 +1,13 @@
+import type { BRAND_LOGO_FILES } from "@/lib/brand/logo-svg";
 import type { Currency } from "@/lib/utils/format";
+
+const LOGO_FILE = "lr-market-logo.svg" satisfies keyof typeof BRAND_LOGO_FILES;
+
+/**
+ * The brand's logo for search engines, a path of this site: the logo is
+ * code, not data (`docs/brand/brand.md`).
+ */
+export const STORE_LOGO_PATH = `/brand/${LOGO_FILE}`;
 
 /** A crumb on the way to a page: its name and its absolute URL. */
 export interface Crumb {
@@ -25,6 +34,39 @@ export function storeOrganization(store: {
     url: store.url,
     ...(store.logoUrl ? { logo: store.logoUrl } : {}),
     ...(sameAs.length > 0 ? { sameAs } : {}),
+  };
+}
+
+/**
+ * The site as schema.org knows it (FER-022): the name search engines show
+ * for it, its home and the language of this page.
+ */
+export function webSite(site: { locale: string; name: string; url: string }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: site.name,
+    url: site.url,
+    inLanguage: site.locale,
+  };
+}
+
+/**
+ * A list of articles a page shows as one block (FER-022: a row of the
+ * home), named as on the page, its items in their order there.
+ */
+export function itemList(list: { items: Crumb[]; name: string }) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: list.name,
+    numberOfItems: list.items.length,
+    itemListElement: list.items.map((item, index) => ({
+      "@type": "ListItem",
+      name: item.name,
+      position: index + 1,
+      url: item.url,
+    })),
   };
 }
 

@@ -10,6 +10,8 @@ import {
   attributeTranslation,
   attributeValue,
   attributeValueTranslation,
+  banner,
+  bannerTranslation,
   category,
   categoryTranslation,
   customerOrder,
@@ -38,6 +40,30 @@ interface ArticleOptions {
   priceAmount?: number;
   publishedAt?: Date;
   title: string;
+}
+
+/** A photo of `public/seed/` with its size, as the database keeps one. */
+interface SeedImage {
+  height: number;
+  url: string;
+  width: number;
+}
+
+/**
+ * A banner of the home (FER-020), on and with no days: in the cover or
+ * between rows. Its photos are the seed's, which `next/image` serves
+ * without the Blob store.
+ */
+interface BannerOptions {
+  /** Its button's own words in Spanish; none for "Comprar ahora". */
+  ctaEs?: string;
+  image: SeedImage;
+  /** Where it leads: a category's page or a site path; nowhere without. */
+  link?: { categoryId: number } | { url: string };
+  phoneImage?: SeedImage;
+  placement: "cover" | "rows";
+  titleEn?: string;
+  titleEs: string;
 }
 
 interface FilterOptions {
@@ -76,6 +102,13 @@ export interface DbFixture {
         id: number;
         slug: string;
       }>;
+      /**
+       * A banner of the home (`BannerOptions`). In the cover it goes last
+       * until the home's order is saved; between rows, after the rest.
+       * Only a `*.serial.e2e.ts` spec may add one: every store page's home
+       * would show it.
+       */
+      createBanner: (options: BannerOptions) => Promise<{ id: number }>;
       /**
        * A category of the store at the end of its list, named in Spanish
        * (and English when given). The name and slug carry the test's own tag.
@@ -128,10 +161,17 @@ export const test = userTest.extend<DbFixture>({
       const db = drizzle(pool, { schema });
       const seeded: {
         articleIds: number[];
+        bannerIds: number[];
         categoryIds: number[];
         filterIds: number[];
         userIds: string[];
-      } = { articleIds: [], categoryIds: [], filterIds: [], userIds: [] };
+      } = {
+        articleIds: [],
+        bannerIds: [],
+        categoryIds: [],
+        filterIds: [],
+        userIds: [],
+      };
 
       try {
         const [theStore] = await db
@@ -232,6 +272,61 @@ export const test = userTest.extend<DbFixture>({
                 }))
               );
             }
+
+            return created;
+          },
+
+          createBanner: async ({
+            ctaEs,
+            image,
+            link,
+            phoneImage,
+            placement,
+            titleEn,
+            titleEs,
+          }) => {
+            const [created] = await db
+              .insert(banner)
+              .values({
+                // Last of the cover until the home's order is saved.
+                coverPosition: placement === "cover" ? 1000 : null,
+                imageHeight: image.height,
+                imagePhoneHeight: phoneImage?.height,
+                imagePhoneUrl: phoneImage?.url,
+                imagePhoneWidth: phoneImage?.width,
+                imageUrl: image.url,
+                imageWidth: image.width,
+                isActive: true,
+                linkCategoryId:
+                  link && "categoryId" in link ? link.categoryId : null,
+                linkUrl: link && "url" in link ? link.url : null,
+                placement,
+                storeId,
+              })
+              .returning({ id: banner.id });
+
+            if (!created) {
+              throw new Error("Inserting a banner returned no row");
+            }
+
+            seeded.bannerIds.push(created.id);
+            await db.insert(bannerTranslation).values([
+              {
+                bannerId: created.id,
+                ctaLabel: ctaEs ?? null,
+                locale: "es",
+                title: titleEs,
+              },
+              ...(titleEn
+                ? [
+                    {
+                      bannerId: created.id,
+                      locale: "en" as const,
+                      title: titleEn,
+                    },
+                  ]
+                : []),
+            ]);
 
             return created;
           },
@@ -351,7 +446,8 @@ export const test = userTest.extend<DbFixture>({
 /**
  * Deletes a test's rows, in the order their references allow. The orders
  * first: an order line's article is set to null when the article goes, and
- * nothing would lead to the order after that. Then the articles, which hold
+ * nothing would lead to the order after that. Then the home's banners (with
+ * their texts and places), then the articles, which hold
  * their category (`product_store_category_fk` refuses a category with
  * articles), the filters with their values, the categories, and the logins
  * with their sessions and accounts. An order's lines and status history go
@@ -361,6 +457,7 @@ async function deleteCreated(
   db: ReturnType<typeof drizzle<typeof schema>>,
   rows: {
     articleIds: number[];
+    bannerIds: number[];
     categoryIds: number[];
     filterIds: number[];
     filterValueIds: number[];
@@ -385,6 +482,8 @@ async function deleteCreated(
       inArray(customerOrder.token, rows.orderTokens)
     )
   );
+  // Before their articles and categories, which a banner may lead to.
+  await db.delete(banner).where(inArray(banner.id, rows.bannerIds));
   await db.delete(product).where(inArray(product.id, rows.articleIds));
   await db
     .delete(attributeValue)

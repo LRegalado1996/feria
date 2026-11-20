@@ -2,17 +2,34 @@ import { render, screen } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
+import type { StoreHomeArticle } from "@/app/_components/molecules/store-home-sections";
+import type { HomeContent } from "@/lib/home/content";
 import type { Locale } from "@/lib/i18n/config";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 import { DICTIONARIES } from "@/test/i18n";
 
-import StoreHome, { generateMetadata, instant } from "./page";
+import StoreHomePage, { generateMetadata, instant } from "./page";
 import { StorePageFooter } from "./store-page-footer";
 
-const { connection, frameProps, readStore, shellOf } = vi.hoisted(() => ({
+const {
+  connection,
+  frameProps,
+  homeProps,
+  readHomeContent,
+  readStore,
+  shellOf,
+} = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
   frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
+  homeProps: vi.fn<(props: Record<string, unknown>) => void>(),
+  readHomeContent:
+    vi.fn<
+      (
+        store: unknown,
+        locale: string
+      ) => Promise<HomeContent<StoreHomeArticle & { categorySlug: string }>>
+    >(),
   readStore: vi.fn<() => Promise<PublicStore | null>>(),
   shellOf: vi.fn((store: { name: string }, locale: string) => ({
     shellOf: `${store.name} ${locale}`,
@@ -40,6 +57,19 @@ vi.mock("next/server", () => ({ connection }));
 
 // The cached read has its own tests; here it answers what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore }));
+vi.mock("@/server/cache/home", () => ({ readHomeContent }));
+
+// The home has its own tests; here it records what the page handed it.
+vi.mock("@/app/_components/organisms/store-home", () => ({
+  StoreHome: (props: Record<string, unknown>) => {
+    homeProps(props);
+    return <div data-testid="home-view" />;
+  },
+}));
+
+vi.mock("@/lib/seo/origin", () => ({
+  absoluteUrl: (path: string) => `http://localhost:3000${path}`,
+}));
 
 // The footer has its own tests; here it only shows whose it is.
 vi.mock("./store-page-footer", () => ({
@@ -80,42 +110,121 @@ async function makeParams(locale: string) {
   return await Promise.resolve({ locale });
 }
 
+function makeCard(slug: string, title: string) {
+  return {
+    categorySlug: "burbujeros",
+    cover: null,
+    currencyCode: "UYU" as const,
+    id: slug.length,
+    isAvailable: true,
+    lang: "es",
+    priceAmount: 79_000,
+    slug,
+    title,
+  };
+}
+
+const CONTENT: HomeContent<ReturnType<typeof makeCard>> = {
+  announcement: null,
+  cover: [],
+  sections: [
+    {
+      articles: [makeCard("burbujero-pez", "Burbujero pez")],
+      key: "best_sellers",
+      kind: "best_sellers",
+    },
+    {
+      banner: {
+        ctaLabel: null,
+        href: null,
+        id: 9,
+        image: { height: 800, url: "/seed/bubbles-1.jpg", width: 1200 },
+        lang: "es",
+        phoneImage: null,
+        title: "En la feria",
+      },
+      key: "banner:9",
+      kind: "banner",
+    },
+    {
+      articles: [makeCard("aro", "Aro"), makeCard("aro-perla", "Aro perla")],
+      category: { id: 4, lang: "es", name: "Aros", path: "/aros" },
+      key: "category:4",
+      kind: "category",
+    },
+    {
+      articles: [makeCard("anillo", "Anillo")],
+      key: "featured",
+      kind: "featured",
+    },
+  ],
+};
+
 async function setup({
+  content = CONTENT,
   locale = "es",
   store = makeStore(),
-}: { locale?: Locale; store?: PublicStore | null } = {}) {
+}: {
+  content?: typeof CONTENT;
+  locale?: Locale;
+  store?: PublicStore | null;
+} = {}) {
   readStore.mockResolvedValue(store);
+  readHomeContent.mockResolvedValue(content);
 
-  const page = await StoreHome({ params: makeParams(locale) });
+  const page = await StoreHomePage({ params: makeParams(locale) });
   render(page);
 
   return { home: screen.getByTestId("store-home"), page };
 }
 
-describe("StoreHome", () => {
-  test.each([
-    ["es", "Ver el catálogo", "/productos"],
-    ["en", "See the catalog", "/en/productos"],
-  ] as const)(
-    "in %s, leads into the catalog from the intro with %j",
-    async (locale, label, href) => {
-      await setup({ locale });
+/** The page's JSON-LD, as a search engine reads it. */
+function structuredData(): unknown {
+  const script = document.querySelector('script[type="application/ld+json"]');
 
-      expect(screen.getByRole("link", { name: label })).toHaveAttribute(
-        "href",
-        href
+  return JSON.parse(script?.textContent ?? "null");
+}
+
+describe("StoreHomePage", () => {
+  test.each(["es", "en"] as const)(
+    "in %s, hands the home what it shows now, read from the cache for the store, with the store's own words",
+    async (locale) => {
+      const { home } = await setup({ locale });
+
+      expect(home.tagName).toBe("MAIN");
+      expect(readHomeContent).toHaveBeenCalledExactlyOnceWith(
+        makeStore(),
+        locale
       );
+      expect(homeProps).toHaveBeenCalledExactlyOnceWith({
+        browse: {
+          href: locale === "es" ? "/productos" : "/en/productos",
+          label: DICTIONARIES[locale].storefront.home.browse,
+        },
+        content: CONTENT,
+        copy: DICTIONARIES[locale].storefront,
+        locale,
+        name: "Sample Store",
+        text: locale === "es" ? SPANISH : ENGLISH,
+      });
+      expect(home).toContainElement(screen.getByTestId("home-view"));
     }
   );
 
-  test("introduces the store by name in the page's h1, inside its main landmark, then its footer", async () => {
+  test("an English visitor to a store written only in Spanish gets the Spanish words", async () => {
+    await setup({
+      locale: "en",
+      store: makeStore({ translations: [SPANISH] }),
+    });
+
+    expect(homeProps).toHaveBeenCalledWith(
+      expect.objectContaining({ text: SPANISH })
+    );
+  });
+
+  test("puts the home in its main landmark, then the store's footer", async () => {
     const { home } = await setup();
 
-    expect(home.tagName).toBe("MAIN");
-    expect(home).toContainElement(screen.getByRole("heading", { level: 1 }));
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Sample Store$/u
-    );
     expect(screen.getByTestId("footer")).toHaveTextContent("Sample Store es");
     expect(home.compareDocumentPosition(screen.getByTestId("footer"))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
@@ -152,71 +261,112 @@ describe("StoreHome", () => {
   });
 
   test.each([
-    ["es", SPANISH],
-    ["en", ENGLISH],
+    [
+      "es",
+      "http://localhost:3000/",
+      "Más vendidos",
+      "/productos/burbujero-pez",
+    ],
+    [
+      "en",
+      "http://localhost:3000/en",
+      "Best sellers",
+      "/en/productos/burbujero-pez",
+    ],
   ] as const)(
-    "shows the store's own words in %s, the language of the URL",
-    async (locale, text) => {
-      await setup({ locale });
+    "in %s, tells search engines about the site, the store and each row's articles in their order",
+    async (locale, home, bestSellers, article) => {
+      await setup({
+        locale,
+        store: makeStore({ instagramUrl: "https://instagram.com/sample" }),
+      });
 
-      expect(screen.getByText(text.tagline)).toHaveAttribute("lang", locale);
-      expect(screen.getByTestId("store-description")).toHaveTextContent(
-        text.description
-      );
+      expect(structuredData()).toEqual([
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          inLanguage: locale,
+          name: "Sample Store",
+          url: home,
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          logo: "http://localhost:3000/brand/lr-market-logo.svg",
+          name: "Sample Store",
+          sameAs: ["https://instagram.com/sample"],
+          url: home,
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "ItemList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              name: "Burbujero pez",
+              position: 1,
+              url: `http://localhost:3000${article}`,
+            },
+          ],
+          name: bestSellers,
+          numberOfItems: 1,
+        },
+        expect.objectContaining({
+          "@type": "ItemList",
+          name: "Aros",
+          numberOfItems: 2,
+        }),
+        expect.objectContaining({
+          "@type": "ItemList",
+          name: DICTIONARIES[locale].storefront.home.featured,
+          numberOfItems: 1,
+        }),
+      ]);
     }
   );
 
-  test("an English visitor to a store written only in Spanish reads the Spanish text, marked as Spanish", async () => {
-    await setup({
-      locale: "en",
-      store: makeStore({ translations: [SPANISH] }),
-    });
+  test("a home with nothing to show tells search engines only about the site and the store", async () => {
+    await setup({ content: { announcement: null, cover: [], sections: [] } });
 
-    expect(screen.getByText("Joyas en la feria")).toHaveAttribute("lang", "es");
-    expect(screen.getByTestId("store-description")).toHaveAttribute(
-      "lang",
-      "es"
-    );
-  });
-
-  test("a store with no texts yet shows its name, the way into the catalog, and nothing empty", async () => {
-    const { home } = await setup({ store: makeStore({ translations: [] }) });
-
-    expect(home).toHaveTextContent(/^Sample StoreVer el catálogo$/u);
+    expect(structuredData()).toEqual([
+      expect.objectContaining({ "@type": "WebSite" }),
+      expect.objectContaining({ "@type": "Organization" }),
+    ]);
   });
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
     readStore.mockResolvedValue(makeStore());
+    readHomeContent.mockResolvedValue(CONTENT);
     const request = holdRequest(connection);
 
-    const page = StoreHome({ params: makeParams("es") });
+    const page = StoreHomePage({ params: makeParams("es") });
     await settle();
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
+    expect(readHomeContent).not.toHaveBeenCalled();
 
     request.arrive();
     render(await page);
 
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Sample Store$/u
-    );
+    expect(screen.getByTestId("home-view")).toBeInTheDocument();
   });
 
   test("answers the not-found page, in no frame of its own, when the store's row is missing", async () => {
     readStore.mockResolvedValue(null);
 
-    await expect(StoreHome({ params: makeParams("es") })).rejects.toMatchObject(
-      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
-    );
+    await expect(
+      StoreHomePage({ params: makeParams("es") })
+    ).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
     expect(shellOf).not.toHaveBeenCalled();
+    expect(readHomeContent).not.toHaveBeenCalled();
   });
 
   test("answers 404 for a language the product does not speak, before any read", async () => {
-    await expect(StoreHome({ params: makeParams("fr") })).rejects.toMatchObject(
-      { digest: "NEXT_HTTP_ERROR_FALLBACK;404" }
-    );
+    await expect(
+      StoreHomePage({ params: makeParams("fr") })
+    ).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
     expect(connection).not.toHaveBeenCalled();
     expect(readStore).not.toHaveBeenCalled();
   });

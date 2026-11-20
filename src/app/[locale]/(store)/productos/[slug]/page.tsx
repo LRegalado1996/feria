@@ -5,7 +5,6 @@ import { JsonLd } from "@/app/_components/atoms/json-ld";
 import { StoreArticle } from "@/app/_components/organisms/store-article";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { getDictionary } from "@/content";
-import type { BRAND_LOGO_FILES } from "@/lib/brand/logo-svg";
 import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { buildAlternates } from "@/lib/i18n/metadata";
@@ -17,6 +16,7 @@ import { absoluteUrl } from "@/lib/seo/origin";
 import {
   breadcrumbList,
   productWithOffer,
+  STORE_LOGO_PATH,
   storeOrganization,
 } from "@/lib/seo/structured-data";
 import {
@@ -46,9 +46,6 @@ export const instant = false;
 export function generateStaticParams() {
   return [{ slug: "__sample__" }];
 }
-
-/** The brand's logo, for search engines: the logo is code, not data. */
-const LOGO_FILE = "lr-market-logo.svg" satisfies keyof typeof BRAND_LOGO_FILES;
 
 /** The store and the article, or `null` when the article is missing. */
 async function load(params: ArticlePageProps["params"]) {
@@ -177,7 +174,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
             ]),
             storeOrganization({
               instagramUrl: store.instagramUrl,
-              logoUrl: absoluteUrl(`/brand/${LOGO_FILE}`),
+              logoUrl: absoluteUrl(STORE_LOGO_PATH),
               name: store.name,
               tiktokUrl: store.tiktokUrl,
               url: home,

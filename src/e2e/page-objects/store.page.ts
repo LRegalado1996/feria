@@ -35,9 +35,60 @@ export class StorePage extends BasePage {
     return this.getByTestId("store-theme");
   }
 
-  /** The home's intro, where the store's name sits on the white page. */
-  getHeader(): Locator {
+  /**
+   * The home's intro, where the store's name sits on the white page: only
+   * a store with nothing else to show has one (FER-022).
+   */
+  getIntro(): Locator {
     return this.getByTestId("store-intro-header").filter({ visible: true });
+  }
+
+  /**
+   * What the home shows under the header (FER-022): `data-kind` says
+   * whether it is the curated home (`sections`) or the intro (`intro`).
+   */
+  getHomeView(): Locator {
+    return this.getByTestId("store-home-view").filter({ visible: true });
+  }
+
+  /** The home's cover: its banners, a carousel when there are several. */
+  getHomeCover(): Locator {
+    return this.getByTestId("store-home-cover").filter({ visible: true });
+  }
+
+  /** The home's rows and banners under the cover, in their order. */
+  getHomeSections(): Locator {
+    return this.getByTestId("store-home-section").filter({ visible: true });
+  }
+
+  /** One of the home's rows or banners, by the heading it shows. */
+  getHomeSection(heading: string): Locator {
+    return this.getHomeSections().filter({
+      has: this.page.getByRole("heading", {
+        exact: true,
+        level: 2,
+        name: heading,
+      }),
+    });
+  }
+
+  /**
+   * The `content` of the page's `<meta>` named `key` (`name` or
+   * `property`), wherever Next streamed it: into `<head>` for a crawler,
+   * into `<body>` for a browser (docs/agents/nextjs.md § Store pages).
+   */
+  async readMeta(key: string): Promise<string | null> {
+    return await this.page.evaluate(
+      (wanted) =>
+        [...document.querySelectorAll("meta")]
+          .find(
+            (meta) =>
+              meta.getAttribute("name") === wanted ||
+              meta.getAttribute("property") === wanted
+          )
+          ?.getAttribute("content") ?? null,
+      key
+    );
   }
 
   /** The header every page of the store starts with (FER-021). */
