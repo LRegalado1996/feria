@@ -120,10 +120,18 @@ function StatusCard({ page }: { page: ComingSoonFormPage }) {
           : copy.status.unpublishedHint}
       </p>
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        {/* While a flip travels the button is `aria-disabled`, not
+            `disabled`, so a keyboard press keeps focus on it; a second press
+            is dropped here. */}
         <Button
-          className="w-full sm:w-auto"
-          disabled={!hydrated || setPublished.isPending}
+          aria-disabled={setPublished.isPending || undefined}
+          className="w-full aria-disabled:opacity-50 sm:w-auto"
+          disabled={!hydrated}
           onClick={() => {
+            if (setPublished.isPending) {
+              return;
+            }
+
             if (page.published) {
               void move(false);
             } else {

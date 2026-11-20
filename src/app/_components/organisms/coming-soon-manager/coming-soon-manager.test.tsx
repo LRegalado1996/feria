@@ -283,19 +283,35 @@ describe("ComingSoonManager", () => {
     expect(state()).toHaveTextContent(/^Not published$/u);
   });
 
-  test("while the switch moves, its button says so and cannot be pressed again", async () => {
-    const { status, user } = setup({ published: true, setPublished: "hang" });
+  test("while the switch moves, its button says so, keeps the keyboard's focus and drops a second press", async () => {
+    const { spies, status, user } = setup({
+      published: true,
+      setPublished: "hang",
+    });
     await screen.findByTestId("coming-soon-status");
     const move = within(status()).getByRole("button", {
       name: "Open the store",
     });
 
-    await user.click(move);
+    move.focus();
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
-      expect(move).toBeDisabled();
+      expect(move).toHaveAttribute("aria-disabled", "true");
     });
     expect(move).toHaveTextContent(/^Opening…$/u);
+    // A natively disabled button drops focus to the page in a browser
+    // (happy-dom keeps it), so it must stay enabled.
+    expect(move).toBeEnabled();
+    expect(move).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    await user.click(move);
+
+    expect(move).toHaveFocus();
+    expect(spies.setPublished).toHaveBeenCalledExactlyOnceWith({
+      published: false,
+    });
   });
 
   test("a failed flip is reported, said, and leaves the state as it was", async () => {
