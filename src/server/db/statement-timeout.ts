@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { DatabaseClient } from "@/server/db";
+import type { Database, DatabaseClient } from "@/server/db";
 
 /**
  * Runs `run` in a transaction whose statements Postgres cancels after `ms`
@@ -10,9 +10,13 @@ import type { DatabaseClient } from "@/server/db";
  * read gives its connection back instead of piling up behind the next one.
  * Only what runs on the server is bounded: a connection the pool cannot open
  * is bounded by the pool's own `connectionTimeoutMillis`.
+ *
+ * It takes the top-level client only: given a transaction handle, its
+ * transaction would be a savepoint, and a local setting outlives a released
+ * savepoint, so the limit would cancel the caller's later statements too.
  */
 export async function withStatementTimeout<T>(
-  db: DatabaseClient,
+  db: Database,
   ms: number,
   run: (tx: DatabaseClient) => Promise<T>
 ): Promise<T> {

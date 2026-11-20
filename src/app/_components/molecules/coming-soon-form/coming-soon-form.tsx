@@ -165,8 +165,12 @@ function ComingSoonForm({
   const { comingSoon } = useDictionary();
   const copy = comingSoon.manage;
   const form = useForm<ComingSoonFormFields, unknown, UpdateComingSoonValues>({
-    defaultValues: fieldsOf(page),
+    resetOptions: { keepDirtyValues: true },
     resolver: zodResolver(createComingSoonFormSchema(copy.errors)),
+    // Follows the stored page when a read brings a newer one (another
+    // admin's save), keeping what this admin is typing: a field left as it
+    // was would otherwise send the older text back and undo theirs.
+    values: fieldsOf(page),
   });
   const { isSubmitting } = useFormState({ control: form.control });
 

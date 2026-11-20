@@ -1,6 +1,6 @@
 import { screen, within } from "@testing-library/react";
 import type { ResolvedMetadata } from "next";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, type Mock, test, vi } from "vitest";
 
 import type {
   StoredComingSoon,
@@ -102,43 +102,67 @@ async function makeParams(locale: string) {
   return await Promise.resolve({ locale });
 }
 
-async function setup({
+/** What a read answers: its value, a rejection, or nothing ever ("stall"). */
+function answerWith<T>(
+  read: Mock<() => Promise<T>>,
+  answer: Awaited<T> | Error | "stall"
+) {
+  if (answer === "stall") {
+    read.mockReturnValue(new Promise<never>(() => {}));
+  } else if (answer instanceof Error) {
+    read.mockRejectedValue(answer);
+  } else {
+    read.mockResolvedValue(answer);
+  }
+}
+
+/**
+ * The page in `locale`, already asked for, its reads answering `saved` and
+ * `store`. `held`: the request has not arrived until `arrive()`. `fakeClock`:
+ * the test moves time. `show()` renders what it answered and reads the
+ * headline and the social links off it.
+ */
+function setup({
+  fakeClock = false,
+  held = false,
   locale = "en",
   saved = SAVED,
   store = STORE_LINKS,
 }: {
+  fakeClock?: boolean;
+  held?: boolean;
   locale?: Locale;
-  saved?: StoredComingSoon | Error;
-  store?: StoreSocialLinks | Error;
+  saved?: StoredComingSoon | Error | "stall";
+  store?: StoreSocialLinks | Error | "stall";
 } = {}) {
+  if (fakeClock) {
+    vi.useFakeTimers();
+  }
   stubIntersectionObserver();
   stubReducedMotion(false);
-  if (saved instanceof Error) {
-    readComingSoon.mockRejectedValue(saved);
-  } else {
-    readComingSoon.mockResolvedValue(saved);
-  }
-  if (store instanceof Error) {
-    readStore.mockRejectedValue(store);
-  } else {
-    readStore.mockResolvedValue(store);
-  }
-
-  renderWithI18n(await ComingSoonPage({ params: makeParams(locale) }), {
-    locale,
-  });
-
-  const page = screen.getByTestId("coming-soon-page");
+  answerWith(readComingSoon, saved);
+  answerWith(readStore, store);
+  const request = held ? holdRequest(connection) : { arrive: () => undefined };
+  const rendering = ComingSoonPage({ params: makeParams(locale) });
 
   return {
-    headline: within(page)
-      .getByRole("heading", { level: 1 })
-      .textContent.replaceAll(/\s+/g, ""),
-    page,
-    /** Where each "Seguinos" link leads, Instagram then TikTok. */
-    social: within(page)
-      .getAllByRole("link", { name: /Instagram|TikTok/u })
-      .map((link) => link.getAttribute("href")),
+    arrive: request.arrive,
+    rendering,
+    show: async () => {
+      renderWithI18n(await rendering, { locale });
+      const page = screen.getByTestId("coming-soon-page");
+
+      return {
+        headline: within(page)
+          .getByRole("heading", { level: 1 })
+          .textContent.replaceAll(/\s+/g, ""),
+        page,
+        /** Where each "Seguinos" link leads, Instagram then TikTok. */
+        social: within(page)
+          .getAllByRole("link", { name: /Instagram|TikTok/u })
+          .map((link) => link.getAttribute("href")),
+      };
+    },
   };
 }
 
@@ -150,7 +174,8 @@ describe("ComingSoonPage", () => {
   ] as const)(
     "in %s, renders the coming-soon screen with what was saved in that language, else the dictionary's",
     async (locale, headline) => {
-      const { headline: shown, page } = await setup({ locale });
+      const { show } = setup({ locale });
+      const { headline: shown, page } = await show();
 
       expect(page).toHaveAttribute("data-slot", "store-coming-soon");
       expect(shown).toBe(headline);
@@ -159,7 +184,8 @@ describe("ComingSoonPage", () => {
   );
 
   test("links the store's own social profiles, the brand's where the store has none", async () => {
-    const { social } = await setup({ locale: "es" });
+    const { show } = setup({ locale: "es" });
+    const { social } = await show();
 
     expect(social).toEqual([
       "https://instagram.com/e2e-market",
@@ -170,7 +196,8 @@ describe("ComingSoonPage", () => {
 
   test("links the brand's profiles when the store cannot be read, and reports it", async () => {
     const outage = new Error("connection refused");
-    const { headline, social } = await setup({ locale: "es", store: outage });
+    const { show } = setup({ locale: "es", store: outage });
+    const { headline, social } = await show();
 
     // The texts still come from the page as saved.
     expect(headline).toBe("Abrimospronto");
@@ -184,16 +211,13 @@ describe("ComingSoonPage", () => {
   });
 
   test("reads the saved page and the store only once a request is there: the build has no database", async () => {
-    readComingSoon.mockResolvedValue(SAVED);
-    readStore.mockResolvedValue(STORE_LINKS);
-    const request = holdRequest(connection);
-    const rendering = ComingSoonPage({ params: makeParams("es") });
+    const { arrive, rendering } = setup({ held: true, locale: "es" });
 
     await settle();
     expect(readComingSoon).not.toHaveBeenCalled();
     expect(readStore).not.toHaveBeenCalled();
 
-    request.arrive();
+    arrive();
     await rendering;
     expect(readComingSoon).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
@@ -203,11 +227,8 @@ describe("ComingSoonPage", () => {
 
   test("stands on its own when the database cannot be read: the dictionary's page, the brand's links, and a report of each read", async () => {
     const outage = new Error("connection refused");
-    const { headline, social } = await setup({
-      locale: "es",
-      saved: outage,
-      store: outage,
-    });
+    const { show } = setup({ locale: "es", saved: outage, store: outage });
+    const { headline, social } = await show();
 
     expect(headline).toBe("Muypronto");
     expect(social).toEqual([
@@ -221,10 +242,12 @@ describe("ComingSoonPage", () => {
   });
 
   test("falls back when the database stalls: each read gets the switch's time limit, then the dictionary's page and the brand's links, and a report of each", async () => {
-    vi.useFakeTimers();
-    readComingSoon.mockReturnValue(new Promise<never>(() => {}));
-    readStore.mockReturnValue(new Promise<never>(() => {}));
-    const rendering = ComingSoonPage({ params: makeParams("es") });
+    const { rendering, show } = setup({
+      fakeClock: true,
+      locale: "es",
+      saved: "stall",
+      store: "stall",
+    });
     const settled = vi.fn();
     void rendering.then(settled);
 
@@ -233,7 +256,7 @@ describe("ComingSoonPage", () => {
     expect(captureExceptionWithScope).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    const rendered = await rendering;
+    expect(settled).toHaveBeenCalledOnce();
     expect(captureExceptionWithScope.mock.calls).toEqual([
       [
         new Error(
@@ -250,20 +273,9 @@ describe("ComingSoonPage", () => {
     ]);
 
     vi.useRealTimers();
-    stubIntersectionObserver();
-    stubReducedMotion(false);
-    renderWithI18n(rendered, { locale: "es" });
-    const page = screen.getByTestId("coming-soon-page");
-    expect(
-      within(page)
-        .getByRole("heading", { level: 1 })
-        .textContent.replaceAll(/\s+/g, "")
-    ).toBe("Muypronto");
-    expect(
-      within(page)
-        .getAllByRole("link", { name: /Instagram|TikTok/u })
-        .map((link) => link.getAttribute("href"))
-    ).toEqual([
+    const { headline, social } = await show();
+    expect(headline).toBe("Muypronto");
+    expect(social).toEqual([
       "https://www.instagram.com/lrmarket",
       "https://www.tiktok.com/@lrmarket",
     ]);
