@@ -34,9 +34,9 @@ const {
 } = vi.hoisted(() => ({
   cacheLife: vi.fn<(profile: unknown) => void>(),
   cacheTag: vi.fn<(...tags: string[]) => void>(),
-  findHomePage: vi.fn(async (..._args: unknown[]) => ({ id: 3 })),
-  findStorePage: vi.fn(async (..._args: unknown[]) => ({ id: 4 })),
-  listHeaderPages: vi.fn(async (..._args: unknown[]) => [{ id: 4 }]),
+  findHomePage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  findStorePage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listHeaderPages: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   findHomePageId: vi.fn<(...args: unknown[]) => Promise<number>>(),
   findShowingAnnouncement: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getPageContent: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -60,7 +60,7 @@ vi.mock("@/server/services/page", () => ({
   getPageContent,
 }));
 
-/** The clock at `iso`, and what the service answers. */
+/** The clock at `iso`, and what the services answer. */
 function setup(iso: string) {
   vi.setSystemTime(new Date(iso));
   const announcement = {
@@ -73,6 +73,9 @@ function setup(iso: string) {
   findShowingAnnouncement.mockResolvedValue(announcement);
   getPageContent.mockResolvedValue(content);
   findHomePageId.mockResolvedValue(3);
+  findStorePage.mockResolvedValue({ id: 4 });
+  findHomePage.mockResolvedValue({ id: 3 });
+  listHeaderPages.mockResolvedValue([{ id: 4 }]);
 
   return { announcement, content };
 }
@@ -196,6 +199,8 @@ describe("the pages' settings (FER-060)", () => {
   ] as const)(
     "reads %s with the app's own client, under the settings' and the home's tags",
     async (_what, read, service, scope, expected) => {
+      setup("2026-12-05T03:00:00Z");
+
       await expect(read()).resolves.toEqual(expected);
 
       expect(service).toHaveBeenCalledExactlyOnceWith(db, scope);
