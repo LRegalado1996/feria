@@ -161,6 +161,26 @@ describe("migration 0025: the home is a page like any other", () => {
         slug: `${taken}-2`,
       });
     });
+
+    test("with /home and its first hundred numbered addresses taken, still finds a free one", async () => {
+      await rolledBack(async (tx, { homeId, storeId }) => {
+        const base = `home-${String(homeId)}`;
+        const taken = [
+          "home",
+          base,
+          ...Array.from({ length: 99 }, (_, at) => `${base}-${String(at + 2)}`),
+        ];
+        await tx
+          .insert(category)
+          .values(taken.map((slug, position) => ({ position, slug, storeId })));
+
+        await applyMigration(tx);
+
+        expect(await readHome(tx, homeId)).toMatchObject({
+          slug: `${base}-101`,
+        });
+      });
+    });
   });
 
   test("leaves a page that already has an address and words alone", async () => {

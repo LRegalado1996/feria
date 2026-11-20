@@ -16,7 +16,12 @@ UPDATE "page" SET "slug" = (
 		SELECT 0 AS "n", 'home' AS "slug"
 		UNION ALL
 		SELECT "n", 'home-' || "page"."id" || CASE WHEN "n" = 1 THEN '' ELSE '-' || "n" END
-		FROM generate_series(1, 100) AS "n"
+		-- One candidate more than the store has addresses, so one is free.
+		FROM generate_series(1, 1 + (
+			SELECT count(*) FROM "category" WHERE "category"."storeId" = "page"."storeId"
+		) + (
+			SELECT count(*) FROM "page" AS "held" WHERE "held"."storeId" = "page"."storeId"
+		)) AS "n"
 	) AS "free"
 	WHERE NOT EXISTS (
 		SELECT 1 FROM "category"
