@@ -753,18 +753,66 @@ describe("createSpotlightSchema and updateSpotlightSchema", () => {
   });
 
   test.each([
-    ["a label at 24", { labelEs: "x".repeat(24) }, true],
-    ["a label at 25", { labelEs: "x".repeat(25) }, false],
-    ["a phrase at 140", { phraseEn: "x".repeat(140) }, true],
-    ["a phrase at 141", { phraseEn: "x".repeat(141) }, false],
-    ["first on the page", { rowsIndex: 0 }, true],
-    ["a negative place", { rowsIndex: -1 }, false],
-    ["no article", { productId: undefined }, false],
-    ["no page", { pageId: undefined }, false],
-  ])("%s is %s", (_case, overrides, accepted) => {
+    ["a label at 24", { labelEs: "x".repeat(24) }],
+    ["a phrase at 140", { phraseEn: "x".repeat(140) }],
+    ["first on the page", { rowsIndex: 0 }],
+    ["the last place a page holds", { rowsIndex: 200 }],
+  ])("takes %s", (_case, overrides) => {
+    expect(createSpotlightSchema.safeParse(makeSpotlight(overrides))).toEqual({
+      data: makeSpotlight(overrides),
+      success: true,
+    });
+  });
+
+  test.each([
+    [
+      "a label at 25",
+      { labelEs: "x".repeat(25) },
+      ["labelEs", "too_big", "Keep the label to 24 characters"],
+    ],
+    [
+      "a phrase at 141",
+      { phraseEn: "x".repeat(141) },
+      ["phraseEn", "too_big", "Keep the phrase to 140 characters"],
+    ],
+    [
+      "a negative place",
+      { rowsIndex: -1 },
+      ["rowsIndex", "too_small", "Too small: expected number to be >=0"],
+    ],
+    [
+      "a place past what a page holds",
+      { rowsIndex: 201 },
+      ["rowsIndex", "too_big", "Too big: expected number to be <=200"],
+    ],
+    [
+      "no article",
+      { productId: undefined },
+      [
+        "productId",
+        "invalid_type",
+        "Invalid input: expected number, received undefined",
+      ],
+    ],
+    [
+      "no page",
+      { pageId: undefined },
+      [
+        "pageId",
+        "invalid_type",
+        "Invalid input: expected number, received undefined",
+      ],
+    ],
+  ])("refuses %s, saying why on its field", (_case, overrides, expected) => {
+    const result = createSpotlightSchema.safeParse(makeSpotlight(overrides));
+
     expect(
-      createSpotlightSchema.safeParse(makeSpotlight(overrides)).success
-    ).toBe(accepted);
+      result.error?.issues.map((issue) => [
+        issue.path.join("."),
+        issue.code,
+        issue.message,
+      ])
+    ).toEqual([expected]);
   });
 
   test("an edit takes its id from the path, and the delete only that", () => {
