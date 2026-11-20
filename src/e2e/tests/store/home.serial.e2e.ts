@@ -405,9 +405,22 @@ test.describe("The storefront's home", () => {
         `/productos/${article.slug}`
       );
       await store.expectNoHorizontalScroll();
+
+      // A press on the photo is a press on the name's link, stretched over
+      // the block: a pointer there, as a finger would, not a click on the
+      // img element, which the link covers by design. At both widths: on a
+      // computer the photo moves to the right of the words.
+      const photo = block.getByRole("img");
+      await photo.scrollIntoViewIfNeeded();
+      const box = await photo.boundingBox();
+      await page.mouse.click((box?.x ?? 0) + 20, (box?.y ?? 0) + 20);
+      await expect(page).toHaveURL(
+        new RegExp(`/productos/${article.slug}$`, "u")
+      );
     }
 
     // The button adds it and opens the cart's panel on its line.
+    await store.goto();
     const add = await store.getLiveSpotlightAdd(title);
     await add.click();
     await expect(store.getCartPanel()).toBeVisible();
@@ -417,17 +430,6 @@ test.describe("The storefront's home", () => {
     );
     await store.closeCartPanel();
     await expect(add).toBeFocused();
-
-    // A press on the photo is a press on the name's link, stretched over
-    // the block: a pointer there, as a finger would, not a click on the img
-    // element, which the link covers by design.
-    const photo = store.getSpotlight(title).getByRole("img");
-    await photo.scrollIntoViewIfNeeded();
-    const box = await photo.boundingBox();
-    await page.mouse.click((box?.x ?? 0) + 20, (box?.y ?? 0) + 20);
-    await expect(page).toHaveURL(
-      new RegExp(`/productos/${article.slug}$`, "u")
-    );
 
     // In English, its English label, and the Spanish phrase it only has.
     await store.gotoEnglish();
