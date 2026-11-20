@@ -1,5 +1,6 @@
 import type { APIRequestContext } from "@playwright/test";
 
+import type { SaveAnnouncementValues } from "../../lib/schemas/home";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
 
 /** The store's texts during a run, one per language. */
@@ -52,6 +53,47 @@ export async function writeStoreSettings(
   if (response.status() !== 200) {
     throw new Error(
       `store.update answered ${response.status()}: ${await response.text()}`
+    );
+  }
+}
+
+/**
+ * The announcement the storefront's bar shows during a run (FER-020): the
+ * store has one, and every page shows it, so it is global like the settings
+ * and written the same way. Lucas's words for the fair (FER-039), with a
+ * shorter line for a phone, switched on, with no days and no link. A spec
+ * that changes it is a `*.serial.e2e.ts` and asks for `homeEdit`, which
+ * writes this back when the test ends.
+ */
+export const STORE_ANNOUNCEMENT = {
+  endsOn: null,
+  isActive: true,
+  linkUrl: null,
+  shortTextEn: "Paseo Prado Fair · Stall 86",
+  shortTextEs: "Feria Paseo Prado · Puesto 86",
+  startsOn: null,
+  textEn:
+    "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
+  textEs:
+    "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
+} satisfies SaveAnnouncementValues;
+
+/**
+ * Replaces the store's announcement through `home.saveAnnouncement`, as an
+ * admin does: the procedure drops the cached bar, so the next visit reads
+ * it. `request` carries an admin's session.
+ */
+export async function writeStoreAnnouncement(
+  request: APIRequestContext,
+  values: SaveAnnouncementValues
+): Promise<void> {
+  const response = await request.post("/api/orpc/home/saveAnnouncement", {
+    data: { json: values },
+  });
+
+  if (response.status() !== 200) {
+    throw new Error(
+      `home.saveAnnouncement answered ${response.status()}: ${await response.text()}`
     );
   }
 }

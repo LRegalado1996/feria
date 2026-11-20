@@ -6,7 +6,7 @@ import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, test, vi } from "vitest";
 
 import * as schema from "@/server/db/schema";
-import { category, productImage, store } from "@/server/db/schema";
+import { banner, category, productImage, store } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -239,6 +239,8 @@ describe("cleanUpOrphanBlobs", () => {
       [category],
       [store],
       [store],
+      [banner],
+      [banner],
     ]);
     expect(
       db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
@@ -249,6 +251,8 @@ describe("cleanUpOrphanBlobs", () => {
         '"category"."coverPhoneUrl"',
         '"store"."catalogCoverUrl"',
         '"store"."catalogCoverPhoneUrl"',
+        '"banner"."imageUrl"',
+        '"banner"."imagePhoneUrl"',
       ].map((column) => ({
         params: ["https://%/qa/%"],
         // Whatever the case of its scheme or host: a row saved as
@@ -256,7 +260,7 @@ describe("cleanUpOrphanBlobs", () => {
         sql: `${column} ilike $1`,
       }))
     );
-    // All five in one snapshot, so a cover moved from one column to another
+    // All seven in one snapshot, so a cover moved from one column to another
     // between two reads is seen in one of them.
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
       expect.any(Function),
@@ -335,9 +339,12 @@ describe("IMAGE_URL_COLUMNS", () => {
           .map((column) => `${getTableName(table)}.${column.name}`)
       );
 
-    // The scan finds the article photos and both catalog covers (FER-043).
+    // The scan finds the article photos, both catalog covers (FER-043) and
+    // the home's banners (FER-020).
     expect(new Set(imageColumns)).toEqual(
       new Set([
+        "banner.imagePhoneUrl",
+        "banner.imageUrl",
         "category.coverPhoneUrl",
         "category.coverUrl",
         "product_image.url",

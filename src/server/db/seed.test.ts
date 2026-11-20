@@ -32,6 +32,19 @@ const { seedCatalog, seedCatalogPages } = vi.hoisted(() => ({
 
 vi.mock("./seed-catalog", () => ({ seedCatalog, seedCatalogPages }));
 
+const HOME = { announcement: true, banners: 5, featured: 4, ranking: 8 };
+
+const { seedHome } = vi.hoisted(() => ({
+  seedHome: vi.fn(async (_tx: unknown, _storeId: number) => ({
+    announcement: true,
+    banners: 5,
+    featured: 4,
+    ranking: 8,
+  })),
+}));
+
+vi.mock("./seed-home", () => ({ seedHome }));
+
 const LOCAL_URL = "postgresql://feria:secret@localhost:5432/feria";
 const REMOTE_URL =
   "postgresql://app:secret@ep-qa-123.us-east-2.aws.neon.tech/feria";
@@ -99,6 +112,7 @@ describe("seed", () => {
         createdAccounts: ["test@example.com"],
         createdArticles: 11,
         createdStoreTexts: ["es", "en"],
+        home: HOME,
       });
     }
   );
@@ -144,6 +158,7 @@ describe("seed", () => {
       createdAccounts: [],
       createdArticles: 11,
       createdStoreTexts: ["es", "en"],
+      home: HOME,
     });
     expect(createAccount).not.toHaveBeenCalled();
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
@@ -183,6 +198,15 @@ describe("seed", () => {
     expect(seedCatalog.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
       seedCatalogPages.mock.invocationCallOrder[0] ?? 0
     );
+    // The home picks from the catalog: after it, in a transaction of its own.
+    expect(seedHome).toHaveBeenCalledExactlyOnceWith(tx, STORE_ID);
+    expect(seedCatalogPages.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      seedHome.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(db.$.transaction.mock.calls).toEqual([
+      [expect.any(Function)],
+      [expect.any(Function)],
+    ]);
   });
 
   test("refuses a database without the store's row, writing nothing", async () => {
@@ -195,6 +219,7 @@ describe("seed", () => {
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(seedCatalog).not.toHaveBeenCalled();
     expect(seedCatalogPages).not.toHaveBeenCalled();
+    expect(seedHome).not.toHaveBeenCalled();
   });
 
   test("the seed's login is the documented one", () => {

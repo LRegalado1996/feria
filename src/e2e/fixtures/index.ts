@@ -1,7 +1,11 @@
 export { expect } from "@playwright/test";
 export type { DbFixture, SeededLogin } from "./db.fixture";
 export { ordersHolding } from "./db.fixture";
-export { STORE_SETTINGS, STORE_TEXTS } from "./store-settings";
+export {
+  STORE_ANNOUNCEMENT,
+  STORE_SETTINGS,
+  STORE_TEXTS,
+} from "./store-settings";
 export type { StoreEdit } from "./store.fixture";
 // `test` comes from the last link of the chain (user → db → store), so a
 // spec that imports it gets every fixture.

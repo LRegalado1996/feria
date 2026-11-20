@@ -65,7 +65,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | done        |
 | [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
 | [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | in progress |
-| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | todo        |
+| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | done        |
 | [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done        |
 | [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)   | The bottom bar stays above the iPhone keyboard     | P1       | todo        |
 | [FER-054](FER-054-article-save-conflicts.md)          | Saving one article from two tabs                   | P2       | todo        |

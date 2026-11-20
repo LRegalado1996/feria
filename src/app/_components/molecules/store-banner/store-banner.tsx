@@ -6,8 +6,12 @@ import { cn } from "@/lib/utils";
 
 export interface StoreBannerProps {
   className?: string;
-  /** Built by the caller with `localizePath()`. */
-  href: string;
+  /**
+   * Where it leads, built by the caller with `localizePath()`. Without it
+   * (a banner the store gave no link, FER-020) the banner is a picture with
+   * its title and no "Comprar ahora".
+   */
+  href?: string | null;
   /**
    * The first photo a page shows is its largest: it loads first. Every
    * other banner waits until it is near the screen.
@@ -19,6 +23,9 @@ export interface StoreBannerProps {
   src: string;
   title: string;
 }
+
+const BANNER_CLASS =
+  "group relative block h-118 overflow-hidden bg-store-contrast text-store-background md:h-130";
 
 /**
  * A full-width photo with its title and "Comprar ahora →" on its bottom-left
@@ -34,15 +41,8 @@ function StoreBanner({
   src,
   title,
 }: StoreBannerProps) {
-  return (
-    <Link
-      className={cn(
-        "group relative block h-118 overflow-hidden bg-store-contrast text-store-background focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-store-accent md:h-130",
-        className
-      )}
-      data-slot="store-banner"
-      href={href}
-    >
+  const content = (
+    <>
       <Image
         alt=""
         className="object-cover"
@@ -60,12 +60,32 @@ function StoreBanner({
         <span className="max-w-[15ch] font-display store-display-banner leading-display font-extrabold wrap-anywhere uppercase">
           {title}
         </span>
-        <span className="mt-3 inline-flex min-h-6 items-center gap-2 font-display text-xs font-extrabold uppercase underline-offset-6 group-hover:underline md:mt-4">
-          {shopNow}
-          <ArrowRight aria-hidden="true" className="size-4" />
-        </span>
+        {href ? (
+          <span className="mt-3 inline-flex min-h-6 items-center gap-2 font-display text-xs font-extrabold uppercase underline-offset-6 group-hover:underline md:mt-4">
+            {shopNow}
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </span>
+        ) : null}
       </span>
+    </>
+  );
+
+  return href ? (
+    <Link
+      className={cn(
+        BANNER_CLASS,
+        "focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-store-accent",
+        className
+      )}
+      data-slot="store-banner"
+      href={href}
+    >
+      {content}
     </Link>
+  ) : (
+    <div className={cn(BANNER_CLASS, className)} data-slot="store-banner">
+      {content}
+    </div>
   );
 }
 

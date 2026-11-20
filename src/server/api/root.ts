@@ -2,6 +2,7 @@ import { adminRouter } from "@/server/api/routers/admin";
 import { attributeRouter } from "@/server/api/routers/attribute";
 import { catalogRouter } from "@/server/api/routers/catalog";
 import { categoryRouter } from "@/server/api/routers/category";
+import { homeRouter } from "@/server/api/routers/home";
 import { orderRouter } from "@/server/api/routers/order";
 import { productRouter } from "@/server/api/routers/product";
 import { storeRouter } from "@/server/api/routers/store";
@@ -12,6 +13,7 @@ export const appRouter = {
   attribute: attributeRouter,
   catalog: catalogRouter,
   category: categoryRouter,
+  home: homeRouter,
   order: orderRouter,
   product: productRouter,
   store: storeRouter,

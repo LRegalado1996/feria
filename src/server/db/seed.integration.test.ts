@@ -1,12 +1,20 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";
 import { type DatabaseClient, db } from "@/server/db";
 import {
+  announcement,
+  announcementTranslation,
   attribute,
+  banner,
+  bannerTranslation,
   category,
+  featuredProduct,
+  homeSection,
   product,
+  productTranslation,
+  rankingEntry,
   store,
   storeTranslation,
   user,
@@ -35,10 +43,16 @@ async function runSeed(tx: DatabaseClient) {
 }
 
 /**
- * The store as a fresh database has it: no texts and no catalog. Articles
- * first, since a category that still has one cannot be deleted.
+ * The store as a fresh database has it: no texts, no catalog and no home
+ * curation (FER-020). Articles first, since a category that still has one
+ * cannot be deleted; they take the curated rows with them. The home's
+ * sequence goes whole, its curated places included: the seed keeps one it
+ * finds.
  */
 async function emptyStore(tx: DatabaseClient, storeId: number) {
+  await tx.delete(announcement).where(eq(announcement.storeId, storeId));
+  await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
+  await tx.delete(banner).where(eq(banner.storeId, storeId));
   await tx.delete(product).where(eq(product.storeId, storeId));
   await tx.delete(attribute).where(eq(attribute.storeId, storeId));
   await tx.delete(category).where(eq(category.storeId, storeId));
@@ -65,6 +79,7 @@ test("leaves one login with its credential, and a second run creates nothing", a
       createdAccounts: [],
       createdArticles: 0,
       createdStoreTexts: [],
+      home: { announcement: false, banners: 0, featured: 0, ranking: 0 },
     });
     expect(
       await tx.query.user.findMany({
@@ -259,6 +274,200 @@ test("gives a catalog seeded before groups its Bijouterie, last, and its covers"
       .from(store)
       .where(eq(store.id, storeId));
     expect(cover?.url).toBe("/seed/ring-3.jpg");
+
+    throw new Error(ROLLED_BACK);
+  });
+
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});
+
+/** The Spanish titles of the articles of a curated row, in its order. */
+async function curatedTitles(
+  tx: DatabaseClient,
+  table: typeof rankingEntry | typeof featuredProduct,
+  storeId: number
+) {
+  const rows = await tx
+    .select({ title: productTranslation.title })
+    .from(table)
+    .innerJoin(
+      productTranslation,
+      and(
+        eq(productTranslation.productId, table.productId),
+        eq(productTranslation.locale, "es")
+      )
+    )
+    .where(eq(table.storeId, storeId))
+    .orderBy(asc(table.position));
+
+  return rows.map((row) => row.title);
+}
+
+// The home's demo content (FER-020, FER-031's): the announcement, three
+// cover banners and two between rows, the order of the rows, the best
+// sellers and the featured articles. A second run adding none of it is the
+// first test's (`home` in its second result).
+test("gives the home its announcement, banners, rows, best sellers and featured articles", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+
+    const first = await runSeed(tx);
+
+    expect(first.home).toEqual({
+      announcement: true,
+      banners: 5,
+      featured: 4,
+      ranking: 8,
+    });
+    expect(
+      await tx.query.announcement.findFirst({
+        columns: {
+          endsOn: true,
+          isActive: true,
+          linkUrl: true,
+          startsOn: true,
+        },
+        where: eq(announcement.storeId, storeId),
+        with: {
+          translations: {
+            columns: { locale: true, shortText: true, text: true },
+            orderBy: desc(announcementTranslation.locale),
+          },
+        },
+      })
+    ).toEqual({
+      endsOn: null,
+      isActive: true,
+      linkUrl: null,
+      startsOn: null,
+      // The enum's order (es, en) reversed.
+      translations: [
+        {
+          locale: "en",
+          shortText: "At the fair · Dec 5 to Jan 5",
+          text: "Find us at the fair, from December 5 to January 5",
+        },
+        {
+          locale: "es",
+          shortText: "En la feria · 5/12 al 5/1",
+          text: "Encontranos en la feria, del 5/12 al 5/1",
+        },
+      ],
+    });
+    const banners = await tx.query.banner.findMany({
+      columns: {
+        coverPosition: true,
+        id: true,
+        imagePhoneUrl: true,
+        imageUrl: true,
+        linkUrl: true,
+        placement: true,
+      },
+      orderBy: [asc(banner.coverPosition), asc(banner.id)],
+      where: eq(banner.storeId, storeId),
+      with: {
+        linkCategory: { columns: { slug: true } },
+        translations: {
+          columns: { title: true },
+          where: eq(bannerTranslation.locale, "es"),
+        },
+      },
+    });
+    expect(
+      banners.map((row) => [
+        row.placement,
+        row.coverPosition,
+        row.translations[0]?.title,
+        row.imageUrl,
+        row.imagePhoneUrl,
+        row.linkCategory?.slug ?? row.linkUrl,
+      ])
+    ).toEqual([
+      [
+        "cover",
+        0,
+        "Burbujeros para toda la familia",
+        "/seed/bubble-gun-2.jpg",
+        "/seed/bubble-gun-2-phone.jpg",
+        "burbujeros",
+      ],
+      [
+        "cover",
+        1,
+        "Joyas para regalar en las fiestas",
+        "/seed/ring-3.jpg",
+        "/seed/ring-3-phone.jpg",
+        "bijouterie",
+      ],
+      [
+        "cover",
+        2,
+        "Cadenas que brillan",
+        "/seed/necklace-4.jpg",
+        "/seed/necklace-4-phone.jpg",
+        "cadenas",
+      ],
+      [
+        "rows",
+        null,
+        "Encontranos en la feria",
+        "/seed/bubbles-1.jpg",
+        "/seed/bubbles-1-phone.jpg",
+        "/productos",
+      ],
+      [
+        "rows",
+        null,
+        "Aros para todos los días",
+        "/seed/earrings-4.jpg",
+        null,
+        "aros",
+      ],
+    ]);
+    const titleOf = new Map(
+      banners.map((row) => [row.id, row.translations[0]?.title ?? ""])
+    );
+    const sections = await tx.query.homeSection.findMany({
+      columns: { bannerId: true, kind: true },
+      orderBy: asc(homeSection.position),
+      where: eq(homeSection.storeId, storeId),
+      with: { category: { columns: { slug: true } } },
+    });
+    expect(
+      sections.map((row) =>
+        row.bannerId === null
+          ? (row.category?.slug ?? row.kind)
+          : `banner:${titleOf.get(row.bannerId) ?? ""}`
+      )
+    ).toEqual([
+      "best_sellers",
+      "banner:Encontranos en la feria",
+      "burbujeros",
+      "featured",
+      "cadenas",
+      "anillos",
+      "banner:Aros para todos los días",
+      "aros",
+      "pulseras",
+      "bijouterie",
+    ]);
+    expect(await curatedTitles(tx, rankingEntry, storeId)).toEqual([
+      "Burbujero pez",
+      "Cadena corazones",
+      "Anillo flor rosa",
+      "Aros argolla gruesa",
+      "Burbujero cristal",
+      "Pulsera chapita",
+      "Cadena corona",
+      "Aros mariposa",
+    ]);
+    expect(await curatedTitles(tx, featuredProduct, storeId)).toEqual([
+      "Par de esclavas",
+      "Anillo sello",
+      "Burbujero rosa",
+      "Aros perla",
+    ]);
 
     throw new Error(ROLLED_BACK);
   });

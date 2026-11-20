@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { createMockDatabase } from "@/server/test/context";
 
-import { writeToCatalog, writeToStore } from "./write-to-store";
+import { writeToCatalog, writeToHome, writeToStore } from "./write-to-store";
 
 // The handle `withAdmin` hands its callback: distinct from the client, so a
 // write handed the outer client instead would be caught.
@@ -21,14 +21,17 @@ const { TX, withAdmin } = vi.hoisted(() => {
   };
 });
 
-const { invalidateCatalogCache } = vi.hoisted(() => ({
+const { invalidateCatalogCache, invalidateHomeCache } = vi.hoisted(() => ({
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
+  invalidateHomeCache: vi.fn<(storeId: number) => void>(),
 }));
 
 vi.mock("@/server/services/access", () => ({ withAdmin }));
 
 // Next's cache only exists inside a Next render.
 vi.mock("@/server/cache/catalog", () => ({ invalidateCatalogCache }));
+
+vi.mock("@/server/cache/home", () => ({ invalidateHomeCache }));
 
 function setup() {
   const db = createMockDatabase();
@@ -123,4 +126,65 @@ describe("writeToCatalog", () => {
       expect(invalidateCatalogCache.mock.calls).toEqual(calls);
     }
   );
+});
+
+describe("writeToHome", () => {
+  test("writes through the login's re-check, then drops the store's cached home, and answers the write's result", async () => {
+    const { context, db, write } = setup();
+
+    await expect(writeToHome(context, write)).resolves.toEqual({
+      id: 11,
+      storeId: 7,
+    });
+
+    expect(withAdmin).toHaveBeenCalledExactlyOnceWith(
+      db,
+      "user-1",
+      expect.any(Function)
+    );
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+    // Dropped once the write committed, never before it ran.
+    expect(write.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateHomeCache.mock.invocationCallOrder[0] ?? 0
+    );
+    // The catalog is not the home's: its cache stays.
+    expect(invalidateCatalogCache).not.toHaveBeenCalled();
+  });
+
+  test("drops the cache only once the transaction ended, not once its write ran", async () => {
+    const { context, write } = setup();
+    let commit: () => void = () => undefined;
+    const committed = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    // The write ran; its transaction has not committed yet.
+    withAdmin.mockImplementationOnce(async (_db, _userId, run) => {
+      const result = await run(TX);
+      await committed;
+      return result;
+    });
+
+    const pending = writeToHome(context, write);
+    // Every promise that can settle before the commit has settled.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidateHomeCache).not.toHaveBeenCalled();
+    commit();
+    await expect(pending).resolves.toEqual({ id: 11, storeId: 7 });
+    expect(invalidateHomeCache).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
+  test("keeps the cache when the write fails, and lets the failure reject the call", async () => {
+    const { context, write } = setup();
+    write.mockRejectedValueOnce(new Error("Banner not found"));
+
+    await expect(writeToHome(context, write)).rejects.toThrow(
+      "Banner not found"
+    );
+    expect(invalidateHomeCache).not.toHaveBeenCalled();
+  });
 });

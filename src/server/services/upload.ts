@@ -14,7 +14,7 @@ import {
   UPLOAD_TOKEN_TTL_MS,
 } from "@/lib/schemas/upload";
 import type { DatabaseClient } from "@/server/db";
-import { category, productImage, store } from "@/server/db/schema";
+import { banner, category, productImage, store } from "@/server/db/schema";
 
 /**
  * The Blob store a deployment writes to: its read-write token (server only),
@@ -39,6 +39,8 @@ export const IMAGE_URL_COLUMNS = [
   category.coverPhoneUrl,
   store.catalogCoverUrl,
   store.catalogCoverPhoneUrl,
+  banner.imageUrl,
+  banner.imagePhoneUrl,
 ] as const;
 
 /**

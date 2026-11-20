@@ -167,7 +167,10 @@ export const storefront = {
     title: "Catálogo",
   },
   home: {
+    // The two rows the store curates by hand (FER-020).
+    bestSellers: "Más vendidos",
     browse: "Ver el catálogo",
+    featured: "Destacados",
   },
   cover: {
     goTo: "Ver la portada {current}",
@@ -208,12 +211,6 @@ export const storefront = {
     viewAllOf: "Ver todo: {title}",
   },
   shell: {
-    // The bar above the header until FER-020 lets the store write its own.
-    // The short one is for a phone, where the whole one would not fit.
-    announcement: {
-      full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
-      short: "Feria Paseo Prado · Puesto 86",
-    },
     cartCount: "Carrito, {count} unidades",
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",

@@ -7,7 +7,7 @@ import { z } from "zod";
  * consumer adds its purpose here, its cap below and its column to the
  * cleanup's list (`IMAGE_URL_COLUMNS`, `src/server/services/upload.ts`).
  */
-export const IMAGE_PURPOSES = ["cover", "product"] as const;
+export const IMAGE_PURPOSES = ["cover", "product", "banner"] as const;
 
 export type ImagePurpose = (typeof IMAGE_PURPOSES)[number];
 
@@ -36,9 +36,11 @@ export const IMAGE_MAX_SIDE = 2400;
  * well under 3 MB; a 12 MB original from a phone never reaches the store.
  * An article's photo (FER-017) is shown smaller than a page's cover and an
  * article holds up to eight, so its cap is tighter; it still leaves room for
- * the JPEG a phone's Safari writes where it cannot write WebP.
+ * the JPEG a phone's Safari writes where it cannot write WebP. A home
+ * banner (FER-020) is as wide as a page's cover, so it takes the cover's.
  */
 export const IMAGE_PURPOSE_MAX_BYTES = {
+  banner: 5_000_000,
   cover: 5_000_000,
   product: 4_000_000,
 } as const satisfies Record<ImagePurpose, number>;

@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   APP_TIME_ZONE,
+  businessDay,
+  formatCalendarDay,
   formatCurrencySign,
   formatDate,
   formatList,
@@ -11,6 +13,7 @@ import {
   formatRelativeTime,
   fromPlainNumberText,
   readTypedNumber,
+  secondsUntilNextBusinessDay,
 } from "./format";
 
 const NOW = new Date("2024-06-15T12:00:00Z").getTime();
@@ -316,6 +319,45 @@ describe("fromPlainNumberText", () => {
       }
     }
   );
+});
+
+describe("formatCalendarDay", () => {
+  test.each([
+    ["2026-12-05", "5 dic. 2026", "Dec 5, 2026"],
+    ["2027-01-01", "1 ene. 2027", "Jan 1, 2027"],
+  ])(
+    "%s is %j in Spanish and %j in English, the day itself whatever the zone",
+    (day, spanish, english) => {
+      expect(formatCalendarDay(day, "es")).toBe(spanish);
+      expect(formatCalendarDay(day, "en")).toBe(english);
+    }
+  );
+});
+
+describe("businessDay", () => {
+  test.each([
+    // 02:59 UTC is still the evening before in Montevideo (UTC-3)...
+    ["2026-12-05T02:59:59Z", "2026-12-04"],
+    // ...and 03:00 UTC is its midnight.
+    ["2026-12-05T03:00:00Z", "2026-12-05"],
+    ["2027-01-01T02:00:00Z", "2026-12-31"],
+  ])("%s falls on %s in the store's time zone", (iso, day) => {
+    expect(businessDay(new Date(iso))).toBe(day);
+  });
+});
+
+describe("secondsUntilNextBusinessDay", () => {
+  test.each([
+    // Montevideo's midnight is 03:00 UTC.
+    ["2026-12-05T03:00:00Z", 86_400],
+    ["2026-12-05T02:59:00Z", 60],
+    ["2026-12-05T02:59:59Z", 1],
+    ["2026-12-05T15:00:00Z", 43_200],
+    // Never zero: the last instant of a day still waits a second.
+    ["2026-12-05T02:59:59.900Z", 1],
+  ])("from %s, %s seconds", (iso, seconds) => {
+    expect(secondsUntilNextBusinessDay(new Date(iso))).toBe(seconds);
+  });
 });
 
 describe("formatter cache", () => {

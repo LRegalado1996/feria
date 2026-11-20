@@ -2,6 +2,7 @@ import type { Locator } from "@playwright/test";
 
 import {
   expect,
+  STORE_ANNOUNCEMENT,
   STORE_SETTINGS,
   STORE_TEXTS,
   test,
@@ -11,15 +12,18 @@ import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { StorePage } from "../../page-objects/store.page";
 
-/** The bar's words until FER-020, as Lucas wrote them (FER-039). */
+/**
+ * The bar's words: the run's announcement (FER-020), which every worker
+ * writes as it starts, in Lucas's words for the fair (FER-039).
+ */
 const ANNOUNCEMENT = {
   en: {
-    full: "See you at the Paseo Prado Fair from December 5 to January 5, stall 86",
-    short: "Paseo Prado Fair · Stall 86",
+    full: STORE_ANNOUNCEMENT.textEn,
+    short: STORE_ANNOUNCEMENT.shortTextEn,
   },
   es: {
-    full: "Te esperamos en la Feria Paseo Prado del 5 de diciembre al 5 de enero, puesto 86",
-    short: "Feria Paseo Prado · Puesto 86",
+    full: STORE_ANNOUNCEMENT.textEs,
+    short: STORE_ANNOUNCEMENT.shortTextEs,
   },
 } as const;
 

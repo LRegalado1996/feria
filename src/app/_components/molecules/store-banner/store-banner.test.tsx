@@ -62,6 +62,26 @@ describe("StoreBanner", () => {
     expect(photo).not.toHaveAttribute("loading", "lazy");
   });
 
+  test.each([null, undefined])(
+    "without a link (%s), is the photo and its title, with no call to action (FER-020)",
+    (href) => {
+      const { container } = render(
+        <StoreBanner
+          href={href}
+          shopNow="Comprar ahora"
+          src="/seed/bubble-gun-1.jpg"
+          title="Burbujas para toda la feria"
+        />
+      );
+
+      const banner = container.querySelector('[data-slot="store-banner"]');
+      expect(screen.queryByRole("link")).toBeNull();
+      expect(banner?.tagName).toBe("DIV");
+      expect(banner).toHaveTextContent(/^Burbujas para toda la feria$/u);
+      expect(banner).toHaveClass("h-118", "relative");
+    }
+  );
+
   test("keeps a caller's class", () => {
     const { banner } = setup({ className: "h-100" });
 

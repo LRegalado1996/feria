@@ -6,6 +6,17 @@ export {
   userRoleEnum,
   verification,
 } from "./auth";
+export {
+  announcement,
+  announcementTranslation,
+  banner,
+  bannerPlacementEnum,
+  bannerTranslation,
+  featuredProduct,
+  homeSection,
+  homeSectionKindEnum,
+  rankingEntry,
+} from "./home";
 export { localeEnum } from "./locale";
 export {
   customerOrder,
@@ -15,13 +26,19 @@ export {
 } from "./order";
 export {
   accountRelations,
+  announcementRelations,
+  announcementTranslationRelations,
   attributeRelations,
   attributeTranslationRelations,
   attributeValueRelations,
   attributeValueTranslationRelations,
+  bannerRelations,
+  bannerTranslationRelations,
   categoryRelations,
   categoryTranslationRelations,
   customerOrderRelations,
+  featuredProductRelations,
+  homeSectionRelations,
   orderItemRelations,
   orderStatusEventRelations,
   productImageRelations,
@@ -29,6 +46,7 @@ export {
   productRelations,
   productTranslationRelations,
   productAttributeValueRelations,
+  rankingEntryRelations,
   sessionRelations,
   storeRelations,
   storeTranslationRelations,

@@ -196,6 +196,73 @@ export function formatDate(date: Date, locale: Locale): string {
   return dateFormat(INTL_LOCALES[locale]).format(date);
 }
 
+const calendarDayFormat = cached(
+  (tag: string) =>
+    new Intl.DateTimeFormat(tag, {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+      year: "numeric",
+    })
+);
+
+/**
+ * A day kept as `YYYY-MM-DD` (a start or end date, FER-020) as the language
+ * writes it ("5 dic 2026"). The day is a day, not an instant, so it is read
+ * and written at UTC midnight and never shifts by a time zone.
+ */
+export function formatCalendarDay(day: string, locale: Locale): string {
+  return calendarDayFormat(INTL_LOCALES[locale]).format(
+    new Date(`${day}T00:00:00Z`)
+  );
+}
+
+const businessClock = cached(
+  () =>
+    new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+    })
+);
+
+/** The business time zone's calendar and clock at `now`, as numbers. */
+function businessParts(now: Date) {
+  const parts = Object.fromEntries(
+    businessClock()
+      .formatToParts(now)
+      .map((part) => [part.type, part.value])
+  );
+
+  return {
+    day: `${parts.year}-${parts.month}-${parts.day}`,
+    secondOfDay:
+      Number(parts.hour) * 3600 +
+      Number(parts.minute) * 60 +
+      Number(parts.second),
+  };
+}
+
+/**
+ * The business day `now` falls on (`YYYY-MM-DD` in `APP_TIME_ZONE`): the
+ * one helper every "today" comes from (docs/agents/database.md § Time), so
+ * a banner that ends on December 5 shows until midnight in Montevideo, not
+ * in UTC.
+ */
+export function businessDay(now: Date): string {
+  return businessParts(now).day;
+}
+
+/** Whole seconds from `now` to the next business day's midnight, at least 1. */
+export function secondsUntilNextBusinessDay(now: Date): number {
+  return Math.max(1, 86_400 - businessParts(now).secondOfDay);
+}
+
 const decimalSeparator = cached(
   (tag: string) =>
     new Intl.NumberFormat(tag)
