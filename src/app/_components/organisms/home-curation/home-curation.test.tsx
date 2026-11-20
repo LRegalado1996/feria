@@ -1277,7 +1277,7 @@ describe("HomeCuration", () => {
     expect(add).toHaveFocus();
   });
 
-  test("edits a spotlight on its place, offering the draft it features", async () => {
+  test("edits a spotlight opened on its place, offering the draft it features, and leaves the place to the server", async () => {
     const { loaded, spies, user } = setup({
       data: makeData({
         sections: [
@@ -1310,7 +1310,6 @@ describe("HomeCuration", () => {
       phraseEn: "The one kids ask for most.",
       phraseEs: "El que más piden los chicos.",
       productId: 22,
-      rowsIndex: 1,
     });
   });
 
