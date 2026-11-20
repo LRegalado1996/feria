@@ -1,4 +1,5 @@
 import { captureExceptionWithScope } from "@/lib/sentry";
+import { within } from "@/lib/utils/within";
 import { db } from "@/server/db";
 import { isComingSoonPublished } from "@/server/services/coming-soon";
 
@@ -26,22 +27,6 @@ interface StorefrontSwitchOptions {
   ttlMs: number;
 }
 
-/** `promise`, or a rejection once `ms` have passed without it settling. */
-async function within<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      reject(new Error(`The storefront switch took over ${ms} ms`));
-    }, ms);
-  });
-
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * The switch as the proxy reads it: remembered for `ttlMs`, one read at a
  * time however many requests arrive together. It fails closed: a read that
@@ -61,7 +46,7 @@ export function createStorefrontSwitch({
 
   async function load(): Promise<boolean> {
     try {
-      return await within(read(), timeoutMs);
+      return await within(read(), timeoutMs, "The storefront switch");
     } catch (error) {
       report(error);
 

@@ -8,8 +8,12 @@ import {
 import { DEFAULT_LOCALE } from "@/lib/i18n/config";
 import { localizePath, splitLocale } from "@/lib/i18n/paths";
 import { captureExceptionWithScope } from "@/lib/sentry";
+import { within } from "@/lib/utils/within";
 import { isAdminRequest } from "@/server/better-auth/admin-request";
-import { isStorefrontClosed } from "@/server/cache/storefront-switch";
+import {
+  isStorefrontClosed,
+  SWITCH_TIMEOUT_MS,
+} from "@/server/cache/storefront-switch";
 
 /**
  * Stamps an `/api` request with an `x-request-id` (kept when the caller sent
@@ -30,13 +34,19 @@ function isAdminPath(pathname: string) {
 
 /**
  * Whether a signed-in admin made the request: a session the database
- * vouches for (`isAdminRequest`), never a cookie's presence. A failed check
- * is reported and answers no, so an outage shows the admin what the public
- * sees instead of opening the store to someone it could not check.
+ * vouches for (`isAdminRequest`), never a cookie's presence. A check that
+ * fails or outlasts the switch's own limit is reported and answers no, so an
+ * outage shows the admin what the public sees instead of opening the store to
+ * someone it could not check, and a stalled database holds a page no longer
+ * than the switch read does.
  */
 async function fromAdmin(request: NextRequest): Promise<boolean> {
   try {
-    return await isAdminRequest(request.headers);
+    return await within(
+      isAdminRequest(request.headers),
+      SWITCH_TIMEOUT_MS,
+      "The admin session check"
+    );
   } catch (error) {
     captureExceptionWithScope(error, { action: "ComingSoon.check_admin" });
 

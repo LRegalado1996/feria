@@ -5,6 +5,8 @@ import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
 import { LOCALES } from "@/lib/i18n/config";
+import type * as StorefrontSwitch from "@/server/cache/storefront-switch";
+import { SWITCH_TIMEOUT_MS } from "@/server/cache/storefront-switch";
 
 import { config, proxy } from "./proxy";
 
@@ -23,8 +25,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // The switch's own read and its fail-safe are `storefront-switch.test.ts`'s;
-// the session check is `admin-request.test.ts`'s.
-vi.mock("@/server/cache/storefront-switch", () => ({
+// the session check is `admin-request.test.ts`'s. The time limit stays real.
+vi.mock("@/server/cache/storefront-switch", async (importOriginal) => ({
+  ...(await importOriginal<typeof StorefrontSwitch>()),
   isStorefrontClosed: mocks.isStorefrontClosed,
 }));
 
@@ -353,6 +356,47 @@ describe("proxy: the launch switch", () => {
     expect(await route("/")).toEqual(redirect("/coming-soon"));
     expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
       outage,
+      { action: "ComingSoon.check_admin" }
+    );
+  });
+
+  test("closed, an admin check answering just inside the switch's time limit lets the admin in", async () => {
+    vi.useFakeTimers();
+    setup();
+    mocks.isAdminRequest.mockImplementationOnce(
+      async () =>
+        await new Promise<boolean>((resolve) => {
+          setTimeout(() => {
+            resolve(true);
+          }, SWITCH_TIMEOUT_MS - 1);
+        })
+    );
+
+    const routed = route("/");
+    await vi.advanceTimersByTimeAsync(SWITCH_TIMEOUT_MS - 1);
+
+    expect(await routed).toMatchObject({
+      passedThrough: false,
+      rewrittenTo: `${ORIGIN}/es`,
+    });
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+  });
+
+  test("closed, an admin check that outlasts the switch's time limit is reported and shows the coming-soon page", async () => {
+    vi.useFakeTimers();
+    setup();
+    mocks.isAdminRequest.mockImplementationOnce(
+      async () => await new Promise<boolean>(() => {})
+    );
+
+    const routed = route("/");
+    await vi.advanceTimersByTimeAsync(SWITCH_TIMEOUT_MS - 1);
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await routed).toEqual(redirect("/coming-soon"));
+    expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      new Error(`The admin session check took over ${SWITCH_TIMEOUT_MS} ms`),
       { action: "ComingSoon.check_admin" }
     );
   });
