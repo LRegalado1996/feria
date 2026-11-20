@@ -400,6 +400,7 @@ describe("HomeCuration", () => {
         document.body
     );
 
+    expect(listed("home-layout-featured-item")).toEqual(["Pearl necklace"]);
     // One featured article is not a valid order: the saved ones stay.
     expect(featured()).toEqual(["Featured", "Signet ring", "Pearl necklace"]);
   });
@@ -432,7 +433,7 @@ describe("HomeCuration", () => {
     expect(cover()).toBe("Rings sale");
   });
 
-  test("the preview falls back to the saved order when even the saved lists do not read", async () => {
+  test("the preview keeps a reordered cover while even the saved featured articles do not read", async () => {
     // A featured article deleted since leaves the saved row with one.
     const { loaded, user } = setup({
       data: makeData({
@@ -443,11 +444,13 @@ describe("HomeCuration", () => {
     });
     await loaded();
 
+    expect(coverTitle()).toBe("Bubble guns");
     await user.click(
       screen.getByRole("button", { name: "Move down: Bubble guns" })
     );
 
-    expect(coverTitle()).toBe("Bubble guns");
+    expect(coverTitle()).toBe("Rings sale");
+    expect(listed("home-layout-featured-item")).toEqual(["Signet ring"]);
   });
 
   test("saves the announcement and says so", async () => {
