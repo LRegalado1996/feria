@@ -62,13 +62,20 @@ export async function generateMetadata({
   // The page the store chose as its home may have texts of its own for
   // search engines (FER-060); without them, the store's.
   const home = await readHomePage(store, locale);
+  const shared = storeMetadata(store, locale);
 
   return {
-    ...storeMetadata(store, locale),
+    ...shared,
     alternates: buildAlternates("/", locale),
     description:
       home?.seoDescription ??
       pickTranslation(store.translations, locale)?.description,
+    // A share card says what search engines read when the home has its own
+    // words, as any page's does; else the store's tagline.
+    openGraph:
+      home?.seoDescription == null
+        ? shared.openGraph
+        : { ...shared.openGraph, description: home.seoDescription },
     // The home is the store itself: no "· Store" after its own name.
     title: { absolute: home?.seoTitle ?? store.name },
   };

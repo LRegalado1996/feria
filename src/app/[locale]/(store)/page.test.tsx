@@ -504,6 +504,11 @@ describe("generateMetadata", () => {
 
     expect(metadata.title).toEqual({ absolute: "Regalos de Navidad" });
     expect(metadata.description).toBe("Regalos para todos.");
+    expect(metadata.openGraph).toEqual({
+      description: "Regalos para todos.",
+      siteName: "Sample Store",
+      type: "website",
+    });
     // Still at `/`, whichever page the home is.
     expect(metadata.alternates?.canonical).toBe("/en");
     expect(readHomePage).toHaveBeenCalledExactlyOnceWith(makeStore(), "en");
