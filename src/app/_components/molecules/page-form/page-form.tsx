@@ -149,6 +149,13 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
   useEffect(() => {
     received.current = page;
     form.reset(fieldsOf(page), { keepDirtyValues: true });
+
+    // The home is always published, and its switch is not offered: a page
+    // that became the home while this admin had unticked it takes the
+    // stored value, or every save would be refused with no way to fix it.
+    if (page?.isHome) {
+      form.resetField("isPublished", { defaultValue: true });
+    }
   }, [form, page]);
 
   const isHome = page?.isHome ?? false;

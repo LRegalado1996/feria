@@ -249,6 +249,28 @@ describe("PageForm", () => {
     expect(field("Name in English")).toBeDisabled();
   });
 
+  test("a page that becomes the home while unticked here is published again, and saves so", async () => {
+    const { onSave, refresh, submit, user } = setup({ page: makePage() });
+    await user.click(screen.getByRole("checkbox", { name: "Published" }));
+
+    // Another admin chose this page as the home.
+    refresh(makePage({ isHome: true }));
+    await submit();
+
+    expect(screen.getByRole("checkbox", { name: "Published" })).toBeChecked();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      isPublished: true,
+      nameEn: "Gifts",
+      nameEs: "Regalos",
+      seoDescriptionEn: null,
+      seoDescriptionEs: "Para regalar.",
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: true,
+      slug: "regalos",
+    });
+  });
+
   test("a failed save keeps the admin's edit: a newer page read still leaves it", async () => {
     const { field, refresh, submit, user } = setup({
       outcome: "failed",
