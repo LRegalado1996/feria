@@ -18,6 +18,7 @@ The store is live on its own domain and has been checked the way a stranger with
   - Full purchase on an iPhone and an Android phone, on mobile data, in both languages.
   - Admin on a phone: load an article with AI, change an order's status, change the announcement bar.
   - Lighthouse on mobile for home, catalog and article.
+  - Lighthouse on mobile for `/coming-soon` on the deployed site, while it is still published and before the launch step below takes it down (FER-034's owed production measurement; once the store opens, a visitor no longer reaches that page).
   - Keyboard and screen reader pass on the purchase flow.
   - Sentry receiving production errors; health check monitored.
   - Rate limits and BotID active on order creation and sign-in.
