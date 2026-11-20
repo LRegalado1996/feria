@@ -48,6 +48,17 @@ function setup({
   visualViewport?: boolean;
 } = {}) {
   const viewport = new FakeVisualViewport();
+  // The window's width against `md`, as the hook asks the browser.
+  const width = { wide: false };
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({
+        get matches() {
+          return query === "(min-width: 48rem)" && width.wide;
+        },
+        media: query,
+      }) as unknown as MediaQueryList
+  );
   const layout = { height: SCREEN_HEIGHT, scrollY: 0 };
   const frames = new Map<number, FrameRequestCallback>();
   let nextFrame = 1;
@@ -113,6 +124,7 @@ function setup({
 
   return {
     addListener,
+    width,
     bar,
     cancelFrame,
     /** The bar's state as the page's CSS reads it. */
@@ -236,6 +248,30 @@ describe("useAboveKeyboard", () => {
     flushFrame();
 
     expect(barState()).toEqual(CLOSED);
+  });
+
+  test("lets go of the keyboard once the window crosses md, where the action moves to the top bar", () => {
+    const {
+      barState,
+      flushFrame,
+      focusField,
+      scrollBy,
+      viewportChanges,
+      width,
+    } = setup({ field: { bottom: 480, top: 440 } });
+    viewportChanges("resize", { height: 500 });
+    flushFrame();
+    expect(barState()).toEqual({ inset: "300px", keyboard: "open" });
+    scrollBy.mockClear();
+
+    width.wide = true;
+    viewportChanges("resize", { height: 500 });
+    flushFrame();
+    focusField();
+    flushFrame();
+
+    expect(barState()).toEqual({ inset: "0px", keyboard: undefined });
+    expect(scrollBy).not.toHaveBeenCalled();
   });
 
   test("does nothing where the browser has no visualViewport", () => {
