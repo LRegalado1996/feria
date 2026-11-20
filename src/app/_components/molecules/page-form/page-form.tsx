@@ -226,6 +226,7 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
                         {...field}
                         autoComplete="off"
                         lang={lang}
+                        required={name === "nameEs"}
                         onChange={(event) => {
                           field.onChange(event);
 
@@ -261,6 +262,7 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
                     {...field}
                     autoCapitalize="none"
                     autoComplete="off"
+                    required
                     spellCheck={false}
                   />
                 </FormControl>

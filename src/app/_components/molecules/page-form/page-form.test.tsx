@@ -303,6 +303,15 @@ describe("PageForm", () => {
     ).toBeInTheDocument();
   });
 
+  test("tells assistive tech which fields are required, and only those", () => {
+    const { field } = setup({ page: makePage() });
+
+    expect(field("Name in Spanish")).toBeRequired();
+    expect(field("Address")).toBeRequired();
+    expect(field("Name in English")).not.toBeRequired();
+    expect(field("Title for search engines in Spanish")).not.toBeRequired();
+  });
+
   test("refuses a missing name and an address the site uses, saving nothing", async () => {
     const { field, onSave, submit, user } = setup();
 
