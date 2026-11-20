@@ -936,8 +936,8 @@ afterEach(async () => {
 });
 
 /**
- * Keeps the store's sequence and curated rows as they are now, to be put
- * back after the test, and adds a category with three articles to rank.
+ * Keeps the store's sequence, curated rows and cover places as they are
+ * now, to be put back after the test, and adds a category with three articles to rank.
  */
 async function setupTwoWriters() {
   const storeId = await theStoreId(db);
@@ -967,6 +967,11 @@ async function setupTwoWriters() {
     })
     .from(featuredProduct)
     .where(eq(featuredProduct.storeId, storeId));
+  // A save renumbers the cover from 0, though it lists none of it.
+  const cover = await db
+    .select({ coverPosition: banner.coverPosition, id: banner.id })
+    .from(banner)
+    .where(and(eq(banner.storeId, storeId), eq(banner.placement, "cover")));
   committed.restore.push(async () => {
     await db.transaction(async (tx) => {
       await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
@@ -985,6 +990,10 @@ async function setupTwoWriters() {
 
       if (featured.length > 0) {
         await tx.insert(featuredProduct).values(featured);
+      }
+
+      for (const { coverPosition, id } of cover) {
+        await tx.update(banner).set({ coverPosition }).where(eq(banner.id, id));
       }
     });
   });
@@ -1059,7 +1068,14 @@ describe("the home's order under two writers", () => {
 
     // Both writers end before the teardown, whatever the wait does.
     try {
-      await waitUntilBlocked(await secondPid, storeId);
+      // A second writer that fails before it says its backend ends the wait.
+      const startedPid = await Promise.race([
+        secondPid,
+        second.then(() => {
+          throw new Error("The second writer ended before saying its backend");
+        }),
+      ]);
+      await waitUntilBlocked(startedPid, storeId);
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
