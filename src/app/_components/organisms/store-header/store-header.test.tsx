@@ -112,7 +112,7 @@ function linksOf(scope: HTMLElement): [string, string | null][] {
 describe("StoreHeader", () => {
   test.each([
     ["en", "/en", "LR Market, go to the home page"],
-    ["es", "/", "LR Market, ir al inicio"],
+    ["es", "/", "LR Market, ir a la home"],
   ] as const)(
     "in %s, leads home at %s from the full logo, named %j",
     async (locale, href, name) => {
@@ -402,7 +402,7 @@ describe("StoreHeader", () => {
   });
 
   test.each([
-    ["es", "/", "LR Market, inicio"],
+    ["es", "/", "LR Market, home"],
     ["en", "/en", "LR Market, home"],
   ] as const)(
     "in %s, the menu opens on the full logo, centered over the links, leading home at %s, named %j",
@@ -415,7 +415,7 @@ describe("StoreHeader", () => {
       const home = within(dialog()).getByTestId("store-mobile-menu-home");
       expect(home).toHaveAccessibleName(name);
       expect(home).toHaveAttribute("href", href);
-      // No "Inicio" among the links: the logo is the way home.
+      // No "Home" among the links: the logo is the way home.
       expect(
         within(dialog()).queryByRole("link", { name: copy.home })
       ).toBeNull();

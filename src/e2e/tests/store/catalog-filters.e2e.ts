@@ -99,7 +99,7 @@ test.describe("Catalog filter panel", () => {
     // category and the search are not filters (FER-044).
     await page
       .getByRole("navigation", { name: "Ruta" })
-      .getByRole("link", { name: "Inicio" })
+      .getByRole("link", { name: "Home" })
       .focus();
     await page.keyboard.press("Tab");
     await expect(trigger).toBeFocused();

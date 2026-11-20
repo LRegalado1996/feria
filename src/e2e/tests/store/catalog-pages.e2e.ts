@@ -126,7 +126,7 @@ test.describe("Catalog pages", () => {
       );
       await expect(titles(page)).toHaveText(["Anillo sello", "Anillo flor"]);
       await expect(trail(page)).toHaveText([
-        "Inicio",
+        "Home",
         `Bijou ${tag}`,
         `Anillos ${tag}`,
       ]);
@@ -164,7 +164,7 @@ test.describe("Catalog pages", () => {
       "Anillo flor",
       "Aro perla",
     ]);
-    await expect(trail(page)).toHaveText(["Inicio", `Bijou ${tag}`]);
+    await expect(trail(page)).toHaveText(["Home", `Bijou ${tag}`]);
     await expect(page).toHaveTitle(`Bijou ${tag} · ${STORE_SETTINGS.name}`);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute(
       "content",
@@ -236,13 +236,13 @@ test.describe("Catalog pages", () => {
       expect(box?.y).toBe((header?.y ?? 0) + (header?.height ?? 0));
       expect(box?.height).toBe(height - reserve);
 
-      // The trail under the cover, starting at a house named Inicio.
+      // The trail under the cover, starting at a house named Home.
       const trailNav = page.getByRole("navigation", { name: "Ruta" });
       const trailBox = await trailNav.boundingBox();
       expect(trailBox?.y).toBeGreaterThanOrEqual(
         (box?.y ?? 0) + (box?.height ?? 0)
       );
-      const home = trailNav.getByRole("link", { name: "Inicio" });
+      const home = trailNav.getByRole("link", { name: "Home" });
       await expect(home).toHaveAttribute("href", "/");
       await expect(
         home.getByTestId("store-breadcrumb-home-icon")
@@ -276,7 +276,7 @@ test.describe("Catalog pages", () => {
 
     await page.goto(`/${bubbles.slug}`);
     await expect(titles(page)).toHaveText(["Burbujero cristal"]);
-    await expect(trail(page)).toHaveText(["Inicio", `Burbujas ${tag}`]);
+    await expect(trail(page)).toHaveText(["Home", `Burbujas ${tag}`]);
 
     const moved = await request.get(`/${rings.slug}?sort=price_asc`, {
       headers: { "User-Agent": BINGBOT },

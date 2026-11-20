@@ -21,7 +21,7 @@ export const admin = {
         "«{name}» tiene {count}. Elegí a qué categoría pasan antes de eliminarla.",
     },
     description:
-      "El orden de esta lista es el de los carruseles del inicio y el del filtro del catálogo.",
+      "El orden de esta lista es el de los carruseles de la home y el del filtro del catálogo.",
     edit: {
       action: "Renombrar: {name}",
       cancel: "Cancelar",
@@ -700,7 +700,7 @@ export const admin = {
     submit: "Guardar",
     texts: "Textos",
     textsHint:
-      "La frase va arriba del nombre en el inicio, y la descripción debajo.",
+      "La frase va arriba del nombre en la home, y la descripción debajo.",
     title: "Ajustes",
   },
   shell: {
