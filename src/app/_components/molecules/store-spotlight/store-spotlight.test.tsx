@@ -142,14 +142,42 @@ describe("StoreSpotlight", () => {
         /(?:^|\s)(?:sm|md|lg|xl):/u
       );
     }
-    // The name is sized to the column it sits in.
+    // The name is sized to the column it sits in, worked out from the
+    // block's width.
     const heading = inside.getByRole("heading", { name: "Fish bubble gun" });
     expect(heading).toHaveClass("store-display-spotlight");
     expect(heading.parentElement).toHaveAttribute(
       "data-slot",
       "store-spotlight-words"
     );
-    expect(heading.parentElement).toHaveClass("@container");
+    expect(block.firstElementChild).toHaveClass(
+      "[--spotlight-column:calc(100cqi_-_2rem)]",
+      "@3xl:[--spotlight-column:calc((min(100cqi,80rem)_-_9rem)_/_2)]"
+    );
+  });
+
+  test("leaves the block the link's one containing block, so its stretched area covers the photo in Safari too", () => {
+    const { block, within: inside } = setup();
+
+    const link = inside.getByRole("link", { name: "Fish bubble gun" });
+    expect(link).toHaveClass("after:absolute", "after:inset-0");
+    expect(block).toHaveClass("relative");
+    // Safari makes a container the containing block of what is absolutely
+    // positioned inside it: none between the link and the block.
+    const between: string[] = [];
+    for (
+      let element = link.parentElement;
+      element && element !== block;
+      element = element.parentElement
+    ) {
+      between.push(element.getAttribute("class") ?? "");
+    }
+    expect(between).toHaveLength(3);
+    expect(
+      between.filter((names) =>
+        /(?:^|\s)(?:@container|relative)(?:\s|$)/u.test(names)
+      )
+    ).toEqual([]);
   });
 
   test("its name's size follows its column and stops at 64 px, so a ten-letter word never breaks mid-word in a narrow one", () => {
@@ -162,7 +190,9 @@ describe("StoreSpotlight", () => {
         css
       )?.[1];
 
-    expect(size).toBe("clamp(1.25rem, 10cqi, 4rem)");
+    expect(size).toBe(
+      "clamp(1.25rem, var(--spotlight-column, 100cqi) / 10, 4rem)"
+    );
   });
 
   test("speaks Spanish on a Spanish page", () => {

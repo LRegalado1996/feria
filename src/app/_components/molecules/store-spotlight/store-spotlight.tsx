@@ -60,6 +60,11 @@ export interface StoreSpotlightProps {
  * block is a container that turns to two columns at the width `md` means
  * for a block the window's width, and the name is sized to its own column
  * (`store-display-spotlight`), so a word of ten letters fits on a line.
+ * The column's width is worked out from the block's (`--spotlight-column`)
+ * rather than the column being a container itself: Safari makes a
+ * `container-type` box the containing block of what is absolutely
+ * positioned inside it, which would shrink the link's stretched area to
+ * the words and leave the photo dead.
  *
  * The block is one link to the article and one button, never one inside
  * the other: the name is the anchor and its hit area is stretched over the
@@ -90,7 +95,15 @@ function StoreSpotlight({
       )}
       data-slot="store-spotlight"
     >
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 pt-4 pb-8 @3xl:grid-cols-2 @3xl:items-center @3xl:gap-12 @3xl:p-12">
+      <div
+        className={cn(
+          "mx-auto grid max-w-7xl gap-5 px-4 pt-4 pb-8 @3xl:grid-cols-2 @3xl:items-center @3xl:gap-12 @3xl:p-12",
+          // The words' column, from the block's width: less the side
+          // padding (1rem each, 3rem from @3xl), and from @3xl half of
+          // what the 80rem measure leaves after the 3rem gap.
+          "[--spotlight-column:calc(100cqi_-_2rem)] @3xl:[--spotlight-column:calc((min(100cqi,80rem)_-_9rem)_/_2)]"
+        )}
+      >
         <div
           className="relative aspect-square overflow-hidden bg-store-surface @3xl:order-last"
           data-slot="store-spotlight-tile"
@@ -111,7 +124,7 @@ function StoreSpotlight({
           )}
         </div>
         <div
-          className="@container flex min-w-0 flex-col items-start gap-4 @3xl:gap-5"
+          className="flex min-w-0 flex-col items-start gap-4 @3xl:gap-5"
           data-slot="store-spotlight-words"
         >
           {label ? (
