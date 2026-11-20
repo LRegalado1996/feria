@@ -401,10 +401,43 @@ describe("updatePage", () => {
 
     await updatePage(tx, {
       storeId: STORE_ID,
-      values: { ...makeValues({ slug: "home" }), id: PAGE_ID },
+      values: {
+        ...makeValues({
+          nameEn: "Front",
+          nameEs: "Portada",
+          seoDescriptionEn: "All the store.",
+          seoTitleEs: "Inicio",
+          slug: "home",
+        }),
+        id: PAGE_ID,
+      },
     });
 
-    expect(db.$.update).toHaveBeenCalledOnce();
+    expect(db.$["update.set"]).toHaveBeenCalledExactlyOnceWith({
+      isPublished: true,
+      showInHeader: false,
+      slug: "home",
+    });
+    expect(db.$["insert.values"].mock.calls).toEqual([
+      [
+        [
+          {
+            locale: "es",
+            name: "Portada",
+            pageId: PAGE_ID,
+            seoDescription: "Para regalar.",
+            seoTitle: "Inicio",
+          },
+          {
+            locale: "en",
+            name: "Front",
+            pageId: PAGE_ID,
+            seoDescription: "All the store.",
+            seoTitle: null,
+          },
+        ],
+      ],
+    ]);
   });
 
   test("another page may be unpublished", async () => {

@@ -47,7 +47,7 @@ describe("usePages", () => {
     await waitFor(() => {
       expect(result.current.data).toEqual(ROWS);
     });
-    expect(list).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(
       queryClient.getQueriesData({ queryKey: pagesKey() }).map(([, d]) => d)
     ).toEqual([ROWS]);
