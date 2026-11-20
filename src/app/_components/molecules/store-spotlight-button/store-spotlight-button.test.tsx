@@ -49,6 +49,8 @@ function setup({
       await user.click(screen.getByRole("button", { name }));
     },
     open,
+    /** The live region's text as a screen reader gets it, mark included. */
+    raw: () => screen.getByRole("status").textContent,
     /** What the live region under the button says, without its mark. */
     said: () => screen.getByRole("status").textContent?.replaceAll(MARK, ""),
     stored: (): unknown => JSON.parse(localStorage.getItem(KEY) ?? "null"),
@@ -78,19 +80,20 @@ describe("StoreSpotlightButton", () => {
   });
 
   test("what adding could not do is said under it, again on a second press", async () => {
-    const { add, open, said } = setup({
+    const { add, open, raw, said } = setup({
       cart: [{ productId: 6, quantity: 10 }],
     });
+    const atCap =
+      "You already have 10 of this article, the most an order takes.";
 
     await add();
-    expect(said()).toBe(
-      "You already have 10 of this article, the most an order takes."
-    );
+    expect(said()).toBe(atCap);
+    const first = raw();
     await add();
 
-    expect(said()).toBe(
-      "You already have 10 of this article, the most an order takes."
-    );
+    expect(said()).toBe(atCap);
+    // The same words in a changed region: a screen reader says them again.
+    expect([first, raw()]).toEqual([`${atCap}${MARK}`, atCap]);
     expect(open).not.toHaveBeenCalled();
   });
 
