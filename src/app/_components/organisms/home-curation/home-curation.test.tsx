@@ -655,6 +655,41 @@ describe("HomeCuration", () => {
     expect(reportError).not.toHaveBeenCalled();
   });
 
+  test("a save that ends after its sheet was closed leaves the sheet opened since alone", async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    let release: (value: { id: number }) => void = () => undefined;
+    const saved = new Promise<{ id: number }>((resolve) => {
+      release = resolve;
+    });
+    server.use(createOrpcHandler("home.updateBanner", async () => await saved));
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit banner: Bubble guns" })
+    );
+    const editSheet = await screen.findByRole("dialog", {
+      name: "Edit banner",
+    });
+    await user.click(within(editSheet).getByTestId("banner-form-submit"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await user.click(screen.getByTestId("home-banner-add"));
+    const newSheet = await screen.findByRole("dialog", { name: "New banner" });
+    await user.type(
+      within(newSheet).getByRole("textbox", { name: "Title in Spanish" }),
+      "Joyas"
+    );
+    release({ id: 31 });
+
+    expect(await screen.findByText("Banner saved.")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "New banner" })).toBe(newSheet);
+    expect(
+      within(newSheet).getByRole("textbox", { name: "Title in Spanish" })
+    ).toHaveValue("Joyas");
+  });
+
   test("a failed new banner is reported as one", async () => {
     const { loaded, user } = setup({ write: "fail" });
     await loaded();

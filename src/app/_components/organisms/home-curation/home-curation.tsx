@@ -260,6 +260,9 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   const [editing, setEditing] = useState<{ banner: Banner | null } | null>(
     null
   );
+  // The sheet open now, by identity: a save that ends after its sheet was
+  // closed, or another one opened, leaves the open one alone.
+  const openSheet = useRef<{ banner: Banner | null } | null>(null);
   const [deleting, setDeleting] = useState<Banner | null>(null);
   // What opened the sheet or the dialog: focus goes back to it, or to the
   // "new banner" button once its banner is gone.
@@ -382,14 +385,21 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
     };
   };
 
+  const showSheet = (sheet: { banner: Banner | null }) => {
+    openSheet.current = sheet;
+    setEditing(sheet);
+  };
+
   const closeSheet = () => {
+    openSheet.current = null;
     setEditing(null);
   };
 
   const saveBanner = async (
     values: BannerFormValues
   ): Promise<BannerFormOutcome> => {
-    const banner = editing?.banner ?? null;
+    const sheet = editing;
+    const banner = sheet?.banner ?? null;
 
     try {
       if (banner) {
@@ -409,7 +419,10 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
         toast.success(copy.bannerForm.created);
       }
 
-      closeSheet();
+      if (openSheet.current === sheet) {
+        closeSheet();
+      }
+
       return "saved";
     } catch (error) {
       // A full cover is the owner's to fix, not a failure to report.
@@ -486,7 +499,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
             data-testid="home-banner-add"
             onClick={(event) => {
               opener.current = event.currentTarget;
-              setEditing({ banner: null });
+              showSheet({ banner: null });
             }}
             ref={addButton}
             type="button"
@@ -511,7 +524,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
                 }}
                 onEdit={(button) => {
                   opener.current = button;
-                  setEditing({ banner });
+                  showSheet({ banner });
                 }}
                 today={data.today}
                 unpublishedLink={
