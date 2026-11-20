@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import { auth } from "@/server/better-auth/config";
@@ -12,8 +12,10 @@ import {
   category,
   comingSoon,
   featuredProduct,
+  page,
   pageCoverBanner,
   pageSection,
+  pageTranslation,
   product,
   productTranslation,
   rankingEntry,
@@ -24,6 +26,7 @@ import {
   user,
 } from "@/server/db/schema";
 import { isComingSoonPublished } from "@/server/services/coming-soon";
+import { findHomePageId } from "@/server/services/page";
 import { theStoreId } from "@/server/test/one-store";
 
 import { SEED_USER, seed } from "./seed";
@@ -70,6 +73,15 @@ async function emptyStore(tx: DatabaseClient, storeId: number) {
   await tx.delete(product).where(eq(product.storeId, storeId));
   await tx.delete(attribute).where(eq(attribute.storeId, storeId));
   await tx.delete(category).where(eq(category.storeId, storeId));
+  // Every page but the home, which the store points at (FER-060).
+  await tx
+    .delete(page)
+    .where(
+      and(
+        eq(page.storeId, storeId),
+        ne(page.id, await findHomePageId(tx, { storeId }))
+      )
+    );
   await tx
     .delete(storeTranslation)
     .where(eq(storeTranslation.storeId, storeId));
@@ -89,11 +101,13 @@ test("leaves one login with its credential, and a second run creates nothing", a
 
     expect(first.createdAccounts).toEqual([SEED_USER.email]);
     expect(first.openedStore).toBe(true);
+    expect(first.examplePage).toBe(true);
     expect(second).toEqual({
       catalogPages: { covers: 0, grouped: 0, groups: 0 },
       createdAccounts: [],
       createdArticles: 0,
       createdStoreTexts: [],
+      examplePage: false,
       home: {
         announcement: false,
         banners: 0,
@@ -430,6 +444,13 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
         "/productos",
       ],
       ["Aros para todos los días", "/seed/earrings-4.jpg", null, "aros"],
+      // The example page's cover (FER-060), seeded after the home.
+      [
+        "Regalos para las fiestas",
+        "/seed/ring-3.jpg",
+        "/seed/ring-3-phone.jpg",
+        "/productos",
+      ],
     ]);
     const titleOf = new Map(
       banners.map((row) => [row.id, row.translations[0]?.title ?? ""])
@@ -476,10 +497,20 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       "pulseras",
       "bijouterie",
     ]);
+    // The home's: the example page has its own (FER-060).
+    const [homeSpotlight] = await tx
+      .select({ id: pageSection.spotlightId })
+      .from(pageSection)
+      .where(
+        and(
+          eq(pageSection.pageId, homePageId),
+          eq(pageSection.kind, "spotlight")
+        )
+      );
     expect(
       await tx.query.spotlight.findMany({
         columns: {},
-        where: eq(spotlight.storeId, storeId),
+        where: eq(spotlight.id, homeSpotlight?.id ?? 0),
         with: {
           product: {
             columns: {},
@@ -531,6 +562,98 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       "Burbujero rosa",
       "Aros perla",
     ]);
+
+    throw new Error(ROLLED_BACK);
+  });
+
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});
+
+test("adds the example page at /regalos: published, off the header, its cover, its spotlight and two rows (FER-060)", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+
+    await runSeed(tx);
+
+    const found = await tx.query.page.findFirst({
+      columns: { isPublished: true, showInHeader: true },
+      where: and(eq(page.storeId, storeId), eq(page.slug, "regalos")),
+      with: {
+        cover: {
+          columns: {},
+          with: {
+            banner: {
+              columns: { imageUrl: true, linkUrl: true },
+              with: {
+                translations: {
+                  columns: { locale: true, title: true },
+                  orderBy: asc(bannerTranslation.locale),
+                },
+              },
+            },
+          },
+        },
+        sections: {
+          columns: { kind: true },
+          orderBy: asc(pageSection.position),
+          with: {
+            category: { columns: { slug: true } },
+            spotlight: {
+              columns: {},
+              with: {
+                product: {
+                  columns: {},
+                  with: {
+                    translations: {
+                      columns: { title: true },
+                      where: eq(productTranslation.locale, "es"),
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        translations: {
+          columns: { locale: true, name: true },
+          orderBy: asc(pageTranslation.locale),
+        },
+      },
+    });
+
+    expect(found).toEqual({
+      cover: [
+        {
+          banner: {
+            imageUrl: "/seed/ring-3.jpg",
+            linkUrl: "/productos",
+            // The enum's order: es, then en.
+            translations: [
+              { locale: "es", title: "Regalos para las fiestas" },
+              { locale: "en", title: "Gifts for the holidays" },
+            ],
+          },
+        },
+      ],
+      isPublished: true,
+      sections: [
+        {
+          category: null,
+          kind: "spotlight",
+          spotlight: {
+            product: { translations: [{ title: "Cadena corazones" }] },
+          },
+        },
+        { category: { slug: "anillos" }, kind: "category", spotlight: null },
+        { category: { slug: "aros" }, kind: "category", spotlight: null },
+      ],
+      showInHeader: false,
+      translations: [
+        { locale: "es", name: "Regalos de Navidad" },
+        { locale: "en", name: "Christmas gifts" },
+      ],
+    });
 
     throw new Error(ROLLED_BACK);
   });

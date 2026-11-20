@@ -19,17 +19,19 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M0 Foundation
 
-| ID                                             | Title                                                 | Priority | Status |
-| ---------------------------------------------- | ----------------------------------------------------- | -------- | ------ |
-| [FER-001](FER-001-bootstrap-from-template.md)  | Bootstrap the repo from the template                  | P0       | done   |
-| [FER-002](FER-002-vercel-neon-blob.md)         | Vercel project, Neon database and Blob storage        | P0       | done   |
-| [FER-003](FER-003-ci-and-previews.md)          | CI, preview deployments and error reporting           | P0       | done   |
-| [FER-004](FER-004-i18n-foundation.md)          | Spanish and English with a toggle                     | P0       | done   |
-| [FER-005](FER-005-design-system.md)            | Storefront design system                              | P0       | done   |
-| [FER-034](FER-034-coming-soon-page.md)         | Coming-soon page, managed from the admin              | P0       | done   |
-| [FER-036](FER-036-slack-apps.md)               | GitHub and Vercel apps post to Slack                  | P2       | todo   |
-| [FER-046](FER-046-e2e-head-metadata-helper.md) | Read a page's head in e2e tests without CSS selectors | P2       | todo   |
-| [FER-047](FER-047-integration-tests-setup.md)  | Integration tests take their rows from `setup()`      | P2       | todo   |
+| ID                                                      | Title                                                            | Priority | Status |
+| ------------------------------------------------------- | ---------------------------------------------------------------- | -------- | ------ |
+| [FER-001](FER-001-bootstrap-from-template.md)           | Bootstrap the repo from the template                             | P0       | done   |
+| [FER-002](FER-002-vercel-neon-blob.md)                  | Vercel project, Neon database and Blob storage                   | P0       | done   |
+| [FER-003](FER-003-ci-and-previews.md)                   | CI, preview deployments and error reporting                      | P0       | done   |
+| [FER-004](FER-004-i18n-foundation.md)                   | Spanish and English with a toggle                                | P0       | done   |
+| [FER-005](FER-005-design-system.md)                     | Storefront design system                                         | P0       | done   |
+| [FER-034](FER-034-coming-soon-page.md)                  | Coming-soon page, managed from the admin                         | P0       | done   |
+| [FER-036](FER-036-slack-apps.md)                        | GitHub and Vercel apps post to Slack                             | P2       | todo   |
+| [FER-046](FER-046-e2e-head-metadata-helper.md)          | Read a page's head in e2e tests without CSS selectors            | P2       | todo   |
+| [FER-047](FER-047-integration-tests-setup.md)           | Integration tests take their rows from `setup()`                 | P2       | todo   |
+| [FER-072](FER-072-two-writer-helper-surfaces-errors.md) | The two-writer test helper reports the second writer's own error | P2       | todo   |
+| [FER-073](FER-073-tests-assert-what-they-claim.md)      | Tests assert what they claim: exact spies, own rows              | P2       | todo   |
 
 ### M1 Brand
 
@@ -56,23 +58,29 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M3 Admin
 
-| ID                                                    | Title                                              | Priority | Status      |
-| ----------------------------------------------------- | -------------------------------------------------- | -------- | ----------- |
-| [FER-013](FER-013-admin-shell.md)                     | Admin shell and sign-in                            | P0       | done        |
-| [FER-035](FER-035-number-input-decimal-separators.md) | Number input that accepts either decimal separator | P0       | done        |
-| [FER-014](FER-014-store-management.md)                | Company settings                                   | P0       | done        |
-| [FER-015](FER-015-user-management.md)                 | User management                                    | P1       | todo        |
-| [FER-016](FER-016-category-management.md)             | Category management                                | P0       | done        |
-| [FER-017](FER-017-article-wizard.md)                  | Article upload wizard                              | P0       | done        |
-| [FER-018](FER-018-ai-autofill.md)                     | Fill the article from its photos with Claude       | P0       | todo        |
-| [FER-019](FER-019-article-list.md)                    | Article list and quick edits                       | P0       | in progress |
-| [FER-020](FER-020-home-curation.md)                   | Home curation: announcement, banners, rows         | P0       | done        |
-| [FER-040](FER-040-admin-redesign.md)                  | Admin redesign                                     | P0       | done        |
-| [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)   | The bottom bar stays above the iPhone keyboard     | P1       | done        |
-| [FER-054](FER-054-article-save-conflicts.md)          | Saving one article from two tabs                   | P2       | todo        |
-| [FER-055](FER-055-photo-grid-swipe.md)                | Swiping over the wizard's photos scrolls           | P2       | todo        |
-| [FER-056](FER-056-list-search-and-filters-race.md)    | A pending search and "Aplicar" can lose each other | P2       | todo        |
-| [FER-057](FER-057-article-list-review-follow-ups.md)  | Follow-ups from the article list's last review     | P1       | todo        |
+| ID                                                     | Title                                                        | Priority | Status      |
+| ------------------------------------------------------ | ------------------------------------------------------------ | -------- | ----------- |
+| [FER-013](FER-013-admin-shell.md)                      | Admin shell and sign-in                                      | P0       | done        |
+| [FER-035](FER-035-number-input-decimal-separators.md)  | Number input that accepts either decimal separator           | P0       | done        |
+| [FER-014](FER-014-store-management.md)                 | Company settings                                             | P0       | done        |
+| [FER-015](FER-015-user-management.md)                  | User management                                              | P1       | todo        |
+| [FER-016](FER-016-category-management.md)              | Category management                                          | P0       | done        |
+| [FER-017](FER-017-article-wizard.md)                   | Article upload wizard                                        | P0       | done        |
+| [FER-018](FER-018-ai-autofill.md)                      | Fill the article from its photos with Claude                 | P0       | todo        |
+| [FER-019](FER-019-article-list.md)                     | Article list and quick edits                                 | P0       | in progress |
+| [FER-020](FER-020-home-curation.md)                    | Home curation: announcement, banners, rows                   | P0       | done        |
+| [FER-040](FER-040-admin-redesign.md)                   | Admin redesign                                               | P0       | done        |
+| [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)    | The bottom bar stays above the iPhone keyboard               | P1       | done        |
+| [FER-054](FER-054-article-save-conflicts.md)           | Saving one article from two tabs                             | P2       | todo        |
+| [FER-055](FER-055-photo-grid-swipe.md)                 | Swiping over the wizard's photos scrolls                     | P2       | todo        |
+| [FER-056](FER-056-list-search-and-filters-race.md)     | A pending search and "Aplicar" can lose each other           | P2       | todo        |
+| [FER-057](FER-057-article-list-review-follow-ups.md)   | Follow-ups from the article list's last review               | P1       | todo        |
+| [FER-064](FER-064-admin-main-landmark-once.md)         | The admin has one main landmark after navigating             | P1       | todo        |
+| [FER-065](FER-065-place-blocks-by-section-key.md)      | A block's place between rows follows the row, not a number   | P2       | todo        |
+| [FER-066](FER-066-page-sequence-limit.md)              | One limit on a page's blocks, on every path that adds one    | P2       | todo        |
+| [FER-067](FER-067-banner-photo-cleanup-race.md)        | A banner photo is never deleted while a save starts using it | P2       | todo        |
+| [FER-068](FER-068-stale-order-save.md)                 | Saving a page's order from an old screen asks first          | P2       | todo        |
+| [FER-071](FER-071-settings-form-follows-newer-read.md) | The store settings form follows a newer read                 | P2       | todo        |
 
 ### M4 Storefront and orders
 
@@ -96,7 +104,9 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-049](FER-049-share-card-blob-photos.md)         | An article's share card draws its uploaded photo  | P1       | todo        |
 | [FER-058](FER-058-pages-built-from-sections.md)      | Pages built from sections: the home is the first  | P0       | done        |
 | [FER-059](FER-059-home-article-spotlight.md)         | An article in the spotlight on the home           | P0       | done        |
-| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin         | P0       | todo        |
+| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin         | P0       | done        |
+| [FER-069](FER-069-unknown-store-address-404.md)      | An unknown store address answers 404              | P1       | todo        |
+| [FER-070](FER-070-home-address-307.md)               | The home's own address answers a 307              | P2       | todo        |
 
 ### M5 Metrics
 

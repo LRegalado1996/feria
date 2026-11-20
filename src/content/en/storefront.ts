@@ -188,6 +188,14 @@ export const storefront: Dictionary["storefront"] = {
     title: "Order {code}",
     total: "Total",
   },
+  // A page of the store built from sections (FER-060).
+  page: {
+    // Its description for search engines when the admin wrote none.
+    description: "{name} at {store}. See the prices and order online.",
+    draft:
+      "Draft: you see it because you are signed in. The public does not see it yet.",
+    empty: "This page shows nothing yet.",
+  },
   price: {
     previous: "Was {price}",
   },

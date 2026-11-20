@@ -16,7 +16,7 @@ const SECTIONS = [
   ["products", "Artículos"],
   ["categories", "Categorías"],
   ["filters", "Filtros"],
-  ["home", "Inicio"],
+  ["pages", "Páginas"],
   ["settings", "Ajustes"],
   ["users", "Usuarios"],
   ["metrics", "Métricas"],

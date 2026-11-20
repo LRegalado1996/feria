@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ORPCError } from "@orpc/client";
 import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import {
   type DeepPartial,
   useForm,
@@ -27,8 +27,10 @@ import {
   type BannerFormOutcome,
 } from "@/app/_components/molecules/banner-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
+import { PageForm } from "@/app/_components/molecules/page-form";
 import {
   PageLayoutEditor,
+  type PageLayoutBlockChoice,
   type PageLayoutEntry,
 } from "@/app/_components/molecules/page-layout-editor";
 import {
@@ -52,6 +54,7 @@ import {
   useSaveAnnouncement,
   useSavePageLayout,
   useUpdateBanner,
+  useUpdatePage,
   useUpdateSpotlight,
 } from "@/lib/hooks/page";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
@@ -628,6 +631,89 @@ function SpotlightsManager({
   );
 }
 
+/** What only the home's editor shows: the store's bar, edited once. */
+function HomeOnly({
+  children,
+  isHome,
+}: {
+  children: ReactNode;
+  isHome: boolean;
+}): ReactNode {
+  return isHome ? children : null;
+}
+
+/**
+ * The blocks a page that is not the home can be given (FER-060): each of
+ * the store's categories' rows and the two curated rows, named as the
+ * order names them; `undefined` for the home, which shows them all.
+ */
+function blocksOf(
+  data: PageCurationData,
+  describeSection: (section: PageSection) => PageLayoutEntry
+): PageLayoutBlockChoice[] | undefined {
+  if (data.page.isHome) {
+    return undefined;
+  }
+
+  const sections: PageSection[] = [
+    { kind: "best_sellers" },
+    { kind: "featured" },
+    ...data.categories.map((row) => ({
+      categoryId: row.id,
+      kind: "category" as const,
+    })),
+  ];
+
+  return sections.map((section) => ({
+    name: describeSection(section).name,
+    section,
+  }));
+}
+
+/**
+ * A page's settings in a card of its editor (FER-060): its names, address,
+ * texts for search engines, status and place in the header, saved on
+ * their own with "Guardar ajustes".
+ */
+function PageSettingsCard({ page }: { page: PageCurationData["page"] }) {
+  const copy = useDictionary().admin.pages.form;
+  const headingId = useId();
+  const updatePage = useUpdatePage();
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+      data-testid="page-settings"
+    >
+      <div className="space-y-1">
+        <h2 className="text-sm font-semibold" id={headingId}>
+          {copy.editTitle}
+        </h2>
+        <p className="text-xs text-muted-foreground">{copy.description}</p>
+      </div>
+      <PageForm
+        key={page.id}
+        onSave={async (values) => {
+          try {
+            await updatePage.mutateAsync({ ...values, id: page.id });
+            toast.success(copy.saved);
+            return "saved";
+          } catch (error) {
+            if (error instanceof ORPCError && error.code === "CONFLICT") {
+              return "taken";
+            }
+
+            reportError(error, { action: "Pages.update_page" });
+            return "failed";
+          }
+        }}
+        page={page}
+      />
+    </section>
+  );
+}
+
 /**
  * The screen once the home is read: the announcement's card, the banners'
  * card with its side sheet, the order's cards and the preview, which reads
@@ -671,7 +757,8 @@ function CurationScreen({ data }: { data: PageCurationData }) {
 
   // The server's page changed under the form (a banner added, moved or
   // deleted from the side sheet): its order becomes the form's defaults,
-  // and an order moved and not saved yet is kept over it, less what is gone.
+  // and an order moved and not saved yet is kept over it, less what is gone
+  // (a block added or taken out and not saved yet included, FER-060).
   // A save in flight owns the form until it settles: a reset now would
   // unlock its lists, and the save's own reset would then undo any move.
   useEffect(() => {
@@ -689,7 +776,12 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         next,
         previous: layoutFieldsOf(previous),
       },
-      new Set(data.articles.map((row) => row.id))
+      {
+        articles: new Set(data.articles.map((row) => row.id)),
+        banners: new Set(data.banners.map((row) => row.id)),
+        categories: new Set(data.categories.map((row) => row.id)),
+        spotlights: new Set(data.spotlights.map((row) => row.id)),
+      }
     );
 
     layoutForm.reset(next);
@@ -945,23 +1037,28 @@ function CurationScreen({ data }: { data: PageCurationData }) {
           {saveLayout.isPending ? copy.layout.pending : copy.layout.submit}
         </Button>
       }
-      title={copy.title}
+      title={textIn({ en: data.page.nameEn, es: data.page.nameEs }, locale)}
     >
-      <p className="text-sm text-muted-foreground">{copy.description}</p>
-      <AnnouncementForm
-        form={announcementForm}
-        onSave={async (values) => {
-          try {
-            await saveAnnouncement.mutateAsync(values);
-            toast.success(copy.announcement.saved);
-            return true;
-          } catch (error) {
-            reportError(error, { action: "Home.save_announcement" });
-            toast.error(copy.announcement.errors.save);
-            return false;
-          }
-        }}
-      />
+      <p className="text-sm text-muted-foreground">
+        {data.page.isHome ? copy.description : admin.pages.description}
+      </p>
+      <PageSettingsCard page={data.page} />
+      <HomeOnly isHome={data.page.isHome}>
+        <AnnouncementForm
+          form={announcementForm}
+          onSave={async (values) => {
+            try {
+              await saveAnnouncement.mutateAsync(values);
+              toast.success(copy.announcement.saved);
+              return true;
+            } catch (error) {
+              reportError(error, { action: "Home.save_announcement" });
+              toast.error(copy.announcement.errors.save);
+              return false;
+            }
+          }}
+        />
+      </HomeOnly>
       <section
         aria-labelledby={`${layoutId}-banners`}
         className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
@@ -1020,6 +1117,7 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         describeSection={describeSection}
       />
       <PageLayoutEditor
+        blocks={blocksOf(data, describeSection)}
         choices={data.articles
           .filter((row) => row.status === "published")
           .map((row) => ({ id: row.id, name: articleName(row.id) }))}
@@ -1142,7 +1240,7 @@ function CurationScreen({ data }: { data: PageCurationData }) {
   );
 }
 
-export interface HomeCurationProps {
+export interface PageEditorProps {
   /** The page the store shows at `/` (FER-058), which the screen edits. */
   pageId: number;
 }
@@ -1154,22 +1252,22 @@ export interface HomeCurationProps {
  * Reads the page with `page.get` (prefetched by the route), shows its
  * skeleton while it comes and a retry when it fails.
  */
-function HomeCuration({ pageId }: HomeCurationProps) {
+function PageEditor({ pageId }: PageEditorProps) {
   const { admin, common } = useDictionary();
   const copy = admin.home;
   const curation = usePageCuration(pageId);
 
   if (curation.data) {
     return (
-      <section data-slot="home-curation" data-testid="home-curation">
+      <section data-slot="page-editor" data-testid="home-curation">
         <CurationScreen data={curation.data} />
       </section>
     );
   }
 
   return (
-    <section data-slot="home-curation" data-testid="home-curation">
-      <AdminPage title={copy.title}>
+    <section data-slot="page-editor" data-testid="home-curation">
+      <AdminPage title={admin.pages.title}>
         {curation.isError ? (
           <div
             className="space-y-3 rounded-lg border bg-card p-4 text-card-foreground"
@@ -1203,4 +1301,4 @@ function HomeCuration({ pageId }: HomeCurationProps) {
   );
 }
 
-export { HomeCuration };
+export { PageEditor };

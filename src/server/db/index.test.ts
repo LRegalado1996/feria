@@ -99,6 +99,7 @@ describe("database client", () => {
         "page",
         "pageCoverBanner",
         "pageSection",
+        "pageTranslation",
         "product",
         "productAttributeValue",
         "productImage",

@@ -6,7 +6,17 @@ import {
   createAnnouncementFormSchema,
   createBannerFormSchema,
   createBannerSchema,
+  createPageFormSchema,
   createPageLayoutFormSchema,
+  createPageSchema,
+  deletePageSchema,
+  isPageSlug,
+  PAGE_NAME_MAX_LENGTH,
+  PAGE_SEO_DESCRIPTION_MAX_LENGTH,
+  PAGE_SEO_TITLE_MAX_LENGTH,
+  type PageFormFields,
+  setHomePageSchema,
+  updatePageSchema,
   createSpotlightFormSchema,
   createSpotlightSchema,
   deleteBannerSchema,
@@ -901,4 +911,169 @@ describe("createSpotlightFormSchema", () => {
       ])
     ).toEqual([expected]);
   });
+});
+
+describe("pages (FER-060)", () => {
+  const MESSAGES = {
+    nameRequired: "name required",
+    nameTooLong: "name too long",
+    seoDescriptionTooLong: "description too long",
+    seoTitleTooLong: "title too long",
+    slugInvalid: "slug invalid",
+  };
+
+  function makePage(overrides: Record<string, unknown> = {}) {
+    return {
+      isPublished: true,
+      nameEn: "",
+      nameEs: " Regalos ",
+      seoDescriptionEn: null,
+      seoDescriptionEs: "  ",
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: false,
+      slug: " regalos ",
+      ...overrides,
+    };
+  }
+
+  function makeFields(overrides: Partial<PageFormFields> = {}): PageFormFields {
+    return {
+      isPublished: false,
+      nameEn: "",
+      nameEs: "Regalos",
+      seoDescriptionEn: "",
+      seoDescriptionEs: "",
+      seoTitleEn: "",
+      seoTitleEs: "",
+      showInHeader: true,
+      slug: " Regalos ",
+      ...overrides,
+    };
+  }
+
+  test.each([
+    ["regalos", true],
+    ["regalos-de-navidad", true],
+    ["a".repeat(80), true],
+    ["a".repeat(81), false],
+    ["Regalos", false],
+    ["regalos-", false],
+    ["regalos de navidad", false],
+    ["", false],
+    // Paths the site answers itself.
+    ["productos", false],
+    ["admin", false],
+    ["en", false],
+    ["cart", false],
+    ["llms", false],
+  ])("isPageSlug(%j) is %s", (slug, expected) => {
+    expect(isPageSlug(slug)).toBe(expected);
+  });
+
+  test("reads a page's values: trimmed, blanks as none", () => {
+    expect(createPageSchema.parse(makePage())).toEqual({
+      isPublished: true,
+      nameEn: null,
+      nameEs: "Regalos",
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: false,
+      slug: "regalos",
+    });
+  });
+
+  test.each([
+    [{ nameEs: "  " }, "nameEs", "A Spanish name is required"],
+    [
+      { nameEs: "a".repeat(PAGE_NAME_MAX_LENGTH + 1) },
+      "nameEs",
+      `Keep the name to ${PAGE_NAME_MAX_LENGTH} characters`,
+    ],
+    [
+      { nameEn: "a".repeat(PAGE_NAME_MAX_LENGTH + 1) },
+      "nameEn",
+      `Keep the name to ${PAGE_NAME_MAX_LENGTH} characters`,
+    ],
+    [
+      { seoTitleEs: "a".repeat(PAGE_SEO_TITLE_MAX_LENGTH + 1) },
+      "seoTitleEs",
+      `Keep the title to ${PAGE_SEO_TITLE_MAX_LENGTH} characters`,
+    ],
+    [
+      { seoDescriptionEn: "a".repeat(PAGE_SEO_DESCRIPTION_MAX_LENGTH + 1) },
+      "seoDescriptionEn",
+      `Keep the description to ${PAGE_SEO_DESCRIPTION_MAX_LENGTH} characters`,
+    ],
+    [
+      { slug: "productos" },
+      "slug",
+      "Enter a free address: lowercase words joined by hyphens",
+    ],
+  ])("refuses %j", (overrides, path, message) => {
+    expect(refusals(createPageSchema.safeParse(makePage(overrides)))).toEqual([
+      [path, message],
+    ]);
+  });
+
+  test.each([
+    [{ nameEs: "a".repeat(PAGE_NAME_MAX_LENGTH) }],
+    [{ seoTitleEn: "a".repeat(PAGE_SEO_TITLE_MAX_LENGTH) }],
+    [{ seoDescriptionEs: "a".repeat(PAGE_SEO_DESCRIPTION_MAX_LENGTH) }],
+  ])("takes %j, at its limit", (overrides) => {
+    expect(createPageSchema.safeParse(makePage(overrides)).success).toBe(true);
+  });
+
+  test("an edit, a deletion and the choice of the home name the page by a positive id", () => {
+    expect(updatePageSchema.parse(makePage({ id: "12" })).id).toBe(12);
+    expect(deletePageSchema.parse({ id: 12 })).toEqual({ id: 12 });
+    expect(setHomePageSchema.parse({ pageId: "12" })).toEqual({ pageId: 12 });
+    expect(setHomePageSchema.safeParse({ pageId: "0" }).success).toBe(false);
+    expect(deletePageSchema.safeParse({ id: -1 }).success).toBe(false);
+  });
+
+  test("the form reads its fields, lowercasing the address, blanks as none", () => {
+    expect(createPageFormSchema(MESSAGES).parse(makeFields())).toEqual({
+      isPublished: false,
+      nameEn: null,
+      nameEs: "Regalos",
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: true,
+      slug: "regalos",
+    });
+  });
+
+  test.each([
+    [{ nameEs: " " }, "nameEs", MESSAGES.nameRequired],
+    [
+      { nameEn: "a".repeat(PAGE_NAME_MAX_LENGTH + 1) },
+      "nameEn",
+      MESSAGES.nameTooLong,
+    ],
+    [
+      { seoTitleEs: "a".repeat(PAGE_SEO_TITLE_MAX_LENGTH + 1) },
+      "seoTitleEs",
+      MESSAGES.seoTitleTooLong,
+    ],
+    [
+      { seoDescriptionEs: "a".repeat(PAGE_SEO_DESCRIPTION_MAX_LENGTH + 1) },
+      "seoDescriptionEs",
+      MESSAGES.seoDescriptionTooLong,
+    ],
+    [{ slug: "cart" }, "slug", MESSAGES.slugInvalid],
+  ])(
+    "the form refuses %j with the screen's words",
+    (overrides, path, message) => {
+      expect(
+        refusals(
+          createPageFormSchema(MESSAGES).safeParse(makeFields(overrides))
+        )
+      ).toEqual([[path, message]]);
+    }
+  );
 });

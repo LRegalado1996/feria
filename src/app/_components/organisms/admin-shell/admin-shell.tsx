@@ -2,7 +2,7 @@ import {
   ChartColumn,
   Folder,
   Funnel,
-  House,
+  Files,
   type LucideIcon,
   Settings,
   ShoppingBag,
@@ -31,7 +31,7 @@ import type { Locale } from "@/lib/i18n/config";
 const SECTION_ICONS = {
   categories: Folder,
   filters: Funnel,
-  home: House,
+  pages: Files,
   metrics: ChartColumn,
   orders: ShoppingBag,
   products: Tag,

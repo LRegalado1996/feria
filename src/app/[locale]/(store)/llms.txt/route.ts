@@ -5,6 +5,7 @@ import { isLocale } from "@/lib/i18n/config";
 import { buildStoreLlms } from "@/lib/seo/llms";
 import { siteOrigin } from "@/lib/seo/origin";
 import { db } from "@/server/db";
+import { listIndexablePages } from "@/server/services/page-settings";
 import {
   findIndexableStore,
   listIndexableArticles,
@@ -43,9 +44,10 @@ export async function GET(_request: Request, { params }: LlmsContext) {
     return notFound();
   }
 
-  const [articles, categories] = await Promise.all([
+  const [articles, categories, pages] = await Promise.all([
     listIndexableArticles(db, { storeId: store.id }),
     listIndexableCategories(db, { locale, storeId: store.id }),
+    listIndexablePages(db, { locale, storeId: store.id }),
   ]);
   const body = buildStoreLlms({
     articles,
@@ -54,6 +56,7 @@ export async function GET(_request: Request, { params }: LlmsContext) {
     currencyCode: store.currencyCode,
     locale,
     origin: siteOrigin(),
+    pages,
     store,
   });
 

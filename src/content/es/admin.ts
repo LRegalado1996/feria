@@ -461,11 +461,14 @@ export const admin = {
       title: "Banners",
     },
     description:
-      "Lo que muestra el inicio de la tienda: el anuncio de arriba, los banners con fotos y el orden de las filas de artículos.",
+      "Lo que muestra la home de la tienda: el anuncio de arriba, los banners con fotos y el orden de las filas de artículos.",
     errors: {
-      load: "No pudimos cargar el inicio.",
+      load: "No pudimos cargar la página.",
     },
     layout: {
+      addBlock: "Agregar bloque",
+      addBlockLabel: "Bloque para agregar",
+      addBlockNone: "No hay más bloques para agregar.",
       add: "Agregar",
       addArticle: "Artículo para agregar",
       bannerRow: "Banner: {title}",
@@ -492,10 +495,11 @@ export const admin = {
       remove: "Quitar: {name}",
       rows: "Filas",
       rowsHint: "Una fila sin artículos para mostrar no aparece en la tienda.",
+      sharedList: "Esta lista es la misma en todas las páginas.",
       saved: "Orden guardado.",
       spotlightRow: "Vidriera: {name}",
       submit: "Guardar orden",
-      title: "Orden del inicio",
+      title: "Orden de la página",
       untitled: "Sin título",
       up: "Subir: {name}",
       warnings: {
@@ -506,8 +510,8 @@ export const admin = {
     },
     preview: {
       coverMore: "Y {count} más en la portada.",
-      empty: "Con lo que elegiste, el inicio todavía no muestra nada.",
-      hint: "Así se ve el inicio con lo que elegiste, antes de guardar: muestra lo que hoy aparece en la tienda.",
+      empty: "Con lo que elegiste, esta página todavía no muestra nada.",
+      hint: "Así se ve esta página con lo que elegiste, antes de guardar: muestra lo que hoy aparece en la tienda.",
       title: "Vista previa",
     },
     spotlightForm: {
@@ -554,7 +558,7 @@ export const admin = {
       deleteTitle: "¿Borrar la vidriera?",
       edit: "Editar vidriera: {name}",
       empty:
-        "Todavía no hay vidrieras. Agregá una para destacar un artículo al bajar por el inicio.",
+        "Todavía no hay vidrieras. Agregá una para destacar un artículo al bajar por la página.",
       errors: {
         delete: "No pudimos borrar la vidriera. Probá de nuevo.",
       },
@@ -568,7 +572,86 @@ export const admin = {
       scheduled: "Programado",
       showing: "Se muestra",
     },
-    title: "Inicio",
+  },
+  pages: {
+    add: "Nueva página",
+    delete: "Borrar: {name}",
+    deleteConfirm: "Borrar",
+    deleted: "Página borrada.",
+    deleteDescription:
+      "Se borra «{name}» con sus bloques. Los banners, las vidrieras y los artículos siguen como están.",
+    deletePending: "Borrando…",
+    deleteTitle: "¿Borrar la página?",
+    description:
+      "Cada página tiene su dirección y se arma con los mismos bloques que la home: portada, filas, banners y vidrieras. La home es la que se ve en «/».",
+    draft: "Borrador",
+    draftCannotBeHome: "Publicala para poder usarla como home.",
+    edit: "Editar: {name}",
+    empty: "Todavía no hay páginas.",
+    errors: {
+      delete: "No pudimos borrar la página. Probá de nuevo.",
+      load: "No pudimos cargar las páginas.",
+      setHome: "No pudimos cambiar la home. Probá de nuevo.",
+    },
+    form: {
+      cancel: "Cancelar",
+      close: "Cerrar",
+      created: "Página creada.",
+      createTitle: "Nueva página",
+      description:
+        "Su nombre, su dirección y cómo la ven los buscadores. Los bloques se agregan después, en su editor.",
+      editTitle: "Ajustes de la página",
+      errors: {
+        nameRequired: "Escribí el nombre.",
+        nameTooLong: "Usá hasta 60 caracteres.",
+        save: "No pudimos guardar la página. Lo que escribiste sigue acá: probá de nuevo.",
+        seoDescriptionTooLong: "Usá hasta 160 caracteres.",
+        seoTitleTooLong: "Usá hasta 70 caracteres.",
+        slugInvalid:
+          "Usá letras minúsculas, números y guiones, y una dirección que la tienda no use.",
+        slugTaken: "Ya hay una página o una categoría en esa dirección.",
+      },
+      fields: {
+        homeNoHeader: "La home no va en el encabezado: el logo ya lleva ahí.",
+        homeStaysPublished:
+          "Es la home: sigue publicada. Para despublicarla, elegí otra home primero.",
+        isPublished: "Publicada",
+        isPublishedHint:
+          "Sin publicar, solo la ves vos, con la sesión iniciada.",
+        nameEn: "Nombre en inglés",
+        nameEs: "Nombre en español",
+        seoDescriptionEn: "Descripción para buscadores en inglés",
+        seoDescriptionEs: "Descripción para buscadores en español",
+        seoHint: "Opcional: si los dejás vacíos, se arman con el nombre.",
+        seoTitleEn: "Título para buscadores en inglés",
+        seoTitleEs: "Título para buscadores en español",
+        showInHeaderHint:
+          "Va después de «Catálogo», antes de las categorías, en la computadora y en el menú del celular.",
+        showInHeader: "Mostrar en el encabezado",
+        slug: "Dirección",
+        slugHint:
+          "La página queda en /{slug}, y en inglés en /en/{slug}. Minúsculas, números y guiones.",
+      },
+      pending: "Guardando…",
+      saved: "Ajustes guardados.",
+      submitCreate: "Crear página",
+      submitEdit: "Guardar ajustes",
+    },
+    homeCannotBeDeleted:
+      "Esta página es la home: elegí otra antes de borrarla.",
+    homeChanged: "«{name}» es la home.",
+    homeMark: "Home",
+    inHeader: "En el encabezado",
+    published: "Publicada",
+    title: "Páginas",
+    useAsHome: "Usar como home",
+    useAsHomeConfirm: "Usar como home",
+    useAsHomeDescription:
+      "La tienda va a mostrar «{name}» en «/». La home de ahora vuelve a su propia dirección.",
+    useAsHomeNamed: "Usar como home: {name}",
+    useAsHomePending: "Cambiando…",
+    useAsHomeTitle: "¿Usar «{name}» como home?",
+    view: "Ver en la tienda: {name}",
   },
   settings: {
     contact: "Contacto y redes",
@@ -634,9 +717,9 @@ export const admin = {
   storeSections: {
     categories: "Categorías",
     filters: "Filtros",
-    home: "Inicio",
     metrics: "Métricas",
     orders: "Pedidos",
+    pages: "Páginas",
     products: "Artículos",
     settings: "Ajustes",
     users: "Usuarios",

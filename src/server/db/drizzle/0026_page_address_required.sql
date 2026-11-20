@@ -1,0 +1,1 @@
+ALTER TABLE "page" ALTER COLUMN "slug" SET NOT NULL;

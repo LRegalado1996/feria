@@ -448,9 +448,12 @@ export const admin: Dictionary["admin"] = {
     description:
       "What the store's home shows: the announcement at the top, the photo banners and the order of the rows of articles.",
     errors: {
-      load: "We couldn't load the home.",
+      load: "We couldn't load the page.",
     },
     layout: {
+      addBlock: "Add block",
+      addBlockLabel: "Block to add",
+      addBlockNone: "No more blocks to add.",
       add: "Add",
       addArticle: "Article to add",
       bannerRow: "Banner: {title}",
@@ -477,10 +480,11 @@ export const admin: Dictionary["admin"] = {
       remove: "Remove: {name}",
       rows: "Rows",
       rowsHint: "A row with no articles to show does not appear in the store.",
+      sharedList: "This list is the same on every page.",
       saved: "Order saved.",
       spotlightRow: "Spotlight: {name}",
       submit: "Save order",
-      title: "Home order",
+      title: "Page order",
       untitled: "Untitled",
       up: "Move up: {name}",
       warnings: {
@@ -491,8 +495,8 @@ export const admin: Dictionary["admin"] = {
     },
     preview: {
       coverMore: "And {count} more in the cover.",
-      empty: "With what you chose, the home shows nothing yet.",
-      hint: "How the home looks with what you chose, before saving: it shows what appears in the store today.",
+      empty: "With what you chose, this page shows nothing yet.",
+      hint: "How this page looks with what you chose, before saving: it shows what appears in the store today.",
       title: "Preview",
     },
     spotlightForm: {
@@ -538,7 +542,7 @@ export const admin: Dictionary["admin"] = {
       deleteTitle: "Delete the spotlight?",
       edit: "Edit spotlight: {name}",
       empty:
-        "No spotlights yet. Add one to feature an article as people scroll the home.",
+        "No spotlights yet. Add one to feature an article as people scroll the page.",
       errors: {
         delete: "We could not delete the spotlight. Try again.",
       },
@@ -552,7 +556,86 @@ export const admin: Dictionary["admin"] = {
       scheduled: "Scheduled",
       showing: "Showing",
     },
-    title: "Home",
+  },
+  pages: {
+    add: "New page",
+    delete: "Delete: {name}",
+    deleteConfirm: "Delete",
+    deleted: "Page deleted.",
+    deleteDescription:
+      "“{name}” is deleted with its blocks. The banners, spotlights and articles stay as they are.",
+    deletePending: "Deleting…",
+    deleteTitle: "Delete the page?",
+    description:
+      "Each page has its own address and is built from the same blocks as the home: cover, rows, banners and spotlights. The home is the one shown at “/”.",
+    draft: "Draft",
+    draftCannotBeHome: "Publish it to use it as the home.",
+    edit: "Edit: {name}",
+    empty: "No pages yet.",
+    errors: {
+      delete: "We could not delete the page. Try again.",
+      load: "We could not load the pages.",
+      setHome: "We could not change the home. Try again.",
+    },
+    form: {
+      cancel: "Cancel",
+      close: "Close",
+      created: "Page created.",
+      createTitle: "New page",
+      description:
+        "Its name, its address and how search engines see it. The blocks come next, in its editor.",
+      editTitle: "Page settings",
+      errors: {
+        nameRequired: "Write the name.",
+        nameTooLong: "Use up to 60 characters.",
+        save: "We could not save the page. What you typed is still here: try again.",
+        seoDescriptionTooLong: "Use up to 160 characters.",
+        seoTitleTooLong: "Use up to 70 characters.",
+        slugInvalid:
+          "Use lowercase letters, numbers and hyphens, and an address the store does not use.",
+        slugTaken: "Another page or a category already has that address.",
+      },
+      fields: {
+        homeNoHeader:
+          "The home does not go in the header: the logo leads there.",
+        homeStaysPublished:
+          "It is the home: it stays published. To unpublish it, choose another home first.",
+        isPublished: "Published",
+        isPublishedHint: "Unpublished, only you see it, signed in.",
+        nameEn: "Name in English",
+        nameEs: "Name in Spanish",
+        seoDescriptionEn: "Description for search engines in English",
+        seoDescriptionEs: "Description for search engines in Spanish",
+        seoHint: "Optional: left empty, they are made from the name.",
+        seoTitleEn: "Title for search engines in English",
+        seoTitleEs: "Title for search engines in Spanish",
+        showInHeaderHint:
+          "It goes after “Catalog”, before the categories, on a computer and in the phone menu.",
+        showInHeader: "Show in the header",
+        slug: "Address",
+        slugHint:
+          "The page is at /{slug}, and in English at /en/{slug}. Lowercase letters, numbers and hyphens.",
+      },
+      pending: "Saving…",
+      saved: "Settings saved.",
+      submitCreate: "Create page",
+      submitEdit: "Save settings",
+    },
+    homeCannotBeDeleted:
+      "This page is the home: choose another one before deleting it.",
+    homeChanged: "“{name}” is the home.",
+    homeMark: "Home",
+    inHeader: "In the header",
+    published: "Published",
+    title: "Pages",
+    useAsHome: "Use as home",
+    useAsHomeConfirm: "Use as home",
+    useAsHomeDescription:
+      "The store will show “{name}” at “/”. The current home goes back to its own address.",
+    useAsHomeNamed: "Use as home: {name}",
+    useAsHomePending: "Changing…",
+    useAsHomeTitle: "Use “{name}” as the home?",
+    view: "See on the store: {name}",
   },
   settings: {
     contact: "Contact and socials",
@@ -618,9 +701,9 @@ export const admin: Dictionary["admin"] = {
   storeSections: {
     categories: "Categories",
     filters: "Filters",
-    home: "Home",
     metrics: "Metrics",
     orders: "Orders",
+    pages: "Pages",
     products: "Articles",
     settings: "Settings",
     users: "Users",

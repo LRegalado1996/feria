@@ -1209,7 +1209,7 @@ async function commitArticles(storeId: number) {
 async function commitPage(storeId: number) {
   const [row] = await db
     .insert(page)
-    .values({ storeId })
+    .values({ slug: `escritores-${uniqueTag()}`, storeId })
     .returning({ id: page.id });
 
   if (!row) {

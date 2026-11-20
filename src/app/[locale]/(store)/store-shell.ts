@@ -9,7 +9,7 @@ import {
 import type { Locale } from "@/lib/i18n/config";
 import { pageHref } from "@/lib/page/content";
 import { readCategories } from "@/server/cache/catalog";
-import { readAnnouncement } from "@/server/cache/page";
+import { readAnnouncement, readHeaderPages } from "@/server/cache/page";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
 
@@ -44,6 +44,35 @@ export async function announcementOf(
 /** A category with the admin's choice of whether the header lists it. */
 type HeaderCategory = NavigationCategory & { showInHeader: boolean };
 
+/**
+ * The header's entries: the published pages the admin shows there
+ * (FER-060), each a link to its address like a category in no group, then
+ * the categories it shows there (FER-051). Pages go first because the
+ * computer's line holds only what fits and has no menu: a category left off
+ * it is still in the catalog's filter, a page would be nowhere. A page's id
+ * is negated, so it never meets a category's in the header's keys.
+ */
+async function headerEntries(
+  store: Pick<PublicStore, "id">,
+  locale: Locale,
+  categories: readonly HeaderCategory[]
+): Promise<HeaderCategory[]> {
+  const pages = await readHeaderPages(store, locale);
+
+  return [
+    ...pages.map((entry) => ({
+      id: -entry.id,
+      lang: entry.lang,
+      name: entry.name,
+      parentId: null,
+      path: entry.path,
+      showInHeader: true,
+      slug: entry.slug,
+    })),
+    ...headerCategories(categories),
+  ];
+}
+
 /** The store, once a request is there: the build has no database. */
 async function readStoreAtRequest() {
   await connection();
@@ -58,7 +87,9 @@ async function categoriesAtRequest(
 ) {
   const store = await read;
 
-  return store ? headerCategories(await readCategories(store, locale)) : [];
+  return store
+    ? await headerEntries(store, locale, await readCategories(store, locale))
+    : [];
 }
 
 /** The bar's words, from the store once it is read. */
@@ -95,7 +126,7 @@ export function streamedShell(locale: Locale): StoreShell {
  * that runs no script (FER-043). A page that read the categories itself, as
  * of now (a catalog page), hands them over instead of the cached list.
  * Either way the header gets only those the admin shows there
- * (`headerCategories`, FER-051).
+ * (`headerCategories`, FER-051), then the pages it shows there (FER-060).
  */
 export async function shellOf(
   store: PublicStore,
@@ -106,7 +137,9 @@ export async function shellOf(
 
   return {
     announcement: Promise.resolve(announcement),
-    categories: headerCategories(
+    categories: await headerEntries(
+      store,
+      locale,
       categories ?? (await readCategories(store, locale))
     ),
   };

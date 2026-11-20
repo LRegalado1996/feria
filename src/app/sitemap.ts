@@ -7,6 +7,7 @@ import { localizePath } from "@/lib/i18n/paths";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/origin";
 import { readComingSoon } from "@/server/cache/coming-soon";
 import { db } from "@/server/db";
+import { listIndexablePages } from "@/server/services/page-settings";
 import {
   findIndexableStore,
   listIndexableArticles,
@@ -38,7 +39,8 @@ function latest(dates: Date[]) {
 
 /**
  * `sitemap.xml` (FER-024): the store's home, the page of all its articles,
- * each group and category page that lists one (FER-043) and every published
+ * each group and category page that lists one (FER-043), every published
+ * page built from sections but the home (FER-060) and every published
  * article, in Spanish and English. Read at request time, so a new article
  * is listed at once and the build needs no database. Empty while the
  * coming-soon page is published (FER-034): every page leads to it then. The
@@ -59,11 +61,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
-  const [articles, categories] = await Promise.all([
+  const [articles, categories, pages] = await Promise.all([
     listIndexableArticles(db, { storeId: store.id }),
     // A page's address is the same in both languages: the names are not
     // listed, so either language reads them.
     listIndexableCategories(db, { locale: DEFAULT_LOCALE, storeId: store.id }),
+    // The home is `/`, listed once as the home; its own address leads there.
+    listIndexablePages(db, { locale: DEFAULT_LOCALE, storeId: store.id }),
   ]);
   const catalogChanged = latest([
     store.updatedAt,
@@ -81,6 +85,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         category.path,
         latest([catalogChanged, category.updatedAt])
       )
+    ),
+    // Every published page built from sections (FER-060), as it changed
+    // with its own settings or the catalog it shows.
+    ...pages.flatMap((entry) =>
+      entries(origin, entry.path, latest([catalogChanged, entry.updatedAt]))
     ),
     ...articles.flatMap((article) =>
       entries(origin, articlePath(article.slug), article.updatedAt)

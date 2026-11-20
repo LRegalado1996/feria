@@ -12,20 +12,49 @@ export interface PageLayoutTargets {
   rowBannerIds: readonly number[];
   /** The article spotlights between the page's rows (FER-059). */
   spotlightIds: readonly number[];
+  /**
+   * The home's rule (FER-020): every category has a row on it and both
+   * curated rows a place, those with none yet added. Off for any other
+   * page (FER-060), which shows the blocks it was given and no more.
+   * Left out, on.
+   */
+  fillIn?: boolean;
+}
+
+/** The ids of what a page's blocks show that the store still holds. */
+interface SectionTargets {
+  banners: ReadonlySet<number>;
+  categories: ReadonlySet<number>;
+  spotlights: ReadonlySet<number>;
+}
+
+/** Whether what `section` shows is still there: a curated row always is. */
+function sectionTargetExists(
+  section: PageSection,
+  { banners, categories, spotlights }: SectionTargets
+): boolean {
+  return (
+    (section.kind === "category" && categories.has(section.categoryId)) ||
+    (section.kind === "banner" && banners.has(section.bannerId)) ||
+    (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
+    section.kind === "best_sellers" ||
+    section.kind === "featured"
+  );
 }
 
 /**
  * A page's sequence under its cover (FER-020, FER-058), whole: the places
- * that were saved, in their order, less any whose category or banner is
- * gone, then what has no place yet. A page that was never saved opens on
- * "best sellers", then "featured", then its categories; a category or a
- * banner added since the last save comes after the rest, in the
- * categories' own order. The admin's screen, its preview and the storefront
+ * that were saved, in their order, less any whose category, banner or
+ * spotlight is gone, then a banner or a spotlight of the page with no place
+ * yet (one added in another tab). On the home (`fillIn`), a page never
+ * saved opens on "best sellers", then "featured", then its categories, and
+ * a category added since the last save comes after the rest, in the
+ * categories' own order; another page holds only what it was given. The admin's screen, its preview and the storefront
  * all read the sequence through here, so the three agree.
  */
 export function resolvePageSections(
   saved: readonly PageSection[],
-  { categoryIds, rowBannerIds, spotlightIds }: PageLayoutTargets
+  { categoryIds, fillIn = true, rowBannerIds, spotlightIds }: PageLayoutTargets
 ): PageSection[] {
   const categories = new Set(categoryIds);
   const banners = new Set(rowBannerIds);
@@ -42,31 +71,26 @@ export function resolvePageSections(
   };
 
   for (const section of saved) {
-    const exists =
-      (section.kind === "category" && categories.has(section.categoryId)) ||
-      (section.kind === "banner" && banners.has(section.bannerId)) ||
-      (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
-      section.kind === "best_sellers" ||
-      section.kind === "featured";
-
-    if (exists) {
+    if (sectionTargetExists(section, { banners, categories, spotlights })) {
       place(section);
     }
   }
 
-  const curated: PageSection[] = [];
+  if (fillIn) {
+    const curated: PageSection[] = [];
 
-  for (const kind of ["best_sellers", "featured"] as const) {
-    if (!placed.has(kind)) {
-      placed.add(kind);
-      curated.push({ kind });
+    for (const kind of ["best_sellers", "featured"] as const) {
+      if (!placed.has(kind)) {
+        placed.add(kind);
+        curated.push({ kind });
+      }
     }
-  }
 
-  sections.unshift(...curated);
+    sections.unshift(...curated);
 
-  for (const categoryId of categoryIds) {
-    place({ categoryId, kind: "category" });
+    for (const categoryId of categoryIds) {
+      place({ categoryId, kind: "category" });
+    }
   }
 
   for (const bannerId of rowBannerIds) {
@@ -127,24 +151,38 @@ function sameOrder<T>(
  * holds it now), drops what the server no longer holds, and places what is
  * new on the server at the server's index. Merging per position instead
  * would keep a deleted banner or list one twice, which the save refuses.
+ * An entry the draft added (a block given to a page, FER-060) stays while
+ * what it shows still `exists` (a category deleted meanwhile would have
+ * every save refused), and one the draft took out stays out: the server
+ * never held the one, and still holds the other only because the draft is
+ * not saved yet.
  */
 export function followServerOrder<T>(
   { draft, next, previous }: OrderVersions<T>,
-  keyOf: (item: T) => string
+  keyOf: (item: T) => string,
+  exists: (item: T) => boolean = () => true
 ): T[] {
   if (sameOrder(draft, previous, keyOf)) {
     return [...next];
   }
 
   const current = new Map(next.map((item) => [keyOf(item), item]));
+  const held = new Set(previous.map(keyOf));
   const drafted = new Set(draft.map(keyOf));
   const merged = draft.flatMap((item): T[] => {
     const fresh = current.get(keyOf(item));
-    return fresh === undefined ? [] : [fresh];
+
+    if (fresh !== undefined) {
+      return [fresh];
+    }
+
+    return held.has(keyOf(item)) || !exists(item) ? [] : [item];
   });
 
   for (const [index, item] of next.entries()) {
-    if (!drafted.has(keyOf(item))) {
+    const key = keyOf(item);
+
+    if (!drafted.has(key) && !held.has(key)) {
       merged.splice(Math.min(index, merged.length), 0, item);
     }
   }
@@ -177,7 +215,8 @@ type LayoutLists = Pick<
  * A page's order form's lists once the server's page changed under it (a
  * banner added, moved or deleted from the side sheet): see
  * `followServerOrder` for the cover and the rows, `followCuratedRow` for
- * the best sellers and the featured articles.
+ * the best sellers and the featured articles. `targets` are what the store
+ * holds now: an entry only the draft has goes once its target is gone.
  */
 export function followServerLayout(
   {
@@ -189,7 +228,12 @@ export function followServerLayout(
     next: LayoutLists;
     previous: LayoutLists;
   },
-  articleIds: ReadonlySet<number>
+  {
+    articles: articleIds,
+    ...targets
+  }: SectionTargets & {
+    articles: ReadonlySet<number>;
+  }
 ): LayoutLists {
   const versions = <K extends keyof LayoutLists>(name: K) => ({
     draft: draft[name],
@@ -198,11 +242,17 @@ export function followServerLayout(
   });
 
   return {
-    cover: followServerOrder(versions("cover"), (row) => String(row.bannerId)),
+    cover: followServerOrder(
+      versions("cover"),
+      (row) => String(row.bannerId),
+      (row) => targets.banners.has(row.bannerId)
+    ),
     featured: followCuratedRow(versions("featured"), articleIds),
     ranking: followCuratedRow(versions("ranking"), articleIds),
-    sections: followServerOrder(versions("sections"), (row) =>
-      pageSectionKey(row.section)
+    sections: followServerOrder(
+      versions("sections"),
+      (row) => pageSectionKey(row.section),
+      (row) => sectionTargetExists(row.section, targets)
     ),
   };
 }

@@ -5,5 +5,6 @@ export const seo = {
     categories: "Categorías",
     catalog: "Catálogo completo",
     otherLanguage: "English version",
+    pages: "Páginas",
   },
 };

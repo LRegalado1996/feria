@@ -33,7 +33,20 @@ const IMAGE = {
 
 const services = vi.hoisted(() => ({
   createBanner: vi.fn(async () => ({ id: 9 })),
+  createPage: vi.fn(async () => ({ id: 12 })),
   createSpotlight: vi.fn(async () => ({ id: 51 })),
+  deletePage: vi.fn(async () => ({ id: 12 })),
+  invalidateHomeChoiceCache:
+    vi.fn<(storeId: number, pageIds: readonly number[]) => void>(),
+  invalidatePageSettingsCache:
+    vi.fn<(storeId: number, pageIds?: readonly number[]) => void>(),
+  listPages: vi.fn(async () => [{ id: 1, slug: "home" }]),
+  setHomePage: vi.fn(async () => ({ homePageId: 12, previousHomeId: 1 })),
+  updatePage: vi.fn(async () => ({
+    id: 12,
+    previousSlug: "regalos",
+    slug: "navidad",
+  })),
   deleteSpotlight: vi.fn(async () => ({ id: 51 })),
   updateSpotlight: vi.fn(async () => ({ id: 51 })),
   deleteBanner: vi.fn(async () => ({ discardedImageUrls: [OLD_PHOTO], id: 9 })),
@@ -71,6 +84,14 @@ vi.mock("@/server/services/page", () => ({
   updateBanner: services.updateBanner,
 }));
 
+vi.mock("@/server/services/page-settings", () => ({
+  createPage: services.createPage,
+  deletePage: services.deletePage,
+  listPages: services.listPages,
+  setHomePage: services.setHomePage,
+  updatePage: services.updatePage,
+}));
+
 // The files' deletion after the response is `blob-store.test.ts`'s.
 vi.mock("@/server/api/utils/blob-store", () => ({
   discardBlobs: services.discardBlobs,
@@ -86,6 +107,8 @@ vi.mock("@/server/services/access", () => ({
 // spied on, the cached reads are `src/server/cache/page.test.ts`'s.
 vi.mock("@/server/cache/page", () => ({
   invalidateAnnouncementCache: services.invalidateAnnouncementCache,
+  invalidateHomeChoiceCache: services.invalidateHomeChoiceCache,
+  invalidatePageSettingsCache: services.invalidatePageSettingsCache,
   invalidatePageCache: services.invalidatePageCache,
   invalidatePagesCache: services.invalidatePagesCache,
 }));
@@ -136,6 +159,21 @@ function makeBannerInput(overrides: Record<string, unknown> = {}) {
     startsOn: null,
     titleEn: null,
     titleEs: "Burbujas",
+    ...overrides,
+  };
+}
+
+function makePageInput(overrides: Record<string, unknown> = {}) {
+  return {
+    isPublished: true,
+    nameEn: "",
+    nameEs: " Regalos ",
+    seoDescriptionEn: "",
+    seoDescriptionEs: "",
+    seoTitleEn: "",
+    seoTitleEs: "",
+    showInHeader: false,
+    slug: "regalos",
     ...overrides,
   };
 }
@@ -395,6 +433,134 @@ describe("page router", () => {
     expect(services.invalidatePagesCache).not.toHaveBeenCalled();
     expect(services.discardBlobs).not.toHaveBeenCalled();
   });
+
+  test("lists the store's pages outside any write", async () => {
+    const { db, run } = setup();
+
+    await expect(run("list", undefined)).resolves.toEqual([
+      { id: 1, slug: "home" },
+    ]);
+    expect(services.listPages).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+    });
+    expect(services.withAdmin).not.toHaveBeenCalled();
+  });
+
+  test("creates a page in the store, trimmed and blanks as none, then drops the pages' settings only", async () => {
+    const { run } = setup();
+
+    await expect(run("create", makePageInput())).resolves.toEqual({ id: 12 });
+
+    expect(services.createPage).toHaveBeenCalledExactlyOnceWith(TX, {
+      storeId: 7,
+      values: makePageInput({
+        nameEn: null,
+        nameEs: "Regalos",
+        seoDescriptionEn: null,
+        seoDescriptionEs: null,
+        seoTitleEn: null,
+        seoTitleEs: null,
+      }),
+    });
+    expect(
+      services.invalidatePageSettingsCache
+    ).toHaveBeenCalledExactlyOnceWith(7, []);
+    expect(services.invalidatePagesCache).not.toHaveBeenCalled();
+  });
+
+  test("edits a page, answering its id and address, then drops its settings and its own read", async () => {
+    const { run } = setup();
+
+    await expect(
+      run("update", makePageInput({ id: 12, slug: "navidad" }))
+    ).resolves.toEqual({ id: 12, slug: "navidad" });
+
+    expect(services.updatePage).toHaveBeenCalledExactlyOnceWith(TX, {
+      storeId: 7,
+      values: expect.objectContaining({ id: 12, slug: "navidad" }),
+    });
+    expect(
+      services.invalidatePageSettingsCache
+    ).toHaveBeenCalledExactlyOnceWith(7, [12]);
+  });
+
+  test("deletes a page of the store, then drops its settings and its own read", async () => {
+    const { run } = setup();
+
+    await expect(run("delete", { id: 12 })).resolves.toEqual({ id: 12 });
+
+    expect(services.deletePage).toHaveBeenCalledExactlyOnceWith(TX, {
+      id: 12,
+      storeId: 7,
+    });
+    expect(
+      services.invalidatePageSettingsCache
+    ).toHaveBeenCalledExactlyOnceWith(7, [12]);
+  });
+
+  test("chooses the home, then drops what `/` shows and both pages involved", async () => {
+    const { run } = setup();
+
+    await expect(run("setHome", { pageId: "12" })).resolves.toEqual({
+      homePageId: 12,
+      previousHomeId: 1,
+    });
+
+    expect(services.setHomePage).toHaveBeenCalledExactlyOnceWith(TX, {
+      pageId: 12,
+      storeId: 7,
+    });
+    expect(services.invalidateHomeChoiceCache).toHaveBeenCalledExactlyOnceWith(
+      7,
+      [1, 12]
+    );
+  });
+
+  test("keeps the pages' cache when a page's write is refused", async () => {
+    const { run } = setup();
+    services.deletePage.mockRejectedValueOnce(new Error("Page is the home"));
+
+    await expect(run("delete", { id: 1 })).rejects.toThrow("Page is the home");
+    expect(services.invalidatePageSettingsCache).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["create", makePageInput({ slug: "Regalos de Navidad" })],
+    ["create", makePageInput({ nameEs: "  " })],
+    ["update", makePageInput({ id: 12, slug: "productos" })],
+    ["setHome", { pageId: "0" }],
+  ] as const)(
+    "%s with input the schema refuses is BAD_REQUEST, before any service",
+    async (name, input) => {
+      const { run } = setup();
+
+      await expect(run(name, input)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      expect(services.withAdmin).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each([
+    ["list", undefined, services.listPages],
+    ["create", makePageInput(), services.createPage],
+    ["update", makePageInput({ id: 12 }), services.updatePage],
+    ["delete", { id: 12 }, services.deletePage],
+    ["setHome", { pageId: 12 }, services.setHomePage],
+  ] as const)(
+    "%s by a login the database no longer has is UNAUTHORIZED, before the service",
+    async (name, input, service) => {
+      const { run } = setup({ isLogin: false });
+
+      await expect(run(name, input)).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      });
+      expect(service).not.toHaveBeenCalled();
+      expect(services.invalidatePageSettingsCache).not.toHaveBeenCalled();
+      expect(services.invalidateHomeChoiceCache).not.toHaveBeenCalled();
+    }
+  );
 
   test.each([
     ["get", { pageId: 3 }, services.getPageCuration],

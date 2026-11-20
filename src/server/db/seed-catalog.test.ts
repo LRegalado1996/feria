@@ -57,8 +57,28 @@ vi.mock("@/server/services/attribute", () => ({
   createAttributeValue,
 }));
 
-function setup({ hasCategories = false } = {}) {
+/** The store's advisory locks and its pages' addresses, as the seed asks. */
+const LOCKS = [
+  {
+    params: ["pages:7"],
+    sql: "select pg_advisory_xact_lock(hashtext($1))",
+  },
+  {
+    params: ["category:7"],
+    sql: "select pg_advisory_xact_lock(hashtext($1))",
+  },
+];
+
+function pageSlugsRead(db: ReturnType<typeof createMockDatabase>) {
+  return db.query.page.findMany.mock.calls.map(([config]) => ({
+    columns: (config as { columns: unknown }).columns,
+    where: renderQuery((config as { where: unknown }).where),
+  }));
+}
+
+function setup({ hasCategories = false, pageSlugs = [] as string[] } = {}) {
   const db = createMockDatabase();
+  db.query.page.findMany.mockResolvedValue(pageSlugs.map((slug) => ({ slug })));
   // Article ids count up from 101 in each test.
   let articleId = 100;
   createProduct.mockImplementation(async () => {
@@ -96,6 +116,34 @@ describe("seedCatalog", () => {
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(createProduct).not.toHaveBeenCalled();
     expect(createAttribute).not.toHaveBeenCalled();
+  });
+
+  test("leaves out the whole catalog when a page holds one of its addresses, reading them under the pages' then the categories' lock", async () => {
+    const { db, run } = setup({ pageSlugs: ["home", "aros"] });
+
+    await expect(run()).resolves.toBe(0);
+    expect(
+      db.$.execute.mock.calls.map(([statement]) => renderQuery(statement))
+    ).toEqual(LOCKS);
+    expect(pageSlugsRead(db)).toEqual([
+      {
+        columns: { slug: true },
+        where: { params: [7], sql: '"page"."storeId" = $1' },
+      },
+    ]);
+    expect(db.$.execute.mock.invocationCallOrder[1] ?? 0).toBeLessThan(
+      db.query.page.findMany.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(createProduct).not.toHaveBeenCalled();
+    expect(createAttribute).not.toHaveBeenCalled();
+  });
+
+  test("a page at an address of its own leaves the catalog to be seeded", async () => {
+    const { db, run } = setup({ pageSlugs: ["home", "regalos"] });
+
+    await expect(run()).resolves.toBe(SEED_ARTICLES.length);
+    expect(db.$.insert).toHaveBeenCalledWith(category);
   });
 
   test("creates the Color filter, then its nine values in order with their swatches", async () => {
@@ -365,13 +413,18 @@ describe("seedCatalogPages", () => {
   function setupPages({
     after,
     before,
+    pageSlugs = [],
     storeCovered = false,
   }: {
     after?: ReturnType<typeof makeRow>[];
     before: ReturnType<typeof makeRow>[];
+    pageSlugs?: string[];
     storeCovered?: boolean;
   }) {
     const db = createMockDatabase();
+    db.query.page.findMany.mockResolvedValue(
+      pageSlugs.map((slug) => ({ slug }))
+    );
     let reads = 0;
     db.$["select.where"].mockImplementation(async () => {
       reads += 1;
@@ -402,18 +455,33 @@ describe("seedCatalogPages", () => {
     makeRow(5, "pulseras"),
   ];
 
-  test("takes the store's category lock before it reads a category", async () => {
+  test("takes the store's pages' then its categories' lock before it reads a page or a category", async () => {
     const { db, run } = setupPages({ before: FLAT });
 
     await run();
 
-    expect(renderQuery(db.$.execute.mock.calls[0]?.[0])).toEqual({
-      params: ["category:7"],
-      sql: "select pg_advisory_xact_lock(hashtext($1))",
-    });
-    expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
-      db.$["select.where"].mock.invocationCallOrder[0] ?? 0
+    expect(
+      db.$.execute.mock.calls.map(([statement]) => renderQuery(statement))
+    ).toEqual(LOCKS);
+    expect(pageSlugsRead(db)).toEqual([
+      {
+        columns: { slug: true },
+        where: { params: [7], sql: '"page"."storeId" = $1' },
+      },
+    ]);
+    expect(db.$.execute.mock.invocationCallOrder[1] ?? 0).toBeLessThan(
+      Math.min(
+        db.$["select.where"].mock.invocationCallOrder[0] ?? 0,
+        db.query.page.findMany.mock.invocationCallOrder[0] ?? 0
+      )
     );
+  });
+
+  test("adds no group at an address a page holds, and so groups no category", async () => {
+    const { db, run } = setupPages({ before: FLAT, pageSlugs: ["bijouterie"] });
+
+    await expect(run()).resolves.toMatchObject({ grouped: 0, groups: 0 });
+    expect(db.$.insert).not.toHaveBeenCalled();
   });
 
   test("gives a catalog seeded before groups its Bijouterie last, its four categories in it and every cover", async () => {

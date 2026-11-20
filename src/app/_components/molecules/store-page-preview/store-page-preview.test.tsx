@@ -106,7 +106,7 @@ describe("StorePagePreview", () => {
     const { preview } = setup();
 
     expect(preview).toHaveTextContent(
-      /^With what you chose, the home shows nothing yet\.$/u
+      /^With what you chose, this page shows nothing yet\.$/u
     );
     expect(screen.queryByTestId("store-announcement-bar")).toBeNull();
   });

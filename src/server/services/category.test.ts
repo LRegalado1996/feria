@@ -344,6 +344,8 @@ describe("createCategory", () => {
     expect(selectWheres()).toEqual([
       { params: [STORE_ID, "es", "Collares"], sql: NAME_FREE_SQL },
       { params: [STORE_ID], sql: STORE_SQL },
+      // The store's pages share the address space (FER-060).
+      { params: [STORE_ID], sql: '"page"."storeId" = $1' },
     ]);
     expect(db.$.insert.mock.calls).toEqual([[category], [categoryTranslation]]);
     expect(db.$["insert.values"].mock.calls).toEqual([
@@ -364,6 +366,23 @@ describe("createCategory", () => {
     expect(db.$.execute.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
       db.$["select.where"].mock.invocationCallOrder[0] ?? 0
     );
+  });
+
+  test("never takes a page's address: pages share `/<slug>` (FER-060)", async () => {
+    const { db } = setup();
+    const answer = db.$["select.where"].getMockImplementation();
+    db.$["select.where"].mockImplementation(async (where: unknown) =>
+      renderQuery(where).sql === '"page"."storeId" = $1'
+        ? await Promise.resolve([{ slug: "collares" }])
+        : await answer?.(where)
+    );
+    db.$["insert.returning"].mockResolvedValue([{ id: 7 }]);
+
+    await create(db);
+
+    expect(db.$["insert.values"].mock.calls[0]).toEqual([
+      { position: 0, slug: "collares-2", storeId: STORE_ID },
+    ]);
   });
 
   test.each([

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   findIndexableStore: vi.fn(),
   listIndexableArticles: vi.fn(),
   listIndexableCategories: vi.fn(),
+  listIndexablePages: vi.fn(),
   readComingSoon: vi.fn(),
 }));
 
@@ -19,6 +20,10 @@ vi.mock("next/server", () => ({ connection: mocks.connection }));
 
 vi.mock("@/server/cache/coming-soon", () => ({
   readComingSoon: mocks.readComingSoon,
+}));
+
+vi.mock("@/server/services/page-settings", () => ({
+  listIndexablePages: mocks.listIndexablePages,
 }));
 
 vi.mock("@/server/services/seo", () => ({
@@ -32,6 +37,7 @@ const STORE_UPDATED = new Date("2026-11-10T10:00:00.000Z");
 const RING_UPDATED = new Date("2026-11-12T10:00:00.000Z");
 const CHAIN_UPDATED = new Date("2026-11-11T10:00:00.000Z");
 const RINGS_PAGE_UPDATED = new Date("2026-11-13T10:00:00.000Z");
+const GIFTS_UPDATED = new Date("2026-11-14T10:00:00.000Z");
 
 /** One page in both languages, as the sitemap lists it. */
 function pair(spanish: string, english: string, lastModified: Date) {
@@ -63,8 +69,14 @@ function setup({
     },
   ],
   launched = true,
+  pages = [
+    { name: "Regalos", path: "/regalos", updatedAt: GIFTS_UPDATED },
+    // Changed before the catalog did: dated by the catalog.
+    { name: "Viejo", path: "/viejo", updatedAt: STORE_UPDATED },
+  ],
   store = { id: 7, updatedAt: STORE_UPDATED },
 }: {
+  pages?: { name: string; path: string; updatedAt: Date }[];
   articles?: { slug: string; updatedAt: Date }[];
   categories?: {
     name: string;
@@ -84,6 +96,7 @@ function setup({
   mocks.findIndexableStore.mockResolvedValue(store);
   mocks.listIndexableArticles.mockResolvedValue(articles);
   mocks.listIndexableCategories.mockResolvedValue(categories);
+  mocks.listIndexablePages.mockResolvedValue(pages);
 }
 
 describe("sitemap", () => {
@@ -102,6 +115,9 @@ describe("sitemap", () => {
         "/en/bijouterie/anillos",
         RINGS_PAGE_UPDATED
       ),
+      // The published pages built from sections but the home (FER-060).
+      ...pair("/regalos", "/en/regalos", GIFTS_UPDATED),
+      ...pair("/viejo", "/en/viejo", RING_UPDATED),
       ...pair(
         "/productos/anillo-sello",
         "/en/productos/anillo-sello",
@@ -118,10 +134,14 @@ describe("sitemap", () => {
       locale: "es",
       storeId: 7,
     });
+    expect(mocks.listIndexablePages).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "es",
+      storeId: 7,
+    });
   });
 
   test("dates the catalog of a store with no articles by the store itself", async () => {
-    setup({ articles: [], categories: [] });
+    setup({ articles: [], categories: [], pages: [] });
 
     await expect(sitemap()).resolves.toEqual([
       ...pair("/", "/en", STORE_UPDATED),

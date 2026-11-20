@@ -180,6 +180,34 @@ describe("followServerOrder", () => {
     ).toEqual(["x", "c", "b", "y", "a", "z"]);
   });
 
+  test("an entry the draft added stays where the draft put it, though the server never held it", () => {
+    expect(
+      followServerOrder(
+        { draft: ["a", "n", "b"], next: ["b", "a"], previous: ["a", "b"] },
+        key
+      )
+    ).toEqual(["a", "n", "b"]);
+  });
+
+  test("an entry the draft added goes once what it shows is gone", () => {
+    expect(
+      followServerOrder(
+        { draft: ["a", "n", "m", "b"], next: ["a", "b"], previous: ["a", "b"] },
+        key,
+        (letter) => letter !== "n"
+      )
+    ).toEqual(["a", "m", "b"]);
+  });
+
+  test("an entry the draft took out stays out, though the server still holds it", () => {
+    expect(
+      followServerOrder(
+        { draft: ["b"], next: ["a", "b", "x"], previous: ["a", "b"] },
+        key
+      )
+    ).toEqual(["b", "x"]);
+  });
+
   test("each entry is the server's own", () => {
     const fresh = { id: "a", title: "new" };
 
@@ -203,6 +231,23 @@ describe("followServerOrder", () => {
 });
 
 describe("followServerLayout", () => {
+  /** What the store holds now: every banner, category and spotlight the lists name. */
+  function makeTargets(
+    articles: number[],
+    {
+      banners = [1, 2, 3, 9],
+      categories = [4],
+      spotlights = [51, 52],
+    }: { banners?: number[]; categories?: number[]; spotlights?: number[] } = {}
+  ) {
+    return {
+      articles: new Set(articles),
+      banners: new Set(banners),
+      categories: new Set(categories),
+      spotlights: new Set(spotlights),
+    };
+  }
+
   function makeLists(
     overrides: Partial<Parameters<typeof followServerLayout>[0]["next"]> = {}
   ) {
@@ -226,7 +271,7 @@ describe("followServerLayout", () => {
     expect(
       followServerLayout(
         { draft: makeLists(), next, previous: makeLists() },
-        new Set([5, 6])
+        makeTargets([5, 6])
       )
     ).toEqual(next);
   });
@@ -251,7 +296,7 @@ describe("followServerLayout", () => {
     expect(
       followServerLayout(
         { draft, next, previous: makeLists() },
-        new Set([5, 6, 7, 8])
+        makeTargets([5, 6, 7, 8])
       ).sections
     ).toEqual([
       { section: makeCategory(4) },
@@ -282,7 +327,7 @@ describe("followServerLayout", () => {
     expect(
       followServerLayout(
         { draft, next, previous: makeLists() },
-        new Set([5, 6, 7, 8])
+        makeTargets([5, 6, 7, 8])
       ).sections
     ).toEqual([
       { section: FEATURED },
@@ -317,7 +362,7 @@ describe("followServerLayout", () => {
     });
 
     expect(
-      followServerLayout({ draft, next, previous }, new Set([5, 6, 7, 8]))
+      followServerLayout({ draft, next, previous }, makeTargets([5, 6, 7, 8]))
         .sections
     ).toEqual([
       { section: makeSpotlight(52) },
@@ -352,7 +397,7 @@ describe("followServerLayout", () => {
 
     const lists = followServerLayout(
       { draft, next, previous: makeLists() },
-      new Set([5, 6, 7, 8])
+      makeTargets([5, 6, 7, 8])
     );
 
     expect(lists.cover).toEqual([{ bannerId: 2 }]);
@@ -365,6 +410,38 @@ describe("followServerLayout", () => {
     ]);
   });
 
+  test("a block only the draft added goes once what it shows is gone, and stays while it is there", () => {
+    const previous = makeLists();
+    const draft = makeLists({
+      cover: [{ bannerId: 1 }, { bannerId: 2 }, { bannerId: 9 }],
+      sections: [
+        ...previous.sections,
+        { section: makeCategory(6) },
+        { section: makeCategory(7) },
+        { section: makeSpotlight(51) },
+        { section: makeSpotlight(52) },
+        { section: makeBanner(8) },
+      ],
+    });
+
+    const lists = followServerLayout(
+      { draft, next: makeLists(), previous },
+      // Category 6, spotlight 52 and banners 8 and 9 deleted meanwhile.
+      makeTargets([5, 6, 7, 8], {
+        banners: [1, 2, 3],
+        categories: [4, 7],
+        spotlights: [51],
+      })
+    );
+
+    expect(lists.cover).toEqual([{ bannerId: 1 }, { bannerId: 2 }]);
+    expect(lists.sections).toEqual([
+      ...previous.sections,
+      { section: makeCategory(7) },
+      { section: makeSpotlight(51) },
+    ]);
+  });
+
   test("a moved curated row keeps its order, less the articles that are gone, and an article taken out stays out", () => {
     const draft = makeLists({
       featured: [{ productId: 6 }, { productId: 5 }],
@@ -373,7 +450,7 @@ describe("followServerLayout", () => {
 
     const lists = followServerLayout(
       { draft, next: makeLists(), previous: makeLists() },
-      new Set([5, 7, 8])
+      makeTargets([5, 7, 8])
     );
 
     expect(lists.featured).toEqual([{ productId: 5 }]);

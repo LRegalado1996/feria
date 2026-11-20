@@ -27,7 +27,7 @@ import {
   spotlight,
   spotlightTranslation,
 } from "./page";
-import { page, store, storeTranslation } from "./store";
+import { page, pageTranslation, store, storeTranslation } from "./store";
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -263,7 +263,18 @@ export const pageRelations = relations(page, ({ many, one }) => ({
   cover: many(pageCoverBanner),
   sections: many(pageSection),
   store: one(store, { fields: [page.storeId], references: [store.id] }),
+  translations: many(pageTranslation),
 }));
+
+export const pageTranslationRelations = relations(
+  pageTranslation,
+  ({ one }) => ({
+    page: one(page, {
+      fields: [pageTranslation.pageId],
+      references: [page.id],
+    }),
+  })
+);
 
 export const pageSectionRelations = relations(pageSection, ({ one }) => ({
   banner: one(banner, {

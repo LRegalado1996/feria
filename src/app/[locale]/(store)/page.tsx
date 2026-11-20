@@ -6,7 +6,7 @@ import { JsonLd } from "@/app/_components/atoms/json-ld";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreHome } from "@/app/_components/organisms/store-home";
 import { getDictionary } from "@/content";
-import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
@@ -16,16 +16,20 @@ import type { PageContent } from "@/lib/page/content";
 import { absoluteUrl } from "@/lib/seo/origin";
 import { storeMetadata } from "@/lib/seo/store-metadata";
 import {
-  itemList,
   STORE_LOGO_PATH,
   storeOrganization,
   webSite,
 } from "@/lib/seo/structured-data";
-import { readHomePageId, readPageContent } from "@/server/cache/page";
+import {
+  readHomePage,
+  readHomePageId,
+  readPageContent,
+} from "@/server/cache/page";
 import { readStore } from "@/server/cache/store";
 import type { ProductCard } from "@/server/services/catalog";
 import type { PublicStore } from "@/server/services/store";
 
+import { sectionLists } from "./section-lists";
 import { StorePageFooter } from "./store-page-footer";
 import { shellOf } from "./store-shell";
 
@@ -55,12 +59,25 @@ export async function generateMetadata({
     return {};
   }
 
+  // The page the store chose as its home may have texts of its own for
+  // search engines (FER-060); without them, the store's.
+  const home = await readHomePage(store, locale);
+  const shared = storeMetadata(store, locale);
+
   return {
-    ...storeMetadata(store, locale),
+    ...shared,
     alternates: buildAlternates("/", locale),
-    description: pickTranslation(store.translations, locale)?.description,
+    description:
+      home?.seoDescription ??
+      pickTranslation(store.translations, locale)?.description,
+    // A share card says what search engines read when the home has its own
+    // words, as any page's does; else the store's tagline.
+    openGraph:
+      home?.seoDescription == null
+        ? shared.openGraph
+        : { ...shared.openGraph, description: home.seoDescription },
     // The home is the store itself: no "· Store" after its own name.
-    title: { absolute: store.name },
+    title: { absolute: home?.seoTitle ?? store.name },
   };
 }
 
@@ -74,7 +91,6 @@ function homeStructuredData(
   content: PageContent<ProductCard>,
   locale: Locale
 ) {
-  const { storefront } = getDictionary(locale);
   const home = absoluteUrl(localizePath("/", locale));
 
   return [
@@ -86,49 +102,7 @@ function homeStructuredData(
       tiktokUrl: store.tiktokUrl,
       url: home,
     }),
-    ...content.sections.flatMap((section) => {
-      if (section.kind === "banner") {
-        return [];
-      }
-
-      // An article in the spotlight (FER-059): a list of one, named by its
-      // heading on the page, the article's name.
-      if (section.kind === "spotlight") {
-        const { article } = section.spotlight;
-
-        return [
-          itemList({
-            items: [
-              {
-                name: article.title,
-                url: absoluteUrl(
-                  localizePath(articlePath(article.slug), locale)
-                ),
-              },
-            ],
-            name: article.title,
-          }),
-        ];
-      }
-
-      const names = {
-        best_sellers: storefront.home.bestSellers,
-        featured: storefront.home.featured,
-      };
-
-      return [
-        itemList({
-          items: section.articles.map((article) => ({
-            name: article.title,
-            url: absoluteUrl(localizePath(articlePath(article.slug), locale)),
-          })),
-          name:
-            section.kind === "category"
-              ? section.category.name
-              : names[section.kind],
-        }),
-      ];
-    }),
+    ...sectionLists(content, locale),
   ];
 }
 

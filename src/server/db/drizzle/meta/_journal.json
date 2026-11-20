@@ -169,6 +169,27 @@
       "when": 1795140987757,
       "tag": "0023_article_spotlight",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795143441604,
+      "tag": "0024_pages_from_the_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795143454114,
+      "tag": "0025_name_the_home_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795143455152,
+      "tag": "0026_page_address_required",
+      "breakpoints": true
     }
   ]
 }

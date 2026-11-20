@@ -207,6 +207,7 @@ export function previewPageContent(
     sections: composePageSections(
       resolvePageSections(drafts.layout.sections, {
         categoryIds: data.categories.map((entry) => entry.id),
+        fillIn: data.page.isHome,
         rowBannerIds: [...rowBanners.keys()],
         spotlightIds: data.spotlights.flatMap((entry) =>
           entry.onPage ? [entry.id] : []
