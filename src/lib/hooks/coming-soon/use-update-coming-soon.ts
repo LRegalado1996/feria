@@ -7,7 +7,9 @@ import { comingSoonKey } from "./use-coming-soon";
 /**
  * Saves the coming-soon page's texts and day (FER-034). The page the server
  * answers becomes the screen's copy at once, so what it shows next is what
- * was stored (a text trimmed, a blank one gone), with no second read.
+ * was stored (a text trimmed, a blank one gone), with no second read. A save
+ * never touches the switch, so its answer's switch is never taken over the
+ * screen's: a flip that landed while the save travelled stays.
  */
 export function useUpdateComingSoon() {
   const queryClient = useQueryClient();
@@ -20,7 +22,9 @@ export function useUpdateComingSoon() {
       // A read still on its way was answered before the save: landing
       // later, it would put the old texts back on the screen.
       await queryClient.cancelQueries({ queryKey: comingSoonKey() });
-      queryClient.setQueryData(comingSoonKey(), saved);
+      queryClient.setQueryData(comingSoonKey(), (page) =>
+        page ? { ...saved, published: page.published } : saved
+      );
     },
   });
 }
