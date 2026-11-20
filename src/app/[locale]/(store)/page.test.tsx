@@ -2,9 +2,9 @@ import { render, screen } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
-import type { StoreHomeArticle } from "@/app/_components/molecules/store-home-sections";
-import type { HomeContent } from "@/lib/home/content";
+import type { StorePageArticle } from "@/app/_components/molecules/store-page-sections";
 import type { Locale } from "@/lib/i18n/config";
+import type { PageContent } from "@/lib/page/content";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 import { DICTIONARIES } from "@/test/i18n";
@@ -16,19 +16,23 @@ const {
   connection,
   frameProps,
   homeProps,
-  readHomeContent,
+  readHomePageId,
+  readPageContent,
   readStore,
   shellOf,
 } = vi.hoisted(() => ({
   connection: vi.fn(async () => undefined),
   frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
   homeProps: vi.fn<(props: Record<string, unknown>) => void>(),
-  readHomeContent:
+  // The store's home is its page 12 (FER-058), not its id (7).
+  readHomePageId: vi.fn(async (_store: unknown) => 12),
+  readPageContent:
     vi.fn<
       (
         store: unknown,
+        pageId: number,
         locale: string
-      ) => Promise<HomeContent<StoreHomeArticle & { categorySlug: string }>>
+      ) => Promise<PageContent<StorePageArticle & { categorySlug: string }>>
     >(),
   readStore: vi.fn<() => Promise<PublicStore | null>>(),
   shellOf: vi.fn((store: { name: string }, locale: string) => ({
@@ -57,7 +61,7 @@ vi.mock("next/server", () => ({ connection }));
 
 // The cached read has its own tests; here it answers what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore }));
-vi.mock("@/server/cache/home", () => ({ readHomeContent }));
+vi.mock("@/server/cache/page", () => ({ readHomePageId, readPageContent }));
 
 // The home has its own tests; here it records what the page handed it.
 vi.mock("@/app/_components/organisms/store-home", () => ({
@@ -124,8 +128,7 @@ function makeCard(slug: string, title: string) {
   };
 }
 
-const CONTENT: HomeContent<ReturnType<typeof makeCard>> = {
-  announcement: null,
+const CONTENT: PageContent<ReturnType<typeof makeCard>> = {
   cover: [],
   sections: [
     {
@@ -170,7 +173,7 @@ async function setup({
   store?: PublicStore | null;
 } = {}) {
   readStore.mockResolvedValue(store);
-  readHomeContent.mockResolvedValue(content);
+  readPageContent.mockResolvedValue(content);
 
   const page = await StoreHomePage({ params: makeParams(locale) });
   render(page);
@@ -192,8 +195,11 @@ describe("StoreHomePage", () => {
       const { home } = await setup({ locale });
 
       expect(home.tagName).toBe("MAIN");
-      expect(readHomeContent).toHaveBeenCalledExactlyOnceWith(
+      // The page the store chose as its home, in the visitor's language.
+      expect(readHomePageId).toHaveBeenCalledExactlyOnceWith(makeStore());
+      expect(readPageContent).toHaveBeenCalledExactlyOnceWith(
         makeStore(),
+        12,
         locale
       );
       expect(homeProps).toHaveBeenCalledExactlyOnceWith({
@@ -326,7 +332,7 @@ describe("StoreHomePage", () => {
   );
 
   test("a home with nothing to show tells search engines only about the site and the store", async () => {
-    await setup({ content: { announcement: null, cover: [], sections: [] } });
+    await setup({ content: { cover: [], sections: [] } });
 
     expect(structuredData()).toEqual([
       expect.objectContaining({ "@type": "WebSite" }),
@@ -336,7 +342,7 @@ describe("StoreHomePage", () => {
 
   test("waits for a request before reading the store, so the build needs no database", async () => {
     readStore.mockResolvedValue(makeStore());
-    readHomeContent.mockResolvedValue(CONTENT);
+    readPageContent.mockResolvedValue(CONTENT);
     const request = holdRequest(connection);
 
     const page = StoreHomePage({ params: makeParams("es") });
@@ -344,7 +350,8 @@ describe("StoreHomePage", () => {
 
     expect(connection).toHaveBeenCalledExactlyOnceWith();
     expect(readStore).not.toHaveBeenCalled();
-    expect(readHomeContent).not.toHaveBeenCalled();
+    expect(readHomePageId).not.toHaveBeenCalled();
+    expect(readPageContent).not.toHaveBeenCalled();
 
     request.arrive();
     render(await page);
@@ -360,7 +367,8 @@ describe("StoreHomePage", () => {
       StoreHomePage({ params: makeParams("es") })
     ).rejects.toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
     expect(shellOf).not.toHaveBeenCalled();
-    expect(readHomeContent).not.toHaveBeenCalled();
+    expect(readHomePageId).not.toHaveBeenCalled();
+    expect(readPageContent).not.toHaveBeenCalled();
   });
 
   test("answers 404 for a language the product does not speak, before any read", async () => {

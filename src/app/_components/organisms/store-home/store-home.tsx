@@ -1,21 +1,21 @@
 import { StoreCoverCarousel } from "@/app/_components/molecules/store-cover-carousel";
 import {
-  type StoreHomeArticle,
-  StoreHomeSections,
-} from "@/app/_components/molecules/store-home-sections";
+  type StorePageArticle,
+  StorePageSections,
+} from "@/app/_components/molecules/store-page-sections";
 import {
   StoreIntro,
   type StoreIntroProps,
 } from "@/app/_components/organisms/store-intro";
 import type { Dictionary } from "@/content";
-import { type HomeContent, homeHref } from "@/lib/home/content";
 import type { Locale } from "@/lib/i18n/config";
+import { type PageContent, pageHref } from "@/lib/page/content";
 
 export interface StoreHomeProps {
   /** The way into the catalog, for a home with nothing else to show. */
   browse: StoreIntroProps["browse"];
   /** What the home shows now (FER-020's read), already filtered. */
-  content: Pick<HomeContent<StoreHomeArticle>, "cover" | "sections">;
+  content: Pick<PageContent<StorePageArticle>, "cover" | "sections">;
   copy: Dictionary["storefront"];
   locale: Locale;
   /** The store's name: the page's `h1`. */
@@ -76,7 +76,7 @@ function StoreHome({
         <div data-testid="store-home-cover">
           <StoreCoverCarousel
             banners={content.cover.map((banner) => ({
-              href: banner.href === null ? null : homeHref(banner.href, locale),
+              href: banner.href === null ? null : pageHref(banner.href, locale),
               id: String(banner.id),
               image: banner.image,
               lang: banner.lang,
@@ -88,7 +88,7 @@ function StoreHome({
           />
         </div>
       ) : null}
-      <StoreHomeSections
+      <StorePageSections
         afterBanner={hasCover}
         copy={copy}
         leading={!hasCover}

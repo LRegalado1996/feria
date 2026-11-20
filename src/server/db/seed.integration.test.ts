@@ -12,7 +12,8 @@ import {
   category,
   comingSoon,
   featuredProduct,
-  homeSection,
+  pageCoverBanner,
+  pageSection,
   product,
   productTranslation,
   rankingEntry,
@@ -48,12 +49,20 @@ async function runSeed(tx: DatabaseClient) {
  * The store as a fresh database has it: no texts, no catalog, no home
  * curation (FER-020) and no coming-soon page (so closed, FER-034).
  * Articles first, since a category that still has one cannot be deleted;
- * they take the curated rows with them. The home's sequence goes whole, its
- * curated places included: the seed keeps one it finds.
+ * they take the curated rows with them, and the banners their places in a
+ * page's cover. The home page's sequence goes whole, its curated places
+ * included: the seed keeps one it finds there.
  */
 async function emptyStore(tx: DatabaseClient, storeId: number) {
   await tx.delete(announcement).where(eq(announcement.storeId, storeId));
-  await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
+  // Only the home page's sequence: the seed reads no other page's.
+  const [own] = await tx
+    .select({ homePageId: store.homePageId })
+    .from(store)
+    .where(eq(store.id, storeId));
+  await tx
+    .delete(pageSection)
+    .where(eq(pageSection.pageId, own?.homePageId ?? 0));
   await tx.delete(banner).where(eq(banner.storeId, storeId));
   await tx.delete(comingSoon).where(eq(comingSoon.storeId, storeId));
   await tx.delete(product).where(eq(product.storeId, storeId));
@@ -364,14 +373,12 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
     });
     const banners = await tx.query.banner.findMany({
       columns: {
-        coverPosition: true,
         id: true,
         imagePhoneUrl: true,
         imageUrl: true,
         linkUrl: true,
-        placement: true,
       },
-      orderBy: [asc(banner.coverPosition), asc(banner.id)],
+      orderBy: [asc(banner.id)],
       where: eq(banner.storeId, storeId),
       with: {
         linkCategory: { columns: { slug: true } },
@@ -383,8 +390,6 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
     });
     expect(
       banners.map((row) => [
-        row.placement,
-        row.coverPosition,
         row.translations[0]?.title,
         row.imageUrl,
         row.imagePhoneUrl,
@@ -392,53 +397,54 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       ])
     ).toEqual([
       [
-        "cover",
-        0,
         "Burbujeros para toda la familia",
         "/seed/bubble-gun-2.jpg",
         "/seed/bubble-gun-2-phone.jpg",
         "burbujeros",
       ],
       [
-        "cover",
-        1,
         "Joyas para regalar en las fiestas",
         "/seed/ring-3.jpg",
         "/seed/ring-3-phone.jpg",
         "bijouterie",
       ],
       [
-        "cover",
-        2,
         "Cadenas que brillan",
         "/seed/necklace-4.jpg",
         "/seed/necklace-4-phone.jpg",
         "cadenas",
       ],
       [
-        "rows",
-        null,
         "Encontranos en la feria",
         "/seed/bubbles-1.jpg",
         "/seed/bubbles-1-phone.jpg",
         "/productos",
       ],
-      [
-        "rows",
-        null,
-        "Aros para todos los días",
-        "/seed/earrings-4.jpg",
-        null,
-        "aros",
-      ],
+      ["Aros para todos los días", "/seed/earrings-4.jpg", null, "aros"],
     ]);
     const titleOf = new Map(
       banners.map((row) => [row.id, row.translations[0]?.title ?? ""])
     );
-    const sections = await tx.query.homeSection.findMany({
+    // Placed on the store's home page (FER-058): three in its cover, in
+    // order, two between its rows.
+    const [{ homePageId } = { homePageId: 0 }] = await tx
+      .select({ homePageId: store.homePageId })
+      .from(store)
+      .where(eq(store.id, storeId));
+    const cover = await tx.query.pageCoverBanner.findMany({
+      columns: { bannerId: true },
+      orderBy: asc(pageCoverBanner.position),
+      where: eq(pageCoverBanner.pageId, homePageId),
+    });
+    expect(cover.map((row) => titleOf.get(row.bannerId))).toEqual([
+      "Burbujeros para toda la familia",
+      "Joyas para regalar en las fiestas",
+      "Cadenas que brillan",
+    ]);
+    const sections = await tx.query.pageSection.findMany({
       columns: { bannerId: true, kind: true },
-      orderBy: asc(homeSection.position),
-      where: eq(homeSection.storeId, storeId),
+      orderBy: asc(pageSection.position),
+      where: eq(pageSection.pageId, homePageId),
       with: { category: { columns: { slug: true } } },
     });
     expect(
@@ -474,6 +480,55 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       "Anillo sello",
       "Burbujero rosa",
       "Aros perla",
+    ]);
+
+    throw new Error(ROLLED_BACK);
+  });
+
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});
+
+test("places the banners it adds between rows after an order the home page already has", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+    const [{ homePageId } = { homePageId: 0 }] = await tx
+      .select({ homePageId: store.homePageId })
+      .from(store)
+      .where(eq(store.id, storeId));
+    // An order saved with no banner: the curated rows, featured first.
+    await tx.insert(pageSection).values([
+      { kind: "featured", pageId: homePageId, position: 0, storeId },
+      { kind: "best_sellers", pageId: homePageId, position: 4, storeId },
+    ]);
+
+    expect((await runSeed(tx)).home.banners).toBe(5);
+    const sections = await tx.query.pageSection.findMany({
+      columns: { kind: true, position: true },
+      orderBy: asc(pageSection.position),
+      where: eq(pageSection.pageId, homePageId),
+      with: {
+        banner: {
+          columns: {},
+          with: {
+            translations: {
+              columns: { title: true },
+              where: eq(bannerTranslation.locale, "es"),
+            },
+          },
+        },
+      },
+    });
+    expect(
+      sections.map((row) => [
+        row.position,
+        row.banner?.translations[0]?.title ?? row.kind,
+      ])
+    ).toEqual([
+      [0, "featured"],
+      [4, "best_sellers"],
+      [5, "Encontranos en la feria"],
+      [6, "Aros para todos los días"],
     ]);
 
     throw new Error(ROLLED_BACK);

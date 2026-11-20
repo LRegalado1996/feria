@@ -130,7 +130,7 @@ test.describe("Home curation", () => {
 
     await row.getByRole("button", { name: `Borrar banner: ${title}` }).click();
     const dialog = page.getByRole("dialog", { name: "¿Borrar el banner?" });
-    await completeRpcAction(page, "/api/orpc/home/deleteBanner", async () => {
+    await completeRpcAction(page, "/api/orpc/page/deleteBanner", async () => {
       await dialog.getByRole("button", { exact: true, name: "Borrar" }).click();
     });
     await expect(page.getByText("Banner borrado.")).toBeVisible();

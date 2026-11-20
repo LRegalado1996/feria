@@ -2,9 +2,9 @@ import { screen, within } from "@testing-library/react";
 import useEmblaCarousel from "embla-carousel-react";
 import { describe, expect, test, vi } from "vitest";
 
-import type { StoreHomeArticle } from "@/app/_components/molecules/store-home-sections";
-import type { HomeBanner, HomeContentSection } from "@/lib/home/content";
+import type { StorePageArticle } from "@/app/_components/molecules/store-page-sections";
 import type { Locale } from "@/lib/i18n/config";
+import type { PageBanner, PageContentSection } from "@/lib/page/content";
 import { createFakeEmbla } from "@/test/embla";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { stubReducedMotion } from "@/test/reduced-motion";
@@ -15,7 +15,7 @@ import { StoreHome, type StoreHomeProps } from "./store-home";
 // The carousels measure a layout happy-dom does not have.
 vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
 
-function makeBanner(overrides: Partial<HomeBanner> = {}): HomeBanner {
+function makeBanner(overrides: Partial<PageBanner> = {}): PageBanner {
   return {
     ctaLabel: null,
     href: "/burbujeros",
@@ -32,7 +32,7 @@ function makeBanner(overrides: Partial<HomeBanner> = {}): HomeBanner {
   };
 }
 
-const ROW: HomeContentSection<StoreHomeArticle> = {
+const ROW: PageContentSection<StorePageArticle> = {
   articles: [
     {
       cover: null,
@@ -108,7 +108,7 @@ describe("StoreHome", () => {
     expect(view).toHaveAttribute("data-kind", "sections");
     expect(
       required(cover()).compareDocumentPosition(
-        screen.getByTestId("store-home-section")
+        screen.getByTestId("store-page-section")
       )
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
@@ -203,7 +203,7 @@ describe("StoreHome", () => {
       },
     });
 
-    expect(screen.getByTestId("store-home-section")).toHaveClass("mt-2.5");
+    expect(screen.getByTestId("store-page-section")).toHaveClass("mt-2.5");
   });
 
   test.each([
@@ -229,7 +229,7 @@ describe("StoreHome", () => {
       expect(
         screen.getByRole("link", { name: "Ver el catálogo" })
       ).toHaveAttribute("href", "/productos");
-      expect(screen.queryByTestId("store-home-section")).toBeNull();
+      expect(screen.queryByTestId("store-page-section")).toBeNull();
     }
   );
 

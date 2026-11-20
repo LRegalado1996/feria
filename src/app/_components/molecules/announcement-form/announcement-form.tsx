@@ -18,7 +18,7 @@ import { useDictionary } from "@/lib/hooks/i18n";
 import type {
   AnnouncementFormFields,
   SaveAnnouncementValues,
-} from "@/lib/schemas/home";
+} from "@/lib/schemas/page";
 import { cn } from "@/lib/utils";
 
 /** The announcement as `home.get` reads it, or `null` before it exists. */

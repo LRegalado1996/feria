@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import type { HomeAnnouncement } from "@/lib/home/content";
+import type { ShownAnnouncement } from "@/lib/page/content";
 import type { PublicStore } from "@/server/services/store";
 import { holdRequest, settle } from "@/test/connection";
 
@@ -45,7 +45,7 @@ vi.mock("@/server/cache/store", () => ({ readStore }));
 
 vi.mock("@/server/cache/catalog", () => ({ readCategories }));
 
-vi.mock("@/server/cache/home", () => ({ readAnnouncement }));
+vi.mock("@/server/cache/page", () => ({ readAnnouncement }));
 
 const SPANISH = {
   description: "Anillos y cadenas.",
@@ -68,8 +68,8 @@ function makeStore(overrides: Partial<PublicStore> = {}): PublicStore {
 
 /** The announcement the cached read answers, in its own words. */
 function makeAnnouncement(
-  overrides: Partial<HomeAnnouncement> = {}
-): HomeAnnouncement {
+  overrides: Partial<ShownAnnouncement> = {}
+): ShownAnnouncement {
   return {
     href: "/productos",
     lang: "es",
@@ -90,7 +90,7 @@ function setup({
   held = false,
   missing = false,
 }: {
-  announcement?: HomeAnnouncement | null;
+  announcement?: ShownAnnouncement | null;
   held?: boolean;
   missing?: boolean;
 } = {}) {
@@ -233,9 +233,9 @@ describe("shellOf", () => {
 
   test("does not answer before its announcement is read, then hands that announcement", async () => {
     const { store } = setup();
-    let answer: (value: HomeAnnouncement) => void = () => undefined;
+    let answer: (value: ShownAnnouncement) => void = () => undefined;
     readAnnouncement.mockReturnValueOnce(
-      new Promise<HomeAnnouncement>((resolve) => {
+      new Promise<ShownAnnouncement>((resolve) => {
         answer = resolve;
       })
     );

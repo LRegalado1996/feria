@@ -1,6 +1,6 @@
 import type { Locator } from "@playwright/test";
 
-import type { HomeSection } from "../../../lib/schemas/home";
+import type { PageSection } from "../../../lib/schemas/page";
 import {
   expect,
   IGNORE_HTTPS_ERRORS,
@@ -40,7 +40,7 @@ const PHOTOS = {
 };
 
 /** Whether two places of the home's sequence are the same place. */
-function samePlace(a: HomeSection, b: HomeSection): boolean {
+function samePlace(a: PageSection, b: PageSection): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
@@ -116,7 +116,7 @@ async function curateHome(db: DbFixture["db"], homeEdit: HomeEdit) {
     titleEs: titles.between,
   });
   const before = await homeEdit.read();
-  const mine: HomeSection[] = [
+  const mine: PageSection[] = [
     { categoryId: shelf.id, kind: "category" },
     { bannerId: between.id, kind: "banner" },
     { kind: "best_sellers" },

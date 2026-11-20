@@ -1,1 +1,1 @@
-export { HomeCuration } from "./home-curation";
+export { HomeCuration, type HomeCurationProps } from "./home-curation";

@@ -1,5 +1,9 @@
 import { invalidateCatalogCache } from "@/server/cache/catalog";
-import { invalidateHomeCache } from "@/server/cache/home";
+import {
+  invalidateAnnouncementCache,
+  invalidatePageCache,
+  invalidatePagesCache,
+} from "@/server/cache/page";
 import type { DatabaseClient } from "@/server/db";
 import { withAdmin } from "@/server/services/access";
 
@@ -49,17 +53,51 @@ export async function writeToCatalog<T>(
 }
 
 /**
- * `writeToStore` for a write to the home's curation (FER-020): the
- * announcement, a banner, the home's order. Once it committed, the store's
- * cached announcement and home are dropped, so the storefront shows it on
- * the next visit.
+ * `writeToStore` for a write to what the store's pages may show (FER-020,
+ * FER-058): a banner, which any page may place. Once it committed, every
+ * cached page is dropped, so the storefront shows it on the next visit.
  */
-export async function writeToHome<T>(
+export async function writeToPages<T>(
   context: StoreWriteContext,
   write: (tx: DatabaseClient, storeId: number) => Promise<T>
 ): Promise<T> {
   const result = await writeToStore(context, write);
-  invalidateHomeCache(context.store.id);
+  invalidatePagesCache(context.store.id);
+
+  return result;
+}
+
+/**
+ * `writeToStore` for a write to one page's order (FER-058). Once it
+ * committed, that page's cached read is dropped, and every page's when
+ * the write says it changed what they all show (`curatedChanged`: the
+ * best sellers or the featured articles).
+ */
+export async function writeToPage<T extends { curatedChanged: boolean }>(
+  context: StoreWriteContext,
+  pageId: number,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+): Promise<T> {
+  const result = await writeToStore(context, write);
+  invalidatePageCache(context.store.id, pageId);
+
+  if (result.curatedChanged) {
+    invalidatePagesCache(context.store.id);
+  }
+
+  return result;
+}
+
+/**
+ * `writeToStore` for the announcement (FER-020): once it committed, the
+ * frame's cached bar is dropped.
+ */
+export async function writeToAnnouncement<T>(
+  context: StoreWriteContext,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+): Promise<T> {
+  const result = await writeToStore(context, write);
+  invalidateAnnouncementCache(context.store.id);
 
   return result;
 }

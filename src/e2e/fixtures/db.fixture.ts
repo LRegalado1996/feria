@@ -16,6 +16,8 @@ import {
   categoryTranslation,
   customerOrder,
   orderItem,
+  pageCoverBanner,
+  pageSection,
   product,
   productAttributeValue,
   productImage,
@@ -103,8 +105,8 @@ export interface DbFixture {
         slug: string;
       }>;
       /**
-       * A banner of the home (`BannerOptions`). In the cover it goes last
-       * until the home's order is saved; between rows, after the rest.
+       * A banner on the home page (`BannerOptions`). In the cover it goes
+       * last until the home's order is saved; between rows, after the rest.
        * Only a `*.serial.e2e.ts` spec may add one: every store page's home
        * would show it.
        */
@@ -288,8 +290,6 @@ export const test = userTest.extend<DbFixture>({
             const [created] = await db
               .insert(banner)
               .values({
-                // Last of the cover until the home's order is saved.
-                coverPosition: placement === "cover" ? 1000 : null,
                 imageHeight: image.height,
                 imagePhoneHeight: phoneImage?.height,
                 imagePhoneUrl: phoneImage?.url,
@@ -300,7 +300,6 @@ export const test = userTest.extend<DbFixture>({
                 linkCategoryId:
                   link && "categoryId" in link ? link.categoryId : null,
                 linkUrl: link && "url" in link ? link.url : null,
-                placement,
                 storeId,
               })
               .returning({ id: banner.id });
@@ -309,7 +308,35 @@ export const test = userTest.extend<DbFixture>({
               throw new Error("Inserting a banner returned no row");
             }
 
+            // Recorded first, so a failure below still deletes it (its
+            // places cascade with it).
             seeded.bannerIds.push(created.id);
+
+            // Placed last on the home page (FER-058) until its order is
+            // saved: last of the cover, or after the rest of its blocks.
+            const [own] = await db
+              .select({ homePageId: store.homePageId })
+              .from(store)
+              .where(eq(store.id, storeId));
+
+            if (!own) {
+              throw new Error("The store has no row");
+            }
+
+            await (placement === "cover"
+              ? db.insert(pageCoverBanner).values({
+                  bannerId: created.id,
+                  pageId: own.homePageId,
+                  position: sql`(select coalesce(max(${pageCoverBanner.position}), -1) + 1 from ${pageCoverBanner} where ${pageCoverBanner.pageId} = ${own.homePageId})`,
+                })
+              : db.insert(pageSection).values({
+                  bannerId: created.id,
+                  kind: "banner",
+                  pageId: own.homePageId,
+                  position: sql`(select coalesce(max(${pageSection.position}), -1) + 1 from ${pageSection} where ${pageSection.pageId} = ${own.homePageId})`,
+                  storeId,
+                }));
+
             await db.insert(bannerTranslation).values([
               {
                 bannerId: created.id,

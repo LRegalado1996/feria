@@ -142,10 +142,16 @@ describe("the store's row", () => {
     await setup();
     await expect(findStore(db)).resolves.not.toBeNull();
 
+    // A second row pointed at the first's home page (FER-058), so only the
+    // one-row rule can refuse it.
+    const [{ homePageId } = { homePageId: 0 }] = await db
+      .select({ homePageId: store.homePageId })
+      .from(store);
+
     await expect(
       db
         .insert(store)
-        .values({ currencyCode: "UYU", name: "Another store" })
+        .values({ currencyCode: "UYU", homePageId, name: "Another store" })
         .returning({ id: store.id })
     ).rejects.toMatchObject({
       cause: { code: "23505", constraint: "store_single_row" },

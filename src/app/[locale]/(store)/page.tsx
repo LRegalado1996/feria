@@ -7,12 +7,12 @@ import { StoreFrame } from "@/app/_components/organisms/store-frame";
 import { StoreHome } from "@/app/_components/organisms/store-home";
 import { getDictionary } from "@/content";
 import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
-import type { HomeContent } from "@/lib/home/content";
 import type { Locale } from "@/lib/i18n/config";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readLocale } from "@/lib/i18n/read-locale";
+import type { PageContent } from "@/lib/page/content";
 import { absoluteUrl } from "@/lib/seo/origin";
 import { storeMetadata } from "@/lib/seo/store-metadata";
 import {
@@ -21,7 +21,7 @@ import {
   storeOrganization,
   webSite,
 } from "@/lib/seo/structured-data";
-import { readHomeContent } from "@/server/cache/home";
+import { readHomePageId, readPageContent } from "@/server/cache/page";
 import { readStore } from "@/server/cache/store";
 import type { ProductCard } from "@/server/services/catalog";
 import type { PublicStore } from "@/server/services/store";
@@ -71,7 +71,7 @@ export async function generateMetadata({
  */
 function homeStructuredData(
   store: PublicStore,
-  content: HomeContent<ProductCard>,
+  content: PageContent<ProductCard>,
   locale: Locale
 ) {
   const { storefront } = getDictionary(locale);
@@ -113,9 +113,10 @@ function homeStructuredData(
 }
 
 /**
- * The site's home, the store's (FER-038, FER-022): the cover, then the
- * rows of articles and the banners between them, as curated in the admin
- * (FER-020); a store with nothing to show yet introduces itself. The store
+ * The site's home, the store's (FER-038, FER-022): the page the store
+ * chose as its home (FER-058), its cover, then the rows of articles and
+ * the banners between them, as curated in the admin (FER-020); a store with
+ * nothing to show yet introduces itself. The store
  * and its home are read per request, from the cache, before anything is
  * sent, so every section and the footer sit behind no boundary: the first
  * response holds them, for a crawler that runs no script.
@@ -134,7 +135,9 @@ export default async function StoreHomePage({ params }: StoreHomeProps) {
   const { storefront } = getDictionary(locale);
   const [shell, content] = await Promise.all([
     shellOf(store, locale),
-    readHomeContent(store, locale),
+    readHomePageId(store).then(
+      async (pageId) => await readPageContent(store, pageId, locale)
+    ),
   ]);
 
   return (

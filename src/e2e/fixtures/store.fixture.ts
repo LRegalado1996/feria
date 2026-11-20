@@ -3,9 +3,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { UpdateComingSoonValues } from "../../lib/schemas/coming-soon";
-import type { SaveHomeLayoutValues } from "../../lib/schemas/home";
+import type { SavePageLayoutValues } from "../../lib/schemas/page";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
-import { banner, product } from "../../server/db/schema";
+import { banner, product, store } from "../../server/db/schema";
 import {
   DEFAULT_COMING_SOON,
   type Storefront,
@@ -59,13 +59,13 @@ export interface HomeEdit {
    * The test's end puts each back as it was, before the order is saved.
    */
   hideEverything: () => Promise<void>;
-  /** The home's order as `home.get` reads it now. */
+  /** The home's order as `page.get` reads it now. */
   read: () => Promise<HomeSnapshot>;
   /**
-   * Saves the home's order whole through `home.saveLayout`, as an admin,
+   * Saves the home's order whole through `page.saveLayout`, as an admin,
    * which drops the home's cached read; it must succeed.
    */
-  saveLayout: (values: SaveHomeLayoutValues) => Promise<void>;
+  saveLayout: (values: SavePageLayoutValues) => Promise<void>;
 }
 
 export interface StoreFixtures {
@@ -79,7 +79,7 @@ export interface StoreFixtures {
    * For a spec that changes the home's curation (FER-020), which every
    * spec's storefront shows: when the test ends, whatever it did, what
    * `hideEverything` hid shows again, the banners it added are deleted
-   * (those `home.get` lists that it did not list as the test started), the
+   * (those `page.get` lists that it did not list as the test started), the
    * home's order is saved back as it was, and the run's announcement
    * (`STORE_ANNOUNCEMENT`) is written back. Only a `*.serial.e2e.ts` spec
    * may ask for it.
@@ -92,24 +92,26 @@ export interface StoreFixtures {
   storeEdit: StoreEdit;
 }
 
-/** What `home.get` answers that the home's teardown puts back. */
-export interface HomeSnapshot extends SaveHomeLayoutValues {
+/** What `page.get` answers of the home that its teardown puts back. */
+export interface HomeSnapshot extends SavePageLayoutValues {
   banners: { id: number }[];
+  /** The page the store shows at `/` (FER-058). */
+  pageId: number;
 }
 
-/** Calls one of the home's procedures as an admin; it must succeed. */
+/** Calls one of the pages' procedures as an admin; it must succeed. */
 async function callHome(
   request: APIRequestContext,
   procedure: string,
   input: unknown
 ): Promise<unknown> {
-  const response = await request.post(`/api/orpc/home/${procedure}`, {
+  const response = await request.post(`/api/orpc/page/${procedure}`, {
     data: input === undefined ? {} : { json: input },
   });
 
   if (response.status() !== 200) {
     throw new Error(
-      `home.${procedure} answered ${response.status()}: ${await response.text()}`
+      `page.${procedure} answered ${response.status()}: ${await response.text()}`
     );
   }
 
@@ -119,29 +121,33 @@ async function callHome(
 }
 
 /**
- * One place of the home's sequence, as `home.get` answers it. Written here,
+ * One place of a page's sequence, as `page.get` answers it. Written here,
  * not imported: the app's schema module reaches its siblings through the
  * `@/` alias, which Playwright's loader does not resolve.
  */
-const homeSectionSchema = z.discriminatedUnion("kind", [
+const pageSectionSchema = z.discriminatedUnion("kind", [
   z.object({ categoryId: z.number(), kind: z.literal("category") }),
   z.object({ kind: z.literal("best_sellers") }),
   z.object({ kind: z.literal("featured") }),
   z.object({ bannerId: z.number(), kind: z.literal("banner") }),
 ]);
 
-/** What the teardown reads of `home.get`'s answer; the rest is dropped. */
+/** What the teardown reads of `page.get`'s answer; the rest is dropped. */
 const homeSnapshotSchema = z.object({
+  pageId: z.number(),
   banners: z.array(z.object({ id: z.number() })),
   coverBannerIds: z.array(z.number()),
   featuredProductIds: z.array(z.number()),
   rankingProductIds: z.array(z.number()),
-  sections: z.array(homeSectionSchema),
+  sections: z.array(pageSectionSchema),
 });
 
-/** The home as `home.get` reads it now. */
-async function readHome(request: APIRequestContext): Promise<HomeSnapshot> {
-  return homeSnapshotSchema.parse(await callHome(request, "get", undefined));
+/** The home page as `page.get` reads it now. */
+async function readHome(
+  request: APIRequestContext,
+  pageId: number
+): Promise<HomeSnapshot> {
+  return homeSnapshotSchema.parse(await callHome(request, "get", { pageId }));
 }
 
 export interface StoreWorkerFixtures {
@@ -276,14 +282,24 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerUser.storageState,
     });
-    const before = await readHome(request);
+    const [own] = await db.drizzle
+      .select({ homePageId: store.homePageId })
+      .from(store)
+      .where(eq(store.id, db.storeId));
+
+    if (!own) {
+      throw new Error("The store has no row");
+    }
+
+    const pageId = own.homePageId;
+    const before = await readHome(request, pageId);
     const kept = new Set(before.banners.map((row) => row.id));
     const hidden: { articleIds: number[]; bannerIds: number[] } = {
       articleIds: [],
       bannerIds: [],
     };
-    const saveLayout = async (values: SaveHomeLayoutValues) => {
-      await callHome(request, "saveLayout", values);
+    const saveLayout = async (values: SavePageLayoutValues) => {
+      await callHome(request, "saveLayout", { ...values, pageId });
     };
 
     try {
@@ -310,7 +326,7 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
             .returning({ id: banner.id });
           hidden.bannerIds.push(...banners.map((row) => row.id));
           // Saving the order as it is drops the home's cached read.
-          const now = await readHome(request);
+          const now = await readHome(request, pageId);
           await saveLayout({
             coverBannerIds: now.coverBannerIds,
             featuredProductIds: now.featuredProductIds,
@@ -318,7 +334,7 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
             sections: now.sections,
           });
         },
-        read: async () => await readHome(request),
+        read: async () => await readHome(request, pageId),
         saveLayout,
       });
     } finally {
@@ -339,18 +355,19 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
             .where(inArray(banner.id, hidden.bannerIds));
         }
 
-        const after = await readHome(request);
+        const after = await readHome(request, pageId);
 
         for (const { id } of after.banners.filter((row) => !kept.has(row.id))) {
           await callHome(request, "deleteBanner", { id });
         }
 
         await callHome(request, "saveLayout", {
+          pageId,
           coverBannerIds: before.coverBannerIds,
           featuredProductIds: before.featuredProductIds,
           rankingProductIds: before.rankingProductIds,
           sections: before.sections,
-        } satisfies SaveHomeLayoutValues);
+        } satisfies SavePageLayoutValues & { pageId: number });
         await writeStoreAnnouncement(request, STORE_ANNOUNCEMENT);
       } finally {
         await request.dispose();

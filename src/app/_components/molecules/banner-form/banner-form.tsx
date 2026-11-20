@@ -18,9 +18,9 @@ import {
 } from "@/app/_components/molecules/form";
 import { ImageUploader } from "@/app/_components/molecules/image-uploader";
 import { SheetBody, SheetFooter } from "@/app/_components/molecules/sheet";
-import { DEFAULT_ROWS_INDEX } from "@/lib/home/layout";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { DEFAULT_ROWS_INDEX } from "@/lib/page/layout";
 import {
   BANNER_LINK_KINDS,
   BANNER_PLACEMENTS,
@@ -30,7 +30,7 @@ import {
   type BannerPlacement,
   COVER_BANNERS_MAX,
   createBannerFormSchema,
-} from "@/lib/schemas/home";
+} from "@/lib/schemas/page";
 import type { UploadedImage } from "@/lib/schemas/upload";
 
 /** A banner as `home.get` reads it: what the form starts from. */
@@ -43,7 +43,8 @@ export interface BannerFormBanner {
   imagePhone: UploadedImage | null;
   isActive: boolean;
   link: BannerLink;
-  placement: BannerPlacement;
+  /** Where it shows on the page being edited; `null`, not on it yet. */
+  placement: BannerPlacement | null;
   startsOn: string | null;
   titleEn: string | null;
   titleEs: string;
@@ -57,7 +58,7 @@ export interface BannerFormChoice {
 
 /**
  * How a save ended: saved; refused because the cover is full (a banner
- * placed in a cover that holds `COVER_BANNERS_MAX`); or failed otherwise.
+ * placed in a page's cover that holds `COVER_BANNERS_MAX`); or failed otherwise.
  */
 export type BannerFormOutcome = "coverFull" | "failed" | "saved";
 
@@ -128,7 +129,8 @@ function fieldsOf(
     imagePhone: banner.imagePhone,
     isActive: banner.isActive,
     ...linkFieldsOf(banner.link),
-    placement: banner.placement,
+    // Not on this page yet: placed between its rows, after the first.
+    placement: banner.placement ?? "rows",
     rowsIndex: String(rowsIndex),
     startsOn: banner.startsOn ?? "",
     titleEn: banner.titleEn ?? "",

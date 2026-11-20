@@ -28,9 +28,9 @@ import {
 } from "@/app/_components/molecules/banner-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
 import {
-  HomeLayoutEditor,
-  type HomeLayoutEntry,
-} from "@/app/_components/molecules/home-layout-editor";
+  PageLayoutEditor,
+  type PageLayoutEntry,
+} from "@/app/_components/molecules/page-layout-editor";
 import {
   Sheet,
   SheetContent,
@@ -38,37 +38,37 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/app/_components/molecules/sheet";
-import { StoreHomePreview } from "@/app/_components/molecules/store-home-preview";
+import { StorePagePreview } from "@/app/_components/molecules/store-page-preview";
 import { reportError } from "@/lib/errors/client";
-import { followServerLayout, sameLayoutList } from "@/lib/home/layout";
-import { previewHomeContent } from "@/lib/home/preview";
-import { scheduleStatus } from "@/lib/home/schedule";
+import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import {
-  type HomeCurationData,
+  type PageCurationData,
   useCreateBanner,
   useDeleteBanner,
-  useHomeCuration,
+  usePageCuration,
   useSaveAnnouncement,
-  useSaveHomeLayout,
+  useSavePageLayout,
   useUpdateBanner,
-} from "@/lib/hooks/home";
-import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+} from "@/lib/hooks/page";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { followServerLayout, sameLayoutList } from "@/lib/page/layout";
+import { previewPageContent } from "@/lib/page/preview";
+import { scheduleStatus } from "@/lib/page/schedule";
 import {
   type AnnouncementFormFields,
   type BannerFormValues,
   createAnnouncementFormSchema,
-  createHomeLayoutFormSchema,
-  type HomeLayoutFormFields,
-  type HomeSection,
+  createPageLayoutFormSchema,
+  type PageLayoutFormFields,
+  type PageSection,
   type SaveAnnouncementValues,
-  type SaveHomeLayoutValues,
-} from "@/lib/schemas/home";
+  type SavePageLayoutValues,
+} from "@/lib/schemas/page";
 import type { UploadedImage } from "@/lib/schemas/upload";
 
-type Banner = HomeCurationData["banners"][number];
+type Banner = PageCurationData["banners"][number];
 
 /** The cards the screen fills, as their skeleton holds their place. */
 const SKELETON_CARDS = [
@@ -78,7 +78,7 @@ const SKELETON_CARDS = [
 ] as const;
 
 /** The order form's fields for what the server holds. */
-function layoutFieldsOf(data: HomeCurationData): HomeLayoutFormFields {
+function layoutFieldsOf(data: PageCurationData): PageLayoutFormFields {
   return {
     cover: data.coverBannerIds.map((bannerId) => ({ bannerId })),
     featured: data.featuredProductIds.map((productId) => ({ productId })),
@@ -103,10 +103,10 @@ function typedOrSaved<T>(list: z.ZodType<T>, typed: unknown, saved: T): T {
  * fix never hides a reordered other. Saving still checks the whole order.
  */
 function previewLayout(
-  schema: ReturnType<typeof createHomeLayoutFormSchema>,
-  draft: DeepPartial<HomeLayoutFormFields>,
-  data: HomeCurationData
-): SaveHomeLayoutValues {
+  schema: ReturnType<typeof createPageLayoutFormSchema>,
+  draft: DeepPartial<PageLayoutFormFields>,
+  data: PageCurationData
+): SavePageLayoutValues {
   const lists = schema.in.shape;
   const saved = layoutFieldsOf(data);
 
@@ -170,7 +170,11 @@ function BannerRow({
       <div className="min-w-0 flex-1 space-y-1">
         <p className="truncate text-sm font-medium">{title}</p>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>{copy.banners.placements[banner.placement]}</span>
+          <span>
+            {banner.placement
+              ? copy.banners.placements[banner.placement]
+              : copy.banners.notOnPage}
+          </span>
           <span
             className={
               status === "showing"
@@ -228,7 +232,7 @@ function BannerRow({
  * card with its side sheet, the order's cards and the preview, which reads
  * both forms as they are typed.
  */
-function CurationScreen({ data }: { data: HomeCurationData }) {
+function CurationScreen({ data }: { data: PageCurationData }) {
   const { admin, storefront } = useDictionary();
   const locale = useLocale();
   const copy = admin.home;
@@ -237,7 +241,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   // browser's way, its fields in the address.
   const hydrated = useHydrated();
   const saveAnnouncement = useSaveAnnouncement();
-  const saveLayout = useSaveHomeLayout();
+  const saveLayout = useSavePageLayout();
   const createBanner = useCreateBanner();
   const updateBanner = useUpdateBanner();
   const deleteBanner = useDeleteBanner();
@@ -251,20 +255,20 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
       createAnnouncementFormSchema(copy.announcement.errors)
     ),
   });
-  const layoutSchema = createHomeLayoutFormSchema(copy.layout.errors);
+  const layoutSchema = createPageLayoutFormSchema(copy.layout.errors);
   const layoutForm = useForm<
-    HomeLayoutFormFields,
+    PageLayoutFormFields,
     unknown,
-    SaveHomeLayoutValues
+    SavePageLayoutValues
   >({
     defaultValues: layoutFieldsOf(data),
     resolver: zodResolver(layoutSchema),
   });
-  // The home the order form last followed.
+  // The page the order form last followed.
   const followed = useRef(data);
   const savingLayout = saveLayout.isPending;
 
-  // The server's home changed under the form (a banner added, moved or
+  // The server's page changed under the form (a banner added, moved or
   // deleted from the side sheet): its order becomes the form's defaults,
   // and an order moved and not saved yet is kept over it, less what is gone.
   // A save in flight owns the form until it settles: a reset now would
@@ -374,7 +378,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
         : []
     )
   );
-  const describeArticle = (id: number): HomeLayoutEntry => {
+  const describeArticle = (id: number): PageLayoutEntry => {
     const article = articles.get(id);
     let warning: string | null = null;
 
@@ -386,7 +390,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
 
     return { name: articleName(id), note: null, warning };
   };
-  const describeSection = (section: HomeSection): HomeLayoutEntry => {
+  const describeSection = (section: PageSection): PageLayoutEntry => {
     if (section.kind === "category") {
       const category = categories.get(section.categoryId);
 
@@ -425,7 +429,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   const announcementRead = createAnnouncementFormSchema(
     copy.announcement.errors
   ).safeParse(announcementDraft);
-  const preview = previewHomeContent(
+  const preview = previewPageContent(
     data,
     {
       announcement: announcementRead.success ? announcementRead.data : null,
@@ -473,6 +477,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
         await updateBanner.mutateAsync({
           ...values,
           id: banner.id,
+          pageId: data.pageId,
           image: sameImage(values.image, banner.image)
             ? undefined
             : values.image,
@@ -482,7 +487,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
         });
         toast.success(copy.bannerForm.saved);
       } else {
-        await createBanner.mutateAsync(values);
+        await createBanner.mutateAsync({ ...values, pageId: data.pageId });
         toast.success(copy.bannerForm.created);
       }
 
@@ -602,7 +607,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
           </ul>
         )}
       </section>
-      <HomeLayoutEditor
+      <PageLayoutEditor
         choices={data.articles
           .filter((row) => row.status === "published")
           .map((row) => ({ id: row.id, name: articleName(row.id) }))}
@@ -617,7 +622,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
         id={layoutId}
         onSave={async (values) => {
           try {
-            await saveLayout.mutateAsync(values);
+            await saveLayout.mutateAsync({ ...values, pageId: data.pageId });
             toast.success(copy.layout.saved);
             return true;
           } catch (error) {
@@ -638,7 +643,7 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
           </h2>
           <p className="text-xs text-muted-foreground">{copy.preview.hint}</p>
         </div>
-        <StoreHomePreview
+        <StorePagePreview
           className="rounded-md border"
           content={preview}
           copy={storefront}
@@ -725,17 +730,22 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
   );
 }
 
+export interface HomeCurationProps {
+  /** The page the store shows at `/` (FER-058), which the screen edits. */
+  pageId: number;
+}
+
 /**
  * The home's curation screen (FER-020) in the admin's shell and cards: the
- * announcement bar, the photo banners, the home's order and a preview of
- * the home with what is chosen, before it is saved. Reads the home with
- * `home.get` (prefetched by the page), shows its skeleton while it comes
- * and a retry when it fails.
+ * announcement bar, the photo banners, the order of the home page's blocks
+ * (FER-058) and a preview of it with what is chosen, before it is saved.
+ * Reads the page with `page.get` (prefetched by the route), shows its
+ * skeleton while it comes and a retry when it fails.
  */
-function HomeCuration() {
+function HomeCuration({ pageId }: HomeCurationProps) {
   const { admin, common } = useDictionary();
   const copy = admin.home;
-  const curation = useHomeCuration();
+  const curation = usePageCuration(pageId);
 
   if (curation.data) {
     return (

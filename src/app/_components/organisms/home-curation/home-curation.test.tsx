@@ -8,7 +8,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { ImageUploaderProps } from "@/app/_components/molecules/image-uploader";
 import { Toaster } from "@/app/_components/molecules/sonner";
 import { reportError } from "@/lib/errors/client";
-import type { HomeCurationData } from "@/lib/hooks/home";
+import type { PageCurationData } from "@/lib/hooks/page";
 import type { Locale } from "@/lib/i18n/config";
 import { createFakeEmbla } from "@/test/embla";
 import {
@@ -73,7 +73,7 @@ const FAILURE = {
  * article, and best sellers that cannot show (a draft, the sold-out one and
  * one the screen does not know).
  */
-function makeData(overrides: Partial<HomeCurationData> = {}): HomeCurationData {
+function makeData(overrides: Partial<PageCurationData> = {}): PageCurationData {
   return makeHomeCuration({
     articles: [
       makeHomeArticle(),
@@ -145,7 +145,7 @@ function setup({
   locale = "en",
   write = "ok",
 }: {
-  data?: HomeCurationData;
+  data?: PageCurationData;
   get?: Outcome;
   locale?: Locale;
   write?: Outcome;
@@ -163,12 +163,12 @@ function setup({
     updateBanner: vi.fn((_input: unknown) => ({ id: 31 })),
   };
   server.use(
-    answer("home.get", spies.get, get),
-    answer("home.saveAnnouncement", spies.saveAnnouncement, write),
-    answer("home.createBanner", spies.createBanner, write),
-    answer("home.updateBanner", spies.updateBanner, write),
-    answer("home.deleteBanner", spies.deleteBanner, write),
-    answer("home.saveLayout", spies.saveLayout, write)
+    answer("page.get", spies.get, get),
+    answer("page.saveAnnouncement", spies.saveAnnouncement, write),
+    answer("page.createBanner", spies.createBanner, write),
+    answer("page.updateBanner", spies.updateBanner, write),
+    answer("page.deleteBanner", spies.deleteBanner, write),
+    answer("page.saveLayout", spies.saveLayout, write)
   );
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
@@ -183,13 +183,13 @@ function setup({
     );
   }
 
-  renderWithI18n(<HomeCuration />, { locale, wrapper: Providers });
+  renderWithI18n(<HomeCuration pageId={1} />, { locale, wrapper: Providers });
   const user = userEvent.setup();
 
   return {
-    loaded: async () => await screen.findByTestId("home-layout-editor"),
-    /** `home.get` answers `next` from now on, and the screen reads it again. */
-    refresh: async (next: HomeCurationData) => {
+    loaded: async () => await screen.findByTestId("page-layout-editor"),
+    /** `page.get` answers `next` from now on, and the screen reads it again. */
+    refresh: async (next: PageCurationData) => {
       spies.get.mockReturnValue(next);
       await queryClient.invalidateQueries();
     },
@@ -213,7 +213,7 @@ function coverTitle(): string | null | undefined {
 }
 
 /** A saved announcement, on, with only its Spanish line. */
-const ANNOUNCEMENT: NonNullable<HomeCurationData["announcement"]> = {
+const ANNOUNCEMENT: NonNullable<PageCurationData["announcement"]> = {
   endsOn: null,
   isActive: true,
   linkUrl: null,
@@ -234,7 +234,7 @@ function holdLayoutSave() {
     release = resolve;
   });
   server.use(
-    createOrpcHandler("home.saveLayout", async (input) => {
+    createOrpcHandler("page.saveLayout", async (input) => {
       await held;
       return input;
     })
@@ -255,7 +255,7 @@ describe("HomeCuration", () => {
     expect(skeleton).toHaveTextContent(/^Loading$/u);
     expect(screen.queryByTestId("admin-primary-action")).toBeNull();
     await waitFor(() => {
-      expect(spies.get).toHaveBeenCalledExactlyOnceWith(undefined);
+      expect(spies.get).toHaveBeenCalledExactlyOnceWith({ pageId: 1 });
     });
   });
 
@@ -266,10 +266,10 @@ describe("HomeCuration", () => {
     expect(alert).toHaveTextContent(/^We couldn't load the home\.Try again$/u);
     expect(screen.queryByTestId("admin-primary-action")).toBeNull();
 
-    server.use(createOrpcHandler("home.get", spies.get));
+    server.use(createOrpcHandler("page.get", spies.get));
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByTestId("home-layout-editor")).toBeVisible();
+    expect(await screen.findByTestId("page-layout-editor")).toBeVisible();
     expect(screen.queryByText(/load the home/u)).toBeNull();
   });
 
@@ -294,6 +294,22 @@ describe("HomeCuration", () => {
       within(rows[1] ?? document.body).getByTestId("home-layout-warning")
     ).toHaveTextContent(
       "The article it leads to is not published: the banner shows without a link."
+    );
+  });
+
+  test("says when a banner of the store is not on this page", async () => {
+    const { loaded } = setup({
+      data: makeHomeCuration({
+        banners: [makeHomeBanner({ placement: null, titleEn: "Elsewhere" })],
+      }),
+    });
+    await loaded();
+
+    expect(screen.getByTestId("home-banner-row")).toHaveTextContent(
+      "Not on this page"
+    );
+    expect(screen.getByTestId("home-banner-row")).not.toHaveTextContent(
+      "Cover"
     );
   });
 
@@ -348,7 +364,7 @@ describe("HomeCuration", () => {
     const { loaded } = setup();
     await loaded();
 
-    const preview = within(screen.getByTestId("store-home-preview"));
+    const preview = within(screen.getByTestId("store-page-preview"));
     expect(screen.queryByTestId("store-announcement-bar")).toBeNull();
     expect(preview.getByTestId("store-home-preview-cover")).toHaveTextContent(
       "Bubble guns"
@@ -368,7 +384,7 @@ describe("HomeCuration", () => {
     );
 
     expect(
-      within(screen.getByTestId("store-home-preview")).getByTestId(
+      within(screen.getByTestId("store-page-preview")).getByTestId(
         "store-announcement-bar"
       )
     ).toHaveTextContent(/^Hola feria$/u);
@@ -387,7 +403,7 @@ describe("HomeCuration", () => {
     await loaded();
     const featured = () =>
       within(
-        within(screen.getByTestId("store-home-preview"))
+        within(screen.getByTestId("store-page-preview"))
           .getByRole("heading", { name: "Featured" })
           .closest("section") ?? document.body
       )
@@ -564,6 +580,7 @@ describe("HomeCuration", () => {
     expect(await screen.findByText("Order saved.")).toBeVisible();
     expect(spies.saveLayout).toHaveBeenCalledExactlyOnceWith({
       coverBannerIds: [31],
+      pageId: 1,
       featuredProductIds: [],
       rankingProductIds: [22, 23, 99],
       sections: [
@@ -617,6 +634,7 @@ describe("HomeCuration", () => {
     expect(await screen.findByText("Order saved.")).toBeVisible();
     expect(spies.saveLayout).toHaveBeenCalledExactlyOnceWith({
       coverBannerIds: [31],
+      pageId: 1,
       featuredProductIds: [],
       rankingProductIds: [22, 23, 99],
       sections: [
@@ -769,6 +787,7 @@ describe("HomeCuration", () => {
       imagePhone: null,
       isActive: true,
       link: { kind: "none" },
+      pageId: 1,
       placement: "cover",
       startsOn: null,
       titleEn: null,
@@ -814,6 +833,7 @@ describe("HomeCuration", () => {
       id: 32,
       isActive: true,
       link: { kind: "product", productId: 22 },
+      pageId: 1,
       placement: "rows",
       rowsIndex: 1,
       startsOn: "2026-12-05",
@@ -866,7 +886,7 @@ describe("HomeCuration", () => {
     const { loaded, user } = setup();
     await loaded();
     server.use(
-      createOrpcErrorHandler("home.updateBanner", {
+      createOrpcErrorHandler("page.updateBanner", {
         code: "CONFLICT",
         message: "The cover holds at most 6 banners",
         status: 409,
@@ -896,7 +916,7 @@ describe("HomeCuration", () => {
     const saved = new Promise<{ id: number }>((resolve) => {
       release = resolve;
     });
-    server.use(createOrpcHandler("home.updateBanner", async () => await saved));
+    server.use(createOrpcHandler("page.updateBanner", async () => await saved));
 
     await user.click(
       screen.getByRole("button", { name: "Edit banner: Bubble guns" })
@@ -1035,7 +1055,7 @@ describe("HomeCuration", () => {
       finish = resolve;
     });
     server.use(
-      createOrpcHandler("home.deleteBanner", async () => {
+      createOrpcHandler("page.deleteBanner", async () => {
         await held;
         return { id: 31 };
       })

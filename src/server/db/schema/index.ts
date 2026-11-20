@@ -21,8 +21,10 @@ export {
   featuredProduct,
   homeSection,
   homeSectionKindEnum,
+  pageCoverBanner,
+  pageSection,
   rankingEntry,
-} from "./home";
+} from "./page";
 export { localeEnum } from "./locale";
 export {
   customerOrder,
@@ -44,9 +46,11 @@ export {
   categoryTranslationRelations,
   customerOrderRelations,
   featuredProductRelations,
-  homeSectionRelations,
   orderItemRelations,
   orderStatusEventRelations,
+  pageCoverBannerRelations,
+  pageRelations,
+  pageSectionRelations,
   productImageRelations,
   productImageTranslationRelations,
   productRelations,
@@ -58,7 +62,7 @@ export {
   storeTranslationRelations,
   userRelations,
 } from "./relations";
-export { currencyCodeEnum, store, storeTranslation } from "./store";
+export { currencyCodeEnum, page, store, storeTranslation } from "./store";
 export {
   attribute,
   attributeTranslation,

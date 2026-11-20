@@ -3,13 +3,14 @@ import path from "node:path";
 
 import { describe, expect, test, vi } from "vitest";
 
-import { createBannerSchema, saveAnnouncementSchema } from "@/lib/schemas/home";
+import { createBannerSchema, saveAnnouncementSchema } from "@/lib/schemas/page";
 import {
   banner,
   bannerTranslation,
   category,
   featuredProduct,
-  homeSection,
+  pageCoverBanner,
+  pageSection,
   product,
   rankingEntry,
 } from "@/server/db/schema";
@@ -26,15 +27,21 @@ import {
   seedHome,
 } from "./seed-home";
 
-const { lockStoreHome, saveAnnouncement } = vi.hoisted(() => ({
-  lockStoreHome: vi.fn(async (_tx: unknown, _storeId: number) => undefined),
+const { findHomePageId, lockStorePages, saveAnnouncement } = vi.hoisted(() => ({
+  // The store's home is its page 3 (FER-058).
+  findHomePageId: vi.fn(async (_tx: unknown, _scope: unknown) => 3),
+  lockStorePages: vi.fn(async (_tx: unknown, _storeId: number) => undefined),
   saveAnnouncement: vi.fn(async (_tx: unknown, _options: unknown) => ({
     id: 1,
   })),
 }));
 
-// The service's writes are `src/server/services/home.test.ts`'s.
-vi.mock("@/server/services/home", () => ({ lockStoreHome, saveAnnouncement }));
+// The service's reads and writes are `src/server/services/page.test.ts`'s.
+vi.mock("@/server/services/page", () => ({
+  findHomePageId,
+  lockStorePages,
+  saveAnnouncement,
+}));
 
 const STORE_ID = 7;
 
@@ -58,7 +65,7 @@ const HOME_PARTS = [
   "announcement",
   "banner",
   "featuredProduct",
-  "homeSection",
+  "pageSection",
   "rankingEntry",
 ] as const;
 
@@ -94,7 +101,8 @@ function setup({
   });
 
   for (const model of existing) {
-    db.query[model].findFirst.mockResolvedValue({ id: 9 });
+    // A saved order's last section is at place 9.
+    db.query[model].findFirst.mockResolvedValue({ id: 9, position: 9 });
   }
 
   return { db, run: async () => await seedHome(db as never, STORE_ID) };
@@ -140,7 +148,7 @@ function jpegSize(file: string) {
 }
 
 describe("seedHome", () => {
-  test("on a store with none of it, adds the announcement, five banners, the order, the best sellers and the featured, under the home's lock", async () => {
+  test("on a store with none of it, adds the announcement, five banners placed on its home page, its order, the best sellers and the featured, under the pages' lock", async () => {
     const { db, run } = setup();
 
     await expect(run()).resolves.toEqual({
@@ -150,7 +158,7 @@ describe("seedHome", () => {
       ranking: 8,
     });
 
-    expect(lockStoreHome).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
+    expect(lockStorePages).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
     expect(saveAnnouncement).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: STORE_ID,
       values: SEED_ANNOUNCEMENT,
@@ -167,13 +175,22 @@ describe("seedHome", () => {
       bannerTranslation,
       banner,
       bannerTranslation,
-      homeSection,
+      pageCoverBanner,
+      pageSection,
       rankingEntry,
       featuredProduct,
     ]);
+    expect(findHomePageId).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: STORE_ID,
+    });
+    // The cover's three, in order, on the home page.
+    expect(inserts[10]?.values).toEqual([
+      { bannerId: 1, pageId: 3, position: 0 },
+      { bannerId: 2, pageId: 3, position: 1 },
+      { bannerId: 3, pageId: 3, position: 2 },
+    ]);
     // The first cover banner, its phone crop and its category.
     expect(inserts[0]?.values).toEqual({
-      coverPosition: 0,
       imageHeight: 1067,
       imagePhoneHeight: 1067,
       imagePhoneUrl: "/seed/bubble-gun-2-phone.jpg",
@@ -183,7 +200,6 @@ describe("seedHome", () => {
       isActive: true,
       linkCategoryId: 1,
       linkUrl: null,
-      placement: "cover",
       storeId: STORE_ID,
     });
     expect(inserts[3]?.values).toEqual([
@@ -202,18 +218,19 @@ describe("seedHome", () => {
     ]);
     // The fair's banner leads to the catalog; the earrings' has no phone crop.
     expect(inserts[6]?.values).toMatchObject({
-      coverPosition: null,
       linkCategoryId: null,
       linkUrl: "/productos",
-      placement: "rows",
     });
     expect(inserts[8]?.values).toMatchObject({
       imagePhoneUrl: null,
       linkCategoryId: 5,
-      placement: "rows",
+    });
+    expect(rowsOf(inserts[11]?.values)[0]).toMatchObject({
+      pageId: 3,
+      storeId: STORE_ID,
     });
     expect(
-      rowsOf(inserts[10]?.values).map((row) => [
+      rowsOf(inserts[11]?.values).map((row) => [
         row.position,
         row.kind,
         row.bannerId ?? row.categoryId,
@@ -231,16 +248,16 @@ describe("seedHome", () => {
       // Bijouterie, a group with no row of its own in the list, goes last.
       [9, "category", 2],
     ]);
-    // A store with no order has nothing to replace.
+    // A store with no banner and no order has nothing to replace.
     expect(db.$.delete).not.toHaveBeenCalled();
-    expect(inserts[11]?.values).toEqual(
+    expect(inserts[12]?.values).toEqual(
       SEED_BEST_SELLERS.map((_title, position) => ({
         position,
         productId: 100 + position,
         storeId: STORE_ID,
       }))
     );
-    expect(inserts[12]?.values).toEqual(
+    expect(inserts[13]?.values).toEqual(
       SEED_FEATURED.map((_title, position) => ({
         position,
         productId: 108 + position,
@@ -282,12 +299,12 @@ describe("seedHome", () => {
     expect(db.$.delete).not.toHaveBeenCalled();
   });
 
-  test("keeps an order the admin saved on a store with no banner, adding the banners after it", async () => {
+  test("keeps an order the admin saved on a store with no banner, placing the banners between rows after it", async () => {
     const { db, run } = setup({
       existing: [
         "announcement",
         "featuredProduct",
-        "homeSection",
+        "pageSection",
         "rankingEntry",
       ],
     });
@@ -298,10 +315,42 @@ describe("seedHome", () => {
       featured: 0,
       ranking: 0,
     });
-    const tables = insertsOf(db).map((insert) => insert.table);
-    expect(tables).toEqual(
-      Array.from({ length: 5 }, () => [banner, bannerTranslation]).flat()
-    );
+    const inserts = insertsOf(db);
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      ...Array.from({ length: 5 }, () => [banner, bannerTranslation]).flat(),
+      pageCoverBanner,
+      pageSection,
+    ]);
+    // Banners 4 and 5 (the seed's two between rows) follow the saved
+    // order's last place, 9; nothing else of the order is written.
+    expect(inserts.at(-1)?.values).toEqual([
+      {
+        bannerId: 4,
+        categoryId: null,
+        kind: "banner",
+        pageId: 3,
+        position: 10,
+        storeId: STORE_ID,
+      },
+      {
+        bannerId: 5,
+        categoryId: null,
+        kind: "banner",
+        pageId: 3,
+        position: 11,
+        storeId: STORE_ID,
+      },
+    ]);
+    // The order looked for is the home page's, its last place first.
+    const [config] = db.query.pageSection.findFirst.mock.calls[0] ?? [];
+    const { orderBy, where } = config as { orderBy: unknown[]; where: unknown };
+    expect(renderQuery(where)).toEqual({
+      params: [3],
+      sql: '"page_section"."pageId" = $1',
+    });
+    expect(orderBy.map((term) => renderQuery(term))).toEqual([
+      { params: [], sql: '"page_section"."position" desc' },
+    ]);
     expect(db.$.delete).not.toHaveBeenCalled();
   });
 
@@ -317,7 +366,7 @@ describe("seedHome", () => {
       ranking: 0,
     });
     const inserts = insertsOf(db);
-    expect(inserts.map((insert) => insert.table)).toEqual([homeSection]);
+    expect(inserts.map((insert) => insert.table)).toEqual([pageSection]);
     // The seed's banners between rows are not this store's: left out.
     expect(
       rowsOf(inserts[0]?.values).map(
@@ -340,7 +389,7 @@ describe("seedHome", () => {
     });
     const inserts = insertsOf(db);
     expect(inserts.map((insert) => insert.table).slice(-1)).toEqual([
-      homeSection,
+      pageSection,
     ]);
     // A banner whose category is missing has no link.
     expect(inserts[2]?.values).toMatchObject({ linkCategoryId: null });
@@ -382,6 +431,7 @@ describe("the seed's home content", () => {
             "path" in seed.link
               ? { kind: "url", url: seed.link.path }
               : { kind: "none" },
+          pageId: 1,
           placement: "cover",
           startsOn: null,
           titleEn: seed.title.en,

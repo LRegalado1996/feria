@@ -58,7 +58,7 @@ export class StorePage extends BasePage {
 
   /** The home's rows and banners under the cover, in their order. */
   getHomeSections(): Locator {
-    return this.getByTestId("store-home-section").filter({ visible: true });
+    return this.getByTestId("store-page-section").filter({ visible: true });
   }
 
   /** One of the home's rows or banners, by the heading it shows. */

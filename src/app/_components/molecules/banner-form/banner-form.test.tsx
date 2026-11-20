@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import type { ImageUploaderProps } from "@/app/_components/molecules/image-uploader";
 import type { Locale } from "@/lib/i18n/config";
-import type { BannerFormValues } from "@/lib/schemas/home";
+import type { BannerFormValues } from "@/lib/schemas/page";
 import { renderWithI18n } from "@/test/i18n";
 
 import {
@@ -286,6 +286,19 @@ describe("BannerForm", () => {
     const { select } = setup({ banner: makeBanner(), rowsIndex: 9 });
 
     expect(select("After")).toHaveValue("3");
+  });
+
+  test.each([
+    ["in the cover", "cover", "In the cover"],
+    [
+      "not on this page yet (FER-058), between its rows",
+      null,
+      "Between two rows",
+    ],
+  ] as const)("a banner %s opens there", (_case, placement, shown) => {
+    const { select } = setup({ banner: makeBanner({ placement }) });
+
+    expect(select("Where it goes")).toHaveDisplayValue(shown);
   });
 
   test("shows how each screen crops the photos, the phone its own when there is one", () => {

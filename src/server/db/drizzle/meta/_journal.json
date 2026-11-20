@@ -141,6 +141,27 @@
       "when": 1795062469980,
       "tag": "0019_sad_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795139449213,
+      "tag": "0020_page_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795139454917,
+      "tag": "0021_home_page_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795139474268,
+      "tag": "0022_home_page_required",
+      "breakpoints": true
     }
   ]
 }

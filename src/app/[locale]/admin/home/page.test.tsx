@@ -18,17 +18,27 @@ interface HomePageParams {
   params: Promise<{ locale: string }>;
 }
 
-const HOME_KEY = ["home", "get"] as const;
+const HOME_KEY = ["page", "get", 3] as const;
 
-const { get, queryOptions, requireAdmin, shellProps } = vi.hoisted(() => {
+const {
+  get,
+  queryOptions,
+  readHomePageId,
+  readStore,
+  requireAdmin,
+  shellProps,
+} = vi.hoisted(() => {
   const getMock = vi.fn(async (): Promise<unknown> => null);
 
   return {
     get: getMock,
-    queryOptions: vi.fn(() => ({
+    queryOptions: vi.fn((options: { input: { pageId: number } }) => ({
       queryFn: async () => await getMock(),
-      queryKey: ["home", "get"],
+      queryKey: ["page", "get", options.input.pageId],
     })),
+    // The store's home is its page 3 (FER-058).
+    readHomePageId: vi.fn(async (_store: unknown) => 3),
+    readStore: vi.fn(async (): Promise<{ id: number } | null> => ({ id: 7 })),
     requireAdmin: vi.fn<typeof RequireAdmin>(),
     shellProps: vi.fn<(props: Omit<AdminShellProps, "children">) => void>(),
   };
@@ -45,9 +55,13 @@ vi.mock("@/lib/orpc/server", async () => {
   const { QueryClient: Client } = await import("@tanstack/react-query");
   return {
     getQueryClient: () => new Client(),
-    orpc: { home: { get: { queryOptions } } },
+    orpc: { page: { get: { queryOptions } } },
   };
 });
+
+vi.mock("@/server/cache/store", () => ({ readStore }));
+
+vi.mock("@/server/cache/page", () => ({ readHomePageId }));
 
 // The shell has its own tests; here it records what the page handed it.
 vi.mock("@/app/_components/organisms/admin-shell", () => ({
@@ -60,10 +74,12 @@ vi.mock("@/app/_components/organisms/admin-shell", () => ({
 // The screen has its own tests; here it shows the curation it found in the
 // cache the page hydrated.
 vi.mock("@/app/_components/organisms/home-curation", () => ({
-  HomeCuration: () => {
+  HomeCuration: ({ pageId }: { pageId: number }) => {
     const cached = useQueryClient().getQueryData([...HOME_KEY]);
     return (
-      <div data-testid="home-curation">{JSON.stringify(cached ?? null)}</div>
+      <div data-page-id={pageId} data-testid="home-curation">
+        {JSON.stringify(cached ?? null)}
+      </div>
     );
   },
 }));
@@ -186,12 +202,17 @@ describe("HomePage", () => {
         login: { email: "ada@example.com", name: "Ada Admin" },
         section: "home",
       });
-      // No input: the site is one store (FER-038).
-      expect(queryOptions).toHaveBeenCalledExactlyOnceWith();
+      // The page the store shows at `/` (FER-058), fetched and handed on.
+      expect(readHomePageId).toHaveBeenCalledExactlyOnceWith({ id: 7 });
+      expect(queryOptions).toHaveBeenCalledExactlyOnceWith({
+        input: { pageId: 3 },
+      });
       expect(get).toHaveBeenCalledExactlyOnceWith();
-      expect(
-        within(screen.getByTestId("admin-shell")).getByTestId("home-curation")
-      ).toHaveTextContent('{"today":"2026-11-20"}');
+      const screenShown = within(screen.getByTestId("admin-shell")).getByTestId(
+        "home-curation"
+      );
+      expect(screenShown).toHaveTextContent('{"today":"2026-11-20"}');
+      expect(screenShown).toHaveAttribute("data-page-id", "3");
     }
   );
 
@@ -202,5 +223,15 @@ describe("HomePage", () => {
 
     expect(get).toHaveBeenCalledExactlyOnceWith();
     expect(screen.getByTestId("home-curation")).toHaveTextContent(/^null$/u);
+  });
+
+  test("answers 404 when the store has no row, a database whose migrations have not run", async () => {
+    const { resolve } = setup();
+    readStore.mockResolvedValueOnce(null);
+
+    await expect(resolve()).rejects.toMatchObject({
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
+    expect(get).not.toHaveBeenCalled();
   });
 });

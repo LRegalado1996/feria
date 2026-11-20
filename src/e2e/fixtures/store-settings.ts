@@ -1,6 +1,6 @@
 import type { APIRequestContext } from "@playwright/test";
 
-import type { SaveAnnouncementValues } from "../../lib/schemas/home";
+import type { SaveAnnouncementValues } from "../../lib/schemas/page";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
 
 /** The store's texts during a run, one per language. */
@@ -79,7 +79,7 @@ export const STORE_ANNOUNCEMENT = {
 } satisfies SaveAnnouncementValues;
 
 /**
- * Replaces the store's announcement through `home.saveAnnouncement`, as an
+ * Replaces the store's announcement through `page.saveAnnouncement`, as an
  * admin does: the procedure drops the cached bar, so the next visit reads
  * it. `request` carries an admin's session.
  */
@@ -87,13 +87,13 @@ export async function writeStoreAnnouncement(
   request: APIRequestContext,
   values: SaveAnnouncementValues
 ): Promise<void> {
-  const response = await request.post("/api/orpc/home/saveAnnouncement", {
+  const response = await request.post("/api/orpc/page/saveAnnouncement", {
     data: { json: values },
   });
 
   if (response.status() !== 200) {
     throw new Error(
-      `home.saveAnnouncement answered ${response.status()}: ${await response.text()}`
+      `page.saveAnnouncement answered ${response.status()}: ${await response.text()}`
     );
   }
 }
