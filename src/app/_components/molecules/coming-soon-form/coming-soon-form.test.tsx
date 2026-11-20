@@ -60,25 +60,29 @@ function setup({
     async (_values: UpdateComingSoonValues) => await Promise.resolve(saved)
   );
 
-  renderWithI18n(
+  const screenFor = (shown: ComingSoonFormPage) => (
     <>
       <ComingSoonForm
         className="extra"
         defaults={DEFAULTS}
         id="coming-soon-form"
         onSave={onSave}
-        page={page}
+        page={shown}
       />
       <button form="coming-soon-form" type="submit">
         Submit
       </button>
-    </>,
-    { locale }
+    </>
   );
+  const { rerender } = renderWithI18n(screenFor(page), { locale });
 
   return {
     field: (name: string) => screen.getByRole("textbox", { name }),
     onSave,
+    /** A later read of the page reaches the form, as a refetch does. */
+    refresh: (stored: ComingSoonFormPage) => {
+      rerender(screenFor(stored));
+    },
     submit: async () => {
       await userEvent.click(screen.getByRole("button", { name: "Submit" }));
     },
@@ -189,12 +193,75 @@ describe("ComingSoonForm", () => {
   });
 
   test("a failed save keeps everything typed", async () => {
-    const { field, submit, user } = setup({ saved: null });
+    const { field, onSave, submit, user } = setup({ saved: null });
     await user.type(field("Moving band, in English"), "Jewelry");
 
     await submit();
 
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      countdownTo: "2026-12-20",
+      translations: [
+        {
+          eyebrow: "Feria · desde el 20",
+          headline: "Abrimos\npronto",
+          lead: "Te esperamos.",
+          locale: "es",
+          marquee: null,
+        },
+        {
+          eyebrow: null,
+          headline: null,
+          lead: null,
+          locale: "en",
+          marquee: "Jewelry",
+        },
+      ],
+    });
     expect(field("Moving band, in English")).toHaveValue("Jewelry");
+  });
+
+  test("a newer page read after it opened replaces the fields left alone, never what the admin typed", async () => {
+    const { field, onSave, refresh, submit, user } = setup();
+    await user.clear(field("Text under the headline, in Spanish"));
+    await user.type(field("Text under the headline, in Spanish"), "Mío");
+
+    // Another admin saved a new headline and text in the meantime.
+    refresh(
+      makePage({
+        translations: [
+          {
+            eyebrow: "Feria · desde el 20",
+            headline: "De ellos",
+            lead: "Suyo",
+            locale: "es",
+            marquee: null,
+          },
+        ],
+      })
+    );
+
+    expect(field("Headline in Spanish")).toHaveValue("De ellos");
+    expect(field("Text under the headline, in Spanish")).toHaveValue("Mío");
+    await submit();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      countdownTo: "2026-12-20",
+      translations: [
+        {
+          eyebrow: "Feria · desde el 20",
+          headline: "De ellos",
+          lead: "Mío",
+          locale: "es",
+          marquee: null,
+        },
+        {
+          eyebrow: null,
+          headline: null,
+          lead: null,
+          locale: "en",
+          marquee: null,
+        },
+      ],
+    });
   });
 
   test("in Spanish, labels and refuses in Spanish", async () => {

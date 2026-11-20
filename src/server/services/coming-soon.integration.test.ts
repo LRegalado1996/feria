@@ -8,9 +8,17 @@ import { comingSoonRouter } from "@/server/api/routers/coming-soon";
 import { createAccount } from "@/server/better-auth/accounts";
 import { isAdminRequest } from "@/server/better-auth/admin-request";
 import { auth } from "@/server/better-auth/config";
-import { db } from "@/server/db";
+import { type DatabaseClient, db } from "@/server/db";
 import { comingSoon, comingSoonTranslation, user } from "@/server/db/schema";
 import { theStoreId } from "@/server/test/one-store";
+import {
+  backendPid,
+  deferred,
+  readyOrFailed,
+  releaseHeldWriters,
+  releaseOnTeardown,
+  waitUntilBlockedBy,
+} from "@/server/test/two-writers";
 
 import {
   addComingSoonIfMissing,
@@ -40,6 +48,8 @@ const snapshots: { page: Row | undefined; texts: TextRow[] }[] = [];
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
+  // A held writer still holds the page's row: let it finish first.
+  await releaseHeldWriters();
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
 
   for (const { page, texts } of snapshots.splice(0)) {
@@ -244,6 +254,117 @@ describe("the coming-soon page in the database", () => {
     ).resolves.toBe(false);
     await expect(isComingSoonPublished(db)).resolves.toBe(true);
   });
+});
+
+/**
+ * Two admins pressing at once: `first` writes in a transaction held open,
+ * `second` starts in its own, and the first commits only once Postgres says
+ * the second waits on it.
+ */
+async function overlap(
+  first: (tx: DatabaseClient) => Promise<unknown>,
+  second: (tx: DatabaseClient) => Promise<unknown>
+) {
+  const held = deferred();
+  const firstPid = deferred<number>();
+  const secondPid = deferred<number>();
+  const one = db.transaction(async (tx) => {
+    await first(tx);
+    firstPid.resolve(await backendPid(tx));
+    await held.promise;
+  });
+  const holder = await readyOrFailed(firstPid.promise, one);
+  const two = db.transaction(async (tx) => {
+    secondPid.resolve(await backendPid(tx));
+    await second(tx);
+  });
+  releaseOnTeardown(
+    () => {
+      held.resolve(undefined);
+    },
+    async () => await Promise.allSettled([one, two])
+  );
+  const waiter = await readyOrFailed(secondPid.promise, two);
+
+  await waitUntilBlockedBy(db, waiter, holder);
+  held.resolve(undefined);
+  await Promise.all([one, two]);
+}
+
+/** A save in both languages, then one in Spanish only, as two admins send them. */
+const BOTH_LANGUAGES = {
+  countdownTo: "2026-12-20",
+  translations: [
+    {
+      eyebrow: null,
+      headline: "Abrimos",
+      lead: "Hola",
+      locale: "es" as const,
+      marquee: null,
+    },
+    {
+      eyebrow: null,
+      headline: "Opening",
+      lead: "Hello",
+      locale: "en" as const,
+      marquee: "Jewelry",
+    },
+  ],
+};
+const SPANISH_ONLY = {
+  countdownTo: "2027-01-02",
+  translations: [
+    {
+      eyebrow: "Feria · 2 de enero",
+      headline: null,
+      lead: "Chau",
+      locale: "es" as const,
+      marquee: "Bijou",
+    },
+  ],
+};
+
+describe("two writers at once", () => {
+  test("a save that starts while another holds the page waits for it, and the page is wholly the second's, never a mix of their languages", async () => {
+    const { storeId } = await setup();
+    // The page's row is there: only its lock keeps the second save's delete
+    // from running before the first's new language is visible to it.
+    await addComingSoonIfMissing(db, { published: true, storeId });
+
+    await overlap(
+      async (tx) => await updateComingSoon(tx, storeId, BOTH_LANGUAGES),
+      async (tx) => await updateComingSoon(tx, storeId, SPANISH_ONLY)
+    );
+
+    await expect(findComingSoon(db)).resolves.toEqual({
+      ...SPANISH_ONLY,
+      published: true,
+    });
+  });
+
+  test.each([
+    ["a save waits for a flip", "flip", "save"],
+    ["a flip waits for a save", "save", "flip"],
+  ] as const)(
+    "%s, and both survive: the texts saved and the store opened",
+    async (_name, first, second) => {
+      const { storeId } = await setup();
+      await addComingSoonIfMissing(db, { published: true, storeId });
+      const writes = {
+        flip: async (tx: DatabaseClient) =>
+          await setComingSoonPublished(tx, storeId, false),
+        save: async (tx: DatabaseClient) =>
+          await updateComingSoon(tx, storeId, SPANISH_ONLY),
+      };
+
+      await overlap(writes[first], writes[second]);
+
+      await expect(findComingSoon(db)).resolves.toEqual({
+        ...SPANISH_ONLY,
+        published: false,
+      });
+    }
+  );
 });
 
 describe("who may see and flip it", () => {
