@@ -1578,9 +1578,22 @@ describe("updateBanner", () => {
     const { db, update } = setup({ cover: makeCover(6) });
 
     await expect(
-      update(makeUpdateValues({ id: 106, placement: "cover" }))
+      update(makeUpdateValues({ id: 106, isActive: false, placement: "cover" }))
     ).resolves.toEqual({ discardedImageUrls: [], id: 106 });
-    expect(db.$.update).toHaveBeenCalledOnce();
+    // That banner of this store, switched off as sent.
+    expect(db.$.update.mock.calls).toEqual([[banner]]);
+    expect(setOf(db)).toEqual({
+      endsOn: null,
+      isActive: false,
+      linkCategoryId: null,
+      linkProductId: null,
+      linkUrl: null,
+      startsOn: null,
+    });
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      params: [106, STORE_ID],
+      sql: '("banner"."id" = $1 and "banner"."storeId" = $2)',
+    });
     expect(placingsOf(db)).toEqual({ deleted: [], inserted: [] });
   });
 

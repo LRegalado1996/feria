@@ -112,7 +112,8 @@ function setup({
   });
 
   for (const model of existing) {
-    db.query[model].findFirst.mockResolvedValue({ id: 9 });
+    // A saved order's last section is at place 9.
+    db.query[model].findFirst.mockResolvedValue({ id: 9, position: 9 });
   }
 
   return { db, run: async () => await seedHome(db as never, STORE_ID) };
@@ -330,7 +331,7 @@ describe("seedHome", () => {
     expect(db.$.delete).not.toHaveBeenCalled();
   });
 
-  test("keeps an order the admin saved on a store with no banner, adding the banners after it", async () => {
+  test("keeps an order the admin saved on a store with no banner, placing the banners between rows after it", async () => {
     const { db, run } = setup({
       existing: [
         "announcement",
@@ -347,7 +348,8 @@ describe("seedHome", () => {
       ranking: 0,
       spotlight: true,
     });
-    // The spotlight goes after the saved order, which keeps its places.
+    // The spotlight goes last, after the saved order and the banners placed
+    // after it, which keep their places.
     expect(createSpotlight).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: STORE_ID,
       values: {
@@ -357,17 +359,42 @@ describe("seedHome", () => {
         rowsIndex: Number.MAX_SAFE_INTEGER,
       },
     });
-    const tables = insertsOf(db).map((insert) => insert.table);
-    expect(tables).toEqual([
+    const inserts = insertsOf(db);
+    expect(inserts.map((insert) => insert.table)).toEqual([
       ...Array.from({ length: 5 }, () => [banner, bannerTranslation]).flat(),
       pageCoverBanner,
+      pageSection,
     ]);
-    // The order looked for is the home page's.
+    // Banners 4 and 5 (the seed's two between rows) follow the saved
+    // order's last place, 9; nothing else of the order is written.
+    expect(inserts.at(-1)?.values).toEqual([
+      {
+        bannerId: 4,
+        categoryId: null,
+        kind: "banner",
+        pageId: 3,
+        position: 10,
+        storeId: STORE_ID,
+      },
+      {
+        bannerId: 5,
+        categoryId: null,
+        kind: "banner",
+        pageId: 3,
+        position: 11,
+        storeId: STORE_ID,
+      },
+    ]);
+    // The order looked for is the home page's, its last place first.
     const [config] = db.query.pageSection.findFirst.mock.calls[0] ?? [];
-    expect(renderQuery((config as { where: unknown }).where)).toEqual({
+    const { orderBy, where } = config as { orderBy: unknown[]; where: unknown };
+    expect(renderQuery(where)).toEqual({
       params: [3],
       sql: '"page_section"."pageId" = $1',
     });
+    expect(orderBy.map((term) => renderQuery(term))).toEqual([
+      { params: [], sql: '"page_section"."position" desc' },
+    ]);
     expect(db.$.delete).not.toHaveBeenCalled();
   });
 

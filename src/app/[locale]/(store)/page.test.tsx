@@ -24,8 +24,8 @@ const {
   connection: vi.fn(async () => undefined),
   frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
   homeProps: vi.fn<(props: Record<string, unknown>) => void>(),
-  // The store's home is its page 7 (FER-058).
-  readHomePageId: vi.fn(async (_store: unknown) => 7),
+  // The store's home is its page 12 (FER-058), not its id (7).
+  readHomePageId: vi.fn(async (_store: unknown) => 12),
   readPageContent:
     vi.fn<
       (
@@ -199,7 +199,7 @@ describe("StoreHomePage", () => {
       expect(readHomePageId).toHaveBeenCalledExactlyOnceWith(makeStore());
       expect(readPageContent).toHaveBeenCalledExactlyOnceWith(
         makeStore(),
-        7,
+        12,
         locale
       );
       expect(homeProps).toHaveBeenCalledExactlyOnceWith({

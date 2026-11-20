@@ -4,8 +4,11 @@
 -- copies FER-020's home-only placing into that page: `home_section` into
 -- `page_section`, and the banners whose `placement` is the cover, in
 -- `coverPosition` order, into `page_cover_banner`. A banner between rows
--- that had no place of its own yet (the storefront showed it after the
--- rest) goes after the rest.
+-- that had no place of its own yet goes after the rest, and the categories
+-- with no place of their own go before it, in their own order: FER-020's
+-- home showed the saved places, then those categories, then those banners,
+-- and the new build shows a banner only where a section places it, so
+-- copying the banner alone would put it ahead of those categories.
 --
 -- Fill only and idempotent (docs/agents/database.md § Migrations): a page
 -- is added only for a store with no home, and each copy only into a home
@@ -23,8 +26,15 @@ UPDATE "store" SET "homePageId" = "created"."id"
 FROM "created"
 WHERE "store"."id" = "created"."storeId";
 --> statement-breakpoint
-WITH "placed" AS (
-	SELECT "home_section"."storeId", 0 AS "grp", "home_section"."position" AS "ord",
+WITH "unplaced_banner" AS (
+	SELECT "banner"."storeId", "banner"."id"
+	FROM "banner"
+	WHERE "banner"."placement" = 'rows'
+		AND NOT EXISTS (
+			SELECT 1 FROM "home_section" WHERE "home_section"."bannerId" = "banner"."id"
+		)
+), "placed" AS (
+	SELECT "home_section"."storeId", 0 AS "grp", "home_section"."position"::bigint AS "ord",
 		"home_section"."kind"::text AS "kind", "home_section"."categoryId", "home_section"."bannerId"
 	FROM "home_section"
 	WHERE "home_section"."kind" <> 'banner'
@@ -33,12 +43,19 @@ WITH "placed" AS (
 			WHERE "banner"."id" = "home_section"."bannerId" AND "banner"."placement" = 'rows'
 		)
 	UNION ALL
-	SELECT "banner"."storeId", 1, "banner"."id", 'banner', NULL, "banner"."id"
-	FROM "banner"
-	WHERE "banner"."placement" = 'rows'
-		AND NOT EXISTS (
-			SELECT 1 FROM "home_section" WHERE "home_section"."bannerId" = "banner"."id"
+	SELECT "category"."storeId", 1,
+		row_number() OVER (PARTITION BY "category"."storeId" ORDER BY "category"."position", "category"."id"),
+		'category', "category"."id", NULL
+	FROM "category"
+	WHERE EXISTS (
+			SELECT 1 FROM "unplaced_banner" WHERE "unplaced_banner"."storeId" = "category"."storeId"
 		)
+		AND NOT EXISTS (
+			SELECT 1 FROM "home_section" WHERE "home_section"."categoryId" = "category"."id"
+		)
+	UNION ALL
+	SELECT "unplaced_banner"."storeId", 2, "unplaced_banner"."id"::bigint, 'banner', NULL, "unplaced_banner"."id"
+	FROM "unplaced_banner"
 )
 INSERT INTO "page_section" ("storeId", "pageId", "position", "kind", "categoryId", "bannerId", "updatedAt")
 SELECT "placed"."storeId", "store"."homePageId",
