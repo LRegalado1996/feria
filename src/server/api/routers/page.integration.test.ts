@@ -325,7 +325,9 @@ describe("the pages' procedures against the database", () => {
     ).toMatchObject({ isPublished: true });
   });
 
-  test("an admin lists the pages, the home first, and cannot delete it", async () => {
+  // The home's place first, whatever its id, is the service's
+  // (`page-settings.integration.test.ts` chooses a newer page as the home).
+  test("an admin lists the pages, the home marked once, and cannot delete it", async () => {
     const { pages } = await setup();
     const homePageId = await findHomePageId(db, {
       storeId: await theStoreId(db),
@@ -333,7 +335,9 @@ describe("the pages' procedures against the database", () => {
 
     const listed = await pages.list();
 
-    expect(listed[0]).toMatchObject({ id: homePageId, isHome: true });
+    expect(listed.filter((row) => row.isHome).map((row) => row.id)).toEqual([
+      homePageId,
+    ]);
     await expect(pages.delete({ id: homePageId })).rejects.toMatchObject({
       code: "BAD_REQUEST",
       message: "The home cannot be deleted: choose another home first",

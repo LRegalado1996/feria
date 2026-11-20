@@ -390,27 +390,24 @@ describe("the home: always exactly one (FER-060)", () => {
 describe("a page's words and blocks", () => {
   test("an edit without an English name leaves only the Spanish words; a deletion takes its words and blocks", async () => {
     await rolledBack(async (tx, storeId) => {
+      const tag = uniqueTag();
       const created = await createPage(tx, {
         storeId,
-        values: pageValues(`palabras-${uniqueTag()}`, {
+        values: pageValues(`palabras-${tag}`, {
           seoTitleEs: "Título",
         }),
       });
-      const [row] = await tx
-        .select({ id: category.id })
-        .from(category)
-        .where(eq(category.storeId, storeId))
-        .limit(1);
-
-      if (row) {
-        await tx.insert(pageSection).values({
-          categoryId: row.id,
-          kind: "category",
-          pageId: created.id,
-          position: 0,
-          storeId,
-        });
-      }
+      const row = await createCategory(tx, {
+        storeId,
+        values: { nameEn: null, nameEs: `Palabras ${tag}` },
+      });
+      await tx.insert(pageSection).values({
+        categoryId: row.id,
+        kind: "category",
+        pageId: created.id,
+        position: 0,
+        storeId,
+      });
 
       await updatePage(tx, {
         storeId,
@@ -429,6 +426,13 @@ describe("a page's words and blocks", () => {
           .from(pageTranslation)
           .where(eq(pageTranslation.pageId, created.id))
       ).toEqual([{ locale: "es", seoTitle: null }]);
+
+      expect(
+        await tx
+          .select({ categoryId: pageSection.categoryId })
+          .from(pageSection)
+          .where(eq(pageSection.pageId, created.id))
+      ).toEqual([{ categoryId: row.id }]);
 
       await deletePage(tx, { id: created.id, storeId });
 
