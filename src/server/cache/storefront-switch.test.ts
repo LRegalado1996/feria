@@ -2,10 +2,12 @@ import { describe, expect, test, vi } from "vitest";
 
 import { db } from "@/server/db";
 import type { MockDatabase } from "@/server/test/context";
+import { renderQuery } from "@/server/test/render-sql";
 
 import {
   createStorefrontSwitch,
   isStorefrontClosed,
+  SWITCH_STATEMENT_TIMEOUT_MS,
   SWITCH_TIMEOUT_MS,
   SWITCH_TTL_MS,
 } from "./storefront-switch";
@@ -198,8 +200,23 @@ describe("isStorefrontClosed", () => {
     vi.setSystemTime(new Date("2026-11-18T12:00:05.000Z"));
     await expect(isStorefrontClosed()).resolves.toBe(false);
     expect(database.$["select.limit"].mock.calls).toEqual([[1], [1]]);
+    // Each read runs in its own transaction, under a server-side limit set
+    // before it, so Postgres cancels a stalled one and frees its connection.
+    expect(database.$.transaction).toHaveBeenCalledTimes(2);
+    expect(
+      database.$.execute.mock.calls.map(([query]) => renderQuery(query))
+    ).toEqual(
+      Array.from({ length: 2 }, () => ({
+        params: ["4000"],
+        sql: "select set_config('statement_timeout', $1, true)",
+      }))
+    );
     // Short enough for a flip to show in seconds; long enough to spare the
-    // database a read per page.
-    expect([SWITCH_TTL_MS, SWITCH_TIMEOUT_MS]).toEqual([5000, 5000]);
+    // database a read per page. The server gives up before the proxy does.
+    expect([
+      SWITCH_TTL_MS,
+      SWITCH_TIMEOUT_MS,
+      SWITCH_STATEMENT_TIMEOUT_MS,
+    ]).toEqual([5000, 5000, 4000]);
   });
 });

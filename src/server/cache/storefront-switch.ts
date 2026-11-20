@@ -1,6 +1,7 @@
 import { captureExceptionWithScope } from "@/lib/sentry";
 import { within } from "@/lib/utils/within";
 import { db } from "@/server/db";
+import { withStatementTimeout } from "@/server/db/statement-timeout";
 import { isComingSoonPublished } from "@/server/services/coming-soon";
 
 /**
@@ -17,6 +18,13 @@ export const SWITCH_TTL_MS = 5000;
  * treats the store as closed. Long enough for a database waking from idle.
  */
 export const SWITCH_TIMEOUT_MS = 5000;
+
+/**
+ * How long Postgres runs the switch's query before it cancels it: under the
+ * proxy's wait and the window, so a stalled read hands its connection back
+ * before the next window starts another, and a stall cannot fill the pool.
+ */
+export const SWITCH_STATEMENT_TIMEOUT_MS = 4000;
 
 interface StorefrontSwitchOptions {
   now: () => number;
@@ -83,7 +91,12 @@ export function createStorefrontSwitch({
 
 const storefrontSwitch = createStorefrontSwitch({
   now: () => Date.now(),
-  read: async () => await isComingSoonPublished(db),
+  read: async () =>
+    await withStatementTimeout(
+      db,
+      SWITCH_STATEMENT_TIMEOUT_MS,
+      async (tx) => await isComingSoonPublished(tx)
+    ),
   report: (error) => {
     captureExceptionWithScope(error, {
       action: "ComingSoon.read_switch",
