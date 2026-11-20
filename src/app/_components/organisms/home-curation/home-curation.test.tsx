@@ -502,6 +502,61 @@ describe("HomeCuration", () => {
     });
   });
 
+  test("a spotlight created while the order has unsaved moves joins it at the server's place, and saves with it", async () => {
+    const { loaded, spies, user } = setup();
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Move down: Best sellers" })
+    );
+    // The server put the new spotlight first, right under the cover.
+    spies.get.mockReturnValue(
+      makeData({
+        sections: [
+          { kind: "spotlight", spotlightId: 52 },
+          ...makeData().sections,
+        ],
+        spotlights: [makeHomeSpotlight({ id: 52 })],
+      })
+    );
+    await user.click(screen.getByTestId("home-spotlight-add"));
+    const sheet = await screen.findByRole("dialog", { name: "New spotlight" });
+    await user.selectOptions(
+      within(sheet).getByRole("combobox", { name: "Article" }),
+      "Signet ring"
+    );
+    await user.click(within(sheet).getByTestId("spotlight-form-submit"));
+    expect(await screen.findByText("Spotlight added.")).toBeVisible();
+    expect(
+      await within(screen.getByTestId("page-layout-editor")).findByText(
+        "Spotlight: Signet ring"
+      )
+    ).toBeVisible();
+    await user.click(
+      within(screen.getByTestId("admin-primary-action")).getByRole("button", {
+        name: "Save order",
+      })
+    );
+
+    expect(await screen.findByText("Order saved.")).toBeVisible();
+    // The move kept, the spotlight where the server placed it.
+    expect(spies.saveLayout).toHaveBeenCalledExactlyOnceWith({
+      coverBannerIds: [31],
+      pageId: 1,
+      featuredProductIds: [],
+      rankingProductIds: [22, 23, 99],
+      sections: [
+        { kind: "spotlight", spotlightId: 52 },
+        { bannerId: 32, kind: "banner" },
+        { kind: "best_sellers" },
+        { categoryId: 4, kind: "category" },
+        { kind: "featured" },
+        { bannerId: 99, kind: "banner" },
+        { categoryId: 99, kind: "category" },
+      ],
+    });
+  });
+
   test("a failed order says so and is reported", async () => {
     const { loaded, user } = setup({ write: "fail" });
     await loaded();

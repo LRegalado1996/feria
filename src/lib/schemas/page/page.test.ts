@@ -693,6 +693,36 @@ describe("createPageLayoutFormSchema", () => {
       },
       [],
     ],
+    [
+      "an article spotlight twice",
+      {
+        sections: [
+          { section: { kind: "spotlight", spotlightId: 6 } },
+          { section: { kind: "spotlight", spotlightId: 6 } },
+        ],
+      },
+      [["sections", "repeated"]],
+    ],
+    [
+      "two article spotlights",
+      {
+        sections: [
+          { section: { kind: "spotlight", spotlightId: 6 } },
+          { section: { kind: "spotlight", spotlightId: 7 } },
+        ],
+      },
+      [],
+    ],
+    [
+      "a spotlight and a banner of the same id",
+      {
+        sections: [
+          { section: { kind: "spotlight", spotlightId: 2 } },
+          { section: { bannerId: 2, kind: "banner" } },
+        ],
+      },
+      [],
+    ],
   ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
     expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
   });

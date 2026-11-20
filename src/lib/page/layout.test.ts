@@ -293,6 +293,42 @@ describe("followServerLayout", () => {
     ]);
   });
 
+  test("an article spotlight new on the server joins a moved order at the server's index, beside one already there", () => {
+    const previous = makeLists({
+      sections: [
+        { section: BEST },
+        { section: makeSpotlight(51) },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+    });
+    const draft = makeLists({
+      sections: [
+        { section: makeCategory(4) },
+        { section: BEST },
+        { section: makeSpotlight(51) },
+        { section: makeBanner(3) },
+        { section: FEATURED },
+      ],
+    });
+    const next = makeLists({
+      sections: [{ section: makeSpotlight(52) }, ...previous.sections],
+    });
+
+    expect(
+      followServerLayout({ draft, next, previous }, new Set([5, 6, 7, 8]))
+        .sections
+    ).toEqual([
+      { section: makeSpotlight(52) },
+      { section: makeCategory(4) },
+      { section: BEST },
+      { section: makeSpotlight(51) },
+      { section: makeBanner(3) },
+      { section: FEATURED },
+    ]);
+  });
+
   test("a banner moved from the cover to the rows leaves the moved cover and joins the moved rows", () => {
     const draft = makeLists({
       cover: [{ bannerId: 2 }, { bannerId: 1 }],
