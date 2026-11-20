@@ -1,7 +1,11 @@
 import type { APIRequest, Browser, Page } from "@playwright/test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { page as pageTable, store } from "../../../server/db/schema";
+import {
+  page as pageTable,
+  pageTranslation,
+  store,
+} from "../../../server/db/schema";
 import {
   type DbFixture,
   expect,
@@ -195,19 +199,33 @@ test.describe("Pages from the admin", () => {
     const slug = `portada-${tag}`;
     const row = await seedRow(db, tag);
     await homeEdit.addPage({ categoryIds: [row.id], nameEs: name, slug });
+    // The home as the test finds it: named "Home" after `0025`, unless an
+    // admin of a development database renamed it.
     const [own] = await db.drizzle
-      .select({ slug: pageTable.slug })
+      .select({ name: pageTranslation.name, slug: pageTable.slug })
       .from(store)
       .innerJoin(pageTable, eq(pageTable.id, store.homePageId))
+      .innerJoin(
+        pageTranslation,
+        and(
+          eq(pageTranslation.pageId, pageTable.id),
+          eq(pageTranslation.locale, "es")
+        )
+      )
       .where(eq(store.id, db.storeId));
-    const oldHome = own?.slug ?? "";
+
+    if (!own) {
+      throw new Error("The store has no home page");
+    }
+
+    const oldHome = own.name;
     const pages = new AdminPagesPage(page);
 
     await pages.open();
     // The home is marked and cannot be deleted; a page can.
-    await expect(pages.row("Home")).toHaveAttribute("data-home", "true");
+    await expect(pages.row(oldHome)).toHaveAttribute("data-home", "true");
     await expect(
-      pages.row("Home").getByRole("button", { name: "Borrar: Home" })
+      pages.row(oldHome).getByRole("button", { name: `Borrar: ${oldHome}` })
     ).toHaveCount(0);
     await pages.useAsHome(name);
 
@@ -216,7 +234,7 @@ test.describe("Pages from the admin", () => {
       pages.row(name).getByRole("button", { name: `Borrar: ${name}` })
     ).toHaveCount(0);
     await expect(
-      pages.row("Home").getByRole("button", { name: "Borrar: Home" })
+      pages.row(oldHome).getByRole("button", { name: `Borrar: ${oldHome}` })
     ).toBeVisible();
 
     const context = await visitor(browser, baseURL);
@@ -228,9 +246,9 @@ test.describe("Pages from the admin", () => {
         shopper.getByRole("link", { name: new RegExp(`Taza ${tag}`, "u") })
       ).toBeVisible();
       // The old home is an ordinary page at its own address.
-      await shopper.goto(`/${oldHome}`);
+      await shopper.goto(`/${own.slug}`);
       await expect(
-        shopper.getByRole("heading", { level: 1, name: "Home" })
+        shopper.getByRole("heading", { level: 1, name: oldHome })
       ).toBeVisible();
     } finally {
       await context.close();

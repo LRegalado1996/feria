@@ -57,12 +57,16 @@ export class AdminPagesPage extends AdminPage {
     await expect(this.page).toHaveURL(/\/admin\/pages\/\d+$/u);
   }
 
-  /** Makes the page `name` the home, through its question. */
+  /**
+   * Makes the page `name` the home, through its question: the question's
+   * first open after a load is repeated until React owns the button.
+   */
   async useAsHome(name: string): Promise<void> {
-    await this.row(name)
-      .getByRole("button", { name: `Usar como home: ${name}` })
-      .click();
     const dialog = this.page.getByRole("dialog");
+    await clickUntilVisible(
+      this.row(name).getByRole("button", { name: `Usar como home: ${name}` }),
+      dialog
+    );
     await completeRpcAction(this.page, "/api/orpc/page/setHome", async () => {
       await dialog.getByRole("button", { name: "Usar como home" }).click();
     });

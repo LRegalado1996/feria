@@ -17,10 +17,11 @@ export class AdminHomePage extends AdminPage {
    */
   async open(): Promise<void> {
     // `/admin/home` leads to the editor of the page that is the home now
-    // (FER-060), which is named "Home" in every language.
+    // (FER-060), whatever its name: "Home" after `0025`, unless an admin
+    // of a development database renamed it.
     await this.goto("/admin/home");
     await expect(this.page).toHaveURL(/\/admin\/pages\/\d+$/u);
-    await expect(this.heading()).toHaveText("Home");
+    await expect(this.heading()).toBeVisible();
     await expect(this.saveOrderButton()).toBeEnabled();
   }
 
