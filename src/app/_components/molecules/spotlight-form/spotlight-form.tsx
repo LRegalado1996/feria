@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -100,18 +100,31 @@ function SpotlightForm({
   const fields = copy.fields;
   const formId = useId();
   const [failed, setFailed] = useState(false);
+  const placed = Math.min(rowsIndex ?? DEFAULT_SPOTLIGHT_INDEX, rows.length);
+  // The place the select opened on: kept from the first render, as the
+  // form's own default is.
+  const openedAt = useRef(placed);
   const form = useForm<SpotlightFormFields, unknown, SpotlightFormValues>({
-    defaultValues: fieldsOf(
-      spotlight,
-      Math.min(rowsIndex ?? DEFAULT_SPOTLIGHT_INDEX, rows.length)
-    ),
+    defaultValues: fieldsOf(spotlight, placed),
     resolver: zodResolver(createSpotlightFormSchema(copy.errors)),
   });
   const { isSubmitting } = useFormState({ control: form.control });
 
   const submit = async (values: SpotlightFormValues) => {
     setFailed(false);
-    setFailed(!(await onSave(values)));
+    // An edit sends a place only when the staff chose another one: the
+    // index read when the sheet opened may name another place by now (a
+    // spotlight added from another tab shifts the rows), and the server
+    // keeps the spotlight where it is when none is given.
+    const { rowsIndex: chosen, ...words } = values;
+    const keepsPlace = spotlight !== null && chosen === openedAt.current;
+    setFailed(
+      !(await onSave(
+        keepsPlace || chosen === undefined
+          ? words
+          : { ...words, rowsIndex: chosen }
+      ))
+    );
   };
 
   return (

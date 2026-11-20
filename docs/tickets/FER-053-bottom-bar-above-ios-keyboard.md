@@ -13,7 +13,7 @@ On a phone the admin's main action sits in a bar under the thumb (`molecules/adm
 
 - On iOS Safari, keep the bar above the keyboard while a field has focus, with the `visualViewport` API (its `height` and `offsetTop` on `resize` and `scroll`), or hide the bar while typing if riding above it turns out janky; decided after trying both on a real iPhone.
 - The same for every admin screen with a bar under the thumb (the wizard, the settings, the orders' moves).
-- No change on a computer or on Android.
+- No change on a computer, nor on Android where the page already shrinks for the keyboard (`resizes-content`, the article pages). On the other Android screens Chrome covers the bar the way Safari does, so the bar rides above the keyboard there too (decided on 2026-11-20 in review: leaving it covered there would keep the bug this ticket fixes).
 
 ## Acceptance criteria
 

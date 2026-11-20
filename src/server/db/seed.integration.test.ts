@@ -653,3 +653,63 @@ test("adds the example page at /regalos: published, off the header, its cover, i
 
   await expect(run).rejects.toThrow(ROLLED_BACK);
 });
+
+test("places the banners it adds between rows, then its spotlight, after an order the home page already has", async () => {
+  const run = db.transaction(async (tx) => {
+    const storeId = await theStoreId(tx);
+    await emptyStore(tx, storeId);
+    const [{ homePageId } = { homePageId: 0 }] = await tx
+      .select({ homePageId: store.homePageId })
+      .from(store)
+      .where(eq(store.id, storeId));
+    // An order saved with no banner: the curated rows, featured first.
+    await tx.insert(pageSection).values([
+      { kind: "featured", pageId: homePageId, position: 0, storeId },
+      { kind: "best_sellers", pageId: homePageId, position: 4, storeId },
+    ]);
+
+    expect((await runSeed(tx)).home.banners).toBe(5);
+    const sections = await tx.query.pageSection.findMany({
+      columns: { kind: true, position: true },
+      orderBy: asc(pageSection.position),
+      where: eq(pageSection.pageId, homePageId),
+      with: {
+        category: { columns: { slug: true } },
+        banner: {
+          columns: {},
+          with: {
+            translations: {
+              columns: { title: true },
+              where: eq(bannerTranslation.locale, "es"),
+            },
+          },
+        },
+      },
+    });
+    expect(
+      sections.map((row) => [
+        row.position,
+        row.banner?.translations[0]?.title ?? row.category?.slug ?? row.kind,
+      ])
+    ).toEqual([
+      [0, "featured"],
+      [1, "best_sellers"],
+      [2, "Encontranos en la feria"],
+      [3, "Aros para todos los días"],
+      // The categories the order never placed, in their own order, then the
+      // spotlight, placed through the service as the admin adds one: the
+      // sequence is written whole and numbered again (FER-059).
+      [4, "burbujeros"],
+      [5, "bijouterie"],
+      [6, "cadenas"],
+      [7, "anillos"],
+      [8, "aros"],
+      [9, "pulseras"],
+      [10, "spotlight"],
+    ]);
+
+    throw new Error(ROLLED_BACK);
+  });
+
+  await expect(run).rejects.toThrow(ROLLED_BACK);
+});

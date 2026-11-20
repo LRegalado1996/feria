@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { describe, expect, test, vi } from "vitest";
 
 import { type DatabaseClient, db } from "@/server/db";
@@ -104,6 +104,38 @@ async function homeOf(tx: DatabaseClient, storeId: number) {
   return row?.homePageId ?? null;
 }
 
+/** A category of the store at `position` in the categories' own order. */
+async function addCategory(
+  tx: DatabaseClient,
+  storeId: number,
+  position: number
+) {
+  const [row] = await tx
+    .insert(category)
+    .values({ position, slug: `home-${uniqueTag()}`, storeId })
+    .returning({ id: category.id });
+
+  return row?.id ?? 0;
+}
+
+/**
+ * The store's categories other than `placed`, in their own order, as
+ * sections of the short form `placesOf` answers from `position` on.
+ */
+async function unplacedCategories(
+  tx: DatabaseClient,
+  storeId: number,
+  { placed, position }: { placed: number[]; position: number }
+) {
+  const rows = await tx
+    .select({ id: category.id })
+    .from(category)
+    .where(and(eq(category.storeId, storeId), notInArray(category.id, placed)))
+    .orderBy(asc(category.position), asc(category.id));
+
+  return rows.map((row, index) => [position + index, "category", row.id]);
+}
+
 /** A page's sequence and cover, short. */
 async function placesOf(tx: DatabaseClient, pageId: number) {
   const sections = await tx
@@ -136,13 +168,12 @@ async function placesOf(tx: DatabaseClient, pageId: number) {
 }
 
 describe("migration 0021: the home becomes a page", () => {
-  test("gives the store a home page, copies its places in order (an unplaced banner last), and converges when replayed", async () => {
+  test("gives the store a home page, copies its places in order (the unplaced categories, then an unplaced banner, last), and converges when replayed", async () => {
     await rolledBack(async (tx, storeId) => {
-      const [shelf] = await tx
-        .insert(category)
-        .values({ position: 10_000, slug: `home-${uniqueTag()}`, storeId })
-        .returning({ id: category.id });
-      const shelfId = shelf?.id ?? 0;
+      const shelfId = await addCategory(tx, storeId, 10_000);
+      // Two with no place, made in the reverse of their own order.
+      const later = await addCategory(tx, storeId, 10_002);
+      const sooner = await addCategory(tx, storeId, 10_001);
       const second = await addOldBanner(tx, storeId, { coverPosition: 1 });
       const first = await addOldBanner(tx, storeId, { coverPosition: 0 });
       const between = await addOldBanner(tx, storeId, "rows");
@@ -166,6 +197,17 @@ describe("migration 0021: the home becomes a page", () => {
       expect(await tx.$count(page, eq(page.storeId, storeId))).toBe(
         pagesBefore + 1
       );
+      // FER-020's home showed the categories with no place before the
+      // banner with none: the copy keeps that order.
+      const categories = await unplacedCategories(tx, storeId, {
+        placed: [shelfId],
+        position: 4,
+      });
+      expect(
+        categories
+          .map((section) => section[2])
+          .filter((id) => id === sooner || id === later)
+      ).toEqual([sooner, later]);
       expect(await placesOf(tx, home ?? 0)).toEqual({
         cover: [
           [0, first],
@@ -176,9 +218,32 @@ describe("migration 0021: the home becomes a page", () => {
           [1, "category", shelfId],
           [2, "banner", between],
           [3, "best_sellers", null],
-          [4, "banner", unplaced],
+          ...categories,
+          [4 + categories.length, "banner", unplaced],
         ],
       });
+    });
+  });
+
+  test("places no category when no banner is left without a place", async () => {
+    await rolledBack(async (tx, storeId) => {
+      const shelfId = await addCategory(tx, storeId, 10_000);
+      await addCategory(tx, storeId, 9999);
+      const between = await addOldBanner(tx, storeId, "rows");
+      await tx.insert(homeSection).values([
+        { categoryId: shelfId, kind: "category", position: 0, storeId },
+        { bannerId: between, kind: "banner", position: 1, storeId },
+      ]);
+
+      await applyMigration(tx);
+
+      // The resolver adds them after the saved places, as FER-020's did.
+      expect(
+        (await placesOf(tx, (await homeOf(tx, storeId)) ?? 0)).sections
+      ).toEqual([
+        [0, "category", shelfId],
+        [1, "banner", between],
+      ]);
     });
   });
 

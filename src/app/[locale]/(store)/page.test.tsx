@@ -35,8 +35,8 @@ const {
       seoTitle: string | null;
     } | null>
   >(async () => ({ seoDescription: null, seoTitle: null })),
-  // The store's home is its page 7 (FER-058).
-  readHomePageId: vi.fn(async (_store: unknown) => 7),
+  // The store's home is its page 12 (FER-058), not its id (7).
+  readHomePageId: vi.fn(async (_store: unknown) => 12),
   readPageContent:
     vi.fn<
       (
@@ -214,7 +214,7 @@ describe("StoreHomePage", () => {
       expect(readHomePageId).toHaveBeenCalledExactlyOnceWith(makeStore());
       expect(readPageContent).toHaveBeenCalledExactlyOnceWith(
         makeStore(),
-        7,
+        12,
         locale
       );
       expect(homeProps).toHaveBeenCalledExactlyOnceWith({

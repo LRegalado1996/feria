@@ -30,12 +30,49 @@ interface SlowAnswer {
 }
 
 /**
+ * The module's own switch over `@/server/db`, the passive double for every
+ * unit test (setup-common), at `2026-11-18T12:00:00Z`. Its transaction
+ * hands out a handle of its own (`tx`), so what ran inside the limited
+ * transaction shows apart from what ran on the root client; that handle's
+ * first read fails with `outage`, its second answers `published: false`
+ * (the coming-soon page is off). `at` moves the clock.
+ */
+function setupModuleSwitch() {
+  vi.setSystemTime(new Date("2026-11-18T12:00:00.000Z"));
+  const database = db as unknown as MockDatabase;
+  const tx = createMockDatabase();
+  database.$.transaction.mockImplementation(async (callback: unknown) =>
+    typeof callback === "function" ? await callback(tx) : undefined
+  );
+  const outage = new Error("connection refused");
+  tx.$["select.limit"]
+    .mockRejectedValueOnce(outage)
+    .mockResolvedValueOnce([{ published: false }]);
+
+  return {
+    at: (iso: string) => {
+      vi.setSystemTime(new Date(iso));
+    },
+    database,
+    outage,
+    tx,
+  };
+}
+
+/**
  * A switch over a database double: `answers` are what each read returns in
  * turn (`true` published, an `Error` thrown, `"hang"` never settling, or a
  * slow answer that moves the clock before it returns), on a clock the test
- * moves.
+ * moves; `fakeTimers` also puts the time limit's timer on the test's clock.
  */
-function setup(answers: (boolean | Error | SlowAnswer | "hang")[]) {
+function setup(
+  answers: (boolean | Error | SlowAnswer | "hang")[],
+  { fakeTimers = false }: { fakeTimers?: boolean } = {}
+) {
+  if (fakeTimers) {
+    vi.useFakeTimers();
+  }
+
   const clock = { now: 1_000_000 };
   const queue = [...answers];
   const read = vi.fn(async (): Promise<boolean> => {
@@ -166,8 +203,7 @@ describe("createStorefrontSwitch", () => {
   });
 
   test("fails closed when the database does not answer in time", async () => {
-    vi.useFakeTimers();
-    const { report, storefront } = setup(["hang"]);
+    const { report, storefront } = setup(["hang"], { fakeTimers: true });
 
     const closed = storefront.isClosed();
     await vi.advanceTimersByTimeAsync(TIMEOUT - 1);
@@ -184,30 +220,21 @@ describe("createStorefrontSwitch", () => {
 describe("isStorefrontClosed", () => {
   // One test: the switch it reads is the module's own, remembered across calls.
   test("reads the switch's one column through the service, failing closed with a report, then trusting the next answer for its window", async () => {
-    vi.setSystemTime(new Date("2026-11-18T12:00:00.000Z"));
-    // `@/server/db` is the passive double for every unit test (setup-common);
-    // its transaction hands out a handle of its own, so what ran inside the
-    // limited transaction shows apart from what ran on the root client.
-    const database = db as unknown as MockDatabase;
-    const tx = createMockDatabase();
-    database.$.transaction.mockImplementation(async (callback: unknown) =>
-      typeof callback === "function" ? await callback(tx) : undefined
-    );
-    const outage = new Error("connection refused");
-    tx.$["select.limit"]
-      .mockRejectedValueOnce(outage)
-      .mockResolvedValueOnce([{ published: false }]);
+    const { at, database, outage, tx } = setupModuleSwitch();
 
     await expect(isStorefrontClosed()).resolves.toBe(true);
     expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(outage, {
       action: "ComingSoon.read_switch",
     });
 
-    vi.setSystemTime(new Date("2026-11-18T12:00:05.000Z"));
+    at("2026-11-18T12:00:05.000Z");
     await expect(isStorefrontClosed()).resolves.toBe(false);
     // Each read runs in its own transaction, under a server-side limit set
     // before it, so Postgres cancels a stalled one and frees its connection.
-    expect(database.$.transaction).toHaveBeenCalledTimes(2);
+    expect(database.$.transaction.mock.calls).toEqual([
+      [expect.any(Function)],
+      [expect.any(Function)],
+    ]);
     expect(
       tx.$.execute.mock.calls.map(([query]) => renderQuery(query))
     ).toEqual(

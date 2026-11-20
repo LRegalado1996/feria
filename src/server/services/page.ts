@@ -237,13 +237,24 @@ function sectionSpotlightIds(sections: readonly PageSection[]): number[] {
 
 /**
  * The store's article spotlights (FER-059), in the order they were made,
- * with the article each features and their words.
+ * with the article each features and their words. Given `ids` (the ones a
+ * page places), only those: none when it places none.
  */
-async function readSpotlights(db: DatabaseClient, storeId: number) {
+async function readSpotlights(
+  db: DatabaseClient,
+  storeId: number,
+  ids?: readonly number[]
+) {
+  if (ids?.length === 0) {
+    return [];
+  }
+
   return await db.query.spotlight.findMany({
     columns: { id: true, productId: true },
     orderBy: [asc(spotlight.id)],
-    where: eq(spotlight.storeId, storeId),
+    where: ids
+      ? and(eq(spotlight.storeId, storeId), inArray(spotlight.id, [...ids]))
+      : eq(spotlight.storeId, storeId),
     with: {
       translations: { columns: { label: true, locale: true, phrase: true } },
     },
@@ -498,7 +509,12 @@ export async function getPageContent(
     });
     const categoryRows = await readCategoryRows(tx, storeId);
     const curated = await readCurated(tx, storeId);
-    const spotlights = await readSpotlights(tx, storeId);
+    // An unplaced spotlight cannot show: neither it nor its article is read.
+    const spotlights = await readSpotlights(
+      tx,
+      storeId,
+      sectionSpotlightIds(saved)
+    );
     const ids = new Set([
       ...[...categoryRows.values()].flat(),
       ...curated.ranking,

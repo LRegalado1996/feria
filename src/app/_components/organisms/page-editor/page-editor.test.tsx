@@ -435,6 +435,7 @@ describe("PageEditor", () => {
         document.body
     );
 
+    expect(listed("home-layout-featured-item")).toEqual(["Pearl necklace"]);
     // One featured article is not a valid order: the saved ones stay.
     expect(featured()).toEqual(["Featured", "Signet ring", "Pearl necklace"]);
   });
@@ -467,7 +468,7 @@ describe("PageEditor", () => {
     expect(cover()).toBe("Rings sale");
   });
 
-  test("the preview falls back to the saved order when even the saved lists do not read", async () => {
+  test("the preview keeps a reordered cover while even the saved featured articles do not read", async () => {
     // A featured article deleted since leaves the saved row with one.
     const { loaded, user } = setup({
       data: makeData({
@@ -478,11 +479,13 @@ describe("PageEditor", () => {
     });
     await loaded();
 
+    expect(coverTitle()).toBe("Bubble guns");
     await user.click(
       screen.getByRole("button", { name: "Move down: Bubble guns" })
     );
 
-    expect(coverTitle()).toBe("Bubble guns");
+    expect(coverTitle()).toBe("Rings sale");
+    expect(listed("home-layout-featured-item")).toEqual(["Signet ring"]);
   });
 
   test("saves the announcement and says so", async () => {
@@ -1155,7 +1158,10 @@ describe("PageEditor", () => {
   test("lists the article spotlights: the article, its label, whether it is on this page, and why the store leaves one out", async () => {
     const { loaded } = setup({
       data: makeData({
-        sections: [{ kind: "spotlight", spotlightId: 51 }],
+        sections: [
+          { kind: "spotlight", spotlightId: 51 },
+          { kind: "spotlight", spotlightId: 53 },
+        ],
         spotlights: [
           makeHomeSpotlight(),
           makeHomeSpotlight({
@@ -1197,10 +1203,20 @@ describe("PageEditor", () => {
     expect(rows[1]).toHaveTextContent("Nuevo");
     // In the page's order, named and warned like a curated article.
     expect(
-      within(screen.getByTestId("home-layout-rows")).getByText(
-        "Spotlight: Signet ring"
-      )
-    ).toBeVisible();
+      within(screen.getByTestId("home-layout-rows"))
+        .getAllByTestId("home-layout-rows-item")
+        .map((item) => [
+          item.querySelector("p")?.textContent,
+          within(item).queryByTestId("home-layout-warning")?.textContent ??
+            null,
+        ])
+    ).toEqual([
+      ["Spotlight: Signet ring", null],
+      [
+        "Spotlight: Cadena corona",
+        "It is sold out: it doesn't appear in the store until it is available again.",
+      ],
+    ]);
   });
 
   test.each([
@@ -1287,7 +1303,7 @@ describe("PageEditor", () => {
     expect(add).toHaveFocus();
   });
 
-  test("edits a spotlight on its place, offering the draft it features", async () => {
+  test("edits a spotlight opened on its place, offering the draft it features, and leaves the place to the server", async () => {
     const { loaded, spies, user } = setup({
       data: makeData({
         sections: [
@@ -1320,7 +1336,6 @@ describe("PageEditor", () => {
       phraseEn: "The one kids ask for most.",
       phraseEs: "El que más piden los chicos.",
       productId: 22,
-      rowsIndex: 1,
     });
   });
 
@@ -1389,25 +1404,36 @@ describe("PageEditor", () => {
       within(first).getByRole("combobox", { name: "Article" }),
       "Signet ring"
     );
-    await user.click(within(first).getByTestId("spotlight-form-submit"));
-    expect(
-      await within(first).findByRole("button", { name: "Saving…" })
-    ).toBeDisabled();
-    await user.keyboard("{Escape}");
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    await user.click(add);
-    const second = await screen.findByRole("dialog", { name: "New spotlight" });
-    const label = within(second).getByRole("textbox", {
-      name: "Label in Spanish",
-    });
-    await user.type(label, "Otra");
-    finish();
+    // Released whatever happens before it: a failed step leaves no
+    // request hanging past the test.
+    try {
+      await user.click(within(first).getByTestId("spotlight-form-submit"));
+      expect(
+        await within(first).findByRole("button", { name: "Saving…" })
+      ).toBeDisabled();
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+      await user.click(add);
+      const second = await screen.findByRole("dialog", {
+        name: "New spotlight",
+      });
+      const label = within(second).getByRole("textbox", {
+        name: "Label in Spanish",
+      });
+      await user.type(label, "Otra");
+      expect(label).toHaveValue("Otra");
+      finish();
 
-    expect(await screen.findByText("Spotlight added.")).toBeVisible();
-    expect(screen.getByRole("dialog", { name: "New spotlight" })).toBe(second);
-    expect(label).toHaveValue("Otra");
+      expect(await screen.findByText("Spotlight added.")).toBeVisible();
+      expect(screen.getByRole("dialog", { name: "New spotlight" })).toBe(
+        second
+      );
+      expect(label).toHaveValue("Otra");
+    } finally {
+      finish();
+    }
   });
 
   test("cancelling and Escape close the sheet and hand focus back", async () => {
@@ -1480,6 +1506,54 @@ describe("PageEditor", () => {
     await waitFor(() => {
       expect(remove).toHaveFocus();
     });
+  });
+
+  test("a deletion that ends after its question was closed leaves the question asked since open", async () => {
+    const { loaded, user } = setup({
+      data: makeData({
+        spotlights: [
+          makeHomeSpotlight(),
+          makeHomeSpotlight({ id: 53, productId: 23 }),
+        ],
+      }),
+    });
+    await loaded();
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    server.use(
+      createOrpcHandler("page.deleteSpotlight", async () => {
+        await held;
+        return { id: 51 };
+      })
+    );
+
+    // Released whatever happens before it: a failed step leaves no
+    // request hanging past the test.
+    try {
+      await user.click(
+        screen.getByRole("button", { name: "Delete spotlight: Signet ring" })
+      );
+      await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      });
+      await user.click(
+        screen.getByRole("button", { name: "Delete spotlight: Cadena corona" })
+      );
+      const second = await screen.findByTestId("confirm-dialog");
+      finish();
+
+      expect(await screen.findByText("Spotlight deleted.")).toBeVisible();
+      expect(screen.getByTestId("confirm-dialog")).toBe(second);
+      expect(second).toHaveTextContent(
+        "The spotlight of “Cadena corona” is deleted. The article stays as it is."
+      );
+    } finally {
+      finish();
+    }
   });
 
   test("closing the question deletes no spotlight", async () => {

@@ -15,6 +15,7 @@ import {
   category,
   categoryTranslation,
   featuredProduct,
+  page,
   pageCoverBanner,
   pageSection,
   product,
@@ -1102,26 +1103,51 @@ async function backendOf(tx: DatabaseClient) {
   return result.rows[0]?.pid ?? 0;
 }
 
+/** Whether the backend `pid` waits on the advisory lock `key` right now. */
+async function waitsOn(pid: number, key: string) {
+  const result = await db.execute<{ waiting: number }>(sql`
+    select count(*)::int as waiting
+    from pg_locks
+    where locktype = 'advisory'
+      and not granted
+      and pid = ${pid}
+      and objsubid = 1
+      and objid::bigint = (hashtext(${key})::bigint & 4294967295)
+  `);
+
+  return (result.rows[0]?.waiting ?? 0) > 0;
+}
+
 /**
- * Waits until the backend `pid` waits on the store's pages' lock: an
- * advisory lock not granted, whose key is `hashtext('pages:<storeId>')`.
- * Any other wait (a row lock, another store's pages) does not count.
+ * Waits until the backend `pid` of `writer` waits on the store's pages'
+ * lock: an advisory lock not granted, whose key is
+ * `hashtext('pages:<storeId>')`. Any other wait (a row lock, another store's
+ * pages) does not count. A writer that ends first never waited: the wait
+ * stops and fails with the writer's own error when it has one.
  */
-async function waitUntilBlocked(pid: number, storeId: number) {
+async function waitUntilBlocked(
+  pid: number,
+  storeId: number,
+  writer: Promise<unknown>
+) {
   const key = `pages:${String(storeId)}`;
+  const ended = writer.then(
+    () => "ended" as const,
+    () => "ended" as const
+  );
 
   for (let attempt = 0; attempt < 2000; attempt += 1) {
-    const result = await db.execute<{ waiting: number }>(sql`
-      select count(*)::int as waiting
-      from pg_locks
-      where locktype = 'advisory'
-        and not granted
-        and pid = ${pid}
-        and objsubid = 1
-        and objid::bigint = (hashtext(${key})::bigint & 4294967295)
-    `);
+    const poll = waitsOn(pid, key);
 
-    if ((result.rows[0]?.waiting ?? 0) > 0) {
+    if ((await Promise.race([ended, poll])) === "ended") {
+      await poll;
+      await writer;
+      throw new Error(
+        "The second writer ended without waiting on the pages' lock"
+      );
+    }
+
+    if (await poll) {
       return;
     }
   }
@@ -1133,11 +1159,18 @@ async function waitUntilBlocked(pid: number, storeId: number) {
 // store's home is put back as it was.
 const committed = {
   categoryIds: [] as number[],
+  pageIds: [] as number[],
   productIds: [] as number[],
   restore: [] as (() => Promise<void>)[],
+  spotlightIds: [] as number[],
 };
 
 afterEach(async () => {
+  await db
+    .delete(spotlight)
+    .where(inArray(spotlight.id, committed.spotlightIds.splice(0)));
+  // Its places go with it.
+  await db.delete(page).where(inArray(page.id, committed.pageIds.splice(0)));
   await db
     .delete(product)
     .where(inArray(product.id, committed.productIds.splice(0)));
@@ -1149,6 +1182,44 @@ afterEach(async () => {
     await restore();
   }
 });
+
+/**
+ * A category with three published articles, committed in one go: nothing
+ * is left behind half made, and the ids are recorded for the teardown only
+ * once they exist.
+ */
+async function commitArticles(storeId: number) {
+  const made = await db.transaction(async (tx) => {
+    const shelf = await addCategory(tx, storeId);
+    const ids: number[] = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      ids.push((await addArticle(tx, { categoryId: shelf.id, storeId })).id);
+    }
+
+    return { articles: ids, shelfId: shelf.id };
+  });
+  committed.categoryIds.push(made.shelfId);
+  committed.productIds.push(...made.articles);
+
+  return made.articles;
+}
+
+/** A page of the store, recorded for the teardown, which takes its places. */
+async function commitPage(storeId: number) {
+  const [row] = await db
+    .insert(page)
+    .values({ slug: `escritores-${uniqueTag()}`, storeId })
+    .returning({ id: page.id });
+
+  if (!row) {
+    throw new Error("Inserting a page returned no row");
+  }
+
+  committed.pageIds.push(row.id);
+
+  return row.id;
+}
 
 /**
  * Keeps the store's sequence, curated rows and cover places as they are
@@ -1222,23 +1293,10 @@ async function setupTwoWriters() {
       }
     });
   });
-  // One commit: nothing is left behind half made, and the ids are recorded
-  // for the teardown only once they exist.
-  const made = await db.transaction(async (tx) => {
-    const shelf = await addCategory(tx, storeId);
-    const ids: number[] = [];
-
-    for (let index = 0; index < 3; index += 1) {
-      ids.push((await addArticle(tx, { categoryId: shelf.id, storeId })).id);
-    }
-
-    return { articles: ids, shelfId: shelf.id };
-  });
-  committed.categoryIds.push(made.shelfId);
-  committed.productIds.push(...made.articles);
+  const articles = await commitArticles(storeId);
 
   return {
-    articles: made.articles,
+    articles,
     storeId,
     // The store's curated rows now, by the ids this test ranked.
     ranked: async () =>
@@ -1296,7 +1354,11 @@ describe("the home's order under two writers", () => {
     // second writer that fails before it says its process ends the wait
     // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
+      await waitUntilBlocked(
+        await readyOrFailed(secondPid, second),
+        storeId,
+        second
+      );
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
@@ -1326,10 +1388,11 @@ describe("the home's order under two writers", () => {
 
 describe("article spotlights under two writers", () => {
   test("a spotlight added while another write holds the pages' lock waits for it, and both land on the page", async () => {
-    const { articles } = await setupTwoWriters();
     const storeId = await theStoreId(db);
-    const pageId = await findHomePageId(db, { storeId });
-    const [a = 0, b = 0] = articles;
+    const [a = 0, b = 0] = await commitArticles(storeId);
+    // A page of its own: the home's sequence and curated rows stay as they
+    // are.
+    const pageId = await commitPage(storeId);
     const values = (productId: number) => ({
       labelEn: null,
       labelEs: "Nuevo",
@@ -1339,14 +1402,12 @@ describe("article spotlights under two writers", () => {
       productId,
     });
     const made: number[] = [];
-    committed.restore.unshift(async () => {
-      await db.delete(spotlight).where(inArray(spotlight.id, made));
-    });
     const held = deferred();
     const locked = deferred();
     const first = db.transaction(async (tx) => {
       const created = await createSpotlight(tx, { storeId, values: values(a) });
       made.push(created.id);
+      committed.spotlightIds.push(created.id);
       locked.resolve(undefined);
       await held.promise;
 
@@ -1363,6 +1424,7 @@ describe("article spotlights under two writers", () => {
       pid.resolve(await backendOf(tx));
       const created = await createSpotlight(tx, { storeId, values: values(b) });
       made.push(created.id);
+      committed.spotlightIds.push(created.id);
 
       return created;
     });
@@ -1374,7 +1436,11 @@ describe("article spotlights under two writers", () => {
     // second writer that fails before it says its process ends the wait
     // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
+      await waitUntilBlocked(
+        await readyOrFailed(secondPid, second),
+        storeId,
+        second
+      );
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
@@ -1394,6 +1460,6 @@ describe("article spotlights under two writers", () => {
         .where(eq(pageSection.pageId, pageId))
         .orderBy(asc(pageSection.position))
     ).flatMap((row) => (row.spotlightId === null ? [] : [row.spotlightId]));
-    expect(placed.slice(0, 2)).toEqual([made[1], made[0]]);
+    expect(placed).toEqual([made[1], made[0]]);
   });
 });

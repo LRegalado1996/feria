@@ -204,6 +204,44 @@ describe("SpotlightForm", () => {
     expect(select("After")).toHaveValue("2");
   });
 
+  test("an edit of its words alone sends no place, so it stays where it is now", async () => {
+    const { field, onSave, submit, user } = setup({
+      rowsIndex: 1,
+      spotlight: makeSpotlight(),
+    });
+
+    await user.clear(field("Label in English"));
+    await user.type(field("Label in English"), "Fresh");
+    await submit();
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      labelEn: "Fresh",
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 22,
+    });
+  });
+
+  test("an edit that moves it sends its new place", async () => {
+    const { onSave, select, submit, user } = setup({
+      rowsIndex: 1,
+      spotlight: makeSpotlight(),
+    });
+
+    await user.selectOptions(select("After"), "Featured");
+    await submit();
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      labelEn: "New",
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 22,
+      rowsIndex: 3,
+    });
+  });
+
   test("a place past the end of the rows opens at the last one", () => {
     const { select } = setup({ rowsIndex: 9, spotlight: makeSpotlight() });
 
@@ -229,7 +267,6 @@ describe("SpotlightForm", () => {
       phraseEn: null,
       phraseEs: "El que más piden.",
       productId: 22,
-      rowsIndex: 0,
     });
     expect(field("Label in English")).toHaveValue("Fresh");
   });

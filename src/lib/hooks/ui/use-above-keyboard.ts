@@ -107,8 +107,10 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
       inset = next;
       element.style.setProperty(KEYBOARD_INSET_VARIABLE, `${inset}px`);
 
-      // Riding above the keyboard is styled through this attribute; hiding
-      // the bar while typing instead would only change the CSS it selects.
+      // Riding above the keyboard is styled through this attribute. It marks
+      // only a keyboard that pushes the bar up, not Safari's pan to the
+      // page's bottom (`keyboardShown`), so hiding the bar while typing
+      // would first need it set for every shown keyboard (FER-053).
       if (inset > 0) {
         element.dataset.keyboard = "open";
       } else {
