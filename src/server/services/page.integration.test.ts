@@ -15,6 +15,7 @@ import {
   category,
   categoryTranslation,
   featuredProduct,
+  page,
   pageCoverBanner,
   pageSection,
   product,
@@ -1158,11 +1159,18 @@ async function waitUntilBlocked(
 // store's home is put back as it was.
 const committed = {
   categoryIds: [] as number[],
+  pageIds: [] as number[],
   productIds: [] as number[],
   restore: [] as (() => Promise<void>)[],
+  spotlightIds: [] as number[],
 };
 
 afterEach(async () => {
+  await db
+    .delete(spotlight)
+    .where(inArray(spotlight.id, committed.spotlightIds.splice(0)));
+  // Its places go with it.
+  await db.delete(page).where(inArray(page.id, committed.pageIds.splice(0)));
   await db
     .delete(product)
     .where(inArray(product.id, committed.productIds.splice(0)));
@@ -1174,6 +1182,44 @@ afterEach(async () => {
     await restore();
   }
 });
+
+/**
+ * A category with three published articles, committed in one go: nothing
+ * is left behind half made, and the ids are recorded for the teardown only
+ * once they exist.
+ */
+async function commitArticles(storeId: number) {
+  const made = await db.transaction(async (tx) => {
+    const shelf = await addCategory(tx, storeId);
+    const ids: number[] = [];
+
+    for (let index = 0; index < 3; index += 1) {
+      ids.push((await addArticle(tx, { categoryId: shelf.id, storeId })).id);
+    }
+
+    return { articles: ids, shelfId: shelf.id };
+  });
+  committed.categoryIds.push(made.shelfId);
+  committed.productIds.push(...made.articles);
+
+  return made.articles;
+}
+
+/** A page of the store, recorded for the teardown, which takes its places. */
+async function commitPage(storeId: number) {
+  const [row] = await db
+    .insert(page)
+    .values({ storeId })
+    .returning({ id: page.id });
+
+  if (!row) {
+    throw new Error("Inserting a page returned no row");
+  }
+
+  committed.pageIds.push(row.id);
+
+  return row.id;
+}
 
 /**
  * Keeps the store's sequence, curated rows and cover places as they are
@@ -1247,23 +1293,10 @@ async function setupTwoWriters() {
       }
     });
   });
-  // One commit: nothing is left behind half made, and the ids are recorded
-  // for the teardown only once they exist.
-  const made = await db.transaction(async (tx) => {
-    const shelf = await addCategory(tx, storeId);
-    const ids: number[] = [];
-
-    for (let index = 0; index < 3; index += 1) {
-      ids.push((await addArticle(tx, { categoryId: shelf.id, storeId })).id);
-    }
-
-    return { articles: ids, shelfId: shelf.id };
-  });
-  committed.categoryIds.push(made.shelfId);
-  committed.productIds.push(...made.articles);
+  const articles = await commitArticles(storeId);
 
   return {
-    articles: made.articles,
+    articles,
     storeId,
     // The store's curated rows now, by the ids this test ranked.
     ranked: async () =>
@@ -1355,10 +1388,11 @@ describe("the home's order under two writers", () => {
 
 describe("article spotlights under two writers", () => {
   test("a spotlight added while another write holds the pages' lock waits for it, and both land on the page", async () => {
-    const { articles } = await setupTwoWriters();
     const storeId = await theStoreId(db);
-    const pageId = await findHomePageId(db, { storeId });
-    const [a = 0, b = 0] = articles;
+    const [a = 0, b = 0] = await commitArticles(storeId);
+    // A page of its own: the home's sequence and curated rows stay as they
+    // are.
+    const pageId = await commitPage(storeId);
     const values = (productId: number) => ({
       labelEn: null,
       labelEs: "Nuevo",
@@ -1368,14 +1402,12 @@ describe("article spotlights under two writers", () => {
       productId,
     });
     const made: number[] = [];
-    committed.restore.unshift(async () => {
-      await db.delete(spotlight).where(inArray(spotlight.id, made));
-    });
     const held = deferred();
     const locked = deferred();
     const first = db.transaction(async (tx) => {
       const created = await createSpotlight(tx, { storeId, values: values(a) });
       made.push(created.id);
+      committed.spotlightIds.push(created.id);
       locked.resolve(undefined);
       await held.promise;
 
@@ -1392,6 +1424,7 @@ describe("article spotlights under two writers", () => {
       pid.resolve(await backendOf(tx));
       const created = await createSpotlight(tx, { storeId, values: values(b) });
       made.push(created.id);
+      committed.spotlightIds.push(created.id);
 
       return created;
     });
@@ -1427,6 +1460,6 @@ describe("article spotlights under two writers", () => {
         .where(eq(pageSection.pageId, pageId))
         .orderBy(asc(pageSection.position))
     ).flatMap((row) => (row.spotlightId === null ? [] : [row.spotlightId]));
-    expect(placed.slice(0, 2)).toEqual([made[1], made[0]]);
+    expect(placed).toEqual([made[1], made[0]]);
   });
 });
