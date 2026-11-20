@@ -355,4 +355,47 @@ test.describe("Home curation", () => {
       "Está agotado: no aparece en la tienda hasta que vuelva a estar disponible."
     );
   });
+
+  test("on a wide computer the preview's narrow column keeps each word of a spotlight's name on one line", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    // Where the preview is a narrow column beside the screen's cards: the
+    // window's breakpoints once gave the name half of it and broke
+    // "CORAZONES" in two.
+    await page.setViewportSize({ height: 900, width: 1440 });
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const title = `Corazones ${tag}`;
+    const article = await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 49_000,
+      title,
+    });
+    await homeEdit.addSpotlight(article.id, {});
+    const home = new AdminHomePage(page);
+    await home.open();
+
+    const name = home.previewSpotlightName(title);
+    await expect(name).toBeVisible();
+
+    // The boxes the browser draws the word "Corazones" in: one per line.
+    const lines = await name.evaluate((heading) => {
+      const text = heading.querySelector("a")?.firstChild;
+      if (!text) {
+        return 0;
+      }
+
+      const word = document.createRange();
+      word.setStart(text, 0);
+      word.setEnd(text, "Corazones".length);
+
+      return word.getClientRects().length;
+    });
+    expect(lines).toBe(1);
+  });
 });

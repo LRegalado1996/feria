@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
@@ -125,6 +128,41 @@ describe("StoreSpotlight", () => {
     expect(
       inside.getByRole("heading", { level: 3, name: "Fish bubble gun" })
     ).toBeVisible();
+  });
+
+  test("lays itself out by its own width, not the window's, so a narrow preview on a computer draws it as a phone does", () => {
+    const { block, within: inside } = setup();
+
+    expect(block).toHaveClass("@container");
+    expect(block.firstElementChild).toHaveClass("grid", "@3xl:grid-cols-2");
+    // One breakpoint of the window's left inside would split a narrow
+    // preview in two columns again.
+    for (const element of [block, ...block.querySelectorAll("*")]) {
+      expect(element.getAttribute("class") ?? "").not.toMatch(
+        /(?:^|\s)(?:sm|md|lg|xl):/u
+      );
+    }
+    // The name is sized to the column it sits in.
+    const heading = inside.getByRole("heading", { name: "Fish bubble gun" });
+    expect(heading).toHaveClass("store-display-spotlight");
+    expect(heading.parentElement).toHaveAttribute(
+      "data-slot",
+      "store-spotlight-words"
+    );
+    expect(heading.parentElement).toHaveClass("@container");
+  });
+
+  test("its name's size follows its column and stops at 64 px, so a ten-letter word never breaks mid-word in a narrow one", () => {
+    const css = readFileSync(
+      path.join(process.cwd(), "src/styles/globals.css"),
+      "utf-8"
+    );
+    const size =
+      /@utility store-display-spotlight \{\s*font-size: ([^;]+);/u.exec(
+        css
+      )?.[1];
+
+    expect(size).toBe("clamp(1.25rem, 10cqi, 4rem)");
   });
 
   test("speaks Spanish on a Spanish page", () => {

@@ -294,9 +294,15 @@
   font-size: clamp(1.75rem, 1rem + 3.4vw, 3.375rem);
 }
 
-/* An article in the spotlight (FER-059): its name, the block's one voice. */
+/*
+ * An article in the spotlight (FER-059): its name, the block's one voice.
+ * Sized to the column it sits in (an `@container`), not the window: a
+ * letter of the display face is about 0.97em wide, so 10cqi keeps a word of
+ * ten letters on one line in any column wider than 200 px, the admin's
+ * narrow preview included. About 36 px on a 390 px phone, 57 px at 1440 px.
+ */
 @utility store-display-spotlight {
-  font-size: clamp(2.25rem, 1.2rem + 3.2vw, 4rem);
+  font-size: clamp(1.25rem, 10cqi, 4rem);
 }
 
 @utility store-display-page {

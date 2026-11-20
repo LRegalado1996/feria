@@ -54,6 +54,13 @@ export interface StoreSpotlightProps {
  * tone, the lime "Agregar al carrito") and the photo on the right on the
  * grey tile; on a phone the photo first.
  *
+ * Both follow the block's own width, never the window's: the admin's
+ * preview is a narrow column on a computer, where the window's breakpoints
+ * squeezed the name into half of it and broke "CORAZONES" mid-word. So the
+ * block is a container that turns to two columns at the width `md` means
+ * for a block the window's width, and the name is sized to its own column
+ * (`store-display-spotlight`), so a word of ten letters fits on a line.
+ *
  * The block is one link to the article and one button, never one inside
  * the other: the name is the anchor and its hit area is stretched over the
  * block (the photo, the label and the phrase lead there too), so it has a
@@ -78,14 +85,14 @@ function StoreSpotlight({
     <section
       aria-labelledby={headingId}
       className={cn(
-        "group relative bg-store-contrast text-store-background has-[a:focus-visible]:outline-3 has-[a:focus-visible]:-outline-offset-3 has-[a:focus-visible]:outline-store-accent",
+        "group @container relative bg-store-contrast text-store-background has-[a:focus-visible]:outline-3 has-[a:focus-visible]:-outline-offset-3 has-[a:focus-visible]:outline-store-accent",
         className
       )}
       data-slot="store-spotlight"
     >
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 pt-4 pb-8 md:grid-cols-2 md:items-center md:gap-12 md:p-12">
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 pt-4 pb-8 @3xl:grid-cols-2 @3xl:items-center @3xl:gap-12 @3xl:p-12">
         <div
-          className="relative aspect-square overflow-hidden bg-store-surface md:order-last"
+          className="relative aspect-square overflow-hidden bg-store-surface @3xl:order-last"
           data-slot="store-spotlight-tile"
         >
           {article.cover ? (
@@ -103,7 +110,10 @@ function StoreSpotlight({
             </div>
           )}
         </div>
-        <div className="flex min-w-0 flex-col items-start gap-4 md:gap-5">
+        <div
+          className="@container flex min-w-0 flex-col items-start gap-4 @3xl:gap-5"
+          data-slot="store-spotlight-words"
+        >
           {label ? (
             <span
               className="rounded-full bg-store-accent px-3 py-1.5 font-display text-xs leading-none font-extrabold text-store-foreground uppercase"
@@ -136,7 +146,7 @@ function StoreSpotlight({
           />
           {phrase ? (
             <p
-              className="max-w-[34ch] text-base text-store-contrast-muted md:text-lg"
+              className="max-w-[34ch] text-base text-store-contrast-muted @3xl:text-lg"
               data-slot="store-spotlight-phrase"
               lang={phrase.lang}
             >

@@ -191,4 +191,16 @@ export class AdminHomePage extends AdminPage {
   preview(): Locator {
     return this.getByTestId("store-page-preview");
   }
+
+  /**
+   * The name of the preview's spotlight featuring `title`: an `h3` there.
+   * The preview is `inert`, out of the accessibility tree, so it is found
+   * by its slot rather than by its role.
+   */
+  previewSpotlightName(title: string): Locator {
+    return this.preview()
+      .locator('[data-slot="store-spotlight"]')
+      .filter({ hasText: title })
+      .locator("h3");
+  }
 }
