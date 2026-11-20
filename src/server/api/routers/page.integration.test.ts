@@ -8,7 +8,7 @@ import { createORPCContext } from "@/server/api/orpc";
 import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
-import { announcement, spotlight, user } from "@/server/db/schema";
+import { announcement, product, spotlight, user } from "@/server/db/schema";
 import { findHomePageId } from "@/server/services/page";
 import { theStoreId } from "@/server/test/one-store";
 
@@ -31,10 +31,41 @@ vi.mock("next/cache", () => ({
 
 // The logins this file created; deleting one deletes its sessions.
 const createdUserIds: string[] = [];
+// The articles this file created; deleting one deletes its spotlights.
+const createdProductIds: number[] = [];
 
 afterEach(async () => {
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
+  await db
+    .delete(product)
+    .where(inArray(product.id, createdProductIds.splice(0)));
 });
+
+/** A draft article of the store, which a spotlight can feature. */
+async function seedArticle() {
+  const [row] = await db
+    .insert(product)
+    .values({
+      slug: `page-router-${randomUUID()}`,
+      storeId: await theStoreId(db),
+    })
+    .returning({ id: product.id });
+
+  if (!row) {
+    throw new Error("Inserting an article returned no row");
+  }
+
+  createdProductIds.push(row.id);
+  return row.id;
+}
+
+/** The spotlights featuring `productId`: none, after a refused write. */
+async function spotlightsOf(productId: number) {
+  return await db
+    .select({ id: spotlight.id })
+    .from(spotlight)
+    .where(eq(spotlight.productId, productId));
+}
 
 /** An announcement a refused write would have saved. */
 function makeAnnouncement() {
@@ -130,18 +161,19 @@ describe("the pages' procedures against the database", () => {
       message: "Unauthorized",
     });
     expect(await savedTexts()).not.toContain(refused.textEs);
-    const before = await db.$count(spotlight);
+    // An article and a page the store has: only the login stops the write.
+    const productId = await seedArticle();
     await expect(
       createSpotlight({
         labelEn: null,
         labelEs: refused.textEs.slice(0, 24),
-        pageId: 1,
+        pageId: await findHomePageId(db, { storeId: await theStoreId(db) }),
         phraseEn: null,
         phraseEs: null,
-        productId: 1,
+        productId,
       })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
-    expect(await db.$count(spotlight)).toBe(before);
+    expect(await spotlightsOf(productId)).toEqual([]);
   });
 
   test("a login removed after signing in is refused, though its session cookie lives on", async () => {
