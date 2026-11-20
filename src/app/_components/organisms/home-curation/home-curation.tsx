@@ -365,6 +365,10 @@ function SpotlightsManager({
   const [spotlighting, setSpotlighting] = useState<{
     spotlight: Spotlight | null;
   } | null>(null);
+  // The sheet open now, by identity, as the banners' (`openSheet`).
+  const openSpotlightSheet = useRef<{ spotlight: Spotlight | null } | null>(
+    null
+  );
   const [unspotlighting, setUnspotlighting] = useState<Spotlight | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const addSpotlightButton = useRef<HTMLButtonElement>(null);
@@ -389,11 +393,21 @@ function SpotlightsManager({
     };
   };
 
+  const showSpotlightSheet = (sheet: { spotlight: Spotlight | null }) => {
+    openSpotlightSheet.current = sheet;
+    setSpotlighting(sheet);
+  };
+
+  const closeSpotlightSheet = () => {
+    openSpotlightSheet.current = null;
+    setSpotlighting(null);
+  };
+
   const saveSpotlight = async (values: SpotlightFormValues) => {
     // Each opening of the sheet is its own object: a save that lands after
     // the staff closed this sheet and opened another closes only its own.
-    const session = spotlighting;
-    const spotlight = session?.spotlight ?? null;
+    const sheet = spotlighting;
+    const spotlight = sheet?.spotlight ?? null;
 
     try {
       if (spotlight) {
@@ -408,7 +422,10 @@ function SpotlightsManager({
         toast.success(copy.spotlightForm.created);
       }
 
-      setSpotlighting((open) => (open === session ? null : open));
+      if (openSpotlightSheet.current === sheet) {
+        closeSpotlightSheet();
+      }
+
       return true;
     } catch (error) {
       reportError(error, {
@@ -454,7 +471,7 @@ function SpotlightsManager({
             data-testid="home-spotlight-add"
             onClick={(event) => {
               opener.current = event.currentTarget;
-              setSpotlighting({ spotlight: null });
+              showSpotlightSheet({ spotlight: null });
             }}
             ref={addSpotlightButton}
             type="button"
@@ -481,7 +498,7 @@ function SpotlightsManager({
                 }}
                 onEdit={(button) => {
                   opener.current = button;
-                  setSpotlighting({ spotlight });
+                  showSpotlightSheet({ spotlight });
                 }}
                 spotlight={spotlight}
               />
@@ -492,7 +509,7 @@ function SpotlightsManager({
       <Sheet
         onOpenChange={(open) => {
           if (!open) {
-            setSpotlighting(null);
+            closeSpotlightSheet();
           }
         }}
         open={spotlighting !== null}
@@ -525,7 +542,7 @@ function SpotlightsManager({
                 .map((row) => ({ id: row.id, label: articleName(row.id) }))}
               key={spotlighting.spotlight?.id ?? "new"}
               onCancel={() => {
-                setSpotlighting(null);
+                closeSpotlightSheet();
               }}
               onSave={saveSpotlight}
               rows={spotlightPlaces.names}
