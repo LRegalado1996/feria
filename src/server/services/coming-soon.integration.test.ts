@@ -193,23 +193,42 @@ describe("the coming-soon page in the database", () => {
     ).resolves.toHaveLength(1);
   });
 
-  test("the database refuses a text past its limit, whatever writes it", async () => {
-    const { storeId } = await setup();
-    const [page] = await db
-      .insert(comingSoon)
-      .values({ storeId })
-      .returning({ id: comingSoon.id });
+  test.each([
+    ["eyebrow", 80],
+    ["headline", 50],
+    ["lead", 240],
+    ["marquee", 120],
+  ] as const)(
+    "the database keeps a %s of exactly %i characters and refuses one more, whatever writes it",
+    async (column, limit) => {
+      const { storeId } = await setup();
+      const [page] = await db
+        .insert(comingSoon)
+        .values({ storeId })
+        .returning({ id: comingSoon.id });
+      const comingSoonId = page?.id ?? 0;
 
-    await expect(
-      db.insert(comingSoonTranslation).values({
-        comingSoonId: page?.id ?? 0,
-        headline: "x".repeat(51),
-        locale: "es",
-      })
-    ).rejects.toMatchObject({
-      cause: { constraint: "coming_soon_translation_headline_length" },
-    });
-  });
+      await db
+        .insert(comingSoonTranslation)
+        .values({ comingSoonId, [column]: "x".repeat(limit), locale: "es" });
+      await expect(
+        db
+          .select({ text: comingSoonTranslation[column] })
+          .from(comingSoonTranslation)
+          .where(eq(comingSoonTranslation.comingSoonId, comingSoonId))
+      ).resolves.toEqual([{ text: "x".repeat(limit) }]);
+
+      await expect(
+        db.insert(comingSoonTranslation).values({
+          comingSoonId,
+          [column]: "x".repeat(limit + 1),
+          locale: "en",
+        })
+      ).rejects.toMatchObject({
+        cause: { constraint: `coming_soon_translation_${column}_length` },
+      });
+    }
+  );
 
   test("the seed's insert opens a fresh store and never undoes a choice", async () => {
     const { storeId } = await setup();
