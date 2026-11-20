@@ -112,16 +112,53 @@ describe("SpotlightForm", () => {
     });
   });
 
-  test("refuses a label over 24 characters under its field", async () => {
-    const { field, onSave, select, submit, user } = setup();
+  test.each([
+    ["Label in English", "labelEn", 24],
+    ["Phrase in Spanish", "phraseEs", 140],
+  ] as const)(
+    "%s takes %i characters and sends them as typed",
+    async (name, key, length) => {
+      const { field, onSave, select, submit, user } = setup();
+      const words = "x".repeat(length);
 
-    await user.selectOptions(select("Article"), "Anillo sello");
-    await user.type(field("Label in English"), "x".repeat(25));
-    await submit();
+      await user.selectOptions(select("Article"), "Anillo sello");
+      await user.click(field(name));
+      await user.paste(words);
+      await submit();
 
-    expect(await screen.findByText("Use up to 24 characters.")).toBeVisible();
-    expect(onSave).not.toHaveBeenCalled();
-  });
+      expect(onSave).toHaveBeenCalledExactlyOnceWith({
+        labelEn: null,
+        labelEs: null,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 21,
+        rowsIndex: 0,
+        [key]: words,
+      });
+    }
+  );
+
+  test.each([
+    ["Label in English", 25, "Use up to 24 characters."],
+    ["Phrase in Spanish", 141, "Use up to 140 characters."],
+  ] as const)(
+    "%s refuses %i characters under its field, saving nothing",
+    async (name, length, message) => {
+      const { field, onSave, select, submit, user } = setup();
+
+      await user.selectOptions(select("Article"), "Anillo sello");
+      await user.click(field(name));
+      await user.paste("x".repeat(length));
+      await submit();
+
+      expect(await screen.findByText(message)).toBeVisible();
+      expect(field(name)).toHaveAttribute("aria-invalid", "true");
+      expect(field(name)).toHaveAccessibleDescription(
+        expect.stringContaining(message)
+      );
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
 
   test("an edit opens on its article, words and place, its words in their languages", () => {
     const { field, select } = setup({
@@ -147,17 +184,27 @@ describe("SpotlightForm", () => {
   });
 
   test("a failed save keeps everything typed and says so", async () => {
-    const { field, submit } = setup({
+    const { field, onSave, submit, user } = setup({
       saves: false,
       spotlight: makeSpotlight(),
     });
 
+    await user.clear(field("Label in English"));
+    await user.type(field("Label in English"), "Fresh");
     await submit();
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       "We could not save the spotlight. What you typed is still here: try again."
     );
-    expect(field("Label in English")).toHaveValue("New");
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      labelEn: "Fresh",
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 22,
+      rowsIndex: 0,
+    });
+    expect(field("Label in English")).toHaveValue("Fresh");
   });
 
   test("cancel closes without saving", async () => {
