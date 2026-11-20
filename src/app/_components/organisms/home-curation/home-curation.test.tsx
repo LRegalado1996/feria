@@ -1536,7 +1536,7 @@ describe("HomeCuration", () => {
     });
   });
 
-  test("a deletion that ends after its question was closed leaves the question asked since open", async () => {
+  test("a spotlight deletion that ends after its question was closed leaves the question asked since open", async () => {
     const { loaded, user } = setup({
       data: makeData({
         spotlights: [
