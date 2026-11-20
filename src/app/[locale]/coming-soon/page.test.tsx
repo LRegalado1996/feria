@@ -256,7 +256,7 @@ describe("ComingSoonPage", () => {
     expect(captureExceptionWithScope).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
-    expect(settled).toHaveBeenCalledOnce();
+    expect(settled).toHaveBeenCalledExactlyOnceWith(await rendering);
     expect(captureExceptionWithScope.mock.calls).toEqual([
       [
         new Error(
