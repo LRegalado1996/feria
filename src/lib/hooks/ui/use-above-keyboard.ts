@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 /** The CSS variable that carries how far the keyboard reaches into the bar. */
 const KEYBOARD_INSET_VARIABLE = "--keyboard-inset";
 
+/** From here up the main action sits in the top bar, not along the bottom. */
+const WIDE_QUERY = "(min-width: 48rem)";
+
 /** Dialogs, whose fields the bar under them never covers. */
 const MODAL_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
@@ -29,9 +32,13 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
   // Only when the keyboard comes or focus moves, never on a scroll: a field
   // the user scrolled under the bar on purpose stays there.
   let revealPending = false;
+  // Crossing `md` (a phone turned, a window widened) moves the bar into the
+  // top bar, where its CSS no longer shifts it: an inset kept from before
+  // would read as a keyboard that is not there.
+  const wide = window.matchMedia(WIDE_QUERY);
 
   function measure(bar: DOMRect) {
-    if (Math.abs(viewport.scale - 1) > SCALE_TOLERANCE) {
+    if (wide.matches || Math.abs(viewport.scale - 1) > SCALE_TOLERANCE) {
       return 0;
     }
 
@@ -59,6 +66,7 @@ function followKeyboard(element: HTMLElement, viewport: VisualViewport) {
     }
 
     return (
+      !wide.matches &&
       Math.abs(viewport.scale - 1) <= SCALE_TOLERANCE &&
       Math.round(viewport.height) < Math.round(bar.bottom + inset)
     );
