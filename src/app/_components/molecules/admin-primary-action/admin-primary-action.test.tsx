@@ -13,6 +13,11 @@ function setup({ visibleHeight = 800 } = {}) {
     scale: 1,
   });
   vi.stubGlobal("visualViewport", viewport);
+  // A phone's width, under md: the bar rides along the bottom.
+  vi.spyOn(window, "matchMedia").mockImplementation(
+    (query: string) =>
+      ({ matches: false, media: query }) as unknown as MediaQueryList
+  );
   vi.useFakeTimers({
     toFake: ["requestAnimationFrame", "cancelAnimationFrame"],
   });
