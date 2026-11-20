@@ -740,7 +740,10 @@ function CurationScreen({ data }: { data: PageCurationData }) {
   // The sheet open now, by identity: a save that ends after its sheet was
   // closed, or another one opened, leaves the open one alone.
   const openSheet = useRef<{ banner: Banner | null } | null>(null);
-  const [deleting, setDeleting] = useState<Banner | null>(null);
+  // Each opening of the question is its own object, as the sheet's: a
+  // deletion that ends after the owner asked about another banner leaves
+  // that question open.
+  const [deleting, setDeleting] = useState<{ banner: Banner } | null>(null);
   // What opened the sheet or the dialog: focus goes back to it, or to the
   // "new banner" button once its banner is gone.
   const opener = useRef<HTMLButtonElement | null>(null);
@@ -913,17 +916,17 @@ function CurationScreen({ data }: { data: PageCurationData }) {
     }
   };
 
-  // The dialog closes either way: a refused deletion says why in a toast.
-  const removeBanner = async (banner: Banner) => {
+  // Its question closes either way: a refused deletion says why in a toast.
+  const removeBanner = async (asked: { banner: Banner }) => {
     try {
-      await deleteBanner.mutateAsync({ id: banner.id });
+      await deleteBanner.mutateAsync({ id: asked.banner.id });
       toast.success(copy.banners.deleted);
     } catch (error) {
       reportError(error, { action: "Home.delete_banner" });
       toast.error(copy.banners.errors.delete);
     }
 
-    setDeleting(null);
+    setDeleting((open) => (open === asked ? null : open));
   };
 
   const editingRows = rowsFor(editing?.banner ?? null);
@@ -996,7 +999,7 @@ function CurationScreen({ data }: { data: PageCurationData }) {
                 locale={locale}
                 onDelete={(button) => {
                   opener.current = button;
-                  setDeleting(banner);
+                  setDeleting({ banner });
                 }}
                 onEdit={(button) => {
                   opener.current = button;
@@ -1109,7 +1112,7 @@ function CurationScreen({ data }: { data: PageCurationData }) {
       <ConfirmDialog
         confirmLabel={copy.banners.deleteConfirm}
         description={interpolate(copy.banners.deleteDescription, {
-          title: deleting ? bannerTitle(deleting.id) : "",
+          title: deleting ? bannerTitle(deleting.banner.id) : "",
         })}
         isPending={deleteBanner.isPending}
         onCloseAutoFocus={(event) => {
