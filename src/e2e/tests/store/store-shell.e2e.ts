@@ -50,7 +50,7 @@ test.describe("Storefront shell", () => {
       ANNOUNCEMENT.es.full
     );
     const header = storePage.getSiteHeader();
-    const home = header.getByRole("link", { name: "LR Market, ir al inicio" });
+    const home = header.getByRole("link", { name: "LR Market, ir a la home" });
     await expect(home).toHaveAttribute("href", "/");
     await expect(home.locator('[data-slot="store-logo"]')).toHaveAttribute(
       "data-variant",
@@ -86,7 +86,7 @@ test.describe("Storefront shell", () => {
     await expect(storePage.getNotFoundHeading()).toBeVisible();
     await expect(storePage.getSiteHeader()).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Volver al inicio de la tienda" })
+      page.getByRole("link", { name: "Volver a la home de la tienda" })
     ).toHaveAttribute("href", "/");
   });
 
@@ -243,10 +243,10 @@ test.describe("Storefront shell", () => {
       // The first open after the page loaded: repeated until React owns it.
       await clickUntilVisible(storePage.getMenuButton("Menú"), menu);
 
-      const home = menu.getByRole("link", { name: "LR Market, inicio" });
+      const home = menu.getByRole("link", { name: "LR Market, home" });
       await expect(home).toHaveAttribute("href", "/");
       await expect(
-        menu.getByRole("link", { exact: true, name: "Inicio" })
+        menu.getByRole("link", { exact: true, name: "Home" })
       ).toHaveCount(0);
       const panel = await boxOf(menu);
       const logo = await boxOf(home);

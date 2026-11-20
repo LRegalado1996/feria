@@ -11,7 +11,7 @@ describe("NotFound", () => {
       "es",
       "Página no encontrada",
       "La dirección que abriste no existe o ya no está disponible.",
-      "Ir a la página de inicio",
+      "Ir a la home",
       "/",
     ],
     [

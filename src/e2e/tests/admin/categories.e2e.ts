@@ -196,7 +196,7 @@ test.describe("Category management", () => {
     await expect(page).toHaveTitle(`Anillos de la feria ${tag}`);
     await expect(
       page.getByRole("navigation", { name: "Ruta" }).getByRole("listitem")
-    ).toHaveText(["Inicio", `Bijou ${tag}`, `Anillos ${tag}`]);
+    ).toHaveText(["Home", `Bijou ${tag}`, `Anillos ${tag}`]);
   });
 });
 

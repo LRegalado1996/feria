@@ -17,7 +17,7 @@ export interface StoreBreadcrumbProps {
   /** The trail's own name for a screen reader ("Ruta"). */
   label: string;
   /**
-   * From the home to the page, in order: Inicio › Bijouterie › Anillos. The
+   * From the home to the page, in order: Home › Bijouterie › Anillos. The
    * first is the home, drawn as a house.
    */
   items: readonly StoreBreadcrumbItem[];
@@ -31,7 +31,7 @@ const LINK_CLASS =
  * cover (FER-044): a `nav` of an ordered list, each step a link but the
  * last, which is the page itself (`aria-current="page"`). The home is a
  * house (lucide's `House`), a 44 px target named by its word for a screen
- * reader ("Inicio"); the arrows between the steps are drawn, not read.
+ * reader ("Home"); the arrows between the steps are drawn, not read.
  * Rendered by the server, so it is in the HTML a crawler reads.
  */
 function StoreBreadcrumb({ className, items, label }: StoreBreadcrumbProps) {

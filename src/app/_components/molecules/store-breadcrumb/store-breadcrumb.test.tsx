@@ -8,7 +8,7 @@ function setup() {
     <StoreBreadcrumb
       className="custom"
       items={[
-        { href: "/", name: "Inicio" },
+        { href: "/", name: "Home" },
         { href: "/bijouterie", lang: "es", name: "Bijouterie" },
         { lang: "en", name: "Rings" },
       ]}
@@ -30,7 +30,7 @@ test("lists the trail in order, every step a link but the page itself", () => {
         item.querySelector("a")?.getAttribute("href") ?? null,
       ])
   ).toEqual([
-    ["Inicio", "/"],
+    ["Home", "/"],
     ["Bijouterie", "/bijouterie"],
     ["Rings", null],
   ]);
@@ -72,12 +72,12 @@ test("its links are 44 px targets with a visible focus ring, and it takes a clas
 test("draws the home as a house named by its word, a 44 px square (FER-044)", () => {
   const { trail } = setup();
 
-  const home = within(trail).getByRole("link", { name: "Inicio" });
+  const home = within(trail).getByRole("link", { name: "Home" });
   expect(home).toBe(within(trail).getByTestId("store-breadcrumb-home"));
   expect(home).toHaveAttribute("href", "/");
   // Only the house shows; the word is for a screen reader.
   expect(home.querySelector("svg")).toHaveClass("lucide-house");
-  expect(within(home).getByText("Inicio")).toHaveClass("sr-only");
+  expect(within(home).getByText("Home")).toHaveClass("sr-only");
   expect(home).toHaveClass("min-h-11", "min-w-11");
   // The other steps keep their words.
   expect(
@@ -90,7 +90,7 @@ test("keeps every step when two share a name, as a group and its category can", 
   const { rerender } = render(
     <StoreBreadcrumb
       items={[
-        { href: "/", name: "Inicio" },
+        { href: "/", name: "Home" },
         { href: "/bijouterie", name: "Bijouterie" },
         { name: "Bijouterie" },
       ]}
@@ -101,7 +101,7 @@ test("keeps every step when two share a name, as a group and its category can", 
   rerender(
     <StoreBreadcrumb
       items={[
-        { href: "/", name: "Inicio" },
+        { href: "/", name: "Home" },
         { href: "/bijouterie", name: "Bijouterie" },
         { name: "Anillos" },
       ]}
@@ -113,7 +113,7 @@ test("keeps every step when two share a name, as a group and its category can", 
     within(screen.getByRole("navigation", { name: "Ruta" }))
       .getAllByRole("listitem")
       .map((item) => item.textContent)
-  ).toEqual(["Inicio", "Bijouterie", "Anillos"]);
+  ).toEqual(["Home", "Bijouterie", "Anillos"]);
   // React says so when two siblings share a key.
   expect(error).not.toHaveBeenCalled();
   error.mockRestore();

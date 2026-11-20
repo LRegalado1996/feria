@@ -43,7 +43,7 @@ describe("StoreNotFound", () => {
       "es",
       "No encontramos esta página",
       "Puede que el enlace sea viejo o que ese artículo ya no esté.",
-      "Volver al inicio de la tienda",
+      "Volver a la home de la tienda",
       "/",
     ],
   ] as const)(

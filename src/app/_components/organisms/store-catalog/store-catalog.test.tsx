@@ -181,7 +181,7 @@ function setup({
   const catalog = (next: CatalogQuery, page: CatalogPage) => (
     <StoreCatalog
       breadcrumb={{
-        items: [{ href: "/", name: "Inicio" }, { name: "Collares" }],
+        items: [{ href: "/", name: "Home" }, { name: "Collares" }],
         label: "Ruta",
       }}
       categories={CATEGORIES}
@@ -258,14 +258,14 @@ describe("StoreCatalog", () => {
     expect(screen.queryByTestId("store-catalog-cover")).toBeNull();
   });
 
-  test("leads home from a house named Inicio, then each step a link but the page itself (FER-043, FER-044)", () => {
+  test("leads home from a house named Home, then each step a link but the page itself (FER-043, FER-044)", () => {
     setup();
 
     const trail = screen.getByRole("navigation", { name: "Ruta" });
-    const home = within(trail).getByRole("link", { name: "Inicio" });
+    const home = within(trail).getByRole("link", { name: "Home" });
     expect(home).toHaveAttribute("href", "/");
     expect(home.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
-    expect(within(home).getByText("Inicio")).toHaveClass("sr-only");
+    expect(within(home).getByText("Home")).toHaveClass("sr-only");
     expect(within(trail).getByText("Collares")).toHaveAttribute(
       "aria-current",
       "page"

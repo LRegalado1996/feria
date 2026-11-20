@@ -99,7 +99,7 @@ test.describe("Not found", () => {
     await expect(page).toHaveTitle("No encontramos esta página");
     await expect(store.getSiteHeader()).toBeVisible();
     const home = page.getByRole("link", {
-      name: "Volver al inicio de la tienda",
+      name: "Volver a la home de la tienda",
     });
     await expect(home).toHaveAttribute("href", "/");
 
