@@ -62,6 +62,12 @@ test.describe("Company settings", () => {
     await settings.open();
     const field = settings.field("Frase en español");
     await expect(field).toHaveValue(STORE_TEXTS.es.tagline);
+    // The texts' hint says where they show (FER-074: "la home").
+    await expect(
+      page.getByText(
+        "La frase va arriba del nombre en la home, y la descripción debajo."
+      )
+    ).toBeVisible();
 
     await field.fill(tagline);
     await settings.save({ name: STORE_SETTINGS.name });

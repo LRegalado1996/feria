@@ -64,6 +64,12 @@ test.describe("Category management", () => {
     page,
   }) => {
     const { tag } = await setup({ db, page });
+    // The list's order is the home's carousels' (FER-074: "la home").
+    await expect(
+      page.getByText(
+        "El orden de esta lista es el de los carruseles de la home y el del filtro del catálogo."
+      )
+    ).toBeVisible();
     const spanish = page.getByLabel("Nombre en español");
     const add = page.getByRole("button", { name: "Agregar" });
     // React owns the form once its button can be pressed.
