@@ -15,14 +15,16 @@ Raised by CodeRabbit on #68 (FER-020). When a banner's photo is replaced, remove
 
 ## Scope
 
-Decide between:
+Neither half alone closes both orders. Holding a lock across the cleanup's check and delete still lets a later save reuse the URL it deleted; checking that the file exists before the save commits still lets a cleanup delete it between that check and the commit. Both, under one lock:
 
-1. holding the pages' advisory lock across the reference check and the Blob delete (a lock held across an external call: bound its time), or
-2. checking, before the save commits, that every reused photo URL still exists in Blob (a HEAD per reused URL), and leaving the cleanup as is.
+1. The cleanup takes the pages' advisory lock, checks that no row references the file and deletes it from Blob before releasing the lock (a lock held across an external call: bound its time, and leave the file when the bound is hit; a file left behind is harmless, a file deleted under a row is not).
+2. A save that reuses a photo URL checks, under the same lock and before it commits, that the file still exists in Blob (a HEAD per reused URL), and refuses the save when it does not.
 
 ## Acceptance criteria
 
-- A two-writer test (a save reusing a URL while its cleanup runs) never ends with a banner whose file is gone.
+- Cleanup first: a save that reuses a URL after its cleanup deleted the file is refused, and no banner points at it.
+- Save first: a cleanup that runs while a save reusing the URL holds the lock waits for it, then finds the reference and keeps the file.
+- A photo whose file still exists stays reusable.
 
 ## Reporting
 
