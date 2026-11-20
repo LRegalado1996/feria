@@ -4,6 +4,7 @@ import type { DatabaseClient } from "@/server/db";
 import {
   category,
   categoryTranslation,
+  page,
   productImage,
   productImageTranslation,
   store,
@@ -14,6 +15,7 @@ import {
   createAttributeValue,
 } from "@/server/services/attribute";
 import { lockStoreCategories } from "@/server/services/category";
+import { lockStorePages } from "@/server/services/page";
 import { createProduct, publishProduct } from "@/server/services/product";
 
 import { SEED_ARTICLES, SEED_PHOTOS } from "./seed-articles";
@@ -188,21 +190,46 @@ function categoryCover(cover: SeedCover) {
 }
 
 /**
+ * The addresses the store's pages hold (FER-060). Pages and categories
+ * share `/<slug>` and the storefront looks for a page first, so a category
+ * seeded at one would never be reached at its own address. Read under the
+ * pages' lock, then the categories', the order every page-address write
+ * takes them in.
+ */
+async function lockedPageSlugs(
+  tx: DatabaseClient,
+  storeId: number
+): Promise<Set<string>> {
+  await lockStorePages(tx, storeId);
+  await lockStoreCategories(tx, storeId);
+  const rows = await tx.query.page.findMany({
+    columns: { slug: true },
+    where: eq(page.storeId, storeId),
+  });
+
+  return new Set(rows.map((row) => row.slug));
+}
+
+/**
  * Lucas's launch categories and sample articles, published, in `storeId`.
- * Run only on a store that has no category yet, so a second seed run, or a
- * store whose owner already set up a catalog, is left alone. Returns how
+ * Run only on a store that has no category yet and no page at one of its
+ * addresses, so a second seed run, or a store whose owner already set up a
+ * catalog or a page there, is left alone. Returns how
  * many articles it created.
  */
 export async function seedCatalog(
   tx: DatabaseClient,
   storeId: number
 ): Promise<number> {
+  const held = await lockedPageSlugs(tx, storeId);
   const existing = await tx.query.category.findFirst({
     columns: { id: true },
     where: eq(category.storeId, storeId),
   });
 
-  if (existing) {
+  // The catalog is seeded whole or not at all: its articles live in its
+  // categories, so a page at any of their addresses leaves it out.
+  if (existing || SEED_CATEGORIES.some((entry) => held.has(entry.slug))) {
     return 0;
   }
 
@@ -295,8 +322,8 @@ export async function seedCatalog(
 
 /**
  * Lucas's catalog pages (FER-043) on a store seeded before or after them:
- * the Bijouterie group, last in the list, when the store has none and has
- * one of its categories; each seeded category not yet in a group put in
+ * the Bijouterie group, last in the list, when the store has none, has
+ * one of its categories and no page holds its address; each seeded category not yet in a group put in
  * its own; and the covers and their alt texts that are still empty, the
  * store's for the page of all articles included. Whatever the store already
  * has is left alone, so it is safe to run again. Returns what it changed.
@@ -304,7 +331,7 @@ export async function seedCatalog(
 export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
   // Under the admin's category lock: a group moved while this reads the
   // groups could otherwise take a category into a group inside a group.
-  await lockStoreCategories(tx, storeId);
+  const held = await lockedPageSlugs(tx, storeId);
   const changes = { covers: 0, grouped: 0, groups: 0 };
   const rows = async () =>
     await tx
@@ -328,7 +355,7 @@ export async function seedCatalogPages(tx: DatabaseClient, storeId: number) {
       (entry) => entry.group === seedGroup.slug && present.has(entry.slug)
     );
 
-    if (!present.has(seedGroup.slug) && holdsOne) {
+    if (!present.has(seedGroup.slug) && !held.has(seedGroup.slug) && holdsOne) {
       // Last in the list, as Lucas orders them (FER-044): after the bubble
       // guns, the one category in no group.
       const [row] = await tx
