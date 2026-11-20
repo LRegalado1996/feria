@@ -12,6 +12,7 @@ import {
   useWatch,
 } from "react-hook-form";
 import { toast } from "sonner";
+import type { z } from "zod";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
@@ -96,43 +97,34 @@ function layoutFieldsOf(data: PageCurationData): PageLayoutFormFields {
   };
 }
 
+/** A list as typed when it reads, else as saved. */
+function typedOrSaved<T>(list: z.ZodType<T>, typed: unknown, saved: T): T {
+  const read = list.safeParse(typed);
+
+  return read.success ? read.data : saved;
+}
+
 /**
- * The order the preview shows: the one typed when it reads; else the lists
- * that read as typed and the saved one in place of each that does not (one
- * featured article waiting for its second keeps a reordered cover); else
- * the saved order.
+ * The order the preview shows, each list on its own: as typed when it
+ * reads, else as saved, even when the saved one does not read either (an
+ * article deleted since leaves one featured), so one list waiting for a
+ * fix never hides a reordered other. Saving still checks the whole order.
  */
 function previewLayout(
   schema: ReturnType<typeof createPageLayoutFormSchema>,
   draft: DeepPartial<PageLayoutFormFields>,
   data: PageCurationData
 ): SavePageLayoutValues {
-  const read = schema.safeParse(draft);
-
-  if (read.success) {
-    return read.data;
-  }
-
-  const refused = new Set(read.error.issues.map((issue) => issue.path[0]));
+  const lists = schema.in.shape;
   const saved = layoutFieldsOf(data);
-  const mended = { ...draft };
 
-  for (const name of ["cover", "featured", "ranking", "sections"] as const) {
-    if (refused.has(name)) {
-      mended[name] = saved[name];
-    }
-  }
-
-  const reread = schema.safeParse(mended);
-
-  return reread.success
-    ? reread.data
-    : {
-        coverBannerIds: data.coverBannerIds,
-        featuredProductIds: data.featuredProductIds,
-        rankingProductIds: data.rankingProductIds,
-        sections: data.sections,
-      };
+  return schema.out.parse({
+    ...saved,
+    cover: typedOrSaved(lists.cover, draft.cover, saved.cover),
+    featured: typedOrSaved(lists.featured, draft.featured, saved.featured),
+    ranking: typedOrSaved(lists.ranking, draft.ranking, saved.ranking),
+    sections: typedOrSaved(lists.sections, draft.sections, saved.sections),
+  });
 }
 
 /** A text in `locale`, else the Spanish one. */

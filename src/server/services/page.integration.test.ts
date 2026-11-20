@@ -1102,26 +1102,51 @@ async function backendOf(tx: DatabaseClient) {
   return result.rows[0]?.pid ?? 0;
 }
 
+/** Whether the backend `pid` waits on the advisory lock `key` right now. */
+async function waitsOn(pid: number, key: string) {
+  const result = await db.execute<{ waiting: number }>(sql`
+    select count(*)::int as waiting
+    from pg_locks
+    where locktype = 'advisory'
+      and not granted
+      and pid = ${pid}
+      and objsubid = 1
+      and objid::bigint = (hashtext(${key})::bigint & 4294967295)
+  `);
+
+  return (result.rows[0]?.waiting ?? 0) > 0;
+}
+
 /**
- * Waits until the backend `pid` waits on the store's pages' lock: an
- * advisory lock not granted, whose key is `hashtext('pages:<storeId>')`.
- * Any other wait (a row lock, another store's pages) does not count.
+ * Waits until the backend `pid` of `writer` waits on the store's pages'
+ * lock: an advisory lock not granted, whose key is
+ * `hashtext('pages:<storeId>')`. Any other wait (a row lock, another store's
+ * pages) does not count. A writer that ends first never waited: the wait
+ * stops and fails with the writer's own error when it has one.
  */
-async function waitUntilBlocked(pid: number, storeId: number) {
+async function waitUntilBlocked(
+  pid: number,
+  storeId: number,
+  writer: Promise<unknown>
+) {
   const key = `pages:${String(storeId)}`;
+  const ended = writer.then(
+    () => "ended" as const,
+    () => "ended" as const
+  );
 
   for (let attempt = 0; attempt < 2000; attempt += 1) {
-    const result = await db.execute<{ waiting: number }>(sql`
-      select count(*)::int as waiting
-      from pg_locks
-      where locktype = 'advisory'
-        and not granted
-        and pid = ${pid}
-        and objsubid = 1
-        and objid::bigint = (hashtext(${key})::bigint & 4294967295)
-    `);
+    const poll = waitsOn(pid, key);
 
-    if ((result.rows[0]?.waiting ?? 0) > 0) {
+    if ((await Promise.race([ended, poll])) === "ended") {
+      await poll;
+      await writer;
+      throw new Error(
+        "The second writer ended without waiting on the pages' lock"
+      );
+    }
+
+    if (await poll) {
       return;
     }
   }
@@ -1296,7 +1321,11 @@ describe("the home's order under two writers", () => {
     // second writer that fails before it says its process ends the wait
     // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
+      await waitUntilBlocked(
+        await readyOrFailed(secondPid, second),
+        storeId,
+        second
+      );
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
@@ -1374,7 +1403,11 @@ describe("article spotlights under two writers", () => {
     // second writer that fails before it says its process ends the wait
     // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
+      await waitUntilBlocked(
+        await readyOrFailed(secondPid, second),
+        storeId,
+        second
+      );
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
