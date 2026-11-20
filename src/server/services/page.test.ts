@@ -1823,7 +1823,9 @@ describe("savePageLayout", () => {
     }
   );
 
-  test("empties the curated rows and the cover", async () => {
+  // A cover the order leaves out keeps its banners (they go after the rest):
+  // the service integration test "writes the order whole…" pins that.
+  test("empties the curated rows, and an empty cover stays empty", async () => {
     const { db, save } = setup();
     answerSelects(db, makeTargets({ banners: [], products: [] }));
     db.query.pageCoverBanner.findMany.mockResolvedValue([]);
