@@ -264,6 +264,42 @@ describe("ComingSoonForm", () => {
     });
   });
 
+  test("a field saved is no longer the admin's edit: a newer page read after the save replaces it", async () => {
+    const mine = makePage({
+      translations: [
+        {
+          eyebrow: "Feria · desde el 20",
+          headline: "Abrimos\npronto",
+          lead: "Mío",
+          locale: "es",
+          marquee: null,
+        },
+      ],
+    });
+    const { field, refresh, submit, user } = setup({ saved: mine });
+    await user.clear(field("Text under the headline, in Spanish"));
+    await user.type(field("Text under the headline, in Spanish"), "Mío");
+    await submit();
+    refresh(mine);
+
+    // Another admin then saved a new text over it.
+    refresh(
+      makePage({
+        translations: [
+          {
+            eyebrow: "Feria · desde el 20",
+            headline: "Abrimos\npronto",
+            lead: "Suyo",
+            locale: "es",
+            marquee: null,
+          },
+        ],
+      })
+    );
+
+    expect(field("Text under the headline, in Spanish")).toHaveValue("Suyo");
+  });
+
   test("in Spanish, labels and refuses in Spanish", async () => {
     const { field, submit, user } = setup({ locale: "es" });
     await user.type(field("Banda en movimiento, en inglés"), "x".repeat(121));
