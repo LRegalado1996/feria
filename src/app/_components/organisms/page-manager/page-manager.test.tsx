@@ -248,6 +248,70 @@ describe("PageManager", () => {
     });
   });
 
+  test("a creation that ends after its sheet was closed leaves the sheet opened since alone, and stays on the list", async () => {
+    const { user } = setup();
+    await waitForRows();
+    let release: (value: { id: number; slug: string }) => void = () =>
+      undefined;
+    const created = new Promise<{ id: number; slug: string }>((resolve) => {
+      release = resolve;
+    });
+    server.use(createOrpcHandler("page.create", async () => await created));
+
+    await user.click(screen.getByTestId("page-add"));
+    const first = await screen.findByTestId("page-sheet");
+    await user.type(
+      within(first).getByRole("textbox", { name: "Name in Spanish" }),
+      "Navidad"
+    );
+    await user.click(within(first).getByTestId("page-form-submit"));
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByTestId("page-sheet")).toBeNull();
+    });
+    await user.click(screen.getByTestId("page-add"));
+    const second = await screen.findByTestId("page-sheet");
+    await user.type(
+      within(second).getByRole("textbox", { name: "Name in Spanish" }),
+      "Joyas"
+    );
+    release({ id: 9, slug: "navidad" });
+
+    expect(await screen.findByText("Page created.")).toBeInTheDocument();
+    expect(screen.getByTestId("page-sheet")).toBe(second);
+    expect(
+      within(second).getByRole("textbox", { name: "Name in Spanish" })
+    ).toHaveValue("Joyas");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a creation that ends after its sheet was closed, none opened since, stays on the list", async () => {
+    const { user } = setup();
+    await waitForRows();
+    let release: (value: { id: number; slug: string }) => void = () =>
+      undefined;
+    const created = new Promise<{ id: number; slug: string }>((resolve) => {
+      release = resolve;
+    });
+    server.use(createOrpcHandler("page.create", async () => await created));
+
+    await user.click(screen.getByTestId("page-add"));
+    const sheet = await screen.findByTestId("page-sheet");
+    await user.type(
+      within(sheet).getByRole("textbox", { name: "Name in Spanish" }),
+      "Navidad"
+    );
+    await user.click(within(sheet).getByTestId("page-form-submit"));
+    await user.click(within(sheet).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("page-sheet")).toBeNull();
+    });
+    release({ id: 9, slug: "navidad" });
+
+    expect(await screen.findByText("Page created.")).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   test("an address taken stays in the sheet, said under the address, reported to no one", async () => {
     const { user } = setup({ writes: { create: "conflict" } });
     await waitForRows();

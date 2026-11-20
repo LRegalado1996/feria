@@ -190,17 +190,30 @@ function PageManager() {
   const deletePage = useDeletePage();
   const setHome = useSetHomePage();
   const [creating, setCreating] = useState(false);
+  // The sheet open now, by identity: a creation that ends after its sheet
+  // was closed, or another one opened, leaves the open one alone.
+  const openSheet = useRef<object | null>(null);
   const [deleting, setDeleting] = useState<PageRow | null>(null);
   const [choosing, setChoosing] = useState<PageRow | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
 
+  const closeSheet = () => {
+    openSheet.current = null;
+    setCreating(false);
+  };
+
   const create = async (values: PageFormValues): Promise<PageFormOutcome> => {
+    const sheet = openSheet.current;
+
     try {
       const created = await createPage.mutateAsync(values);
       toast.success(copy.form.created);
-      setCreating(false);
-      router.push(localizePath(`/admin/pages/${String(created.id)}`, locale));
+
+      if (openSheet.current === sheet) {
+        closeSheet();
+        router.push(localizePath(`/admin/pages/${String(created.id)}`, locale));
+      }
 
       return "saved";
     } catch (error) {
@@ -257,6 +270,7 @@ function PageManager() {
             data-testid="page-add"
             onClick={(event) => {
               opener.current = event.currentTarget;
+              openSheet.current = {};
               setCreating(true);
             }}
             ref={addButton}
@@ -321,7 +335,7 @@ function PageManager() {
       <Sheet
         onOpenChange={(open) => {
           if (!open) {
-            setCreating(false);
+            closeSheet();
           }
         }}
         open={creating}
@@ -333,13 +347,7 @@ function PageManager() {
           </SheetHeader>
           <SheetBody>
             {creating ? (
-              <PageForm
-                onCancel={() => {
-                  setCreating(false);
-                }}
-                onSave={create}
-                page={null}
-              />
+              <PageForm onCancel={closeSheet} onSave={create} page={null} />
             ) : null}
           </SheetBody>
         </SheetContent>
