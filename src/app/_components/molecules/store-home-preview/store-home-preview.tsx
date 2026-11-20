@@ -156,7 +156,7 @@ function StoreHomePreview({
   return (
     <div
       className={cn(
-        "overflow-hidden bg-store-background text-store-foreground",
+        "isolate overflow-hidden bg-store-background text-store-foreground",
         className
       )}
       data-slot="store-home-preview"

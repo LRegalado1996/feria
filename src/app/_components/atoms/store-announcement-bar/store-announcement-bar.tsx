@@ -61,8 +61,12 @@ function Words({
   );
 }
 
+// Below `md` a 44 px target, as every control there, without making the
+// 35 px bar taller: a box 44 px tall (and at least as wide) centered on the
+// words, over the header's top padding (z-50 above its z-40), never over
+// its buttons, which start 9 px down.
 const LINK_CLASS =
-  "underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground";
+  "relative underline underline-offset-4 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground max-md:z-50 max-md:before:absolute max-md:before:top-1/2 max-md:before:left-1/2 max-md:before:h-11 max-md:before:w-full max-md:before:min-w-11 max-md:before:-translate-x-1/2 max-md:before:-translate-y-1/2";
 
 /**
  * The words as a link when the announcement has one: a path of the site

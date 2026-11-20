@@ -96,6 +96,9 @@ describe("StoreHomePreview", () => {
       "text-store-foreground",
       "rounded-md"
     );
+    // Its own stacking context: the bar's link sits above the storefront's
+    // header, never above the admin's top bar.
+    expect(preview).toHaveClass("isolate");
   });
 
   test("with nothing to show, says so", () => {

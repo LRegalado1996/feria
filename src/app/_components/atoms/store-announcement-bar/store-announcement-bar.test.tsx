@@ -116,6 +116,27 @@ describe("StoreAnnouncementBar", () => {
     expect(link).toHaveAttribute("rel", "noopener");
   });
 
+  test.each([
+    ["a path of the site", "/en/productos"],
+    ["an address elsewhere", "https://instagram.com/lr-market"],
+  ])(
+    "with %s, its link is a 44 px target below md over a box of its own, not a taller bar",
+    (_case, href) => {
+      const { bar } = setup({ href });
+
+      expect(screen.getByRole("link")).toHaveClass(
+        "relative",
+        "max-md:z-50",
+        "max-md:before:absolute",
+        "max-md:before:h-11",
+        "max-md:before:min-w-11",
+        "max-md:before:top-1/2",
+        "max-md:before:-translate-y-1/2"
+      );
+      expect(bar).toHaveClass("py-2.5");
+    }
+  );
+
   test("keeps a caller's class", () => {
     const { bar } = setup({ className: "sticky" });
 
