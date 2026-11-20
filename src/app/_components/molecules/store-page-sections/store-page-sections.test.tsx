@@ -60,6 +60,23 @@ function bannerSection(overrides: Partial<PageBanner> = {}): Section {
   return { banner, key: `banner:${banner.id}`, kind: "banner" };
 }
 
+function spotlightSection(id = 51): Section {
+  return {
+    key: `spotlight:${String(id)}`,
+    kind: "spotlight",
+    spotlight: {
+      article: makeArticle({
+        id: 6,
+        slug: "burbujero-pez",
+        title: "Burbujero pez",
+      }),
+      id,
+      label: { lang: "es", text: "Nuevo" },
+      phrase: null,
+    },
+  };
+}
+
 function categorySection(
   overrides: { articles?: StorePageArticle[]; lang?: Locale } = {}
 ): Section {
@@ -288,6 +305,65 @@ describe("StorePageSections", () => {
           section.classList.contains("mt-2.5") ? "mt-2.5" : ""
         )
       ).toEqual([...gutters, ""]);
+    }
+  );
+
+  test.each([
+    ["es", "/productos/burbujero-pez", "Agregar al carrito: Burbujero pez"],
+    ["en", "/en/productos/burbujero-pez", "Add to cart: Burbujero pez"],
+  ] as const)(
+    "in %s, draws an article spotlight under its h2, its name the link to the article, beside its add button",
+    (locale, href, add) => {
+      const { sections } = setup({
+        locale,
+        sections: [spotlightSection(), categorySection()],
+      });
+
+      const [block] = sections();
+      expect(block).toHaveAttribute("data-kind", "spotlight");
+      const heading = within(required(block)).getByRole("heading", {
+        level: 2,
+        name: "Burbujero pez",
+      });
+      expect(
+        within(heading).getByRole("link", { name: "Burbujero pez" })
+      ).toHaveAttribute("href", href);
+      expect(
+        within(required(block)).getByRole("button", { name: add })
+      ).toBeVisible();
+    }
+  );
+
+  test.each([
+    [
+      "under the cover",
+      true,
+      [spotlightSection(), categorySection()],
+      ["mt-2.5", ""],
+    ],
+    [
+      "under a banner",
+      false,
+      [bannerSection(), spotlightSection()],
+      ["", "mt-2.5"],
+    ],
+    [
+      "above a banner",
+      false,
+      [spotlightSection(), bannerSection()],
+      ["", "mt-2.5"],
+    ],
+    ["under a row", false, [categorySection(), spotlightSection()], ["", ""]],
+  ] as const)(
+    "a spotlight %s keeps the gutter a full-width block keeps",
+    (_case, afterBanner, sequence, gutters) => {
+      const { sections } = setup({ afterBanner, sections: [...sequence] });
+
+      expect(
+        sections().map((section) =>
+          section.classList.contains("mt-2.5") ? "mt-2.5" : ""
+        )
+      ).toEqual(gutters);
     }
   );
 

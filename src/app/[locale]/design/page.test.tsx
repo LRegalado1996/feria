@@ -131,6 +131,7 @@ describe("DesignPage", () => {
         "Count-up",
         "Row of articles",
         "Banner",
+        "Article spotlight",
         "Moving cover",
         "Marquee band",
         "Bubbles",
@@ -152,6 +153,7 @@ describe("DesignPage", () => {
         "Número que cuenta",
         "Fila de artículos",
         "Banner",
+        "Artículo en vidriera",
         "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",
@@ -175,6 +177,27 @@ describe("DesignPage", () => {
       ).toEqual(sections);
     }
   );
+
+  test("shows the article spotlight: the name, its pill, its phrase, and the button that adds it", async () => {
+    await setup();
+
+    const block = within(screen.getByTestId("design-spotlight"));
+
+    expect(
+      block.getByRole("heading", { level: 3, name: "Bubble gun with lights" })
+    ).toBeVisible();
+    expect(block.getByText("New")).toBeVisible();
+    expect(
+      block.getByText(
+        "Lights and bubbles that never stop. The one people ask for most at the fair."
+      )
+    ).toBeVisible();
+    expect(
+      block.getByRole("button", {
+        name: "Add to cart: Bubble gun with lights",
+      })
+    ).toBeVisible();
+  });
 
   test("shows the full logo on the tile and on the moss, in both tones, at the sizes the store uses, and the mark alone", async () => {
     await setup();

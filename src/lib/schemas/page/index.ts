@@ -14,6 +14,9 @@ export const ANNOUNCEMENT_SHORT_TEXT_MAX_LENGTH = 40;
 export const BANNER_TITLE_MAX_LENGTH = 60;
 export const BANNER_CTA_MAX_LENGTH = 24;
 export const HOME_LINK_MAX_LENGTH = 500;
+/** An article spotlight's pill label ("Nuevo") and its short phrase (FER-059). */
+export const SPOTLIGHT_LABEL_MAX_LENGTH = 24;
+export const SPOTLIGHT_PHRASE_MAX_LENGTH = 140;
 /** Far above what a home holds; a bound, so a body cannot be unbounded. */
 const SECTIONS_MAX = 200;
 /**
@@ -42,6 +45,7 @@ export const PAGE_SECTION_KINDS = [
   "best_sellers",
   "featured",
   "banner",
+  "spotlight",
 ] as const;
 
 export type PageSectionKind = (typeof PAGE_SECTION_KINDS)[number];
@@ -323,12 +327,53 @@ export type UpdateBannerValues = z.infer<typeof updateBannerSchema>;
 
 export const deleteBannerSchema = z.object({ id: pathIdSchema });
 
+const spotlightLabel = optionalText(
+  SPOTLIGHT_LABEL_MAX_LENGTH,
+  `Keep the label to ${SPOTLIGHT_LABEL_MAX_LENGTH} characters`
+);
+const spotlightPhrase = optionalText(
+  SPOTLIGHT_PHRASE_MAX_LENGTH,
+  `Keep the phrase to ${SPOTLIGHT_PHRASE_MAX_LENGTH} characters`
+);
+
+/**
+ * An article spotlight (FER-059): the article it features (its photo,
+ * name and price are the article's), an optional pill label and an
+ * optional short phrase in each language, and its place between a page's
+ * rows: how many places of the page's sequence come before it. Left out,
+ * one already on the page keeps its place and one that arrives there goes
+ * first, right under the cover.
+ */
+const spotlightFields = z.object({
+  labelEn: spotlightLabel,
+  labelEs: spotlightLabel,
+  pageId: bodyIdSchema,
+  phraseEn: spotlightPhrase,
+  phraseEs: spotlightPhrase,
+  productId: bodyIdSchema,
+  rowsIndex: z.number().int().min(0).max(SECTIONS_MAX).optional(),
+});
+
+export const createSpotlightSchema = spotlightFields;
+
+export type CreateSpotlightValues = z.infer<typeof createSpotlightSchema>;
+
+/** An edit of a spotlight: the same fields, by its id. */
+export const updateSpotlightSchema = spotlightFields.extend({
+  id: pathIdSchema,
+});
+
+export type UpdateSpotlightValues = z.infer<typeof updateSpotlightSchema>;
+
+export const deleteSpotlightSchema = z.object({ id: pathIdSchema });
+
 /** One place of a page's sequence under its cover. */
 export const pageSectionSchema = z.discriminatedUnion("kind", [
   z.object({ categoryId: bodyIdSchema, kind: z.literal("category") }),
   z.object({ kind: z.literal("best_sellers") }),
   z.object({ kind: z.literal("featured") }),
   z.object({ bannerId: bodyIdSchema, kind: z.literal("banner") }),
+  z.object({ kind: z.literal("spotlight"), spotlightId: bodyIdSchema }),
 ]);
 
 export type PageSection = z.infer<typeof pageSectionSchema>;
@@ -339,8 +384,12 @@ export function pageSectionKey(section: PageSection): string {
     return `category:${section.categoryId}`;
   }
 
-  return section.kind === "banner"
-    ? `banner:${section.bannerId}`
+  if (section.kind === "banner") {
+    return `banner:${section.bannerId}`;
+  }
+
+  return section.kind === "spotlight"
+    ? `spotlight:${section.spotlightId}`
     : section.kind;
 }
 
@@ -714,4 +763,72 @@ export function createPageLayoutFormSchema(messages: {
       rankingProductIds: fields.ranking.map((row) => row.productId),
       sections: fields.sections.map((row) => row.section),
     }));
+}
+
+/** What the spotlight form says under a field it refuses. */
+export interface SpotlightFormMessages {
+  articleRequired: string;
+  labelTooLong: string;
+  phraseTooLong: string;
+}
+
+/** The spotlight form's fields, as the form holds them: strings. */
+export interface SpotlightFormFields {
+  labelEn: string;
+  labelEs: string;
+  phraseEn: string;
+  phraseEs: string;
+  /** The article the select holds, an id in text or `""`. */
+  productId: string;
+  /** The place between rows, as the select holds it: a number in text. */
+  rowsIndex: string;
+}
+
+/** What the spotlight form gives once valid, for the page it is on. */
+export type SpotlightFormValues = Omit<CreateSpotlightValues, "pageId">;
+
+/**
+ * The spotlight form's fields, read into a spotlight's values with the
+ * page's words for a refusal. The article is chosen from a list, so an
+ * empty choice is the only way it can be wrong here; the service checks it
+ * is the store's.
+ */
+export function createSpotlightFormSchema(messages: SpotlightFormMessages) {
+  const label = blankText(SPOTLIGHT_LABEL_MAX_LENGTH, messages.labelTooLong);
+  const phrase = blankText(SPOTLIGHT_PHRASE_MAX_LENGTH, messages.phraseTooLong);
+
+  return z
+    .object({
+      labelEn: label,
+      labelEs: label,
+      phraseEn: phrase,
+      phraseEs: phrase,
+      productId: z.string(),
+      rowsIndex: z.string(),
+    })
+    .transform((fields, context): SpotlightFormValues => {
+      const productId = chosenId(fields.productId);
+      const rowsIndex = Number(fields.rowsIndex);
+
+      if (productId === null) {
+        context.addIssue({
+          code: "custom",
+          message: messages.articleRequired,
+          path: ["productId"],
+        });
+
+        return z.NEVER;
+      }
+
+      return {
+        labelEn: fields.labelEn,
+        labelEs: fields.labelEs,
+        phraseEn: fields.phraseEn,
+        phraseEs: fields.phraseEs,
+        productId,
+        ...(fields.rowsIndex !== "" && Number.isInteger(rowsIndex)
+          ? { rowsIndex }
+          : {}),
+      };
+    });
 }

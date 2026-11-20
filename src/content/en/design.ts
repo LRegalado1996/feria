@@ -65,6 +65,11 @@ export const design: Dictionary["design"] = {
       "This block rises and fades in once, when it scrolls into view.",
     rowTitle: "Just arrived",
     section: { lineOne: "Necklaces", lineTwo: "and rings" },
+    spotlight: {
+      label: "New",
+      phrase:
+        "Lights and bubbles that never stop. The one people ask for most at the fair.",
+    },
   },
   sections: {
     banner: "Banner",
@@ -81,6 +86,7 @@ export const design: Dictionary["design"] = {
     price: "Price",
     reveal: "Reveal on scroll",
     shell: "Bar, header and footer",
+    spotlight: "Article spotlight",
     type: "Headings",
   },
 };

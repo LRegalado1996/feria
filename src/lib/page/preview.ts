@@ -12,6 +12,7 @@ import {
   type ShownAnnouncement,
   type PageBanner,
   type PageContent,
+  type PageWords,
 } from "./content";
 import { resolvePageSections } from "./layout";
 import { isShowing } from "./schedule";
@@ -51,6 +52,28 @@ function inLocale(
   return locale === "en" && texts.en !== null
     ? { lang: "en", text: texts.en }
     : { lang: "es", text: texts.es };
+}
+
+/**
+ * An optional word in `locale`, else in the other language, with the one
+ * it is in; `null` when neither has it. As the storefront's read picks a
+ * spotlight's label and phrase.
+ */
+function wordIn(
+  texts: { en: string | null; es: string | null },
+  locale: Locale
+): PageWords | null {
+  const other: Locale = locale === "en" ? "es" : "en";
+
+  for (const lang of [locale, other]) {
+    const text = texts[lang];
+
+    if (text !== null) {
+      return { lang, text };
+    }
+  }
+
+  return null;
 }
 
 /** The announcement's words in `locale`, as the storefront's read gives them. */
@@ -146,6 +169,30 @@ export function previewPageContent(
       banner.placement === "rows" ? [[id, banner.shown] as const] : []
     )
   );
+  // A spotlight shows while its article can be bought, as on the
+  // storefront (FER-059).
+  const spotlights = new Map(
+    data.spotlights.flatMap((entry) => {
+      const article = articles.get(entry.productId);
+
+      return article?.status === "published" && article.isAvailable
+        ? [
+            [
+              entry.id,
+              {
+                article: cardOf(article),
+                id: entry.id,
+                label: wordIn({ en: entry.labelEn, es: entry.labelEs }, locale),
+                phrase: wordIn(
+                  { en: entry.phraseEn, es: entry.phraseEs },
+                  locale
+                ),
+              },
+            ] as const,
+          ]
+        : [];
+    })
+  );
 
   return {
     announcement:
@@ -161,6 +208,9 @@ export function previewPageContent(
       resolvePageSections(drafts.layout.sections, {
         categoryIds: data.categories.map((entry) => entry.id),
         rowBannerIds: [...rowBanners.keys()],
+        spotlightIds: data.spotlights.flatMap((entry) =>
+          entry.onPage ? [entry.id] : []
+        ),
       }),
       {
         bestSellers: curated(drafts.layout.rankingProductIds),
@@ -187,6 +237,7 @@ export function previewPageContent(
         ),
         featured: curated(drafts.layout.featuredProductIds),
         rowBanners,
+        spotlights,
       }
     ),
   };

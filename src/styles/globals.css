@@ -294,6 +294,21 @@
   font-size: clamp(1.75rem, 1rem + 3.4vw, 3.375rem);
 }
 
+/*
+ * An article in the spotlight (FER-059): its name, the block's one voice.
+ * Sized to the column it sits in, not the window: the block works the
+ * column's width out of its own (`--spotlight-column`, never a container
+ * of its own, which Safari would make the stretched link's containing
+ * block). A letter of the display face is about 0.97em wide, so a tenth of
+ * the column keeps a word of ten letters on one line in any column wider
+ * than about 12 root ems (194 px at a 16 px root), the admin's narrow
+ * preview included: narrower, the 1.25rem floor wins and the word breaks.
+ * About 36 px on a 390 px phone, 57 px at 1440 px.
+ */
+@utility store-display-spotlight {
+  font-size: clamp(1.25rem, var(--spotlight-column, 100cqi) / 10, 4rem);
+}
+
 @utility store-display-page {
   font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.875rem);
 }

@@ -20,6 +20,13 @@ function makeBanner(overrides: Partial<PageBanner> = {}): PageBanner {
   };
 }
 
+const SPOTLIGHT = {
+  article: "pez",
+  id: 5,
+  label: { lang: "es" as const, text: "Nuevo" },
+  phrase: null,
+};
+
 function makeSources(
   overrides: Partial<PageSectionSources<string>> = {}
 ): PageSectionSources<string> {
@@ -47,6 +54,7 @@ function makeSources(
     ]),
     featured: ["esclavas", "sello"],
     rowBanners: new Map([[9, makeBanner()]]),
+    spotlights: new Map([[5, SPOTLIGHT]]),
     ...overrides,
   };
 }
@@ -68,6 +76,7 @@ describe("composePageSections", () => {
         [
           { kind: "featured" },
           { bannerId: 9, kind: "banner" },
+          { kind: "spotlight", spotlightId: 5 },
           { categoryId: 1, kind: "category" },
           { kind: "best_sellers" },
         ],
@@ -76,6 +85,7 @@ describe("composePageSections", () => {
     ).toEqual([
       { articles: ["esclavas", "sello"], key: "featured", kind: "featured" },
       { banner: makeBanner(), key: "banner:9", kind: "banner" },
+      { key: "spotlight:5", kind: "spotlight", spotlight: SPOTLIGHT },
       {
         articles: ["anillo"],
         category: {
@@ -95,13 +105,14 @@ describe("composePageSections", () => {
     ]);
   });
 
-  test("leaves out a row with no article, an unknown category and a banner that does not show", () => {
+  test("leaves out a row with no article, an unknown category, a banner that does not show and a spotlight that cannot", () => {
     expect(
       composePageSections(
         [
           { categoryId: 2, kind: "category" },
           { categoryId: 3, kind: "category" },
           { bannerId: 8, kind: "banner" },
+          { kind: "spotlight", spotlightId: 6 },
           { kind: "best_sellers" },
           { kind: "featured" },
         ],

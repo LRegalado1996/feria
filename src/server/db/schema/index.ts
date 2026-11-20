@@ -24,6 +24,8 @@ export {
   pageCoverBanner,
   pageSection,
   rankingEntry,
+  spotlight,
+  spotlightTranslation,
 } from "./page";
 export { localeEnum } from "./locale";
 export {
@@ -58,6 +60,8 @@ export {
   productAttributeValueRelations,
   rankingEntryRelations,
   sessionRelations,
+  spotlightRelations,
+  spotlightTranslationRelations,
   storeRelations,
   storeTranslationRelations,
   userRelations,

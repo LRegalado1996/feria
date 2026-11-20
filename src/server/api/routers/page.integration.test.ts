@@ -12,6 +12,8 @@ import {
   announcement,
   category,
   categoryTranslation,
+  product,
+  spotlight,
   user,
 } from "@/server/db/schema";
 import { findHomePageId } from "@/server/services/page";
@@ -36,15 +38,46 @@ vi.mock("next/cache", () => ({
 
 // The logins this file created; deleting one deletes its sessions.
 const createdUserIds: string[] = [];
+// The articles this file created; deleting one deletes its spotlights.
+const createdProductIds: number[] = [];
 // The categories this file created; deleting one deletes its texts.
 const createdCategoryIds: number[] = [];
 
 afterEach(async () => {
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
   await db
+    .delete(product)
+    .where(inArray(product.id, createdProductIds.splice(0)));
+  await db
     .delete(category)
     .where(inArray(category.id, createdCategoryIds.splice(0)));
 });
+
+/** A draft article of the store, which a spotlight can feature. */
+async function seedArticle() {
+  const [row] = await db
+    .insert(product)
+    .values({
+      slug: `page-router-${randomUUID()}`,
+      storeId: await theStoreId(db),
+    })
+    .returning({ id: product.id });
+
+  if (!row) {
+    throw new Error("Inserting an article returned no row");
+  }
+
+  createdProductIds.push(row.id);
+  return row.id;
+}
+
+/** The spotlights featuring `productId`: none, after a refused write. */
+async function spotlightsOf(productId: number) {
+  return await db
+    .select({ id: spotlight.id })
+    .from(spotlight)
+    .where(eq(spotlight.productId, productId));
+}
 
 /** A category of the store, with its Spanish name, made by this file. */
 async function addCategory() {
@@ -134,6 +167,8 @@ async function setup({ signedIn = true }: { signedIn?: boolean } = {}) {
     },
     saveAnnouncement: async (input: unknown) =>
       await call(pageRouter.saveAnnouncement, input as never, { context }),
+    createSpotlight: async (input: unknown) =>
+      await call(pageRouter.createSpotlight, input as never, { context }),
   };
 }
 
@@ -154,7 +189,9 @@ async function savedTexts() {
 
 describe("the pages' procedures against the database", () => {
   test("an anonymous request reads and writes nothing", async () => {
-    const { get, saveAnnouncement } = await setup({ signedIn: false });
+    const { createSpotlight, get, saveAnnouncement } = await setup({
+      signedIn: false,
+    });
     const refused = makeAnnouncement();
 
     await expect(get()).rejects.toMatchObject({
@@ -166,6 +203,19 @@ describe("the pages' procedures against the database", () => {
       message: "Unauthorized",
     });
     expect(await savedTexts()).not.toContain(refused.textEs);
+    // An article and a page the store has: only the login stops the write.
+    const productId = await seedArticle();
+    await expect(
+      createSpotlight({
+        labelEn: null,
+        labelEs: refused.textEs.slice(0, 24),
+        pageId: await findHomePageId(db, { storeId: await theStoreId(db) }),
+        phraseEn: null,
+        phraseEs: null,
+        productId,
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
+    expect(await spotlightsOf(productId)).toEqual([]);
   });
 
   test("a login removed after signing in is refused, though its session cookie lives on", async () => {

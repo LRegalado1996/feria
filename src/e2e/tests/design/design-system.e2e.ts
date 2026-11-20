@@ -40,6 +40,7 @@ test.describe("Storefront design system", () => {
         "Número que cuenta",
         "Fila de artículos",
         "Banner",
+        "Artículo en vidriera",
         "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",

@@ -107,6 +107,8 @@ describe("database client", () => {
         "rankingEntry",
         "rateLimit",
         "session",
+        "spotlight",
+        "spotlightTranslation",
         "store",
         "storeTranslation",
         "user",

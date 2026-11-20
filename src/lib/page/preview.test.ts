@@ -44,6 +44,17 @@ function makeBanner(overrides: Partial<Banner> = {}): Banner {
   };
 }
 
+/** A spotlight on the page, of article 10, with no words. */
+const SPOTLIGHT_ROW = {
+  id: 50,
+  labelEn: null,
+  labelEs: null,
+  onPage: true,
+  phraseEn: null,
+  phraseEs: null,
+  productId: 10,
+};
+
 function makeAnnouncement(
   overrides: Partial<SaveAnnouncementValues> = {}
 ): SaveAnnouncementValues {
@@ -79,6 +90,7 @@ function makeData(overrides: Partial<PageCurationData> = {}): PageCurationData {
     pageId: 1,
     rankingProductIds: [],
     sections: [],
+    spotlights: [],
     today: "2026-12-04",
     ...overrides,
   };
@@ -286,6 +298,90 @@ describe("previewPageContent", () => {
       },
       { articles: [RING_CARD_ES], key: "best_sellers", kind: "best_sellers" },
     ]);
+  });
+
+  test.each([
+    [
+      "es",
+      { lang: "es", text: "Nuevo" },
+      { lang: "es", text: "El que más piden." },
+    ],
+    // No English phrase: the Spanish one, marked as such.
+    [
+      "en",
+      { lang: "en", text: "New" },
+      { lang: "es", text: "El que más piden." },
+    ],
+  ] as const)(
+    "draws an article spotlight on the page, in %s, while its article can be bought",
+    (locale, label, phrase) => {
+      const data = makeData({
+        articles: [
+          makeArticle(),
+          makeArticle({ id: 11, status: "draft" }),
+          makeArticle({ id: 12, isAvailable: false }),
+        ],
+        spotlights: [
+          {
+            id: 51,
+            labelEn: "New",
+            labelEs: "Nuevo",
+            onPage: true,
+            phraseEn: null,
+            phraseEs: "El que más piden.",
+            productId: 10,
+          },
+          // A draft's and a sold-out article's leave the page.
+          { ...SPOTLIGHT_ROW, id: 52, productId: 11 },
+          { ...SPOTLIGHT_ROW, id: 53, productId: 12 },
+          // On another page: listed by a stale draft, it shows not.
+          { ...SPOTLIGHT_ROW, id: 54, onPage: false, productId: 10 },
+        ],
+      });
+
+      const content = previewPageContent(
+        data,
+        makeDrafts({
+          sections: [
+            { kind: "spotlight", spotlightId: 52 },
+            { kind: "spotlight", spotlightId: 51 },
+            { kind: "spotlight", spotlightId: 53 },
+            { kind: "spotlight", spotlightId: 54 },
+          ],
+        }),
+        locale
+      );
+
+      // The category's row, appended as on the home, is not this test's.
+      expect(
+        content.sections.filter((section) => section.kind === "spotlight")
+      ).toEqual([
+        {
+          key: "spotlight:51",
+          kind: "spotlight",
+          spotlight: {
+            article: expect.objectContaining({ id: 10, slug: "anillo-sello" }),
+            id: 51,
+            label,
+            phrase,
+          },
+        },
+      ]);
+    }
+  );
+
+  test("a spotlight with no words shows none", () => {
+    const data = makeData({ spotlights: [SPOTLIGHT_ROW] });
+
+    const [section] = previewPageContent(
+      data,
+      makeDrafts({ sections: [{ kind: "spotlight", spotlightId: 50 }] }),
+      "en"
+    ).sections;
+
+    expect(section).toMatchObject({
+      spotlight: { label: null, phrase: null },
+    });
   });
 
   test("names a category in English when it has an English name, and caps its row at twelve", () => {

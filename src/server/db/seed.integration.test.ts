@@ -17,6 +17,8 @@ import {
   product,
   productTranslation,
   rankingEntry,
+  spotlight,
+  spotlightTranslation,
   store,
   storeTranslation,
   user,
@@ -92,7 +94,13 @@ test("leaves one login with its credential, and a second run creates nothing", a
       createdAccounts: [],
       createdArticles: 0,
       createdStoreTexts: [],
-      home: { announcement: false, banners: 0, featured: 0, ranking: 0 },
+      home: {
+        announcement: false,
+        banners: 0,
+        featured: 0,
+        ranking: 0,
+        spotlight: false,
+      },
       openedStore: false,
     });
     // A seeded database shows the store: the coming-soon page is unpublished.
@@ -335,6 +343,7 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       banners: 5,
       featured: 4,
       ranking: 8,
+      spotlight: true,
     });
     expect(
       await tx.query.announcement.findFirst({
@@ -454,6 +463,8 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
           : `banner:${titleOf.get(row.bannerId) ?? ""}`
       )
     ).toEqual([
+      // The article spotlight right under the cover (FER-059).
+      "spotlight",
       "best_sellers",
       "banner:Encontranos en la feria",
       "burbujeros",
@@ -464,6 +475,45 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
       "aros",
       "pulseras",
       "bijouterie",
+    ]);
+    expect(
+      await tx.query.spotlight.findMany({
+        columns: {},
+        where: eq(spotlight.storeId, storeId),
+        with: {
+          product: {
+            columns: {},
+            with: {
+              translations: {
+                columns: { title: true },
+                where: eq(productTranslation.locale, "es"),
+              },
+            },
+          },
+          translations: {
+            columns: { label: true, locale: true, phrase: true },
+            orderBy: asc(spotlightTranslation.locale),
+          },
+        },
+      })
+    ).toEqual([
+      {
+        product: { translations: [{ title: "Burbujero pez" }] },
+        translations: [
+          {
+            label: "Nuevo",
+            locale: "es",
+            phrase:
+              "Tira burbujas sin parar. El que más piden los chicos en la feria.",
+          },
+          {
+            label: "New",
+            locale: "en",
+            phrase:
+              "Blows bubbles nonstop. The one kids ask for most at the fair.",
+          },
+        ],
+      },
     ]);
     expect(await curatedTitles(tx, rankingEntry, storeId)).toEqual([
       "Burbujero pez",
@@ -488,7 +538,7 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
   await expect(run).rejects.toThrow(ROLLED_BACK);
 });
 
-test("places the banners it adds between rows after an order the home page already has", async () => {
+test("places the banners it adds between rows, then its spotlight, after an order the home page already has", async () => {
   const run = db.transaction(async (tx) => {
     const storeId = await theStoreId(tx);
     await emptyStore(tx, storeId);
@@ -508,6 +558,7 @@ test("places the banners it adds between rows after an order the home page alrea
       orderBy: asc(pageSection.position),
       where: eq(pageSection.pageId, homePageId),
       with: {
+        category: { columns: { slug: true } },
         banner: {
           columns: {},
           with: {
@@ -522,13 +573,23 @@ test("places the banners it adds between rows after an order the home page alrea
     expect(
       sections.map((row) => [
         row.position,
-        row.banner?.translations[0]?.title ?? row.kind,
+        row.banner?.translations[0]?.title ?? row.category?.slug ?? row.kind,
       ])
     ).toEqual([
       [0, "featured"],
-      [4, "best_sellers"],
-      [5, "Encontranos en la feria"],
-      [6, "Aros para todos los días"],
+      [1, "best_sellers"],
+      [2, "Encontranos en la feria"],
+      [3, "Aros para todos los días"],
+      // The categories the order never placed, in their own order, then the
+      // spotlight, placed through the service as the admin adds one: the
+      // sequence is written whole and numbered again (FER-059).
+      [4, "burbujeros"],
+      [5, "bijouterie"],
+      [6, "cadenas"],
+      [7, "anillos"],
+      [8, "aros"],
+      [9, "pulseras"],
+      [10, "spotlight"],
     ]);
 
     throw new Error(ROLLED_BACK);

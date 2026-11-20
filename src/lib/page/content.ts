@@ -48,6 +48,24 @@ export interface PageBanner {
   title: string;
 }
 
+/** Words of a block in the language they are in, maybe not the page's. */
+export interface PageWords {
+  lang: Locale;
+  text: string;
+}
+
+/**
+ * An article in the spotlight (FER-059), as a page shows it: the article
+ * (published and available, or it is left out), and its optional label
+ * and phrase, each in the page's language or the one it has.
+ */
+export interface PageSpotlight<Article> {
+  article: Article;
+  id: number;
+  label: PageWords | null;
+  phrase: PageWords | null;
+}
+
 /** A row of articles' place in the sequence, with its articles. */
 export type PageRow<Article> =
   | {
@@ -73,7 +91,8 @@ export type PageRow<Article> =
 /** One place of a page's sequence under the cover, as it shows now. */
 export type PageContentSection<Article> =
   | PageRow<Article>
-  | { banner: PageBanner; key: string; kind: "banner" };
+  | { banner: PageBanner; key: string; kind: "banner" }
+  | { key: string; kind: "spotlight"; spotlight: PageSpotlight<Article> };
 
 /**
  * What a page of the storefront shows right now (FER-058, after FER-020's
@@ -82,7 +101,8 @@ export type PageContentSection<Article> =
  * the admin set, holding only what has something to show: a category's row
  * only with published articles, the curated rows ("best sellers",
  * "featured") only with articles that are published and available, a
- * banner only while it is on and inside its days. Either part can be
+ * banner only while it is on and inside its days, an article spotlight
+ * only while its article is published and can be bought. Either part can be
  * empty: a new store's home is `{ cover: [], sections: [] }`.
  */
 export interface PageContent<Article> {
@@ -103,6 +123,8 @@ export interface PageSectionSources<Article> {
   featured: readonly Article[];
   /** The banners between rows that show now, by id. */
   rowBanners: ReadonlyMap<number, PageBanner>;
+  /** The spotlights that can show now (their article can be bought), by id. */
+  spotlights: ReadonlyMap<number, PageSpotlight<Article>>;
 }
 
 /**
@@ -122,6 +144,12 @@ export function composePageSections<Article>(
       const banner = sources.rowBanners.get(section.bannerId);
 
       return banner ? [{ banner, key, kind: "banner" }] : [];
+    }
+
+    if (section.kind === "spotlight") {
+      const spotlight = sources.spotlights.get(section.spotlightId);
+
+      return spotlight ? [{ key, kind: "spotlight", spotlight }] : [];
     }
 
     if (section.kind === "category") {

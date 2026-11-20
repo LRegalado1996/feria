@@ -4,6 +4,7 @@ import type { PageSection } from "@/lib/schemas/page";
 
 import {
   DEFAULT_ROWS_INDEX,
+  DEFAULT_SPOTLIGHT_INDEX,
   followServerLayout,
   followServerOrder,
   placePageSection,
@@ -22,10 +23,18 @@ function makeBanner(bannerId: number): PageSection {
   return { bannerId, kind: "banner" };
 }
 
+function makeSpotlight(spotlightId: number): PageSection {
+  return { kind: "spotlight", spotlightId };
+}
+
 describe("resolvePageSections", () => {
   test("a store that never saved opens on the best sellers, the featured, then its categories and banners in their order", () => {
     expect(
-      resolvePageSections([], { categoryIds: [3, 1], rowBannerIds: [9] })
+      resolvePageSections([], {
+        categoryIds: [3, 1],
+        rowBannerIds: [9],
+        spotlightIds: [],
+      })
     ).toEqual([
       BEST,
       FEATURED,
@@ -50,6 +59,7 @@ describe("resolvePageSections", () => {
         // 5 was deleted, 6 is new; banner 7 went to the cover, 9 is new.
         categoryIds: [6, 2],
         rowBannerIds: [8, 9],
+        spotlightIds: [],
       })
     ).toEqual([
       makeCategory(2),
@@ -61,11 +71,28 @@ describe("resolvePageSections", () => {
     ]);
   });
 
+  test("keeps the article spotlights still on the page in their places, and puts one with no place after the rest", () => {
+    expect(
+      resolvePageSections(
+        [makeSpotlight(4), makeCategory(1), makeSpotlight(3), BEST, FEATURED],
+        // 3 was deleted; 6 is on the page with no place yet.
+        { categoryIds: [1], rowBannerIds: [], spotlightIds: [4, 6] }
+      )
+    ).toEqual([
+      makeSpotlight(4),
+      makeCategory(1),
+      BEST,
+      FEATURED,
+      makeSpotlight(6),
+    ]);
+  });
+
   test("puts a missing curated row first, the best sellers before the featured", () => {
     expect(
       resolvePageSections([makeCategory(1), FEATURED], {
         categoryIds: [1],
         rowBannerIds: [],
+        spotlightIds: [],
       })
     ).toEqual([BEST, makeCategory(1), FEATURED]);
   });
@@ -74,7 +101,7 @@ describe("resolvePageSections", () => {
     expect(
       resolvePageSections(
         [makeCategory(1), BEST, makeCategory(1), FEATURED, BEST],
-        { categoryIds: [1], rowBannerIds: [] }
+        { categoryIds: [1], rowBannerIds: [], spotlightIds: [] }
       )
     ).toEqual([makeCategory(1), BEST, FEATURED]);
   });
@@ -106,6 +133,12 @@ describe("placePageSection", () => {
 
   test("by default a banner goes after the first row", () => {
     expect(DEFAULT_ROWS_INDEX).toBe(1);
+  });
+
+  test("by default an article spotlight goes first, right under the cover", () => {
+    expect(
+      placePageSection(sections, makeSpotlight(2), DEFAULT_SPOTLIGHT_INDEX)
+    ).toEqual([makeSpotlight(2), BEST, makeCategory(1), FEATURED]);
   });
 });
 
@@ -257,6 +290,42 @@ describe("followServerLayout", () => {
       { section: BEST },
       { section: makeBanner(3) },
       { section: makeCategory(4) },
+    ]);
+  });
+
+  test("an article spotlight new on the server joins a moved order at the server's index, beside one already there", () => {
+    const previous = makeLists({
+      sections: [
+        { section: BEST },
+        { section: makeSpotlight(51) },
+        { section: makeBanner(3) },
+        { section: makeCategory(4) },
+        { section: FEATURED },
+      ],
+    });
+    const draft = makeLists({
+      sections: [
+        { section: makeCategory(4) },
+        { section: BEST },
+        { section: makeSpotlight(51) },
+        { section: makeBanner(3) },
+        { section: FEATURED },
+      ],
+    });
+    const next = makeLists({
+      sections: [{ section: makeSpotlight(52) }, ...previous.sections],
+    });
+
+    expect(
+      followServerLayout({ draft, next, previous }, new Set([5, 6, 7, 8]))
+        .sections
+    ).toEqual([
+      { section: makeSpotlight(52) },
+      { section: makeCategory(4) },
+      { section: BEST },
+      { section: makeSpotlight(51) },
+      { section: makeBanner(3) },
+      { section: FEATURED },
     ]);
   });
 

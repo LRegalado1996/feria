@@ -7,7 +7,12 @@ import {
   createBannerFormSchema,
   createBannerSchema,
   createPageLayoutFormSchema,
+  createSpotlightFormSchema,
+  createSpotlightSchema,
   deleteBannerSchema,
+  deleteSpotlightSchema,
+  type SpotlightFormFields,
+  updateSpotlightSchema,
   type PageLayoutFormFields,
   pageSectionKey,
   isCalendarDate,
@@ -207,6 +212,7 @@ describe("pageSectionKey", () => {
     [{ bannerId: 9, kind: "banner" }, "banner:9"],
     [{ kind: "best_sellers" }, "best_sellers"],
     [{ kind: "featured" }, "featured"],
+    [{ kind: "spotlight", spotlightId: 51 }, "spotlight:51"],
   ] as const)("%o is %s", (section, key) => {
     expect(pageSectionKey(section)).toBe(key);
   });
@@ -681,16 +687,218 @@ describe("createPageLayoutFormSchema", () => {
       [["sections", "repeated"]],
     ],
     [
-      "a category and a banner of the same id",
+      "an article spotlight twice",
       {
         sections: [
-          { section: { categoryId: 2, kind: "category" } },
-          { section: { bannerId: 2, kind: "banner" } },
+          { section: { kind: "spotlight", spotlightId: 6 } },
+          { section: { kind: "spotlight", spotlightId: 6 } },
         ],
       },
-      [],
+      [["sections", "repeated"]],
     ],
   ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
     expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
+  });
+
+  test.each<[string, PageLayoutFormFields["sections"][number]["section"][]]>([
+    [
+      "a category and a banner of the same id",
+      [
+        { categoryId: 2, kind: "category" },
+        { bannerId: 2, kind: "banner" },
+      ],
+    ],
+    [
+      "two article spotlights",
+      [
+        { kind: "spotlight", spotlightId: 6 },
+        { kind: "spotlight", spotlightId: 7 },
+      ],
+    ],
+    [
+      "a spotlight and a banner of the same id",
+      [
+        { kind: "spotlight", spotlightId: 2 },
+        { bannerId: 2, kind: "banner" },
+      ],
+    ],
+  ])("different entries are both kept: %s", (_case, sections) => {
+    expect(
+      schema.parse(
+        makeFields({ sections: sections.map((section) => ({ section })) })
+      ).sections
+    ).toEqual(sections);
+  });
+});
+
+function makeSpotlight(overrides: Record<string, unknown> = {}) {
+  return {
+    labelEn: null,
+    labelEs: "Nuevo",
+    pageId: 3,
+    phraseEn: null,
+    phraseEs: null,
+    productId: 40,
+    ...overrides,
+  };
+}
+
+describe("createSpotlightSchema and updateSpotlightSchema", () => {
+  test("trims the words and reads a blank one as none", () => {
+    expect(
+      createSpotlightSchema.parse(
+        makeSpotlight({ labelEn: "  ", labelEs: " Nuevo ", phraseEs: "" })
+      )
+    ).toEqual(makeSpotlight({ labelEn: null, labelEs: "Nuevo" }));
+  });
+
+  test.each([
+    ["a label at 24", { labelEs: "x".repeat(24) }],
+    ["a phrase at 140", { phraseEn: "x".repeat(140) }],
+    ["first on the page", { rowsIndex: 0 }],
+    ["the last place a page holds", { rowsIndex: 200 }],
+  ])("takes %s", (_case, overrides) => {
+    expect(createSpotlightSchema.safeParse(makeSpotlight(overrides))).toEqual({
+      data: makeSpotlight(overrides),
+      success: true,
+    });
+  });
+
+  test.each([
+    [
+      "a label at 25",
+      { labelEs: "x".repeat(25) },
+      ["labelEs", "too_big", "Keep the label to 24 characters"],
+    ],
+    [
+      "a phrase at 141",
+      { phraseEn: "x".repeat(141) },
+      ["phraseEn", "too_big", "Keep the phrase to 140 characters"],
+    ],
+    [
+      "a negative place",
+      { rowsIndex: -1 },
+      ["rowsIndex", "too_small", "Too small: expected number to be >=0"],
+    ],
+    [
+      "a place past what a page holds",
+      { rowsIndex: 201 },
+      ["rowsIndex", "too_big", "Too big: expected number to be <=200"],
+    ],
+    [
+      "no article",
+      { productId: undefined },
+      [
+        "productId",
+        "invalid_type",
+        "Invalid input: expected number, received undefined",
+      ],
+    ],
+    [
+      "no page",
+      { pageId: undefined },
+      [
+        "pageId",
+        "invalid_type",
+        "Invalid input: expected number, received undefined",
+      ],
+    ],
+  ])("refuses %s, saying why on its field", (_case, overrides, expected) => {
+    const result = createSpotlightSchema.safeParse(makeSpotlight(overrides));
+
+    expect(
+      result.error?.issues.map((issue) => [
+        issue.path.join("."),
+        issue.code,
+        issue.message,
+      ])
+    ).toEqual([expected]);
+  });
+
+  test("an edit takes its id from the path, and the delete only that", () => {
+    expect(
+      updateSpotlightSchema.parse({ ...makeSpotlight(), id: "51" })
+    ).toMatchObject({ id: 51 });
+    expect(deleteSpotlightSchema.parse({ id: "51" })).toEqual({ id: 51 });
+    expect(
+      deleteSpotlightSchema
+        .safeParse({ id: "0" })
+        .error?.issues.map((issue) => [
+          issue.path.join("."),
+          issue.code,
+          issue.message,
+        ])
+    ).toEqual([["id", "too_small", "Too small: expected number to be >0"]]);
+  });
+});
+
+describe("createSpotlightFormSchema", () => {
+  const schema = createSpotlightFormSchema({
+    articleRequired: "articleRequired",
+    labelTooLong: "labelTooLong",
+    phraseTooLong: "phraseTooLong",
+  });
+
+  function makeFields(
+    overrides: Partial<SpotlightFormFields> = {}
+  ): SpotlightFormFields {
+    return {
+      labelEn: "",
+      labelEs: " Nuevo ",
+      phraseEn: "",
+      phraseEs: "El que más piden.",
+      productId: "40",
+      rowsIndex: "2",
+      ...overrides,
+    };
+  }
+
+  test("reads the fields into a spotlight's values, blanks as none", () => {
+    expect(schema.parse(makeFields())).toEqual({
+      labelEn: null,
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 40,
+      rowsIndex: 2,
+    });
+  });
+
+  test("with no place chosen, leaves the place out", () => {
+    expect(schema.parse(makeFields({ rowsIndex: "" }))).toEqual({
+      labelEn: null,
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 40,
+    });
+  });
+
+  test.each([
+    [
+      "no article",
+      { productId: "" },
+      ["productId", "custom", "articleRequired"],
+    ],
+    [
+      "a long label",
+      { labelEn: "x".repeat(25) },
+      ["labelEn", "too_big", "labelTooLong"],
+    ],
+    [
+      "a long phrase",
+      { phraseEs: "x".repeat(141) },
+      ["phraseEs", "too_big", "phraseTooLong"],
+    ],
+  ] as const)("refuses %s under its field", (_case, overrides, expected) => {
+    const parsed = schema.safeParse(makeFields(overrides));
+
+    expect(
+      parsed.error?.issues.map((issue) => [
+        issue.path.join("."),
+        issue.code,
+        issue.message,
+      ])
+    ).toEqual([expected]);
   });
 });

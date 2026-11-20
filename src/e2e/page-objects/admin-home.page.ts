@@ -98,6 +98,45 @@ export class AdminHomePage extends AdminPage {
     await expect(this.page.getByText("Banner agregado.")).toBeVisible();
   }
 
+  /** The article spotlights' card (FER-059). */
+  spotlights(): Locator {
+    return this.getByTestId("home-spotlights");
+  }
+
+  /** A spotlight of the list, by its article's name. */
+  spotlightRow(name: string): Locator {
+    return this.getByTestId("home-spotlight-row").filter({ hasText: name });
+  }
+
+  /** The side sheet's spotlight form. */
+  spotlightForm(): Locator {
+    return this.getByTestId("spotlight-form");
+  }
+
+  /** Opens a new spotlight's form: the first open after a load is repeated. */
+  async openNewSpotlight(): Promise<void> {
+    await clickUntilVisible(
+      this.getByTestId("home-spotlight-add"),
+      this.spotlightForm()
+    );
+  }
+
+  /**
+   * Saves the spotlight form, waiting for `page.createSpotlight` to answer
+   * with the fields in `input`, then for the screen to say it was added.
+   */
+  async saveNewSpotlight(input: RpcInput = {}): Promise<void> {
+    await completeRpcAction(
+      this.page,
+      "/api/orpc/page/createSpotlight",
+      async () => {
+        await this.getByTestId("spotlight-form-submit").click();
+      },
+      { input }
+    );
+    await expect(this.page.getByText("Vidriera agregada.")).toBeVisible();
+  }
+
   /** The best sellers' card. */
   bestSellers(): Locator {
     return this.getByTestId("home-layout-best-sellers");
@@ -151,5 +190,16 @@ export class AdminHomePage extends AdminPage {
   /** The preview of the home, drawn by the storefront's pieces. */
   preview(): Locator {
     return this.getByTestId("store-page-preview");
+  }
+
+  /**
+   * The name of the preview's spotlight featuring `title`: the heading of
+   * the region it names. The preview is `inert`, out of the accessibility
+   * tree, hence `includeHidden`.
+   */
+  previewSpotlightName(title: string): Locator {
+    return this.preview()
+      .getByRole("region", { includeHidden: true, name: title })
+      .getByRole("heading", { includeHidden: true, name: title });
   }
 }

@@ -1,10 +1,13 @@
 import {
   createBannerSchema,
+  createSpotlightSchema,
   deleteBannerSchema,
+  deleteSpotlightSchema,
   pageRefSchema,
   saveAnnouncementSchema,
   savePageLayoutInputSchema,
   updateBannerSchema,
+  updateSpotlightSchema,
 } from "@/lib/schemas/page";
 import { businessDay } from "@/lib/utils/format";
 import { adminProcedure } from "@/server/api/orpc";
@@ -16,11 +19,14 @@ import {
 } from "@/server/api/utils/write-to-store";
 import {
   createBanner,
+  createSpotlight,
   deleteBanner,
+  deleteSpotlight,
   getPageCuration,
   saveAnnouncement,
   savePageLayout,
   updateBanner,
+  updateSpotlight,
 } from "@/server/services/page";
 
 /**
@@ -30,8 +36,8 @@ import {
  * shows. Every query is on the store `adminProcedure` puts in the context;
  * every write re-checks the caller's login inside its transaction and
  * drops what it changed from the cache: a page's order its page
- * (`writeToPage`), a banner every page (`writeToPages`), the announcement
- * the bar (`writeToAnnouncement`). A banner's dropped photos are deleted
+ * (`writeToPage`), a banner or an article spotlight (FER-059) every page
+ * (`writeToPages`), the announcement the bar (`writeToAnnouncement`). A banner's dropped photos are deleted
  * once it is saved (FER-011).
  */
 export const pageRouter = {
@@ -133,6 +139,59 @@ export const pageRouter = {
       method: "DELETE",
       path: "/admin/banners/{id}",
       summary: "Delete a photo banner from every page",
+      tags: ["pages"],
+    }),
+
+  createSpotlight: adminProcedure
+    .input(createSpotlightSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToPages(
+          context,
+          async (tx, storeId) =>
+            await createSpotlight(tx, { storeId, values: input })
+        )
+    )
+    .route({
+      method: "POST",
+      path: "/admin/spotlights",
+      summary:
+        "Feature one article in a dark block between a page's rows, with an optional label and phrase",
+      tags: ["pages"],
+    }),
+
+  updateSpotlight: adminProcedure
+    .input(updateSpotlightSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToPages(
+          context,
+          async (tx, storeId) =>
+            await updateSpotlight(tx, { storeId, values: input })
+        )
+    )
+    .route({
+      method: "PUT",
+      path: "/admin/spotlights/{id}",
+      summary:
+        "Edit an article spotlight: its article, words and place on a page",
+      tags: ["pages"],
+    }),
+
+  deleteSpotlight: adminProcedure
+    .input(deleteSpotlightSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToPages(
+          context,
+          async (tx, storeId) =>
+            await deleteSpotlight(tx, { id: input.id, storeId })
+        )
+    )
+    .route({
+      method: "DELETE",
+      path: "/admin/spotlights/{id}",
+      summary: "Delete an article spotlight from every page",
       tags: ["pages"],
     }),
 

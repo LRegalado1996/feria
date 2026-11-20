@@ -33,6 +33,9 @@ const IMAGE = {
 
 const services = vi.hoisted(() => ({
   createBanner: vi.fn(async () => ({ id: 9 })),
+  createSpotlight: vi.fn(async () => ({ id: 51 })),
+  deleteSpotlight: vi.fn(async () => ({ id: 51 })),
+  updateSpotlight: vi.fn(async () => ({ id: 51 })),
   deleteBanner: vi.fn(async () => ({ discardedImageUrls: [OLD_PHOTO], id: 9 })),
   discardBlobs: vi.fn<(db: unknown, urls: readonly string[]) => void>(),
   findAdminStore: vi.fn(),
@@ -58,6 +61,9 @@ const services = vi.hoisted(() => ({
 
 vi.mock("@/server/services/page", () => ({
   createBanner: services.createBanner,
+  createSpotlight: services.createSpotlight,
+  deleteSpotlight: services.deleteSpotlight,
+  updateSpotlight: services.updateSpotlight,
   deleteBanner: services.deleteBanner,
   getPageCuration: services.getPageCuration,
   saveAnnouncement: services.saveAnnouncement,
@@ -130,6 +136,18 @@ function makeBannerInput(overrides: Record<string, unknown> = {}) {
     startsOn: null,
     titleEn: null,
     titleEs: "Burbujas",
+    ...overrides,
+  };
+}
+
+function makeSpotlightInput(overrides: Record<string, unknown> = {}) {
+  return {
+    labelEn: "",
+    labelEs: " Nuevo ",
+    pageId: 3,
+    phraseEn: null,
+    phraseEs: null,
+    productId: 40,
     ...overrides,
   };
 }
@@ -309,6 +327,66 @@ describe("page router", () => {
     }
   );
 
+  test.each([
+    [
+      "adds an article spotlight",
+      "createSpotlight",
+      makeSpotlightInput({ rowsIndex: 0 }),
+      services.createSpotlight,
+      {
+        labelEn: null,
+        labelEs: "Nuevo",
+        pageId: 3,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 40,
+        rowsIndex: 0,
+      },
+    ],
+    [
+      "edits an article spotlight by id",
+      "updateSpotlight",
+      makeSpotlightInput({ id: "51" }),
+      services.updateSpotlight,
+      {
+        id: 51,
+        labelEn: null,
+        labelEs: "Nuevo",
+        pageId: 3,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 40,
+      },
+    ],
+  ] as const)(
+    "%s, trimmed and blanks as none, then drops every cached page",
+    async (_case, name, input, service, values) => {
+      const { run } = setup();
+
+      await expect(run(name, input)).resolves.toEqual({ id: 51 });
+
+      expect(service).toHaveBeenCalledExactlyOnceWith(TX, {
+        storeId: 7,
+        values,
+      });
+      expect(services.invalidatePagesCache).toHaveBeenCalledExactlyOnceWith(7);
+    }
+  );
+
+  test("deletes an article spotlight by id, then drops every cached page", async () => {
+    const { run } = setup();
+
+    await expect(run("deleteSpotlight", { id: "51" })).resolves.toEqual({
+      id: 51,
+    });
+
+    expect(services.deleteSpotlight).toHaveBeenCalledExactlyOnceWith(TX, {
+      id: 51,
+      storeId: 7,
+    });
+    expect(services.invalidatePagesCache).toHaveBeenCalledExactlyOnceWith(7);
+  });
+
   test("keeps the cache when a write fails", async () => {
     const { run } = setup();
     services.deleteBanner.mockRejectedValueOnce(new Error("Banner gone"));
@@ -381,6 +459,12 @@ describe("page router", () => {
       },
     ],
     ["get", { pageId: "0" }],
+    ["createSpotlight", makeSpotlightInput({ productId: undefined })],
+    ["createSpotlight", makeSpotlightInput({ labelEs: "x".repeat(25) })],
+    ["createSpotlight", makeSpotlightInput({ phraseEn: "x".repeat(141) })],
+    ["createSpotlight", makeSpotlightInput({ rowsIndex: -1 })],
+    ["updateSpotlight", makeSpotlightInput({ id: "0" })],
+    ["deleteSpotlight", { id: "" }],
     ["createBanner", makeBannerInput({ pageId: undefined })],
   ] as const)(
     "refuses invalid %s input before reading the login",

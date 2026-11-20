@@ -62,6 +62,24 @@ export class StorePage extends BasePage {
   }
 
   /** One of the home's rows or banners, by the heading it shows. */
+  /** The home's article spotlight (FER-059) featuring `title`. */
+  getSpotlight(title: string): Locator {
+    return this.getHomeSections().filter({
+      has: this.page.getByRole("region", { exact: true, name: title }),
+    });
+  }
+
+  /**
+   * The spotlight's add button once React owns it: disabled in the
+   * server's HTML, it is enabled only then.
+   */
+  async getLiveSpotlightAdd(title: string): Promise<Locator> {
+    const button = this.getSpotlight(title).getByTestId("store-spotlight-add");
+    await expect(button).toBeEnabled({ timeout: 60_000 });
+
+    return button;
+  }
+
   getHomeSection(heading: string): Locator {
     return this.getHomeSections().filter({
       has: this.page.getByRole("heading", {
