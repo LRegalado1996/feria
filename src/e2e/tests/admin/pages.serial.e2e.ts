@@ -137,14 +137,13 @@ test.describe("Pages from the admin", () => {
         ).toBeVisible();
       }
 
-      // In the header's line, right after "Catálogo".
+      // In the header's line. Its place before the categories is
+      // store-shell's unit test: here, other published pages of the store
+      // can stand before it.
       await shopper.goto("/");
       await expect(
         headerBar(shopper).getByRole("link", { name })
       ).toHaveAttribute("href", `/${slug}`);
-      await expect(headerBar(shopper).getByRole("link").nth(1)).toHaveText(
-        name
-      );
     } finally {
       await context.close();
     }
