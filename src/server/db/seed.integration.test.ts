@@ -55,12 +55,19 @@ async function runSeed(tx: DatabaseClient) {
  * curation (FER-020) and no coming-soon page (so closed, FER-034).
  * Articles first, since a category that still has one cannot be deleted;
  * they take the curated rows with them, and the banners their places in a
- * page's cover. The pages' sequences go whole, their curated places
- * included: the seed keeps one it finds on the home page.
+ * page's cover. The home page's sequence goes whole, its curated places
+ * included: the seed keeps one it finds there.
  */
 async function emptyStore(tx: DatabaseClient, storeId: number) {
   await tx.delete(announcement).where(eq(announcement.storeId, storeId));
-  await tx.delete(pageSection).where(eq(pageSection.storeId, storeId));
+  // Only the home page's sequence: the seed reads no other page's.
+  const [own] = await tx
+    .select({ homePageId: store.homePageId })
+    .from(store)
+    .where(eq(store.id, storeId));
+  await tx
+    .delete(pageSection)
+    .where(eq(pageSection.pageId, own?.homePageId ?? 0));
   await tx.delete(banner).where(eq(banner.storeId, storeId));
   await tx.delete(comingSoon).where(eq(comingSoon.storeId, storeId));
   await tx.delete(product).where(eq(product.storeId, storeId));
