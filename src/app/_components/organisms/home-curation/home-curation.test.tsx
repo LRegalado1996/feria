@@ -1047,6 +1047,47 @@ describe("HomeCuration", () => {
     });
   });
 
+  test("a deletion that ends after its question was closed leaves the question asked since open", async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    server.use(
+      createOrpcHandler("home.deleteBanner", async () => {
+        await held;
+        return { id: 31 };
+      })
+    );
+
+    // Released whatever happens before it: a failed step leaves no request
+    // hanging past the test.
+    try {
+      await user.click(
+        screen.getByRole("button", { name: "Delete banner: Bubble guns" })
+      );
+      await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      });
+      await user.click(
+        screen.getByRole("button", { name: "Delete banner: Feria" })
+      );
+      const second = await screen.findByTestId("confirm-dialog");
+      finish();
+
+      expect(await screen.findByText("Banner deleted.")).toBeVisible();
+      expect(screen.getByTestId("confirm-dialog")).toBe(second);
+      expect(second).toHaveTextContent(
+        "“Feria” and its photos are deleted. This can't be undone."
+      );
+    } finally {
+      finish();
+    }
+  });
+
   test("closing the question deletes nothing", async () => {
     const { loaded, spies, user } = setup();
     await loaded();
