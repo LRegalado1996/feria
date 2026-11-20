@@ -1721,6 +1721,36 @@ describe("PageEditor on a page that is not the home (FER-060)", () => {
     );
   });
 
+  test("another admin's new address reaches the settings without undoing what this admin is typing", async () => {
+    const { loaded, refresh, spies, user } = setup({
+      data: makeData({ page: GIFTS }),
+    });
+    await loaded();
+    const settings = screen.getByTestId("page-settings");
+    const nameEs = within(settings).getByRole("textbox", {
+      name: "Name in Spanish",
+    });
+    await user.clear(nameEs);
+    await user.type(nameEs, "Mío");
+
+    await refresh(makeData({ page: { ...GIFTS, slug: "navidad" } }));
+
+    await waitFor(() => {
+      expect(
+        within(settings).getByRole("textbox", { name: "Address" })
+      ).toHaveValue("navidad");
+    });
+    expect(
+      within(settings).getByRole("textbox", { name: "Name in Spanish" })
+    ).toHaveValue("Mío");
+    await user.click(within(settings).getByTestId("page-form-submit"));
+    await waitFor(() => {
+      expect(spies.update).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ id: 2, nameEs: "Mío", slug: "navidad" })
+      );
+    });
+  });
+
   test("an address taken is said under the address, reported to no one", async () => {
     const { loaded, user } = setup({
       data: makeData({ page: GIFTS }),

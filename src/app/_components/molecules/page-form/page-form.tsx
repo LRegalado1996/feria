@@ -129,8 +129,12 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
   const formId = useId();
   const [failed, setFailed] = useState(false);
   const form = useForm<PageFormFields, unknown, PageFormValues>({
-    defaultValues: fieldsOf(page),
+    resetOptions: { keepDirtyValues: true },
     resolver: zodResolver(createPageFormSchema(copy.errors)),
+    // Follows the stored page when a read brings a newer one (another
+    // admin's save), keeping what this admin is typing: a field left as it
+    // was would otherwise send the older value back and undo theirs.
+    values: fieldsOf(page),
   });
   const { isSubmitting } = useFormState({ control: form.control });
   const isHome = page?.isHome ?? false;
@@ -142,6 +146,14 @@ function PageForm({ className, onCancel, onSave, page }: PageFormProps) {
 
     if (outcome === "taken") {
       form.setError("slug", { message: copy.errors.slugTaken });
+    }
+
+    // What was saved is no longer this admin's edit, so a later read with
+    // another admin's newer value must replace it, not be kept: a save
+    // turns off the keepDirtyValues that `reset` inherits from
+    // `resetOptions`.
+    if (outcome === "saved") {
+      form.reset(form.getValues(), { keepDirtyValues: false });
     }
 
     setFailed(outcome === "failed");

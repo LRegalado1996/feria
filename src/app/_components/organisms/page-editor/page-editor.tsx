@@ -693,7 +693,7 @@ function PageSettingsCard({ page }: { page: PageCurationData["page"] }) {
         <p className="text-xs text-muted-foreground">{copy.description}</p>
       </div>
       <PageForm
-        key={`${String(page.id)}:${page.slug}`}
+        key={page.id}
         onSave={async (values) => {
           try {
             await updatePage.mutateAsync({ ...values, id: page.id });

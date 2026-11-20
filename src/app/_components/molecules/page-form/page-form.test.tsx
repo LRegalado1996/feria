@@ -42,21 +42,25 @@ function setup({
         : await Promise.resolve(outcome)
   );
   const onCancel = vi.fn<() => void>();
-  renderWithI18n(
+  const screenFor = (shown: PageFormPage | null) => (
     <PageForm
       onCancel={cancel ? onCancel : undefined}
       onSave={onSave}
-      page={page}
-    />,
-    { locale }
+      page={shown}
+    />
   );
+  const { rerender } = renderWithI18n(screenFor(page), { locale });
+  /** A later read of the page reaches the form, as a refetch does. */
+  const refresh = (stored: PageFormPage) => {
+    rerender(screenFor(stored));
+  };
   const user = userEvent.setup();
   const field = (name: string) => screen.getByRole("textbox", { name });
   const submit = async () => {
     await user.click(screen.getByTestId("page-form-submit"));
   };
 
-  return { field, onCancel, onSave, submit, user };
+  return { field, onCancel, onSave, refresh, submit, user };
 }
 
 describe("PageForm", () => {
@@ -144,6 +148,68 @@ describe("PageForm", () => {
     expect(
       screen.getByRole("button", { name: "Save settings" })
     ).toBeInTheDocument();
+  });
+
+  test("a newer page read after it opened replaces the settings left alone, never what the admin typed", async () => {
+    const { field, onSave, refresh, submit, user } = setup({
+      page: makePage(),
+    });
+    await user.clear(field("Name in Spanish"));
+    await user.type(field("Name in Spanish"), "Mío");
+
+    // Another admin renamed it in English and unpublished it meanwhile.
+    refresh(makePage({ isPublished: false, nameEn: "Theirs", nameEs: "Suyo" }));
+
+    expect(field("Name in English")).toHaveValue("Theirs");
+    expect(field("Name in Spanish")).toHaveValue("Mío");
+    expect(
+      screen.getByRole("checkbox", { name: "Published" })
+    ).not.toBeChecked();
+    await submit();
+    expect(onSave).toHaveBeenCalledExactlyOnceWith({
+      isPublished: false,
+      nameEn: "Theirs",
+      nameEs: "Mío",
+      seoDescriptionEn: null,
+      seoDescriptionEs: "Para regalar.",
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: true,
+      slug: "regalos",
+    });
+  });
+
+  test("a setting saved is no longer the admin's edit: a newer page read after the save replaces it", async () => {
+    const { field, onSave, refresh, submit, user } = setup({
+      page: makePage(),
+    });
+    await user.clear(field("Name in Spanish"));
+    await user.type(field("Name in Spanish"), "Mío");
+    await submit();
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledOnce();
+    });
+    refresh(makePage({ nameEs: "Mío" }));
+
+    // Another admin then renamed it over this save.
+    refresh(makePage({ nameEs: "Suyo" }));
+
+    expect(field("Name in Spanish")).toHaveValue("Suyo");
+  });
+
+  test("a failed save keeps the admin's edit: a newer page read still leaves it", async () => {
+    const { field, refresh, submit, user } = setup({
+      outcome: "failed",
+      page: makePage(),
+    });
+    await user.clear(field("Name in Spanish"));
+    await user.type(field("Name in Spanish"), "Mío");
+    await submit();
+    await screen.findByRole("alert");
+
+    refresh(makePage({ nameEs: "Suyo" }));
+
+    expect(field("Name in Spanish")).toHaveValue("Mío");
   });
 
   test("the home stays published and stays off the header: both said, not offered", () => {
