@@ -23,6 +23,7 @@ import {
   spotlight,
 } from "@/server/db/schema";
 import { theStoreId, uniqueTag } from "@/server/test/one-store";
+import { readyOrFailed } from "@/server/test/two-writers";
 
 import {
   createBanner,
@@ -1275,9 +1276,11 @@ describe("the home's order under two writers", () => {
       results: [],
     };
 
-    // Both writers end before the teardown, whatever the wait does.
+    // Both writers end before the teardown, whatever the wait does: a
+    // second writer that fails before it says its process ends the wait
+    // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await secondPid, storeId);
+      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
@@ -1351,9 +1354,11 @@ describe("article spotlights under two writers", () => {
       results: [],
     };
 
-    // Both writers end before the teardown, whatever the wait does.
+    // Both writers end before the teardown, whatever the wait does: a
+    // second writer that fails before it says its process ends the wait
+    // too, instead of leaving the first holding the lock.
     try {
-      await waitUntilBlocked(await secondPid, storeId);
+      await waitUntilBlocked(await readyOrFailed(secondPid, second), storeId);
     } finally {
       held.resolve(undefined);
       settled.results = await Promise.allSettled([first, second]);
