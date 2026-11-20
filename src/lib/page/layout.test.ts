@@ -180,6 +180,24 @@ describe("followServerOrder", () => {
     ).toEqual(["x", "c", "b", "y", "a", "z"]);
   });
 
+  test("an entry the draft added stays where the draft put it, though the server never held it", () => {
+    expect(
+      followServerOrder(
+        { draft: ["a", "n", "b"], next: ["b", "a"], previous: ["a", "b"] },
+        key
+      )
+    ).toEqual(["a", "n", "b"]);
+  });
+
+  test("an entry the draft took out stays out, though the server still holds it", () => {
+    expect(
+      followServerOrder(
+        { draft: ["b"], next: ["a", "b", "x"], previous: ["a", "b"] },
+        key
+      )
+    ).toEqual(["b", "x"]);
+  });
+
   test("each entry is the server's own", () => {
     const fresh = { id: "a", title: "new" };
 

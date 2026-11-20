@@ -1529,6 +1529,41 @@ describe("PageEditor on a page that is not the home (FER-060)", () => {
     ).toEqual(["Choose…", "Best sellers", "Featured", "Rings"]);
   });
 
+  test("a block added and one taken out, not saved yet, stay so when the page is read again", async () => {
+    const sections: PageCurationData["sections"] = [
+      { categoryId: 4, kind: "category" },
+      { kind: "featured" },
+    ];
+    const { loaded, refresh, user } = setup({
+      data: makeData({ page: GIFTS, sections }),
+    });
+    await loaded();
+    const add = screen.getByTestId("page-add-block");
+
+    await user.selectOptions(
+      within(add).getByRole("combobox", { name: "Block to add" }),
+      "best_sellers"
+    );
+    await user.click(within(add).getByRole("button", { name: "Add block" }));
+    await user.click(screen.getByRole("button", { name: "Remove: Featured" }));
+    // Read again (its settings saved, a banner put between its rows): the
+    // server still holds the featured row and never held the best sellers.
+    await refresh(
+      makeData({
+        page: { ...GIFTS, showInHeader: false },
+        sections: [...sections, { bannerId: 32, kind: "banner" }],
+      })
+    );
+
+    await waitFor(() => {
+      expect(listed("home-layout-rows-item")).toEqual([
+        "Rings",
+        "Best sellers",
+        "Banner: Feria",
+      ]);
+    });
+  });
+
   test("saves its settings on their own, with its id, and says so", async () => {
     const { loaded, spies, user } = setup({ data: makeData({ page: GIFTS }) });
     await loaded();

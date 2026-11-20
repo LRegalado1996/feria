@@ -758,7 +758,8 @@ function CurationScreen({ data }: { data: PageCurationData }) {
 
   // The server's page changed under the form (a banner added, moved or
   // deleted from the side sheet): its order becomes the form's defaults,
-  // and an order moved and not saved yet is kept over it, less what is gone.
+  // and an order moved and not saved yet is kept over it, less what is gone
+  // (a block added or taken out and not saved yet included, FER-060).
   // A save in flight owns the form until it settles: a reset now would
   // unlock its lists, and the save's own reset would then undo any move.
   useEffect(() => {

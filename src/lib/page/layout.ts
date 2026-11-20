@@ -137,6 +137,9 @@ function sameOrder<T>(
  * holds it now), drops what the server no longer holds, and places what is
  * new on the server at the server's index. Merging per position instead
  * would keep a deleted banner or list one twice, which the save refuses.
+ * An entry the draft added (a block given to a page, FER-060) stays, and
+ * one the draft took out stays out: the server never held the one, and
+ * still holds the other only because the draft is not saved yet.
  */
 export function followServerOrder<T>(
   { draft, next, previous }: OrderVersions<T>,
@@ -147,14 +150,22 @@ export function followServerOrder<T>(
   }
 
   const current = new Map(next.map((item) => [keyOf(item), item]));
+  const held = new Set(previous.map(keyOf));
   const drafted = new Set(draft.map(keyOf));
   const merged = draft.flatMap((item): T[] => {
     const fresh = current.get(keyOf(item));
-    return fresh === undefined ? [] : [fresh];
+
+    if (fresh !== undefined) {
+      return [fresh];
+    }
+
+    return held.has(keyOf(item)) ? [] : [item];
   });
 
   for (const [index, item] of next.entries()) {
-    if (!drafted.has(keyOf(item))) {
+    const key = keyOf(item);
+
+    if (!drafted.has(key) && !held.has(key)) {
       merged.splice(Math.min(index, merged.length), 0, item);
     }
   }
