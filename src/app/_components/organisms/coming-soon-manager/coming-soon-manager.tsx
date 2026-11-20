@@ -56,7 +56,7 @@ export interface ComingSoonManagerProps {
 
 /** The switch's card: the page's state in words, and the one move it has. */
 function StatusCard({ page }: { page: ComingSoonFormPage }) {
-  const { comingSoon } = useDictionary();
+  const { comingSoon, storefront } = useDictionary();
   const locale = useLocale();
   const copy = comingSoon.manage;
   const setPublished = useSetComingSoonPublished();
@@ -154,6 +154,7 @@ function StatusCard({ page }: { page: ComingSoonFormPage }) {
           >
             <ExternalLink aria-hidden="true" />
             {copy.preview}
+            <span className="sr-only"> {storefront.shell.newTab}</span>
           </a>
         </Button>
       </div>

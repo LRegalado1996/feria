@@ -201,11 +201,13 @@ describe("ComingSoonManager", () => {
     }
   );
 
-  test("links to the page itself in a new tab, in the admin's language", async () => {
+  test("links to the page itself in a new tab, in the admin's language, and says so to a screen reader", async () => {
     const { status } = setup({ locale: "es" });
     await screen.findByTestId("coming-soon-status");
 
-    const link = within(status()).getByRole("link", { name: "Ver la página" });
+    const link = within(status()).getByRole("link", {
+      name: "Ver la página (se abre en otra pestaña)",
+    });
     expect(link).toHaveAttribute("href", "/coming-soon");
     expect(link).toHaveAttribute("target", "_blank");
   });
