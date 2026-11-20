@@ -697,16 +697,6 @@ describe("createPageLayoutFormSchema", () => {
       [["sections", "repeated"]],
     ],
     [
-      "a category and a banner of the same id",
-      {
-        sections: [
-          { section: { categoryId: 2, kind: "category" } },
-          { section: { bannerId: 2, kind: "banner" } },
-        ],
-      },
-      [],
-    ],
-    [
       "an article spotlight twice",
       {
         sections: [
@@ -716,28 +706,38 @@ describe("createPageLayoutFormSchema", () => {
       },
       [["sections", "repeated"]],
     ],
+  ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
+    expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
+  });
+
+  test.each<[string, PageLayoutFormFields["sections"][number]["section"][]]>([
+    [
+      "a category and a banner of the same id",
+      [
+        { categoryId: 2, kind: "category" },
+        { bannerId: 2, kind: "banner" },
+      ],
+    ],
     [
       "two article spotlights",
-      {
-        sections: [
-          { section: { kind: "spotlight", spotlightId: 6 } },
-          { section: { kind: "spotlight", spotlightId: 7 } },
-        ],
-      },
-      [],
+      [
+        { kind: "spotlight", spotlightId: 6 },
+        { kind: "spotlight", spotlightId: 7 },
+      ],
     ],
     [
       "a spotlight and a banner of the same id",
-      {
-        sections: [
-          { section: { kind: "spotlight", spotlightId: 2 } },
-          { section: { bannerId: 2, kind: "banner" } },
-        ],
-      },
-      [],
+      [
+        { kind: "spotlight", spotlightId: 2 },
+        { bannerId: 2, kind: "banner" },
+      ],
     ],
-  ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
-    expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
+  ])("different entries are both kept: %s", (_case, sections) => {
+    expect(
+      schema.parse(
+        makeFields({ sections: sections.map((section) => ({ section })) })
+      ).sections
+    ).toEqual(sections);
   });
 });
 
@@ -830,7 +830,15 @@ describe("createSpotlightSchema and updateSpotlightSchema", () => {
       updateSpotlightSchema.parse({ ...makeSpotlight(), id: "51" })
     ).toMatchObject({ id: 51 });
     expect(deleteSpotlightSchema.parse({ id: "51" })).toEqual({ id: 51 });
-    expect(deleteSpotlightSchema.safeParse({ id: "0" }).success).toBe(false);
+    expect(
+      deleteSpotlightSchema
+        .safeParse({ id: "0" })
+        .error?.issues.map((issue) => [
+          issue.path.join("."),
+          issue.code,
+          issue.message,
+        ])
+    ).toEqual([["id", "too_small", "Too small: expected number to be >0"]]);
   });
 });
 
@@ -877,23 +885,32 @@ describe("createSpotlightFormSchema", () => {
   });
 
   test.each([
-    ["no article", { productId: "" }, ["productId", "articleRequired"]],
-    ["a long label", { labelEn: "x".repeat(25) }, ["labelEn", "labelTooLong"]],
+    [
+      "no article",
+      { productId: "" },
+      ["productId", "custom", "articleRequired"],
+    ],
+    [
+      "a long label",
+      { labelEn: "x".repeat(25) },
+      ["labelEn", "too_big", "labelTooLong"],
+    ],
     [
       "a long phrase",
       { phraseEs: "x".repeat(141) },
-      ["phraseEs", "phraseTooLong"],
+      ["phraseEs", "too_big", "phraseTooLong"],
     ],
-  ] as const)(
-    "refuses %s under its field",
-    (_case, overrides, [path, message]) => {
-      const parsed = schema.safeParse(makeFields(overrides));
+  ] as const)("refuses %s under its field", (_case, overrides, expected) => {
+    const parsed = schema.safeParse(makeFields(overrides));
 
-      expect(
-        parsed.error?.issues.map((issue) => [issue.path[0], issue.message])
-      ).toEqual([[path, message]]);
-    }
-  );
+    expect(
+      parsed.error?.issues.map((issue) => [
+        issue.path.join("."),
+        issue.code,
+        issue.message,
+      ])
+    ).toEqual([expected]);
+  });
 });
 
 describe("pages (FER-060)", () => {

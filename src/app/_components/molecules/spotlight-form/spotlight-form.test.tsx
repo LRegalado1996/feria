@@ -89,17 +89,27 @@ describe("SpotlightForm", () => {
 
     expect(select("Article")).toBeRequired();
     expect(select("After")).not.toBeRequired();
-    expect(
-      screen.getByRole("textbox", { name: "Label in Spanish" })
-    ).not.toBeRequired();
+
+    for (const name of [
+      "Label in Spanish",
+      "Label in English",
+      "Phrase in Spanish",
+      "Phrase in English",
+    ]) {
+      expect(screen.getByRole("textbox", { name })).not.toBeRequired();
+    }
   });
 
   test("refuses a spotlight with no article, under its field, saving nothing", async () => {
-    const { onSave, submit } = setup();
+    const { onSave, select, submit } = setup();
 
     await submit();
 
     expect(await screen.findByText("Choose the article.")).toBeVisible();
+    expect(select("Article")).toHaveAttribute("aria-invalid", "true");
+    expect(select("Article")).toHaveAccessibleDescription(
+      expect.stringContaining("Choose the article.")
+    );
     expect(onSave).not.toHaveBeenCalled();
   });
 
