@@ -96,6 +96,27 @@ function textIn(texts: { en: string | null; es: string }, locale: Locale) {
   return locale === "en" && texts.en !== null ? texts.en : texts.es;
 }
 
+/**
+ * A spotlight's label in `locale`, else in the other language with the
+ * language it is in, as the storefront falls back (FER-059); `null` when
+ * it has none.
+ */
+function labelIn(
+  spotlight: Pick<Spotlight, "labelEn" | "labelEs">,
+  locale: Locale
+): { lang: Locale; text: string } | null {
+  const labels = { en: spotlight.labelEn, es: spotlight.labelEs };
+  const other: Locale = locale === "en" ? "es" : "en";
+  const own = labels[locale];
+  const fallback = labels[other];
+
+  if (own !== null) {
+    return { lang: locale, text: own };
+  }
+
+  return fallback === null ? null : { lang: other, text: fallback };
+}
+
 /** Whether two images are the same file (or both none). */
 function sameImage(one: UploadedImage | null, other: UploadedImage | null) {
   return one?.url === other?.url;
@@ -237,10 +258,7 @@ function SpotlightRow({
   const locale = useLocale();
   const copy = admin.home;
   const warning = articleWarning(article, copy.layout.warnings);
-  const label =
-    locale === "en" && spotlight.labelEn !== null
-      ? spotlight.labelEn
-      : spotlight.labelEs;
+  const label = labelIn(spotlight, locale);
 
   return (
     <li
@@ -261,7 +279,16 @@ function SpotlightRow({
       <div className="min-w-0 flex-1 space-y-1">
         <p className="truncate text-sm font-medium">{name}</p>
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {label ? <span>{label}</span> : null}
+          {label ? (
+            <span
+              data-testid="home-spotlight-label"
+              // The screen's language needs no mark; the other one does,
+              // so a screen reader says it in its own voice.
+              lang={label.lang === locale ? undefined : label.lang}
+            >
+              {label.text}
+            </span>
+          ) : null}
           <span
             className={
               warning === null && spotlight.onPage

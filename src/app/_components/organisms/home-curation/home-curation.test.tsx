@@ -905,6 +905,45 @@ describe("HomeCuration", () => {
     ).toBeVisible();
   });
 
+  test.each([
+    ["en", "New", "Nuevo", "New", null],
+    ["es", "New", "Nuevo", "Nuevo", null],
+    ["en", null, "Nuevo", "Nuevo", "es"],
+    ["es", "New", null, "New", "en"],
+  ] as const)(
+    "on a %s screen, a spotlight labelled %s and %s shows %s, marked as %s",
+    async (locale, labelEn, labelEs, text, lang) => {
+      const { loaded } = setup({
+        data: makeData({
+          spotlights: [makeHomeSpotlight({ labelEn, labelEs })],
+        }),
+        locale,
+      });
+      await loaded();
+
+      const label = within(
+        screen.getByTestId("home-spotlight-row")
+      ).getByTestId("home-spotlight-label");
+      expect(label).toHaveTextContent(text);
+      expect(label.getAttribute("lang")).toBe(lang);
+    }
+  );
+
+  test("a spotlight with no label shows none", async () => {
+    const { loaded } = setup({
+      data: makeData({
+        spotlights: [makeHomeSpotlight({ labelEn: null, labelEs: null })],
+      }),
+    });
+    await loaded();
+
+    expect(
+      within(screen.getByTestId("home-spotlight-row")).queryByTestId(
+        "home-spotlight-label"
+      )
+    ).toBeNull();
+  });
+
   test("says when there is no spotlight yet", async () => {
     const { loaded } = setup();
     await loaded();
