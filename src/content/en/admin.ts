@@ -441,6 +441,7 @@ export const admin: Dictionary["admin"] = {
       hint: "Large photos with a title and a button. They go in the cover, the carousel at the very top, or between two rows of articles.",
       linkUnpublished:
         "The article it leads to is not published: the banner shows without a link.",
+      notOnPage: "Not on this page",
       placements: { cover: "Cover", rows: "Between rows" },
       title: "Banners",
     },

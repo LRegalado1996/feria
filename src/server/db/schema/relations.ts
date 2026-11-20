@@ -14,17 +14,18 @@ import {
   productImageTranslation,
   productTranslation,
 } from "./catalog";
+import { customerOrder, orderItem, orderStatusEvent } from "./order";
 import {
   announcement,
   announcementTranslation,
   banner,
   bannerTranslation,
   featuredProduct,
-  homeSection,
+  pageCoverBanner,
+  pageSection,
   rankingEntry,
-} from "./home";
-import { customerOrder, orderItem, orderStatusEvent } from "./order";
-import { store, storeTranslation } from "./store";
+} from "./page";
+import { page, store, storeTranslation } from "./store";
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -256,16 +257,37 @@ export const bannerTranslationRelations = relations(
   })
 );
 
-export const homeSectionRelations = relations(homeSection, ({ one }) => ({
+export const pageRelations = relations(page, ({ many, one }) => ({
+  cover: many(pageCoverBanner),
+  sections: many(pageSection),
+  store: one(store, { fields: [page.storeId], references: [store.id] }),
+}));
+
+export const pageSectionRelations = relations(pageSection, ({ one }) => ({
   banner: one(banner, {
-    fields: [homeSection.bannerId],
+    fields: [pageSection.bannerId],
     references: [banner.id],
   }),
   category: one(category, {
-    fields: [homeSection.categoryId],
+    fields: [pageSection.categoryId],
     references: [category.id],
   }),
+  page: one(page, { fields: [pageSection.pageId], references: [page.id] }),
 }));
+
+export const pageCoverBannerRelations = relations(
+  pageCoverBanner,
+  ({ one }) => ({
+    banner: one(banner, {
+      fields: [pageCoverBanner.bannerId],
+      references: [banner.id],
+    }),
+    page: one(page, {
+      fields: [pageCoverBanner.pageId],
+      references: [page.id],
+    }),
+  })
+);
 
 export const rankingEntryRelations = relations(rankingEntry, ({ one }) => ({
   product: one(product, {

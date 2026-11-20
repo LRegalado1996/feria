@@ -9,7 +9,7 @@ import {
   type AnnouncementFormFields,
   createAnnouncementFormSchema,
   type SaveAnnouncementValues,
-} from "@/lib/schemas/home";
+} from "@/lib/schemas/page";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import {

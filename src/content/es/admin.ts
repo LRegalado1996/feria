@@ -456,6 +456,7 @@ export const admin = {
       hint: "Fotos grandes con un título y un botón. Van en la portada, el carrusel de arriba de todo, o entre dos filas de artículos.",
       linkUnpublished:
         "El artículo al que lleva no está publicado: el banner se muestra sin enlace.",
+      notOnPage: "No está en esta página",
       placements: { cover: "Portada", rows: "Entre filas" },
       title: "Banners",
     },

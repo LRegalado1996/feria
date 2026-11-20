@@ -1,8 +1,8 @@
-import type { HomeCurationData } from "@/lib/hooks/home";
+import type { PageCurationData } from "@/lib/hooks/page";
 
-type Article = HomeCurationData["articles"][number];
-type Banner = HomeCurationData["banners"][number];
-type Category = HomeCurationData["categories"][number];
+type Article = PageCurationData["articles"][number];
+type Banner = PageCurationData["banners"][number];
+type Category = PageCurationData["categories"][number];
 
 /** An article of the store, published and available unless a test says so. */
 export function makeHomeArticle(overrides: Partial<Article> = {}): Article {
@@ -52,13 +52,13 @@ export function makeHomeCategory(overrides: Partial<Category> = {}): Category {
 }
 
 /**
- * What `home.get` answers (FER-020): no announcement yet, no banner, one
+ * What `page.get` answers for the home page (FER-020, FER-058): no announcement yet, no banner, one
  * category with one published article, the curated rows empty, read on
  * 2026-11-20, unless a test says otherwise.
  */
 export function makeHomeCuration(
-  overrides: Partial<HomeCurationData> = {}
-): HomeCurationData {
+  overrides: Partial<PageCurationData> = {}
+): PageCurationData {
   return {
     announcement: null,
     articles: [makeHomeArticle()],
@@ -67,6 +67,7 @@ export function makeHomeCuration(
     coverBannerIds: [],
     currencyCode: "UYU",
     featuredProductIds: [],
+    pageId: 1,
     rankingProductIds: [],
     sections: [
       { kind: "best_sellers" },

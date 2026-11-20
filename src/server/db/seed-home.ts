@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { HomeSection, SaveAnnouncementValues } from "@/lib/schemas/home";
+import type { PageSection, SaveAnnouncementValues } from "@/lib/schemas/page";
 import type { DatabaseClient } from "@/server/db";
 import {
   announcement,
@@ -8,12 +8,17 @@ import {
   bannerTranslation,
   category,
   featuredProduct,
-  homeSection,
+  pageCoverBanner,
+  pageSection,
   product,
   productTranslation,
   rankingEntry,
 } from "@/server/db/schema";
-import { lockStoreHome, saveAnnouncement } from "@/server/services/home";
+import {
+  findHomePageId,
+  lockStorePages,
+  saveAnnouncement,
+} from "@/server/services/page";
 
 /**
  * The announcement the bar shows on a seeded store (FER-020): the fair's
@@ -187,12 +192,10 @@ async function insertBanner(
   tx: DatabaseClient,
   {
     categoryIds,
-    coverPosition,
     seed,
     storeId,
   }: {
     categoryIds: ReadonlyMap<string, number>;
-    coverPosition: number | null;
     seed: SeedBanner;
     storeId: number;
   }
@@ -209,9 +212,7 @@ async function insertBanner(
     .values({
       ...photoColumns(seed.computer, seed.phone),
       ...link,
-      coverPosition,
       isActive: true,
-      placement: coverPosition === null ? "rows" : "cover",
       storeId,
     })
     .returning({ id: banner.id });
@@ -234,13 +235,13 @@ async function insertBanner(
 
 /**
  * The home's demo content (FER-020, also FER-031's): the announcement, the
- * cover's three banners and two between rows, the order of the rows, the
- * best sellers and the featured articles. Each part only when the store has
- * none of it yet, so a second run, or a home the admin already curated, is
- * left alone. Answers what it added.
+ * cover's three banners and two between rows, the order of the home page's
+ * blocks (FER-058), the best sellers and the featured articles. Each part
+ * only when the store has none of it yet, so a second run, or a home the
+ * admin already curated, is left alone. Answers what it added.
  */
 export async function seedHome(tx: DatabaseClient, storeId: number) {
-  await lockStoreHome(tx, storeId);
+  await lockStorePages(tx, storeId);
   const added = {
     announcement: false,
     banners: 0,
@@ -262,9 +263,10 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
     where: eq(banner.storeId, storeId),
   });
 
-  const anySection = await tx.query.homeSection.findFirst({
+  const pageId = await findHomePageId(tx, { storeId });
+  const anySection = await tx.query.pageSection.findFirst({
     columns: { id: true },
-    where: eq(homeSection.storeId, storeId),
+    where: eq(pageSection.pageId, pageId),
   });
   const categories =
     anyBanner && anySection
@@ -278,25 +280,26 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   const rowBannerIds: number[] = [];
 
   if (!anyBanner) {
-    for (const [position, seed] of SEED_COVER_BANNERS.entries()) {
-      await insertBanner(tx, {
-        categoryIds,
-        coverPosition: position,
-        seed,
-        storeId,
-      });
+    const coverBannerIds: number[] = [];
+
+    for (const seed of SEED_COVER_BANNERS) {
+      coverBannerIds.push(
+        await insertBanner(tx, { categoryIds, seed, storeId })
+      );
     }
 
     for (const seed of SEED_ROW_BANNERS) {
-      rowBannerIds.push(
-        await insertBanner(tx, {
-          categoryIds,
-          coverPosition: null,
-          seed,
-          storeId,
-        })
-      );
+      rowBannerIds.push(await insertBanner(tx, { categoryIds, seed, storeId }));
     }
+
+    // A store with no banner has no cover to replace.
+    await tx.insert(pageCoverBanner).values(
+      coverBannerIds.map((bannerId, position) => ({
+        bannerId,
+        pageId,
+        position,
+      }))
+    );
 
     added.banners = SEED_COVER_BANNERS.length + SEED_ROW_BANNERS.length;
   }
@@ -304,7 +307,7 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   // An order the admin saved stays, banners or not: the banners added
   // above then come after it, as any banner new since the last save does.
   if (!anySection) {
-    const listed = SEED_SEQUENCE.flatMap((entry): HomeSection[] => {
+    const listed = SEED_SEQUENCE.flatMap((entry): PageSection[] => {
       if ("curated" in entry) {
         return [{ kind: entry.curated }];
       }
@@ -327,18 +330,19 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
         entry.kind === "category" ? [entry.categoryId] : []
       )
     );
-    const sections: HomeSection[] = [
+    const sections: PageSection[] = [
       ...listed,
       ...categories
         .filter((row) => !placed.has(row.id))
         .map((row) => ({ categoryId: row.id, kind: "category" as const })),
     ];
 
-    await tx.insert(homeSection).values(
+    await tx.insert(pageSection).values(
       sections.map((section, position) => ({
         bannerId: section.kind === "banner" ? section.bannerId : null,
         categoryId: section.kind === "category" ? section.categoryId : null,
         kind: section.kind,
+        pageId,
         position,
         storeId,
       }))

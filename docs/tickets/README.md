@@ -52,6 +52,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-041](FER-041-drop-unread-schema.md)           | Drop what nothing reads any more                   | P2       | todo   |
 | [FER-048](FER-048-reserved-category-slug-check.md) | The database refuses a category on a reserved path | P2       | todo   |
 | [FER-052](FER-052-drop-article-search-texts.md)    | Drop an article's own search texts                 | P2       | todo   |
+| [FER-061](FER-061-drop-home-only-placing.md)       | Drop FER-020's home-only placing                   | P2       | todo   |
 
 ### M3 Admin
 
@@ -93,6 +94,8 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-050](FER-050-storefront-round.md)               | Storefront round: menu, grid, footer, confirm     | P0       | done        |
 | [FER-051](FER-051-order-stepper-and-admin-round.md)  | Order stepper, the order pages and an admin round | P0       | done        |
 | [FER-049](FER-049-share-card-blob-photos.md)         | An article's share card draws its uploaded photo  | P1       | todo        |
+| [FER-058](FER-058-pages-built-from-sections.md)      | Pages built from sections: the home is the first  | P0       | done        |
+| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin         | P0       | todo        |
 
 ### M5 Metrics
 

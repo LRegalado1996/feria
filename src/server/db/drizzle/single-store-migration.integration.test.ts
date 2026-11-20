@@ -91,9 +91,11 @@ async function categoriesOf(tx: DatabaseClient, storeId: number) {
 async function refusesASecondStore(tx: DatabaseClient) {
   try {
     await tx.transaction(async (savepoint) => {
-      await savepoint
-        .insert(store)
-        .values({ currencyCode: "UYU", name: "Another" });
+      // In SQL: a store row of today must name its home page (FER-058),
+      // which a store of before 0012 had none of.
+      await savepoint.execute(
+        sql`insert into "store" ("name", "currencyCode", "updatedAt") values ('Another', 'UYU', now())`
+      );
     });
 
     return false;
@@ -108,8 +110,12 @@ async function refusesASecondStore(tx: DatabaseClient) {
 /** Runs `scenario` in a transaction it then rolls back, failing on its own error. */
 async function rolledBack(scenario: (tx: DatabaseClient) => Promise<void>) {
   const run = db.transaction(async (tx) => {
-    // The state before 0012: more than one store was allowed.
+    // The state before 0012: more than one store was allowed, and none had
+    // a home page yet (0022, FER-058), which a store it inserts lacks.
     await tx.execute(sql`drop index if exists "store_single_row"`);
+    await tx.execute(
+      sql`alter table "store" alter column "homePageId" drop not null`
+    );
     await scenario(tx);
 
     throw new Error(ROLLED_BACK);

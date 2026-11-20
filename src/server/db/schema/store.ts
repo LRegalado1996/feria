@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   check,
+  foreignKey,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -47,6 +50,13 @@ export const store = pgTable(
     catalogCoverPhoneUrl: text(),
     catalogCoverPhoneWidth: integer(),
     catalogCoverPhoneHeight: integer(),
+    /**
+     * The page `/` shows (FER-058): exactly one, always one of the store's
+     * own pages (the pair references the page's), and that page cannot be
+     * deleted while it is the home. Migration 0021 gave every store its
+     * first page and pointed here; 0022 made it required.
+     */
+    homePageId: integer().notNull(),
     createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
@@ -59,6 +69,13 @@ export const store = pgTable(
     // Every row indexes the same constant, so a second row is a unique
     // violation: the database refuses it, whatever writes it.
     uniqueIndex("store_single_row").on(sql`(true)`),
+    index().on(table.homePageId),
+    foreignKey({
+      columns: [table.id, table.homePageId],
+      // oxlint-disable-next-line eslint/no-use-before-define -- the store and its pages reference each other; this callback runs once both exist (1 here)
+      foreignColumns: [page.storeId, page.id],
+      name: "store_home_page_fk",
+    }).onDelete("no action"),
     ...coverChecks("store_catalog", {
       computer: {
         height: table.catalogCoverHeight,
@@ -102,5 +119,40 @@ export const storeTranslation = pgTable(
       "store_translation_catalog_cover_alt_length",
       sql`char_length(${table.catalogCoverAlt}) <= ${sql.raw(String(COVER_ALT_MAX_LENGTH))}`
     ),
+  ]
+);
+
+/**
+ * A page of the store built from sections (FER-058). A page holds no
+ * content of its own: what it shows, and in what order, is its sections'
+ * and its cover's, which point at store-level content (banners, the
+ * curated lists, categories). Which page is the home is the store's to say
+ * (`store.homePageId`), so there is always exactly one; migration 0021
+ * gave every store its first page and made it the home. A name, an address
+ * and texts per language come with the pages of FER-060.
+ */
+// Here, beside the store, not in `page.ts` with its sections: the store
+// names its home page, and two schema files must not import each other.
+export const page = pgTable(
+  "page",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    // Typed by hand: the store references its home page back, and the two
+    // tables' types cannot both be inferred from each other.
+    storeId: integer()
+      .notNull()
+      .references((): AnyPgColumn => store.id, { onDelete: "cascade" }),
+    createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    // What a section's and the store's (store, page) pairs reference; it
+    // leads with `storeId`, so it also serves the store's foreign key.
+    unique("page_store_id_unique").on(table.storeId, table.id),
   ]
 );

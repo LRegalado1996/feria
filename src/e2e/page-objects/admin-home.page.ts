@@ -48,7 +48,7 @@ export class AdminHomePage extends AdminPage {
   async saveAnnouncement(input: RpcInput = {}): Promise<void> {
     await completeRpcAction(
       this.page,
-      "/api/orpc/home/saveAnnouncement",
+      "/api/orpc/page/saveAnnouncement",
       async () => {
         await this.announcement()
           .getByRole("button", { name: "Guardar anuncio" })
@@ -89,7 +89,7 @@ export class AdminHomePage extends AdminPage {
   async saveNewBanner(input: RpcInput = {}): Promise<void> {
     await completeRpcAction(
       this.page,
-      "/api/orpc/home/createBanner",
+      "/api/orpc/page/createBanner",
       async () => {
         await this.getByTestId("banner-form-submit").click();
       },
@@ -140,7 +140,7 @@ export class AdminHomePage extends AdminPage {
   async saveOrder(): Promise<void> {
     await completeRpcAction(
       this.page,
-      "/api/orpc/home/saveLayout",
+      "/api/orpc/page/saveLayout",
       async () => {
         await this.saveOrderButton().click();
       }
@@ -150,6 +150,6 @@ export class AdminHomePage extends AdminPage {
 
   /** The preview of the home, drawn by the storefront's pieces. */
   preview(): Locator {
-    return this.getByTestId("store-home-preview");
+    return this.getByTestId("store-page-preview");
   }
 }

@@ -6,10 +6,10 @@ import {
   headerCategories,
   type NavigationCategory,
 } from "@/lib/catalog/navigation";
-import { homeHref } from "@/lib/home/content";
 import type { Locale } from "@/lib/i18n/config";
+import { pageHref } from "@/lib/page/content";
 import { readCategories } from "@/server/cache/catalog";
-import { readAnnouncement } from "@/server/cache/home";
+import { readAnnouncement } from "@/server/cache/page";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
 
@@ -33,7 +33,7 @@ export async function announcementOf(
 
   return shown
     ? {
-        href: shown.href === null ? null : homeHref(shown.href, locale),
+        href: shown.href === null ? null : pageHref(shown.href, locale),
         lang: shown.lang,
         short: shown.shortText,
         text: shown.text,
