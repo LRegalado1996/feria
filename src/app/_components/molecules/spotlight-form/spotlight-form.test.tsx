@@ -84,6 +84,16 @@ describe("SpotlightForm", () => {
     ]);
   });
 
+  test("tells assistive tech which control is required, and only that one", () => {
+    const { select } = setup();
+
+    expect(select("Article")).toBeRequired();
+    expect(select("After")).not.toBeRequired();
+    expect(
+      screen.getByRole("textbox", { name: "Label in Spanish" })
+    ).not.toBeRequired();
+  });
+
   test("refuses a spotlight with no article, under its field, saving nothing", async () => {
     const { onSave, submit } = setup();
 

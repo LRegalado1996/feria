@@ -139,7 +139,7 @@ function SpotlightForm({
                 <FormItem className="min-w-0">
                   <FormLabel required>{fields.productId}</FormLabel>
                   <FormControl>
-                    <select {...field} className={SELECT_CLASS}>
+                    <select {...field} className={SELECT_CLASS} required>
                       <option value="">{fields.choose}</option>
                       {articles.map((choice) => (
                         <option key={choice.id} value={String(choice.id)}>
