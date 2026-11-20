@@ -1145,7 +1145,10 @@ describe("HomeCuration", () => {
   test("lists the article spotlights: the article, its label, whether it is on this page, and why the store leaves one out", async () => {
     const { loaded } = setup({
       data: makeData({
-        sections: [{ kind: "spotlight", spotlightId: 51 }],
+        sections: [
+          { kind: "spotlight", spotlightId: 51 },
+          { kind: "spotlight", spotlightId: 53 },
+        ],
         spotlights: [
           makeHomeSpotlight(),
           makeHomeSpotlight({
@@ -1187,10 +1190,20 @@ describe("HomeCuration", () => {
     expect(rows[1]).toHaveTextContent("Nuevo");
     // In the page's order, named and warned like a curated article.
     expect(
-      within(screen.getByTestId("home-layout-rows")).getByText(
-        "Spotlight: Signet ring"
-      )
-    ).toBeVisible();
+      within(screen.getByTestId("home-layout-rows"))
+        .getAllByTestId("home-layout-rows-item")
+        .map((item) => [
+          item.querySelector("p")?.textContent,
+          within(item).queryByTestId("home-layout-warning")?.textContent ??
+            null,
+        ])
+    ).toEqual([
+      ["Spotlight: Signet ring", null],
+      [
+        "Spotlight: Cadena corona",
+        "It is sold out: it doesn't appear in the store until it is available again.",
+      ],
+    ]);
   });
 
   test.each([
@@ -1378,25 +1391,36 @@ describe("HomeCuration", () => {
       within(first).getByRole("combobox", { name: "Article" }),
       "Signet ring"
     );
-    await user.click(within(first).getByTestId("spotlight-form-submit"));
-    expect(
-      await within(first).findByRole("button", { name: "Saving…" })
-    ).toBeDisabled();
-    await user.keyboard("{Escape}");
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    await user.click(add);
-    const second = await screen.findByRole("dialog", { name: "New spotlight" });
-    const label = within(second).getByRole("textbox", {
-      name: "Label in Spanish",
-    });
-    await user.type(label, "Otra");
-    finish();
+    // Released whatever happens before it: a failed step leaves no
+    // request hanging past the test.
+    try {
+      await user.click(within(first).getByTestId("spotlight-form-submit"));
+      expect(
+        await within(first).findByRole("button", { name: "Saving…" })
+      ).toBeDisabled();
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+      await user.click(add);
+      const second = await screen.findByRole("dialog", {
+        name: "New spotlight",
+      });
+      const label = within(second).getByRole("textbox", {
+        name: "Label in Spanish",
+      });
+      await user.type(label, "Otra");
+      expect(label).toHaveValue("Otra");
+      finish();
 
-    expect(await screen.findByText("Spotlight added.")).toBeVisible();
-    expect(screen.getByRole("dialog", { name: "New spotlight" })).toBe(second);
-    expect(label).toHaveValue("Otra");
+      expect(await screen.findByText("Spotlight added.")).toBeVisible();
+      expect(screen.getByRole("dialog", { name: "New spotlight" })).toBe(
+        second
+      );
+      expect(label).toHaveValue("Otra");
+    } finally {
+      finish();
+    }
   });
 
   test("cancelling and Escape close the sheet and hand focus back", async () => {
