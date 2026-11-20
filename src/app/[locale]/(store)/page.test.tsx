@@ -331,6 +331,46 @@ describe("StoreHomePage", () => {
     }
   );
 
+  test("an article in the spotlight is a list of one, named by the article as its heading is", async () => {
+    await setup({
+      content: {
+        cover: [],
+        sections: [
+          {
+            key: "spotlight:51",
+            kind: "spotlight",
+            spotlight: {
+              article: makeCard("burbujero-pez", "Burbujero pez"),
+              id: 51,
+              label: null,
+              phrase: null,
+            },
+          },
+        ],
+      },
+      locale: "en",
+    });
+
+    expect(structuredData()).toEqual([
+      expect.objectContaining({ "@type": "WebSite" }),
+      expect.objectContaining({ "@type": "Organization" }),
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            name: "Burbujero pez",
+            position: 1,
+            url: "http://localhost:3000/en/productos/burbujero-pez",
+          },
+        ],
+        name: "Burbujero pez",
+        numberOfItems: 1,
+      },
+    ]);
+  });
+
   test("a home with nothing to show tells search engines only about the site and the store", async () => {
     await setup({ content: { cover: [], sections: [] } });
 

@@ -4,11 +4,9 @@ import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
-import { addOutcomeMessage } from "@/lib/catalog/add-outcome";
-import { useCart, useCartPanel } from "@/lib/hooks/cart";
+import { useAddToCart } from "@/lib/hooks/cart";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
-import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 import { cn } from "@/lib/utils";
 
@@ -26,10 +24,11 @@ export interface StoreArticlePurchaseProps {
  * two steps and the count, and beside it, on one row at every width down to
  * 375 px, the page's one primary pill, which takes the rest of the row
  * (FER-039, like landonorris.store's "QTY 1" beside "ADD TO BAG"). From 1
- * to the per-article cap. What adding did opens the cart's side panel with
- * the article's line marked and says so there (FER-045); what it could not
- * do, and anything at all outside a store page's frame, is said here, in a
- * polite live region, a repeat included.
+ * to the per-article cap. Adding is the store's one way (`useAddToCart`):
+ * what it did opens the cart's side panel with the article's line marked
+ * and says so there (FER-045); what it could not do, and anything at all
+ * outside a store page's frame, is said here, in a polite live region, a
+ * repeat included.
  */
 function StoreArticlePurchase({
   className,
@@ -37,10 +36,8 @@ function StoreArticlePurchase({
   productId,
   title,
 }: StoreArticlePurchaseProps) {
-  const { storefront } = useDictionary();
-  const copy = storefront.article;
-  const { add, items } = useCart();
-  const panel = useCartPanel();
+  const copy = useDictionary().storefront.article;
+  const addToCart = useAddToCart();
   const [quantity, setQuantity] = useState(1);
   const [status, setStatus] = useState({ count: 0, text: "" });
   // Disabled until React owns it: a press on the server's HTML would add
@@ -101,31 +98,13 @@ function StoreArticlePurchase({
           className="min-w-0 flex-1 px-3.5 text-center text-xs leading-tight whitespace-normal"
           disabled={!hydrated}
           onClick={(event) => {
-            const had =
-              items.find((item) => item.productId === productId)?.quantity ?? 0;
-            const outcome = add(productId, quantity, priceAmount);
-            // The cart keeps at most the cap of one article: when it took
-            // fewer than chosen, the shopper is told how many, not "added".
-            const added = Math.min(quantity, CART_QUANTITY_MAX - had);
-            let text = addOutcomeMessage(outcome, storefront.catalog);
-
-            if (outcome === "added" && added < quantity) {
-              text = interpolate(copy.addedCapped, {
-                added,
-                max: CART_QUANTITY_MAX,
-              });
-            } else if (outcome === "added" && panel) {
-              text = interpolate(storefront.cart.panel.added, { title });
-            }
-
-            if (outcome === "added" && panel) {
-              panel.open({
-                added: { message: text, productId },
-                returnFocus: event.currentTarget,
-              });
-              // Said in the panel: nothing older stays under the button.
-              text = "";
-            }
+            const text = addToCart({
+              priceAmount,
+              productId,
+              quantity,
+              returnFocus: event.currentTarget,
+              title,
+            });
 
             setStatus((previous) => ({ count: previous.count + 1, text }));
           }}

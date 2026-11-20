@@ -24,6 +24,8 @@ import {
   pageCoverBanner,
   pageSection,
   rankingEntry,
+  spotlight,
+  spotlightTranslation,
 } from "./page";
 import { page, store, storeTranslation } from "./store";
 
@@ -273,7 +275,30 @@ export const pageSectionRelations = relations(pageSection, ({ one }) => ({
     references: [category.id],
   }),
   page: one(page, { fields: [pageSection.pageId], references: [page.id] }),
+  spotlight: one(spotlight, {
+    fields: [pageSection.spotlightId],
+    references: [spotlight.id],
+  }),
 }));
+
+export const spotlightRelations = relations(spotlight, ({ many, one }) => ({
+  product: one(product, {
+    fields: [spotlight.productId],
+    references: [product.id],
+  }),
+  store: one(store, { fields: [spotlight.storeId], references: [store.id] }),
+  translations: many(spotlightTranslation),
+}));
+
+export const spotlightTranslationRelations = relations(
+  spotlightTranslation,
+  ({ one }) => ({
+    spotlight: one(spotlight, {
+      fields: [spotlightTranslation.spotlightId],
+      references: [spotlight.id],
+    }),
+  })
+);
 
 export const pageCoverBannerRelations = relations(
   pageCoverBanner,

@@ -16,6 +16,7 @@ import {
   makeHomeBanner,
   makeHomeCategory,
   makeHomeCuration,
+  makeHomeSpotlight,
 } from "@/test/factories/home-curation";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
@@ -156,6 +157,9 @@ function setup({
   );
   const spies = {
     createBanner: vi.fn((_input: unknown) => ({ id: 40 })),
+    createSpotlight: vi.fn((_input: unknown) => ({ id: 52 })),
+    deleteSpotlight: vi.fn((_input: unknown) => ({ id: 51 })),
+    updateSpotlight: vi.fn((_input: unknown) => ({ id: 51 })),
     deleteBanner: vi.fn((_input: unknown) => ({ id: 31 })),
     get: vi.fn((_input: unknown) => data),
     saveAnnouncement: vi.fn((_input: unknown) => ({ id: 1 })),
@@ -168,7 +172,10 @@ function setup({
     answer("page.createBanner", spies.createBanner, write),
     answer("page.updateBanner", spies.updateBanner, write),
     answer("page.deleteBanner", spies.deleteBanner, write),
-    answer("page.saveLayout", spies.saveLayout, write)
+    answer("page.saveLayout", spies.saveLayout, write),
+    answer("page.createSpotlight", spies.createSpotlight, write),
+    answer("page.updateSpotlight", spies.updateSpotlight, write),
+    answer("page.deleteSpotlight", spies.deleteSpotlight, write)
   );
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
@@ -845,5 +852,272 @@ describe("HomeCuration", () => {
     expect(
       within(screen.getByTestId("admin-primary-action")).getByRole("button")
     ).toHaveTextContent(/^Guardar orden$/u);
+  });
+
+  test("lists the article spotlights: the article, its label, whether it is on this page, and why the store leaves one out", async () => {
+    const { loaded } = setup({
+      data: makeData({
+        sections: [{ kind: "spotlight", spotlightId: 51 }],
+        spotlights: [
+          makeHomeSpotlight(),
+          makeHomeSpotlight({
+            id: 52,
+            labelEn: null,
+            onPage: false,
+            productId: 22,
+          }),
+          makeHomeSpotlight({ id: 53, productId: 23 }),
+        ],
+      }),
+    });
+    await loaded();
+
+    const rows = within(screen.getByTestId("home-spotlights")).getAllByTestId(
+      "home-spotlight-row"
+    );
+    expect(
+      rows.map((row) => [
+        row.querySelector("p")?.textContent,
+        within(row).getByTestId("home-spotlight-status").textContent,
+        within(row).queryByTestId("home-layout-warning")?.textContent ?? null,
+      ])
+    ).toEqual([
+      ["Signet ring", "On this page", null],
+      [
+        "Untitled",
+        "Not on this page",
+        "It is not published: it doesn't appear in the store.",
+      ],
+      [
+        "Cadena corona",
+        "On this page",
+        "It is sold out: it doesn't appear in the store until it is available again.",
+      ],
+    ]);
+    // Its label in the screen's language, else the Spanish one.
+    expect(rows[0]).toHaveTextContent("New");
+    expect(rows[1]).toHaveTextContent("Nuevo");
+    // In the page's order, named and warned like a curated article.
+    expect(
+      within(screen.getByTestId("home-layout-rows")).getByText(
+        "Spotlight: Signet ring"
+      )
+    ).toBeVisible();
+  });
+
+  test("says when there is no spotlight yet", async () => {
+    const { loaded } = setup();
+    await loaded();
+
+    expect(screen.getByTestId("home-spotlights")).toHaveTextContent(
+      "No spotlights yet. Add one to feature an article as people scroll the home."
+    );
+  });
+
+  test("adds a spotlight to this page from the side sheet, offering the published articles, says so and hands focus back", async () => {
+    const { loaded, spies, user } = setup();
+    await loaded();
+    const add = screen.getByTestId("home-spotlight-add");
+
+    await user.click(add);
+    const sheet = await screen.findByRole("dialog", { name: "New spotlight" });
+    const article = within(sheet).getByRole("combobox", { name: "Article" });
+    expect(
+      [...article.querySelectorAll("option")].map(
+        (option) => option.textContent
+      )
+    ).toEqual(["Choose…", "Signet ring", "Cadena corona"]);
+    await user.selectOptions(article, "Signet ring");
+    await user.type(
+      within(sheet).getByRole("textbox", { name: "Label in Spanish" }),
+      "Nuevo"
+    );
+    await user.click(within(sheet).getByTestId("spotlight-form-submit"));
+
+    expect(await screen.findByText("Spotlight added.")).toBeVisible();
+    expect(spies.createSpotlight).toHaveBeenCalledExactlyOnceWith({
+      labelEn: null,
+      labelEs: "Nuevo",
+      pageId: 1,
+      phraseEn: null,
+      phraseEs: null,
+      productId: 21,
+      rowsIndex: 0,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(add).toHaveFocus();
+  });
+
+  test("edits a spotlight on its place, offering the draft it features", async () => {
+    const { loaded, spies, user } = setup({
+      data: makeData({
+        sections: [
+          { kind: "best_sellers" },
+          { kind: "spotlight", spotlightId: 51 },
+        ],
+        spotlights: [makeHomeSpotlight({ productId: 22 })],
+      }),
+    });
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit spotlight: Untitled" })
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Edit spotlight" });
+    expect(
+      within(sheet).getByRole("combobox", { name: "Article" })
+    ).toHaveValue("22");
+    expect(within(sheet).getByRole("combobox", { name: "After" })).toHaveValue(
+      "1"
+    );
+    await user.click(within(sheet).getByTestId("spotlight-form-submit"));
+
+    expect(await screen.findByText("Spotlight saved.")).toBeVisible();
+    expect(spies.updateSpotlight).toHaveBeenCalledExactlyOnceWith({
+      id: 51,
+      labelEn: "New",
+      labelEs: "Nuevo",
+      pageId: 1,
+      phraseEn: "The one kids ask for most.",
+      phraseEs: "El que más piden los chicos.",
+      productId: 22,
+      rowsIndex: 1,
+    });
+  });
+
+  test.each([["a new one", "home-spotlight-add", "Home.create_spotlight"]])(
+    "a failed save of %s keeps the sheet open, says so and is reported",
+    async (_case, opener, action) => {
+      const { loaded, user } = setup({ write: "fail" });
+      await loaded();
+
+      await user.click(screen.getByTestId(opener));
+      const sheet = await screen.findByRole("dialog", {
+        name: "New spotlight",
+      });
+      await user.selectOptions(
+        within(sheet).getByRole("combobox", { name: "Article" }),
+        "Signet ring"
+      );
+      await user.click(within(sheet).getByTestId("spotlight-form-submit"));
+
+      expect(await within(sheet).findByRole("alert")).toHaveTextContent(
+        "We could not save the spotlight. What you typed is still here: try again."
+      );
+      expect(reportError).toHaveBeenCalledExactlyOnceWith(expect.any(Error), {
+        action,
+      });
+    }
+  );
+
+  test("a failed edit is reported as one", async () => {
+    const { loaded, user } = setup({
+      data: makeData({ spotlights: [makeHomeSpotlight()] }),
+      write: "fail",
+    });
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit spotlight: Signet ring" })
+    );
+    await user.click(await screen.findByTestId("spotlight-form-submit"));
+
+    await waitFor(() => {
+      expect(reportError).toHaveBeenCalledExactlyOnceWith(expect.any(Error), {
+        action: "Home.update_spotlight",
+      });
+    });
+  });
+
+  test("cancelling and Escape close the sheet and hand focus back", async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    const add = screen.getByTestId("home-spotlight-add");
+
+    await user.click(add);
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Cancel",
+      })
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(add).toHaveFocus();
+
+    await user.click(add);
+    await screen.findByRole("dialog");
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(add).toHaveFocus();
+  });
+
+  test("deletes a spotlight after asking, says so, and hands focus to the list's button once it is gone", async () => {
+    const { loaded, spies, user } = setup({
+      data: makeData({ spotlights: [makeHomeSpotlight()] }),
+    });
+    await loaded();
+    spies.get.mockReturnValue(makeData());
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete spotlight: Signet ring" })
+    );
+    const dialog = await screen.findByTestId("confirm-dialog");
+    expect(dialog).toHaveTextContent(
+      "The spotlight of “Signet ring” is deleted. The article stays as it is."
+    );
+    await user.click(within(dialog).getByTestId("confirm-dialog-confirm"));
+
+    expect(await screen.findByText("Spotlight deleted.")).toBeVisible();
+    expect(spies.deleteSpotlight).toHaveBeenCalledExactlyOnceWith({ id: 51 });
+    await waitFor(() => {
+      expect(screen.getByTestId("home-spotlight-add")).toHaveFocus();
+    });
+  });
+
+  test("a refused deletion of a spotlight says so, is reported, and hands focus back to the button that asked", async () => {
+    const { loaded, user } = setup({
+      data: makeData({ spotlights: [makeHomeSpotlight()] }),
+      write: "fail",
+    });
+    await loaded();
+    const remove = screen.getByRole("button", {
+      name: "Delete spotlight: Signet ring",
+    });
+
+    await user.click(remove);
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+
+    expect(
+      await screen.findByText("We could not delete the spotlight. Try again.")
+    ).toBeVisible();
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(expect.any(Error), {
+      action: "Home.delete_spotlight",
+    });
+    await waitFor(() => {
+      expect(remove).toHaveFocus();
+    });
+  });
+
+  test("closing the question deletes no spotlight", async () => {
+    const { loaded, spies, user } = setup({
+      data: makeData({ spotlights: [makeHomeSpotlight()] }),
+    });
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Delete spotlight: Signet ring" })
+    );
+    await screen.findByTestId("confirm-dialog");
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+    });
+    expect(spies.deleteSpotlight).not.toHaveBeenCalled();
   });
 });

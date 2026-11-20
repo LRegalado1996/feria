@@ -3,7 +3,11 @@ import path from "node:path";
 
 import { describe, expect, test, vi } from "vitest";
 
-import { createBannerSchema, saveAnnouncementSchema } from "@/lib/schemas/page";
+import {
+  createBannerSchema,
+  createSpotlightSchema,
+  saveAnnouncementSchema,
+} from "@/lib/schemas/page";
 import {
   banner,
   bannerTranslation,
@@ -24,20 +28,26 @@ import {
   SEED_COVER_BANNERS,
   SEED_FEATURED,
   SEED_ROW_BANNERS,
+  SEED_SPOTLIGHT,
   seedHome,
 } from "./seed-home";
 
-const { findHomePageId, lockStorePages, saveAnnouncement } = vi.hoisted(() => ({
-  // The store's home is its page 3 (FER-058).
-  findHomePageId: vi.fn(async (_tx: unknown, _scope: unknown) => 3),
-  lockStorePages: vi.fn(async (_tx: unknown, _storeId: number) => undefined),
-  saveAnnouncement: vi.fn(async (_tx: unknown, _options: unknown) => ({
-    id: 1,
-  })),
-}));
+const { createSpotlight, findHomePageId, lockStorePages, saveAnnouncement } =
+  vi.hoisted(() => ({
+    createSpotlight: vi.fn(async (_tx: unknown, _options: unknown) => ({
+      id: 51,
+    })),
+    // The store's home is its page 3 (FER-058).
+    findHomePageId: vi.fn(async (_tx: unknown, _scope: unknown) => 3),
+    lockStorePages: vi.fn(async (_tx: unknown, _storeId: number) => undefined),
+    saveAnnouncement: vi.fn(async (_tx: unknown, _options: unknown) => ({
+      id: 1,
+    })),
+  }));
 
 // The service's reads and writes are `src/server/services/page.test.ts`'s.
 vi.mock("@/server/services/page", () => ({
+  createSpotlight,
   findHomePageId,
   lockStorePages,
   saveAnnouncement,
@@ -67,6 +77,7 @@ const HOME_PARTS = [
   "featuredProduct",
   "pageSection",
   "rankingEntry",
+  "spotlight",
 ] as const;
 
 type HomePart = (typeof HOME_PARTS)[number];
@@ -155,8 +166,20 @@ describe("seedHome", () => {
       banners: 5,
       featured: 4,
       ranking: 8,
+      spotlight: true,
     });
 
+    // The fish bubble gun (the first best seller, 100), first on the home
+    // page, right under the cover, through the service as the admin adds one.
+    expect(createSpotlight).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: STORE_ID,
+      values: {
+        ...SEED_SPOTLIGHT.words,
+        pageId: 3,
+        productId: 100,
+        rowsIndex: 0,
+      },
+    });
     expect(lockStorePages).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
     expect(saveAnnouncement).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: STORE_ID,
@@ -270,7 +293,13 @@ describe("seedHome", () => {
 
     await run();
 
-    const [where] = db.$["select.where"].mock.calls[1] ?? [];
+    const [spotlit] = db.$["select.where"].mock.calls[1] ?? [];
+    expect(renderQuery(spotlit).params).toEqual([
+      STORE_ID,
+      "es",
+      SEED_SPOTLIGHT.title,
+    ]);
+    const [where] = db.$["select.where"].mock.calls[2] ?? [];
     expect(renderQuery(where)).toEqual({
       params: [STORE_ID, "es", ...SEED_BEST_SELLERS],
       sql: expect.stringMatching(
@@ -279,6 +308,7 @@ describe("seedHome", () => {
     });
     expect(db.$["select.from"].mock.calls.map(([table]) => table)).toEqual([
       category,
+      product,
       product,
       product,
     ]);
@@ -292,8 +322,10 @@ describe("seedHome", () => {
       banners: 0,
       featured: 0,
       ranking: 0,
+      spotlight: false,
     });
     expect(saveAnnouncement).not.toHaveBeenCalled();
+    expect(createSpotlight).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(db.$.delete).not.toHaveBeenCalled();
   });
@@ -313,6 +345,17 @@ describe("seedHome", () => {
       banners: 5,
       featured: 0,
       ranking: 0,
+      spotlight: true,
+    });
+    // The spotlight goes after the saved order, which keeps its places.
+    expect(createSpotlight).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: STORE_ID,
+      values: {
+        ...SEED_SPOTLIGHT.words,
+        pageId: 3,
+        productId: 100,
+        rowsIndex: Number.MAX_SAFE_INTEGER,
+      },
     });
     const tables = insertsOf(db).map((insert) => insert.table);
     expect(tables).toEqual([
@@ -330,7 +373,13 @@ describe("seedHome", () => {
 
   test("writes the order on a store that has banners but never saved one", async () => {
     const { db, run } = setup({
-      existing: ["announcement", "banner", "featuredProduct", "rankingEntry"],
+      existing: [
+        "announcement",
+        "banner",
+        "featuredProduct",
+        "rankingEntry",
+        "spotlight",
+      ],
     });
 
     await expect(run()).resolves.toEqual({
@@ -338,6 +387,7 @@ describe("seedHome", () => {
       banners: 0,
       featured: 0,
       ranking: 0,
+      spotlight: false,
     });
     const inserts = insertsOf(db);
     expect(inserts.map((insert) => insert.table)).toEqual([pageSection]);
@@ -360,7 +410,10 @@ describe("seedHome", () => {
       banners: 5,
       featured: 0,
       ranking: 0,
+      spotlight: false,
     });
+    // Without its article, no spotlight.
+    expect(createSpotlight).not.toHaveBeenCalled();
     const inserts = insertsOf(db);
     expect(inserts.map((insert) => insert.table).slice(-1)).toEqual([
       pageSection,
@@ -446,5 +499,18 @@ describe("the seed's home content", () => {
     expect(SEED_BEST_SELLERS.length).toBeLessThanOrEqual(10);
     expect(SEED_FEATURED.length).toBeGreaterThanOrEqual(2);
     expect(SEED_FEATURED.length).toBeLessThanOrEqual(4);
+  });
+
+  test("the spotlight's article is a seeded one, and its words pass the rules the admin's saves hold them to", () => {
+    expect(
+      SEED_ARTICLES.some((article) => article.title.es === SEED_SPOTLIGHT.title)
+    ).toBe(true);
+    expect(
+      createSpotlightSchema.safeParse({
+        ...SEED_SPOTLIGHT.words,
+        pageId: 1,
+        productId: 1,
+      }).success
+    ).toBe(true);
   });
 });

@@ -1,6 +1,8 @@
 import type { Locator } from "@playwright/test";
+import { eq } from "drizzle-orm";
 
 import type { PageSection } from "../../../lib/schemas/page";
+import { product } from "../../../server/db/schema";
 import {
   expect,
   IGNORE_HTTPS_ERRORS,
@@ -351,6 +353,161 @@ test.describe("The storefront's home", () => {
     await page.keyboard.press("ArrowLeft");
     await expect(card(0)).toBeInViewport();
     await store.expectNoHorizontalScroll();
+  });
+
+  // FER-059. An article in the spotlight, right under the cover: the dark
+  // block catches the eye as one scrolls; its name, photo and words lead to
+  // the article, and its button adds it to the cart.
+  test("an article spotlight shows right after the cover in both languages, leads to the article, adds it to the cart, and leaves when the article is unpublished", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const title = `Burbujero ${tag}`;
+    const article = await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 79_000,
+      title,
+    });
+    await homeEdit.addSpotlight(article.id, {
+      labelEn: "New",
+      labelEs: "Nuevo",
+      phraseEs: `El que más piden ${tag}`,
+    });
+    const store = new StorePage(page);
+
+    for (const [width, height] of [
+      [1440, 900],
+      [390, 844],
+    ] as const) {
+      await page.setViewportSize({ height, width });
+      await store.goto();
+
+      const block = store.getSpotlight(title);
+      // Right under the cover: the first of the home's sections.
+      await expect(store.getHomeSections().first()).toHaveAttribute(
+        "data-kind",
+        "spotlight"
+      );
+      await expect(store.getHomeSections().first()).toContainText(title);
+      await expect(
+        block.getByRole("heading", { level: 2, name: title })
+      ).toBeVisible();
+      await expect(block.getByText("Nuevo", { exact: true })).toBeVisible();
+      await expect(block.getByText(`El que más piden ${tag}`)).toBeVisible();
+      await expect(block.getByRole("link", { name: title })).toHaveAttribute(
+        "href",
+        `/productos/${article.slug}`
+      );
+      await store.expectNoHorizontalScroll();
+    }
+
+    // The button adds it and opens the cart's panel on its line.
+    const add = await store.getLiveSpotlightAdd(title);
+    await add.click();
+    await expect(store.getCartPanel()).toBeVisible();
+    await expect(store.getCartPanelLine(title)).toBeVisible();
+    await expect(store.getCartPanel()).toContainText(
+      `Agregaste ${title} al carrito.`
+    );
+    await store.closeCartPanel();
+    await expect(add).toBeFocused();
+
+    // A press on the photo is a press on the name's link, stretched over
+    // the block: a pointer there, as a finger would, not a click on the img
+    // element, which the link covers by design.
+    const photo = store.getSpotlight(title).getByRole("img");
+    await photo.scrollIntoViewIfNeeded();
+    const box = await photo.boundingBox();
+    await page.mouse.click((box?.x ?? 0) + 20, (box?.y ?? 0) + 20);
+    await expect(page).toHaveURL(
+      new RegExp(`/productos/${article.slug}$`, "u")
+    );
+
+    // In English, its English label, and the Spanish phrase it only has.
+    await store.gotoEnglish();
+    const english = store.getSpotlight(title);
+    await expect(english.getByText("New", { exact: true })).toBeVisible();
+    await expect(english.getByText(`El que más piden ${tag}`)).toHaveAttribute(
+      "lang",
+      "es"
+    );
+    await expect(english.getByRole("link", { name: title })).toHaveAttribute(
+      "href",
+      `/en/productos/${article.slug}`
+    );
+    await expect(
+      english.getByRole("button", { name: `Add to cart: ${title}` })
+    ).toBeVisible();
+
+    // Unpublished, it leaves the home; saving the order drops the cache.
+    await db.drizzle
+      .update(product)
+      .set({ status: "draft" })
+      .where(eq(product.id, article.id));
+    const now = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: now.coverBannerIds,
+      featuredProductIds: now.featuredProductIds,
+      rankingProductIds: now.rankingProductIds,
+      sections: now.sections,
+    });
+    await store.goto();
+    await expect(store.getHomeView()).toBeVisible();
+    await expect(store.getSpotlight(title)).toHaveCount(0);
+  });
+
+  test("a crawler that runs no script finds the spotlight's article, words and price in the HTML", async ({
+    baseURL,
+    browser,
+    db,
+    homeEdit,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const title = `Burbujero ${tag}`;
+    const article = await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 79_000,
+      title,
+    });
+    await homeEdit.addSpotlight(article.id, {
+      labelEs: "Nuevo",
+      phraseEs: `El que más piden ${tag}`,
+    });
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      userAgent: BINGBOT,
+    });
+
+    try {
+      const page = await context.newPage();
+      const store = new StorePage(page);
+      await store.goto();
+
+      const block = store.getSpotlight(title);
+      await expect(
+        block.getByRole("heading", { level: 2, name: title })
+      ).toBeVisible();
+      await expect(block.getByText(`El que más piden ${tag}`)).toBeVisible();
+      await expect(block.getByText(/^\$\s790$/u)).toBeVisible();
+      await expect(block.getByRole("link", { name: title })).toHaveAttribute(
+        "href",
+        `/productos/${article.slug}`
+      );
+    } finally {
+      await context.close();
+    }
   });
 
   // A crawler that reads only the HTML (Bingbot) gets only what the server

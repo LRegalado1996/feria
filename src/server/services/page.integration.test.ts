@@ -20,12 +20,15 @@ import {
   product,
   productTranslation,
   rankingEntry,
+  spotlight,
 } from "@/server/db/schema";
 import { theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
   createBanner,
+  createSpotlight,
   deleteBanner,
+  deleteSpotlight,
   findHomePageId,
   findShowingAnnouncement,
   getPageContent,
@@ -33,6 +36,7 @@ import {
   saveAnnouncement,
   savePageLayout,
   updateBanner,
+  updateSpotlight,
 } from "./page";
 
 vi.mock("@/env", () => ({
@@ -113,6 +117,7 @@ async function clearHome(
 ) {
   await tx.delete(announcement).where(eq(announcement.storeId, storeId));
   await tx.delete(banner).where(eq(banner.storeId, storeId));
+  await tx.delete(spotlight).where(eq(spotlight.storeId, storeId));
   await tx.delete(pageSection).where(eq(pageSection.pageId, pageId));
   await tx.delete(rankingEntry).where(eq(rankingEntry.storeId, storeId));
   await tx.delete(featuredProduct).where(eq(featuredProduct.storeId, storeId));
@@ -424,9 +429,9 @@ describe("the rows on the storefront", () => {
           .filter((section) => own.has(section.key))
           .map((section) => [
             section.key,
-            section.kind === "banner"
-              ? []
-              : section.articles.map((card) => [card.id, card.isAvailable]),
+            "articles" in section
+              ? section.articles.map((card) => [card.id, card.isAvailable])
+              : [],
           ])
       ).toEqual([
         ["best_sellers", [[ready.id, true]]],
@@ -892,6 +897,191 @@ describe("saving the home's order", () => {
   });
 });
 
+describe("the article spotlights on a page", () => {
+  test("show while their article is published and can be bought, and leave the page when it is not, on both sides of each", async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const shelf = await addCategory(tx, storeId);
+      const ready = await addArticle(tx, { categoryId: shelf.id, storeId });
+      const soldOut = await addArticle(tx, {
+        available: false,
+        categoryId: shelf.id,
+        storeId,
+      });
+      const draft = await addArticle(tx, {
+        categoryId: shelf.id,
+        published: false,
+        storeId,
+      });
+      const ids: Record<string, number> = {};
+
+      for (const [name, productId] of [
+        ["ready", ready.id],
+        ["soldOut", soldOut.id],
+        ["draft", draft.id],
+      ] as const) {
+        ids[name] = (
+          await createSpotlight(tx, {
+            storeId,
+            values: {
+              labelEn: "New",
+              labelEs: "Nuevo",
+              pageId,
+              phraseEn: null,
+              phraseEs: "El que más piden.",
+              productId,
+            },
+          })
+        ).id;
+      }
+
+      const shown = async () =>
+        (await readContent(tx, storeId, { locale: "en" })).sections.flatMap(
+          (section) =>
+            section.kind === "spotlight"
+              ? [[section.spotlight.id, section.spotlight.article.id]]
+              : []
+        );
+
+      expect(await shown()).toEqual([[ids.ready, ready.id]]);
+      const [first] = (await readContent(tx, storeId, { locale: "en" }))
+        .sections;
+      // Each new one went first: the last made opens the page, under the
+      // cover; its words in English where it has them, else in Spanish.
+      expect(first).toMatchObject({
+        kind: "spotlight",
+        spotlight: {
+          label: { lang: "en", text: "New" },
+          phrase: { lang: "es", text: "El que más piden." },
+        },
+      });
+
+      // The other side of each: sold out → can be bought; published →
+      // draft.
+      await tx
+        .update(product)
+        .set({ isAvailable: true })
+        .where(eq(product.id, soldOut.id));
+      await tx
+        .update(product)
+        .set({ status: "draft" })
+        .where(eq(product.id, ready.id));
+
+      expect(await shown()).toEqual([[ids.soldOut, soldOut.id]]);
+
+      // Deleting the article deletes its spotlight and its place.
+      await tx.delete(product).where(eq(product.id, soldOut.id));
+      expect(
+        await tx
+          .select({ id: spotlight.id })
+          .from(spotlight)
+          .where(eq(spotlight.id, ids.soldOut ?? 0))
+      ).toEqual([]);
+      expect(
+        (
+          await getPageCuration(tx, { pageId, storeId, today: TODAY })
+        ).sections.filter((section) => section.kind === "spotlight")
+      ).toEqual([
+        { kind: "spotlight", spotlightId: ids.draft },
+        { kind: "spotlight", spotlightId: ids.ready },
+      ]);
+    });
+  });
+
+  test("an edit moves it and rewrites its words; a delete takes its place with it", async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const shelf = await addCategory(tx, storeId);
+      const one = await addArticle(tx, { categoryId: shelf.id, storeId });
+      const other = await addArticle(tx, { categoryId: shelf.id, storeId });
+      const values = {
+        labelEn: null,
+        labelEs: "Nuevo",
+        pageId,
+        phraseEn: null,
+        phraseEs: null,
+        productId: one.id,
+      };
+      const { id } = await createSpotlight(tx, { storeId, values });
+
+      await updateSpotlight(tx, {
+        storeId,
+        values: {
+          ...values,
+          id,
+          labelEs: null,
+          phraseEn: "Kids love it.",
+          productId: other.id,
+          rowsIndex: 2,
+        },
+      });
+
+      const curation = await getPageCuration(tx, {
+        pageId,
+        storeId,
+        today: TODAY,
+      });
+      expect(curation.sections[2]).toEqual({
+        kind: "spotlight",
+        spotlightId: id,
+      });
+      expect(curation.spotlights).toEqual([
+        {
+          id,
+          labelEn: null,
+          labelEs: null,
+          onPage: true,
+          phraseEn: "Kids love it.",
+          phraseEs: null,
+          productId: other.id,
+        },
+      ]);
+
+      await deleteSpotlight(tx, { id, storeId });
+
+      const after = await getPageCuration(tx, {
+        pageId,
+        storeId,
+        today: TODAY,
+      });
+      expect(after.spotlights).toEqual([]);
+      expect(
+        after.sections.filter((section) => section.kind === "spotlight")
+      ).toEqual([]);
+    });
+  });
+
+  test("refuses an article, a page or a spotlight the store does not have", async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const values = {
+        labelEn: null,
+        labelEs: "Nuevo",
+        pageId,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 2_000_000_000,
+      };
+
+      await expect(
+        createSpotlight(tx, { storeId, values })
+      ).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "Article not found",
+      });
+      await expect(
+        createSpotlight(tx, {
+          storeId,
+          values: { ...values, pageId: 2_000_000_000 },
+        })
+      ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Page not found" });
+      await expect(
+        deleteSpotlight(tx, { id: 2_000_000_000, storeId })
+      ).rejects.toMatchObject({
+        code: "NOT_FOUND",
+        message: "Spotlight not found",
+      });
+    });
+  });
+});
+
 /** A promise and the function that settles it, for ordering two writers. */
 function deferred() {
   let settle: (value: undefined) => void = () => undefined;
@@ -973,6 +1163,7 @@ async function setupTwoWriters() {
       kind: pageSection.kind,
       pageId: pageSection.pageId,
       position: pageSection.position,
+      spotlightId: pageSection.spotlightId,
       storeId: pageSection.storeId,
     })
     .from(pageSection)
@@ -1111,5 +1302,77 @@ describe("the home's order under two writers", () => {
     await db.transaction(async (tx) => await save(tx, [b]));
 
     expect(await ranked()).toEqual([b]);
+  });
+});
+
+describe("article spotlights under two writers", () => {
+  test("a spotlight added while another write holds the pages' lock waits for it, and both land on the page", async () => {
+    const { articles } = await setupTwoWriters();
+    const storeId = await theStoreId(db);
+    const pageId = await findHomePageId(db, { storeId });
+    const [a = 0, b = 0] = articles;
+    const values = (productId: number) => ({
+      labelEn: null,
+      labelEs: "Nuevo",
+      pageId,
+      phraseEn: null,
+      phraseEs: null,
+      productId,
+    });
+    const made: number[] = [];
+    committed.restore.unshift(async () => {
+      await db.delete(spotlight).where(inArray(spotlight.id, made));
+    });
+    const held = deferred();
+    const locked = deferred();
+    const first = db.transaction(async (tx) => {
+      const created = await createSpotlight(tx, { storeId, values: values(a) });
+      made.push(created.id);
+      locked.resolve(undefined);
+      await held.promise;
+
+      return created;
+    });
+    await Promise.race([locked.promise, first]);
+    const pid: { resolve: (value: number) => void } = {
+      resolve: () => undefined,
+    };
+    const secondPid = new Promise<number>((resolve) => {
+      pid.resolve = resolve;
+    });
+    const second = db.transaction(async (tx) => {
+      pid.resolve(await backendOf(tx));
+      const created = await createSpotlight(tx, { storeId, values: values(b) });
+      made.push(created.id);
+
+      return created;
+    });
+    const settled: { results: PromiseSettledResult<unknown>[] } = {
+      results: [],
+    };
+
+    // Both writers end before the teardown, whatever the wait does.
+    try {
+      await waitUntilBlocked(await secondPid, storeId);
+    } finally {
+      held.resolve(undefined);
+      settled.results = await Promise.allSettled([first, second]);
+    }
+
+    const { results } = settled;
+
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+    ]);
+    // Each went first in the sequence the other left: the second on top.
+    const placed = (
+      await db
+        .select({ spotlightId: pageSection.spotlightId })
+        .from(pageSection)
+        .where(eq(pageSection.pageId, pageId))
+        .orderBy(asc(pageSection.position))
+    ).flatMap((row) => (row.spotlightId === null ? [] : [row.spotlightId]));
+    expect(placed.slice(0, 2)).toEqual([made[1], made[0]]);
   });
 });

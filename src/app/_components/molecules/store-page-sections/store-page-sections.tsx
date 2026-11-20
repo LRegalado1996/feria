@@ -5,6 +5,7 @@ import {
 } from "@/app/_components/molecules/store-article-card";
 import { StoreArticleRow } from "@/app/_components/molecules/store-article-row";
 import { StoreBanner } from "@/app/_components/molecules/store-banner";
+import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import type { Dictionary } from "@/content";
 import { articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
@@ -49,6 +50,15 @@ export interface StorePageSectionsProps {
    */
   reveal?: boolean;
   sections: readonly PageContentSection<StorePageArticle>[];
+}
+
+/**
+ * Whether a section is a block the width of the window (a banner, a
+ * spotlight): one right under another, or under the cover, keeps the
+ * cards' gutter from it, so two of them never fuse.
+ */
+function isFullBleed(section: PageContentSection<StorePageArticle>): boolean {
+  return section.kind === "banner" || section.kind === "spotlight";
 }
 
 /** A row's heading: its category's name, or the curated row's own. */
@@ -121,13 +131,74 @@ function HomeArticleRow({
   );
 }
 
+/** One block of a page, drawn by its kind's own renderer. */
+function PageBlock({
+  copy,
+  headingLevel,
+  locale,
+  priority,
+  section,
+}: {
+  copy: Dictionary["storefront"];
+  headingLevel: "h2" | "h3";
+  locale: Locale;
+  /** The block opens the page: a banner's photo loads first. */
+  priority: boolean;
+  section: PageContentSection<StorePageArticle>;
+}) {
+  if (section.kind === "banner") {
+    return (
+      <StoreBanner
+        headingLevel={headingLevel}
+        href={
+          section.banner.href === null
+            ? null
+            : pageHref(section.banner.href, locale)
+        }
+        image={section.banner.image}
+        lang={section.banner.lang}
+        phoneImage={section.banner.phoneImage}
+        priority={priority}
+        shopNow={section.banner.ctaLabel ?? copy.banner.shopNow}
+        shopNowLang={section.banner.ctaLabel ? section.banner.lang : undefined}
+        title={section.banner.title}
+      />
+    );
+  }
+
+  if (section.kind === "spotlight") {
+    return (
+      <StoreSpotlight
+        article={section.spotlight.article}
+        copy={copy}
+        headingLevel={headingLevel}
+        href={localizePath(articlePath(section.spotlight.article.slug), locale)}
+        id={section.spotlight.id}
+        label={section.spotlight.label}
+        locale={locale}
+        phrase={section.spotlight.phrase}
+      />
+    );
+  }
+
+  return (
+    <HomeArticleRow
+      copy={copy}
+      headingLevel={headingLevel}
+      locale={locale}
+      section={section}
+    />
+  );
+}
+
 /**
- * The home's sequence under the cover (FER-022), in the order the admin set
- * (FER-020): rows of the catalog's cards and photo banners the width of the
- * window between them. The storefront's home and the admin's preview both
- * draw it here, so the preview is the home. A banner directly under another
- * one (or under the cover) keeps a gutter from it, the cards' own, so two
- * photos never fuse; rows keep their own padding.
+ * A page's blocks under its cover (FER-022, FER-058), in the order the
+ * admin set (FER-020): rows of the catalog's cards, and between them photo
+ * banners and article spotlights (FER-059) the width of the window. The
+ * storefront's pages and the admin's preview all draw them here, so the
+ * preview is the page: one renderer per block kind. A full-width block
+ * directly under another one (or under the cover) keeps a gutter from it,
+ * the cards' own, so two never fuse; rows keep their own padding.
  */
 function StorePageSections({
   afterBanner = false,
@@ -147,44 +218,26 @@ function StorePageSections({
       data-slot="store-page-sections"
     >
       {sections.map((section, index) => {
-        const underBanner =
-          index === 0 ? afterBanner : sections[index - 1]?.kind === "banner";
+        const previous = sections[index - 1];
+        const underBlock =
+          previous === undefined ? afterBanner : isFullBleed(previous);
 
         return (
           <Section
             className={cn(
-              section.kind === "banner" && underBanner && "mt-2.5 md:mt-3.5"
+              isFullBleed(section) && underBlock && "mt-2.5 md:mt-3.5"
             )}
             data-kind={section.kind}
             data-testid="store-page-section"
             key={section.key}
           >
-            {section.kind === "banner" ? (
-              <StoreBanner
-                headingLevel={headingLevel}
-                href={
-                  section.banner.href === null
-                    ? null
-                    : pageHref(section.banner.href, locale)
-                }
-                image={section.banner.image}
-                lang={section.banner.lang}
-                phoneImage={section.banner.phoneImage}
-                priority={leading && index === 0}
-                shopNow={section.banner.ctaLabel ?? copy.banner.shopNow}
-                shopNowLang={
-                  section.banner.ctaLabel ? section.banner.lang : undefined
-                }
-                title={section.banner.title}
-              />
-            ) : (
-              <HomeArticleRow
-                copy={copy}
-                headingLevel={headingLevel}
-                locale={locale}
-                section={section}
-              />
-            )}
+            <PageBlock
+              copy={copy}
+              headingLevel={headingLevel}
+              locale={locale}
+              priority={leading && index === 0}
+              section={section}
+            />
           </Section>
         );
       })}

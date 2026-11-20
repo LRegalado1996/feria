@@ -24,6 +24,8 @@ import {
   HOME_LINK_MAX_LENGTH,
   PAGE_SECTION_KINDS,
   RANKING_MAX,
+  SPOTLIGHT_LABEL_MAX_LENGTH,
+  SPOTLIGHT_PHRASE_MAX_LENGTH,
 } from "@/lib/schemas/page";
 
 import { category, product } from "./catalog";
@@ -330,6 +332,54 @@ export const featuredProduct = pgTable(
   ]
 );
 
+/**
+ * An article spotlight (FER-059): one article, large, in a dark block
+ * between a page's rows. Store-level content like a banner: where it shows
+ * is a page's (`page_section`). Its photo, name and price are the
+ * article's; deleting the article deletes it, and its places with it. One
+ * whose article is not published or cannot be bought stays here and drops
+ * out of the storefront; the admin warns beside it.
+ */
+export const spotlight = pgTable(
+  "spotlight",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    storeId: integer()
+      .notNull()
+      .references(() => store.id, { onDelete: "cascade" }),
+    productId: integer()
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (table) => [index().on(table.storeId), index().on(table.productId)]
+);
+
+/**
+ * A spotlight's words in one language: its pill label ("Nuevo") and its
+ * short phrase, each optional. A row only while it holds one of them.
+ */
+export const spotlightTranslation = pgTable(
+  "spotlight_translation",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    spotlightId: integer()
+      .notNull()
+      .references(() => spotlight.id, { onDelete: "cascade" }),
+    locale: localeEnum().notNull(),
+    label: text(),
+    phrase: text(),
+    ...timestamps,
+  },
+  (table) => [
+    unique().on(table.spotlightId, table.locale),
+    check(
+      "spotlight_translation_texts",
+      sql`num_nonnulls(${table.label}, ${table.phrase}) >= 1 AND char_length(${table.label}) BETWEEN 1 AND ${limit(SPOTLIGHT_LABEL_MAX_LENGTH)} AND char_length(${table.phrase}) BETWEEN 1 AND ${limit(SPOTLIGHT_PHRASE_MAX_LENGTH)}`
+    ),
+  ]
+);
+
 /** The kinds as a SQL list, for the CHECK that holds `kind` to them. */
 const sectionKinds = sql.raw(
   PAGE_SECTION_KINDS.map((kind) => `'${kind}'`).join(", ")
@@ -357,6 +407,9 @@ export const pageSection = pgTable(
     kind: text({ enum: PAGE_SECTION_KINDS }).notNull(),
     categoryId: integer(),
     bannerId: integer().references(() => banner.id, { onDelete: "cascade" }),
+    spotlightId: integer().references(() => spotlight.id, {
+      onDelete: "cascade",
+    }),
     ...timestamps,
   },
   (table) => [
@@ -364,11 +417,13 @@ export const pageSection = pgTable(
     unique().on(table.pageId, table.position),
     unique().on(table.pageId, table.categoryId),
     unique().on(table.pageId, table.bannerId),
+    unique().on(table.pageId, table.spotlightId),
     uniqueIndex("page_section_untargeted_once")
       .on(table.pageId, table.kind)
       .where(sql`${table.kind} IN ('best_sellers', 'featured')`),
     index().on(table.storeId, table.categoryId),
     index().on(table.bannerId),
+    index().on(table.spotlightId),
     foreignKey({
       columns: [table.storeId, table.pageId],
       foreignColumns: [page.storeId, page.id],
@@ -388,6 +443,10 @@ export const pageSection = pgTable(
     check(
       "page_section_banner_target",
       sql`(${table.kind} = 'banner') = (${table.bannerId} IS NOT NULL)`
+    ),
+    check(
+      "page_section_spotlight_target",
+      sql`(${table.kind} = 'spotlight') = (${table.spotlightId} IS NOT NULL)`
     ),
   ]
 );

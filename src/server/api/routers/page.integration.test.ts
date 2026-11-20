@@ -8,7 +8,7 @@ import { createORPCContext } from "@/server/api/orpc";
 import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
-import { announcement, user } from "@/server/db/schema";
+import { announcement, spotlight, user } from "@/server/db/schema";
 import { findHomePageId } from "@/server/services/page";
 import { theStoreId } from "@/server/test/one-store";
 
@@ -98,6 +98,8 @@ async function setup({ signedIn = true }: { signedIn?: boolean } = {}) {
     },
     saveAnnouncement: async (input: unknown) =>
       await call(pageRouter.saveAnnouncement, input as never, { context }),
+    createSpotlight: async (input: unknown) =>
+      await call(pageRouter.createSpotlight, input as never, { context }),
   };
 }
 
@@ -114,7 +116,9 @@ async function savedTexts() {
 
 describe("the pages' procedures against the database", () => {
   test("an anonymous request reads and writes nothing", async () => {
-    const { get, saveAnnouncement } = await setup({ signedIn: false });
+    const { createSpotlight, get, saveAnnouncement } = await setup({
+      signedIn: false,
+    });
     const refused = makeAnnouncement();
 
     await expect(get()).rejects.toMatchObject({
@@ -126,6 +130,18 @@ describe("the pages' procedures against the database", () => {
       message: "Unauthorized",
     });
     expect(await savedTexts()).not.toContain(refused.textEs);
+    const before = await db.$count(spotlight);
+    await expect(
+      createSpotlight({
+        labelEn: null,
+        labelEs: refused.textEs.slice(0, 24),
+        pageId: 1,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 1,
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
+    expect(await db.$count(spotlight)).toBe(before);
   });
 
   test("a login removed after signing in is refused, though its session cookie lives on", async () => {

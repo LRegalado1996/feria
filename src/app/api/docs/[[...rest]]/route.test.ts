@@ -95,6 +95,8 @@ describe("API docs route", () => {
       ["/admin/announcement", ["put"]],
       ["/admin/banners", ["post"]],
       ["/admin/banners/{id}", ["put", "delete"]],
+      ["/admin/spotlights", ["post"]],
+      ["/admin/spotlights/{id}", ["put", "delete"]],
       ["/admin/pages/{pageId}/layout", ["put"]],
       ["/admin/products", ["get", "post"]],
       ["/admin/products/{id}", ["get", "put", "delete"]],

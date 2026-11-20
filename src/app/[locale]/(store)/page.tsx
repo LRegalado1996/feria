@@ -66,8 +66,8 @@ export async function generateMetadata({
 
 /**
  * What the home tells search engines and assistants (FER-022): the site and
- * the store behind it, and each row as a list of its articles, named as on
- * the page, in its order there.
+ * the store behind it, and each row (and each article in the spotlight) as
+ * a list of its articles, named as on the page, in its order there.
  */
 function homeStructuredData(
   store: PublicStore,
@@ -89,6 +89,26 @@ function homeStructuredData(
     ...content.sections.flatMap((section) => {
       if (section.kind === "banner") {
         return [];
+      }
+
+      // An article in the spotlight (FER-059): a list of one, named by its
+      // heading on the page, the article's name.
+      if (section.kind === "spotlight") {
+        const { article } = section.spotlight;
+
+        return [
+          itemList({
+            items: [
+              {
+                name: article.title,
+                url: absoluteUrl(
+                  localizePath(articlePath(article.slug), locale)
+                ),
+              },
+            ],
+            name: article.title,
+          }),
+        ];
       }
 
       const names = {

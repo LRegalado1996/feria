@@ -1,6 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { PageSection, SaveAnnouncementValues } from "@/lib/schemas/page";
+import type {
+  CreateSpotlightValues,
+  PageSection,
+  SaveAnnouncementValues,
+} from "@/lib/schemas/page";
 import type { DatabaseClient } from "@/server/db";
 import {
   announcement,
@@ -13,8 +17,10 @@ import {
   product,
   productTranslation,
   rankingEntry,
+  spotlight,
 } from "@/server/db/schema";
 import {
+  createSpotlight,
   findHomePageId,
   lockStorePages,
   saveAnnouncement,
@@ -141,6 +147,27 @@ export const SEED_BEST_SELLERS = [
   "Aros mariposa",
 ];
 
+/**
+ * The article spotlight right under the cover (FER-059): the fish bubble
+ * gun, by its Spanish title, with its label and phrase in both languages.
+ */
+export const SEED_SPOTLIGHT = {
+  title: "Burbujero pez",
+  words: {
+    labelEn: "New",
+    labelEs: "Nuevo",
+    phraseEn: "Blows bubbles nonstop. The one kids ask for most at the fair.",
+    phraseEs:
+      "Tira burbujas sin parar. El que más piden los chicos en la feria.",
+  },
+} satisfies {
+  title: string;
+  words: Pick<
+    CreateSpotlightValues,
+    "labelEn" | "labelEs" | "phraseEn" | "phraseEs"
+  >;
+};
+
 /** The featured articles, the same way. */
 export const SEED_FEATURED = [
   "Par de esclavas",
@@ -236,9 +263,10 @@ async function insertBanner(
 /**
  * The home's demo content (FER-020, also FER-031's): the announcement, the
  * cover's three banners and two between rows, the order of the home page's
- * blocks (FER-058), the best sellers and the featured articles. Each part
- * only when the store has none of it yet, so a second run, or a home the
- * admin already curated, is left alone. Answers what it added.
+ * blocks (FER-058), an article spotlight right under the cover (FER-059),
+ * the best sellers and the featured articles. Each part only when the store
+ * has none of it yet, so a second run, or a home the admin already curated,
+ * is left alone. Answers what it added.
  */
 export async function seedHome(tx: DatabaseClient, storeId: number) {
   await lockStorePages(tx, storeId);
@@ -247,6 +275,7 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
     banners: 0,
     featured: 0,
     ranking: 0,
+    spotlight: false,
   };
   const existing = await tx.query.announcement.findFirst({
     columns: { id: true },
@@ -347,6 +376,31 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
         storeId,
       }))
     );
+  }
+
+  const anySpotlight = await tx.query.spotlight.findFirst({
+    columns: { id: true },
+    where: eq(spotlight.storeId, storeId),
+  });
+
+  if (!anySpotlight) {
+    const [productId] = await articleIds(tx, storeId, [SEED_SPOTLIGHT.title]);
+
+    // Through the service, as the admin adds one: first on the home page,
+    // right under the cover, or after an order the admin saved (the index
+    // is clamped to its end), which stays as it was.
+    if (productId !== undefined) {
+      await createSpotlight(tx, {
+        storeId,
+        values: {
+          ...SEED_SPOTLIGHT.words,
+          pageId,
+          productId,
+          rowsIndex: anySection ? Number.MAX_SAFE_INTEGER : 0,
+        },
+      });
+      added.spotlight = true;
+    }
   }
 
   const anyRanked = await tx.query.rankingEntry.findFirst({

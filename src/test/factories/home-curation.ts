@@ -3,6 +3,7 @@ import type { PageCurationData } from "@/lib/hooks/page";
 type Article = PageCurationData["articles"][number];
 type Banner = PageCurationData["banners"][number];
 type Category = PageCurationData["categories"][number];
+type Spotlight = PageCurationData["spotlights"][number];
 
 /** An article of the store, published and available unless a test says so. */
 export function makeHomeArticle(overrides: Partial<Article> = {}): Article {
@@ -36,6 +37,22 @@ export function makeHomeBanner(overrides: Partial<Banner> = {}): Banner {
     startsOn: null,
     titleEn: "Bubble guns",
     titleEs: "Burbujeros",
+    ...overrides,
+  };
+}
+
+/** An article spotlight on the page, of the default article, with words. */
+export function makeHomeSpotlight(
+  overrides: Partial<Spotlight> = {}
+): Spotlight {
+  return {
+    id: 51,
+    labelEn: "New",
+    labelEs: "Nuevo",
+    onPage: true,
+    phraseEn: "The one kids ask for most.",
+    phraseEs: "El que más piden los chicos.",
+    productId: 21,
     ...overrides,
   };
 }
@@ -74,6 +91,7 @@ export function makeHomeCuration(
       { kind: "featured" },
       { categoryId: 4, kind: "category" },
     ],
+    spotlights: [],
     today: "2026-11-20",
     ...overrides,
   };

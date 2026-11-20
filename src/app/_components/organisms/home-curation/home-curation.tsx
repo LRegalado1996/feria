@@ -32,17 +32,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/app/_components/molecules/sheet";
+import { SpotlightForm } from "@/app/_components/molecules/spotlight-form";
 import { StorePagePreview } from "@/app/_components/molecules/store-page-preview";
 import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import {
   type PageCurationData,
   useCreateBanner,
+  useCreateSpotlight,
   useDeleteBanner,
+  useDeleteSpotlight,
   usePageCuration,
   useSaveAnnouncement,
   useSavePageLayout,
   useUpdateBanner,
+  useUpdateSpotlight,
 } from "@/lib/hooks/page";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import type { Locale } from "@/lib/i18n/config";
@@ -59,15 +63,19 @@ import {
   type PageSection,
   type SaveAnnouncementValues,
   type SavePageLayoutValues,
+  type SpotlightFormValues,
 } from "@/lib/schemas/page";
 import type { UploadedImage } from "@/lib/schemas/upload";
 
 type Banner = PageCurationData["banners"][number];
+type Spotlight = PageCurationData["spotlights"][number];
+type Article = PageCurationData["articles"][number];
 
 /** The cards the screen fills, as their skeleton holds their place. */
 const SKELETON_CARDS = [
   ["announcement", "h-72"],
   ["banners", "h-48"],
+  ["spotlights", "h-32"],
   ["layout", "h-96"],
 ] as const;
 
@@ -192,6 +200,345 @@ function BannerRow({
 }
 
 /**
+ * Why the storefront leaves an article out (FER-020's rule for the curated
+ * rows, FER-059's for a spotlight), or `null` when it shows.
+ */
+function articleWarning(
+  article: Article | undefined,
+  warnings: { unavailable: string; unpublished: string }
+): string | null {
+  if (article?.status !== "published") {
+    return warnings.unpublished;
+  }
+
+  return article.isAvailable ? null : warnings.unavailable;
+}
+
+/**
+ * An article spotlight of the list (FER-059): its article's photo and
+ * name, its label, whether it is on this page, a warning when the
+ * storefront leaves it out, and its edit and delete buttons, named with
+ * the article.
+ */
+function SpotlightRow({
+  article,
+  name,
+  onDelete,
+  onEdit,
+  spotlight,
+}: {
+  article: Article | undefined;
+  name: string;
+  onDelete: (opener: HTMLButtonElement) => void;
+  onEdit: (opener: HTMLButtonElement) => void;
+  spotlight: Spotlight;
+}) {
+  const { admin } = useDictionary();
+  const locale = useLocale();
+  const copy = admin.home;
+  const warning = articleWarning(article, copy.layout.warnings);
+  const label =
+    locale === "en" && spotlight.labelEn !== null
+      ? spotlight.labelEn
+      : spotlight.labelEs;
+
+  return (
+    <li
+      className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0"
+      data-testid="home-spotlight-row"
+    >
+      <div className="relative aspect-square w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
+        {article?.image ? (
+          <Image
+            alt=""
+            className="object-cover"
+            fill
+            sizes="3.5rem"
+            src={article.image.url}
+          />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="truncate text-sm font-medium">{name}</p>
+        <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {label ? <span>{label}</span> : null}
+          <span
+            className={
+              warning === null && spotlight.onPage
+                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                : "rounded-full bg-muted px-2 py-0.5 text-muted-foreground"
+            }
+            data-testid="home-spotlight-status"
+          >
+            {spotlight.onPage ? copy.spotlights.onPage : copy.banners.notOnPage}
+          </span>
+        </p>
+        {warning ? (
+          <p
+            className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+            data-testid="home-layout-warning"
+          >
+            <TriangleAlert
+              aria-hidden="true"
+              className="mt-px size-3.5 shrink-0"
+            />
+            {warning}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center">
+        <Button
+          aria-label={interpolate(copy.spotlights.edit, { name })}
+          onClick={(event) => {
+            onEdit(event.currentTarget);
+          }}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+        <Button
+          aria-label={interpolate(copy.spotlights.delete, { name })}
+          onClick={(event) => {
+            onDelete(event.currentTarget);
+          }}
+          size="icon-sm"
+          type="button"
+          variant="ghost"
+        >
+          <Trash2 aria-hidden="true" />
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The article spotlights' card (FER-059): their list, the side sheet that
+ * adds or edits one and the question before deleting one. Focus goes back
+ * to what opened the sheet or the question, or to "Nueva vidriera" once
+ * the spotlight it was on is gone.
+ */
+function SpotlightsManager({
+  articleName,
+  data,
+  describeSection,
+}: {
+  articleName: (id: number) => string;
+  data: PageCurationData;
+  describeSection: (section: PageSection) => PageLayoutEntry;
+}) {
+  const copy = useDictionary().admin.home;
+  const headingId = useId();
+  const createSpotlight = useCreateSpotlight();
+  const updateSpotlight = useUpdateSpotlight();
+  const deleteSpotlight = useDeleteSpotlight();
+  // `null` closed; `{ spotlight: null }` a new spotlight.
+  const [spotlighting, setSpotlighting] = useState<{
+    spotlight: Spotlight | null;
+  } | null>(null);
+  const [unspotlighting, setUnspotlighting] = useState<Spotlight | null>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const addSpotlightButton = useRef<HTMLButtonElement>(null);
+  const articles = new Map(data.articles.map((row) => [row.id, row]));
+  // The sequence under the cover, the spotlight being edited left out:
+  // where it can go.
+  const placesFor = (spotlight: Spotlight | null) => {
+    const sections = data.sections.filter(
+      (section) =>
+        section.kind !== "spotlight" || section.spotlightId !== spotlight?.id
+    );
+    const at = spotlight
+      ? data.sections.findIndex(
+          (section) =>
+            section.kind === "spotlight" && section.spotlightId === spotlight.id
+        )
+      : -1;
+
+    return {
+      names: sections.map((section) => describeSection(section).name),
+      rowsIndex: at === -1 ? null : at,
+    };
+  };
+
+  const saveSpotlight = async (values: SpotlightFormValues) => {
+    const spotlight = spotlighting?.spotlight ?? null;
+
+    try {
+      if (spotlight) {
+        await updateSpotlight.mutateAsync({
+          ...values,
+          id: spotlight.id,
+          pageId: data.pageId,
+        });
+        toast.success(copy.spotlightForm.saved);
+      } else {
+        await createSpotlight.mutateAsync({ ...values, pageId: data.pageId });
+        toast.success(copy.spotlightForm.created);
+      }
+
+      setSpotlighting(null);
+      return true;
+    } catch (error) {
+      reportError(error, {
+        action: spotlight ? "Home.update_spotlight" : "Home.create_spotlight",
+      });
+      return false;
+    }
+  };
+
+  // The dialog closes either way: a refused deletion says why in a toast.
+  const removeSpotlight = async (spotlight: Spotlight) => {
+    try {
+      await deleteSpotlight.mutateAsync({ id: spotlight.id });
+      toast.success(copy.spotlights.deleted);
+    } catch (error) {
+      reportError(error, { action: "Home.delete_spotlight" });
+      toast.error(copy.spotlights.errors.delete);
+    }
+
+    setUnspotlighting(null);
+  };
+
+  const spotlightPlaces = placesFor(spotlighting?.spotlight ?? null);
+  const spotlightChoice = spotlighting?.spotlight?.productId;
+
+  return (
+    <>
+      <section
+        aria-labelledby={headingId}
+        className="flex min-w-0 flex-col gap-4 rounded-lg border bg-card p-4 text-card-foreground md:p-5"
+        data-testid="home-spotlights"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 basis-60 space-y-1">
+            <h2 className="text-sm font-semibold" id={headingId}>
+              {copy.spotlights.title}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {copy.spotlights.hint}
+            </p>
+          </div>
+          <Button
+            data-testid="home-spotlight-add"
+            onClick={(event) => {
+              opener.current = event.currentTarget;
+              setSpotlighting({ spotlight: null });
+            }}
+            ref={addSpotlightButton}
+            type="button"
+            variant="outline"
+          >
+            <Plus aria-hidden="true" />
+            {copy.spotlights.add}
+          </Button>
+        </div>
+        {data.spotlights.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {copy.spotlights.empty}
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {data.spotlights.map((spotlight) => (
+              <SpotlightRow
+                article={articles.get(spotlight.productId)}
+                key={spotlight.id}
+                name={articleName(spotlight.productId)}
+                onDelete={(button) => {
+                  opener.current = button;
+                  setUnspotlighting(spotlight);
+                }}
+                onEdit={(button) => {
+                  opener.current = button;
+                  setSpotlighting({ spotlight });
+                }}
+                spotlight={spotlight}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+      <Sheet
+        onOpenChange={(open) => {
+          if (!open) {
+            setSpotlighting(null);
+          }
+        }}
+        open={spotlighting !== null}
+      >
+        <SheetContent
+          data-testid="home-spotlight-sheet"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            (opener.current ?? addSpotlightButton.current)?.focus();
+          }}
+        >
+          <SheetHeader closeLabel={copy.spotlightForm.close}>
+            <SheetTitle>
+              {spotlighting?.spotlight
+                ? copy.spotlightForm.editTitle
+                : copy.spotlightForm.createTitle}
+            </SheetTitle>
+            <SheetDescription>
+              {copy.spotlightForm.description}
+            </SheetDescription>
+          </SheetHeader>
+          {spotlighting ? (
+            <SpotlightForm
+              // The published articles, and the one it features already.
+              articles={data.articles
+                .filter(
+                  (row) =>
+                    row.status === "published" || row.id === spotlightChoice
+                )
+                .map((row) => ({ id: row.id, label: articleName(row.id) }))}
+              key={spotlighting.spotlight?.id ?? "new"}
+              onCancel={() => {
+                setSpotlighting(null);
+              }}
+              onSave={saveSpotlight}
+              rows={spotlightPlaces.names}
+              rowsIndex={spotlightPlaces.rowsIndex}
+              spotlight={spotlighting.spotlight}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
+      <ConfirmDialog
+        confirmLabel={copy.spotlights.deleteConfirm}
+        description={interpolate(copy.spotlights.deleteDescription, {
+          name: unspotlighting ? articleName(unspotlighting.productId) : "",
+        })}
+        isPending={deleteSpotlight.isPending}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          // The deleted spotlight's button is gone: the list's own button.
+          const target = opener.current?.isConnected
+            ? opener.current
+            : addSpotlightButton.current;
+          target?.focus();
+        }}
+        onConfirm={() => {
+          // The dialog only asks while a spotlight is chosen.
+          if (unspotlighting) {
+            void removeSpotlight(unspotlighting);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUnspotlighting(null);
+          }
+        }}
+        open={unspotlighting !== null}
+        pendingLabel={copy.spotlights.deletePending}
+        title={copy.spotlights.deleteTitle}
+      />
+    </>
+  );
+}
+
+/**
  * The screen once the home is read: the announcement's card, the banners'
  * card with its side sheet, the order's cards and the preview, which reads
  * both forms as they are typed.
@@ -275,6 +622,7 @@ function CurationScreen({ data }: { data: PageCurationData }) {
   const articles = new Map(data.articles.map((row) => [row.id, row]));
   const banners = new Map(data.banners.map((row) => [row.id, row]));
   const categories = new Map(data.categories.map((row) => [row.id, row]));
+  const spotlights = new Map(data.spotlights.map((row) => [row.id, row]));
   const articleName = (id: number) => {
     const article = articles.get(id);
     const name = article
@@ -303,18 +651,11 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         : []
     )
   );
-  const describeArticle = (id: number): PageLayoutEntry => {
-    const article = articles.get(id);
-    let warning: string | null = null;
-
-    if (article?.status !== "published") {
-      warning = copy.layout.warnings.unpublished;
-    } else if (!article.isAvailable) {
-      warning = copy.layout.warnings.unavailable;
-    }
-
-    return { name: articleName(id), note: null, warning };
-  };
+  const describeArticle = (id: number): PageLayoutEntry => ({
+    name: articleName(id),
+    note: null,
+    warning: articleWarning(articles.get(id), copy.layout.warnings),
+  });
   const describeSection = (section: PageSection): PageLayoutEntry => {
     if (section.kind === "category") {
       const category = categories.get(section.categoryId);
@@ -337,6 +678,18 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         }),
         note: bannerNote(section.bannerId),
         warning: null,
+      };
+    }
+
+    if (section.kind === "spotlight") {
+      const productId = spotlights.get(section.spotlightId)?.productId ?? 0;
+
+      return {
+        name: interpolate(copy.layout.spotlightRow, {
+          name: articleName(productId),
+        }),
+        note: null,
+        warning: articleWarning(articles.get(productId), copy.layout.warnings),
       };
     }
 
@@ -540,6 +893,11 @@ function CurationScreen({ data }: { data: PageCurationData }) {
           </ul>
         )}
       </section>
+      <SpotlightsManager
+        articleName={articleName}
+        data={data}
+        describeSection={describeSection}
+      />
       <PageLayoutEditor
         choices={data.articles
           .filter((row) => row.status === "published")

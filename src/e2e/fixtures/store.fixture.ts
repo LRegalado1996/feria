@@ -50,6 +50,20 @@ export interface ComingSoonEdit {
 
 /** The home's curation for one serial test (FER-020, FER-022). */
 export interface HomeEdit {
+  /**
+   * Features the article `productId` in a spotlight (FER-059) through
+   * `page.createSpotlight`, as an admin, first on the home page, right
+   * under the cover; answers its id. The test's end deletes it.
+   */
+  addSpotlight: (
+    productId: number,
+    words: {
+      labelEn?: string;
+      labelEs?: string;
+      phraseEn?: string;
+      phraseEs?: string;
+    }
+  ) => Promise<number>;
   /** The run's announcement, which the test's end writes back. */
   announcement: typeof STORE_ANNOUNCEMENT;
   /**
@@ -79,7 +93,8 @@ export interface StoreFixtures {
    * For a spec that changes the home's curation (FER-020), which every
    * spec's storefront shows: when the test ends, whatever it did, what
    * `hideEverything` hid shows again, the banners it added are deleted
-   * (those `page.get` lists that it did not list as the test started), the
+   * (those `page.get` lists that it did not list as the test started) and
+   * the article spotlights it added, the
    * home's order is saved back as it was, and the run's announcement
    * (`STORE_ANNOUNCEMENT`) is written back. Only a `*.serial.e2e.ts` spec
    * may ask for it.
@@ -95,6 +110,7 @@ export interface StoreFixtures {
 /** What `page.get` answers of the home that its teardown puts back. */
 export interface HomeSnapshot extends SavePageLayoutValues {
   banners: { id: number }[];
+  spotlights: { id: number }[];
   /** The page the store shows at `/` (FER-058). */
   pageId: number;
 }
@@ -130,6 +146,7 @@ const pageSectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("best_sellers") }),
   z.object({ kind: z.literal("featured") }),
   z.object({ bannerId: z.number(), kind: z.literal("banner") }),
+  z.object({ kind: z.literal("spotlight"), spotlightId: z.number() }),
 ]);
 
 /** What the teardown reads of `page.get`'s answer; the rest is dropped. */
@@ -140,6 +157,7 @@ const homeSnapshotSchema = z.object({
   featuredProductIds: z.array(z.number()),
   rankingProductIds: z.array(z.number()),
   sections: z.array(pageSectionSchema),
+  spotlights: z.array(z.object({ id: z.number() })),
 });
 
 /** The home page as `page.get` reads it now. */
@@ -294,6 +312,7 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
     const pageId = own.homePageId;
     const before = await readHome(request, pageId);
     const kept = new Set(before.banners.map((row) => row.id));
+    const keptSpotlights = new Set(before.spotlights.map((row) => row.id));
     const hidden: { articleIds: number[]; bannerIds: number[] } = {
       articleIds: [],
       bannerIds: [],
@@ -304,6 +323,21 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
 
     try {
       await use({
+        addSpotlight: async (productId, words) => {
+          const created = z.object({ id: z.number() }).parse(
+            await callHome(request, "createSpotlight", {
+              labelEn: words.labelEn ?? null,
+              labelEs: words.labelEs ?? null,
+              pageId,
+              phraseEn: words.phraseEn ?? null,
+              phraseEs: words.phraseEs ?? null,
+              productId,
+              rowsIndex: 0,
+            })
+          );
+
+          return created.id;
+        },
         announcement: STORE_ANNOUNCEMENT,
         hideEverything: async () => {
           const articles = await db.drizzle
@@ -359,6 +393,12 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
 
         for (const { id } of after.banners.filter((row) => !kept.has(row.id))) {
           await callHome(request, "deleteBanner", { id });
+        }
+
+        for (const { id } of after.spotlights.filter(
+          (row) => !keptSpotlights.has(row.id)
+        )) {
+          await callHome(request, "deleteSpotlight", { id });
         }
 
         await callHome(request, "saveLayout", {

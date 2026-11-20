@@ -7,7 +7,12 @@ import {
   createBannerFormSchema,
   createBannerSchema,
   createPageLayoutFormSchema,
+  createSpotlightFormSchema,
+  createSpotlightSchema,
   deleteBannerSchema,
+  deleteSpotlightSchema,
+  type SpotlightFormFields,
+  updateSpotlightSchema,
   type PageLayoutFormFields,
   pageSectionKey,
   isCalendarDate,
@@ -204,6 +209,7 @@ describe("pageSectionKey", () => {
     [{ bannerId: 9, kind: "banner" }, "banner:9"],
     [{ kind: "best_sellers" }, "best_sellers"],
     [{ kind: "featured" }, "featured"],
+    [{ kind: "spotlight", spotlightId: 51 }, "spotlight:51"],
   ] as const)("%o is %s", (section, key) => {
     expect(pageSectionKey(section)).toBe(key);
   });
@@ -690,4 +696,111 @@ describe("createPageLayoutFormSchema", () => {
   ])("an entry listed twice is refused: %s", (_case, overrides, expected) => {
     expect(refusals(schema.safeParse(makeFields(overrides)))).toEqual(expected);
   });
+});
+
+function makeSpotlight(overrides: Record<string, unknown> = {}) {
+  return {
+    labelEn: null,
+    labelEs: "Nuevo",
+    pageId: 3,
+    phraseEn: null,
+    phraseEs: null,
+    productId: 40,
+    ...overrides,
+  };
+}
+
+describe("createSpotlightSchema and updateSpotlightSchema", () => {
+  test("trims the words and reads a blank one as none", () => {
+    expect(
+      createSpotlightSchema.parse(
+        makeSpotlight({ labelEn: "  ", labelEs: " Nuevo ", phraseEs: "" })
+      )
+    ).toEqual(makeSpotlight({ labelEn: null, labelEs: "Nuevo" }));
+  });
+
+  test.each([
+    ["a label at 24", { labelEs: "x".repeat(24) }, true],
+    ["a label at 25", { labelEs: "x".repeat(25) }, false],
+    ["a phrase at 140", { phraseEn: "x".repeat(140) }, true],
+    ["a phrase at 141", { phraseEn: "x".repeat(141) }, false],
+    ["first on the page", { rowsIndex: 0 }, true],
+    ["a negative place", { rowsIndex: -1 }, false],
+    ["no article", { productId: undefined }, false],
+    ["no page", { pageId: undefined }, false],
+  ])("%s is %s", (_case, overrides, accepted) => {
+    expect(
+      createSpotlightSchema.safeParse(makeSpotlight(overrides)).success
+    ).toBe(accepted);
+  });
+
+  test("an edit takes its id from the path, and the delete only that", () => {
+    expect(
+      updateSpotlightSchema.parse({ ...makeSpotlight(), id: "51" })
+    ).toMatchObject({ id: 51 });
+    expect(deleteSpotlightSchema.parse({ id: "51" })).toEqual({ id: 51 });
+    expect(deleteSpotlightSchema.safeParse({ id: "0" }).success).toBe(false);
+  });
+});
+
+describe("createSpotlightFormSchema", () => {
+  const schema = createSpotlightFormSchema({
+    articleRequired: "articleRequired",
+    labelTooLong: "labelTooLong",
+    phraseTooLong: "phraseTooLong",
+  });
+
+  function makeFields(
+    overrides: Partial<SpotlightFormFields> = {}
+  ): SpotlightFormFields {
+    return {
+      labelEn: "",
+      labelEs: " Nuevo ",
+      phraseEn: "",
+      phraseEs: "El que más piden.",
+      productId: "40",
+      rowsIndex: "2",
+      ...overrides,
+    };
+  }
+
+  test("reads the fields into a spotlight's values, blanks as none", () => {
+    expect(schema.parse(makeFields())).toEqual({
+      labelEn: null,
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 40,
+      rowsIndex: 2,
+    });
+  });
+
+  test("with no place chosen, leaves the place out", () => {
+    expect(schema.parse(makeFields({ rowsIndex: "" }))).toEqual({
+      labelEn: null,
+      labelEs: "Nuevo",
+      phraseEn: null,
+      phraseEs: "El que más piden.",
+      productId: 40,
+    });
+  });
+
+  test.each([
+    ["no article", { productId: "" }, ["productId", "articleRequired"]],
+    ["a long label", { labelEn: "x".repeat(25) }, ["labelEn", "labelTooLong"]],
+    [
+      "a long phrase",
+      { phraseEs: "x".repeat(141) },
+      ["phraseEs", "phraseTooLong"],
+    ],
+  ] as const)(
+    "refuses %s under its field",
+    (_case, overrides, [path, message]) => {
+      const parsed = schema.safeParse(makeFields(overrides));
+
+      expect(
+        parsed.error?.issues.map((issue) => [issue.path[0], issue.message])
+      ).toEqual([[path, message]]);
+    }
+  );
 });

@@ -11,10 +11,13 @@ import {
   PAGE_CATEGORY_ROW_MAX,
   type PageBanner,
   type PageContent,
+  type PageSpotlight,
+  type PageWords,
   type ShownAnnouncement,
 } from "@/lib/page/content";
 import {
   DEFAULT_ROWS_INDEX,
+  DEFAULT_SPOTLIGHT_INDEX,
   placePageSection,
   resolvePageSections,
 } from "@/lib/page/layout";
@@ -24,10 +27,12 @@ import {
   type BannerPlacement,
   COVER_BANNERS_MAX,
   type CreateBannerValues,
+  type CreateSpotlightValues,
   type PageSection,
   type SaveAnnouncementValues,
   type SavePageLayoutValues,
   type UpdateBannerValues,
+  type UpdateSpotlightValues,
 } from "@/lib/schemas/page";
 import type { UploadedImage } from "@/lib/schemas/upload";
 import type { Currency } from "@/lib/utils/format";
@@ -45,6 +50,8 @@ import {
   product,
   productImage,
   rankingEntry,
+  spotlight,
+  spotlightTranslation,
   store,
 } from "@/server/db/schema";
 import {
@@ -154,6 +161,7 @@ function toSection(row: {
   bannerId: number | null;
   categoryId: number | null;
   kind: PageSection["kind"];
+  spotlightId: number | null;
 }): PageSection[] {
   // The table's checks keep each target beside its kind; a row they have
   // not seen (a mock) is skipped rather than read as a broken place.
@@ -169,6 +177,12 @@ function toSection(row: {
       : [{ bannerId: row.bannerId, kind: "banner" }];
   }
 
+  if (row.kind === "spotlight") {
+    return row.spotlightId === null
+      ? []
+      : [{ kind: "spotlight", spotlightId: row.spotlightId }];
+  }
+
   return [{ kind: row.kind }];
 }
 
@@ -178,7 +192,12 @@ async function readSavedSections(
   pageId: number
 ): Promise<PageSection[]> {
   const rows = await db.query.pageSection.findMany({
-    columns: { bannerId: true, categoryId: true, kind: true },
+    columns: {
+      bannerId: true,
+      categoryId: true,
+      kind: true,
+      spotlightId: true,
+    },
     orderBy: [asc(pageSection.position)],
     where: eq(pageSection.pageId, pageId),
   });
@@ -191,6 +210,65 @@ function sectionBannerIds(sections: readonly PageSection[]): number[] {
   return sections.flatMap((section) =>
     section.kind === "banner" ? [section.bannerId] : []
   );
+}
+
+/** The article spotlights of a page's sequence, in its order. */
+function sectionSpotlightIds(sections: readonly PageSection[]): number[] {
+  return sections.flatMap((section) =>
+    section.kind === "spotlight" ? [section.spotlightId] : []
+  );
+}
+
+/**
+ * The store's article spotlights (FER-059), in the order they were made,
+ * with the article each features and their words.
+ */
+async function readSpotlights(db: DatabaseClient, storeId: number) {
+  return await db.query.spotlight.findMany({
+    columns: { id: true, productId: true },
+    orderBy: [asc(spotlight.id)],
+    where: eq(spotlight.storeId, storeId),
+    with: {
+      translations: { columns: { label: true, locale: true, phrase: true } },
+    },
+  });
+}
+
+type SpotlightRow = Awaited<ReturnType<typeof readSpotlights>>[number];
+
+/**
+ * One of a block's words in `locale`, else in the language that has it,
+ * with the language it is in: a label and a phrase fall back each on its
+ * own, so an English label beside a Spanish phrase both show.
+ */
+function wordsIn(
+  rows: readonly ({ locale: Locale } & Record<
+    "label" | "phrase",
+    string | null
+  >)[],
+  field: "label" | "phrase",
+  locale: Locale
+): PageWords | null {
+  const withWord = rows.filter((row) => row[field] !== null);
+  const found =
+    withWord.find((row) => row.locale === locale) ?? withWord[0] ?? null;
+  const text = found?.[field] ?? null;
+
+  return found && text !== null ? { lang: found.locale, text } : null;
+}
+
+/** A spotlight as a page shows it, around its article's card. */
+function toPageSpotlight<Article>(
+  row: SpotlightRow,
+  article: Article,
+  locale: Locale
+): PageSpotlight<Article> {
+  return {
+    article,
+    id: row.id,
+    label: wordsIn(row.translations, "label", locale),
+    phrase: wordsIn(row.translations, "phrase", locale),
+  };
 }
 
 /** A page's cover: its banners in the carousel's order, with their places. */
@@ -398,13 +476,16 @@ export async function getPageContent(
     const sections = resolvePageSections(saved, {
       categoryIds: categories.map((entry) => entry.id),
       rowBannerIds: sectionBannerIds(saved),
+      spotlightIds: sectionSpotlightIds(saved),
     });
     const categoryRows = await readCategoryRows(tx, storeId);
     const curated = await readCurated(tx, storeId);
+    const spotlights = await readSpotlights(tx, storeId);
     const ids = new Set([
       ...[...categoryRows.values()].flat(),
       ...curated.ranking,
       ...curated.featured,
+      ...spotlights.map((row) => row.productId),
     ]);
     // `loadCards` keeps published articles only: a curated draft drops out.
     const cards = new Map(
@@ -436,6 +517,17 @@ export async function getPageContent(
         ),
         featured: cardsOf(curated.featured).filter((card) => card.isAvailable),
         rowBanners: banners,
+        // A spotlight shows an article that can be bought: one not
+        // published, or sold out, leaves the page until it can again.
+        spotlights: new Map(
+          spotlights.flatMap((row) => {
+            const card = cards.get(row.productId);
+
+            return card?.isAvailable
+              ? [[row.id, toPageSpotlight(row, card, locale)] as const]
+              : [];
+          })
+        ),
       }),
     };
   }, SNAPSHOT);
@@ -534,6 +626,8 @@ export async function getPageCuration(
       (row) => row.bannerId
     );
     const rowBannerIds = sectionBannerIds(saved);
+    const spotlightIds = sectionSpotlightIds(saved);
+    const spotlights = await readSpotlights(tx, storeId);
     const curated = await readCurated(tx, storeId);
     const slugOf = new Map(categories.map((row) => [row.id, row.slug]));
     const placementOf = (id: number): BannerPlacement | null => {
@@ -604,7 +698,17 @@ export async function getPageCuration(
       sections: resolvePageSections(saved, {
         categoryIds: categories.map((row) => row.id),
         rowBannerIds,
+        spotlightIds,
       }),
+      spotlights: spotlights.map((row) => ({
+        id: row.id,
+        labelEn: textIn(row.translations, "en")?.label ?? null,
+        labelEs: textIn(row.translations, "es")?.label ?? null,
+        onPage: spotlightIds.includes(row.id),
+        phraseEn: textIn(row.translations, "en")?.phrase ?? null,
+        phraseEs: textIn(row.translations, "es")?.phrase ?? null,
+        productId: row.productId,
+      })),
       today,
     };
   }, SNAPSHOT);
@@ -649,6 +753,14 @@ async function lockPageTargets(
           )
           .orderBy(asc(product.id))
           .for("key share");
+  // Held like the categories: an article's deletion takes its spotlights,
+  // and a place written for one must not point at a row that went.
+  const spotlights = await tx
+    .select({ id: spotlight.id })
+    .from(spotlight)
+    .where(eq(spotlight.storeId, storeId))
+    .orderBy(asc(spotlight.id))
+    .for("key share");
   const banners = await tx
     .select({
       id: banner.id,
@@ -670,6 +782,8 @@ async function lockPageTargets(
     productIds: new Set(articles.map((row) => row.id)),
     rowBannerIds: sectionBannerIds(saved),
     saved,
+    spotlightIds: sectionSpotlightIds(saved),
+    storeSpotlightIds: spotlights.map((row) => row.id),
   };
 }
 
@@ -834,6 +948,7 @@ async function writeSections(
         kind: section.kind,
         pageId,
         position,
+        spotlightId: section.kind === "spotlight" ? section.spotlightId : null,
         storeId,
       }))
     );
@@ -850,10 +965,7 @@ async function placeBannerInRows(
     targets,
   }: StoreScope & { bannerId: number; index: number; targets: PageTargets }
 ) {
-  const sections = resolvePageSections(targets.saved, {
-    categoryIds: targets.categoryIds,
-    rowBannerIds: targets.rowBannerIds,
-  });
+  const sections = resolvePageSections(targets.saved, targets);
 
   await writeSections(
     tx,
@@ -1197,6 +1309,201 @@ function assertBannerIn(
   }
 }
 
+function spotlightNotFound() {
+  return new ORPCError("NOT_FOUND", { message: "Spotlight not found" });
+}
+
+/** Refuses a spotlight the store does not have, or one not on the page. */
+function assertSpotlightOn(id: number, targets: PageTargets) {
+  if (!targets.storeSpotlightIds.includes(id)) {
+    throw spotlightNotFound();
+  }
+
+  if (!targets.spotlightIds.includes(id)) {
+    throw new ORPCError("BAD_REQUEST", {
+      message: "That spotlight is not on this page",
+    });
+  }
+}
+
+/**
+ * A spotlight's words: a row per language that has a label or a phrase,
+ * and none for a language left with neither.
+ */
+async function writeSpotlightTexts(
+  tx: DatabaseClient,
+  spotlightId: number,
+  values: Pick<
+    CreateSpotlightValues,
+    "labelEn" | "labelEs" | "phraseEn" | "phraseEs"
+  >
+) {
+  const texts = [
+    { label: values.labelEs, locale: "es" as const, phrase: values.phraseEs },
+    { label: values.labelEn, locale: "en" as const, phrase: values.phraseEn },
+  ];
+  const written = texts.filter(
+    (text) => text.label !== null || text.phrase !== null
+  );
+  const empty = texts
+    .filter((text) => text.label === null && text.phrase === null)
+    .map((text) => text.locale);
+
+  if (written.length > 0) {
+    await tx
+      .insert(spotlightTranslation)
+      .values(written.map((text) => ({ ...text, spotlightId })))
+      .onConflictDoUpdate({
+        set: {
+          label: sql`excluded."label"`,
+          phrase: sql`excluded."phrase"`,
+          updatedAt: sql`excluded."updatedAt"`,
+        },
+        target: [spotlightTranslation.spotlightId, spotlightTranslation.locale],
+      });
+  }
+
+  if (empty.length > 0) {
+    await tx
+      .delete(spotlightTranslation)
+      .where(
+        and(
+          eq(spotlightTranslation.spotlightId, spotlightId),
+          inArray(spotlightTranslation.locale, empty)
+        )
+      );
+  }
+}
+
+/** Puts `spotlightId` between the page's rows at `index` of its sequence. */
+async function placeSpotlight(
+  tx: DatabaseClient,
+  {
+    index,
+    spotlightId,
+    storeId,
+    targets,
+  }: StoreScope & { index: number; spotlightId: number; targets: PageTargets }
+) {
+  await writeSections(
+    tx,
+    { pageId: targets.pageId, storeId },
+    placePageSection(
+      resolvePageSections(targets.saved, targets),
+      { kind: "spotlight", spotlightId },
+      index
+    )
+  );
+}
+
+/**
+ * Adds an article spotlight (FER-059) and places it between a page's rows,
+ * at `rowsIndex` of its sequence, first (right under the cover) when none
+ * is given. The article must be the store's; it may be in any state: the
+ * storefront leaves out one that cannot be bought, and the admin warns.
+ */
+export async function createSpotlight(
+  tx: DatabaseClient,
+  { storeId, values }: StoreScope & { values: CreateSpotlightValues }
+) {
+  await lockStorePages(tx, storeId);
+  const { pageId } = values;
+  await lockPage(tx, { pageId, storeId });
+  const targets = await lockPageTargets(tx, {
+    pageId,
+    productIds: [values.productId],
+    storeId,
+  });
+
+  if (!targets.productIds.has(values.productId)) {
+    throw new ORPCError("NOT_FOUND", { message: "Article not found" });
+  }
+
+  const [created] = await tx
+    .insert(spotlight)
+    .values({ productId: values.productId, storeId })
+    .returning({ id: spotlight.id });
+
+  if (!created) {
+    throw new Error("Inserting a spotlight returned no row");
+  }
+
+  await writeSpotlightTexts(tx, created.id, values);
+  await placeSpotlight(tx, {
+    index: values.rowsIndex ?? DEFAULT_SPOTLIGHT_INDEX,
+    spotlightId: created.id,
+    storeId,
+    targets,
+  });
+
+  return { id: created.id };
+}
+
+/**
+ * Edits a spotlight: its article, its words, and its place on a page. Given
+ * a `rowsIndex`, or not on the page yet, it takes that place (first when
+ * none is given); else it keeps the one it has.
+ */
+export async function updateSpotlight(
+  tx: DatabaseClient,
+  { storeId, values }: StoreScope & { values: UpdateSpotlightValues }
+) {
+  await lockStorePages(tx, storeId);
+  const { pageId } = values;
+  await lockPage(tx, { pageId, storeId });
+  const targets = await lockPageTargets(tx, {
+    pageId,
+    productIds: [values.productId],
+    storeId,
+  });
+
+  if (!targets.storeSpotlightIds.includes(values.id)) {
+    throw spotlightNotFound();
+  }
+
+  if (!targets.productIds.has(values.productId)) {
+    throw new ORPCError("NOT_FOUND", { message: "Article not found" });
+  }
+
+  await tx
+    .update(spotlight)
+    .set({ productId: values.productId })
+    .where(and(eq(spotlight.id, values.id), eq(spotlight.storeId, storeId)));
+  await writeSpotlightTexts(tx, values.id, values);
+
+  if (
+    !targets.spotlightIds.includes(values.id) ||
+    values.rowsIndex !== undefined
+  ) {
+    await placeSpotlight(tx, {
+      index: values.rowsIndex ?? DEFAULT_SPOTLIGHT_INDEX,
+      spotlightId: values.id,
+      storeId,
+      targets,
+    });
+  }
+
+  return { id: values.id };
+}
+
+/** Deletes a spotlight, its words and its places on every page with it. */
+export async function deleteSpotlight(
+  tx: DatabaseClient,
+  { id, storeId }: StoreScope & { id: number }
+) {
+  await lockStorePages(tx, storeId);
+  const [deleted] = await tx
+    .delete(spotlight)
+    .where(and(eq(spotlight.id, id), eq(spotlight.storeId, storeId)))
+    .returning({ id: spotlight.id });
+
+  if (!deleted) {
+    throw spotlightNotFound();
+  }
+
+  return { id: deleted.id };
+}
+
 /** Whether two lists hold the same ids in the same order. */
 function sameIds(one: readonly number[], other: readonly number[]): boolean {
   return one.length === other.length && one.every((id, at) => id === other[at]);
@@ -1240,6 +1547,10 @@ export async function savePageLayout(
 
     if (section.kind === "banner") {
       assertBannerIn(section.bannerId, "rows", targets);
+    }
+
+    if (section.kind === "spotlight") {
+      assertSpotlightOn(section.spotlightId, targets);
     }
   }
 

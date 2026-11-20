@@ -10,6 +10,8 @@ export interface PageLayoutTargets {
   categoryIds: readonly number[];
   /** The banners between the page's rows. */
   rowBannerIds: readonly number[];
+  /** The article spotlights between the page's rows (FER-059). */
+  spotlightIds: readonly number[];
 }
 
 /**
@@ -23,10 +25,11 @@ export interface PageLayoutTargets {
  */
 export function resolvePageSections(
   saved: readonly PageSection[],
-  { categoryIds, rowBannerIds }: PageLayoutTargets
+  { categoryIds, rowBannerIds, spotlightIds }: PageLayoutTargets
 ): PageSection[] {
   const categories = new Set(categoryIds);
   const banners = new Set(rowBannerIds);
+  const spotlights = new Set(spotlightIds);
   const placed = new Set<string>();
   const sections: PageSection[] = [];
   const place = (section: PageSection) => {
@@ -42,6 +45,7 @@ export function resolvePageSections(
     const exists =
       (section.kind === "category" && categories.has(section.categoryId)) ||
       (section.kind === "banner" && banners.has(section.bannerId)) ||
+      (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
       section.kind === "best_sellers" ||
       section.kind === "featured";
 
@@ -67,6 +71,10 @@ export function resolvePageSections(
 
   for (const bannerId of rowBannerIds) {
     place({ bannerId, kind: "banner" });
+  }
+
+  for (const spotlightId of spotlightIds) {
+    place({ kind: "spotlight", spotlightId });
   }
 
   return sections;
@@ -206,3 +214,8 @@ export function sameLayoutList(
 ): boolean {
   return JSON.stringify(one) === JSON.stringify(other);
 }
+/**
+ * Where an article spotlight new on a page goes when no place is given:
+ * first, right under the cover, where scrolling meets it (FER-059).
+ */
+export const DEFAULT_SPOTLIGHT_INDEX = 0;

@@ -235,4 +235,124 @@ test.describe("Home curation", () => {
     expect(box?.y ?? 0).toBeGreaterThan(844 / 2);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   });
+
+  // FER-059: an article in the spotlight, created and placed from the admin.
+  test("a spotlight added for an article goes first under the cover, shows in the order and the preview and on the home, and can be deleted", async ({
+    db,
+    homeEdit: _restoresTheHome,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const title = `Burbujero ${tag}`;
+    const article = await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 79_000,
+      title,
+    });
+    const home = new AdminHomePage(page);
+    await home.open();
+
+    await home.openNewSpotlight();
+    const form = home.spotlightForm();
+    await form
+      .getByRole("combobox", { name: "Artículo" })
+      .selectOption({ label: title });
+    await form
+      .getByRole("textbox", { exact: true, name: "Etiqueta en español" })
+      .fill("Nuevo");
+    await form
+      .getByRole("textbox", { exact: true, name: "Frase en español" })
+      .fill(`El que más piden ${tag}`);
+    await expect(
+      form.getByRole("combobox", { name: "Después de" })
+    ).toHaveValue("0");
+    await home.saveNewSpotlight({
+      labelEs: "Nuevo",
+      productId: article.id,
+      rowsIndex: 0,
+    });
+    await expectDialogRemoved(page, form);
+
+    const row = home.spotlightRow(title);
+    await expect(row.getByTestId("home-spotlight-status")).toHaveText(
+      "En esta página"
+    );
+    // First in the order under the cover, and drawn in the preview.
+    await expect(
+      home.getByTestId("home-layout-rows-item").first()
+    ).toContainText(`Vidriera: ${title}`);
+    await expect(
+      home.preview().getByText(`El que más piden ${tag}`)
+    ).toBeAttached();
+
+    const store = new StorePage(page);
+    await store.goto();
+    await expect(store.getHomeSections().first()).toHaveAttribute(
+      "data-kind",
+      "spotlight"
+    );
+    await expect(store.getSpotlight(title)).toBeVisible();
+
+    await home.open();
+    await home
+      .spotlightRow(title)
+      .getByRole("button", { name: `Borrar vidriera: ${title}` })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "¿Borrar la vidriera?" });
+    await completeRpcAction(
+      page,
+      "/api/orpc/page/deleteSpotlight",
+      async () => {
+        await dialog
+          .getByRole("button", { exact: true, name: "Borrar" })
+          .click();
+      }
+    );
+    await expect(page.getByText("Vidriera borrada.")).toBeVisible();
+    await expectDialogRemoved(page, dialog);
+    await expect(home.spotlightRow(title)).toHaveCount(0);
+    await expect(
+      home.preview().getByText(`El que más piden ${tag}`)
+    ).toHaveCount(0);
+  });
+
+  test("a spotlight whose article is sold out is flagged beside it", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const title = `Agotado ${tag}`;
+    const article = await db.seed.createArticle({
+      categoryId: shelf.id,
+      isAvailable: false,
+      priceAmount: 59_000,
+      title,
+    });
+    await homeEdit.addSpotlight(article.id, { labelEs: "Nuevo" });
+    const home = new AdminHomePage(page);
+    await home.open();
+
+    await expect(
+      home.spotlightRow(title).getByTestId("home-layout-warning")
+    ).toHaveText(
+      "Está agotado: no aparece en la tienda hasta que vuelva a estar disponible."
+    );
+    await expect(
+      home
+        .getByTestId("home-layout-rows-item")
+        .filter({ hasText: `Vidriera: ${title}` })
+        .getByTestId("home-layout-warning")
+    ).toHaveText(
+      "Está agotado: no aparece en la tienda hasta que vuelva a estar disponible."
+    );
+  });
 });

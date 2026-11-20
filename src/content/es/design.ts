@@ -68,6 +68,11 @@ export const design = {
       "Este bloque sube y se aclara una sola vez, cuando entra en pantalla al bajar.",
     rowTitle: "Novedades",
     section: { lineOne: "Collares", lineTwo: "y anillos" },
+    spotlight: {
+      label: "Nuevo",
+      phrase:
+        "Con luces y burbujas que no paran. El que más piden en la feria.",
+    },
   },
   sections: {
     banner: "Banner",
@@ -84,6 +89,7 @@ export const design = {
     price: "Precio",
     reveal: "Aparición al bajar",
     shell: "Barra, encabezado y pie",
+    spotlight: "Artículo en vidriera",
     type: "Titulares",
   },
 };

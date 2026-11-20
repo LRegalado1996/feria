@@ -22,6 +22,7 @@ import { StoreBanner } from "@/app/_components/molecules/store-banner";
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreCoverCarousel } from "@/app/_components/molecules/store-cover-carousel";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
+import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import { StoreFooter } from "@/app/_components/organisms/store-footer";
 import {
   STORE_MAIN_ID,
@@ -442,6 +443,32 @@ export default async function DesignPage({ params }: DesignPageProps) {
           image={EARRINGS_PHOTO}
           shopNow={storefront.banner.shopNow}
           title={sample.banners.earrings}
+        />
+      </section>
+
+      <section className="flex flex-col gap-6" data-testid="design-spotlight">
+        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+          {sections.spotlight}
+        </h2>
+        <StoreSpotlight
+          article={{
+            cover: {
+              alt: sample.articles.bubbleGun,
+              url: "/seed/bubble-gun-2.jpg",
+            },
+            currencyCode: "UYU",
+            id: 1,
+            lang: locale,
+            priceAmount: 79_000,
+            title: sample.articles.bubbleGun,
+          }}
+          copy={storefront}
+          headingLevel="h3"
+          href="#cards"
+          id={1}
+          label={{ lang: locale, text: sample.spotlight.label }}
+          locale={locale}
+          phrase={{ lang: locale, text: sample.spotlight.phrase }}
         />
       </section>
 

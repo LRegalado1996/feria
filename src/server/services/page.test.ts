@@ -6,6 +6,7 @@ import type {
   CreateBannerValues,
   SaveAnnouncementValues,
   SavePageLayoutValues,
+  CreateSpotlightValues,
   UpdateBannerValues,
 } from "@/lib/schemas/page";
 import {
@@ -20,6 +21,8 @@ import {
   pageSection,
   product,
   rankingEntry,
+  spotlight,
+  spotlightTranslation,
   store,
 } from "@/server/db/schema";
 import { createMockDatabase, type MockDatabase } from "@/server/test/context";
@@ -27,7 +30,9 @@ import { renderQuery } from "@/server/test/render-sql";
 
 import {
   createBanner,
+  createSpotlight,
   deleteBanner,
+  deleteSpotlight,
   findHomePageId,
   findShowingAnnouncement,
   getPageContent,
@@ -36,6 +41,7 @@ import {
   saveAnnouncement,
   savePageLayout,
   updateBanner,
+  updateSpotlight,
 } from "./page";
 import type { BlobStore } from "./upload";
 
@@ -733,6 +739,7 @@ describe("getPageCuration", () => {
         { categoryId: 3, kind: "category" },
         { categoryId: 5, kind: "category" },
       ],
+      spotlights: [],
       today: TODAY,
     });
     expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
@@ -937,17 +944,20 @@ function makeTargets({
   categories = [{ id: 11 }, { id: 12 }],
   pages = [{ id: PAGE_ID }],
   products = [{ id: 40 }],
+  spotlights = [{ id: 51 }, { id: 52 }],
 }: {
   banners?: Record<string, unknown>[];
   categories?: { id: number }[];
   pages?: { id: number }[];
   products?: { id: number }[];
+  spotlights?: { id: number }[];
 } = {}) {
   return new Map<unknown, unknown[]>([
     [banner, banners],
     [category, categories],
     [page, pages],
     [product, products],
+    [spotlight, spotlights],
   ]);
 }
 
@@ -976,7 +986,7 @@ const SAVED = [
 function placesOf(db: MockDatabase, call: number) {
   return insertedRows(db, call).map((row) => [
     row.kind,
-    row.bannerId ?? row.categoryId ?? null,
+    row.bannerId ?? row.categoryId ?? row.spotlightId ?? null,
   ]);
 }
 
@@ -1023,8 +1033,8 @@ describe("createBanner", () => {
 
     // The page, held to the store's, then the categories, both held.
     expect(readsOf(db)).toEqual({
-      locks: ["key share", "key share"],
-      tables: [page, category, banner],
+      locks: ["key share", "key share", "key share"],
+      tables: [page, category, spotlight, banner],
     });
     expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
       params: [STORE_ID, PAGE_ID],
@@ -1117,6 +1127,7 @@ describe("createBanner", () => {
         kind: "best_sellers",
         pageId: PAGE_ID,
         position: 0,
+        spotlightId: null,
         storeId: STORE_ID,
       },
       {
@@ -1125,6 +1136,7 @@ describe("createBanner", () => {
         kind: "category",
         pageId: PAGE_ID,
         position: 1,
+        spotlightId: null,
         storeId: STORE_ID,
       },
       {
@@ -1133,6 +1145,7 @@ describe("createBanner", () => {
         kind: "banner",
         pageId: PAGE_ID,
         position: 2,
+        spotlightId: null,
         storeId: STORE_ID,
       },
       {
@@ -1141,6 +1154,7 @@ describe("createBanner", () => {
         kind: "banner",
         pageId: PAGE_ID,
         position: 3,
+        spotlightId: null,
         storeId: STORE_ID,
       },
       {
@@ -1149,6 +1163,7 @@ describe("createBanner", () => {
         kind: "featured",
         pageId: PAGE_ID,
         position: 4,
+        spotlightId: null,
         storeId: STORE_ID,
       },
       {
@@ -1157,6 +1172,7 @@ describe("createBanner", () => {
         kind: "category",
         pageId: PAGE_ID,
         position: 5,
+        spotlightId: null,
         storeId: STORE_ID,
       },
     ]);
@@ -1185,8 +1201,8 @@ describe("createBanner", () => {
     );
 
     expect(readsOf(db)).toEqual({
-      locks: ["key share", "key share", "key share"],
-      tables: [page, category, product, banner],
+      locks: ["key share", "key share", "key share", "key share"],
+      tables: [page, category, product, spotlight, banner],
     });
     expect(renderQuery(db.$["select.where"].mock.calls[2]?.[0])).toEqual({
       params: [STORE_ID, 40],
@@ -1617,6 +1633,7 @@ describe("updateBanner", () => {
       kind: "banner",
       pageId: PAGE_ID,
       position: 0,
+      spotlightId: null,
       storeId: STORE_ID,
     });
   });
@@ -1753,8 +1770,8 @@ describe("savePageLayout", () => {
     });
 
     expect(readsOf(db)).toEqual({
-      locks: ["key share", "key share", "key share"],
-      tables: [page, category, product, banner],
+      locks: ["key share", "key share", "key share", "key share"],
+      tables: [page, category, product, spotlight, banner],
     });
     expect(db.$.delete.mock.calls.map(([table]) => table)).toEqual([
       pageSection,
@@ -1821,7 +1838,7 @@ describe("savePageLayout", () => {
       })
     );
 
-    expect(readsOf(db).tables).toEqual([page, category, banner]);
+    expect(readsOf(db).tables).toEqual([page, category, spotlight, banner]);
     expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
       pageSection,
     ]);
@@ -1920,5 +1937,486 @@ describe("findHomePageId", () => {
     await expect(
       findHomePageId(db as never, { storeId: STORE_ID })
     ).rejects.toMatchObject({ code: "NOT_FOUND", message: "Store not found" });
+  });
+});
+
+function makeSpotlightValues(
+  overrides: Partial<CreateSpotlightValues> = {}
+): CreateSpotlightValues {
+  return {
+    labelEn: null,
+    labelEs: "Nuevo",
+    pageId: PAGE_ID,
+    phraseEn: null,
+    phraseEs: null,
+    productId: 40,
+    ...overrides,
+  };
+}
+
+describe("the spotlights on a page", () => {
+  function setup({
+    spotlights = [
+      {
+        id: 51,
+        productId: 20,
+        translations: [
+          { label: "Nuevo", locale: "es", phrase: "El que más piden." },
+          { label: "New", locale: "en", phrase: null },
+        ],
+      },
+      { id: 52, productId: 21, translations: [] },
+      { id: 53, productId: 22, translations: [] },
+    ],
+  }: { spotlights?: Record<string, unknown>[] } = {}) {
+    const db = createMockDatabase();
+    db.query.page.findFirst.mockResolvedValue({ id: PAGE_ID });
+    db.query.pageSection.findMany.mockResolvedValue([
+      { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 51 },
+      { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 52 },
+      { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 53 },
+      // A row the table's check would refuse: skipped.
+      {
+        bannerId: null,
+        categoryId: null,
+        kind: "spotlight",
+        spotlightId: null,
+      },
+      {
+        bannerId: null,
+        categoryId: null,
+        kind: "best_sellers",
+        spotlightId: null,
+      },
+      { bannerId: null, categoryId: null, kind: "featured", spotlightId: null },
+    ]);
+    db.query.spotlight.findMany.mockResolvedValue(spotlights);
+    // 20 can be bought, 21 is sold out, 22 is not published (no card).
+    db.query.product.findMany.mockResolvedValue([
+      makeProductRow(20),
+      makeProductRow(21, { isAvailable: false }),
+    ]);
+
+    return {
+      db,
+      read: async (locale: "en" | "es") =>
+        await getPageContent(db as never, {
+          currencyCode: "UYU",
+          locale,
+          pageId: PAGE_ID,
+          storeId: STORE_ID,
+          today: TODAY,
+        }),
+    };
+  }
+
+  test("shows one whose article can be bought, its words in the page's language each falling back on its own; leaves out one sold out or not published", async () => {
+    const { db, read } = setup();
+
+    const { sections } = await read("en");
+
+    expect(sections).toEqual([
+      {
+        key: "spotlight:51",
+        kind: "spotlight",
+        spotlight: {
+          article: makeCard(20),
+          id: 51,
+          label: { lang: "en", text: "New" },
+          // No English phrase: the Spanish one, marked as such.
+          phrase: { lang: "es", text: "El que más piden." },
+        },
+      },
+    ]);
+    const [query] = db.query.spotlight.findMany.mock.calls[0] ?? [];
+    expect(renderQuery((query as { where: unknown }).where)).toEqual({
+      params: [STORE_ID],
+      sql: '"spotlight"."storeId" = $1',
+    });
+  });
+
+  test("a spotlight with no words shows none", async () => {
+    const { read } = setup({
+      spotlights: [{ id: 51, productId: 20, translations: [] }],
+    });
+
+    const [section] = (await read("es")).sections;
+
+    expect(section).toMatchObject({
+      spotlight: { id: 51, label: null, phrase: null },
+    });
+  });
+
+  test("the page's editor reads each spotlight with its words in both languages and whether it is on the page", async () => {
+    const db = createMockDatabase();
+    answerSelects(db, new Map([[store, [{ currencyCode: "UYU" }]]]));
+    db.query.page.findFirst.mockResolvedValue({ id: PAGE_ID });
+    db.query.pageSection.findMany.mockResolvedValue([
+      { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 51 },
+    ]);
+    db.query.spotlight.findMany.mockResolvedValue([
+      {
+        id: 51,
+        productId: 20,
+        translations: [
+          { label: "Nuevo", locale: "es", phrase: null },
+          { label: null, locale: "en", phrase: "Kids love it." },
+        ],
+      },
+      { id: 52, productId: 21, translations: [] },
+    ]);
+
+    const curation = await getPageCuration(db as never, {
+      pageId: PAGE_ID,
+      storeId: STORE_ID,
+      today: TODAY,
+    });
+
+    expect(curation.spotlights).toEqual([
+      {
+        id: 51,
+        labelEn: null,
+        labelEs: "Nuevo",
+        onPage: true,
+        phraseEn: "Kids love it.",
+        phraseEs: null,
+        productId: 20,
+      },
+      {
+        id: 52,
+        labelEn: null,
+        labelEs: null,
+        onPage: false,
+        phraseEn: null,
+        phraseEs: null,
+        productId: 21,
+      },
+    ]);
+    expect(curation.sections).toContainEqual({
+      kind: "spotlight",
+      spotlightId: 51,
+    });
+  });
+});
+
+describe("createSpotlight", () => {
+  function setup({
+    created = [{ id: 51 }],
+    targets = makeTargets({ spotlights: [] }),
+  }: {
+    created?: { id: number }[];
+    targets?: Map<unknown, unknown[]>;
+  } = {}) {
+    const db = createMockDatabase();
+    answerSelects(db, targets);
+    db.$["insert.returning"].mockResolvedValue(created);
+    db.query.pageCoverBanner.findMany.mockResolvedValue(COVER);
+    db.query.pageSection.findMany.mockResolvedValue(SAVED);
+
+    return {
+      create: async (values: CreateSpotlightValues) =>
+        await createSpotlight(db as never, { storeId: STORE_ID, values }),
+      db,
+    };
+  }
+
+  test("holds the page, the article and the store's spotlights, adds it with its words, and puts it first by default, right under the cover", async () => {
+    const { create, db } = setup();
+
+    await expect(
+      create(
+        makeSpotlightValues({ labelEn: "New", phraseEs: "Lo más pedido." })
+      )
+    ).resolves.toEqual({ id: 51 });
+
+    expect(db.$.execute).toHaveBeenCalledOnce();
+    expect(readsOf(db)).toEqual({
+      locks: ["key share", "key share", "key share", "key share"],
+      tables: [page, category, product, spotlight, banner],
+    });
+    expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
+      spotlight,
+      spotlightTranslation,
+      pageSection,
+    ]);
+    expect(db.$["insert.values"].mock.calls[0]?.[0]).toEqual({
+      productId: 40,
+      storeId: STORE_ID,
+    });
+    expect(db.$["insert.values"].mock.calls[1]?.[0]).toEqual([
+      {
+        label: "Nuevo",
+        locale: "es",
+        phrase: "Lo más pedido.",
+        spotlightId: 51,
+      },
+      { label: "New", locale: "en", phrase: null, spotlightId: 51 },
+    ]);
+    expect(db.$["insert.onConflictDoUpdate"].mock.calls[0]?.[0]).toMatchObject({
+      target: [spotlightTranslation.spotlightId, spotlightTranslation.locale],
+    });
+    expect(placesOf(db, 2)).toEqual([
+      ["spotlight", 51],
+      ["best_sellers", null],
+      ["featured", null],
+      ["category", 11],
+      ["banner", 3],
+      ["category", 12],
+    ]);
+    expect(insertedRows(db, 2)[0]).toEqual({
+      bannerId: null,
+      categoryId: null,
+      kind: "spotlight",
+      pageId: PAGE_ID,
+      position: 0,
+      spotlightId: 51,
+      storeId: STORE_ID,
+    });
+  });
+
+  test("at the place chosen, and with words in one language only, the other's row goes", async () => {
+    const { create, db } = setup();
+
+    await create(
+      makeSpotlightValues({
+        labelEs: null,
+        phraseEn: "Kids love it.",
+        rowsIndex: 2,
+      })
+    );
+
+    expect(db.$["insert.values"].mock.calls[1]?.[0]).toEqual([
+      { label: null, locale: "en", phrase: "Kids love it.", spotlightId: 51 },
+    ]);
+    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
+      params: [51, "es"],
+      sql: '("spotlight_translation"."spotlightId" = $1 and "spotlight_translation"."locale" in ($2))',
+    });
+    expect(insertedRows(db, 2)[2]).toMatchObject({
+      kind: "spotlight",
+      position: 2,
+      spotlightId: 51,
+    });
+  });
+
+  test("with no words at all, writes none", async () => {
+    const { create, db } = setup();
+
+    await create(makeSpotlightValues({ labelEs: null }));
+
+    expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
+      spotlight,
+      pageSection,
+    ]);
+    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0]).params).toEqual(
+      [51, "es", "en"]
+    );
+  });
+
+  test.each([
+    [
+      "an article the store does not have",
+      makeTargets({ products: [] }),
+      { code: "NOT_FOUND", message: "Article not found" },
+    ],
+    [
+      "a page the store does not have",
+      makeTargets({ pages: [] }),
+      { code: "NOT_FOUND", message: "Page not found" },
+    ],
+  ])("refuses %s, writing nothing", async (_case, targets, refusal) => {
+    const { create, db } = setup({ targets });
+
+    await expect(create(makeSpotlightValues())).rejects.toMatchObject(refusal);
+    expect(db.$.insert).not.toHaveBeenCalled();
+  });
+
+  test("throws when the insert answers no row", async () => {
+    const { create } = setup({ created: [] });
+
+    await expect(create(makeSpotlightValues())).rejects.toThrow(
+      "Inserting a spotlight returned no row"
+    );
+  });
+});
+
+describe("updateSpotlight", () => {
+  function setup({
+    saved = SAVED,
+  }: { saved?: Record<string, unknown>[] } = {}) {
+    const db = createMockDatabase();
+    answerSelects(db, makeTargets());
+    db.query.pageCoverBanner.findMany.mockResolvedValue(COVER);
+    db.query.pageSection.findMany.mockResolvedValue(saved);
+
+    return {
+      db,
+      update: async (
+        overrides: Partial<CreateSpotlightValues> & { id?: number }
+      ) =>
+        await updateSpotlight(db as never, {
+          storeId: STORE_ID,
+          values: { ...makeSpotlightValues(), id: 51, ...overrides },
+        }),
+    };
+  }
+
+  const ON_PAGE = [
+    ...SAVED,
+    { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 51 },
+  ];
+
+  test("changes its article and words, and keeps its place on the page when none is given", async () => {
+    const { db, update } = setup({ saved: ON_PAGE });
+
+    await expect(update({ productId: 40 })).resolves.toEqual({ id: 51 });
+
+    expect(db.$["update.set"].mock.calls[0]?.[0]).toEqual({ productId: 40 });
+    expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
+      params: [51, STORE_ID],
+      sql: '("spotlight"."id" = $1 and "spotlight"."storeId" = $2)',
+    });
+    expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
+      spotlightTranslation,
+    ]);
+  });
+
+  test("given a place, moves there", async () => {
+    const { db, update } = setup({ saved: ON_PAGE });
+
+    await update({ rowsIndex: 1 });
+
+    // Never placed, the curated rows come first; the spotlight after one.
+    expect(placesOf(db, 1)).toEqual([
+      ["best_sellers", null],
+      ["spotlight", 51],
+      ["featured", null],
+      ["category", 11],
+      ["banner", 3],
+      ["category", 12],
+    ]);
+  });
+
+  test("not on the page yet, is placed first on it", async () => {
+    const { db, update } = setup();
+
+    await update({});
+
+    expect(insertedRows(db, 1)[0]).toMatchObject({
+      kind: "spotlight",
+      position: 0,
+      spotlightId: 51,
+    });
+  });
+
+  test.each([
+    [
+      "a spotlight the store does not have",
+      { id: 99 },
+      { code: "NOT_FOUND", message: "Spotlight not found" },
+    ],
+    [
+      "an article the store does not have",
+      { productId: 41 },
+      { code: "NOT_FOUND", message: "Article not found" },
+    ],
+  ])("refuses %s, writing nothing", async (_case, overrides, refusal) => {
+    const { db, update } = setup();
+
+    await expect(update(overrides)).rejects.toMatchObject(refusal);
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteSpotlight", () => {
+  test("deletes the store's spotlight after the pages' lock", async () => {
+    const db = createMockDatabase();
+    db.$["delete.returning"].mockResolvedValue([{ id: 51 }]);
+
+    await expect(
+      deleteSpotlight(db as never, { id: 51, storeId: STORE_ID })
+    ).resolves.toEqual({ id: 51 });
+    expect(db.$.execute).toHaveBeenCalledOnce();
+    expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(spotlight);
+    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
+      params: [51, STORE_ID],
+      sql: '("spotlight"."id" = $1 and "spotlight"."storeId" = $2)',
+    });
+  });
+
+  test("refuses a spotlight the store does not have", async () => {
+    const db = createMockDatabase();
+
+    await expect(
+      deleteSpotlight(db as never, { id: 51, storeId: STORE_ID })
+    ).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Spotlight not found",
+    });
+  });
+});
+
+describe("savePageLayout with spotlights", () => {
+  function setup() {
+    const db = createMockDatabase();
+    answerSelects(db, makeTargets({ products: [{ id: 40 }, { id: 41 }] }));
+    db.query.pageCoverBanner.findMany.mockResolvedValue([]);
+    db.query.pageSection.findMany.mockResolvedValue([
+      { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 51 },
+    ]);
+
+    return {
+      db,
+      save: async (sections: SavePageLayoutValues["sections"]) =>
+        await savePageLayout(db as never, {
+          storeId: STORE_ID,
+          values: {
+            coverBannerIds: [],
+            featuredProductIds: [],
+            pageId: PAGE_ID,
+            rankingProductIds: [],
+            sections,
+          },
+        }),
+    };
+  }
+
+  test("keeps a spotlight of the page where it is listed", async () => {
+    const { save } = setup();
+
+    await expect(
+      save([
+        { categoryId: 12, kind: "category" },
+        { kind: "spotlight", spotlightId: 51 },
+      ])
+    ).resolves.toMatchObject({
+      sections: [
+        { kind: "best_sellers" },
+        { kind: "featured" },
+        { categoryId: 12, kind: "category" },
+        { kind: "spotlight", spotlightId: 51 },
+        { categoryId: 11, kind: "category" },
+      ],
+    });
+  });
+
+  test.each([
+    [
+      "a spotlight the store does not have",
+      99,
+      { code: "NOT_FOUND", message: "Spotlight not found" },
+    ],
+    [
+      "a spotlight of the store not on this page",
+      52,
+      { code: "BAD_REQUEST", message: "That spotlight is not on this page" },
+    ],
+  ])("refuses %s, writing nothing", async (_case, spotlightId, refusal) => {
+    const { db, save } = setup();
+
+    await expect(
+      save([{ kind: "spotlight", spotlightId }])
+    ).rejects.toMatchObject(refusal);
+    expect(db.$.delete).not.toHaveBeenCalled();
   });
 });

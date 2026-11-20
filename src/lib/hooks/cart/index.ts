@@ -1,3 +1,4 @@
+export { type AddToCartRequest, useAddToCart } from "./use-add-to-cart";
 export {
   type AddOutcome,
   CART_STORAGE_KEY,
