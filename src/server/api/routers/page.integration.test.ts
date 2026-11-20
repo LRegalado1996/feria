@@ -292,7 +292,6 @@ describe("the pages' procedures against the database", () => {
     const { pages } = await setup({ signedIn: false });
     const storeId = await theStoreId(db);
     const homePageId = await findHomePageId(db, { storeId });
-    const before = await db.$count(page);
     const slug = `anonimo-${randomUUID().slice(0, 8)}`;
     const values = {
       isPublished: true,
@@ -318,7 +317,8 @@ describe("the pages' procedures against the database", () => {
     await expect(pages.setHome({ pageId: homePageId })).rejects.toMatchObject(
       refused
     );
-    expect(await db.$count(page)).toBe(before);
+    // Only the address it tried: the store's other pages are not its own.
+    expect(await db.$count(page, eq(page.slug, slug))).toBe(0);
     expect(await findHomePageId(db, { storeId })).toBe(homePageId);
     expect(
       await db.query.page.findFirst({ where: eq(page.id, homePageId) })

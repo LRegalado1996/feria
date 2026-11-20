@@ -25,6 +25,7 @@ import { findHomePageId } from "./page";
 import {
   createPage,
   deletePage,
+  findHomePage,
   findStorePage,
   listHeaderPages,
   listIndexablePages,
@@ -494,47 +495,47 @@ describe("what the storefront reads", () => {
         storeId,
         values: pageValues(`arriba-${tag}`, { showInHeader: true }),
       });
-      const hidden = await createPage(tx, {
-        storeId,
-        values: pageValues(`abajo-${tag}`),
-      });
-      const draft = await createPage(tx, {
+      await createPage(tx, { storeId, values: pageValues(`abajo-${tag}`) });
+      await createPage(tx, {
         storeId,
         values: pageValues(`borrador-${tag}`, {
           isPublished: false,
           showInHeader: true,
         }),
       });
-      const homeId = await findHomePageId(tx, { storeId });
-      await tx
-        .update(page)
-        .set({ showInHeader: true })
-        .where(eq(page.id, homeId));
+      // A home of the test's own, marked for the header before it was one.
+      const home = await createPage(tx, {
+        storeId,
+        values: pageValues(`casa-${tag}`, { showInHeader: true }),
+      });
+      await setHomePage(tx, { pageId: home.id, storeId });
 
       const header = await listHeaderPages(tx, { locale: "en", storeId });
       const indexed = await listIndexablePages(tx, { locale: "es", storeId });
-      const headerIds = header.map((entry) => entry.id);
-      const indexedPaths = indexed.map((entry) => entry.path);
+      // Only this test's pages: the store's others are not its to assert.
+      const own = (path: string) => path.endsWith(`-${tag}`);
 
-      expect(header.find((entry) => entry.id === shown.id)).toEqual({
-        id: shown.id,
-        lang: "en",
-        name: `Page arriba-${tag}`,
-        path: `/arriba-${tag}`,
-        slug: `arriba-${tag}`,
+      expect(header.filter((entry) => own(entry.path))).toEqual([
+        {
+          id: shown.id,
+          lang: "en",
+          name: `Page arriba-${tag}`,
+          path: `/arriba-${tag}`,
+          slug: `arriba-${tag}`,
+        },
+      ]);
+      expect(indexed.map((entry) => entry.path).filter(own)).toEqual([
+        `/arriba-${tag}`,
+        `/abajo-${tag}`,
+      ]);
+      // The home itself is read in the statement that finds it.
+      await expect(
+        findHomePage(tx, { locale: "es", storeId })
+      ).resolves.toMatchObject({
+        id: home.id,
+        isHome: true,
+        slug: `casa-${tag}`,
       });
-      expect(headerIds).not.toContain(hidden.id);
-      expect(headerIds).not.toContain(draft.id);
-      expect(headerIds).not.toContain(homeId);
-      expect(indexedPaths).toEqual(
-        expect.arrayContaining([`/arriba-${tag}`, `/abajo-${tag}`])
-      );
-      expect(indexedPaths).not.toContain(`/borrador-${tag}`);
-      expect(indexed).toHaveLength(
-        (await listPages(tx, { storeId })).filter(
-          (row) => row.isPublished && !row.isHome
-        ).length
-      );
     });
   });
 });
