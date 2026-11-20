@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P1
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-017, FER-040
 
 ## Goal
@@ -30,7 +30,7 @@ On a phone the admin's main action sits in a bar under the thumb (`molecules/adm
 - **Tests:** `use-above-keyboard.test.tsx` (keyboard open, closed and scrolled, 1 px and fractions, Android's shrunk layout, pinch zoom, rubber band, the top bar from `md` up, `visualViewport` missing, one frame for many events, the focused field revealed or left alone on both sides of its 8 px, focus in the bar, listeners and frame removed on unmount, the server render); `admin-primary-action.test.tsx` (the wiring, hydration). `src/e2e/tests/admin/phone-keyboard.e2e.ts` replaces `visualViewport` with a stand-in whose height the test shrinks, since Chromium opens no keyboard: on the settings screen at 375 px the bar ends where the played keyboard starts, the last field ends above the bar, "Guardar" can be pressed there, and the bar comes back down; a window that shrank itself (Android) moves it no further; on a computer the action stays in the top bar.
 - **Not covered without a real iPhone:** Safari's own keyboard and its animation (Safari reports `resize` as the keyboard settles, so the bar may jump rather than glide), how Safari's own scroll to the focused field and the hook's reveal combine, the QuickType bar and the form assistant above the keyboard, and whether following `scroll` while the keyboard is open looks smooth enough. That is the first acceptance criterion.
 - **Android without `resizes-content`:** only the article pages export `interactiveWidget: "resizes-content"`. On the other screens Chrome on Android keeps the layout viewport's height for the keyboard, as Safari does, so the hook now lifts the bar there too, where before the keyboard covered it.
-- **Pending: check on a real iPhone.** Typing in the article's title, description and price (and a field of the settings) in Safari, with the step's action reachable and the field not covered; then decide whether riding stays or the bar hides while typing. The ticket stays in progress until then.
+- **Checked by Lucas on his iPhone (Safari), 2026-11-20: works.** Riding above the keyboard stays.
 
 ## Reporting
 
