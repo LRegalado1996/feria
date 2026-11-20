@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest";
 import { EmptyState, type EmptyStateProps } from "./empty-state";
 
 function setup(props: Partial<EmptyStateProps> = {}) {
-  render(<EmptyState message="No posts yet." {...props} />);
+  render(<EmptyState message="No orders yet." {...props} />);
 
   const root = screen.getByTestId("empty-state");
   return { icon: root.querySelector("svg"), root };
@@ -17,7 +17,7 @@ describe("EmptyState", () => {
 
     expect(root).toHaveAttribute("data-slot", "empty-state");
     expect(root).toHaveClass("custom");
-    expect(root).toHaveTextContent("No posts yet.");
+    expect(root).toHaveTextContent("No orders yet.");
     expect(icon).toHaveAttribute("aria-hidden", "true");
     expect(icon).toHaveClass("lucide-inbox");
   });

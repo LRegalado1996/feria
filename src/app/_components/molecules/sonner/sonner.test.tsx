@@ -15,7 +15,7 @@ function setup(theme: string | undefined) {
   render(<Toaster />);
 
   act(() => {
-    toast.error("Your post could not be published.");
+    toast.error("Your order could not be sent.");
   });
 
   return { toaster: screen.getByRole("region") };
@@ -27,7 +27,7 @@ describe("Toaster", () => {
 
     expect(toaster).toHaveAccessibleName(/Notifications/u);
     expect(
-      await screen.findByText("Your post could not be published.")
+      await screen.findByText("Your order could not be sent.")
     ).toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe("Toaster", () => {
     setup(theme);
 
     const list = (
-      await screen.findByText("Your post could not be published.")
+      await screen.findByText("Your order could not be sent.")
     ).closest("ol");
     expect(list).toHaveAttribute("data-sonner-theme", expected);
   });

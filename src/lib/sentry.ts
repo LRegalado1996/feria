@@ -11,7 +11,7 @@ export interface CaptureScope {
   action?: string;
   /** Typed so a caller cannot spread a request body into telemetry. */
   context?: Record<string, ReportableValue>;
-  /** The oRPC procedure path (`post.create`). */
+  /** The oRPC procedure path (`category.create`). */
   procedure?: string;
   /** The `x-request-id` the proxy stamped, to find the request's log line. */
   requestId?: string;

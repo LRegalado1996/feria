@@ -20,6 +20,7 @@ Read this before you open or merge a pull request, or change `.github/` or `.hus
 ## Deployments
 
 - Vercel deploys through its Git integration; no workflow deploys `qa` or `main`. `vercel.json` `git.deploymentEnabled` deploys `qa` and `main` only (`"**": false`, Dependabot branches never). Vercel reads it from the pushed commit, so an old branch keeps the old policy until it merges `qa`.
+- **Crons** are `vercel.json` `crons` entries, each a GET to a route under `src/app/api/cron/` that checks `CRON_SECRET` (`docs/agents/security.md` § Scheduled jobs). Vercel runs them on the production deployment only, and the Hobby plan allows one run a day at most, at an hour Vercel may shift within it. Today: `/api/cron/clean-up-blobs` at 07:00 UTC (04:00 in Montevideo), the orphan image cleanup (FER-011). Sentry wraps each in a check-in monitor (`vercelCronsMonitoring`, `next.config.ts`), so a missed run is an alert.
 - `scripts/vercel-ignore.sh` (`ignoreCommand`) skips a non-production deployment when every changed path is inert: docs and `*.md`, tests, `src/e2e/`, `src/test/`, `src/server/test/`, workflows, agent and editor config. It fails open: production, a missing or unreachable previous SHA, a failed or empty diff all build. Exit codes are inverted (1 builds, 0 skips). After changing its list, run `bash scripts/vercel-ignore.sh --self-test`.
 
 ## Previews

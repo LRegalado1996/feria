@@ -1,4 +1,4 @@
-import { STORE_PALETTE } from "@/styles/store-palette";
+import { STORE_THEME } from "@/styles/theme";
 
 import {
   BRAND_NAME,
@@ -49,14 +49,14 @@ function tagPath(fill: string, mask = ""): string {
 }
 
 const TWO_COLOR_FILLS = {
-  accent: { letters: STORE_PALETTE.foreground, tag: STORE_PALETTE.accent },
-  contrast: { letters: STORE_PALETTE.accent, tag: STORE_PALETTE.foreground },
+  accent: { letters: STORE_THEME.foreground, tag: STORE_THEME.accent },
+  contrast: { letters: STORE_THEME.accent, tag: STORE_THEME.foreground },
 } as const;
 
 const ONE_COLOR_INKS = {
-  // Named for the background the file goes on.
-  "one-color-dark": STORE_PALETTE.surface,
-  "one-color-light": STORE_PALETTE.foreground,
+  // Named for the background the file goes on: white on a dark one.
+  "one-color-dark": STORE_THEME.background,
+  "one-color-light": STORE_THEME.foreground,
 } as const;
 
 function drawing(variant: LogoVariant, colorway: LogoColorway): string {

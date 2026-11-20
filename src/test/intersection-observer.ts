@@ -15,7 +15,7 @@ export function stubIntersectionObserver() {
     readonly root = null;
     readonly rootMargin: string;
     readonly scrollMargin = "0px";
-    readonly thresholds = [0];
+    readonly thresholds: number[];
     readonly observed: Element[] = [];
     disconnected = false;
     private readonly callback: IntersectionObserverCallback;
@@ -26,6 +26,7 @@ export function stubIntersectionObserver() {
     ) {
       this.callback = callback;
       this.rootMargin = options?.rootMargin ?? "0px";
+      this.thresholds = [options?.threshold ?? 0].flat();
       instances.push(this);
     }
 

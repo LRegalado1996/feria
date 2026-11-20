@@ -24,7 +24,8 @@ describe("Button", () => {
     expect(button).toHaveAttribute("data-slot", "button");
     expect(button).toHaveAttribute("data-variant", "default");
     expect(button).toHaveAttribute("data-size", "default");
-    expect(button).toHaveClass("bg-primary", "h-9");
+    // A 44 px target on a phone, the compact height from `md` up.
+    expect(button).toHaveClass("bg-primary", "h-11", "md:h-9");
   });
 
   test.each([
@@ -42,20 +43,35 @@ describe("Button", () => {
   });
 
   test.each([
-    ["xs", "h-6"],
-    ["sm", "h-8"],
-    ["lg", "h-10"],
-    ["icon", "size-9"],
-    ["icon-xs", "size-6"],
-    ["icon-sm", "size-8"],
-    ["icon-lg", "size-10"],
-  ] as const)("the %s size carries %s", (size, expected) => {
-    const { button } = setup({ size });
+    ["sm", ["h-11", "md:h-8"]],
+    ["lg", ["h-11", "md:h-10"]],
+    ["icon", ["size-11", "md:size-9"]],
+    ["icon-sm", ["size-11", "md:size-8"]],
+    ["icon-lg", ["size-11", "md:size-10"]],
+  ] as const)(
+    "the %s size is a 44 px target on a phone, %s from md up",
+    (size, expected) => {
+      const { button } = setup({ size });
 
-    expect(button).toHaveAttribute("data-size", size);
-    expect(button).toHaveClass(expected);
-    expect(button).not.toHaveClass("h-9");
-  });
+      expect(button).toHaveAttribute("data-size", size);
+      expect(button).toHaveClass(...expected);
+      expect(button).not.toHaveClass("md:h-9");
+    }
+  );
+
+  test.each([
+    ["xs", "h-6"],
+    ["icon-xs", "size-6"],
+  ] as const)(
+    "the %s size stays small at every width: %s",
+    (size, expected) => {
+      const { button } = setup({ size });
+
+      expect(button).toHaveAttribute("data-size", size);
+      expect(button).toHaveClass(expected);
+      expect(button?.className).not.toMatch(/\b(?:h|size)-11\b/u);
+    }
+  );
 
   test("hands its action the click", async () => {
     const { button, onClick, user } = setup();
@@ -100,7 +116,7 @@ describe("Button", () => {
     const classes = buttonVariants({ variant: "outline", size: "sm" });
 
     expect(classes).toContain("border");
-    expect(classes).toContain("h-8");
-    expect(classes).not.toContain("h-9");
+    expect(classes).toContain("md:h-8");
+    expect(classes).not.toContain("md:h-9");
   });
 });

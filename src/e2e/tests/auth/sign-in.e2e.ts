@@ -1,5 +1,6 @@
 import { expect, test } from "../../fixtures";
-import { HomePage } from "../../page-objects/home.page";
+import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
+import { AdminPage } from "../../page-objects/admin.page";
 
 const INVALID_CREDENTIALS_PATTERN = /no son correctos/i;
 const MIN_PASSWORD_LENGTH_PATTERN = /8/;
@@ -9,55 +10,55 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("Sign In", () => {
   test("should display sign in form by default", async ({ page }) => {
-    const homePage = new HomePage(page);
-    await homePage.goto();
+    const signIn = new AdminSignInPage(page);
+    await signIn.goto();
 
-    await homePage.expectUnauthenticated();
-    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
-    await expect(homePage.getInput("Email")).toBeVisible();
-    await expect(homePage.getInput("Contraseña")).toBeVisible();
+    await signIn.expectHeading("Panel de tu tienda");
+    await expect(signIn.submitButton()).toBeVisible();
+    await expect(signIn.getInput("Email")).toBeVisible();
+    await expect(signIn.getInput("Contraseña")).toBeVisible();
   });
 
   test("should sign in with valid credentials", async ({ identity, page }) => {
-    const homePage = new HomePage(page);
-    await homePage.goto();
+    const signIn = new AdminSignInPage(page);
+    await signIn.goto();
 
-    await homePage.signIn(identity.email, identity.password);
+    await signIn.signIn(identity.email, identity.password);
 
-    await homePage.expectAuthenticated(identity.name);
+    const admin = new AdminPage(page);
+    await admin.waitForLoad();
+    await expect(admin.getButton("Cerrar sesión")).toBeVisible();
   });
 
   test("should show error for wrong password", async ({ identity, page }) => {
-    const homePage = new HomePage(page);
-    await homePage.goto();
+    const signIn = new AdminSignInPage(page);
+    await signIn.goto();
 
-    await homePage.signIn(identity.email, "wrong-password", 401);
+    await signIn.signIn(identity.email, "wrong-password", 401);
 
-    await homePage.expectAuthError(INVALID_CREDENTIALS_PATTERN);
+    await signIn.expectAuthError(INVALID_CREDENTIALS_PATTERN);
   });
 
   test("should show error for non-existent email", async ({ page }) => {
-    const homePage = new HomePage(page);
-    await homePage.goto();
+    const signIn = new AdminSignInPage(page);
+    await signIn.goto();
 
-    await homePage.signIn(
+    await signIn.signIn(
       `e2e-nobody-${crypto.randomUUID()}@example.com`,
       "some-password-123",
       401
     );
 
-    await homePage.expectAuthError(INVALID_CREDENTIALS_PATTERN);
+    await signIn.expectAuthError(INVALID_CREDENTIALS_PATTERN);
   });
 
   test("should show validation error for short password", async ({ page }) => {
-    const homePage = new HomePage(page);
-    await homePage.goto();
+    const signIn = new AdminSignInPage(page);
+    await signIn.goto();
 
-    await homePage.waitForAuthForm();
-    await homePage.fillEmail("test@example.com");
-    await homePage.fillPassword("short");
-    await homePage.submitSignIn();
+    await signIn.fillCredentials("test@example.com", "short");
+    await signIn.submitButton().click();
 
-    await homePage.expectFieldError(MIN_PASSWORD_LENGTH_PATTERN);
+    await signIn.expectFieldError(MIN_PASSWORD_LENGTH_PATTERN);
   });
 });

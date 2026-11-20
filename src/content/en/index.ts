@@ -1,5 +1,7 @@
 import type { Dictionary } from "@/content/es";
 
+import { admin } from "./admin";
+import { articles } from "./articles";
 import { auth } from "./auth";
 import { comingSoon } from "./coming-soon";
 import { common } from "./common";
@@ -8,12 +10,14 @@ import { environment } from "./environment";
 import { errors } from "./errors";
 import { locale } from "./locale";
 import { metadata } from "./metadata";
-import { post } from "./post";
+import { seo } from "./seo";
 import { storefront } from "./storefront";
 import { theme } from "./theme";
 
 /** The English interface text, held to the Spanish dictionary's shape. */
 export const en: Dictionary = {
+  admin,
+  articles,
   auth,
   comingSoon,
   common,
@@ -22,7 +26,7 @@ export const en: Dictionary = {
   errors,
   locale,
   metadata,
-  post,
+  seo,
   storefront,
   theme,
 };

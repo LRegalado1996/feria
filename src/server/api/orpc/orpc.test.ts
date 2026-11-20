@@ -1,13 +1,15 @@
 import { call, ORPCError } from "@orpc/server";
 import { describe, expect, test, vi } from "vitest";
+import { z } from "zod";
 
 import { ERROR_WHYS } from "@/lib/errors";
 import {
   createMockContext,
   createUnauthenticatedMockContext,
 } from "@/server/test";
+import { renderQuery } from "@/server/test/render-sql";
 
-import { createORPCContext, protectedProcedure, publicProcedure } from ".";
+import { adminProcedure, createORPCContext, publicProcedure } from ".";
 
 const { getSession } = vi.hoisted(() => ({
   getSession: vi.fn(
@@ -93,8 +95,8 @@ describe("error contract", () => {
     const { mockCtx } = createMockContext();
     const procedure = publicProcedure.handler(({ errors }) => {
       throw errors.NOT_FOUND({
-        message: "That post no longer exists.",
-        data: { fix: "Refresh the feed.", why: ERROR_WHYS.DATABASE },
+        message: "That order no longer exists.",
+        data: { fix: "Refresh the page.", why: ERROR_WHYS.DATABASE },
       });
     });
 
@@ -102,9 +104,9 @@ describe("error contract", () => {
       call(procedure, undefined, { context: mockCtx as never })
     ).rejects.toMatchObject({
       code: "NOT_FOUND",
-      message: "That post no longer exists.",
+      message: "That order no longer exists.",
       defined: true,
-      data: { fix: "Refresh the feed.", why: ERROR_WHYS.DATABASE },
+      data: { fix: "Refresh the page.", why: ERROR_WHYS.DATABASE },
     });
   });
 
@@ -149,17 +151,17 @@ describe("timing", () => {
 
     await call(procedure, undefined, {
       context: mockCtx as never,
-      path: ["post", "create"],
+      path: ["category", "create"],
     });
 
     expect(requestLog.set).toHaveBeenCalledExactlyOnceWith({
-      orpc: { procedure: "post.create", durationMs: 42 },
+      orpc: { procedure: "category.create", durationMs: 42 },
     });
   });
 
   test("records a call that failed too", async () => {
     const { mockCtx } = createUnauthenticatedMockContext();
-    const procedure = protectedProcedure.handler(() => "never");
+    const procedure = adminProcedure.handler(() => "never");
     vi.spyOn(performance, "now")
       .mockReturnValueOnce(1000)
       .mockReturnValueOnce(1003);
@@ -173,35 +175,124 @@ describe("timing", () => {
   });
 });
 
-describe("protectedProcedure", () => {
-  test("refuses a caller without a session", async () => {
-    const { mockCtx } = createUnauthenticatedMockContext();
-    const procedure = protectedProcedure.handler(() => "protected");
+/**
+ * A signed-in caller (or none) the database still has as a login (or not),
+ * and the store row it answers with (or none): `adminProcedure` reads both.
+ */
+function setupAdmin({
+  login = true,
+  signedIn = true,
+  store = { id: 4 },
+}: {
+  login?: boolean;
+  signedIn?: boolean;
+  store?: { id: number } | null;
+} = {}) {
+  const { mockCtx } = signedIn
+    ? createMockContext()
+    : createUnauthenticatedMockContext();
+  mockCtx.db.query.user.findFirst.mockImplementation(async () =>
+    login ? { id: "test-user-id" } : undefined
+  );
+  mockCtx.db.$["select.limit"].mockImplementation(async () =>
+    store ? [store] : []
+  );
+  const procedure = adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .handler(({ context, input }) => ({
+      id: input.id,
+      storeId: context.store.id,
+      userId: context.session.user.id,
+    }));
 
-    await expect(
-      call(procedure, undefined, { context: mockCtx as never })
-    ).rejects.toMatchObject(UNAUTHORIZED);
+  return {
+    db: mockCtx.db,
+    callAdmin: async (input: unknown, context: unknown = mockCtx) =>
+      await call(procedure, input as never, { context: context as never }),
+  };
+}
+
+describe("adminProcedure", () => {
+  test("hands the handler the signed-in login and the store", async () => {
+    const { callAdmin } = setupAdmin();
+
+    await expect(callAdmin({ id: 7 })).resolves.toEqual({
+      id: 7,
+      storeId: 4,
+      userId: "test-user-id",
+    });
   });
 
-  test("refuses a session without a user", async () => {
-    const { mockCtx } = createMockContext();
-    const procedure = protectedProcedure.handler(() => "protected");
+  test("re-reads the login by its id, then reads the store's one row", async () => {
+    const { callAdmin, db } = setupAdmin();
 
-    await expect(
-      call(procedure, undefined, {
-        context: { ...mockCtx, session: { ...SESSION, user: null } } as never,
-      })
-    ).rejects.toMatchObject(UNAUTHORIZED);
-  });
+    await callAdmin({ id: 7 });
 
-  test("hands the signed-in user to the handler", async () => {
-    const { mockCtx } = createMockContext();
-    const procedure = protectedProcedure.handler(
-      ({ context }) => context.session.user.id
+    const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+    expect(config).toMatchObject({ columns: { id: true } });
+    expect(renderQuery((config as { where: unknown }).where)).toEqual({
+      params: ["test-user-id"],
+      sql: '"user"."id" = $1',
+    });
+    expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
+    expect(db.query.user.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
+      db.$.select.mock.invocationCallOrder[0] ?? 0
     );
+  });
+
+  test("refuses a login the database no longer has, whatever the session says, before reading the store", async () => {
+    const { callAdmin, db } = setupAdmin({ login: false });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("answers NOT_FOUND when the store's row does not exist", async () => {
+    const { callAdmin } = setupAdmin({ store: null });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      message: "Store not found",
+    });
+  });
+
+  test("refuses a caller without a session before reading anything", async () => {
+    const { callAdmin, db } = setupAdmin({ signedIn: false });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("refuses a session without a user before reading anything", async () => {
+    const { callAdmin, db } = setupAdmin();
+    const { mockCtx } = createMockContext();
 
     await expect(
-      call(procedure, undefined, { context: mockCtx as never })
-    ).resolves.toBe("test-user-id");
+      callAdmin(
+        { id: 7 },
+        { ...mockCtx, db, session: { ...SESSION, user: null } }
+      )
+    ).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("refuses a malformed input before reading the login or the store", async () => {
+    const { callAdmin, db } = setupAdmin();
+
+    await expect(callAdmin({ id: "seven" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("checks the session before the input: a caller without one is UNAUTHORIZED, malformed input or not", async () => {
+    const { callAdmin } = setupAdmin({ signedIn: false });
+
+    await expect(callAdmin({ id: "seven" })).rejects.toMatchObject(
+      UNAUTHORIZED
+    );
   });
 });

@@ -3,29 +3,31 @@
 - **Milestone:** M3 Admin
 - **Priority:** P1
 - **Status:** todo
-- **Depends on:** FER-013
+- **Depends on:** FER-038, FER-040
 
 ## Goal
 
-Superadmins manage every login; store members manage the logins of their own store.
+An admin manages the logins of the store from `/admin/users`.
+
+Rescoped on 2026-11-16: there is one role, `admin` ([FER-038](FER-038-single-store.md)), so promotions, memberships and the platform list are gone. `user.role` stays for roles that may come later.
 
 ## Scope
 
-- Platform users: list with store memberships, create, promote to or demote from superadmin, disable, reset password.
-- Store users: list members, add one (new account, or an existing account by email), remove one.
+- List the logins, create one, disable one, reset a password.
 - New accounts get a temporary password shown once to whoever created them and must change it at first sign-in. Email invitations wait until an email service exists.
-- Safeguards: the last superadmin cannot be demoted or disabled; a member cannot remove themselves if they are the store's last member.
+- Safeguard: the last enabled admin cannot be disabled, and nobody disables themselves.
 - Disabling a user ends their sessions.
+- Built in the admin shell and cards of [FER-040](FER-040-admin-redesign.md).
 
 ## Acceptance criteria
 
-- A member cannot list, add or remove users of another store, by UI or by direct API call.
+- An anonymous call to any of these procedures is refused.
 - Each safeguard has a test that fails when the rule is removed.
-- E2E: a superadmin creates a member, who signs in, changes the password and reaches their store.
+- E2E: an admin creates a login, which signs in, changes the password and reaches the orders.
 
 ## Notes
 
-Until this ships, users are created with the seed script from FER-009. That is enough for the fair if time runs short.
+Until this ships, logins are created with `pnpm db:create-superadmin` and the seed. That is enough for the fair if time runs short.
 
 ## Reporting
 

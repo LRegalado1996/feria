@@ -9,6 +9,16 @@ export class ComingSoonPage extends BasePage {
     await this.waitForLoad();
   }
 
+  async gotoEnglish(): Promise<void> {
+    await this.page.goto("/en/coming-soon");
+    await this.waitForLoad();
+  }
+
+  /** The text under the headline (FER-034: an admin's, else the dictionary's). */
+  getLead(): Locator {
+    return this.getByTestId("coming-soon-lead").filter({ visible: true });
+  }
+
   protected loaded(): Locator {
     return this.getByTestId("coming-soon-page")
       .filter({ visible: true })

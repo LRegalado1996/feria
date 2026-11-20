@@ -16,15 +16,16 @@ The store is live on its own domain and has been checked the way a stranger with
 - Submit the sitemap in Google Search Console.
 - Checklist, each item ticked in the PR:
   - Full purchase on an iPhone and an Android phone, on mobile data, in both languages.
-  - Admin on a phone: load an article with AI, change an order's status.
+  - Admin on a phone: load an article with AI, change an order's status, change the announcement bar.
   - Lighthouse on mobile for home, catalog and article.
+  - Lighthouse on mobile for `/coming-soon` on the deployed site, while it is still published and before the launch step below takes it down (FER-034's owed production measurement; once the store opens, a visitor no longer reaches that page).
   - Keyboard and screen reader pass on the purchase flow.
   - Sentry receiving production errors; health check monitored.
   - Rate limits and BotID active on order creation and sign-in.
   - Database backups and point-in-time restore confirmed in Neon.
   - AI Gateway spend limit set.
   - Seed and test accounts absent from production.
-- Launch itself: set `STOREFRONT_LAUNCHED` on in production and redeploy, replacing the coming-soon page (FER-034) with the store.
+- Launch itself: take the coming-soon page down from the admin (`/admin/settings/coming-soon`, FER-034), which opens the store to the public within seconds; no deploy.
 - Generate the final QR code for the print pieces in FER-007.
 
 ## Acceptance criteria

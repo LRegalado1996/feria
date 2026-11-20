@@ -1,0 +1,343 @@
+import { ORPCError } from "@orpc/server";
+import { describe, expect, test, vi } from "vitest";
+
+import type { Locale } from "@/lib/i18n/config";
+import { CATALOG_SLUG_MAX_LENGTH } from "@/lib/schemas/catalog";
+import type { Currency } from "@/lib/utils/format";
+import { db } from "@/server/db";
+
+import {
+  invalidateCatalogCache,
+  readAllArticlesCover,
+  readCategories,
+  readCategoryArticles,
+  readCategoryCounts,
+  readCategoryPage,
+  readPublishedArticle,
+  readRelatedArticles,
+} from "./catalog";
+
+const { cacheLife, cacheTag, revalidateTag } = vi.hoisted(() => ({
+  cacheLife: vi.fn<(profile: string) => void>(),
+  cacheTag: vi.fn<(...tags: string[]) => void>(),
+  revalidateTag: vi.fn<(tag: string, profile: unknown) => void>(),
+}));
+
+// The queries are `src/server/services/catalog.test.ts`'s: here only what the
+// cache layer adds around them.
+const {
+  countPublishedByCategory,
+  getAllArticlesCover,
+  getCategoryPage,
+  getPublishedProduct,
+  listCategories,
+  listCategoryArticles,
+  listRelatedPool,
+} = vi.hoisted(() => ({
+  countPublishedByCategory: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listCategoryArticles: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  getAllArticlesCover: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  getCategoryPage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listRelatedPool: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+}));
+
+// Next's cache only exists inside a Next render. Outside it `"use cache"` is
+// a plain string, so the function under test runs on every call.
+vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
+
+vi.mock("@/server/services/catalog", () => ({
+  countPublishedByCategory,
+  getAllArticlesCover,
+  getCategoryPage,
+  getPublishedProduct,
+  listCategories,
+  listCategoryArticles,
+  listRelatedPool,
+}));
+
+function makeStore(): { currencyCode: Currency; id: number } {
+  return { currencyCode: "USD", id: 7 };
+}
+
+function makeArticle(overrides: Record<string, unknown> = {}) {
+  return {
+    categoryId: 3,
+    id: 11,
+    name: "Cadena",
+    slug: "cadena",
+    ...overrides,
+  };
+}
+
+/**
+ * The services answering with an article (or failing with `error`) and a
+ * list beside it, and both reads on store 7.
+ */
+function setup({ error }: { error?: Error } = {}) {
+  const article = makeArticle();
+  const categories = [
+    { id: 3, lang: "en", name: "Rings", position: 0, slug: "anillos" },
+  ];
+  const related = {
+    others: [],
+    same: [makeArticle({ id: 12, slug: "anillo" })],
+  };
+  if (error === undefined) {
+    getPublishedProduct.mockResolvedValue(article);
+  } else {
+    getPublishedProduct.mockRejectedValue(error);
+  }
+  const counts = [{ categoryId: 3, count: 4 }];
+  const cards = [{ id: 11, title: "Ring" }];
+  listRelatedPool.mockResolvedValue(related);
+  listCategories.mockResolvedValue(categories);
+  countPublishedByCategory.mockResolvedValue(counts);
+  listCategoryArticles.mockResolvedValue(cards);
+
+  return {
+    article,
+    cards,
+    categories,
+    counts,
+    readCategories: async (locale: Locale = "es") =>
+      await readCategories(makeStore(), locale),
+    readArticle: async ({
+      locale = "es",
+      slug = "cadena",
+    }: { locale?: Locale; slug?: string } = {}) =>
+      await readPublishedArticle(makeStore(), slug, locale),
+    readRelated: async (
+      beside: { categoryId: number | null; id: number },
+      locale: Locale = "es"
+    ) => await readRelatedArticles(makeStore(), beside, locale),
+    related,
+  };
+}
+
+describe("readPublishedArticle", () => {
+  test("answers the store's published article at that address, in that language and currency", async () => {
+    const { article, readArticle } = setup();
+
+    await expect(readArticle({ locale: "en" })).resolves.toBe(article);
+
+    expect(getPublishedProduct).toHaveBeenCalledExactlyOnceWith(db, {
+      currencyCode: "USD",
+      locale: "en",
+      slug: "cadena",
+      storeId: 7,
+    });
+  });
+
+  test("answers null for a draft or a missing article, so the page is a 404", async () => {
+    const { readArticle } = setup({
+      error: new ORPCError("NOT_FOUND", { message: "Product not found" }),
+    });
+
+    await expect(readArticle({ slug: "borrador" })).resolves.toBeNull();
+  });
+
+  test.each([
+    [
+      "another oRPC error",
+      new ORPCError("FORBIDDEN", { message: "Forbidden" }),
+    ],
+    ["an unexpected failure", new Error("connection refused")],
+    [
+      "a failure from outside oRPC that carries the same code",
+      Object.assign(new Error("lookup failed"), { code: "NOT_FOUND" }),
+    ],
+  ])("rethrows %s instead of hiding it as a 404", async (_case, error) => {
+    const { readArticle } = setup({ error });
+
+    await expect(readArticle()).rejects.toBe(error);
+  });
+
+  test("reads an address as long as an article's can be", async () => {
+    const { article, readArticle } = setup();
+    const slug = "a".repeat(CATALOG_SLUG_MAX_LENGTH);
+
+    await expect(readArticle({ slug })).resolves.toBe(article);
+
+    expect(getPublishedProduct).toHaveBeenCalledExactlyOnceWith(
+      db,
+      expect.objectContaining({ slug })
+    );
+  });
+
+  test.each([
+    ["one character too long", "a".repeat(CATALOG_SLUG_MAX_LENGTH + 1)],
+    ["with a capital", "Cadena"],
+    ["with an underscore", "__sample__"],
+    ["empty", ""],
+    ["padded with spaces", " cadena "],
+  ])(
+    "answers null for an address %s without a query or a cache entry",
+    async (_case, slug) => {
+      const { readArticle } = setup();
+
+      await expect(readArticle({ slug })).resolves.toBeNull();
+
+      expect(getPublishedProduct).not.toHaveBeenCalled();
+      expect(cacheTag).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe("readRelatedArticles", () => {
+  test("hands over the pool to pick the suggestions from, by its category, in that language and currency", async () => {
+    const { readRelated, related } = setup();
+
+    await expect(readRelated({ categoryId: 3, id: 11 }, "en")).resolves.toBe(
+      related
+    );
+
+    expect(listRelatedPool).toHaveBeenCalledExactlyOnceWith(db, {
+      categoryId: 3,
+      currencyCode: "USD",
+      locale: "en",
+      productId: 11,
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategories", () => {
+  test("lists the store's categories in that language", async () => {
+    const { categories, readCategories: read } = setup();
+
+    await expect(read("en")).resolves.toBe(categories);
+
+    expect(listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategoryCounts", () => {
+  test("counts the store's published articles per category", async () => {
+    const { counts } = setup();
+
+    await expect(readCategoryCounts({ id: 7 })).resolves.toBe(counts);
+    expect(countPublishedByCategory).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategoryArticles", () => {
+  test("lists a category's articles in that language and the store's currency", async () => {
+    const { cards } = setup();
+
+    await expect(readCategoryArticles(makeStore(), 3, "en")).resolves.toBe(
+      cards
+    );
+    expect(listCategoryArticles).toHaveBeenCalledExactlyOnceWith(db, {
+      categoryId: 3,
+      currencyCode: "USD",
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
+describe("readCategoryPage", () => {
+  test("answers the store's category page at that address, in that language", async () => {
+    const page = { name: "Rings", path: "/bijouterie/anillos" };
+    getCategoryPage.mockResolvedValue(page);
+
+    await expect(readCategoryPage({ id: 7 }, "anillos", "en")).resolves.toBe(
+      page
+    );
+    expect(getCategoryPage).toHaveBeenCalledExactlyOnceWith(db, {
+      locale: "en",
+      slug: "anillos",
+      storeId: 7,
+    });
+  });
+
+  test.each([
+    ["one character too long", "a".repeat(CATALOG_SLUG_MAX_LENGTH + 1)],
+    ["with a capital", "Anillos"],
+    ["with an underscore", "__sample__"],
+    ["padded with spaces", " anillos "],
+  ])(
+    "answers null for an address %s without a query or a cache entry",
+    async (_case, slug) => {
+      await expect(readCategoryPage({ id: 7 }, slug, "es")).resolves.toBeNull();
+      expect(getCategoryPage).not.toHaveBeenCalled();
+      expect(cacheTag).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe("readAllArticlesCover", () => {
+  test("answers the store's cover of all articles, described in that language", async () => {
+    const cover = { alt: "Rings", computer: null, phone: null };
+    getAllArticlesCover.mockResolvedValue(cover);
+
+    await expect(
+      readAllArticlesCover({ id: 7 }, "en", "All articles")
+    ).resolves.toBe(cover);
+    expect(getAllArticlesCover).toHaveBeenCalledExactlyOnceWith(db, {
+      fallbackAlt: "All articles",
+      locale: "en",
+      storeId: 7,
+    });
+  });
+});
+
+describe("cached reads", () => {
+  test.each([
+    [
+      "the article",
+      async ({ readArticle }: ReturnType<typeof setup>) => await readArticle(),
+    ],
+    [
+      "the articles beside it",
+      async ({ readRelated }: ReturnType<typeof setup>) =>
+        await readRelated({ categoryId: null, id: 11 }),
+    ],
+    [
+      "the categories",
+      async ({ readCategories: read }: ReturnType<typeof setup>) =>
+        await read(),
+    ],
+    [
+      "the counts per category",
+      async () => await readCategoryCounts({ id: 7 }),
+    ],
+    [
+      "a category's articles",
+      async () => await readCategoryArticles(makeStore(), 3, "es"),
+    ],
+    [
+      "a category's page",
+      async () => await readCategoryPage({ id: 7 }, "anillos", "es"),
+    ],
+    [
+      "the cover of all articles",
+      async () => await readAllArticlesCover({ id: 7 }, "es", "Todos"),
+    ],
+  ])(
+    "tag %s with the store's catalog and keep it for hours",
+    async (_case, read) => {
+      await read(setup());
+
+      expect(cacheTag).toHaveBeenCalledExactlyOnceWith("catalog:7");
+      expect(cacheLife).toHaveBeenCalledExactlyOnceWith("hours");
+    }
+  );
+});
+
+describe("invalidateCatalogCache", () => {
+  test("expires the store's catalog tag at once, serving nothing stale", () => {
+    invalidateCatalogCache(7);
+
+    expect(revalidateTag).toHaveBeenCalledExactlyOnceWith("catalog:7", {
+      expire: 0,
+    });
+  });
+});

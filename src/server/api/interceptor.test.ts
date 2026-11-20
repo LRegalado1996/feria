@@ -25,7 +25,7 @@ vi.mock("@/server/api/utils/logger", () => ({
 }));
 
 const context = { headers: new Headers({ "x-request-id": "req-1" }) };
-const path = ["post", "create"];
+const path = ["category", "create"];
 
 async function intercept(failure: Error) {
   return await interceptErrors({
@@ -66,7 +66,7 @@ describe("interceptErrors", () => {
   test("turns a constraint violation into a typed error and logs the constraint", async () => {
     const pgError = Object.assign(new Error("duplicate key"), {
       code: "23505",
-      constraint: "post_name_unique",
+      constraint: "category_slug_unique",
     });
 
     const error = await caught(
@@ -75,23 +75,23 @@ describe("interceptErrors", () => {
 
     expect(error).toMatchObject({
       code: "CONFLICT",
-      data: { procedure: "post.create", requestId: "req-1" },
+      data: { procedure: "category.create", requestId: "req-1" },
     });
     expect(captureExceptionWithScope).not.toHaveBeenCalled();
     expect(requestLog.set).toHaveBeenCalledExactlyOnceWith({
-      outcome: { code: "CONFLICT", constraint: "post_name_unique" },
+      outcome: { code: "CONFLICT", constraint: "category_slug_unique" },
     });
   });
 
   test("reports anything else once and answers a curated 500", async () => {
-    const defect = new Error('relation "post" does not exist', {
+    const defect = new Error('relation "category" does not exist', {
       cause: Object.assign(new Error("refused"), { code: "ECONNREFUSED" }),
     });
 
     const error = await caught(intercept(defect));
 
     expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(defect, {
-      procedure: "post.create",
+      procedure: "category.create",
       requestId: "req-1",
     });
     expect(error).toBeInstanceOf(ORPCError);
@@ -104,7 +104,7 @@ describe("interceptErrors", () => {
         fix: "Try again. If it keeps failing, contact support with the code shown.",
         eventId: "event-1",
         requestId: "req-1",
-        procedure: "post.create",
+        procedure: "category.create",
       },
     });
     expect(requestLog.error).toHaveBeenCalledExactlyOnceWith(defect, {

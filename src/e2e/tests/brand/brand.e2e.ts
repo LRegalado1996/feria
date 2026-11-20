@@ -1,5 +1,6 @@
 import { expect, test } from "../../fixtures";
-import { HomePage } from "../../page-objects/home.page";
+import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
+import { AdminPage } from "../../page-objects/admin.page";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
@@ -10,35 +11,37 @@ function readPngSize(body: Buffer) {
   return { height: body.readUInt32BE(20), width: body.readUInt32BE(16) };
 }
 
-test.describe("Brand identity", () => {
-  // The identity is the same for everyone: no session decides it.
-  test.use({ storageState: { cookies: [], origins: [] } });
-
-  test("the header shows the LR Market mark", async ({ page }) => {
-    const homePage = new HomePage(page);
-
-    await homePage.goto();
+test.describe("Brand identity, signed in", () => {
+  test("the admin's sidebar shows the full LR Market logo at its smallest size", async ({
+    authenticatedPage: page,
+  }) => {
+    await new AdminPage(page).goto();
 
     const logo = page
       .getByRole("banner")
       .getByRole("img", { name: "LR Market" });
     await expect(logo).toBeVisible();
-    // The mark keeps the drawing's 116:84 proportions at its 48 px height.
+    // The tag with LR and MARKET (FER-040), never under 96 px tall, keeping
+    // the drawing's 116:84 proportions (docs/brand/brand.md).
+    await expect(logo).toHaveAttribute("data-variant", "full");
     const box = await logo.boundingBox();
-    expect(box?.height).toBe(48);
-    expect(Math.round(box?.width ?? 0)).toBe(66);
+    expect(box?.height).toBe(96);
+    expect(Math.round(box?.width ?? 0)).toBe(133);
   });
+});
 
-  test("the page is titled LR Market and links a generated tab icon and home-screen icon", async ({
+test.describe("Brand identity", () => {
+  // The identity is the same for everyone: no session decides it.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("a page links a generated tab icon and home-screen icon", async ({
     page,
   }) => {
-    const homePage = new HomePage(page);
+    const signIn = new AdminSignInPage(page);
 
-    await homePage.goto();
+    await signIn.goto();
 
-    await expect(page).toHaveTitle("LR Market");
-
-    const head = await homePage.readHeadTags();
+    const head = await signIn.readHeadTags();
 
     for (const [rel, path, size] of [
       ["icon", "/icon", 32],
@@ -60,27 +63,27 @@ test.describe("Brand identity", () => {
 
   for (const [path, prefix, heading, description] of [
     [
-      "/",
+      "/admin/sign-in",
       "/es",
-      "Hola de nuevo",
+      "Panel de tu tienda",
       "Bijou y pistolas de burbujas, en la feria y en línea.",
     ],
     [
+      "/en/admin/sign-in",
       "/en",
-      "/en",
-      "Welcome back",
+      "Your store's admin",
       "Jewelry and bubble guns, at the fair and online.",
     ],
   ] as const) {
     test(`a link to ${path} shares as LR Market with its 1200 by 630 card, served without a redirect`, async ({
       page,
     }) => {
-      const homePage = new HomePage(page);
+      const signIn = new AdminSignInPage(page);
 
       await page.goto(path);
       await expect(page.getByRole("heading", { name: heading })).toBeVisible();
 
-      const head = await homePage.readHeadTags();
+      const head = await signIn.readHeadTags();
       // The prerendered shell and the streamed page can each declare a tag,
       // against the origin they were rendered for: the first one is read.
       const meta = (key: string) =>

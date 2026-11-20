@@ -39,8 +39,16 @@ describe("PasswordInput", () => {
 
     expect(field).toHaveAttribute("type", "password");
     expect(field).toHaveValue("secret-123");
-    expect(field).toHaveClass("custom", "pr-10");
+    expect(field).toHaveClass("custom", "pr-12", "md:pr-10");
     expect(field.parentElement).toHaveAttribute("data-slot", "password-input");
+  });
+
+  test("its toggle is a 44 px target on a phone, inside the field", () => {
+    setup();
+
+    const toggle = screen.getByRole("button", { name: "Show password" });
+    expect(toggle).toHaveClass("size-11", "right-0", "md:size-7");
+    expect(toggle).not.toHaveClass("size-7");
   });
 
   test("reveals and hides it again, saying which with aria-pressed", async () => {

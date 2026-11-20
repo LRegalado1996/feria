@@ -74,7 +74,8 @@ pnpm verify:ci           # all of CI on this machine; run before pushing routing
 
 pnpm db:generate         # SQL migration from a schema diff (ask first)
 pnpm db:migrate          # apply migrations (dev, CI, deploy); db:push only on a throwaway DB
-pnpm db:seed             # dev data, refused in production; login test@example.com / password123
+pnpm db:seed             # dev data (one login, the store's texts, a sample catalog, the store open), refused in production; test@example.com / password123
+pnpm db:create-superadmin  # first login of a fresh database, from SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD
 
 pnpm wt:provision        # .env + node_modules, no containers (harnesses run it on create)
 pnpm dev                 # next dev on this worktree's port (pnpm wt:ports; never assume 3000)
@@ -102,24 +103,25 @@ Every change meets all of these; don't ask whether they apply.
 ```
 src/app/[locale]/                                  every page, under the root layout that sets <html lang>
 src/app/_components/{atoms,molecules,organisms}/   atomic design
-src/app/api/{auth,orpc,health,docs}/               Better Auth, oRPC, DB probe, OpenAPI reference
+src/app/api/{auth,orpc,health,docs,cron}/          Better Auth, oRPC, DB probe, OpenAPI reference, Vercel crons
 src/content/{es,en}/                               interface text, one file per area, typed against Spanish
 src/lib/{hooks,orpc,schemas,utils,errors}/         client hooks per domain, oRPC clients, zod, format.ts, reportError
 src/lib/i18n/                                      locales, localized paths, alternates, the dictionary provider
 src/server/api/{orpc,routers}/, root.ts            procedure builders + context, domain routers
 src/server/services/                               domain services: every query
+src/server/cache/                                  cached reads (`"use cache"`) and the tag invalidation that goes with each
 src/server/{better-auth,db,test}/                  auth config, Drizzle client + schema + drizzle/ migrations + seed, test doubles
 src/e2e/ · src/test/ · src/instrumentation.ts · src/proxy.ts · src/env.js
 ```
 
 ## API (oRPC)
 
-| What                            | Import                                                            |
-| ------------------------------- | ----------------------------------------------------------------- |
-| Procedure builders              | `publicProcedure` / `protectedProcedure` from `@/server/api/orpc` |
-| Client-side calls               | `orpc` from `@/lib/orpc/client`                                   |
-| Server-side calls (RSC)         | `caller` from `@/lib/orpc/server`                                 |
-| RSC prefetch for client queries | `getQueryClient()` + `orpc` from `@/lib/orpc/server`              |
+| What                            | Import                                                        |
+| ------------------------------- | ------------------------------------------------------------- |
+| Procedure builders              | `publicProcedure` / `adminProcedure` from `@/server/api/orpc` |
+| Client-side calls               | `orpc` from `@/lib/orpc/client`                               |
+| Server-side calls (RSC)         | `caller` from `@/lib/orpc/server`                             |
+| RSC prefetch for client queries | `getQueryClient()` + `orpc` from `@/lib/orpc/server`          |
 
 A procedure is input schema → auth check → one service call. Routers hold no Drizzle, even for one-step CRUD (`pnpm check` fails): queries live in `src/server/services/<domain>.ts`, plain functions taking a `DatabaseClient` first and importing nothing request-scoped. Any id in input, a header or a cookie is attacker-controlled: authorize it, filter by owner and id, take the actor from the session.
 
@@ -151,23 +153,23 @@ A procedure is input schema → auth check → one service call. Routers hold no
 ## Good examples to follow
 
 - Component with variants: `src/app/_components/atoms/button/button.tsx` (test: `button.test.tsx`)
-- Router · service tested on the SQL it sends: `src/server/api/routers/post.ts` · `src/server/services/post.ts`
-- Procedure test (`setup()`, factory, `call()`, codes pinned, both sides of boundaries): `src/server/api/routers/post.test.ts`
-- Schema with inferred type: `src/lib/schemas/post/index.ts` · Drizzle table: `src/server/db/schema/post.ts`
-- Form: `src/app/_components/organisms/auth-form/auth-form.tsx`
-- Hooks: `src/lib/hooks/post/use-get-posts.ts`, `use-create-post.ts` (optimistic; test over MSW)
-- Text in both languages: `src/content/es/auth.ts` · `src/content/en/auth.ts`, read by `organisms/auth-form` (client) and `src/app/[locale]/page.tsx` (server)
+- Router · service tested on the SQL it sends: `src/server/api/routers/category.ts` · `src/server/services/category.ts` (two-writer test: `src/server/services/category.integration.test.ts`)
+- Procedure test (`setup()`, factory, `call()`, codes pinned, both sides of boundaries): `src/server/api/routers/category.test.ts`
+- Schema with inferred type: `src/lib/schemas/catalog/index.ts` · Drizzle tables: `src/server/db/schema/catalog.ts`
+- Forms: `src/app/_components/organisms/auth-form/auth-form.tsx` · `src/app/_components/molecules/category-form/category-form.tsx`
+- Hooks: `src/lib/hooks/category/use-store-categories.ts`, `use-create-category.ts`, `use-reorder-categories.ts` (optimistic, with rollback; tests over MSW) · `src/lib/hooks/order/use-orders.ts` (paged)
+- Text in both languages: `src/content/es/auth.ts` · `src/content/en/auth.ts`, read by `organisms/auth-form` (client); `src/content/{es,en}/admin.ts`, read by `src/app/[locale]/admin/sign-in/page.tsx` (server)
 - Test doubles: `src/server/test/context.ts` (`createMockDatabase`)
 
 ## Naming
 
-| Thing                    | Convention                                            | Example                                 |
-| ------------------------ | ----------------------------------------------------- | --------------------------------------- |
-| Files                    | kebab-case                                            | `auth-form.tsx`                         |
-| Components · Props       | PascalCase function · + Props                         | `AuthForm` · `AuthFormProps`            |
-| Schemas · inferred types | camelCase + Schema · Pascal + Values                  | `createPostSchema` · `CreatePostValues` |
-| Variants · hooks         | camelCase + Variants · use + Action                   | `buttonVariants` · `useGetPosts`        |
-| Tests                    | `.test.{ts,tsx}` · `.integration.test.ts` · `.e2e.ts` | `button.test.tsx`                       |
+| Thing                    | Convention                                            | Example                                         |
+| ------------------------ | ----------------------------------------------------- | ----------------------------------------------- |
+| Files                    | kebab-case                                            | `auth-form.tsx`                                 |
+| Components · Props       | PascalCase function · + Props                         | `AuthForm` · `AuthFormProps`                    |
+| Schemas · inferred types | camelCase + Schema · Pascal + Values                  | `createCategorySchema` · `CreateCategoryValues` |
+| Variants · hooks         | camelCase + Variants · use + Action                   | `buttonVariants` · `useOrders`                  |
+| Tests                    | `.test.{ts,tsx}` · `.integration.test.ts` · `.e2e.ts` | `button.test.tsx`                               |
 
 ## Testing
 

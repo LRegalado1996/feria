@@ -5,6 +5,7 @@
   "buildCommand": "pnpm db:migrate && pnpm build",
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "regions": ["iad1"],
+  "crons": [{ "path": "/api/cron/clean-up-blobs", "schedule": "0 7 * * *" }],
   "git": {
     "deploymentEnabled": {
       "**": false,

@@ -9,7 +9,8 @@ vi.mock("@/lib/brand/logo-image", () => ({
   renderLogoImage: (options: unknown) => options,
 }));
 
-const INK = "#111312";
+// The header's moss, the theme's contrast color.
+const MOSS = "#262a1d";
 
 describe("generated brand images", () => {
   test("the tab icon is the mark alone, edge to edge on a transparent 32 px square", () => {
@@ -25,11 +26,11 @@ describe("generated brand images", () => {
     });
   });
 
-  test("the home-screen icon is the mark with a margin on an opaque 180 px square", () => {
+  test("the home-screen icon is the mark with a margin on an opaque 180 px square of moss", () => {
     expect(appleIcon.size).toEqual({ height: 180, width: 180 });
     expect(appleIcon.contentType).toBe("image/png");
     expect(AppleIcon()).toEqual({
-      background: INK,
+      background: MOSS,
       colorway: "accent",
       height: 180,
       logoWidth: 132,
@@ -43,7 +44,7 @@ describe("generated brand images", () => {
     expect(openGraphImage.contentType).toBe("image/png");
     expect(openGraphImage.alt).toBe("LR Market");
     expect(OpenGraphImage()).toEqual({
-      background: INK,
+      background: MOSS,
       colorway: "accent",
       height: 630,
       logoWidth: 580,

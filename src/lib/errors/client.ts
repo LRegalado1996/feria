@@ -13,7 +13,7 @@ import { isBusinessError } from "@/lib/sentry-options";
 type ReportableValue = boolean | number | string | null | undefined;
 
 interface ReportOptions {
-  /** `Domain.snake_action`, the tag alerts filter on (`Post.create_failed`). */
+  /** `Domain.snake_action`, the tag alerts filter on (`Category.create_failed`). */
   action: string;
   context?: Record<string, ReportableValue>;
 }

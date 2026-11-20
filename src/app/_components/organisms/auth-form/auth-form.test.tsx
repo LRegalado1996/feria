@@ -14,25 +14,20 @@ import { AuthForm, type AuthFormProps } from "./auth-form";
 vi.mock("@/lib/errors/client", () => ({ reportError: vi.fn() }));
 
 const SIGN_IN = "*/api/auth/sign-in/email";
-const SIGN_UP = "*/api/auth/sign-up/email";
 
 const VALID = { email: "test@example.com", password: "password123" };
 
 // What the helpers below look the form's controls up by, in each language.
 const CONTROLS = {
   en: {
-    name: "Name",
     email: "Email",
     password: "Password",
-    submit: /^Sign (In|Up)$/,
-    switchMode: /account\?/,
+    submit: "Sign In",
   },
   es: {
-    name: "Nombre",
     email: "Email",
     password: "Contraseña",
-    submit: /^(Iniciar sesión|Crear cuenta)$/,
-    switchMode: /cuenta\?/,
+    submit: "Iniciar sesión",
   },
 } as const;
 
@@ -49,13 +44,8 @@ function setup(
 
   renderWithI18n(<AuthForm {...props} />, { locale });
 
-  async function fill(values: {
-    email?: string;
-    name?: string;
-    password?: string;
-  }) {
+  async function fill(values: { email?: string; password?: string }) {
     for (const [label, value] of [
-      [controls.name, values.name],
       [controls.email, values.email],
       [controls.password, values.password],
     ] as const) {
@@ -69,11 +59,7 @@ function setup(
     await user.click(screen.getByRole("button", { name: controls.submit }));
   }
 
-  async function switchMode() {
-    await user.click(screen.getByRole("button", { name: controls.switchMode }));
-  }
-
-  return { assign, fill, submit, switchMode };
+  return { assign, fill, submit };
 }
 
 /** The submit button in a rendered HTML string. */
@@ -90,8 +76,8 @@ function refuse(url: string, status: number, code: string) {
   );
 }
 
-describe("AuthForm modes", () => {
-  test("starts on sign-in: email and password, no name", () => {
+describe("AuthForm fields", () => {
+  test("asks for an email and a password, no name", () => {
     setup();
 
     expect(screen.getByLabelText(/^Email/)).toHaveAccessibleName("Email");
@@ -120,29 +106,17 @@ describe("AuthForm modes", () => {
     expect(screen.getByRole("button", { name: "Sign In" })).toBeInTheDocument();
   });
 
-  test("starts on sign-up when asked, with a name and a new password", () => {
-    setup({ initialMode: "signup" });
+  test("offers no way to create an account: logins are created for people", () => {
+    setup();
 
-    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Password/)).toHaveAttribute(
-      "autocomplete",
-      "new-password"
-    );
-    expect(screen.getByRole("button", { name: "Sign Up" })).toBeInTheDocument();
-  });
-
-  test("switching modes starts a fresh form: nothing typed carries over", async () => {
-    const { fill, switchMode } = setup();
-    await fill({ email: "test@example.com" });
-
-    await switchMode();
-
-    expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Email/)).toHaveValue("");
-
-    await switchMode();
-
-    expect(screen.queryByLabelText(/^Name/)).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole("button")
+        .map(
+          (button) => button.getAttribute("aria-label") ?? button.textContent
+        )
+    ).toEqual(["Show password", "Sign In"]);
+    expect(screen.queryByText(/sign up|create/i)).not.toBeInTheDocument();
   });
 });
 
@@ -181,17 +155,6 @@ describe("AuthForm validation", () => {
     );
     expect(assign).not.toHaveBeenCalled();
   });
-
-  test("asks a new account for a name", async () => {
-    const { fill, submit } = setup({ initialMode: "signup" });
-    await fill({ name: "A", ...VALID });
-
-    await submit();
-
-    expect(
-      await screen.findByText("Name must be at least 2 characters")
-    ).toBeInTheDocument();
-  });
 });
 
 describe("AuthForm submission", () => {
@@ -219,25 +182,19 @@ describe("AuthForm submission", () => {
     expect(signIn).toHaveBeenCalledExactlyOnceWith(VALID);
   });
 
-  test("signs up with the name, then reloads into the home of the page's language", async () => {
-    const signUp = vi.fn((_body: unknown) => undefined);
+  test("lands where the page says once signed in", async () => {
     const { assign, fill, submit } = setup(
-      { initialMode: "signup" },
-      http.post(SIGN_UP, async ({ request }) => {
-        signUp(await request.json());
-        return HttpResponse.json({ token: "t", user: { id: "1" } });
-      })
+      { redirectTo: "/en/admin/orders" },
+      http.post(SIGN_IN, () =>
+        HttpResponse.json({ token: "t", user: { id: "1" } })
+      )
     );
-    await fill({ name: "Test User", ...VALID });
+    await fill(VALID);
 
     await submit();
 
     await waitFor(() => {
-      expect(assign).toHaveBeenCalledExactlyOnceWith("/en");
-    });
-    expect(signUp).toHaveBeenCalledExactlyOnceWith({
-      name: "Test User",
-      ...VALID,
+      expect(assign).toHaveBeenCalledExactlyOnceWith("/en/admin/orders");
     });
   });
 
@@ -270,52 +227,14 @@ describe("AuthForm submission", () => {
   });
 
   test.each([
-    [
-      SIGN_IN,
-      "signin",
-      401,
-      "INVALID_EMAIL_OR_PASSWORD",
-      "Invalid email or password.",
-    ],
-    [
-      SIGN_UP,
-      "signup",
-      422,
-      "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
-      "An account with this email already exists.",
-    ],
-    [
-      SIGN_UP,
-      "signup",
-      422,
-      "USER_ALREADY_EXISTS",
-      "An account with this email already exists.",
-    ],
-    [
-      SIGN_IN,
-      "signin",
-      500,
-      "INTERNAL_SERVER_ERROR",
-      "Sign in failed. Try again.",
-    ],
-    [
-      SIGN_UP,
-      "signup",
-      400,
-      "PASSWORD_TOO_SHORT",
-      "Sign up failed. Try again.",
-    ],
+    [401, "INVALID_EMAIL_OR_PASSWORD", "Invalid email or password."],
+    [500, "INTERNAL_SERVER_ERROR", "Sign in failed. Try again."],
+    [400, "PASSWORD_TOO_SHORT", "Sign in failed. Try again."],
   ] as const)(
-    "%s refused with %s → %i %s says it in our words",
-    async (url, initialMode, status, code, message) => {
-      const { assign, fill, submit } = setup(
-        { initialMode },
-        refuse(url, status, code)
-      );
-      await fill({
-        name: initialMode === "signup" ? "Test User" : undefined,
-        ...VALID,
-      });
+    "sign-in refused with %i %s says it in our words",
+    async (status, code, message) => {
+      const { assign, fill, submit } = setup({}, refuse(SIGN_IN, status, code));
+      await fill(VALID);
 
       await submit();
 
@@ -349,25 +268,11 @@ describe("AuthForm submission", () => {
       { action: "Auth.sign_in" }
     );
   });
-
-  test("switching modes clears the error", async () => {
-    const { fill, submit, switchMode } = setup(
-      {},
-      refuse(SIGN_IN, 401, "INVALID_EMAIL_OR_PASSWORD")
-    );
-    await fill(VALID);
-    await submit();
-    await screen.findByTestId("auth-error");
-
-    await switchMode();
-
-    expect(screen.queryByTestId("auth-error")).not.toBeInTheDocument();
-  });
 });
 
 describe("AuthForm in Spanish", () => {
-  test("labels both modes in Spanish", async () => {
-    const { switchMode } = setup({ locale: "es" });
+  test("labels the form in Spanish", () => {
+    setup({ locale: "es" });
 
     expect(screen.getByLabelText(/^Email/)).toHaveAttribute(
       "placeholder",
@@ -376,42 +281,6 @@ describe("AuthForm in Spanish", () => {
     expect(screen.getByLabelText(/^Contraseña/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Iniciar sesión" })
-    ).toBeInTheDocument();
-
-    await switchMode();
-
-    expect(screen.getByLabelText(/^Nombre/)).toHaveAttribute(
-      "placeholder",
-      "Tu nombre"
-    );
-    expect(
-      screen.getByRole("button", { name: "Crear cuenta" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: "¿Ya tenés una cuenta? Iniciá sesión",
-      })
-    ).toBeInTheDocument();
-
-    await switchMode();
-
-    expect(
-      screen.getByRole("button", { name: "¿No tenés una cuenta? Registrate" })
-    ).toBeInTheDocument();
-  });
-
-  test("explains each invalid field in Spanish", async () => {
-    const { fill, submit } = setup({ initialMode: "signup", locale: "es" });
-    await fill({
-      name: "A",
-      email: "test@example.com",
-      password: "password123",
-    });
-
-    await submit();
-
-    expect(
-      await screen.findByText("El nombre debe tener al menos 2 caracteres")
     ).toBeInTheDocument();
   });
 
@@ -463,44 +332,23 @@ describe("AuthForm in Spanish", () => {
 
   test.each([
     [
-      SIGN_IN,
-      "signin",
       401,
       "INVALID_EMAIL_OR_PASSWORD",
       "El email o la contraseña no son correctos.",
     ],
     [
-      SIGN_UP,
-      "signup",
-      422,
-      "USER_ALREADY_EXISTS",
-      "Ya existe una cuenta con este email.",
-    ],
-    [
-      SIGN_IN,
-      "signin",
       500,
       "INTERNAL_SERVER_ERROR",
       "No pudimos iniciar la sesión. Probá de nuevo.",
     ],
-    [
-      SIGN_UP,
-      "signup",
-      400,
-      "PASSWORD_TOO_SHORT",
-      "No pudimos crear la cuenta. Probá de nuevo.",
-    ],
   ] as const)(
-    "%s refused with %s → %i %s says it in Spanish",
-    async (url, initialMode, status, code, message) => {
+    "sign-in refused with %i %s says it in Spanish",
+    async (status, code, message) => {
       const { fill, submit } = setup(
-        { initialMode, locale: "es" },
-        refuse(url, status, code)
+        { locale: "es" },
+        refuse(SIGN_IN, status, code)
       );
-      await fill({
-        name: initialMode === "signup" ? "Test User" : undefined,
-        ...VALID,
-      });
+      await fill(VALID);
 
       await submit();
 

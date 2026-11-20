@@ -18,13 +18,13 @@ One button turns the uploaded photos into a complete article in both languages. 
 - Results stream into the form field by field. Every field stays editable, each can be regenerated on its own, and "undo" restores what was there before.
 - Fields the person already typed are kept unless they choose to overwrite.
 - Every call writes an `ai_generation` row: store, user, article, model, tokens, cost, duration, outcome, and later whether the result was kept.
-- Limits: per-user and per-store rate limits and a daily cap per store, with a clear message when reached. Failures and refusals degrade to the manual form.
+- Limits: a per-user rate limit and a daily cap for the store, with a clear message when reached. Failures and refusals degrade to the manual form.
 
 ## Acceptance criteria
 
 - From three photos of a bracelet, the form is filled in both languages in a few seconds and can be published after typing only the price.
 - The model's output is treated as untrusted: validated, length-limited and escaped; a malformed answer never reaches the form.
-- A member of another store cannot trigger a generation for this store's article.
+- An anonymous caller cannot trigger a generation.
 - Unit tests cover parsing, limits and logging without calling the model; one manual check against the real model is recorded in the PR.
 
 ## Notes

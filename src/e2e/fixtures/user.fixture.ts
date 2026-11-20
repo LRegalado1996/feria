@@ -35,20 +35,28 @@ export interface Identity {
   password: string;
 }
 
-/** Rows the UI created during a test, read off the requests that created them. */
+/**
+ * Rows the test's pages created through the UI, read off the responses that
+ * created them, for the db fixture to delete at teardown.
+ */
 export interface CreatedRows {
+  /** Articles the wizard created from their first photo (FER-017). */
+  articleIds: number[];
+  categoryIds: number[];
+  filterIds: number[];
+  filterValueIds: number[];
+  /** An order's public token: what `order.create` answers, unique per order. */
+  orderTokens: string[];
   /** Response bodies still being read when the test ended. */
   pending: Promise<void>[];
-  postIds: number[];
   /** Why a created row's id could not be read: that row leaks. */
   unreadable: string[];
-  userEmails: string[];
 }
 
 export interface UserFixtures {
   /** A page signed in as the worker's user, in its own context. */
   authenticatedPage: Page;
-  /** Rows the test's pages created through the UI, for the db fixture to delete. */
+  /** Rows the test's pages created through the UI (`CreatedRows`). */
   createdRows: CreatedRows;
   /** A page with a session of its own, from a real sign-in: sign-out tests. */
   freshAuthenticatedPage: Page;
@@ -68,9 +76,11 @@ export function requireBaseURL(baseURL: string | undefined): string {
   return baseURL;
 }
 
-// A worker fixture cannot read Playwright's test-scoped `baseURL`, so it
-// resolves the URL the way the config does.
-function workerBaseURL(): string {
+/**
+ * The base URL for a worker fixture, which cannot read Playwright's
+ * test-scoped `baseURL`: resolved the way the config resolves it.
+ */
+export function workerBaseURL(): string {
   // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- an empty E2E_BASE_URL means unset
   return process.env.E2E_BASE_URL || "http://localhost:3000";
 }
@@ -80,7 +90,8 @@ function workerBaseURL(): string {
  * instance: the password is hashed Better Auth's way, and no HTTP sign-up
  * counts against the app's rate limit. The email carries the worker index,
  * the one value unique among the workers running at once, so a restarted
- * worker finds the user it made before.
+ * worker finds the user it made before. Every login is an admin (FER-038),
+ * so this one reaches the whole admin.
  */
 async function provisionUser(
   index: number,
@@ -110,6 +121,7 @@ async function provisionUser(
       return { ...identity, id: existing.id };
     }
 
+    // The app closes sign-up (FER-009); this fixture-local instance does not.
     const auth = betterAuth({
       baseURL,
       database: drizzleAdapter(db, { provider: "pg", schema }),
@@ -151,40 +163,91 @@ async function signIn(
   return context;
 }
 
-/**
- * Records the rows a page creates through the UI (a post, a signed-up user)
- * from the responses that created them, so teardown deletes exactly those.
- */
-function captureCreatedRows(page: Page, rows: CreatedRows): void {
-  page.on("response", (response) => {
-    const request = response.request();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-    if (request.method() !== "POST" || !response.ok()) {
+/** The created row's `field`, from an oRPC answer: `{ json: { … } }`. */
+function readCreated(body: unknown, field: "id" | "token"): unknown {
+  return isRecord(body) && isRecord(body.json) ? body.json[field] : undefined;
+}
+
+/** The procedures that create a row, and where its key goes. */
+const CREATING = {
+  "/api/orpc/attribute/create": "filterIds",
+  "/api/orpc/attribute/createValue": "filterValueIds",
+  "/api/orpc/category/create": "categoryIds",
+  "/api/orpc/order/create": "orderTokens",
+  "/api/orpc/product/create": "articleIds",
+} as const;
+
+function isCreating(pathname: string): pathname is keyof typeof CREATING {
+  return Object.hasOwn(CREATING, pathname);
+}
+
+/** Records the key of the row one creating response made. */
+async function recordCreated(
+  response: Response,
+  path: keyof typeof CREATING,
+  rows: CreatedRows
+): Promise<void> {
+  try {
+    const target = CREATING[path];
+    const body: unknown = await response.json();
+
+    if (target === "orderTokens") {
+      const token = readCreated(body, "token");
+
+      if (typeof token !== "string") {
+        throw new TypeError("no token in the answer");
+      }
+
+      rows.orderTokens.push(token);
+      return;
+    }
+
+    const id = readCreated(body, "id");
+
+    if (typeof id !== "number") {
+      throw new TypeError("no id in the answer");
+    }
+
+    rows[target].push(id);
+  } catch (error) {
+    // The page went away before the body was read, or the answer changed.
+    rows.unreadable.push(`${path}: ${String(error)}`);
+  }
+}
+
+/**
+ * Records the rows any page of `context` creates through the UI (a category,
+ * a filter or a value from the admin's forms, an order from the checkout)
+ * from the responses that created them, so teardown deletes exactly those.
+ * A request sent with `page.request` is not a page's and is not seen here:
+ * the orders it places hold the test's own articles, which teardown follows.
+ */
+function captureCreatedRows(context: BrowserContext, rows: CreatedRows): void {
+  context.on("response", (response) => {
+    if (response.request().method() !== "POST" || !response.ok()) {
       return;
     }
 
     const { pathname } = new URL(response.url());
 
-    if (pathname === "/api/orpc/post/create") {
-      rows.pending.push(recordPost(response, rows));
-    } else if (pathname === "/api/auth/sign-up/email") {
-      // The page reloads as soon as sign-up answers, which discards the
-      // response body; the email it signed up, unique, names the user.
-      const { email } = request.postDataJSON() as { email: string };
-      rows.userEmails.push(email);
+    if (isCreating(pathname)) {
+      rows.pending.push(recordCreated(response, pathname, rows));
     }
   });
 }
 
-/** oRPC answers `{ json: <the created post> }`. */
-async function recordPost(response: Response, rows: CreatedRows) {
-  try {
-    const body = (await response.json()) as { json: { id: number } };
-    rows.postIds.push(body.json.id);
-  } catch (error) {
-    // The page went away before the body was read.
-    rows.unreadable.push(`post.create: ${String(error)}`);
-  }
+/**
+ * Waits for the created rows' ids still being read off their responses, so
+ * a context closes only after them: closing it first cuts a read short, and
+ * that row leaks (`unreadable`). Every fixture that closes a context it
+ * captures from calls this first; the db fixture's teardown runs later.
+ */
+async function finishReadingCreatedRows(rows: CreatedRows): Promise<void> {
+  await Promise.all(rows.pending);
 }
 
 export const test = base.extend<UserFixtures, WorkerFixtures>({
@@ -220,12 +283,22 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
 
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires a destructured first argument
   createdRows: async ({}, use) => {
-    await use({ pending: [], postIds: [], unreadable: [], userEmails: [] });
+    await use({
+      articleIds: [],
+      categoryIds: [],
+      filterIds: [],
+      filterValueIds: [],
+      orderTokens: [],
+      pending: [],
+      unreadable: [],
+    });
   },
 
-  page: async ({ createdRows, page }, use) => {
-    captureCreatedRows(page, createdRows);
-    await use(page);
+  context: async ({ context, createdRows }, use) => {
+    captureCreatedRows(context, createdRows);
+    await use(context);
+    // Playwright's own `context` fixture closes it after this returns.
+    await finishReadingCreatedRows(createdRows);
   },
 
   authenticatedPage: async (
@@ -237,10 +310,11 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
       ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
       storageState: workerUser.storageState,
     });
+    captureCreatedRows(context, createdRows);
     const page = await context.newPage();
-    captureCreatedRows(page, createdRows);
 
     await use(page);
+    await finishReadingCreatedRows(createdRows);
     await context.close();
   },
 
@@ -249,13 +323,16 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
     use
   ) => {
     const context = await signIn(browser, requireBaseURL(baseURL), identity);
+    captureCreatedRows(context, createdRows);
     const page = await context.newPage();
-    captureCreatedRows(page, createdRows);
-    await page.goto("/");
-    // The navbar renders for a signed-in visitor only.
-    await expect(page.getByTestId("navbar").first()).toBeVisible();
+    await page.goto("/admin");
+    // The admin's shell renders for a signed-in visitor only.
+    await expect(
+      page.getByTestId("admin-shell").filter({ visible: true }).first()
+    ).toBeVisible();
 
     await use(page);
+    await finishReadingCreatedRows(createdRows);
     await context.close();
   },
 });

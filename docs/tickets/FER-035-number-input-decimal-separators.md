@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P0
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-004
 
 ## Goal
@@ -23,6 +23,12 @@ Formatting prices for display (`formatPrice`, done in FER-004).
 
 - `12,50` and `12.50` are both twelve and a half on `/` and on `/en`.
 - No typed or pasted value changes magnitude silently: it is read as typed or refused with a visible reason.
+
+## Outcome
+
+- The rule (confirmed with Lucas on 2026-11-14): one separator before one or two digits is the decimal point, before exactly three digits it groups thousands (`1.500` is fifteen hundred, the Uruguayan reading), both separators make the last one the decimal point, and anything that could be read two ways is refused. It is `readTypedNumber` in `src/lib/utils/format.ts`, which replaces `toPlainNumberText` and no longer takes the locale.
+- `atoms/input` keeps the text as typed, reports `null` while it is refused and shows the reason under the field once focus leaves; on blur a readable figure is rewritten in the page's notation, so the person sees how it was read.
+- **The e2e on the first form that takes a price** landed with the article wizard ([FER-017](FER-017-article-wizard.md)): `src/e2e/tests/admin/article-wizard.e2e.ts` types `12,50` and `12.50` into the article's price on `/` and on `/en` and requires the save to send 1250 cents each time, and the field to show the figure in the page's notation once focus leaves. When the field sits in a form, the form shows one message for a refused figure: today the field shows its reason and reports `null`, so a `required` rule would add a second, contradicting one.
 
 ## Notes
 

@@ -1,3 +1,5 @@
+import { admin } from "./admin";
+import { articles } from "./articles";
 import { auth } from "./auth";
 import { comingSoon } from "./coming-soon";
 import { common } from "./common";
@@ -6,7 +8,7 @@ import { environment } from "./environment";
 import { errors } from "./errors";
 import { locale } from "./locale";
 import { metadata } from "./metadata";
-import { post } from "./post";
+import { seo } from "./seo";
 import { storefront } from "./storefront";
 import { theme } from "./theme";
 
@@ -17,6 +19,8 @@ import { theme } from "./theme";
  * missing or extra.
  */
 export const es = {
+  admin,
+  articles,
   auth,
   comingSoon,
   common,
@@ -25,7 +29,7 @@ export const es = {
   errors,
   locale,
   metadata,
-  post,
+  seo,
   storefront,
   theme,
 };

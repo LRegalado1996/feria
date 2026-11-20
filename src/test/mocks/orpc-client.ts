@@ -13,6 +13,8 @@
  * whatever the import order.
  */
 
+import { ORPCError } from "@orpc/client";
+
 const BASE_URL = "http://localhost:3000/api/orpc";
 
 async function rpcCall(path: string, input: unknown): Promise<unknown> {
@@ -24,8 +26,17 @@ async function rpcCall(path: string, input: unknown): Promise<unknown> {
   const body: Record<string, unknown> = await response.json();
 
   if (!response.ok) {
-    // The shape of an `ORPCError`: a client branches on `code` and on the
-    // typed `data`, so both survive the trip.
+    // An `ORPCError`, as the real client deserializes one: a client narrows
+    // with `instanceof ORPCError` and branches on `code` and the typed `data`.
+    if (typeof body.code === "string") {
+      throw new ORPCError(body.code, {
+        data: body.data,
+        defined: body.defined === true,
+        message: typeof body.message === "string" ? body.message : undefined,
+        status: typeof body.status === "number" ? body.status : response.status,
+      });
+    }
+
     throw Object.assign(
       new Error(
         typeof body.message === "string"
@@ -62,6 +73,32 @@ function createOrpcProxy(segments: string[] = []): unknown {
           // that swallowed them would leave only "it settled" to assert.
           return (options?: Record<string, unknown>) => ({
             mutationFn: async (input: unknown) => await rpcCall(path, input),
+            ...options,
+          });
+        }
+
+        // The prefix every key of the procedure starts with, its queries
+        // and its infinite queries alike, for an invalidation that reaches
+        // both. Without an input it reaches every input, as oRPC's own
+        // (`{}` is a prefix of any object; `{ input: undefined }` is not).
+        if (prop === "key") {
+          return ({ input }: { input?: unknown } = {}) => [
+            ...segments,
+            input === undefined ? {} : { input },
+          ];
+        }
+
+        if (prop === "queryKey") {
+          return ({ input }: { input?: unknown } = {}) => [
+            ...segments,
+            { input },
+          ];
+        }
+
+        if (prop === "queryOptions") {
+          return ({ input, ...options }: { input?: unknown } = {}) => ({
+            queryKey: [...segments, { input }],
+            queryFn: async () => await rpcCall(path, input),
             ...options,
           });
         }
