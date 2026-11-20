@@ -50,9 +50,9 @@ export const SEED_PAGE = {
 } as const;
 
 /**
- * The example page (`SEED_PAGE`), only on a store that has no page at its
- * address, so a second run, or a page the admin made there, is left alone.
- * Answers whether it added it.
+ * The example page (`SEED_PAGE`), only on a store where nothing answers its
+ * address yet, so a second run, or a page or a category the admin put
+ * there, is left alone. Answers whether it added it.
  */
 export async function seedPages(
   tx: DatabaseClient,
@@ -64,7 +64,14 @@ export async function seedPages(
     where: and(eq(page.storeId, storeId), eq(page.slug, SEED_PAGE.slug)),
   });
 
-  if (existing) {
+  const rows = await tx
+    .select({ id: category.id, slug: category.slug })
+    .from(category)
+    .where(eq(category.storeId, storeId));
+
+  // Pages and categories share `/<slug>`: a category there would make
+  // `createPage` refuse the address and fail the whole seed run.
+  if (existing || rows.some((row) => row.slug === SEED_PAGE.slug)) {
     return false;
   }
 
@@ -112,10 +119,6 @@ export async function seedPages(
         eq(productTranslation.title, SEED_PAGE.spotlight.title)
       )
     );
-  const rows = await tx
-    .select({ id: category.id, slug: category.slug })
-    .from(category)
-    .where(eq(category.storeId, storeId));
   const idOf = new Map(rows.map((row) => [row.slug, row.id]));
   const spotlit = article
     ? await createSpotlight(tx, {

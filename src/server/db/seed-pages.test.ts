@@ -153,6 +153,24 @@ describe("seedPages", () => {
     });
   });
 
+  test("leaves a store whose category already holds the address alone", async () => {
+    const { db, run } = setup({
+      categories: [
+        { id: 2, slug: "anillos" },
+        { id: 9, slug: "regalos" },
+      ],
+    });
+
+    await expect(run()).resolves.toBe(false);
+
+    expect(createPage).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID],
+      sql: '"category"."storeId" = $1',
+    });
+  });
+
   test("without the article, shows the rows only, from the first place", async () => {
     const { db, run } = setup({
       article: false,
