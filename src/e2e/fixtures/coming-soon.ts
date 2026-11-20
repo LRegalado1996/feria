@@ -55,7 +55,7 @@ export async function writeComingSoonTexts(
 
 /**
  * Waits until the public (no session) gets `storefront` at `/`: a temporary
- * redirect to the coming-soon page, or the store. The proxy remembers the
+ * redirect to the coming-soon page, or the store's own 200. The proxy remembers the
  * switch for a few seconds on each server (`SWITCH_TTL_MS`), so a flip
  * reaches the public only once that window passed; this waits for exactly
  * that, never for a fixed time.
@@ -77,12 +77,19 @@ export async function waitForStorefront(
       .poll(
         async () => {
           const response = await visitor.get("/", { maxRedirects: 0 });
+          const status = response.status();
           const location = response.headers().location ?? "";
 
-          return response.status() === 307 &&
+          if (
+            status === 307 &&
             new URL(location, baseURL).pathname === "/coming-soon"
-            ? "closed"
-            : "open";
+          ) {
+            return "closed";
+          }
+
+          // Anything else (a 500, another redirect) is neither, so polling
+          // never reads an outage as the store being open.
+          return status === 200 ? "open" : `unexpected ${status} ${location}`;
         },
         { intervals: [250, 500, 1000], timeout: 30_000 }
       )

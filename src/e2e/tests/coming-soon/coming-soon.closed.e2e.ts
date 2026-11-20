@@ -1,4 +1,3 @@
-import { countdownTarget, daysUntil } from "../../../lib/brand/fair";
 import {
   expect,
   IGNORE_HTTPS_ERRORS,
@@ -32,27 +31,38 @@ function montevideoDay(days: number): string {
   }).format(new Date(Date.now() + days * DAY_MS));
 }
 
+/** The fair's first day in Montevideo, as the page counts to it unchosen. */
+const FAIR_DAY = "2026-12-05";
+
 /**
- * The countdown's text for `day` (`null`: the fair), read between two
- * readings of the runner's clock: the server reads its own between them, so
- * the count is the first, or the second across a day's end. The figure is
- * in the page twice: for screen readers, and for show.
+ * Calendar days from `today` to `day` (both `YYYY-MM-DD` in Montevideo): date
+ * arithmetic, independent of the app's own countdown. The page counts the
+ * day in progress, so the evening before is 1 and the day itself 0.
+ */
+function daysBetween(today: string, day: string): number {
+  return Math.max(0, (Date.parse(day) - Date.parse(today)) / DAY_MS);
+}
+
+/**
+ * The countdown's text for `day`, with `today` the Montevideo day read
+ * before the page was asked for: the server reads its own clock after it, so
+ * across a midnight the count is the next day's. The figure is in the page
+ * twice: for screen readers, and for show.
  */
 function countdownText(
-  day: string | null,
+  day: string,
   labels: { many: string; one: string },
-  before: number
+  today: string
 ): RegExp {
   const label = (days: number) =>
     `${days}${days}${days === 1 ? labels.one : labels.many}`;
-  const target = countdownTarget(day);
-  const after = daysUntil(target, Date.now());
+  const counts = new Set([
+    daysBetween(today, day),
+    daysBetween(montevideoDay(0), day),
+  ]);
 
   return new RegExp(
-    `^(${label(daysUntil(target, before))}|${label(after)})$`.replaceAll(
-      " ",
-      "\\s*"
-    )
+    `^(${[...counts].map(label).join("|")})$`.replaceAll(" ", "\\s*")
   );
 }
 
@@ -193,20 +203,20 @@ test.describe("Published: the public sees only the coming-soon page", () => {
     page,
   }) => {
     const comingSoon = new ComingSoonPage(page);
-    const before = Date.now();
+    const today = montevideoDay(0);
 
     await comingSoon.goto();
 
-    if (daysUntil(countdownTarget(null), before) === 0) {
+    if (daysBetween(today, FAIR_DAY) === 0) {
       await expect(comingSoon.getCountdown()).toHaveCount(0);
       return;
     }
 
     await expect(comingSoon.getCountdown()).toHaveText(
       countdownText(
-        null,
+        FAIR_DAY,
         { many: " días para la feria", one: " día para la feria" },
-        before
+        today
       )
     );
   });
@@ -395,7 +405,7 @@ test.describe("Managed from the admin", () => {
     });
     try {
       const comingSoon = new ComingSoonPage(await visitor.newPage());
-      const before = Date.now();
+      const today = montevideoDay(0);
       await comingSoon.goto();
       await expect(comingSoon.getHeading(1)).toHaveText("Abrimos el sábado");
       await expect(
@@ -411,7 +421,7 @@ test.describe("Managed from the admin", () => {
         countdownText(
           day,
           { many: " días para la feria", one: " día para la feria" },
-          before
+          today
         )
       );
 
@@ -429,7 +439,7 @@ test.describe("Managed from the admin", () => {
         countdownText(
           day,
           { many: " days until the fair", one: " day until the fair" },
-          before
+          today
         )
       );
     } finally {

@@ -72,9 +72,11 @@ test.describe("Not published: a signed-in admin", () => {
     const store = new StorePage(page);
 
     await store.goto();
-    // The home's footer is the last of the page to render: by then the
-    // notice, drawn in the browser, would be there.
+    // The notice is drawn in the browser once React owns the page, which the
+    // header's cart says when it starts opening its panel: by then the
+    // notice would be there.
     await expect(store.getFooter()).toBeVisible();
+    await store.getLiveCartButton();
 
     await expect(store.getPreviewNotice()).toHaveCount(0);
   });
@@ -102,6 +104,7 @@ test.describe("Not published: a signed-in admin", () => {
     ).toBeVisible();
     await expect(screen.previewLink()).toHaveAttribute("href", "/coming-soon");
     await expect(screen.saveButton()).toBeEnabled();
+    await expect(screen.saveButton()).toBeInViewport();
     await screen.expectNoHorizontalScroll();
   });
 });
