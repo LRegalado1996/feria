@@ -121,6 +121,29 @@ describe("migration 0025: the home is a page like any other", () => {
     });
   });
 
+  test("with categories at both /home and /home-<id>, takes /home-<id>-2", async () => {
+    await rolledBack(async (tx, homeId) => {
+      const storeId = await theStoreId(tx);
+      const taken = `home-${String(homeId)}`;
+      await tx.insert(category).values({
+        position: 10_000,
+        slug: "home",
+        storeId,
+      });
+      await tx.insert(category).values({
+        position: 10_001,
+        slug: taken,
+        storeId,
+      });
+
+      await applyMigration(tx);
+
+      expect(await readHome(tx, homeId)).toMatchObject({
+        slug: `${taken}-2`,
+      });
+    });
+  });
+
   test("leaves a page that already has an address and words alone", async () => {
     await rolledBack(async (tx, homeId) => {
       const name = `Inicio ${uniqueTag()}`;
