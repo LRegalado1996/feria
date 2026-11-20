@@ -1031,6 +1031,48 @@ describe("HomeCuration", () => {
     });
   });
 
+  test("a save that lands after its sheet was closed leaves the sheet opened since alone", async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    server.use(
+      createOrpcHandler("page.createSpotlight", async () => {
+        await held;
+        return { id: 52 };
+      })
+    );
+    const add = screen.getByTestId("home-spotlight-add");
+
+    await user.click(add);
+    const first = await screen.findByRole("dialog", { name: "New spotlight" });
+    await user.selectOptions(
+      within(first).getByRole("combobox", { name: "Article" }),
+      "Signet ring"
+    );
+    await user.click(within(first).getByTestId("spotlight-form-submit"));
+    expect(
+      await within(first).findByRole("button", { name: "Saving…" })
+    ).toBeDisabled();
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await user.click(add);
+    const second = await screen.findByRole("dialog", { name: "New spotlight" });
+    const label = within(second).getByRole("textbox", {
+      name: "Label in Spanish",
+    });
+    await user.type(label, "Otra");
+    finish();
+
+    expect(await screen.findByText("Spotlight added.")).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "New spotlight" })).toBe(second);
+    expect(label).toHaveValue("Otra");
+  });
+
   test("cancelling and Escape close the sheet and hand focus back", async () => {
     const { loaded, user } = setup();
     await loaded();

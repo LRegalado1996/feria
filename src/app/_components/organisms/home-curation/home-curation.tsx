@@ -363,7 +363,10 @@ function SpotlightsManager({
   };
 
   const saveSpotlight = async (values: SpotlightFormValues) => {
-    const spotlight = spotlighting?.spotlight ?? null;
+    // Each opening of the sheet is its own object: a save that lands after
+    // the staff closed this sheet and opened another closes only its own.
+    const session = spotlighting;
+    const spotlight = session?.spotlight ?? null;
 
     try {
       if (spotlight) {
@@ -378,7 +381,7 @@ function SpotlightsManager({
         toast.success(copy.spotlightForm.created);
       }
 
-      setSpotlighting(null);
+      setSpotlighting((open) => (open === session ? null : open));
       return true;
     } catch (error) {
       reportError(error, {
