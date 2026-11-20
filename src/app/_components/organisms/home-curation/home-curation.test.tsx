@@ -188,9 +188,59 @@ function setup({
 
   return {
     loaded: async () => await screen.findByTestId("home-layout-editor"),
+    /** `home.get` answers `next` from now on, and the screen reads it again. */
+    refresh: async (next: HomeCurationData) => {
+      spies.get.mockReturnValue(next);
+      await queryClient.invalidateQueries();
+    },
     spies,
     user,
   };
+}
+
+/** The names a list of the order shows, top to bottom. */
+function listed(testId: string): (string | null | undefined)[] {
+  return screen
+    .getAllByTestId(testId)
+    .map((item) => item.querySelector("p")?.textContent);
+}
+
+/** The title of the banner the preview's cover shows first. */
+function coverTitle(): string | null | undefined {
+  return screen
+    .getByTestId("store-home-preview-cover")
+    .querySelector('[data-slot="store-banner"]')?.textContent;
+}
+
+/** A saved announcement, on, with only its Spanish line. */
+const ANNOUNCEMENT: NonNullable<HomeCurationData["announcement"]> = {
+  endsOn: null,
+  isActive: true,
+  linkUrl: null,
+  shortTextEn: null,
+  shortTextEs: null,
+  startsOn: null,
+  textEn: null,
+  textEs: "Hola feria",
+};
+
+/** A second cover banner, which a refreshed home adds. */
+const NEW_COVER = makeHomeBanner({ id: 33, titleEn: "Rings sale" });
+
+/** A save of the order that hangs until the test lets it go. */
+function holdLayoutSave() {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    createOrpcHandler("home.saveLayout", async (input) => {
+      await held;
+      return input;
+    })
+  );
+
+  return release;
 }
 
 describe("HomeCuration", () => {
@@ -324,31 +374,80 @@ describe("HomeCuration", () => {
     ).toHaveTextContent(/^Hola feria$/u);
   });
 
-  test("the preview keeps the saved order while the one typed does not read", async () => {
+  test("the preview keeps the saved featured articles while the ones typed do not read", async () => {
     const { loaded, user } = setup({
       data: makeHomeCuration({
-        articles: [makeHomeArticle(), makeHomeArticle({ id: 24, slug: "b" })],
+        articles: [
+          makeHomeArticle(),
+          makeHomeArticle({ id: 24, slug: "b", titleEn: "Pearl necklace" }),
+        ],
         featuredProductIds: [21, 24],
       }),
     });
     await loaded();
+    const featured = () =>
+      within(
+        within(screen.getByTestId("store-home-preview"))
+          .getByRole("heading", { name: "Featured" })
+          .closest("section") ?? document.body
+      )
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent);
 
-    expect(
-      within(screen.getByTestId("store-home-preview")).getByRole("heading", {
-        name: "Featured",
-      })
-    ).toBeInTheDocument();
+    expect(featured()).toEqual(["Featured", "Signet ring", "Pearl necklace"]);
     await user.click(
       screen.getAllByRole("button", { name: "Remove: Signet ring" })[0] ??
         document.body
     );
 
-    // One featured article is not a valid order: the saved one stays.
-    expect(
-      within(screen.getByTestId("store-home-preview")).getByRole("heading", {
-        name: "Featured",
+    // One featured article is not a valid order: the saved ones stay.
+    expect(featured()).toEqual(["Featured", "Signet ring", "Pearl necklace"]);
+  });
+
+  test("the preview keeps a reordered cover while the featured articles typed do not read", async () => {
+    const { loaded, user } = setup({
+      data: makeData({
+        banners: [makeHomeBanner({ image: STORED }), NEW_COVER],
+        coverBannerIds: [31, 33],
+      }),
+    });
+    await loaded();
+    const cover = () => coverTitle();
+
+    expect(cover()).toBe("Bubble guns");
+    await user.click(
+      screen.getByRole("button", { name: "Move down: Bubble guns" })
+    );
+    await user.selectOptions(
+      within(screen.getByTestId("home-layout-featured")).getByRole("combobox"),
+      "21"
+    );
+    await user.click(
+      within(screen.getByTestId("home-layout-featured")).getByRole("button", {
+        name: "Add",
       })
-    ).toBeInTheDocument();
+    );
+
+    expect(listed("home-layout-featured-item")).toEqual(["Signet ring"]);
+    expect(cover()).toBe("Rings sale");
+  });
+
+  test("the preview falls back to the saved order when even the saved lists do not read", async () => {
+    // A featured article deleted since leaves the saved row with one.
+    const { loaded, user } = setup({
+      data: makeData({
+        banners: [makeHomeBanner({ image: STORED }), NEW_COVER],
+        coverBannerIds: [31, 33],
+        featuredProductIds: [21],
+      }),
+    });
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Move down: Bubble guns" })
+    );
+
+    expect(coverTitle()).toBe("Bubble guns");
   });
 
   test("saves the announcement and says so", async () => {
@@ -373,6 +472,56 @@ describe("HomeCuration", () => {
       textEs: "Hola feria",
     });
     expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("an untouched announcement shows the saved one when the home is read again", async () => {
+    const { loaded, refresh } = setup({
+      data: makeHomeCuration({ announcement: ANNOUNCEMENT }),
+    });
+    await loaded();
+    const text = screen.getByRole("textbox", { name: "Text in Spanish" });
+    expect(text).toHaveValue("Hola feria");
+
+    await refresh(
+      makeHomeCuration({
+        announcement: { ...ANNOUNCEMENT, isActive: false, textEs: "Chau" },
+      })
+    );
+
+    await waitFor(() => {
+      expect(text).toHaveValue("Chau");
+    });
+    expect(
+      screen.getByRole("checkbox", { name: "Show the announcement" })
+    ).not.toBeChecked();
+    expect(screen.queryByTestId("store-announcement-bar")).toBeNull();
+  });
+
+  test("an announcement being edited keeps its edits when the home is read again, and follows it once they are undone", async () => {
+    const { loaded, refresh, user } = setup({
+      data: makeHomeCuration({ announcement: ANNOUNCEMENT }),
+    });
+    await loaded();
+    const text = screen.getByRole("textbox", { name: "Text in Spanish" });
+
+    await user.type(text, "!");
+    await refresh(
+      makeHomeCuration({
+        announcement: { ...ANNOUNCEMENT, textEs: "Chau" },
+        banners: [NEW_COVER],
+        coverBannerIds: [33],
+      })
+    );
+    expect(
+      await screen.findByRole("button", { name: "Edit banner: Rings sale" })
+    ).toBeVisible();
+
+    expect(text).toHaveValue("Hola feria!");
+    await user.type(text, "{Backspace}");
+
+    await waitFor(() => {
+      expect(text).toHaveValue("Chau");
+    });
   });
 
   test("a failed announcement says so and is reported", async () => {
@@ -475,6 +624,87 @@ describe("HomeCuration", () => {
         { categoryId: 99, kind: "category" },
       ],
     });
+  });
+
+  test("an order moved and not saved shows its order on screen when the home is read again", async () => {
+    const { loaded, refresh, user } = setup();
+    await loaded();
+
+    await user.click(
+      screen.getByRole("button", { name: "Move down: Best sellers" })
+    );
+    await refresh(
+      makeData({
+        banners: [...makeData().banners, NEW_COVER],
+        coverBannerIds: [31, 33],
+      })
+    );
+
+    await waitFor(() => {
+      expect(listed("home-layout-cover-item")).toEqual([
+        "Bubble guns",
+        "Rings sale",
+      ]);
+    });
+    expect(listed("home-layout-rows-item")).toEqual([
+      "Banner: Feria",
+      "Best sellers",
+      "Rings",
+      "Featured",
+      "Banner: Untitled",
+      "Untitled",
+    ]);
+  });
+
+  test("the order stays locked while it saves, though the home is read again meanwhile, and follows the home once saved", async () => {
+    const { loaded, refresh, spies, user } = setup();
+    await loaded();
+    const release = holdLayoutSave();
+
+    await user.click(
+      screen.getByRole("button", { name: "Move down: Best sellers" })
+    );
+    await user.click(
+      within(screen.getByTestId("admin-primary-action")).getByRole("button")
+    );
+    const up = screen.getByRole("button", { name: "Move up: Best sellers" });
+    await waitFor(() => {
+      expect(up).toBeDisabled();
+    });
+    await refresh(
+      makeData({
+        banners: [...makeData().banners, NEW_COVER],
+        coverBannerIds: [31, 33],
+      })
+    );
+    expect(
+      await screen.findByRole("button", { name: "Edit banner: Rings sale" })
+    ).toBeVisible();
+
+    expect(up).toBeDisabled();
+    expect(listed("home-layout-cover-item")).toEqual(["Bubble guns"]);
+
+    release();
+
+    expect(await screen.findByText("Order saved.")).toBeVisible();
+    await waitFor(() => {
+      expect(listed("home-layout-cover-item")).toEqual([
+        "Bubble guns",
+        "Rings sale",
+      ]);
+    });
+    expect(listed("home-layout-rows-item")).toEqual([
+      "Banner: Feria",
+      "Best sellers",
+      "Rings",
+      "Featured",
+      "Banner: Untitled",
+      "Untitled",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "Move up: Best sellers" })
+    ).toBeEnabled();
+    expect(spies.get).toHaveBeenCalledTimes(3);
   });
 
   test("a failed order says so and is reported", async () => {
