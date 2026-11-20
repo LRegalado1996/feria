@@ -19,13 +19,15 @@ import {
 import { isShowing } from "@/lib/home/schedule";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
-import type {
-  BannerLink,
-  CreateBannerValues,
-  HomeSection,
-  SaveAnnouncementValues,
-  SaveHomeLayoutValues,
-  UpdateBannerValues,
+import {
+  type BannerLink,
+  type BannerPlacement,
+  COVER_BANNERS_MAX,
+  type CreateBannerValues,
+  type HomeSection,
+  type SaveAnnouncementValues,
+  type SaveHomeLayoutValues,
+  type UpdateBannerValues,
 } from "@/lib/schemas/home";
 import type { UploadedImage } from "@/lib/schemas/upload";
 import type { Currency } from "@/lib/utils/format";
@@ -587,6 +589,27 @@ async function lockHomeTargets(
 
 type HomeTargets = Awaited<ReturnType<typeof lockHomeTargets>>;
 
+/**
+ * Refuses a banner joining a cover that already holds `COVER_BANNERS_MAX`
+ * (one already in it stays): the order's save refuses a longer cover, so
+ * one more would block every save after it.
+ */
+function assertCoverRoom(
+  placement: BannerPlacement,
+  coverPosition: number | null,
+  targets: HomeTargets
+) {
+  if (
+    placement === "cover" &&
+    coverPosition === null &&
+    targets.coverBannerIds.length >= COVER_BANNERS_MAX
+  ) {
+    throw new ORPCError("CONFLICT", {
+      message: `The cover holds at most ${COVER_BANNERS_MAX} banners`,
+    });
+  }
+}
+
 /** Refuses a link to an article or a category the store does not have. */
 function assertLinkTarget(link: BannerLink, targets: HomeTargets) {
   if (link.kind === "product" && !targets.productIds.has(link.productId)) {
@@ -823,7 +846,7 @@ export async function saveAnnouncement(
 /**
  * Adds a banner (FER-020): its photos must be this deployment's uploads for
  * banners, its link the store's own article or category. In the cover it
- * goes last; between rows at `rowsIndex` of the sequence, after the first
+ * goes last, while the cover has room (`COVER_BANNERS_MAX`); between rows at `rowsIndex` of the sequence, after the first
  * row when none is given.
  */
 export async function createBanner(
@@ -846,6 +869,8 @@ export async function createBanner(
     storeId,
   });
   assertLinkTarget(values.link, targets);
+  assertCoverRoom(values.placement, null, targets);
+
   const [created] = await tx
     .insert(banner)
     .values({
@@ -884,7 +909,8 @@ export async function createBanner(
 
 /**
  * Edits a banner. A photo left out keeps the stored one; a new one must be
- * this deployment's upload for banners. Moved into the cover it goes last;
+ * this deployment's upload for banners. Moved into the cover it goes last,
+ * while the cover has room;
  * moved between rows, or given a new `rowsIndex` there, it takes that
  * place (after the first row when none is given); kept where it was, it
  * keeps its place. Answers the addresses the banner no longer shows, for
@@ -918,6 +944,8 @@ export async function updateBanner(
   }
 
   assertLinkTarget(values.link, targets);
+  assertCoverRoom(values.placement, found.coverPosition, targets);
+
   const imageUrl = values.image?.url ?? found.imageUrl;
   const imagePhoneUrl =
     values.imagePhone === undefined

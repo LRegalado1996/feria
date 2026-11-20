@@ -923,6 +923,26 @@ function makeTargets({
   ]);
 }
 
+/** `count` banners in the cover, ids 101 on, then banner 3 between rows. */
+function makeCoverBanners(count: number) {
+  return [
+    ...Array.from({ length: count }, (_unused, index) => ({
+      coverPosition: index,
+      id: 101 + index,
+      imagePhoneUrl: null,
+      imageUrl: "/a.jpg",
+      placement: "cover",
+    })),
+    {
+      coverPosition: null,
+      id: 3,
+      imagePhoneUrl: null,
+      imageUrl: "/seed/c.jpg",
+      placement: "rows",
+    },
+  ];
+}
+
 describe("createBanner", () => {
   function setup({
     created = [{ id: 9 }],
@@ -1173,6 +1193,40 @@ describe("createBanner", () => {
     });
   });
 
+  test("a cover of five banners takes a sixth, last", async () => {
+    const { create, db } = setup({
+      targets: makeTargets({ banners: makeCoverBanners(5) }),
+    });
+
+    await expect(create(makeCreateValues())).resolves.toEqual({ id: 9 });
+    expect(db.$["insert.values"].mock.calls[0]?.[0]).toMatchObject({
+      coverPosition: 5,
+      placement: "cover",
+    });
+  });
+
+  test("a cover of six banners refuses a seventh, writing nothing", async () => {
+    const { create, db } = setup({
+      targets: makeTargets({ banners: makeCoverBanners(6) }),
+    });
+
+    await expect(create(makeCreateValues())).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "The cover holds at most 6 banners",
+    });
+    expect(db.$.insert).not.toHaveBeenCalled();
+  });
+
+  test("a full cover still takes a banner between rows", async () => {
+    const { create } = setup({
+      targets: makeTargets({ banners: makeCoverBanners(6) }),
+    });
+
+    await expect(
+      create(makeCreateValues({ placement: "rows" }))
+    ).resolves.toEqual({ id: 9 });
+  });
+
   test("throws when the insert answers no row", async () => {
     const { create } = setup({ created: [] });
 
@@ -1204,33 +1258,32 @@ describe("updateBanner", () => {
   const STORED_PHONE = `https://${HOST}/qa/banner/${randomUUID()}.webp`;
 
   function setup({
+    banners = [
+      {
+        coverPosition: 2,
+        id: 1,
+        imagePhoneUrl: null,
+        imageUrl: "/a.jpg",
+        placement: "cover",
+      },
+      {
+        coverPosition: null,
+        id: 3,
+        imagePhoneUrl: STORED_PHONE,
+        imageUrl: "/seed/c.jpg",
+        placement: "rows",
+      },
+    ],
     saved = [
       { bannerId: null, categoryId: 11, kind: "category" },
       { bannerId: 3, categoryId: null, kind: "banner" },
     ],
-  }: { saved?: Record<string, unknown>[] } = {}) {
+  }: {
+    banners?: Record<string, unknown>[];
+    saved?: Record<string, unknown>[];
+  } = {}) {
     const db = createMockDatabase();
-    answerSelects(
-      db,
-      makeTargets({
-        banners: [
-          {
-            coverPosition: 2,
-            id: 1,
-            imagePhoneUrl: null,
-            imageUrl: "/a.jpg",
-            placement: "cover",
-          },
-          {
-            coverPosition: null,
-            id: 3,
-            imagePhoneUrl: STORED_PHONE,
-            imageUrl: "/seed/c.jpg",
-            placement: "rows",
-          },
-        ],
-      })
-    );
+    answerSelects(db, makeTargets({ banners }));
     db.query.homeSection.findMany.mockResolvedValue(saved);
 
     return {
@@ -1364,6 +1417,36 @@ describe("updateBanner", () => {
       params: [STORE_ID, 3],
       sql: '("home_section"."storeId" = $1 and "home_section"."bannerId" = $2)',
     });
+  });
+
+  test("moved into a cover of five banners, goes sixth", async () => {
+    const { db, update } = setup({ banners: makeCoverBanners(5) });
+
+    await expect(
+      update(makeUpdateValues({ placement: "cover" }))
+    ).resolves.toEqual({ discardedImageUrls: [], id: 3 });
+    expect(setOf(db)).toMatchObject({ coverPosition: 5, placement: "cover" });
+  });
+
+  test("moved into a cover of six banners, is refused, writing nothing", async () => {
+    const { db, update } = setup({ banners: makeCoverBanners(6) });
+
+    await expect(
+      update(makeUpdateValues({ placement: "cover" }))
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "The cover holds at most 6 banners",
+    });
+    expect(db.$.update).not.toHaveBeenCalled();
+  });
+
+  test("already in a full cover, is edited there", async () => {
+    const { db, update } = setup({ banners: makeCoverBanners(6) });
+
+    await expect(
+      update(makeUpdateValues({ id: 106, placement: "cover" }))
+    ).resolves.toEqual({ discardedImageUrls: [], id: 106 });
+    expect(setOf(db)).toMatchObject({ coverPosition: 5, placement: "cover" });
   });
 
   test("kept in the cover, keeps its place in the carousel", async () => {

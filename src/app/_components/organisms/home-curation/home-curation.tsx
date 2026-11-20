@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ORPCError } from "@orpc/client";
 import { Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useId, useRef, useState } from "react";
@@ -17,6 +18,7 @@ import {
 import {
   BannerForm,
   type BannerFormBanner,
+  type BannerFormOutcome,
 } from "@/app/_components/molecules/banner-form";
 import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
 import {
@@ -384,7 +386,9 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
     setEditing(null);
   };
 
-  const saveBanner = async (values: BannerFormValues) => {
+  const saveBanner = async (
+    values: BannerFormValues
+  ): Promise<BannerFormOutcome> => {
     const banner = editing?.banner ?? null;
 
     try {
@@ -406,12 +410,17 @@ function CurationScreen({ data }: { data: HomeCurationData }) {
       }
 
       closeSheet();
-      return true;
+      return "saved";
     } catch (error) {
+      // A full cover is the owner's to fix, not a failure to report.
+      if (error instanceof ORPCError && error.code === "CONFLICT") {
+        return "coverFull";
+      }
+
       reportError(error, {
         action: banner ? "Home.update_banner" : "Home.create_banner",
       });
-      return false;
+      return "failed";
     }
   };
 

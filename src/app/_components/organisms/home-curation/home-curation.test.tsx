@@ -628,6 +628,33 @@ describe("HomeCuration", () => {
     );
   });
 
+  test("a banner refused because the cover is full says so in the sheet, unreported", async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    server.use(
+      createOrpcErrorHandler("home.updateBanner", {
+        code: "CONFLICT",
+        message: "The cover holds at most 6 banners",
+        status: 409,
+      })
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Edit banner: Feria" })
+    );
+    const sheet = await screen.findByRole("dialog", { name: "Edit banner" });
+    await user.selectOptions(
+      within(sheet).getByRole("combobox", { name: "Where it goes" }),
+      "cover"
+    );
+    await user.click(within(sheet).getByTestId("banner-form-submit"));
+
+    expect(await within(sheet).findByRole("alert")).toHaveTextContent(
+      /^The cover already has 6 banners: take one out of the cover or put this one between rows\.$/u
+    );
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
   test("a failed new banner is reported as one", async () => {
     const { loaded, user } = setup({ write: "fail" });
     await loaded();

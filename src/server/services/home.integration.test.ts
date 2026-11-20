@@ -658,6 +658,46 @@ describe("banner writes", () => {
       ).toEqual([first.id, id]);
     });
   });
+
+  test("the cover takes a sixth banner and refuses a seventh, new or moved in; one in it is still edited", async () => {
+    await onEmptyHome(async (tx, storeId) => {
+      const create = async (values: CreateBannerValues) =>
+        await createBanner(tx, { blobStore: BLOB_STORE, storeId, values });
+      const covered: number[] = [];
+
+      for (let index = 0; index < 6; index += 1) {
+        covered.push((await create(bannerValues())).id);
+      }
+
+      const full = {
+        code: "CONFLICT",
+        message: "The cover holds at most 6 banners",
+      };
+      await expect(create(bannerValues())).rejects.toMatchObject(full);
+      const between = bannerValues({ placement: "rows" });
+      const { id } = await create(between);
+      const { image: _image, imagePhone: _phone, ...words } = between;
+      await expect(
+        updateBanner(tx, {
+          blobStore: BLOB_STORE,
+          storeId,
+          values: { ...words, id, placement: "cover" },
+        })
+      ).rejects.toMatchObject(full);
+      const last = covered.at(-1) ?? 0;
+      await expect(
+        updateBanner(tx, {
+          blobStore: BLOB_STORE,
+          storeId,
+          values: { ...words, id: last, placement: "cover" },
+        })
+      ).resolves.toEqual({ discardedImageUrls: [], id: last });
+
+      expect(
+        (await getHomeCuration(tx, { storeId, today: TODAY })).coverBannerIds
+      ).toEqual(covered);
+    });
+  });
 });
 
 describe("saving the home's order", () => {

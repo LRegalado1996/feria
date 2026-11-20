@@ -16,7 +16,11 @@ export const BANNER_CTA_MAX_LENGTH = 24;
 export const HOME_LINK_MAX_LENGTH = 500;
 /** Far above what a home holds; a bound, so a body cannot be unbounded. */
 const SECTIONS_MAX = 200;
-const COVER_BANNERS_MAX = 20;
+/**
+ * The cover's carousel holds at most six banners (FER-020): its controls, a
+ * pause button and one 44 px dot per banner, must fit a 360 px phone.
+ */
+export const COVER_BANNERS_MAX = 6;
 
 /**
  * Where a banner shows (FER-020): in the cover, the carousel at the top of

@@ -363,6 +363,8 @@ export const admin: Dictionary["admin"] = {
         "A large photo with its title and a button, in the cover or between two rows.",
       editTitle: "Edit banner",
       errors: {
+        coverFull:
+          "The cover already has {max} banners: take one out of the cover or put this one between rows.",
         articleRequired: "Choose the article.",
         categoryRequired: "Choose the category.",
         ctaNeedsTitle: "Write the English title first.",

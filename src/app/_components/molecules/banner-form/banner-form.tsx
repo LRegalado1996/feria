@@ -20,6 +20,7 @@ import { ImageUploader } from "@/app/_components/molecules/image-uploader";
 import { SheetBody, SheetFooter } from "@/app/_components/molecules/sheet";
 import { DEFAULT_ROWS_INDEX } from "@/lib/home/layout";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { interpolate } from "@/lib/i18n/interpolate";
 import {
   BANNER_LINK_KINDS,
   BANNER_PLACEMENTS,
@@ -27,6 +28,7 @@ import {
   type BannerFormValues,
   type BannerLink,
   type BannerPlacement,
+  COVER_BANNERS_MAX,
   createBannerFormSchema,
 } from "@/lib/schemas/home";
 import type { UploadedImage } from "@/lib/schemas/upload";
@@ -53,6 +55,12 @@ export interface BannerFormChoice {
   label: string;
 }
 
+/**
+ * How a save ended: saved; refused because the cover is full (a banner
+ * placed in a cover that holds `COVER_BANNERS_MAX`); or failed otherwise.
+ */
+export type BannerFormOutcome = "coverFull" | "failed" | "saved";
+
 export interface BannerFormProps {
   /** The store's articles a banner can lead to. */
   articles: readonly BannerFormChoice[];
@@ -62,10 +70,10 @@ export interface BannerFormProps {
   categories: readonly BannerFormChoice[];
   onCancel: () => void;
   /**
-   * Saves the banner; answers whether it was saved. A failure keeps
-   * everything typed and the form says so under itself.
+   * Saves the banner; answers how it ended. A failure keeps everything
+   * typed and the form says why under itself.
    */
-  onSave: (values: BannerFormValues) => Promise<boolean>;
+  onSave: (values: BannerFormValues) => Promise<BannerFormOutcome>;
   /**
    * The home's sequence under the cover, this banner left out, by name: a
    * banner between rows goes after one of them.
@@ -192,7 +200,8 @@ function CropPreview({
  * address); the switch and its days; and its place: the cover, or between
  * two rows after the one chosen. A phone photo needs a computer one, so
  * removing the computer photo removes both. Save waits while a photo is on
- * its way. A failure keeps everything typed and says so.
+ * its way. A failure keeps everything typed and says why: a full cover,
+ * or anything else.
  */
 function BannerForm({
   articles,
@@ -207,7 +216,10 @@ function BannerForm({
   const copy = admin.home.bannerForm;
   const fields = copy.fields;
   const formId = useId();
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<Exclude<
+    BannerFormOutcome,
+    "saved"
+  > | null>(null);
   const [uploading, setUploading] = useState({ image: false, phone: false });
   const waiting = uploading.image || uploading.phone;
   const form = useForm<BannerFormFields, unknown, BannerFormValues>({
@@ -224,8 +236,9 @@ function BannerForm({
   const placement = useWatch({ control: form.control, name: "placement" });
 
   const submit = async (values: BannerFormValues) => {
-    setFailed(false);
-    setFailed(!(await onSave(values)));
+    setFailure(null);
+    const outcome = await onSave(values);
+    setFailure(outcome === "saved" ? null : outcome);
   };
 
   return (
@@ -509,9 +522,13 @@ function BannerForm({
                 )}
               />
             ) : null}
-            {failed ? (
+            {failure ? (
               <p className="text-sm text-destructive" role="alert">
-                {copy.errors.save}
+                {failure === "coverFull"
+                  ? interpolate(copy.errors.coverFull, {
+                      max: String(COVER_BANNERS_MAX),
+                    })
+                  : copy.errors.save}
               </p>
             ) : null}
           </fieldset>

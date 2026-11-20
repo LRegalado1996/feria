@@ -7,7 +7,11 @@ import type { Locale } from "@/lib/i18n/config";
 import type { BannerFormValues } from "@/lib/schemas/home";
 import { renderWithI18n } from "@/test/i18n";
 
-import { BannerForm, type BannerFormBanner } from "./banner-form";
+import {
+  BannerForm,
+  type BannerFormBanner,
+  type BannerFormOutcome,
+} from "./banner-form";
 
 const UPLOADED = {
   height: 1067,
@@ -106,15 +110,16 @@ function setup({
   banner = null,
   locale = "en",
   rowsIndex = null,
-  saves = true,
+  outcome = "saved",
 }: {
   banner?: BannerFormBanner | null;
   locale?: Locale;
+  outcome?: BannerFormOutcome;
   rowsIndex?: number | null;
-  saves?: boolean;
 } = {}) {
   const onSave = vi.fn(
-    async (_values: BannerFormValues) => await Promise.resolve(saves)
+    async (_values: BannerFormValues): Promise<BannerFormOutcome> =>
+      await Promise.resolve(outcome)
   );
   const onCancel = vi.fn<() => void>();
   renderWithI18n(
@@ -467,12 +472,25 @@ describe("BannerForm", () => {
   });
 
   test("says a failed save under the form and keeps what was typed", async () => {
-    const { submit } = setup({ banner: makeBanner(), saves: false });
+    const { submit } = setup({ banner: makeBanner(), outcome: "failed" });
 
     await submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "We couldn't save the banner. What you wrote is still here: try again."
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Title in Spanish" })
+    ).toHaveValue("Joyas");
+  });
+
+  test("says the cover is full when the save is refused for it, and keeps the form", async () => {
+    const { submit } = setup({ banner: makeBanner(), outcome: "coverFull" });
+
+    await submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /^The cover already has 6 banners: take one out of the cover or put this one between rows\.$/u
     );
     expect(
       screen.getByRole("textbox", { name: "Title in Spanish" })

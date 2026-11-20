@@ -376,6 +376,8 @@ export const admin = {
         "Una foto grande con su título y un botón, en la portada o entre dos filas.",
       editTitle: "Editar banner",
       errors: {
+        coverFull:
+          "La portada ya tiene {max} banners: sacá uno de la portada o poné este entre filas.",
         articleRequired: "Elegí el artículo.",
         categoryRequired: "Elegí la categoría.",
         ctaNeedsTitle: "Escribí primero el título en inglés.",
