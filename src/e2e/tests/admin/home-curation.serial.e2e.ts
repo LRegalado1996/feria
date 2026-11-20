@@ -295,7 +295,13 @@ test.describe("Home curation", () => {
       "data-kind",
       "spotlight"
     );
-    await expect(store.getSpotlight(title)).toBeVisible();
+    // This test's own spotlight, not one the home already opened with.
+    await expect(
+      store
+        .getHomeSections()
+        .first()
+        .getByRole("region", { exact: true, name: title })
+    ).toBeVisible();
 
     await home.open();
     await home
