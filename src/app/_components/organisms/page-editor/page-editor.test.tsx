@@ -1564,6 +1564,32 @@ describe("PageEditor on a page that is not the home (FER-060)", () => {
     });
   });
 
+  test("a block added and not saved goes when the page is read again without what it shows", async () => {
+    const sections: PageCurationData["sections"] = [{ kind: "featured" }];
+    const { loaded, refresh, user } = setup({
+      data: makeData({ page: GIFTS, sections }),
+    });
+    await loaded();
+    const add = screen.getByTestId("page-add-block");
+    const block = within(add).getByRole("combobox", { name: "Block to add" });
+    const press = within(add).getByRole("button", { name: "Add block" });
+
+    await user.selectOptions(block, "Rings");
+    await user.click(press);
+    await user.selectOptions(block, "best_sellers");
+    await user.click(press);
+    // Rings deleted from the catalog in another tab: kept, it would have
+    // every save refused.
+    await refresh(makeData({ categories: [], page: GIFTS, sections }));
+
+    await waitFor(() => {
+      expect(listed("home-layout-rows-item")).toEqual([
+        "Featured",
+        "Best sellers",
+      ]);
+    });
+  });
+
   test("saves its settings on their own, with its id, and says so", async () => {
     const { loaded, spies, user } = setup({ data: makeData({ page: GIFTS }) });
     await loaded();

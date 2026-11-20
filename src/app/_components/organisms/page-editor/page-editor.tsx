@@ -777,7 +777,12 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         next,
         previous: layoutFieldsOf(previous),
       },
-      new Set(data.articles.map((row) => row.id))
+      {
+        articles: new Set(data.articles.map((row) => row.id)),
+        banners: new Set(data.banners.map((row) => row.id)),
+        categories: new Set(data.categories.map((row) => row.id)),
+        spotlights: new Set(data.spotlights.map((row) => row.id)),
+      }
     );
 
     layoutForm.reset(next);

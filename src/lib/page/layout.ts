@@ -21,6 +21,34 @@ export interface PageLayoutTargets {
   fillIn?: boolean;
 }
 
+/** The ids of what a page's blocks show that the store still holds. */
+interface SectionTargets {
+  banners: ReadonlySet<number>;
+  categories: ReadonlySet<number>;
+  spotlights: ReadonlySet<number>;
+}
+
+/** Whether what `section` shows is still there: a curated row always is. */
+function sectionTargetExists(
+  section: PageSection,
+  { banners, categories, spotlights }: SectionTargets
+): boolean {
+  switch (section.kind) {
+    case "banner": {
+      return banners.has(section.bannerId);
+    }
+    case "category": {
+      return categories.has(section.categoryId);
+    }
+    case "spotlight": {
+      return spotlights.has(section.spotlightId);
+    }
+    default: {
+      return true;
+    }
+  }
+}
+
 /**
  * A page's sequence under its cover (FER-020, FER-058), whole: the places
  * that were saved, in their order, less any whose category, banner or
@@ -50,14 +78,7 @@ export function resolvePageSections(
   };
 
   for (const section of saved) {
-    const exists =
-      (section.kind === "category" && categories.has(section.categoryId)) ||
-      (section.kind === "banner" && banners.has(section.bannerId)) ||
-      (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
-      section.kind === "best_sellers" ||
-      section.kind === "featured";
-
-    if (exists) {
+    if (sectionTargetExists(section, { banners, categories, spotlights })) {
       place(section);
     }
   }
@@ -137,13 +158,16 @@ function sameOrder<T>(
  * holds it now), drops what the server no longer holds, and places what is
  * new on the server at the server's index. Merging per position instead
  * would keep a deleted banner or list one twice, which the save refuses.
- * An entry the draft added (a block given to a page, FER-060) stays, and
- * one the draft took out stays out: the server never held the one, and
- * still holds the other only because the draft is not saved yet.
+ * An entry the draft added (a block given to a page, FER-060) stays while
+ * what it shows still `exists` (a category deleted meanwhile would have
+ * every save refused), and one the draft took out stays out: the server
+ * never held the one, and still holds the other only because the draft is
+ * not saved yet.
  */
 export function followServerOrder<T>(
   { draft, next, previous }: OrderVersions<T>,
-  keyOf: (item: T) => string
+  keyOf: (item: T) => string,
+  exists: (item: T) => boolean = () => true
 ): T[] {
   if (sameOrder(draft, previous, keyOf)) {
     return [...next];
@@ -159,7 +183,7 @@ export function followServerOrder<T>(
       return [fresh];
     }
 
-    return held.has(keyOf(item)) ? [] : [item];
+    return held.has(keyOf(item)) || !exists(item) ? [] : [item];
   });
 
   for (const [index, item] of next.entries()) {
@@ -198,7 +222,8 @@ type LayoutLists = Pick<
  * A page's order form's lists once the server's page changed under it (a
  * banner added, moved or deleted from the side sheet): see
  * `followServerOrder` for the cover and the rows, `followCuratedRow` for
- * the best sellers and the featured articles.
+ * the best sellers and the featured articles. `targets` are what the store
+ * holds now: an entry only the draft has goes once its target is gone.
  */
 export function followServerLayout(
   {
@@ -210,7 +235,12 @@ export function followServerLayout(
     next: LayoutLists;
     previous: LayoutLists;
   },
-  articleIds: ReadonlySet<number>
+  {
+    articles: articleIds,
+    ...targets
+  }: SectionTargets & {
+    articles: ReadonlySet<number>;
+  }
 ): LayoutLists {
   const versions = <K extends keyof LayoutLists>(name: K) => ({
     draft: draft[name],
@@ -219,11 +249,17 @@ export function followServerLayout(
   });
 
   return {
-    cover: followServerOrder(versions("cover"), (row) => String(row.bannerId)),
+    cover: followServerOrder(
+      versions("cover"),
+      (row) => String(row.bannerId),
+      (row) => targets.banners.has(row.bannerId)
+    ),
     featured: followCuratedRow(versions("featured"), articleIds),
     ranking: followCuratedRow(versions("ranking"), articleIds),
-    sections: followServerOrder(versions("sections"), (row) =>
-      pageSectionKey(row.section)
+    sections: followServerOrder(
+      versions("sections"),
+      (row) => pageSectionKey(row.section),
+      (row) => sectionTargetExists(row.section, targets)
     ),
   };
 }
