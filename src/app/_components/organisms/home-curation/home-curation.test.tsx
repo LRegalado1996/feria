@@ -1471,6 +1471,54 @@ describe("HomeCuration", () => {
     });
   });
 
+  test("a deletion that ends after its question was closed leaves the question asked since open", async () => {
+    const { loaded, user } = setup({
+      data: makeData({
+        spotlights: [
+          makeHomeSpotlight(),
+          makeHomeSpotlight({ id: 53, productId: 23 }),
+        ],
+      }),
+    });
+    await loaded();
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    server.use(
+      createOrpcHandler("page.deleteSpotlight", async () => {
+        await held;
+        return { id: 51 };
+      })
+    );
+
+    // Released whatever happens before it: a failed step leaves no
+    // request hanging past the test.
+    try {
+      await user.click(
+        screen.getByRole("button", { name: "Delete spotlight: Signet ring" })
+      );
+      await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByTestId("confirm-dialog")).toBeNull();
+      });
+      await user.click(
+        screen.getByRole("button", { name: "Delete spotlight: Cadena corona" })
+      );
+      const second = await screen.findByTestId("confirm-dialog");
+      finish();
+
+      expect(await screen.findByText("Spotlight deleted.")).toBeVisible();
+      expect(screen.getByTestId("confirm-dialog")).toBe(second);
+      expect(second).toHaveTextContent(
+        "The spotlight of “Cadena corona” is deleted. The article stays as it is."
+      );
+    } finally {
+      finish();
+    }
+  });
+
   test("closing the question deletes no spotlight", async () => {
     const { loaded, spies, user } = setup({
       data: makeData({ spotlights: [makeHomeSpotlight()] }),

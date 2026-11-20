@@ -405,7 +405,12 @@ function SpotlightsManager({
   const openSpotlightSheet = useRef<{ spotlight: Spotlight | null } | null>(
     null
   );
-  const [unspotlighting, setUnspotlighting] = useState<Spotlight | null>(null);
+  // Each opening of the question is its own object, as the sheet's: a
+  // deletion that ends after the staff asked about another spotlight leaves
+  // that question open.
+  const [unspotlighting, setUnspotlighting] = useState<{
+    spotlight: Spotlight;
+  } | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const addSpotlightButton = useRef<HTMLButtonElement>(null);
   const articles = new Map(data.articles.map((row) => [row.id, row]));
@@ -471,17 +476,17 @@ function SpotlightsManager({
     }
   };
 
-  // The dialog closes either way: a refused deletion says why in a toast.
-  const removeSpotlight = async (spotlight: Spotlight) => {
+  // Its question closes either way: a refused deletion says why in a toast.
+  const removeSpotlight = async (asked: { spotlight: Spotlight }) => {
     try {
-      await deleteSpotlight.mutateAsync({ id: spotlight.id });
+      await deleteSpotlight.mutateAsync({ id: asked.spotlight.id });
       toast.success(copy.spotlights.deleted);
     } catch (error) {
       reportError(error, { action: "Home.delete_spotlight" });
       toast.error(copy.spotlights.errors.delete);
     }
 
-    setUnspotlighting(null);
+    setUnspotlighting((open) => (open === asked ? null : open));
   };
 
   const spotlightPlaces = placesFor(spotlighting?.spotlight ?? null);
@@ -530,7 +535,7 @@ function SpotlightsManager({
                 name={articleName(spotlight.productId)}
                 onDelete={(button) => {
                   opener.current = button;
-                  setUnspotlighting(spotlight);
+                  setUnspotlighting({ spotlight });
                 }}
                 onEdit={(button) => {
                   opener.current = button;
@@ -591,7 +596,9 @@ function SpotlightsManager({
       <ConfirmDialog
         confirmLabel={copy.spotlights.deleteConfirm}
         description={interpolate(copy.spotlights.deleteDescription, {
-          name: unspotlighting ? articleName(unspotlighting.productId) : "",
+          name: unspotlighting
+            ? articleName(unspotlighting.spotlight.productId)
+            : "",
         })}
         isPending={deleteSpotlight.isPending}
         onCloseAutoFocus={(event) => {
