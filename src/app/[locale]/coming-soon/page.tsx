@@ -13,8 +13,10 @@ import { COMING_SOON_PATH } from "@/lib/coming-soon/paths";
 import { buildAlternates } from "@/lib/i18n/metadata";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { captureExceptionWithScope } from "@/lib/sentry";
+import { within } from "@/lib/utils/within";
 import { readComingSoon } from "@/server/cache/coming-soon";
 import { readStore } from "@/server/cache/store";
+import { SWITCH_TIMEOUT_MS } from "@/server/cache/storefront-switch";
 
 // The page waits for its texts before anything is sent: they are the whole
 // first screen, and a cached read is quick. This tells Next's
@@ -31,11 +33,17 @@ const DEFAULT_PAGE: StoredComingSoon = { countdownTo: null, translations: [] };
 /**
  * What an admin saved, or the dictionary's page when the database cannot
  * say. The proxy sends the public here when it cannot read the switch
- * either, so this page must stand on its own through an outage.
+ * either, so this page must stand on its own through an outage, a stalled
+ * database too: each read gets the switch's own time limit, and one that
+ * outlasts it is reported and falls back like a failed one.
  */
 async function readSavedPage(): Promise<StoredComingSoon> {
   try {
-    return await readComingSoon();
+    return await within(
+      readComingSoon(),
+      SWITCH_TIMEOUT_MS,
+      "The coming-soon page's read"
+    );
   } catch (error) {
     captureExceptionWithScope(error, { action: "ComingSoon.read_page" });
 
@@ -50,7 +58,11 @@ async function readSavedPage(): Promise<StoredComingSoon> {
  */
 async function readSocialLinks(): Promise<StoreSocialLinks | null> {
   try {
-    return await readStore();
+    return await within(
+      readStore(),
+      SWITCH_TIMEOUT_MS,
+      "The coming-soon page's store read"
+    );
   } catch (error) {
     captureExceptionWithScope(error, { action: "ComingSoon.read_store" });
 

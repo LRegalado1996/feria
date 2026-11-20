@@ -7,6 +7,7 @@ import type {
   StoreSocialLinks,
 } from "@/lib/coming-soon/content";
 import type { Locale } from "@/lib/i18n/config";
+import { SWITCH_TIMEOUT_MS } from "@/server/cache/storefront-switch";
 import { holdRequest, settle } from "@/test/connection";
 import { renderWithI18n } from "@/test/i18n";
 import { stubIntersectionObserver } from "@/test/intersection-observer";
@@ -216,6 +217,55 @@ describe("ComingSoonPage", () => {
     expect(captureExceptionWithScope.mock.calls).toEqual([
       [outage, { action: "ComingSoon.read_page" }],
       [outage, { action: "ComingSoon.read_store" }],
+    ]);
+  });
+
+  test("falls back when the database stalls: each read gets the switch's time limit, then the dictionary's page and the brand's links, and a report of each", async () => {
+    vi.useFakeTimers();
+    readComingSoon.mockReturnValue(new Promise<never>(() => {}));
+    readStore.mockReturnValue(new Promise<never>(() => {}));
+    const rendering = ComingSoonPage({ params: makeParams("es") });
+    const settled = vi.fn();
+    void rendering.then(settled);
+
+    await vi.advanceTimersByTimeAsync(SWITCH_TIMEOUT_MS - 1);
+    expect(settled).not.toHaveBeenCalled();
+    expect(captureExceptionWithScope).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    const rendered = await rendering;
+    expect(captureExceptionWithScope.mock.calls).toEqual([
+      [
+        new Error(
+          `The coming-soon page's read took over ${SWITCH_TIMEOUT_MS} ms`
+        ),
+        { action: "ComingSoon.read_page" },
+      ],
+      [
+        new Error(
+          `The coming-soon page's store read took over ${SWITCH_TIMEOUT_MS} ms`
+        ),
+        { action: "ComingSoon.read_store" },
+      ],
+    ]);
+
+    vi.useRealTimers();
+    stubIntersectionObserver();
+    stubReducedMotion(false);
+    renderWithI18n(rendered, { locale: "es" });
+    const page = screen.getByTestId("coming-soon-page");
+    expect(
+      within(page)
+        .getByRole("heading", { level: 1 })
+        .textContent.replaceAll(/\s+/g, "")
+    ).toBe("Muypronto");
+    expect(
+      within(page)
+        .getAllByRole("link", { name: /Instagram|TikTok/u })
+        .map((link) => link.getAttribute("href"))
+    ).toEqual([
+      "https://www.instagram.com/lrmarket",
+      "https://www.tiktok.com/@lrmarket",
     ]);
   });
 
