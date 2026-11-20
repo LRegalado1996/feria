@@ -12,9 +12,14 @@ const services = vi.hoisted(() => ({
   findIndexableStore: vi.fn(),
   listIndexableArticles: vi.fn(),
   listIndexableCategories: vi.fn(),
+  listIndexablePages: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({ connection: services.connection }));
+
+vi.mock("@/server/services/page-settings", () => ({
+  listIndexablePages: services.listIndexablePages,
+}));
 
 vi.mock("@/server/services/seo", () => ({
   findIndexableStore: services.findIndexableStore,
@@ -51,6 +56,9 @@ function setup({
   ]);
   services.listIndexableCategories.mockResolvedValue([
     { name: "Anillos", path: "/bijouterie/anillos", slug: "anillos" },
+  ]);
+  services.listIndexablePages.mockResolvedValue([
+    { name: "Regalos", path: "/regalos", updatedAt: new Date() },
   ]);
 
   return {
@@ -103,6 +111,14 @@ describe("GET /[locale]/llms.txt", () => {
         db,
         { locale, storeId: 7 }
       );
+      // The store's pages (FER-060), in the file's language.
+      expect(body).toContain(
+        `(${ORIGIN}${locale === "en" ? "/en" : ""}/regalos)`
+      );
+      expect(services.listIndexablePages).toHaveBeenCalledExactlyOnceWith(db, {
+        locale,
+        storeId: 7,
+      });
     }
   );
 

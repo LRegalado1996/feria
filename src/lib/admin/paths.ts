@@ -12,7 +12,7 @@ export const ADMIN_SECTIONS = [
   "products",
   "categories",
   "filters",
-  "home",
+  "pages",
   "settings",
   "users",
   "metrics",

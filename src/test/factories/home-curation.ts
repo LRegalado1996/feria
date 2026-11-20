@@ -57,6 +57,26 @@ export function makeHomeSpotlight(
   };
 }
 
+/** The page the curation is of: the store's home, unless a test says so. */
+export function makeHomePage(
+  overrides: Partial<PageCurationData["page"]> = {}
+): PageCurationData["page"] {
+  return {
+    id: 1,
+    isHome: true,
+    isPublished: true,
+    nameEn: "Home",
+    nameEs: "Home",
+    seoDescriptionEn: null,
+    seoDescriptionEs: null,
+    seoTitleEn: null,
+    seoTitleEs: null,
+    showInHeader: false,
+    slug: "home",
+    ...overrides,
+  };
+}
+
 /** A category of the store. */
 export function makeHomeCategory(overrides: Partial<Category> = {}): Category {
   return {
@@ -84,6 +104,7 @@ export function makeHomeCuration(
     coverBannerIds: [],
     currencyCode: "UYU",
     featuredProductIds: [],
+    page: makeHomePage(),
     pageId: 1,
     rankingProductIds: [],
     sections: [

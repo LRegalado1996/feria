@@ -12,6 +12,7 @@ import {
   announcement,
   category,
   categoryTranslation,
+  page,
   product,
   spotlight,
   user,
@@ -169,6 +170,17 @@ async function setup({ signedIn = true }: { signedIn?: boolean } = {}) {
       await call(pageRouter.saveAnnouncement, input as never, { context }),
     createSpotlight: async (input: unknown) =>
       await call(pageRouter.createSpotlight, input as never, { context }),
+    pages: {
+      create: async (input: unknown) =>
+        await call(pageRouter.create, input as never, { context }),
+      delete: async (input: unknown) =>
+        await call(pageRouter.delete, input as never, { context }),
+      list: async () => await call(pageRouter.list, undefined, { context }),
+      setHome: async (input: unknown) =>
+        await call(pageRouter.setHome, input as never, { context }),
+      update: async (input: unknown) =>
+        await call(pageRouter.update, input as never, { context }),
+    },
   };
 }
 
@@ -273,6 +285,58 @@ describe("the pages' procedures against the database", () => {
     await expect(get(2_000_000_000)).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Page not found",
+    });
+  });
+
+  test("an anonymous request lists, creates, edits, deletes no page and chooses no home (FER-060)", async () => {
+    const { pages } = await setup({ signedIn: false });
+    const storeId = await theStoreId(db);
+    const homePageId = await findHomePageId(db, { storeId });
+    const before = await db.$count(page);
+    const slug = `anonimo-${randomUUID().slice(0, 8)}`;
+    const values = {
+      isPublished: true,
+      nameEn: null,
+      nameEs: "Anónimo",
+      seoDescriptionEn: null,
+      seoDescriptionEs: null,
+      seoTitleEn: null,
+      seoTitleEs: null,
+      showInHeader: false,
+      slug,
+    };
+    const refused = { code: "UNAUTHORIZED", message: "Unauthorized" };
+
+    await expect(pages.list()).rejects.toMatchObject(refused);
+    await expect(pages.create(values)).rejects.toMatchObject(refused);
+    await expect(
+      pages.update({ ...values, id: homePageId, isPublished: false })
+    ).rejects.toMatchObject(refused);
+    await expect(pages.delete({ id: homePageId })).rejects.toMatchObject(
+      refused
+    );
+    await expect(pages.setHome({ pageId: homePageId })).rejects.toMatchObject(
+      refused
+    );
+    expect(await db.$count(page)).toBe(before);
+    expect(await findHomePageId(db, { storeId })).toBe(homePageId);
+    expect(
+      await db.query.page.findFirst({ where: eq(page.id, homePageId) })
+    ).toMatchObject({ isPublished: true });
+  });
+
+  test("an admin lists the pages, the home first, and cannot delete it", async () => {
+    const { pages } = await setup();
+    const homePageId = await findHomePageId(db, {
+      storeId: await theStoreId(db),
+    });
+
+    const listed = await pages.list();
+
+    expect(listed[0]).toMatchObject({ id: homePageId, isHome: true });
+    await expect(pages.delete({ id: homePageId })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "The home cannot be deleted: choose another home first",
     });
   });
 });

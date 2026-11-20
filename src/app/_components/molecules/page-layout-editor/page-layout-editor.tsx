@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown, ArrowUp, TriangleAlert, X } from "lucide-react";
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useState } from "react";
 import {
   type ArrayPath,
   type UseFormReturn,
@@ -45,7 +45,20 @@ export interface PageLayoutChoice {
   name: string;
 }
 
+/** A block a page that is not the home can be given (FER-060). */
+export interface PageLayoutBlockChoice {
+  name: string;
+  section: PageSection;
+}
+
 export interface PageLayoutEditorProps {
+  /**
+   * The blocks the page can be given, for a page that is not the home
+   * (FER-060): with it, each category's row and curated row of the page
+   * can be taken out, and those not on it added. Without it (the home,
+   * which shows every category and both curated rows), neither.
+   */
+  blocks?: readonly PageLayoutBlockChoice[];
   /** The published articles the curated rows can take. */
   choices: readonly PageLayoutChoice[];
   className?: string;
@@ -198,6 +211,90 @@ function LayoutItem({
   );
 }
 
+/**
+ * Whether a place is a block given by hand on a page that is not the home
+ * (FER-060), which its editor can take out: a category's row or a curated
+ * row. A banner or a spotlight leaves a page from its own form.
+ */
+function isGivenBlock(section: PageSection): boolean {
+  return (
+    section.kind === "category" ||
+    section.kind === "best_sellers" ||
+    section.kind === "featured"
+  );
+}
+
+/** A picker of the blocks not on the page yet, and the button that adds one. */
+function AddBlock({
+  blocks,
+  onAdd,
+  taken,
+}: {
+  blocks: readonly PageLayoutBlockChoice[];
+  onAdd: (section: PageSection) => void;
+  taken: readonly string[];
+}) {
+  const copy = useDictionary().admin.home.layout;
+  const choose = useDictionary().admin.home.bannerForm.fields.choose;
+  const selectId = useId();
+  const [picked, setPicked] = useState("");
+  const offered = blocks.filter(
+    (block) => !taken.includes(pageSectionKey(block.section))
+  );
+
+  if (offered.length === 0) {
+    return <p className="text-xs text-muted-foreground">{copy.addBlockNone}</p>;
+  }
+
+  return (
+    <div
+      className="flex flex-wrap items-end gap-2"
+      data-testid="page-add-block"
+    >
+      <div className="grid min-w-0 flex-1 basis-48 gap-2">
+        <label className="text-sm font-medium" htmlFor={selectId}>
+          {copy.addBlockLabel}
+        </label>
+        <select
+          className={SELECT_CLASS}
+          id={selectId}
+          onChange={(event) => {
+            setPicked(event.currentTarget.value);
+          }}
+          value={picked}
+        >
+          <option value="">{choose}</option>
+          {offered.map((block) => (
+            <option
+              key={pageSectionKey(block.section)}
+              value={pageSectionKey(block.section)}
+            >
+              {block.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Button
+        disabled={picked === ""}
+        onClick={() => {
+          const block = offered.find(
+            (entry) => pageSectionKey(entry.section) === picked
+          );
+
+          if (block) {
+            onAdd(block.section);
+            setPicked("");
+          }
+        }}
+        type="button"
+        variant="outline"
+      >
+        {copy.addBlock}
+      </Button>
+    </div>
+  );
+}
+
 /** A list that is one card of rows divided by hairlines. */
 function List({ children, empty }: { children: ReactNode[]; empty: string }) {
   return children.length === 0 ? (
@@ -312,6 +409,7 @@ function CuratedList({
  * the screen's top bar (`id`).
  */
 function PageLayoutEditor({
+  blocks,
   choices,
   className,
   describeArticle,
@@ -401,6 +499,13 @@ function PageLayoutEditor({
                   onMove={(from, to) => {
                     sections.move(from, to);
                   }}
+                  onRemove={
+                    blocks && isGivenBlock(field.section)
+                      ? () => {
+                          sections.remove(index);
+                        }
+                      : undefined
+                  }
                   testId="home-layout-rows-item"
                 />
               ))}
@@ -410,9 +515,20 @@ function PageLayoutEditor({
                 {sectionsError}
               </p>
             ) : null}
+            {blocks ? (
+              <AddBlock
+                blocks={blocks}
+                onAdd={(section) => {
+                  sections.append({ section });
+                }}
+                taken={sections.fields.map((field) =>
+                  pageSectionKey(field.section)
+                )}
+              />
+            ) : null}
           </LayoutCard>
           <LayoutCard
-            hint={copy.bestSellersHint}
+            hint={`${copy.bestSellersHint} ${copy.sharedList}`}
             testId="home-layout-best-sellers"
             title={copy.bestSellers}
           >
@@ -427,7 +543,7 @@ function PageLayoutEditor({
             />
           </LayoutCard>
           <LayoutCard
-            hint={copy.featuredHint}
+            hint={`${copy.featuredHint} ${copy.sharedList}`}
             testId="home-layout-featured"
             title={copy.featured}
           >

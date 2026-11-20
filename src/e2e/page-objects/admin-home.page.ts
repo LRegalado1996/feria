@@ -9,15 +9,18 @@ import { AdminPage } from "./admin.page";
 
 // The admin reads in Spanish, the language of an unprefixed URL.
 
-/** The home's curation (`/admin/home`, FER-020). */
+/** The home's editor (`/admin/home`, FER-020, FER-060). */
 export class AdminHomePage extends AdminPage {
   /**
    * Opens the screen and waits until React owns it: the order's save button
    * is enabled only once the page hydrated.
    */
   async open(): Promise<void> {
+    // `/admin/home` leads to the editor of the page that is the home now
+    // (FER-060), which is named "Home" in every language.
     await this.goto("/admin/home");
-    await expect(this.heading()).toHaveText("Inicio");
+    await expect(this.page).toHaveURL(/\/admin\/pages\/\d+$/u);
+    await expect(this.heading()).toHaveText("Home");
     await expect(this.saveOrderButton()).toBeEnabled();
   }
 

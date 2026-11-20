@@ -13,7 +13,19 @@ import {
 } from "@/lib/schemas/page";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
-import { PageLayoutEditor, type PageLayoutEntry } from "./page-layout-editor";
+import {
+  type PageLayoutBlockChoice,
+  PageLayoutEditor,
+  type PageLayoutEntry,
+} from "./page-layout-editor";
+
+/** What a page that is not the home can be given (FER-060). */
+const BLOCKS: PageLayoutBlockChoice[] = [
+  { name: "Rings", section: { categoryId: 4, kind: "category" } },
+  { name: "Earrings", section: { categoryId: 5, kind: "category" } },
+  { name: "Best sellers", section: { kind: "best_sellers" } },
+  { name: "Featured", section: { kind: "featured" } },
+];
 
 /** Twelve published articles, `Article 1` to `Article 12`. */
 const CHOICES = Array.from({ length: 12 }, (_value, index) => ({
@@ -65,10 +77,12 @@ function makeFields(
 }
 
 function Harness({
+  blocks,
   fields,
   locale,
   onSave,
 }: {
+  blocks?: readonly PageLayoutBlockChoice[];
   fields: PageLayoutFormFields;
   locale: Locale;
   onSave: (values: SavePageLayoutValues) => Promise<boolean>;
@@ -83,6 +97,7 @@ function Harness({
   return (
     <>
       <PageLayoutEditor
+        blocks={blocks}
         choices={CHOICES}
         describeArticle={describeArticle}
         describeBanner={(id) => ({
@@ -107,10 +122,12 @@ function Harness({
 }
 
 function setup({
+  blocks,
   fields = makeFields(),
   locale = "en",
   saves = true,
 }: {
+  blocks?: readonly PageLayoutBlockChoice[];
   fields?: PageLayoutFormFields;
   locale?: Locale;
   saves?: boolean;
@@ -118,9 +135,10 @@ function setup({
   const onSave = vi.fn(
     async (_values: SavePageLayoutValues) => await Promise.resolve(saves)
   );
-  renderWithI18n(<Harness fields={fields} locale={locale} onSave={onSave} />, {
-    locale,
-  });
+  renderWithI18n(
+    <Harness blocks={blocks} fields={fields} locale={locale} onSave={onSave} />,
+    { locale }
+  );
   const user = userEvent.setup();
   const card = (testId: string) => screen.getByTestId(testId);
   const names = (testId: string) =>
@@ -139,6 +157,101 @@ function setup({
     user,
   };
 }
+
+describe("PageLayoutEditor on a page that is not the home (FER-060)", () => {
+  test("offers the blocks it does not have yet, and adds the one picked at the end", async () => {
+    const { names, onSave, submit, user } = setup({ blocks: BLOCKS });
+    const add = screen.getByTestId("page-add-block");
+    const picker = within(add).getByRole("combobox", { name: "Block to add" });
+
+    // Rings, the best sellers and the featured are on it already.
+    expect(
+      within(picker)
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Choose…", "Earrings"]);
+    expect(
+      within(add).getByRole("button", { name: "Add block" })
+    ).toBeDisabled();
+
+    await user.selectOptions(picker, "category:5");
+    await user.click(within(add).getByRole("button", { name: "Add block" }));
+
+    expect(names("home-layout-rows")).toEqual([
+      "Best sellers",
+      "Banner: Fair",
+      "Rings",
+      "Featured",
+      "Rings",
+    ]);
+    expect(screen.getByText("No more blocks to add.")).toBeInTheDocument();
+
+    await submit();
+
+    expect(onSave.mock.calls[0]?.[0].sections).toEqual([
+      { kind: "best_sellers" },
+      { bannerId: 33, kind: "banner" },
+      { categoryId: 4, kind: "category" },
+      { kind: "featured" },
+      { categoryId: 5, kind: "category" },
+    ]);
+  });
+
+  test("takes out a row it was given; a banner leaves from its own form", async () => {
+    const { names, onSave, submit, user } = setup({ blocks: BLOCKS });
+    const rows = screen.getByTestId("home-layout-rows");
+
+    expect(
+      within(rows).queryByRole("button", { name: "Remove: Banner: Fair" })
+    ).toBeNull();
+
+    await user.click(
+      within(rows).getByRole("button", { name: "Remove: Best sellers" })
+    );
+
+    expect(names("home-layout-rows")).toEqual([
+      "Banner: Fair",
+      "Rings",
+      "Featured",
+    ]);
+    // Taken out, it is offered again.
+    expect(
+      within(screen.getByTestId("page-add-block"))
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Choose…", "Earrings", "Best sellers"]);
+
+    await submit();
+
+    expect(onSave.mock.calls[0]?.[0].sections).toEqual([
+      { bannerId: 33, kind: "banner" },
+      { categoryId: 4, kind: "category" },
+      { kind: "featured" },
+    ]);
+  });
+
+  test("the home is given no block and loses none: FER-020's rule fills it", () => {
+    setup();
+
+    expect(screen.queryByTestId("page-add-block")).toBeNull();
+    expect(
+      within(screen.getByTestId("home-layout-rows")).queryByRole("button", {
+        name: /^Remove/u,
+      })
+    ).toBeNull();
+  });
+
+  test("says the curated lists are the same on every page", () => {
+    setup({ blocks: BLOCKS });
+
+    expect(screen.getByTestId("home-layout-best-sellers")).toHaveTextContent(
+      "This list is the same on every page."
+    );
+    expect(screen.getByTestId("home-layout-featured")).toHaveTextContent(
+      "This list is the same on every page."
+    );
+  });
+});
 
 describe("PageLayoutEditor", () => {
   test("lists the cover, the rows and the curated articles in their order, with what each says", () => {
@@ -442,7 +555,7 @@ describe("PageLayoutEditor", () => {
     setup({ locale: "es" });
 
     expect(
-      screen.getByRole("form", { name: "Orden del inicio" })
+      screen.getByRole("form", { name: "Orden de la página" })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Más vendidos" })

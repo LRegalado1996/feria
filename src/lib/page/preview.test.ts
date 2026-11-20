@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import type { PageCurationData } from "@/lib/hooks/page";
 import type { SaveAnnouncementValues } from "@/lib/schemas/page";
+import { makeHomePage } from "@/test/factories/home-curation";
 
 import { type PagePreviewDrafts, previewPageContent } from "./preview";
 
@@ -87,6 +88,7 @@ function makeData(overrides: Partial<PageCurationData> = {}): PageCurationData {
     coverBannerIds: [],
     currencyCode: "UYU",
     featuredProductIds: [],
+    page: makeHomePage(),
     pageId: 1,
     rankingProductIds: [],
     sections: [],

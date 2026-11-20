@@ -67,6 +67,19 @@ export interface HomeEdit {
   /** The run's announcement, which the test's end writes back. */
   announcement: typeof STORE_ANNOUNCEMENT;
   /**
+   * Adds a page of the store (FER-060) through `page.create`, as an admin,
+   * at `/<slug>`, published unless told otherwise, with the rows of
+   * `categoryIds` in that order; answers its id. The test's end deletes
+   * it, as every page the test made through the admin.
+   */
+  addPage: (values: {
+    categoryIds?: number[];
+    isPublished?: boolean;
+    nameEs: string;
+    showInHeader?: boolean;
+    slug: string;
+  }) => Promise<number>;
+  /**
    * Leaves the home nothing to show until the test ends (FER-022's empty
    * store): every published article of the store becomes a draft and every
    * banner on is switched off, then the home's cached read is dropped.
@@ -311,6 +324,13 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
 
     const pageId = own.homePageId;
     const before = await readHome(request, pageId);
+    const listPageIds = async () =>
+      z
+        .array(z.object({ id: z.number() }))
+        .parse(await callHome(request, "list", undefined))
+        .map((row) => row.id);
+    // The pages before the test: any other it made goes when it ends.
+    const keptPages = new Set(await listPageIds());
     const kept = new Set(before.banners.map((row) => row.id));
     const keptSpotlights = new Set(before.spotlights.map((row) => row.id));
     const hidden: { articleIds: number[]; bannerIds: number[] } = {
@@ -323,6 +343,39 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
 
     try {
       await use({
+        addPage: async ({
+          categoryIds = [],
+          isPublished = true,
+          nameEs,
+          showInHeader = false,
+          slug,
+        }) => {
+          const created = z.object({ id: z.number() }).parse(
+            await callHome(request, "create", {
+              isPublished,
+              nameEn: null,
+              nameEs,
+              seoDescriptionEn: null,
+              seoDescriptionEs: null,
+              seoTitleEn: null,
+              seoTitleEs: null,
+              showInHeader,
+              slug,
+            })
+          );
+          await callHome(request, "saveLayout", {
+            coverBannerIds: [],
+            featuredProductIds: before.featuredProductIds,
+            pageId: created.id,
+            rankingProductIds: before.rankingProductIds,
+            sections: categoryIds.map((categoryId) => ({
+              categoryId,
+              kind: "category",
+            })),
+          } satisfies SavePageLayoutValues & { pageId: number });
+
+          return created.id;
+        },
         addSpotlight: async (productId, words) => {
           const created = z.object({ id: z.number() }).parse(
             await callHome(request, "createSpotlight", {
@@ -409,6 +462,14 @@ export const test = dbTest.extend<StoreFixtures, StoreWorkerFixtures>({
           sections: before.sections,
         } satisfies SavePageLayoutValues & { pageId: number });
         await writeStoreAnnouncement(request, STORE_ANNOUNCEMENT);
+        // The home back first: the page the test chose may be one it made.
+        await callHome(request, "setHome", { pageId });
+
+        for (const id of (await listPageIds()).filter(
+          (page) => !keptPages.has(page)
+        )) {
+          await callHome(request, "delete", { id });
+        }
       } finally {
         await request.dispose();
       }

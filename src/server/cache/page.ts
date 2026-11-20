@@ -13,6 +13,11 @@ import {
   findShowingAnnouncement,
   getPageContent,
 } from "@/server/services/page";
+import {
+  findHomePage,
+  findStorePage,
+  listHeaderPages,
+} from "@/server/services/page-settings";
 
 /**
  * Every cached read of what a store's pages show (FER-058): its banners,
@@ -31,6 +36,15 @@ export function pageTag(storeId: number, pageId: number): string {
 /** The cached choice of the store's home page (FER-058). */
 export function homePageTag(storeId: number): string {
   return `home-page:${storeId}`;
+}
+
+/**
+ * Every cached read of the store's pages' settings (FER-060): a page found
+ * by its address, and the pages the header lists. Any write to a page's
+ * name, address, status or place in the header drops it.
+ */
+export function pageSettingsTag(storeId: number): string {
+  return `page-settings:${storeId}`;
 }
 
 /** The cached announcement every store page's frame shows (FER-020). */
@@ -134,4 +148,69 @@ export function invalidatePageCache(storeId: number, pageId: number): void {
 /** Drops the cached announcement after it is saved. */
 export function invalidateAnnouncementCache(storeId: number): void {
   revalidateTag(announcementTag(storeId), { expire: 0 });
+}
+
+/**
+ * The store's page at `/<slug>` in `locale` (FER-060), or `null`, cached
+ * across requests under the pages' settings: whether it is published and
+ * whether it is the home are read here too, so a write to either drops it.
+ */
+export async function readStorePage(
+  store: { id: number },
+  slug: string,
+  locale: Locale
+) {
+  "use cache";
+  // A safety net only: a write to the pages' settings drops it at once.
+  cacheLife("hours");
+  cacheTag(pageSettingsTag(store.id), homePageTag(store.id));
+
+  return await findStorePage(db, { locale, slug, storeId: store.id });
+}
+
+/** The page `/` shows, in `locale` (FER-060), cached likewise. */
+export async function readHomePage(store: { id: number }, locale: Locale) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(pageSettingsTag(store.id), homePageTag(store.id));
+
+  return await findHomePage(db, { locale, storeId: store.id });
+}
+
+/** The pages the header lists in `locale` (FER-060), cached likewise. */
+export async function readHeaderPages(store: { id: number }, locale: Locale) {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(pageSettingsTag(store.id), homePageTag(store.id));
+
+  return await listHeaderPages(db, { locale, storeId: store.id });
+}
+
+/**
+ * Drops what is cached of the pages' settings after a write to one: the
+ * page by its address and the header's list, and the page's own read when
+ * given (its address or its blocks changed with it).
+ */
+export function invalidatePageSettingsCache(
+  storeId: number,
+  pageIds: readonly number[] = []
+): void {
+  revalidateTag(pageSettingsTag(storeId), { expire: 0 });
+
+  for (const pageId of pageIds) {
+    revalidateTag(pageTag(storeId, pageId), { expire: 0 });
+  }
+}
+
+/**
+ * Drops what changes with the home (FER-060): which page `/` shows, the
+ * reads of both pages involved (the home's rule fills its blocks in) and
+ * everything that lists pages.
+ */
+export function invalidateHomeChoiceCache(
+  storeId: number,
+  pageIds: readonly number[]
+): void {
+  revalidateTag(homePageTag(storeId), { expire: 0 });
+  invalidatePageSettingsCache(storeId, pageIds);
 }

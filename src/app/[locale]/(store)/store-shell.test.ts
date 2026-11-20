@@ -6,35 +6,49 @@ import { holdRequest, settle } from "@/test/connection";
 
 import { announcementOf, shellOf, streamedShell } from "./store-shell";
 
-const { connection, readAnnouncement, readCategories, readStore } = vi.hoisted(
-  () => ({
-    connection: vi.fn(async () => undefined),
-    readAnnouncement:
-      vi.fn<(store: { id: number }, locale: string) => Promise<unknown>>(),
-    // One the header shows, one the admin took out of it (FER-051).
-    readCategories: vi.fn(async (_store: { id: number }, locale: string) => [
-      {
-        id: 1,
-        lang: locale,
-        name: `anillos-${locale}`,
-        parentId: null,
-        path: "/anillos",
-        showInHeader: true,
-        slug: "anillos",
-      },
-      {
-        id: 2,
-        lang: locale,
-        name: `relojes-${locale}`,
-        parentId: null,
-        path: "/relojes",
-        showInHeader: false,
-        slug: "relojes",
-      },
-    ]),
-    readStore: vi.fn<() => Promise<PublicStore | null>>(),
-  })
-);
+const {
+  connection,
+  readAnnouncement,
+  readCategories,
+  readHeaderPages,
+  readStore,
+} = vi.hoisted(() => ({
+  connection: vi.fn(async () => undefined),
+  readAnnouncement:
+    vi.fn<(store: { id: number }, locale: string) => Promise<unknown>>(),
+  // One the header shows, one the admin took out of it (FER-051).
+  readCategories: vi.fn(async (_store: { id: number }, locale: string) => [
+    {
+      id: 1,
+      lang: locale,
+      name: `anillos-${locale}`,
+      parentId: null,
+      path: "/anillos",
+      showInHeader: true,
+      slug: "anillos",
+    },
+    {
+      id: 2,
+      lang: locale,
+      name: `relojes-${locale}`,
+      parentId: null,
+      path: "/relojes",
+      showInHeader: false,
+      slug: "relojes",
+    },
+  ]),
+  // A page the admin shows in the header (FER-060).
+  readHeaderPages: vi.fn(async (_store: { id: number }, locale: string) => [
+    {
+      id: 9,
+      lang: locale,
+      name: `regalos-${locale}`,
+      path: "/regalos",
+      slug: "regalos",
+    },
+  ]),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+}));
 
 vi.mock("next/server", () => ({ connection }));
 
@@ -45,7 +59,20 @@ vi.mock("@/server/cache/store", () => ({ readStore }));
 
 vi.mock("@/server/cache/catalog", () => ({ readCategories }));
 
-vi.mock("@/server/cache/page", () => ({ readAnnouncement }));
+vi.mock("@/server/cache/page", () => ({ readAnnouncement, readHeaderPages }));
+
+/** The header's entry for page 9, as a category in no group. */
+function pageEntry(locale: string) {
+  return {
+    id: -9,
+    lang: locale,
+    name: `regalos-${locale}`,
+    parentId: null,
+    path: "/regalos",
+    showInHeader: true,
+    slug: "regalos",
+  };
+}
 
 const SPANISH = {
   description: "Anillos y cadenas.",
@@ -171,6 +198,8 @@ describe("streamedShell", () => {
     });
     // Only those the header shows (FER-051).
     await expect(shell.categories).resolves.toEqual([
+      // The pages it shows there first, then the categories (FER-060).
+      pageEntry("en"),
       {
         id: 1,
         lang: "en",
@@ -181,6 +210,7 @@ describe("streamedShell", () => {
         slug: "anillos",
       },
     ]);
+    expect(readHeaderPages).toHaveBeenCalledExactlyOnceWith(store, "en");
     expect(readStore).toHaveBeenCalledExactlyOnceWith();
     expect(readAnnouncement).toHaveBeenCalledExactlyOnceWith(store, "en");
     expect(readCategories).toHaveBeenCalledExactlyOnceWith(store, "en");
@@ -195,6 +225,7 @@ describe("streamedShell", () => {
     await expect(shell.categories).resolves.toEqual([]);
     expect(readAnnouncement).not.toHaveBeenCalled();
     expect(readCategories).not.toHaveBeenCalled();
+    expect(readHeaderPages).not.toHaveBeenCalled();
   });
 });
 
@@ -216,6 +247,7 @@ describe("shellOf", () => {
     // behind no boundary, in the first response (FER-043).
     // Only those the header shows (FER-051).
     expect(shell.categories).toEqual([
+      pageEntry("es"),
       {
         id: 1,
         lang: "es",
@@ -274,7 +306,7 @@ describe("shellOf", () => {
     const shell = await shellOf(makeStore(), "es", own);
 
     // Those the header shows (FER-051).
-    expect(shell.categories).toEqual([aros]);
+    expect(shell.categories).toEqual([pageEntry("es"), aros]);
     expect(readCategories).not.toHaveBeenCalled();
   });
 });

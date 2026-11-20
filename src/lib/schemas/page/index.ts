@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { INT4_MAX } from "@/lib/schemas/catalog";
+import {
+  CATALOG_SLUG_MAX_LENGTH,
+  CATALOG_SLUG_PATTERN,
+  INT4_MAX,
+  RESERVED_CATEGORY_SLUGS,
+} from "@/lib/schemas/catalog";
 import { uploadedImageSchema } from "@/lib/schemas/upload";
 
 /** The curated "best sellers" row holds at most this many articles. */
@@ -832,3 +837,132 @@ export function createSpotlightFormSchema(messages: SpotlightFormMessages) {
       };
     });
 }
+
+/** A page's name, and its texts for search engines (FER-060). */
+export const PAGE_NAME_MAX_LENGTH = 60;
+export const PAGE_SEO_TITLE_MAX_LENGTH = 70;
+export const PAGE_SEO_DESCRIPTION_MAX_LENGTH = 160;
+
+/**
+ * Whether `slug` is an address a page may take as far as the address
+ * alone says (FER-060): lowercase words joined by hyphens, as a category's,
+ * and never a path the site already answers (`RESERVED_CATEGORY_SLUGS`).
+ * That no category, group or other page has it is the service's to check.
+ */
+export function isPageSlug(slug: string): boolean {
+  return (
+    slug.length <= CATALOG_SLUG_MAX_LENGTH &&
+    CATALOG_SLUG_PATTERN.test(slug) &&
+    !(RESERVED_CATEGORY_SLUGS as readonly string[]).includes(slug)
+  );
+}
+
+const pageFields = z.object({
+  isPublished: z.boolean(),
+  nameEn: optionalText(
+    PAGE_NAME_MAX_LENGTH,
+    `Keep the name to ${PAGE_NAME_MAX_LENGTH} characters`
+  ),
+  nameEs: requiredText(
+    PAGE_NAME_MAX_LENGTH,
+    "A Spanish name is required",
+    `Keep the name to ${PAGE_NAME_MAX_LENGTH} characters`
+  ),
+  seoDescriptionEn: optionalText(
+    PAGE_SEO_DESCRIPTION_MAX_LENGTH,
+    `Keep the description to ${PAGE_SEO_DESCRIPTION_MAX_LENGTH} characters`
+  ),
+  seoDescriptionEs: optionalText(
+    PAGE_SEO_DESCRIPTION_MAX_LENGTH,
+    `Keep the description to ${PAGE_SEO_DESCRIPTION_MAX_LENGTH} characters`
+  ),
+  seoTitleEn: optionalText(
+    PAGE_SEO_TITLE_MAX_LENGTH,
+    `Keep the title to ${PAGE_SEO_TITLE_MAX_LENGTH} characters`
+  ),
+  seoTitleEs: optionalText(
+    PAGE_SEO_TITLE_MAX_LENGTH,
+    `Keep the title to ${PAGE_SEO_TITLE_MAX_LENGTH} characters`
+  ),
+  showInHeader: z.boolean(),
+  slug: z.string().trim().refine(isPageSlug, {
+    error: "Enter a free address: lowercase words joined by hyphens",
+  }),
+});
+
+/**
+ * A page of the store (FER-060): its name in Spanish and, optionally,
+ * English; its address (`/<slug>`, the same under `/en`); its title and
+ * description for search engines in each language, made from the name
+ * when left out; whether it is published; and whether the header lists it.
+ */
+export const createPageSchema = pageFields;
+
+export type CreatePageValues = z.infer<typeof createPageSchema>;
+
+/** An edit of a page's settings, by its id. */
+export const updatePageSchema = pageFields.extend({ id: pathIdSchema });
+
+export type UpdatePageValues = z.infer<typeof updatePageSchema>;
+
+export const deletePageSchema = z.object({ id: pathIdSchema });
+
+/** Which page `/` shows: the store's home (FER-058, FER-060). */
+export const setHomePageSchema = z.object({ pageId: pathIdSchema });
+
+/** What the page form says under a field it refuses. */
+export interface PageFormMessages {
+  nameRequired: string;
+  nameTooLong: string;
+  seoDescriptionTooLong: string;
+  seoTitleTooLong: string;
+  slugInvalid: string;
+}
+
+/** The page form's fields, as the form holds them. */
+export interface PageFormFields {
+  isPublished: boolean;
+  nameEn: string;
+  nameEs: string;
+  seoDescriptionEn: string;
+  seoDescriptionEs: string;
+  seoTitleEn: string;
+  seoTitleEs: string;
+  showInHeader: boolean;
+  slug: string;
+}
+
+/**
+ * The page form's fields, read into a page's values with the screen's
+ * words for a refusal: blanks are none, and the address is lowercased and
+ * trimmed before it is checked.
+ */
+export function createPageFormSchema(messages: PageFormMessages) {
+  return z.object({
+    isPublished: z.boolean(),
+    nameEn: blankText(PAGE_NAME_MAX_LENGTH, messages.nameTooLong),
+    nameEs: requiredText(
+      PAGE_NAME_MAX_LENGTH,
+      messages.nameRequired,
+      messages.nameTooLong
+    ),
+    seoDescriptionEn: blankText(
+      PAGE_SEO_DESCRIPTION_MAX_LENGTH,
+      messages.seoDescriptionTooLong
+    ),
+    seoDescriptionEs: blankText(
+      PAGE_SEO_DESCRIPTION_MAX_LENGTH,
+      messages.seoDescriptionTooLong
+    ),
+    seoTitleEn: blankText(PAGE_SEO_TITLE_MAX_LENGTH, messages.seoTitleTooLong),
+    seoTitleEs: blankText(PAGE_SEO_TITLE_MAX_LENGTH, messages.seoTitleTooLong),
+    showInHeader: z.boolean(),
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .refine(isPageSlug, { error: messages.slugInvalid }),
+  });
+}
+
+export type PageFormValues = z.infer<ReturnType<typeof createPageFormSchema>>;

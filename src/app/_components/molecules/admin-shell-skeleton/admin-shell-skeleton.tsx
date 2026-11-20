@@ -10,7 +10,7 @@ const NAV_ROWS = [
   "products",
   "categories",
   "filters",
-  "home",
+  "pages",
   "settings",
   "users",
   "metrics",

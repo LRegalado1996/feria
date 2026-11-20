@@ -56,6 +56,9 @@ async function rolledBack(
     await tx.execute(
       sql`alter table "store" alter column "homePageId" drop not null`
     );
+    // Before 0026 a page had no address (FER-060): the pages 0021 adds
+    // get theirs from 0025.
+    await tx.execute(sql`alter table "page" alter column "slug" drop not null`);
     await tx.execute(
       sql`update "store" set "homePageId" = null where "id" = ${storeId}`
     );
@@ -196,7 +199,7 @@ describe("migration 0021: the home becomes a page", () => {
     await rolledBack(async (tx, storeId) => {
       const [own] = await tx
         .insert(page)
-        .values({ storeId })
+        .values({ slug: `own-${uniqueTag()}`, storeId })
         .returning({ id: page.id });
       const pageId = own?.id ?? 0;
       await tx

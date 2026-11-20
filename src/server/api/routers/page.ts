@@ -1,5 +1,9 @@
 import {
   createBannerSchema,
+  createPageSchema,
+  deletePageSchema,
+  setHomePageSchema,
+  updatePageSchema,
   createSpotlightSchema,
   deleteBannerSchema,
   deleteSpotlightSchema,
@@ -14,7 +18,9 @@ import { adminProcedure } from "@/server/api/orpc";
 import { discardBlobs, readBlobStore } from "@/server/api/utils/blob-store";
 import {
   writeToAnnouncement,
+  writeToHomeChoice,
   writeToPage,
+  writeToPageSettings,
   writeToPages,
 } from "@/server/api/utils/write-to-store";
 import {
@@ -28,6 +34,13 @@ import {
   updateBanner,
   updateSpotlight,
 } from "@/server/services/page";
+import {
+  createPage,
+  deletePage,
+  listPages,
+  setHomePage,
+  updatePage,
+} from "@/server/services/page-settings";
 
 /**
  * The store's pages and what they show (FER-020, FER-058), for the admin:
@@ -41,6 +54,90 @@ import {
  * once it is saved (FER-011).
  */
 export const pageRouter = {
+  list: adminProcedure
+    .handler(
+      async ({ context }) =>
+        await listPages(context.db, { storeId: context.store.id })
+    )
+    .route({
+      method: "GET",
+      path: "/admin/pages",
+      summary:
+        "The store's pages, the home first: each with its address, names, status and place in the header",
+      tags: ["pages"],
+    }),
+
+  create: adminProcedure
+    .input(createPageSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToPageSettings(
+          context,
+          async (tx, storeId) =>
+            await createPage(tx, { storeId, values: input })
+        )
+    )
+    .route({
+      method: "POST",
+      path: "/admin/pages",
+      summary: "Create a page at its own address, with no blocks yet",
+      tags: ["pages"],
+    }),
+
+  update: adminProcedure
+    .input(updatePageSchema)
+    .handler(async ({ context, input }) => {
+      const { previousSlug: _previous, ...updated } = await writeToPageSettings(
+        context,
+        async (tx, storeId) => await updatePage(tx, { storeId, values: input }),
+        (result) => [result.id]
+      );
+
+      return updated;
+    })
+    .route({
+      method: "PUT",
+      path: "/admin/pages/{id}",
+      summary:
+        "Edit a page's names, address, texts for search engines, status and place in the header",
+      tags: ["pages"],
+    }),
+
+  delete: adminProcedure
+    .input(deletePageSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToPageSettings(
+          context,
+          async (tx, storeId) =>
+            await deletePage(tx, { id: input.id, storeId }),
+          (result) => [result.id]
+        )
+    )
+    .route({
+      method: "DELETE",
+      path: "/admin/pages/{id}",
+      summary: "Delete a page that is not the home, with its blocks",
+      tags: ["pages"],
+    }),
+
+  setHome: adminProcedure
+    .input(setHomePageSchema)
+    .handler(
+      async ({ context, input }) =>
+        await writeToHomeChoice(
+          context,
+          async (tx, storeId) =>
+            await setHomePage(tx, { pageId: input.pageId, storeId })
+        )
+    )
+    .route({
+      method: "PUT",
+      path: "/admin/home-page",
+      summary: "Choose the published page the store shows at its home, /",
+      tags: ["pages"],
+    }),
+
   get: adminProcedure
     .input(pageRefSchema)
     .handler(

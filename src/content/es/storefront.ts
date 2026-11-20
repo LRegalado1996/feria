@@ -201,6 +201,14 @@ export const storefront = {
     title: "Pedido {code}",
     total: "Total",
   },
+  // A page of the store built from sections (FER-060).
+  page: {
+    // Its description for search engines when the admin wrote none.
+    description: "{name} en {store}. Mirá los precios y hacé tu pedido online.",
+    draft:
+      "Borrador: la ves porque iniciaste sesión. El público todavía no la ve.",
+    empty: "Esta página todavía no muestra nada.",
+  },
   price: {
     previous: "Antes {price}",
   },

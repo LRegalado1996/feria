@@ -1,7 +1,9 @@
 import { invalidateCatalogCache } from "@/server/cache/catalog";
 import {
   invalidateAnnouncementCache,
+  invalidateHomeChoiceCache,
   invalidatePageCache,
+  invalidatePageSettingsCache,
   invalidatePagesCache,
 } from "@/server/cache/page";
 import type { DatabaseClient } from "@/server/db";
@@ -98,6 +100,43 @@ export async function writeToAnnouncement<T>(
 ): Promise<T> {
   const result = await writeToStore(context, write);
   invalidateAnnouncementCache(context.store.id);
+
+  return result;
+}
+
+/**
+ * `writeToStore` for a write to a page's settings (FER-060): its name,
+ * address, status or place in the header, its creation or deletion. Once
+ * it committed, the pages found by address and the header's list are
+ * dropped, and the read of each page the write names (`pageIds`, read from
+ * what it committed).
+ */
+export async function writeToPageSettings<T>(
+  context: StoreWriteContext,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>,
+  pageIds: (result: T) => readonly number[] = () => []
+): Promise<T> {
+  const result = await writeToStore(context, write);
+  invalidatePageSettingsCache(context.store.id, pageIds(result));
+
+  return result;
+}
+
+/**
+ * `writeToStore` for the choice of the home (FER-060): once it committed,
+ * what `/` shows, both pages involved and every list of pages are dropped.
+ */
+export async function writeToHomeChoice<
+  T extends { homePageId: number; previousHomeId: number },
+>(
+  context: StoreWriteContext,
+  write: (tx: DatabaseClient, storeId: number) => Promise<T>
+): Promise<T> {
+  const result = await writeToStore(context, write);
+  invalidateHomeChoiceCache(context.store.id, [
+    result.previousHomeId,
+    result.homePageId,
+  ]);
 
   return result;
 }

@@ -12,20 +12,28 @@ export interface PageLayoutTargets {
   rowBannerIds: readonly number[];
   /** The article spotlights between the page's rows (FER-059). */
   spotlightIds: readonly number[];
+  /**
+   * The home's rule (FER-020): every category has a row on it and both
+   * curated rows a place, those with none yet added. Off for any other
+   * page (FER-060), which shows the blocks it was given and no more.
+   * Left out, on.
+   */
+  fillIn?: boolean;
 }
 
 /**
  * A page's sequence under its cover (FER-020, FER-058), whole: the places
- * that were saved, in their order, less any whose category or banner is
- * gone, then what has no place yet. A page that was never saved opens on
- * "best sellers", then "featured", then its categories; a category or a
- * banner added since the last save comes after the rest, in the
- * categories' own order. The admin's screen, its preview and the storefront
+ * that were saved, in their order, less any whose category, banner or
+ * spotlight is gone, then a banner or a spotlight of the page with no place
+ * yet (one added in another tab). On the home (`fillIn`), a page never
+ * saved opens on "best sellers", then "featured", then its categories, and
+ * a category added since the last save comes after the rest, in the
+ * categories' own order; another page holds only what it was given. The admin's screen, its preview and the storefront
  * all read the sequence through here, so the three agree.
  */
 export function resolvePageSections(
   saved: readonly PageSection[],
-  { categoryIds, rowBannerIds, spotlightIds }: PageLayoutTargets
+  { categoryIds, fillIn = true, rowBannerIds, spotlightIds }: PageLayoutTargets
 ): PageSection[] {
   const categories = new Set(categoryIds);
   const banners = new Set(rowBannerIds);
@@ -54,19 +62,21 @@ export function resolvePageSections(
     }
   }
 
-  const curated: PageSection[] = [];
+  if (fillIn) {
+    const curated: PageSection[] = [];
 
-  for (const kind of ["best_sellers", "featured"] as const) {
-    if (!placed.has(kind)) {
-      placed.add(kind);
-      curated.push({ kind });
+    for (const kind of ["best_sellers", "featured"] as const) {
+      if (!placed.has(kind)) {
+        placed.add(kind);
+        curated.push({ kind });
+      }
     }
-  }
 
-  sections.unshift(...curated);
+    sections.unshift(...curated);
 
-  for (const categoryId of categoryIds) {
-    place({ categoryId, kind: "category" });
+    for (const categoryId of categoryIds) {
+      place({ categoryId, kind: "category" });
+    }
   }
 
   for (const bannerId of rowBannerIds) {

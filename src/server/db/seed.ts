@@ -8,6 +8,7 @@ import { addMissingStoreTexts, findStore } from "@/server/services/store";
 
 import { seedCatalog, seedCatalogPages } from "./seed-catalog";
 import { seedHome } from "./seed-home";
+import { seedPages } from "./seed-pages";
 
 interface SeedAccount {
   email: string;
@@ -152,12 +153,18 @@ export async function seed({ auth, databaseUrl, db, nodeEnv }: SeedOptions) {
   // The home's curation (FER-020) picks its articles and categories from
   // the catalog, so it comes after it, also on a store seeded before it.
   const home = await db.transaction(async (tx) => await seedHome(tx, store.id));
+  // An example page built from the same blocks (FER-060), after the home,
+  // whose articles and categories it shows too.
+  const examplePage = await db.transaction(
+    async (tx) => await seedPages(tx, store.id)
+  );
 
   return {
     catalogPages,
     createdAccounts,
     createdArticles,
     createdStoreTexts,
+    examplePage,
     home,
     openedStore,
   };

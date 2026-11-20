@@ -47,6 +47,22 @@ import type { BlobStore } from "./upload";
 
 const STORE_ID = 7;
 const PAGE_ID = 3;
+/** The page's own row, as an editor reads it: the store's home. */
+const PAGE_ROW = {
+  id: PAGE_ID,
+  isPublished: true,
+  showInHeader: false,
+  slug: "home",
+  translations: [
+    { locale: "es", name: "Home", seoDescription: null, seoTitle: null },
+    {
+      locale: "en",
+      name: "Home",
+      seoDescription: "The store.",
+      seoTitle: null,
+    },
+  ],
+};
 const TODAY = "2026-12-04";
 const HOST = "store9.public.blob.vercel-storage.com";
 const BLOB_STORE: BlobStore = {
@@ -351,7 +367,9 @@ describe("getPageContent", () => {
     // Fourteen published articles in Anillos and one with no category.
     answerSelects(
       db,
-      new Map([
+      new Map<unknown, unknown[]>([
+        // The page is the store's home: the home's rule fills it in.
+        [store, [{ homePageId: PAGE_ID }]],
         [
           product,
           [
@@ -481,17 +499,33 @@ describe("getPageContent", () => {
     });
   });
 
+  test("a page that is not the home holds only the blocks it was given (FER-060)", async () => {
+    const { db, read } = setup();
+    db.$["select.where"].mockImplementationOnce(
+      async () => await Promise.resolve([{ homePageId: 99 }])
+    );
+
+    const content = await read();
+
+    // No curated row it was not given, no category it was not given.
+    expect(content.sections.map((section) => section.key)).toEqual([
+      "banner:3",
+      "banner:4",
+      "category:1",
+    ]);
+  });
+
   test("reads only the store's published articles, in its own order", async () => {
     const { db, read } = setup();
 
     await read();
 
-    const [where] = db.$["select.where"].mock.calls[0] ?? [];
+    const [where] = db.$["select.where"].mock.calls[1] ?? [];
     expect(renderQuery(where)).toEqual({
       params: [STORE_ID, "published"],
       sql: '("product"."storeId" = $1 and "product"."status" = $2)',
     });
-    expect(readsOf(db).tables).toEqual([product]);
+    expect(readsOf(db).tables).toEqual([store, product]);
     // The first twelve of each category are the store's first twelve.
     expect(
       db.$["select.orderBy"].mock.calls.map((terms) => renderOrderBy(terms))
@@ -563,9 +597,13 @@ describe("getPageCuration", () => {
     const db = createMockDatabase();
     answerSelects(
       db,
-      new Map(currency ? [[store, [{ currencyCode: "UYU" }]]] : [])
+      new Map(
+        currency
+          ? [[store, [{ currencyCode: "UYU", homePageId: PAGE_ID }]]]
+          : []
+      )
     );
-    db.query.page.findFirst.mockResolvedValue({ id: PAGE_ID });
+    db.query.page.findFirst.mockResolvedValue(PAGE_ROW);
     db.query.pageCoverBanner.findMany.mockResolvedValue([
       { bannerId: 1, position: 0 },
       { bannerId: 3, position: 1 },
@@ -753,6 +791,19 @@ describe("getPageCuration", () => {
       coverBannerIds: [1, 3, 4, 6],
       currencyCode: "UYU",
       featuredProductIds: [],
+      page: {
+        id: PAGE_ID,
+        isHome: true,
+        isPublished: true,
+        nameEn: "Home",
+        nameEs: "Home",
+        seoDescriptionEn: "The store.",
+        seoDescriptionEs: null,
+        seoTitleEn: null,
+        seoTitleEs: null,
+        showInHeader: false,
+        slug: "home",
+      },
       pageId: PAGE_ID,
       rankingProductIds: [10],
       sections: [
@@ -982,6 +1033,8 @@ function makeTargets({
     [page, pages],
     [product, products],
     [spotlight, spotlights],
+    // The page is the store's home: the home's rule fills its blocks in.
+    [store, [{ homePageId: PAGE_ID }]],
   ]);
 }
 
@@ -1058,7 +1111,7 @@ describe("createBanner", () => {
     // The page, held to the store's, then the categories, both held.
     expect(readsOf(db)).toEqual({
       locks: ["key share", "key share", "key share"],
-      tables: [page, category, spotlight, banner],
+      tables: [page, category, spotlight, banner, store],
     });
     expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
       params: [STORE_ID, PAGE_ID],
@@ -1226,7 +1279,7 @@ describe("createBanner", () => {
 
     expect(readsOf(db)).toEqual({
       locks: ["key share", "key share", "key share", "key share"],
-      tables: [page, category, product, spotlight, banner],
+      tables: [page, category, product, spotlight, banner, store],
     });
     expect(renderQuery(db.$["select.where"].mock.calls[2]?.[0])).toEqual({
       params: [STORE_ID, 40],
@@ -1795,7 +1848,7 @@ describe("savePageLayout", () => {
 
     expect(readsOf(db)).toEqual({
       locks: ["key share", "key share", "key share", "key share"],
-      tables: [page, category, product, spotlight, banner],
+      tables: [page, category, product, spotlight, banner, store],
     });
     expect(db.$.delete.mock.calls.map(([table]) => table)).toEqual([
       pageSection,
@@ -1862,7 +1915,13 @@ describe("savePageLayout", () => {
       })
     );
 
-    expect(readsOf(db).tables).toEqual([page, category, spotlight, banner]);
+    expect(readsOf(db).tables).toEqual([
+      page,
+      category,
+      spotlight,
+      banner,
+      store,
+    ]);
     expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
       pageSection,
     ]);
@@ -2073,8 +2132,11 @@ describe("the spotlights on a page", () => {
 
   test("the page's editor reads each spotlight with its words in both languages and whether it is on the page", async () => {
     const db = createMockDatabase();
-    answerSelects(db, new Map([[store, [{ currencyCode: "UYU" }]]]));
-    db.query.page.findFirst.mockResolvedValue({ id: PAGE_ID });
+    answerSelects(
+      db,
+      new Map([[store, [{ currencyCode: "UYU", homePageId: PAGE_ID }]]])
+    );
+    db.query.page.findFirst.mockResolvedValue(PAGE_ROW);
     db.query.pageSection.findMany.mockResolvedValue([
       { bannerId: null, categoryId: null, kind: "spotlight", spotlightId: 51 },
     ]);
@@ -2160,7 +2222,7 @@ describe("createSpotlight", () => {
     });
     expect(readsOf(db)).toEqual({
       locks: ["key share", "key share", "key share", "key share"],
-      tables: [page, category, product, spotlight, banner],
+      tables: [page, category, product, spotlight, banner, store],
     });
     expect(db.$.insert.mock.calls.map(([table]) => table)).toEqual([
       spotlight,

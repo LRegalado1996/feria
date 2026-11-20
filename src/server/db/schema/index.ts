@@ -52,6 +52,7 @@ export {
   orderStatusEventRelations,
   pageCoverBannerRelations,
   pageRelations,
+  pageTranslationRelations,
   pageSectionRelations,
   productImageRelations,
   productImageTranslationRelations,
@@ -66,7 +67,13 @@ export {
   storeTranslationRelations,
   userRelations,
 } from "./relations";
-export { currencyCodeEnum, page, store, storeTranslation } from "./store";
+export {
+  currencyCodeEnum,
+  page,
+  pageTranslation,
+  store,
+  storeTranslation,
+} from "./store";
 export {
   attribute,
   attributeTranslation,

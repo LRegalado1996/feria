@@ -1,4 +1,5 @@
 export {
+  type PageLayoutBlockChoice,
   type PageLayoutChoice,
   PageLayoutEditor,
   type PageLayoutEditorProps,

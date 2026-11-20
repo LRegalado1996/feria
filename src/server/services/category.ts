@@ -10,7 +10,12 @@ import {
 } from "@/lib/schemas/catalog";
 import { firstFreeSlug, slugify } from "@/lib/utils/slugify";
 import type { DatabaseClient } from "@/server/db";
-import { category, categoryTranslation, product } from "@/server/db/schema";
+import {
+  category,
+  categoryTranslation,
+  page,
+  product,
+} from "@/server/db/schema";
 import type { BlobStore } from "@/server/services/upload";
 
 /** What names a category whose Spanish name has nothing readable in it. */
@@ -121,7 +126,8 @@ export type StoreCategory = Awaited<
  * Every write to a store's categories takes this lock first, held to the end
  * of its transaction: the duplicate-name check, the slug, the next position
  * and the groups are then decided by one writer at a time. The seed takes it
- * too (`seedCatalogPages`).
+ * too (`seedCatalogPages`), and so does a page that sets its address
+ * (FER-060), which shares the categories' address space.
  */
 export async function lockStoreCategories(tx: DatabaseClient, storeId: number) {
   await tx.execute(
@@ -188,10 +194,20 @@ export async function createCategory(
     .select({ position: category.position, slug: category.slug })
     .from(category)
     .where(eq(category.storeId, storeId));
+  // The store's pages share the address space (FER-060); they set theirs
+  // under this same lock.
+  const pages = await tx
+    .select({ slug: page.slug })
+    .from(page)
+    .where(eq(page.storeId, storeId));
   // A slug is a page's address (FER-043): never one the site already has.
   const slug = firstFreeSlug(
     slugify(values.nameEs, CATEGORY_SLUG_FALLBACK),
-    new Set([...RESERVED_CATEGORY_SLUGS, ...existing.map((row) => row.slug)])
+    new Set([
+      ...RESERVED_CATEGORY_SLUGS,
+      ...existing.map((row) => row.slug),
+      ...pages.map((row) => row.slug),
+    ])
   );
   // Under the lock, so two creations never take the same place.
   const position = Math.max(-1, ...existing.map((row) => row.position)) + 1;

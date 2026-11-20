@@ -45,6 +45,12 @@ const { seedHome } = vi.hoisted(() => ({
 
 vi.mock("./seed-home", () => ({ seedHome }));
 
+const { seedPages } = vi.hoisted(() => ({
+  seedPages: vi.fn(async (_tx: unknown, _storeId: number) => true),
+}));
+
+vi.mock("./seed-pages", () => ({ seedPages }));
+
 const LOCAL_URL = "postgresql://feria:secret@localhost:5432/feria";
 const REMOTE_URL =
   "postgresql://app:secret@ep-qa-123.us-east-2.aws.neon.tech/feria";
@@ -112,6 +118,7 @@ describe("seed", () => {
         createdAccounts: ["test@example.com"],
         createdArticles: 11,
         createdStoreTexts: ["es", "en"],
+        examplePage: true,
         home: HOME,
         openedStore: true,
       });
@@ -159,6 +166,7 @@ describe("seed", () => {
       createdAccounts: [],
       createdArticles: 11,
       createdStoreTexts: ["es", "en"],
+      examplePage: true,
       home: HOME,
       openedStore: true,
     });
@@ -225,7 +233,13 @@ describe("seed", () => {
     expect(seedCatalogPages.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
       seedHome.mock.invocationCallOrder[0] ?? 0
     );
+    // The example page (FER-060) after the home, in a transaction of its own.
+    expect(seedPages).toHaveBeenCalledExactlyOnceWith(tx, STORE_ID);
+    expect(seedHome.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      seedPages.mock.invocationCallOrder[0] ?? 0
+    );
     expect(db.$.transaction.mock.calls).toEqual([
+      [expect.any(Function)],
       [expect.any(Function)],
       [expect.any(Function)],
     ]);
@@ -242,6 +256,7 @@ describe("seed", () => {
     expect(seedCatalog).not.toHaveBeenCalled();
     expect(seedCatalogPages).not.toHaveBeenCalled();
     expect(seedHome).not.toHaveBeenCalled();
+    expect(seedPages).not.toHaveBeenCalled();
   });
 
   test("the seed's login is the documented one", () => {

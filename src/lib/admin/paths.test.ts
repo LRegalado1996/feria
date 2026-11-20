@@ -26,7 +26,7 @@ describe("admin paths", () => {
       "products",
       "categories",
       "filters",
-      "home",
+      "pages",
       "settings",
       "users",
       "metrics",

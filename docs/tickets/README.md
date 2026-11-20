@@ -96,7 +96,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-049](FER-049-share-card-blob-photos.md)         | An article's share card draws its uploaded photo  | P1       | todo        |
 | [FER-058](FER-058-pages-built-from-sections.md)      | Pages built from sections: the home is the first  | P0       | done        |
 | [FER-059](FER-059-home-article-spotlight.md)         | An article in the spotlight on the home           | P0       | done        |
-| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin         | P0       | todo        |
+| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin         | P0       | done        |
 
 ### M5 Metrics
 

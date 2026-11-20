@@ -51,6 +51,7 @@ function build(overrides: Partial<StoreLlmsInput> = {}) {
     currencyCode: "UYU",
     locale,
     origin: ORIGIN,
+    pages: [{ name: "Regalos de Navidad", path: "/regalos" }],
     store: makeStore(),
     ...overrides,
   });
@@ -69,6 +70,10 @@ describe("buildStoreLlms", () => {
         "## Categorías",
         "",
         `- [Anillos](${ORIGIN}/bijouterie/anillos)`,
+        "",
+        "## Páginas",
+        "",
+        `- [Regalos de Navidad](${ORIGIN}/regalos)`,
         "",
         "## Artículos",
         "",
@@ -95,6 +100,10 @@ describe("buildStoreLlms", () => {
         "## Categories",
         "",
         `- [Anillos](${ORIGIN}/en/bijouterie/anillos)`,
+        "",
+        "## Pages",
+        "",
+        `- [Regalos de Navidad](${ORIGIN}/en/regalos)`,
         "",
         "## Articles",
         "",
@@ -132,6 +141,7 @@ describe("buildStoreLlms", () => {
       ],
       categories: [],
       locale: "en",
+      pages: [],
       store: makeStore({
         translations: [
           { description: "  ", locale: "es", tagline: "Bijou\n y burbujas " },
@@ -163,6 +173,7 @@ describe("buildStoreLlms", () => {
       build({
         articles: [],
         categories: [],
+        pages: [],
         store: makeStore({ translations: [] }),
       })
     ).toBe(

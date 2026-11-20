@@ -5,7 +5,9 @@ import { createMockDatabase } from "@/server/test/context";
 import {
   writeToAnnouncement,
   writeToCatalog,
+  writeToHomeChoice,
   writeToPage,
+  writeToPageSettings,
   writeToPages,
   writeToStore,
 } from "./write-to-store";
@@ -30,9 +32,15 @@ const { TX, withAdmin } = vi.hoisted(() => {
 const {
   invalidateAnnouncementCache,
   invalidateCatalogCache,
+  invalidateHomeChoiceCache,
   invalidatePageCache,
+  invalidatePageSettingsCache,
   invalidatePagesCache,
 } = vi.hoisted(() => ({
+  invalidateHomeChoiceCache:
+    vi.fn<(storeId: number, pageIds: readonly number[]) => void>(),
+  invalidatePageSettingsCache:
+    vi.fn<(storeId: number, pageIds: readonly number[]) => void>(),
   invalidateAnnouncementCache: vi.fn<(storeId: number) => void>(),
   invalidateCatalogCache: vi.fn<(storeId: number) => void>(),
   invalidatePageCache: vi.fn<(storeId: number, pageId: number) => void>(),
@@ -46,7 +54,9 @@ vi.mock("@/server/cache/catalog", () => ({ invalidateCatalogCache }));
 
 vi.mock("@/server/cache/page", () => ({
   invalidateAnnouncementCache,
+  invalidateHomeChoiceCache,
   invalidatePageCache,
+  invalidatePageSettingsCache,
   invalidatePagesCache,
 }));
 
@@ -282,5 +292,76 @@ describe("writeToAnnouncement", () => {
       "Unauthorized"
     );
     expect(invalidateAnnouncementCache).not.toHaveBeenCalled();
+  });
+});
+
+describe("writeToPageSettings", () => {
+  test("writes through the login's re-check, then drops the pages' settings and each page the result names", async () => {
+    const { context, write } = setup();
+
+    await expect(
+      writeToPageSettings(context, write, (result) => [result.id, 4])
+    ).resolves.toEqual({ id: 11, storeId: 7 });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidatePageSettingsCache).toHaveBeenCalledExactlyOnceWith(
+      7,
+      [11, 4]
+    );
+    expect(write.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidatePageSettingsCache.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(invalidatePagesCache).not.toHaveBeenCalled();
+  });
+
+  test("names no page when not told which", async () => {
+    const { context, write } = setup();
+
+    await writeToPageSettings(context, write);
+
+    expect(invalidatePageSettingsCache).toHaveBeenCalledExactlyOnceWith(7, []);
+  });
+
+  test("keeps the cache when the write fails", async () => {
+    const { context, write } = setup();
+    write.mockRejectedValueOnce(new Error("Unauthorized"));
+
+    await expect(writeToPageSettings(context, write)).rejects.toThrow(
+      "Unauthorized"
+    );
+    expect(invalidatePageSettingsCache).not.toHaveBeenCalled();
+  });
+});
+
+describe("writeToHomeChoice", () => {
+  test("writes through the login's re-check, then drops the home and both pages involved", async () => {
+    const { context } = setup();
+    const write = vi.fn(async (_tx: unknown, _storeId: number) => ({
+      homePageId: 12,
+      previousHomeId: 1,
+    }));
+
+    await expect(writeToHomeChoice(context, write)).resolves.toEqual({
+      homePageId: 12,
+      previousHomeId: 1,
+    });
+
+    expect(write).toHaveBeenCalledExactlyOnceWith(TX, 7);
+    expect(invalidateHomeChoiceCache).toHaveBeenCalledExactlyOnceWith(
+      7,
+      [1, 12]
+    );
+  });
+
+  test("keeps the cache when the write fails", async () => {
+    const { context } = setup();
+    const write = vi.fn(async () => {
+      throw new Error("Only a published page can be the home");
+    });
+
+    await expect(writeToHomeChoice(context, write)).rejects.toThrow(
+      "Only a published page can be the home"
+    );
+    expect(invalidateHomeChoiceCache).not.toHaveBeenCalled();
   });
 });

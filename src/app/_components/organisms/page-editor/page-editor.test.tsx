@@ -16,13 +16,14 @@ import {
   makeHomeBanner,
   makeHomeCategory,
   makeHomeCuration,
+  makeHomePage,
   makeHomeSpotlight,
 } from "@/test/factories/home-curation";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { stubReducedMotion } from "@/test/reduced-motion";
 
-import { HomeCuration } from "./home-curation";
+import { PageEditor } from "./page-editor";
 
 vi.mock("@/lib/orpc/client", async () => {
   const { orpcClientMock } = await import("@/test/mocks/orpc-client");
@@ -149,7 +150,7 @@ function setup({
   data?: PageCurationData;
   get?: Outcome;
   locale?: Locale;
-  write?: Outcome;
+  write?: Outcome | "conflict";
 } = {}) {
   stubReducedMotion(false);
   vi.mocked(useEmblaCarousel).mockReturnValue(
@@ -164,18 +165,28 @@ function setup({
     get: vi.fn((_input: unknown) => data),
     saveAnnouncement: vi.fn((_input: unknown) => ({ id: 1 })),
     saveLayout: vi.fn((input: unknown) => input),
+    update: vi.fn((_input: unknown) => ({ id: 1, slug: "home" })),
     updateBanner: vi.fn((_input: unknown) => ({ id: 31 })),
   };
+  // A taken address is the settings' answer only.
+  const others = write === "conflict" ? "ok" : write;
   server.use(
     answer("page.get", spies.get, get),
-    answer("page.saveAnnouncement", spies.saveAnnouncement, write),
-    answer("page.createBanner", spies.createBanner, write),
-    answer("page.updateBanner", spies.updateBanner, write),
-    answer("page.deleteBanner", spies.deleteBanner, write),
-    answer("page.saveLayout", spies.saveLayout, write),
-    answer("page.createSpotlight", spies.createSpotlight, write),
-    answer("page.updateSpotlight", spies.updateSpotlight, write),
-    answer("page.deleteSpotlight", spies.deleteSpotlight, write)
+    answer("page.saveAnnouncement", spies.saveAnnouncement, others),
+    answer("page.createBanner", spies.createBanner, others),
+    answer("page.updateBanner", spies.updateBanner, others),
+    answer("page.deleteBanner", spies.deleteBanner, others),
+    answer("page.saveLayout", spies.saveLayout, others),
+    answer("page.createSpotlight", spies.createSpotlight, others),
+    answer("page.updateSpotlight", spies.updateSpotlight, others),
+    answer("page.deleteSpotlight", spies.deleteSpotlight, others),
+    write === "conflict"
+      ? createOrpcErrorHandler("page.update", {
+          code: "CONFLICT",
+          message: "Another page or category already has that address",
+          status: 409,
+        })
+      : answer("page.update", spies.update, others)
   );
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
@@ -190,7 +201,7 @@ function setup({
     );
   }
 
-  renderWithI18n(<HomeCuration pageId={1} />, { locale, wrapper: Providers });
+  renderWithI18n(<PageEditor pageId={1} />, { locale, wrapper: Providers });
   const user = userEvent.setup();
 
   return {
@@ -250,12 +261,13 @@ function holdLayoutSave() {
   return release;
 }
 
-describe("HomeCuration", () => {
+describe("PageEditor", () => {
   test("shows a busy skeleton and no save button while the home loads", async () => {
     const { spies } = setup({ get: "hang" });
 
+    // The page's name is not known yet: the section's.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Home$/u
+      /^Pages$/u
     );
     const skeleton = screen.getByTestId("home-curation-skeleton");
     expect(skeleton).toHaveAttribute("aria-busy", "true");
@@ -270,14 +282,14 @@ describe("HomeCuration", () => {
     const { spies, user } = setup({ get: "fail" });
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/^We couldn't load the home\.Try again$/u);
+    expect(alert).toHaveTextContent(/^We couldn't load the page\.Try again$/u);
     expect(screen.queryByTestId("admin-primary-action")).toBeNull();
 
     server.use(createOrpcHandler("page.get", spies.get));
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByTestId("page-layout-editor")).toBeVisible();
-    expect(screen.queryByText(/load the home/u)).toBeNull();
+    expect(screen.queryByText(/load the page/u)).toBeNull();
   });
 
   test("lists the banners with where they go, whether they show today and a warning for a draft's link", async () => {
@@ -1126,8 +1138,9 @@ describe("HomeCuration", () => {
     const { loaded } = setup({ locale: "es" });
     await loaded();
 
+    // The page's own name: the home is "Home" in every language.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      /^Inicio$/u
+      /^Home$/u
     );
     expect(
       screen
@@ -1234,7 +1247,7 @@ describe("HomeCuration", () => {
     await loaded();
 
     expect(screen.getByTestId("home-spotlights")).toHaveTextContent(
-      "No spotlights yet. Add one to feature an article as people scroll the home."
+      "No spotlights yet. Add one to feature an article as people scroll the page."
     );
   });
 
@@ -1485,5 +1498,86 @@ describe("HomeCuration", () => {
       expect(screen.queryByTestId("confirm-dialog")).toBeNull();
     });
     expect(spies.deleteSpotlight).not.toHaveBeenCalled();
+  });
+});
+
+describe("PageEditor on a page that is not the home (FER-060)", () => {
+  const GIFTS = makeHomePage({
+    id: 2,
+    isHome: false,
+    nameEn: "Christmas gifts",
+    nameEs: "Regalos de Navidad",
+    showInHeader: true,
+    slug: "regalos",
+  });
+
+  test("titles the screen with the page's name, offers its blocks, and leaves the store's bar to the home", async () => {
+    const { loaded } = setup({
+      data: makeData({ page: GIFTS, sections: [] }),
+    });
+
+    await loaded();
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      /^Christmas gifts$/u
+    );
+    expect(screen.queryByTestId("announcement-form-submit")).toBeNull();
+    expect(
+      within(screen.getByTestId("page-add-block"))
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Choose…", "Best sellers", "Featured", "Rings"]);
+  });
+
+  test("saves its settings on their own, with its id, and says so", async () => {
+    const { loaded, spies, user } = setup({ data: makeData({ page: GIFTS }) });
+    await loaded();
+    const settings = screen.getByTestId("page-settings");
+
+    await user.click(
+      within(settings).getByRole("checkbox", { name: "Show in the header" })
+    );
+    await user.click(within(settings).getByTestId("page-form-submit"));
+
+    expect(await screen.findByText("Settings saved.")).toBeInTheDocument();
+    expect(spies.update).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: 2, showInHeader: false, slug: "regalos" })
+    );
+  });
+
+  test("an address taken is said under the address, reported to no one", async () => {
+    const { loaded, user } = setup({
+      data: makeData({ page: GIFTS }),
+      write: "conflict",
+    });
+    await loaded();
+    const settings = screen.getByTestId("page-settings");
+
+    await user.click(within(settings).getByTestId("page-form-submit"));
+
+    expect(
+      await within(settings).findByText(
+        "Another page or a category already has that address."
+      )
+    ).toBeInTheDocument();
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test("a failed save is reported and said in the card", async () => {
+    const { loaded, user } = setup({
+      data: makeData({ page: GIFTS }),
+      write: "fail",
+    });
+    await loaded();
+    const settings = screen.getByTestId("page-settings");
+
+    await user.click(within(settings).getByTestId("page-form-submit"));
+
+    expect(await within(settings).findByRole("alert")).toHaveTextContent(
+      /We could not save the page/u
+    );
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      action: "Pages.update_page",
+    });
   });
 });

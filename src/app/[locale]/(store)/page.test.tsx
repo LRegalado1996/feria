@@ -16,6 +16,7 @@ const {
   connection,
   frameProps,
   homeProps,
+  readHomePage,
   readHomePageId,
   readPageContent,
   readStore,
@@ -24,6 +25,16 @@ const {
   connection: vi.fn(async () => undefined),
   frameProps: vi.fn<(props: Record<string, unknown>) => void>(),
   homeProps: vi.fn<(props: Record<string, unknown>) => void>(),
+  // The home page's own texts for search engines; none by default.
+  readHomePage: vi.fn<
+    (
+      store: unknown,
+      locale: string
+    ) => Promise<{
+      seoDescription: string | null;
+      seoTitle: string | null;
+    } | null>
+  >(async () => ({ seoDescription: null, seoTitle: null })),
   // The store's home is its page 7 (FER-058).
   readHomePageId: vi.fn(async (_store: unknown) => 7),
   readPageContent:
@@ -61,7 +72,11 @@ vi.mock("next/server", () => ({ connection }));
 
 // The cached read has its own tests; here it answers what the test says.
 vi.mock("@/server/cache/store", () => ({ readStore }));
-vi.mock("@/server/cache/page", () => ({ readHomePageId, readPageContent }));
+vi.mock("@/server/cache/page", () => ({
+  readHomePage,
+  readHomePageId,
+  readPageContent,
+}));
 
 // The home has its own tests; here it records what the page handed it.
 vi.mock("@/app/_components/organisms/store-home", () => ({
@@ -476,6 +491,22 @@ describe("generateMetadata", () => {
 
     expect(metadata.title).toEqual({ absolute: "Sample Store" });
     expect(metadata.description).toBeUndefined();
+  });
+
+  test("takes the home page's own title and description for search engines when it has them (FER-060)", async () => {
+    readStore.mockResolvedValue(makeStore());
+    readHomePage.mockResolvedValueOnce({
+      seoDescription: "Regalos para todos.",
+      seoTitle: "Regalos de Navidad",
+    });
+
+    const metadata = await generateMetadata({ params: makeParams("en") });
+
+    expect(metadata.title).toEqual({ absolute: "Regalos de Navidad" });
+    expect(metadata.description).toBe("Regalos para todos.");
+    // Still at `/`, whichever page the home is.
+    expect(metadata.alternates?.canonical).toBe("/en");
+    expect(readHomePage).toHaveBeenCalledExactlyOnceWith(makeStore(), "en");
   });
 
   test("adds nothing when the store's row is missing: the 404 page titles itself", async () => {

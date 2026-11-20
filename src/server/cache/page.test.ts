@@ -6,25 +6,37 @@ import {
   announcementTag,
   homePageTag,
   invalidateAnnouncementCache,
+  invalidateHomeChoiceCache,
   invalidatePageCache,
+  invalidatePageSettingsCache,
   invalidatePagesCache,
+  pageSettingsTag,
   pagesTag,
   pageTag,
   readAnnouncement,
+  readHeaderPages,
+  readHomePage,
   readHomePageId,
   readPageContent,
+  readStorePage,
 } from "./page";
 
 const {
   cacheLife,
   cacheTag,
+  findHomePage,
   findHomePageId,
+  findStorePage,
+  listHeaderPages,
   findShowingAnnouncement,
   getPageContent,
   revalidateTag,
 } = vi.hoisted(() => ({
   cacheLife: vi.fn<(profile: unknown) => void>(),
   cacheTag: vi.fn<(...tags: string[]) => void>(),
+  findHomePage: vi.fn(async (..._args: unknown[]) => ({ id: 3 })),
+  findStorePage: vi.fn(async (..._args: unknown[]) => ({ id: 4 })),
+  listHeaderPages: vi.fn(async (..._args: unknown[]) => [{ id: 4 }]),
   findHomePageId: vi.fn<(...args: unknown[]) => Promise<number>>(),
   findShowingAnnouncement: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getPageContent: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -34,6 +46,12 @@ const {
 // Next's cache only exists inside a Next render. Outside it `"use cache"` is
 // a plain string, so the function under test runs on every call.
 vi.mock("next/cache", () => ({ cacheLife, cacheTag, revalidateTag }));
+
+vi.mock("@/server/services/page-settings", () => ({
+  findHomePage,
+  findStorePage,
+  listHeaderPages,
+}));
 
 // The service has its own tests; here only what the cache hands it counts.
 vi.mock("@/server/services/page", () => ({
@@ -65,6 +83,7 @@ describe("tags", () => {
     ["one page of the store", pageTag(7, 3), "page:7:3"],
     ["the store's choice of home", homePageTag(7), "home-page:7"],
     ["the store's announcement", announcementTag(7), "announcement:7"],
+    ["the store's pages' settings", pageSettingsTag(7), "page-settings:7"],
   ])("name %s", (_what, tag, expected) => {
     expect(tag).toBe(expected);
   });
@@ -151,7 +170,74 @@ describe("readPageContent", () => {
   });
 });
 
+describe("the pages' settings (FER-060)", () => {
+  test.each([
+    [
+      "a page by its address",
+      async () => await readStorePage({ id: 7 }, "regalos", "en"),
+      findStorePage,
+      { locale: "en", slug: "regalos", storeId: 7 },
+      { id: 4 },
+    ],
+    [
+      "the page `/` shows",
+      async () => await readHomePage({ id: 7 }, "es"),
+      findHomePage,
+      { locale: "es", storeId: 7 },
+      { id: 3 },
+    ],
+    [
+      "the header's pages",
+      async () => await readHeaderPages({ id: 7 }, "en"),
+      listHeaderPages,
+      { locale: "en", storeId: 7 },
+      [{ id: 4 }],
+    ],
+  ] as const)(
+    "reads %s with the app's own client, under the settings' and the home's tags",
+    async (_what, read, service, scope, expected) => {
+      await expect(read()).resolves.toEqual(expected);
+
+      expect(service).toHaveBeenCalledExactlyOnceWith(db, scope);
+      expect(cacheTag).toHaveBeenCalledExactlyOnceWith(
+        "page-settings:7",
+        "home-page:7"
+      );
+      expect(cacheLife).toHaveBeenCalledExactlyOnceWith("hours");
+    }
+  );
+});
+
 describe("invalidation", () => {
+  test("a page's settings: the settings, then each page named", () => {
+    invalidatePageSettingsCache(7, [3, 4]);
+
+    expect(revalidateTag.mock.calls).toEqual([
+      ["page-settings:7", { expire: 0 }],
+      ["page:7:3", { expire: 0 }],
+      ["page:7:4", { expire: 0 }],
+    ]);
+  });
+
+  test("a page's settings with no page named: the settings only", () => {
+    invalidatePageSettingsCache(7);
+
+    expect(revalidateTag.mock.calls).toEqual([
+      ["page-settings:7", { expire: 0 }],
+    ]);
+  });
+
+  test("the choice of the home: the home, the settings and both pages", () => {
+    invalidateHomeChoiceCache(7, [1, 3]);
+
+    expect(revalidateTag.mock.calls).toEqual([
+      ["home-page:7", { expire: 0 }],
+      ["page-settings:7", { expire: 0 }],
+      ["page:7:1", { expire: 0 }],
+      ["page:7:3", { expire: 0 }],
+    ]);
+  });
+
   test.each([
     {
       drop: () => {

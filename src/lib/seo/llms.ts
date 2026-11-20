@@ -15,6 +15,8 @@ export interface StoreLlmsInput {
   currencyCode: Currency;
   locale: Locale;
   origin: string;
+  /** The published pages built from sections but the home (FER-060). */
+  pages: { name: string; path: string }[];
   store: Pick<IndexableStore, "name" | "translations">;
 }
 
@@ -33,7 +35,9 @@ function section(title: string, lines: string[]) {
 /**
  * The store's `llms.txt` (llmstxt.org) in `locale`: the store's name as the
  * one H1, its tagline as the blockquote summary, its description, then
- * links to its categories' and groups' pages (FER-043) and to every published article with its price.
+ * links to its categories' and groups' pages (FER-043), to its published
+ * pages built from sections (FER-060) and to every published article with
+ * its price.
  * Generated from the same rows as the pages, so it never drifts from them.
  */
 export function buildStoreLlms({
@@ -43,6 +47,7 @@ export function buildStoreLlms({
   currencyCode,
   locale,
   origin,
+  pages,
   store,
 }: StoreLlmsInput): string {
   const url = (path: string) => absoluteUrl(path, origin);
@@ -59,6 +64,13 @@ export function buildStoreLlms({
     ...section(
       copy.categories,
       categories.map(
+        (entry) =>
+          `- [${linkText(entry.name)}](${url(localizePath(entry.path, locale))})`
+      )
+    ),
+    ...section(
+      copy.pages,
+      pages.map(
         (entry) =>
           `- [${linkText(entry.name)}](${url(localizePath(entry.path, locale))})`
       )

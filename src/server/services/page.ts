@@ -140,6 +140,19 @@ async function hasPage(
   return found !== undefined;
 }
 
+/** Whether `pageId` is the page the store shows at `/`. */
+async function isHomePage(
+  db: DatabaseClient,
+  { pageId, storeId }: StoreScope & PageScope
+): Promise<boolean> {
+  const [own] = await db
+    .select({ homePageId: store.homePageId })
+    .from(store)
+    .where(eq(store.id, storeId));
+
+  return own?.homePageId === pageId;
+}
+
 /**
  * Holds the page a write is about `FOR KEY SHARE`: it only has to exist
  * until the write commits. NOT_FOUND when the store has no such page.
@@ -479,6 +492,7 @@ export async function getPageContent(
     const categories = await listCategories(tx, { locale, storeId });
     const sections = resolvePageSections(saved, {
       categoryIds: categories.map((entry) => entry.id),
+      fillIn: await isHomePage(tx, { pageId, storeId }),
       rowBannerIds: sectionBannerIds(saved),
       spotlightIds: sectionSpotlightIds(saved),
     });
@@ -561,6 +575,53 @@ function textIn<Row extends { locale: Locale }>(
 }
 
 /**
+ * A page's own settings as its editor shows them (FER-060): its names and
+ * texts for search engines in both languages, its address, status, place in
+ * the header and whether it is the home. NOT_FOUND for a page the store does
+ * not have.
+ */
+async function readPageSettings(
+  tx: DatabaseClient,
+  { pageId, storeId }: StoreScope & PageScope
+) {
+  const found = await tx.query.page.findFirst({
+    columns: { id: true, isPublished: true, showInHeader: true, slug: true },
+    where: and(eq(page.storeId, storeId), eq(page.id, pageId)),
+    with: {
+      translations: {
+        columns: {
+          locale: true,
+          name: true,
+          seoDescription: true,
+          seoTitle: true,
+        },
+      },
+    },
+  });
+
+  if (!found) {
+    throw new ORPCError("NOT_FOUND", { message: "Page not found" });
+  }
+
+  const en = textIn(found.translations, "en");
+  const es = textIn(found.translations, "es");
+
+  return {
+    id: found.id,
+    isHome: await isHomePage(tx, { pageId, storeId }),
+    isPublished: found.isPublished,
+    nameEn: en?.name ?? null,
+    nameEs: es?.name ?? "",
+    seoDescriptionEn: en?.seoDescription ?? null,
+    seoDescriptionEs: es?.seoDescription ?? null,
+    seoTitleEn: en?.seoTitle ?? null,
+    seoTitleEs: es?.seoTitle ?? null,
+    showInHeader: found.showInHeader,
+    slug: found.slug,
+  };
+}
+
+/**
  * Everything a page's editor (FER-020's home screen, FER-058) edits and
  * previews, in one read-only snapshot: the store's announcement, its
  * banners with their texts in both languages and where each shows on this
@@ -586,9 +647,8 @@ export async function getPageCuration(
       throw new ORPCError("NOT_FOUND", { message: "Store not found" });
     }
 
-    if (!(await hasPage(tx, { pageId, storeId }))) {
-      throw new ORPCError("NOT_FOUND", { message: "Page not found" });
-    }
+    const settings = await readPageSettings(tx, { pageId, storeId });
+    const { isHome } = settings;
 
     const found = await tx.query.announcement.findFirst({
       columns: { endsOn: true, isActive: true, linkUrl: true, startsOn: true },
@@ -700,8 +760,10 @@ export async function getPageCuration(
       featuredProductIds: curated.featured,
       pageId,
       rankingProductIds: curated.ranking,
+      page: settings,
       sections: resolvePageSections(saved, {
         categoryIds: categories.map((row) => row.id),
+        fillIn: isHome,
         rowBannerIds,
         spotlightIds,
       }),
@@ -775,10 +837,12 @@ async function lockPageTargets(
     .from(banner)
     .where(eq(banner.storeId, storeId))
     .orderBy(asc(banner.id));
+  const fillIn = await isHomePage(tx, { pageId, storeId });
   const cover = await readCover(tx, pageId);
   const saved = await readSavedSections(tx, pageId);
 
   return {
+    fillIn,
     banners,
     categoryIds: categories.map((row) => row.id),
     coverBannerIds: cover.map((row) => row.bannerId),
