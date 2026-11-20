@@ -193,14 +193,13 @@ export class AdminHomePage extends AdminPage {
   }
 
   /**
-   * The name of the preview's spotlight featuring `title`: an `h3` there.
-   * The preview is `inert`, out of the accessibility tree, so it is found
-   * by its slot rather than by its role.
+   * The name of the preview's spotlight featuring `title`: the heading of
+   * the region it names. The preview is `inert`, out of the accessibility
+   * tree, hence `includeHidden`.
    */
   previewSpotlightName(title: string): Locator {
     return this.preview()
-      .locator('[data-slot="store-spotlight"]')
-      .filter({ hasText: title })
-      .locator("h3");
+      .getByRole("region", { includeHidden: true, name: title })
+      .getByRole("heading", { includeHidden: true, name: title });
   }
 }
