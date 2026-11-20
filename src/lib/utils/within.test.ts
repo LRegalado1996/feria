@@ -7,7 +7,14 @@ const LIMIT = 2000;
 /** A promise the test settles by hand, raced against the limit on fake timers. */
 function setup() {
   vi.useFakeTimers();
-  const { promise, reject, resolve } = Promise.withResolvers<string>();
+  const settle: {
+    reject: (error: Error) => void;
+    resolve: (value: string) => void;
+  } = { reject: () => undefined, resolve: () => undefined };
+  const promise = new Promise<string>((resolve, reject) => {
+    settle.resolve = resolve;
+    settle.reject = reject;
+  });
   const raced = within(promise, LIMIT, "The lookup");
   // Read before the test advances the clock, so an early rejection is not
   // reported as unhandled.
@@ -16,7 +23,7 @@ function setup() {
     (error: unknown) => ({ error })
   );
 
-  return { outcome, reject, resolve };
+  return { outcome, reject: settle.reject, resolve: settle.resolve };
 }
 
 describe("within", () => {

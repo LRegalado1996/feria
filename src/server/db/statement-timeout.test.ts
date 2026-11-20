@@ -14,9 +14,8 @@ function setup() {
   const db = createMockDatabase();
   const tx = createMockDatabase();
   const order: string[] = [];
-  db.$.transaction.mockImplementation(
-    async (callback: (handle: unknown) => Promise<unknown>) =>
-      await callback(tx)
+  db.$.transaction.mockImplementation(async (callback: unknown) =>
+    typeof callback === "function" ? await callback(tx) : undefined
   );
   tx.$.execute.mockImplementation(async () => {
     order.push("limit");
