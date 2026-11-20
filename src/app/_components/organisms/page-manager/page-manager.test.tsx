@@ -219,8 +219,20 @@ describe("PageManager", () => {
     server.use(createOrpcHandler("page.list", spies.list));
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findAllByTestId("page-row")).toHaveLength(3);
-    expect(spies.list).toHaveBeenCalledOnce();
+    const recovered = await screen.findAllByTestId("page-row");
+    expect(
+      recovered.map((row) => [
+        within(row)
+          .getByRole("link", { name: /^Edit: /u })
+          .getAttribute("aria-label"),
+        within(row).getByText(/^\//u).textContent,
+      ])
+    ).toEqual([
+      ["Edit: Home", "/"],
+      ["Edit: Christmas gifts", "/regalos"],
+      ["Edit: Ofertas", "/ofertas"],
+    ]);
+    expect(spies.list).toHaveBeenCalledExactlyOnceWith(undefined);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 

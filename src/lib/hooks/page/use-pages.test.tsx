@@ -57,7 +57,10 @@ describe("usePages", () => {
     const { result } = setup({ fails: true });
 
     await waitFor(() => {
-      expect(result.current.error).toMatchObject({ code: "UNAUTHORIZED" });
+      expect(result.current.error).toMatchObject({
+        code: "UNAUTHORIZED",
+        message: "Unauthorized",
+      });
     });
     expect(result.current.data).toBeUndefined();
   });
