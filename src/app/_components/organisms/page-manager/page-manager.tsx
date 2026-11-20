@@ -193,8 +193,10 @@ function PageManager() {
   // The sheet open now, by identity: a creation that ends after its sheet
   // was closed, or another one opened, leaves the open one alone.
   const openSheet = useRef<object | null>(null);
-  const [deleting, setDeleting] = useState<PageRow | null>(null);
-  const [choosing, setChoosing] = useState<PageRow | null>(null);
+  // Each opening of a question is its own object, as the sheet's: a request
+  // that ends after its question was closed leaves a newer one open.
+  const [deleting, setDeleting] = useState<{ page: PageRow } | null>(null);
+  const [choosing, setChoosing] = useState<{ page: PageRow } | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
 
@@ -227,30 +229,30 @@ function PageManager() {
     }
   };
 
-  const remove = async (page: PageRow) => {
+  const remove = async (asked: { page: PageRow }) => {
     try {
-      await deletePage.mutateAsync({ id: page.id });
+      await deletePage.mutateAsync({ id: asked.page.id });
       toast.success(copy.deleted);
     } catch (error) {
       reportError(error, { action: "Pages.delete_page" });
       toast.error(copy.errors.delete);
     }
 
-    setDeleting(null);
+    setDeleting((open) => (open === asked ? null : open));
   };
 
-  const chooseHome = async (page: PageRow) => {
+  const chooseHome = async (asked: { page: PageRow }) => {
     try {
-      await setHome.mutateAsync({ pageId: page.id });
+      await setHome.mutateAsync({ pageId: asked.page.id });
       toast.success(
-        interpolate(copy.homeChanged, { name: nameOf(page, locale) })
+        interpolate(copy.homeChanged, { name: nameOf(asked.page, locale) })
       );
     } catch (error) {
       reportError(error, { action: "Pages.set_home" });
       toast.error(copy.errors.setHome);
     }
 
-    setChoosing(null);
+    setChoosing((open) => (open === asked ? null : open));
   };
 
   const focusBack = (event: Event) => {
@@ -295,11 +297,11 @@ function PageManager() {
                     locale={locale}
                     onDelete={(button) => {
                       opener.current = button;
-                      setDeleting(page);
+                      setDeleting({ page });
                     }}
                     onSetHome={(button) => {
                       opener.current = button;
-                      setChoosing(page);
+                      setChoosing({ page });
                     }}
                     page={page}
                   />
@@ -356,7 +358,7 @@ function PageManager() {
         confirmLabel={copy.useAsHomeConfirm}
         confirmVariant="default"
         description={interpolate(copy.useAsHomeDescription, {
-          name: choosing ? nameOf(choosing, locale) : "",
+          name: choosing ? nameOf(choosing.page, locale) : "",
         })}
         isPending={setHome.isPending}
         onCloseAutoFocus={focusBack}
@@ -373,13 +375,13 @@ function PageManager() {
         open={choosing !== null}
         pendingLabel={copy.useAsHomePending}
         title={interpolate(copy.useAsHomeTitle, {
-          name: choosing ? nameOf(choosing, locale) : "",
+          name: choosing ? nameOf(choosing.page, locale) : "",
         })}
       />
       <ConfirmDialog
         confirmLabel={copy.deleteConfirm}
         description={interpolate(copy.deleteDescription, {
-          name: deleting ? nameOf(deleting, locale) : "",
+          name: deleting ? nameOf(deleting.page, locale) : "",
         })}
         isPending={deletePage.isPending}
         onCloseAutoFocus={focusBack}

@@ -444,6 +444,51 @@ describe("PageManager", () => {
     expect(spies.delete).toHaveBeenCalledExactlyOnceWith({ id: 2 });
   });
 
+  test("a deletion that ends after its question was closed leaves the question asked since open", async () => {
+    const { rows, user } = setup();
+    const [, gifts, offers] = await rows();
+    let finish: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    server.use(
+      createOrpcHandler("page.delete", async () => {
+        await held;
+        return { id: 2, slug: "regalos" };
+      })
+    );
+
+    // Released whatever happens before it: a failed step leaves no request
+    // hanging past the test.
+    try {
+      await user.click(
+        within(required(gifts)).getByRole("button", {
+          name: "Delete: Christmas gifts",
+        })
+      );
+      await user.click(
+        within(await screen.findByRole("dialog")).getByRole("button", {
+          name: "Delete",
+        })
+      );
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+      await user.click(
+        within(required(offers)).getByRole("button", { name: /^Delete: / })
+      );
+      const second = await screen.findByRole("dialog");
+      finish();
+
+      expect(await screen.findByText("Page deleted.")).toBeInTheDocument();
+      expect(screen.getByRole("dialog")).toBe(second);
+      expect(second).toHaveTextContent("“Ofertas” is deleted with its blocks.");
+    } finally {
+      finish();
+    }
+  });
+
   test("a failed deletion is reported and said", async () => {
     const { rows, user } = setup({ writes: { delete: "fail" } });
     const [, gifts] = await rows();
