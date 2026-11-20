@@ -9,9 +9,10 @@
 --
 -- Fill only and idempotent (docs/agents/database.md § Migrations): a page
 -- is added only for a store with no home, and each copy only into a home
--- page that has none of it yet, so a second run, or a page already edited
--- by the new build, is left alone. Positions are renumbered from 0 in
--- their order. The old table and columns stay for the build that still
+-- page that has none of it yet, so a second run adds nothing. It is for the
+-- migrator's one run: a home whose cover or sequence the new build later
+-- emptied would be filled again from FER-020's columns, so it is never
+-- replayed by hand. Positions are renumbered from 0 in their order. The old table and columns stay for the build that still
 -- reads them while this deploys; FER-061 drops them.
 WITH "created" AS (
 	INSERT INTO "page" ("storeId", "updatedAt")

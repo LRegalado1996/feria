@@ -179,6 +179,19 @@ describe("migration 0021: the home becomes a page", () => {
     });
   });
 
+  test("gives a store with nothing curated an empty home page", async () => {
+    await rolledBack(async (tx, storeId) => {
+      await applyMigration(tx);
+      const home = await homeOf(tx, storeId);
+
+      expect(home).not.toBeNull();
+      expect(await placesOf(tx, home ?? 0)).toEqual({
+        cover: [],
+        sections: [],
+      });
+    });
+  });
+
   test("leaves a store that already has its home page alone", async () => {
     await rolledBack(async (tx, storeId) => {
       const [own] = await tx
