@@ -2343,10 +2343,14 @@ function conflictUpdate(options: unknown): Record<string, string> {
 
 describe("updateSpotlight", () => {
   function setup({
+    products = [{ id: 40 }],
     saved = SAVED,
-  }: { saved?: Record<string, unknown>[] } = {}) {
+  }: {
+    products?: { id: number }[];
+    saved?: Record<string, unknown>[];
+  } = {}) {
     const db = createMockDatabase();
-    answerSelects(db, makeTargets());
+    answerSelects(db, makeTargets({ products }));
     db.query.pageCoverBanner.findMany.mockResolvedValue(COVER);
     db.query.pageSection.findMany.mockResolvedValue(saved);
 
@@ -2368,17 +2372,21 @@ describe("updateSpotlight", () => {
   ];
 
   test("changes its article and words, and keeps its place on the page when none is given", async () => {
-    const { db, update } = setup({ saved: ON_PAGE });
+    // Not the article the values' factory picks, so ignoring it shows.
+    const { db, update } = setup({
+      products: [{ id: 40 }, { id: 41 }],
+      saved: ON_PAGE,
+    });
 
     await expect(
-      update({ labelEs: "Oferta", phraseEs: "Solo hoy", productId: 40 })
+      update({ labelEs: "Oferta", phraseEs: "Solo hoy", productId: 41 })
     ).resolves.toEqual({ id: 51 });
 
     expect(advisoryLocks(db, "select")).toEqual({
       before: true,
       locks: [PAGES_LOCK],
     });
-    expect(db.$["update.set"].mock.calls[0]?.[0]).toEqual({ productId: 40 });
+    expect(db.$["update.set"].mock.calls[0]?.[0]).toEqual({ productId: 41 });
     expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
       params: [51, STORE_ID],
       sql: '("spotlight"."id" = $1 and "spotlight"."storeId" = $2)',
