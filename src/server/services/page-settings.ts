@@ -345,6 +345,17 @@ export async function setHomePage(
   return { homePageId: found.id, previousHomeId };
 }
 
+/**
+ * The store's home page id, as a subquery of the statement that reads a
+ * page: the page and whether it is the home come from one snapshot, so a
+ * home chosen between two reads never shows the old home as not the home.
+ * The store's columns are named by identifier: a relational query aliases
+ * every column object to the page's table.
+ */
+function homePageIdOf(storeId: number) {
+  return sql`(select ${sql.identifier(store.homePageId.name)} from ${store} where ${sql.identifier(store.id.name)} = ${storeId})`;
+}
+
 /** A page of the store as the storefront shows it, found by `where`. */
 async function findShownPage(
   db: DatabaseClient,
@@ -352,6 +363,9 @@ async function findShownPage(
 ) {
   const found = await db.query.page.findFirst({
     columns: { id: true, isPublished: true, slug: true, updatedAt: true },
+    extras: {
+      isHome: sql<boolean>`${page.id} = ${homePageIdOf(storeId)}`.as("isHome"),
+    },
     where: and(eq(page.storeId, storeId), where),
     with: {
       translations: {
@@ -369,12 +383,11 @@ async function findShownPage(
     return null;
   }
 
-  const homePageId = await findHomePageId(db, { storeId });
   const words = pickTranslation(found.translations, locale);
 
   return {
     id: found.id,
-    isHome: found.id === homePageId,
+    isHome: found.isHome,
     isPublished: found.isPublished,
     lang: words?.locale ?? locale,
     name: words?.name ?? "",
@@ -413,7 +426,7 @@ export async function findHomePage(
   return await findShownPage(db, {
     locale,
     storeId,
-    where: eq(page.id, await findHomePageId(db, { storeId })),
+    where: eq(page.id, homePageIdOf(storeId)),
   });
 }
 

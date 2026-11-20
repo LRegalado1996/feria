@@ -114,6 +114,13 @@ function readsOf(db: MockDatabase) {
   };
 }
 
+/** The `isHome` a page's relational read asks for, as SQL and parameters. */
+function isHomeRead(query: unknown) {
+  return renderQuery(
+    (query as { extras: { isHome: { sql: unknown } } }).extras.isHome.sql
+  );
+}
+
 function locksOf(db: MockDatabase) {
   return db.$.execute.mock.calls.map(([statement]) => renderQuery(statement));
 }
@@ -591,6 +598,7 @@ describe("findStorePage", () => {
     const { db, tx } = setup({ home: PAGE_ID });
     db.query.page.findFirst.mockResolvedValue({
       id: PAGE_ID,
+      isHome: true,
       isPublished: true,
       slug: "regalos",
       translations: makeTranslations(),
@@ -614,12 +622,19 @@ describe("findStorePage", () => {
       params: [STORE_ID, "regalos"],
       sql: '("page"."storeId" = $1 and "page"."slug" = $2)',
     });
+    // Whether it is the home is read in the page's own statement.
+    expect(isHomeRead(query)).toEqual({
+      params: [STORE_ID],
+      sql: '"page"."id" = (select "homePageId" from "store" where "id" = $1)',
+    });
+    expect(db.$["select.from"]).not.toHaveBeenCalled();
   });
 
   test("in English, a page with no English words speaks Spanish, and is not the home", async () => {
     const { db, tx } = setup();
     db.query.page.findFirst.mockResolvedValue({
       id: PAGE_ID,
+      isHome: false,
       isPublished: false,
       slug: "regalos",
       translations: makeTranslations().slice(0, 1),
@@ -640,6 +655,7 @@ describe("findStorePage", () => {
     const { db, tx } = setup();
     db.query.page.findFirst.mockResolvedValue({
       id: PAGE_ID,
+      isHome: false,
       isPublished: true,
       slug: "regalos",
       translations: [],
@@ -667,10 +683,11 @@ describe("findStorePage", () => {
 });
 
 describe("findHomePage", () => {
-  test("finds the page the store points at", async () => {
+  test("finds the page the store points at in the same statement that reads it", async () => {
     const { db, tx } = setup({ home: 4 });
     db.query.page.findFirst.mockResolvedValue({
       id: 4,
+      isHome: true,
       isPublished: true,
       slug: "home",
       translations: [],
@@ -682,9 +699,14 @@ describe("findHomePage", () => {
     ).resolves.toMatchObject({ id: 4, isHome: true, slug: "home" });
     const [query] = db.query.page.findFirst.mock.calls[0] ?? [];
     expect(renderQuery((query as { where: unknown }).where)).toEqual({
-      params: [STORE_ID, 4],
-      sql: '("page"."storeId" = $1 and "page"."id" = $2)',
+      params: [STORE_ID, STORE_ID],
+      sql: '("page"."storeId" = $1 and "page"."id" = (select "homePageId" from "store" where "id" = $2))',
     });
+    expect(isHomeRead(query)).toEqual({
+      params: [STORE_ID],
+      sql: '"page"."id" = (select "homePageId" from "store" where "id" = $1)',
+    });
+    expect(db.$["select.from"]).not.toHaveBeenCalled();
   });
 });
 
