@@ -53,18 +53,29 @@ function articleRows(titles: readonly string[]) {
   return titles.map((title, index) => ({ id: 100 + index, title }));
 }
 
+/** The parts of a home the seed checks for before adding its own. */
+const HOME_PARTS = [
+  "announcement",
+  "banner",
+  "featuredProduct",
+  "homeSection",
+  "rankingEntry",
+] as const;
+
+type HomePart = (typeof HOME_PARTS)[number];
+
 /**
- * A store with what `existing` says it already has, the given categories
+ * A store with the parts `existing` names already there, the given categories
  * and articles; each banner insert answers the next id from 1.
  */
 function setup({
   articles = articleRows([...SEED_BEST_SELLERS, ...SEED_FEATURED]),
   categories = CATEGORIES,
-  existing = false,
+  existing = [],
 }: {
   articles?: { id: number; title: string }[];
   categories?: { id: number; slug: string }[];
-  existing?: boolean;
+  existing?: readonly HomePart[];
 } = {}) {
   const db = createMockDatabase();
   const read: { table: unknown } = { table: null };
@@ -82,15 +93,8 @@ function setup({
     return await Promise.resolve([{ id }]);
   });
 
-  if (existing) {
-    for (const model of [
-      "announcement",
-      "banner",
-      "rankingEntry",
-      "featuredProduct",
-    ] as const) {
-      db.query[model].findFirst.mockResolvedValue({ id: 9 });
-    }
+  for (const model of existing) {
+    db.query[model].findFirst.mockResolvedValue({ id: 9 });
   }
 
   return { db, run: async () => await seedHome(db as never, STORE_ID) };
@@ -227,10 +231,8 @@ describe("seedHome", () => {
       // Bijouterie, a group with no row of its own in the list, goes last.
       [9, "category", 2],
     ]);
-    expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
-      params: [STORE_ID],
-      sql: '"home_section"."storeId" = $1',
-    });
+    // A store with no order has nothing to replace.
+    expect(db.$.delete).not.toHaveBeenCalled();
     expect(inserts[11]?.values).toEqual(
       SEED_BEST_SELLERS.map((_title, position) => ({
         position,
@@ -267,7 +269,7 @@ describe("seedHome", () => {
   });
 
   test("leaves a store that has all of it alone", async () => {
-    const { db, run } = setup({ existing: true });
+    const { db, run } = setup({ existing: HOME_PARTS });
 
     await expect(run()).resolves.toEqual({
       announcement: false,
@@ -278,6 +280,50 @@ describe("seedHome", () => {
     expect(saveAnnouncement).not.toHaveBeenCalled();
     expect(db.$.insert).not.toHaveBeenCalled();
     expect(db.$.delete).not.toHaveBeenCalled();
+  });
+
+  test("keeps an order the admin saved on a store with no banner, adding the banners after it", async () => {
+    const { db, run } = setup({
+      existing: [
+        "announcement",
+        "featuredProduct",
+        "homeSection",
+        "rankingEntry",
+      ],
+    });
+
+    await expect(run()).resolves.toEqual({
+      announcement: false,
+      banners: 5,
+      featured: 0,
+      ranking: 0,
+    });
+    const tables = insertsOf(db).map((insert) => insert.table);
+    expect(tables).toEqual(
+      Array.from({ length: 5 }, () => [banner, bannerTranslation]).flat()
+    );
+    expect(db.$.delete).not.toHaveBeenCalled();
+  });
+
+  test("writes the order on a store that has banners but never saved one", async () => {
+    const { db, run } = setup({
+      existing: ["announcement", "banner", "featuredProduct", "rankingEntry"],
+    });
+
+    await expect(run()).resolves.toEqual({
+      announcement: false,
+      banners: 0,
+      featured: 0,
+      ranking: 0,
+    });
+    const inserts = insertsOf(db);
+    expect(inserts.map((insert) => insert.table)).toEqual([homeSection]);
+    // The seed's banners between rows are not this store's: left out.
+    expect(
+      rowsOf(inserts[0]?.values).map(
+        (row) => row.bannerId ?? row.categoryId ?? row.kind
+      )
+    ).toEqual(["best_sellers", 1, "featured", 3, 4, 5, 6, 2]);
   });
 
   test("on a store missing some categories and articles, skips what it cannot find, and adds no featured row of one", async () => {

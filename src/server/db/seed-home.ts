@@ -262,14 +262,22 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
     where: eq(banner.storeId, storeId),
   });
 
-  if (!anyBanner) {
-    const categories = await tx
-      .select({ id: category.id, slug: category.slug })
-      .from(category)
-      .where(eq(category.storeId, storeId));
-    const categoryIds = new Map(categories.map((row) => [row.slug, row.id]));
-    const rowBannerIds: number[] = [];
+  const anySection = await tx.query.homeSection.findFirst({
+    columns: { id: true },
+    where: eq(homeSection.storeId, storeId),
+  });
+  const categories =
+    anyBanner && anySection
+      ? []
+      : await tx
+          .select({ id: category.id, slug: category.slug })
+          .from(category)
+          .where(eq(category.storeId, storeId));
+  const categoryIds = new Map(categories.map((row) => [row.slug, row.id]));
+  // The banners between rows this run added, by their seed's index.
+  const rowBannerIds: number[] = [];
 
+  if (!anyBanner) {
     for (const [position, seed] of SEED_COVER_BANNERS.entries()) {
       await insertBanner(tx, {
         categoryIds,
@@ -291,6 +299,11 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
     }
 
     added.banners = SEED_COVER_BANNERS.length + SEED_ROW_BANNERS.length;
+  }
+
+  // An order the admin saved stays, banners or not: the banners added
+  // above then come after it, as any banner new since the last save does.
+  if (!anySection) {
     const listed = SEED_SEQUENCE.flatMap((entry): HomeSection[] => {
       if ("curated" in entry) {
         return [{ kind: entry.curated }];
@@ -321,7 +334,6 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
         .map((row) => ({ categoryId: row.id, kind: "category" as const })),
     ];
 
-    await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
     await tx.insert(homeSection).values(
       sections.map((section, position) => ({
         bannerId: section.kind === "banner" ? section.bannerId : null,
