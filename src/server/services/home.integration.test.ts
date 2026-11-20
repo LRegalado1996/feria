@@ -823,7 +823,7 @@ describe("saving the home's order", () => {
         saved.map((_row, index) => index)
       );
       expect(saved.slice(5).every((row) => row.kind === "category")).toBe(true);
-      const [{ others = 0 } = {}] = await tx
+      const [counted] = await tx
         .select({ others: sql<number>`count(*)::int` })
         .from(category)
         .where(
@@ -836,7 +836,7 @@ describe("saving the home's order", () => {
         bannerId: null,
         categoryId: three.id,
         kind: "category",
-        position: 5 + others,
+        position: 5 + (counted?.others ?? 0),
       });
       const curation = await getHomeCuration(tx, { storeId, today: TODAY });
       expect(curation.rankingProductIds).toEqual([b.id, a.id, c.id]);

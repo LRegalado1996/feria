@@ -428,10 +428,11 @@ describe("HomeCuration", () => {
   test("an order moved and not saved keeps its order when a banner in it is deleted, and saves without it", async () => {
     const { loaded, spies, user } = setup();
     await loaded();
-    const moveDown = () =>
-      user.click(
+    const moveDown = async () => {
+      await user.click(
         screen.getByRole("button", { name: "Move down: Best sellers" })
       );
+    };
 
     await moveDown();
     await moveDown();
