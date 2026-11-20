@@ -13,17 +13,21 @@ import { renderQuery } from "@/server/test/render-sql";
 
 import { SEED_PAGE, seedPages } from "./seed-pages";
 
-const { createPage, createSpotlight, lockStorePages } = vi.hoisted(() => ({
-  createPage: vi.fn(async (..._args: unknown[]) => ({
-    id: 12,
-    slug: "regalos",
-  })),
-  createSpotlight: vi.fn(async (..._args: unknown[]) => ({ id: 51 })),
-  lockStorePages: vi.fn(async (..._args: unknown[]) => undefined),
-}));
+const { createPage, createSpotlight, lockStoreCategories, lockStorePages } =
+  vi.hoisted(() => ({
+    createPage: vi.fn(async (..._args: unknown[]) => ({
+      id: 12,
+      slug: "regalos",
+    })),
+    createSpotlight: vi.fn(async (..._args: unknown[]) => ({ id: 51 })),
+    lockStoreCategories: vi.fn(async (..._args: unknown[]) => undefined),
+    lockStorePages: vi.fn(async (..._args: unknown[]) => undefined),
+  }));
 
 // The services have their own tests; the seed's integration test runs them.
 vi.mock("@/server/services/page", () => ({ createSpotlight, lockStorePages }));
+
+vi.mock("@/server/services/category", () => ({ lockStoreCategories }));
 
 vi.mock("@/server/services/page-settings", () => ({ createPage }));
 
@@ -71,6 +75,16 @@ describe("seedPages", () => {
     await expect(run()).resolves.toBe(true);
 
     expect(lockStorePages).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
+    expect(lockStoreCategories).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
+    // Pages, then categories, as every page-address write; both before the
+    // categories' addresses are read.
+    expect(lockStorePages.mock.invocationCallOrder[0]).toBeLessThan(
+      lockStoreCategories.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(lockStoreCategories.mock.invocationCallOrder[0]).toBeLessThan(
+      db.$["select.from"].mock.invocationCallOrder[0] ?? 0
+    );
+    expect(db.$["select.from"].mock.calls[0]).toEqual([category]);
     expect(createPage).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: STORE_ID,
       values: { ...SEED_PAGE.values, slug: "regalos" },
@@ -210,6 +224,6 @@ describe("seedPages", () => {
     db.$["insert.returning"].mockResolvedValue([]);
 
     await expect(run()).rejects.toThrow("Inserting a banner returned no row");
-    expect(db.$.insert).toHaveBeenCalledOnce();
+    expect(db.$.insert).toHaveBeenCalledExactlyOnceWith(banner);
   });
 });

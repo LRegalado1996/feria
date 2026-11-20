@@ -11,6 +11,7 @@ import {
   product,
   productTranslation,
 } from "@/server/db/schema";
+import { lockStoreCategories } from "@/server/services/category";
 import { createSpotlight, lockStorePages } from "@/server/services/page";
 import { createPage } from "@/server/services/page-settings";
 
@@ -58,7 +59,11 @@ export async function seedPages(
   tx: DatabaseClient,
   storeId: number
 ): Promise<boolean> {
+  // The pages' lock, then the categories', the order every page-address
+  // write takes them in: a category made or renamed onto the address after
+  // this read would otherwise make `createPage` refuse it and fail the run.
   await lockStorePages(tx, storeId);
+  await lockStoreCategories(tx, storeId);
   const existing = await tx.query.page.findFirst({
     columns: { id: true },
     where: and(eq(page.storeId, storeId), eq(page.slug, SEED_PAGE.slug)),
