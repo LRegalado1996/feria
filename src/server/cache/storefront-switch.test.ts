@@ -21,12 +21,19 @@ vi.mock("@/lib/sentry", () => ({ captureExceptionWithScope }));
 const TTL = 5000;
 const TIMEOUT = 2000;
 
+/** A read that answers `published` after `ms` on the test's clock. */
+interface SlowAnswer {
+  ms: number;
+  published: boolean;
+}
+
 /**
  * A switch over a database double: `answers` are what each read returns in
- * turn (`true` published, an `Error` thrown, `"hang"` never settling), on a
- * clock the test moves.
+ * turn (`true` published, an `Error` thrown, `"hang"` never settling, or a
+ * slow answer that moves the clock before it returns), on a clock the test
+ * moves.
  */
-function setup(answers: (boolean | Error | "hang")[]) {
+function setup(answers: (boolean | Error | SlowAnswer | "hang")[]) {
   const clock = { now: 1_000_000 };
   const queue = [...answers];
   const read = vi.fn(async (): Promise<boolean> => {
@@ -42,6 +49,12 @@ function setup(answers: (boolean | Error | "hang")[]) {
 
     if (answer === undefined) {
       throw new Error("read more often than the test expected");
+    }
+
+    if (typeof answer === "object") {
+      clock.now += answer.ms;
+
+      return answer.published;
     }
 
     return answer;
@@ -79,6 +92,43 @@ describe("createStorefrontSwitch", () => {
     const { advance, read, storefront } = setup([true, false]);
 
     await expect(storefront.isClosed()).resolves.toBe(true);
+    advance(TTL - 1);
+    await expect(storefront.isClosed()).resolves.toBe(true);
+    expect(read.mock.calls).toEqual([[]]);
+
+    advance(1);
+    await expect(storefront.isClosed()).resolves.toBe(false);
+    expect(read.mock.calls).toEqual([[], []]);
+  });
+
+  test("a slow answer is trusted for what is left of the window it was asked in, not a window past it", async () => {
+    const SLOW = 4000;
+    const { advance, read, storefront } = setup([
+      { ms: SLOW, published: true },
+      false,
+    ]);
+
+    await expect(storefront.isClosed()).resolves.toBe(true);
+    advance(TTL - SLOW - 1);
+    await expect(storefront.isClosed()).resolves.toBe(true);
+    expect(read.mock.calls).toEqual([[]]);
+
+    advance(1);
+    await expect(storefront.isClosed()).resolves.toBe(false);
+    expect(read.mock.calls).toEqual([[], []]);
+  });
+
+  test("a slow failure keeps the store closed for a whole window from when it failed", async () => {
+    const SLOW = 4000;
+    const outage = new Error("connection refused");
+    const { advance, read, report, storefront } = setup([false]);
+    read.mockImplementationOnce(async () => {
+      advance(SLOW);
+      return await Promise.reject(outage);
+    });
+
+    await expect(storefront.isClosed()).resolves.toBe(true);
+    expect(report).toHaveBeenCalledExactlyOnceWith(outage);
     advance(TTL - 1);
     await expect(storefront.isClosed()).resolves.toBe(true);
     expect(read.mock.calls).toEqual([[]]);

@@ -29,10 +29,13 @@ interface StorefrontSwitchOptions {
 
 /**
  * The switch as the proxy reads it: remembered for `ttlMs`, one read at a
- * time however many requests arrive together. It fails closed: a read that
- * throws or outlasts `timeoutMs` is reported and answers "closed" for the
- * window, so a database outage hides the store from the public instead of
- * opening it, and costs one wait per window rather than one per request.
+ * time however many requests arrive together. A value is as old as the read
+ * that asked for it, so a slow answer is trusted for what is left of its
+ * window, never a whole window past it. It fails closed: a read that throws
+ * or outlasts `timeoutMs` is reported and answers "closed" for a window
+ * from the failure, so a database outage hides the store from the public
+ * instead of opening it, and costs one wait per window rather than one per
+ * request.
  */
 export function createStorefrontSwitch({
   now,
@@ -44,22 +47,25 @@ export function createStorefrontSwitch({
   let known: { closed: boolean; until: number } | null = null;
   let pending: Promise<boolean> | null = null;
 
-  async function load(): Promise<boolean> {
+  async function load(): Promise<{ closed: boolean; until: number }> {
+    const askedAt = now();
+
     try {
-      return await within(read(), timeoutMs, "The storefront switch");
+      const closed = await within(read(), timeoutMs, "The storefront switch");
+
+      return { closed, until: askedAt + ttlMs };
     } catch (error) {
       report(error);
 
-      return true;
+      return { closed: true, until: now() + ttlMs };
     }
   }
 
   async function refresh(): Promise<boolean> {
-    const closed = await load();
-    known = { closed, until: now() + ttlMs };
+    known = await load();
     pending = null;
 
-    return closed;
+    return known.closed;
   }
 
   return {
