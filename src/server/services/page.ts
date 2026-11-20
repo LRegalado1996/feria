@@ -76,7 +76,10 @@ interface OnDay {
   today: string;
 }
 
-// A snapshot: every read of one answer sees the same commit.
+// A snapshot: every read of one answer sees the same commit. Only on the
+// top-level client: inside a caller's transaction Drizzle opens a savepoint,
+// which ignores these options, so `getPageContent` and `getPageCuration`
+// take `db` itself (the pages' cache and `page.get` both do).
 const SNAPSHOT = {
   accessMode: "read only",
   isolationLevel: "repeatable read",
@@ -447,8 +450,9 @@ async function readCategoryRows(db: DatabaseClient, storeId: number) {
  * What a store's page shows on `today` in `locale` (FER-058, after
  * FER-020's home read that FER-022's home is built on): see `PageContent`
  * for what each part holds and what is left out. The articles are the
- * catalog's cards, with the store's currency. One read-only snapshot. A
- * page the store does not have shows nothing.
+ * catalog's cards, with the store's currency. One read-only snapshot, given
+ * the top-level `db` (see `SNAPSHOT`). A page the store does not have shows
+ * nothing.
  */
 export async function getPageContent(
   db: DatabaseClient,
@@ -565,7 +569,8 @@ function textIn<Row extends { locale: Locale }>(
  * its cover's order, the curated rows' article ids, and the store's
  * categories and articles, from which the screen picks, warns about
  * articles that cannot be bought, and draws its preview. `today` is the
- * business day the screen's statuses are read on.
+ * business day the screen's statuses are read on. Given the top-level `db`,
+ * like `getPageContent`.
  */
 export async function getPageCuration(
   db: DatabaseClient,

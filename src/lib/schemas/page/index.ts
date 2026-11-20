@@ -70,6 +70,10 @@ export const pageRefSchema = z.object({ pageId: pathIdSchema });
 // slash, so a link holding one is not the link a person sees.
 const REWRITTEN_BY_BROWSERS = /[\s\\]/;
 
+// `new URL` reads `https:/host` and `https:host` as `https://host`, but in an
+// `href` a browser resolves both against the page: a path of the store.
+const ABSOLUTE_HTTPS = /^https:\/\//i;
+
 /**
  * Whether `link` may become an `href` on the storefront (docs/agents/
  * security.md § Encode for every sink): a path of this site (`/productos`,
@@ -87,7 +91,7 @@ export function isSafeHomeLink(link: string): boolean {
     return !link.startsWith("//");
   }
 
-  if (!URL.canParse(link)) {
+  if (!(ABSOLUTE_HTTPS.test(link) && URL.canParse(link))) {
     return false;
   }
 

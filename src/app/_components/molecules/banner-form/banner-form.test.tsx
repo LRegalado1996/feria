@@ -172,6 +172,25 @@ describe("BannerForm", () => {
     expect(screen.queryByTestId("banner-form-crop-preview")).toBeNull();
   });
 
+  // The label's asterisk is hidden from assistive tech: the control says it.
+  test("tells assistive tech which controls are required, and only those", async () => {
+    const { select, user } = setup();
+
+    expect(
+      screen.getByRole("textbox", { name: "Title in Spanish" })
+    ).toBeRequired();
+    expect(
+      screen.getByRole("textbox", { name: "Title in English" })
+    ).not.toBeRequired();
+    expect(select("Leads to")).not.toBeRequired();
+    await user.selectOptions(select("Leads to"), "product");
+    expect(select("Article")).toBeRequired();
+    await user.selectOptions(select("Leads to"), "category");
+    expect(select("Category")).toBeRequired();
+    await user.selectOptions(select("Leads to"), "url");
+    expect(screen.getByRole("textbox", { name: "Address" })).toBeRequired();
+  });
+
   test("refuses a banner without its title, saving nothing", async () => {
     const { onSave, submit } = setup();
 
