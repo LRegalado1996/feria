@@ -38,6 +38,7 @@ The fair banners ("find us at the fair, December 5 to January 5") are content cr
 - **Category rows** show up to 12 published articles each, in the store's own order, sold-out ones included (dimmed, as in the catalog); **curated rows** leave out what is not published or not available. A group (Bijouterie) has a row only for articles of its own: its categories have theirs.
 - **A banner's link** is nowhere, an article, a category or an address (a site path or `https`); a link to an article no longer published, or one deleted, leaves the banner without a link instead of leading to a 404, and the admin says so.
 - **The cover holds at most six banners** (`COVER_BANNERS_MAX`): the carousel's controls, a pause button and one 44 px dot per banner, must fit a 360 px phone. The service refuses a seventh, created there or moved in, with `CONFLICT`, and the banner's sheet says why.
+- **One stale response after midnight is accepted:** the home's cached reads go stale at the next midnight (`revalidate`) but `expire` stays a day, so the first request after midnight is answered from yesterday's entry while it regenerates and one visitor may still see yesterday's banner or announcement. Clamping `expire` to midnight as well would turn the read into a dynamic hole in the last minutes before midnight, a worse cost for every visitor then than one stale response.
 - **The preview** reads both forms as they are typed and the banners as saved (each banner is saved from its own sheet), on the business day the server answered.
 
 ## Outcome

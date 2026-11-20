@@ -19,12 +19,15 @@ export function homeTag(storeId: number): string {
 }
 
 /**
- * The lifetime of a home read made at `now`: an hour at most, and never
- * past the next midnight in the store's time zone, when a banner or an
- * announcement may start or end its days. A read made at 23:59 is
- * refreshed a minute later, so what ended yesterday leaves the storefront
- * without anyone touching it (FER-020). The entry expires within a day
- * whatever the traffic.
+ * The lifetime of a home read made at `now`: fresh for an hour at most, and
+ * never past the next midnight in the store's time zone, when a banner or
+ * an announcement may start or end its days (FER-020). Going stale is not
+ * expiring: the first request after midnight is still answered from the
+ * stale entry while it regenerates, so one visitor may see yesterday's
+ * banner or announcement; the next one gets today's, without anyone
+ * touching the admin. `expire` stays a day on purpose: clamping it to
+ * midnight too would turn the read into a dynamic hole in the last minutes
+ * before midnight (an accepted decision, FER-020).
  */
 function homeLife(now: Date) {
   return {
