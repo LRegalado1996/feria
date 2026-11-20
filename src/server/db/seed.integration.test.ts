@@ -45,11 +45,13 @@ async function runSeed(tx: DatabaseClient) {
 /**
  * The store as a fresh database has it: no texts, no catalog and no home
  * curation (FER-020). Articles first, since a category that still has one
- * cannot be deleted; they take the curated rows with them, and the banners
- * their places in the home's sequence.
+ * cannot be deleted; they take the curated rows with them. The home's
+ * sequence goes whole, its curated places included: the seed keeps one it
+ * finds.
  */
 async function emptyStore(tx: DatabaseClient, storeId: number) {
   await tx.delete(announcement).where(eq(announcement.storeId, storeId));
+  await tx.delete(homeSection).where(eq(homeSection.storeId, storeId));
   await tx.delete(banner).where(eq(banner.storeId, storeId));
   await tx.delete(product).where(eq(product.storeId, storeId));
   await tx.delete(attribute).where(eq(attribute.storeId, storeId));
