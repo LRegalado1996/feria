@@ -159,7 +159,7 @@ describe("PageManager", () => {
     ).toBeNull();
     expect(
       within(required(home)).getByRole("link", {
-        name: "See on the store: Home",
+        name: "See on the store: Home (opens in a new tab)",
       })
     ).toHaveAttribute("href", "/en");
     expect(
@@ -171,7 +171,7 @@ describe("PageManager", () => {
     );
     expect(
       within(required(gifts)).getByRole("link", {
-        name: "See on the store: Christmas gifts",
+        name: "See on the store: Christmas gifts (opens in a new tab)",
       })
     ).toHaveAttribute("href", "/en/regalos");
 

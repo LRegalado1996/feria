@@ -71,7 +71,8 @@ function PageItem({
   onSetHome: (opener: HTMLButtonElement) => void;
   page: PageRow;
 }) {
-  const copy = useDictionary().admin.pages;
+  const { admin, storefront } = useDictionary();
+  const copy = admin.pages;
   const name = nameOf(page, locale);
   const address = page.isHome ? "/" : `/${page.slug}`;
 
@@ -142,12 +143,15 @@ function PageItem({
         {page.isPublished ? (
           <Button asChild size="icon-sm" variant="ghost">
             <a
-              aria-label={interpolate(copy.view, { name })}
               href={localizePath(address, locale)}
               rel="noopener"
               target="_blank"
             >
               <ExternalLink aria-hidden="true" />
+              {/* Its name says the tab it opens, as the storefront's do. */}
+              <span className="sr-only">
+                {interpolate(copy.view, { name })} {storefront.shell.newTab}
+              </span>
             </a>
           </Button>
         ) : null}
