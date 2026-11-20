@@ -165,6 +165,29 @@ function insertedRows(
   return typeof rows === "object" && rows !== null ? [{ ...rows }] : [];
 }
 
+/** The store's pages' advisory lock, as `lockStorePages` renders it. */
+const PAGES_LOCK = {
+  params: ["pages:7"],
+  sql: "select pg_advisory_xact_lock(hashtext($1))",
+};
+
+/**
+ * The advisory locks `db` took, rendered, and whether the first came
+ * before the first call of `step`: a lock taken after a read or a write
+ * serializes nothing.
+ */
+function advisoryLocks(
+  db: MockDatabase,
+  step: "delete" | "insert" | "select" | "update"
+) {
+  return {
+    before:
+      (db.$.execute.mock.invocationCallOrder[0] ?? Infinity) <
+      (db.$[step].mock.invocationCallOrder[0] ?? 0),
+    locks: db.$.execute.mock.calls.map(([query]) => renderQuery(query)),
+  };
+}
+
 describe("lockStorePages", () => {
   test("takes the store's pages' advisory lock for the transaction", async () => {
     const db = createMockDatabase();
@@ -172,10 +195,7 @@ describe("lockStorePages", () => {
     await lockStorePages(db as never, STORE_ID);
 
     const [statement] = db.$.execute.mock.calls[0] ?? [];
-    expect(renderQuery(statement)).toEqual({
-      params: ["pages:7"],
-      sql: "select pg_advisory_xact_lock(hashtext($1))",
-    });
+    expect(renderQuery(statement)).toEqual(PAGES_LOCK);
   });
 });
 
@@ -2129,7 +2149,11 @@ describe("createSpotlight", () => {
       )
     ).resolves.toEqual({ id: 51 });
 
-    expect(db.$.execute).toHaveBeenCalledOnce();
+    // The pages' lock first, before any read takes a key share.
+    expect(advisoryLocks(db, "select")).toEqual({
+      before: true,
+      locks: [PAGES_LOCK],
+    });
     expect(readsOf(db)).toEqual({
       locks: ["key share", "key share", "key share", "key share"],
       tables: [page, category, product, spotlight, banner],
@@ -2271,6 +2295,10 @@ describe("updateSpotlight", () => {
 
     await expect(update({ productId: 40 })).resolves.toEqual({ id: 51 });
 
+    expect(advisoryLocks(db, "select")).toEqual({
+      before: true,
+      locks: [PAGES_LOCK],
+    });
     expect(db.$["update.set"].mock.calls[0]?.[0]).toEqual({ productId: 40 });
     expect(renderQuery(db.$["update.where"].mock.calls[0]?.[0])).toEqual({
       params: [51, STORE_ID],
@@ -2336,7 +2364,10 @@ describe("deleteSpotlight", () => {
     await expect(
       deleteSpotlight(db as never, { id: 51, storeId: STORE_ID })
     ).resolves.toEqual({ id: 51 });
-    expect(db.$.execute).toHaveBeenCalledOnce();
+    expect(advisoryLocks(db, "delete")).toEqual({
+      before: true,
+      locks: [PAGES_LOCK],
+    });
     expect(db.$.delete).toHaveBeenCalledExactlyOnceWith(spotlight);
     expect(renderQuery(db.$["delete.where"].mock.calls[0]?.[0])).toEqual({
       params: [51, STORE_ID],
