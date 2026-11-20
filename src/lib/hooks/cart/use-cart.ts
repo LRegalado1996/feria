@@ -19,6 +19,15 @@ const EMPTY: Cart = [];
  */
 export type AddOutcome = "added" | "at_max" | "cart_full" | "refused";
 
+/**
+ * What adding did and the units it put in the cart, counted from the cart
+ * it wrote over: 0 unless `added`, fewer than asked at the cap.
+ */
+export interface AddResult {
+  added: number;
+  outcome: AddOutcome;
+}
+
 /** Where the cart lives in the browser: one per browser (FER-038). */
 export const CART_STORAGE_KEY = "feria:cart";
 
@@ -123,14 +132,6 @@ export function parseCart(raw: string | null): Cart {
 }
 
 /**
- * The cart as stored at this moment, past React's last render: a tab that
- * changed it a moment ago is seen before this one renders again.
- */
-export function readCart(): Cart {
-  return parseCart(readRaw());
-}
-
-/**
  * Saves a cart, or refuses one that would not parse back (a bad quantity
  * would otherwise empty the whole cart on the next read). Answers whether
  * it was saved.
@@ -176,12 +177,13 @@ export function useCart() {
 
   /**
    * Adds `quantity` of an article, up to the per-article cap, and answers
-   * what it did (`AddOutcome`); anything but `added` changed nothing.
+   * what it did and how many units it took (`AddResult`), counted from the
+   * one read it wrote over: anything but `added` changed nothing.
    * `seenPriceAmount` is the price the page showed, kept so the cart can
    * say when it changed since.
    */
   const add = useCallback(
-    (productId: number, quantity = 1, seenPriceAmount?: number): AddOutcome => {
+    (productId: number, quantity = 1, seenPriceAmount?: number): AddResult => {
       const seen = seenPriceAmount === undefined ? {} : { seenPriceAmount };
       const current = parseCart(readRaw());
       const line = current.find((item) => item.productId === productId);
@@ -189,43 +191,34 @@ export function useCart() {
       // Checked before the cap: capped first, 10.5 or Infinity would become
       // a valid 10.
       if (!Number.isInteger(quantity) || quantity < 1) {
-        return "refused";
+        return { added: 0, outcome: "refused" };
       }
 
       // Never clamped in silence: an article already at its cap is said so.
       if (line && line.quantity >= CART_QUANTITY_MAX) {
-        return "at_max";
+        return { added: 0, outcome: "at_max" };
       }
 
       if (!line && current.length >= CART_ITEMS_MAX) {
-        return "cart_full";
+        return { added: 0, outcome: "cart_full" };
       }
+
+      const had = line?.quantity ?? 0;
+      const total = Math.min(had + quantity, CART_QUANTITY_MAX);
 
       const saved = write(
         line
           ? current.map((item) =>
               item.productId === productId
-                ? {
-                    ...item,
-                    ...seen,
-                    quantity: Math.min(
-                      item.quantity + quantity,
-                      CART_QUANTITY_MAX
-                    ),
-                  }
+                ? { ...item, ...seen, quantity: total }
                 : item
             )
-          : [
-              ...current,
-              {
-                productId,
-                quantity: Math.min(quantity, CART_QUANTITY_MAX),
-                ...seen,
-              },
-            ]
+          : [...current, { productId, quantity: total, ...seen }]
       );
 
-      return saved ? "added" : "refused";
+      return saved
+        ? { added: total - had, outcome: "added" }
+        : { added: 0, outcome: "refused" };
     },
     []
   );

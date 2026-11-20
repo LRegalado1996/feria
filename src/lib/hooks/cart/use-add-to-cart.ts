@@ -5,7 +5,7 @@ import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { CART_QUANTITY_MAX } from "@/lib/schemas/cart";
 
-import { readCart, useCart } from "./use-cart";
+import { useCart } from "./use-cart";
 import { useCartPanel } from "./use-cart-panel";
 
 /** One press of an "Agregar al carrito". */
@@ -18,11 +18,6 @@ export interface AddToCartRequest {
   returnFocus: HTMLElement | null;
   /** The article's name, for what adding did. */
   title: string;
-}
-
-/** The units of an article the browser's cart holds right now. */
-function storedUnits(productId: number): number {
-  return readCart().find((item) => item.productId === productId)?.quantity ?? 0;
 }
 
 /**
@@ -40,17 +35,15 @@ export function useAddToCart(): (request: AddToCartRequest) => string {
   const panel = useCartPanel();
 
   return ({ priceAmount, productId, quantity, returnFocus, title }) => {
-    // Read from the stored cart around the change, not the last render:
-    // another tab may have changed it since, and the units it took are
-    // what the change made of what was there.
-    const had = storedUnits(productId);
-    const outcome = add(productId, quantity, priceAmount);
-    // The cart keeps at most the cap of one article: when it took fewer
-    // than chosen, the shopper is told how many, not "added".
-    const added = storedUnits(productId) - had;
+    // Counted by `add` from the cart it read and wrote over, not from the
+    // last render or a read of its own: another tab may change the stored
+    // cart between any two reads.
+    const { added, outcome } = add(productId, quantity, priceAmount);
 
     let text = addOutcomeMessage(outcome, storefront.catalog);
 
+    // The cart keeps at most the cap of one article: when it took fewer
+    // than chosen, the shopper is told how many, not "added".
     if (outcome === "added" && added < quantity) {
       text = interpolate(storefront.article.addedCapped, {
         added,

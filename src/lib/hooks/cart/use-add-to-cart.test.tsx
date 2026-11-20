@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { createI18nWrapper } from "@/test/i18n";
@@ -67,6 +67,10 @@ function setup({
     stored: (): unknown => JSON.parse(localStorage.getItem(KEY) ?? "null"),
   };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("useAddToCart", () => {
   test("adds to the browser's cart and opens the panel, which says it, saying nothing beside the button", () => {
@@ -156,6 +160,31 @@ describe("useAddToCart", () => {
       });
     }
   );
+
+  test("says what its own read of the cart made of it, though another tab writes right after that read", () => {
+    const { add, open, stored } = setup({
+      cart: [{ productId: 42, quantity: 10 }],
+    });
+    const text = localStorage.getItem(KEY);
+    // The next read sees 10, and another tab takes one away right after.
+    const read = vi
+      .spyOn(localStorage, "getItem")
+      .mockImplementationOnce(() => {
+        localStorage.setItem(
+          KEY,
+          JSON.stringify([{ productId: 42, quantity: 9 }])
+        );
+
+        return text;
+      });
+
+    expect(add(42)).toBe(
+      "You already have 10 of this article, the most an order takes."
+    );
+    expect(open).not.toHaveBeenCalled();
+    expect(stored()).toEqual([{ productId: 42, quantity: 9 }]);
+    expect(read).toHaveBeenCalledWith(KEY);
+  });
 
   test("outside a store page's frame, says what it did beside the button", () => {
     const { add, stored } = setup({ inFrame: false });

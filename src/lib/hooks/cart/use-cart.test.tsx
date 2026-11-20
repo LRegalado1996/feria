@@ -2,7 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import type { AddOutcome, useCart as UseCart } from "./use-cart";
+import type { AddResult, useCart as UseCart } from "./use-cart";
 
 const { reportError } = vi.hoisted(() => ({ reportError: vi.fn() }));
 
@@ -142,29 +142,31 @@ describe("useCart", () => {
       stored: JSON.stringify([makeItem(4, 2)]),
     });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(9);
     });
 
-    expect(outcome).toBe("added");
+    expect(outcome).toEqual({ added: 1, outcome: "added" });
     expect(result.current.items).toEqual([makeItem(4, 2), makeItem(9, 1)]);
     expect(storedCart()).toEqual([makeItem(4, 2), makeItem(9, 1)]);
   });
 
   test.each([
-    ["adds to an existing line", 3, 2, 5],
-    ["caps an existing line at 10", 8, 5, 10],
-    ["reaches exactly 10", 7, 3, 10],
-  ])("%s", async (_case, start, added, expected) => {
+    ["adds to an existing line", 3, 2, 5, 2],
+    ["caps an existing line at 10, counting the units it took", 8, 5, 10, 2],
+    ["reaches exactly 10", 7, 3, 10, 3],
+  ])("%s", async (_case, start, asked, expected, took) => {
     const { result } = await setup({
       stored: JSON.stringify([makeItem(4, start)]),
     });
 
+    let outcome: AddResult | null = null;
     act(() => {
-      result.current.add(4, added);
+      outcome = result.current.add(4, asked);
     });
 
+    expect(outcome).toEqual({ added: took, outcome: "added" });
     expect(result.current.items).toEqual([makeItem(4, expected)]);
   });
 
@@ -179,12 +181,12 @@ describe("useCart", () => {
       });
       storage.setItem.mockClear();
 
-      let outcome: AddOutcome | null = null;
+      let outcome: AddResult | null = null;
       act(() => {
         outcome = result.current.add(4, quantity);
       });
 
-      expect(outcome).toBe("at_max");
+      expect(outcome).toEqual({ added: 0, outcome: "at_max" });
       expect(storedCart()).toEqual([makeItem(4, 10)]);
       expect(storage.setItem).not.toHaveBeenCalled();
     }
@@ -256,12 +258,12 @@ describe("useCart", () => {
       stored: JSON.stringify([makeItem(4, 9)]),
     });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(4, 5);
     });
 
-    expect(outcome).toBe("added");
+    expect(outcome).toEqual({ added: 1, outcome: "added" });
     expect(result.current.items).toEqual([makeItem(4, 10)]);
   });
 
@@ -270,12 +272,12 @@ describe("useCart", () => {
       stored: JSON.stringify([...makeCart(19), makeItem(99, 10)]),
     });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(99);
     });
 
-    expect(outcome).toBe("at_max");
+    expect(outcome).toEqual({ added: 0, outcome: "at_max" });
   });
 
   test("caps a new line at 10 units", async () => {
@@ -293,36 +295,36 @@ describe("useCart", () => {
       stored: JSON.stringify(makeCart(20)),
     });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(99);
     });
 
-    expect(outcome).toBe("cart_full");
+    expect(outcome).toEqual({ added: 0, outcome: "cart_full" });
     expect(storedCart()).toEqual(makeCart(20));
   });
 
   test("still adds units to an article already in a full cart", async () => {
     const { result } = await setup({ stored: JSON.stringify(makeCart(20)) });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(20, 2);
     });
 
-    expect(outcome).toBe("added");
+    expect(outcome).toEqual({ added: 2, outcome: "added" });
     expect(result.current.items.at(-1)).toEqual(makeItem(20, 3));
   });
 
   test("adds the 20th article", async () => {
     const { result } = await setup({ stored: JSON.stringify(makeCart(19)) });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(99);
     });
 
-    expect(outcome).toBe("added");
+    expect(outcome).toEqual({ added: 1, outcome: "added" });
     expect(result.current.items).toEqual([...makeCart(19), makeItem(99, 1)]);
   });
 
@@ -463,7 +465,7 @@ describe("useCart", () => {
     async (refused) => {
       const { cart, result, storage } = await setup({ refused });
 
-      let outcome: AddOutcome | null = null;
+      let outcome: AddResult | null = null;
       act(() => {
         outcome = result.current.add(4);
       });
@@ -471,7 +473,7 @@ describe("useCart", () => {
         result.current.setQuantity(4, 3);
       });
 
-      expect(outcome).toBe("added");
+      expect(outcome).toEqual({ added: 1, outcome: "added" });
       expect(result.current.items).toEqual([makeItem(4, 3)]);
       expect(result.current.count).toBe(3);
       // Another cart of the store on the page sees the same one.
@@ -487,12 +489,12 @@ describe("useCart", () => {
   test("reports a write the storage refuses, and keeps the cart in the page", async () => {
     const { result } = await setup({ full: true });
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = result.current.add(4, 2);
     });
 
-    expect(outcome).toBe("added");
+    expect(outcome).toEqual({ added: 2, outcome: "added" });
     expect(reportError).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ name: "QuotaExceededError" }),
       { action: "Cart.write_storage" }
@@ -686,12 +688,12 @@ describe("useCart", () => {
     });
     storage.setItem.mockClear();
 
-    let outcome: AddOutcome | null = null;
+    let outcome: AddResult | null = null;
     act(() => {
       outcome = change(result.current);
     });
 
-    expect(outcome).toBe("refused");
+    expect(outcome).toEqual({ added: 0, outcome: "refused" });
     expect(result.current.items).toEqual([makeItem(4, 2)]);
     expect(storedCart()).toEqual([makeItem(4, 2)]);
     expect(storage.setItem).not.toHaveBeenCalled();
@@ -789,15 +791,20 @@ describe("useCart", () => {
     expect(renderToString(<Count />)).toBe("<span>0</span>");
   });
 
-  test("readCart reads the stored cart as it is now, before React renders again", async () => {
-    const { cart, result, storage } = await setup({
+  test("adds to the stored cart as it is now, before React renders again, and counts from it", async () => {
+    const { result, storedCart, storage } = await setup({
       stored: JSON.stringify([makeItem(4, 2)]),
     });
 
     // Written past the hook, as another tab does before its event arrives.
-    storage.setItem(KEY, JSON.stringify([makeItem(4, 5)]));
+    storage.setItem(KEY, JSON.stringify([makeItem(4, 8)]));
 
-    expect(result.current.items).toEqual([makeItem(4, 2)]);
-    expect(cart.readCart()).toEqual([makeItem(4, 5)]);
+    let outcome: AddResult | null = null;
+    act(() => {
+      outcome = result.current.add(4, 5);
+    });
+
+    expect(outcome).toEqual({ added: 2, outcome: "added" });
+    expect(storedCart()).toEqual([makeItem(4, 10)]);
   });
 });
