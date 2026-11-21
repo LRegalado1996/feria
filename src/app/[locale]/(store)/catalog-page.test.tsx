@@ -272,7 +272,7 @@ describe("a catalog page's address", () => {
     expect(catalog()).toMatchObject({
       breadcrumb: {
         items: [
-          { href: "/", name: "Inicio" },
+          { href: "/", name: "Home" },
           { lang: undefined, name: "Catálogo" },
         ],
         label: "Ruta",
@@ -339,7 +339,7 @@ describe("a catalog page's address", () => {
     expect(catalog()).toMatchObject({
       breadcrumb: {
         items: [
-          { href: "/", name: "Inicio" },
+          { href: "/", name: "Home" },
           { lang: "es", name: "Bijouterie" },
         ],
       },
@@ -494,7 +494,7 @@ describe("a catalog page's structured data", () => {
         {
           "@type": "ListItem",
           item: `${ORIGIN}/`,
-          name: "Inicio",
+          name: "Home",
           position: 1,
         },
         {

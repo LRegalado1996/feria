@@ -7,7 +7,7 @@ export const errors = {
   },
   notFound: {
     description: "La dirección que abriste no existe o ya no está disponible.",
-    homeLink: "Ir a la página de inicio",
+    homeLink: "Ir a la home",
     title: "Página no encontrada",
   },
   page: {

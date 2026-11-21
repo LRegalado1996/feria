@@ -141,7 +141,7 @@ describe("StoreArticle", () => {
     const { breadcrumb, page } = setup();
 
     expect(breadcrumb()).toEqual([
-      ["Inicio", "/"],
+      ["Home", "/"],
       ["Catálogo", "/productos"],
       ["Collares", "/collares"],
       ["Collar de perlas", null],
@@ -171,7 +171,7 @@ describe("StoreArticle", () => {
     });
 
     expect(breadcrumb()).toEqual([
-      ["Inicio", "/"],
+      ["Home", "/"],
       ["Catálogo", "/productos"],
       ["Bijouterie", "/bijouterie"],
       ["Anillos", "/bijouterie/anillos"],
@@ -183,7 +183,7 @@ describe("StoreArticle", () => {
     const { breadcrumb } = setup({ article: makeArticle({ category: null }) });
 
     expect(breadcrumb()).toEqual([
-      ["Inicio", "/"],
+      ["Home", "/"],
       ["Catálogo", "/productos"],
       ["Collar de perlas", null],
     ]);

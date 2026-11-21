@@ -161,7 +161,7 @@ test.describe("Article page", () => {
     );
   });
 
-  test("trails from a house named Inicio through “Catálogo” and its category to the article itself", async ({
+  test("trails from a house named Home through “Catálogo” and its category to the article itself", async ({
     db,
     page,
   }) => {
@@ -170,12 +170,12 @@ test.describe("Article page", () => {
     const trail = page.getByRole("navigation", { name: "Ruta" });
 
     await expect(trail.getByRole("listitem")).toHaveText([
-      "Inicio",
+      "Home",
       "Catálogo",
       `Anillos ${rings.slug.slice("anillos-".length)}`,
       "Anillo de plata",
     ]);
-    const home = trail.getByRole("link", { name: "Inicio" });
+    const home = trail.getByRole("link", { name: "Home" });
     await expect(home).toHaveAttribute("href", "/");
     await expect(home.getByTestId("store-breadcrumb-home-icon")).toBeVisible();
     await expect(trail.getByRole("link", { name: "Catálogo" })).toHaveAttribute(

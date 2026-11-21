@@ -255,7 +255,7 @@ describe("StoreFooter", () => {
 
   test.each([
     ["en", "/en", "LR Market, go to the home page"],
-    ["es", "/", "LR Market, ir al inicio"],
+    ["es", "/", "LR Market, ir a la home"],
   ] as const)(
     "in %s, leads home at %s from the full logo",
     (locale, href, name) => {
