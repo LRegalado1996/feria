@@ -6,12 +6,12 @@
 #   bash scripts/lint-router-db.sh --self-test
 #
 # konsistent bans a router's drizzle-orm imports, but it sees files, imports
-# and declarations, not member access: `context.db.query.post.findFirst()`
+# and declarations, not member access: `context.db.query.category.findFirst()`
 # needs no import at all. This closes that half.
 #
 # `db.transaction(...)` stays allowed: a transaction that composes service
 # calls is a boundary, not a query. Passing the client on
-# (`createPost(context.db, …)`) is not member access and is not matched.
+# (`createCategory(context.db, …)`) is not member access and is not matched.
 
 set -euo pipefail
 
@@ -30,12 +30,12 @@ pattern='\b(db|tx|trx)\??\.(\$count|query|selectDistinctOn|selectDistinct|select
 self_test() {
   local failures=0 line
   for line in \
-    'await context.db.query.post.findMany({' \
-    'context.db.insert(post).values(input)' \
-    'await db?.select().from(post)' \
-    'await tx.update(post).set({ name })' \
-    'trx.delete(post)' \
-    'db.$count(post)' \
+    'await context.db.query.category.findMany({' \
+    'context.db.insert(category).values(input)' \
+    'await db?.select().from(category)' \
+    'await tx.update(category).set({ name })' \
+    'trx.delete(category)' \
+    'db.$count(category)' \
     'db.execute(sql`select 1`)'; do
     grep -qE "$pattern" <<<"$line" || {
       echo "FAIL: must flag: $line" >&2
@@ -43,8 +43,8 @@ self_test() {
     }
   done
   for line in \
-    'await createPost(context.db, input)' \
-    'await context.db.transaction(async (tx) => createPost(tx, input))' \
+    'await createCategory(context.db, input)' \
+    'await context.db.transaction(async (tx) => createCategory(tx, input))' \
     'const database = context.db;' \
     'selection.update(x)'; do
     if grep -qE "$pattern" <<<"$line"; then

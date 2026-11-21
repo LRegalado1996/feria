@@ -21,7 +21,7 @@ vi.mock("@/server/better-auth", () => ({ auth: { api: { getSession } } }));
 
 describe("server oRPC caller", () => {
   test("builds each call's context from the incoming request headers", async () => {
-    await expect(caller.post.create({ name: "Hello" })).rejects.toMatchObject({
+    await expect(caller.admin.me()).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });

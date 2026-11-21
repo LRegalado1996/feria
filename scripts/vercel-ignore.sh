@@ -155,10 +155,10 @@ self_test() {
   SELF_TEST_FAILURES=0
 
   assert_verdict skip "docs only" "README.md" "docs/agents/ci.md"
-  assert_verdict skip "unit test" "src/server/api/routers/post.test.ts"
-  assert_verdict skip "tsx test" "src/lib/hooks/post/use-get-posts.test.tsx"
-  assert_verdict skip "integration test" "src/server/api/routers/post.integration.test.ts"
-  assert_verdict skip "e2e spec" "src/e2e/tests/posts.spec.ts"
+  assert_verdict skip "unit test" "src/server/api/routers/category.test.ts"
+  assert_verdict skip "tsx test" "src/lib/hooks/category/use-store-categories.test.tsx"
+  assert_verdict skip "integration test" "src/server/api/routers/category.integration.test.ts"
+  assert_verdict skip "e2e spec" "src/e2e/tests/orders.spec.ts"
   assert_verdict skip "test setup" "src/test/setup.ts"
   assert_verdict skip "server test helpers" "src/server/test/context.ts"
   assert_verdict skip "workflow" ".github/workflows/ci.yml"
@@ -166,9 +166,9 @@ self_test() {
   assert_verdict skip "editor config" ".cursor/rules/a.mdc" ".vscode/settings.json" ".superset/config.json"
 
   # Each of these must flip an otherwise skippable push to build.
-  assert_verdict build "router source" "src/server/api/routers/post.ts"
+  assert_verdict build "router source" "src/server/api/routers/category.ts"
   assert_verdict build "test alongside source" \
-    "src/server/api/routers/post.test.ts" "src/server/api/routers/post.ts"
+    "src/server/api/routers/category.test.ts" "src/server/api/routers/category.ts"
   assert_verdict build "deployment config" "vercel.json"
   assert_verdict build "this script" "scripts/vercel-ignore.sh"
   assert_verdict build "drizzle config" "drizzle.config.ts"

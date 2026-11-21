@@ -83,7 +83,7 @@ describe("AppProviders", () => {
     setup(locale);
 
     act(() => {
-      toast.success("Post published.");
+      toast.success("Order sent.");
     });
 
     expect(screen.getByRole("region")).toHaveAccessibleName(name);
@@ -93,9 +93,9 @@ describe("AppProviders", () => {
     setup();
 
     act(() => {
-      toast.success("Post published.");
+      toast.success("Order sent.");
     });
 
-    expect(await screen.findByText("Post published.")).toBeInTheDocument();
+    expect(await screen.findByText("Order sent.")).toBeInTheDocument();
   });
 });

@@ -20,7 +20,7 @@ describe("safeRequestLogger", () => {
       return await Promise.resolve(new Response("ok"));
     });
 
-    await handler(new Request("http://localhost/api/orpc/post/create"));
+    await handler(new Request("http://localhost/api/orpc/category/create"));
 
     expect(seen.evlog).toHaveProperty("set", expect.any(Function));
     expect(seen.ours).toBe(seen.evlog);

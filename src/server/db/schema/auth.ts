@@ -3,13 +3,18 @@ import {
   boolean,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
 
+import { USER_ROLES } from "@/lib/schemas/access";
+
 // Better Auth's tables. Their `text` ids are set by Better Auth; every other
 // convention (timestamptz, `onDelete`, indexed foreign keys) is the house one.
+
+export const userRoleEnum = pgEnum("user_role", USER_ROLES);
 
 export const user = pgTable("user", {
   id: text().primaryKey(),
@@ -17,6 +22,12 @@ export const user = pgTable("user", {
   email: text().notNull().unique(),
   emailVerified: boolean().notNull().default(false),
   image: text(),
+  // Nothing reads it since FER-038: every login is an admin and reaches the
+  // whole admin. It stays as the home of later roles; FER-041 turns its type
+  // into the single value `admin` once no deployed build reads the two the
+  // multi-store model had. Declared to Better Auth as an additional field it
+  // never takes from a request (`input: false`).
+  role: userRoleEnum().notNull().default("member"),
   createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
     .notNull()
     .defaultNow(),

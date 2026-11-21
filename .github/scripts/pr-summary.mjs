@@ -425,14 +425,14 @@ export async function selfTest() {
     ["pnpm-lock.yaml", "generated"],
     ["src/server/db/drizzle/0001_add_column.sql", "prod"],
     ["src/app/_components/atoms/button/button.test.tsx", "test"],
-    ["src/server/api/routers/post.integration.test.ts", "test"],
-    ["src/e2e/tests/posts.spec.ts", "test"],
+    ["src/server/api/routers/category.integration.test.ts", "test"],
+    ["src/e2e/tests/orders.spec.ts", "test"],
     ["src/e2e/page-objects/base.ts", "test"],
     ["src/test/setup.ts", "test"],
     ["src/server/test/context.ts", "test"],
     ["src/server/db/__tests__/helpers.ts", "test"],
-    ["src/server/api/routers/post.ts", "prod"],
-    ["src/lib/schemas/post/index.ts", "prod"],
+    ["src/server/api/routers/category.ts", "prod"],
+    ["src/lib/schemas/catalog/index.ts", "prod"],
     ["src/lib/contest/page.tsx", "prod"],
     ["scripts/vercel-ignore.sh", "prod"],
     ["drizzle\\meta\\0001_snapshot.json", "generated"],
@@ -441,9 +441,13 @@ export async function selfTest() {
   }
 
   const totals = sumChangedFiles([
-    { filename: "src/server/api/routers/post.ts", additions: 40, deletions: 5 },
     {
-      filename: "src/server/api/routers/post.test.ts",
+      filename: "src/server/api/routers/category.ts",
+      additions: 40,
+      deletions: 5,
+    },
+    {
+      filename: "src/server/api/routers/category.test.ts",
       additions: 120,
       deletions: 0,
     },

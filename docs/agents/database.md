@@ -10,7 +10,7 @@ Detail behind `AGENTS.md` § Database. Read it before you change a schema, a mig
 - A service that can join a caller's transaction uses only the handle it is given. If the app audits, the service writes the audit row in the mutation's own transaction.
 - A write that matched zero rows throws NOT_FOUND or CONFLICT, never reports success.
 - Enforced: konsistent bans Drizzle imports in routers and request-scoped or React imports in services; `scripts/lint-router-db.sh` catches `context.db.query…` and other client member access in a router.
-- A service test asserts the SQL the driver would receive, not just the rows the mock returns: `renderQuery(where)` (text and bound values) and `renderOrderBy(orderBy)` from `@/server/test/render-sql`, as `src/server/services/post.test.ts` does.
+- A service test asserts the SQL the driver would receive, not just the rows the mock returns: `renderQuery(where)` (text and bound values) and `renderOrderBy(orderBy)` from `@/server/test/render-sql`, as `src/server/services/category.test.ts` does.
 
 ## Multi-step writes: resolve → lock → commit
 

@@ -88,8 +88,9 @@ export default defineConfig({
     "class-methods-use-this": "off",
     // 4 violations, all counters in tests and e2e loops.
     "no-plusplus": "off",
-    // 3 violations, all e2e: posts seeded in order (their timestamps set the
-    // feed order) and browser contexts closed one by one.
+    // 65 violations: rows seeded in order (the seed, the e2e fixture, the
+    // integration tests), steps of the CI scripts' self-tests run in order,
+    // and browser contexts closed one by one.
     "no-await-in-loop": "off",
     // 2 violations. `const first = pages[0]` is as clear as destructuring.
     "prefer-destructuring": "off",
@@ -188,7 +189,7 @@ export default defineConfig({
         // 10 violations. Falsifiability wants every field asserted, not a cap.
         "vitest/max-expects": "off",
         // 95 violations. `describe` titles name the procedure or feature
-        // (`"post.create"`), which a function reference cannot.
+        // (`"category.create"`), which a function reference cannot.
         "vitest/prefer-describe-function-title": "off",
         // 11 violations. A file about one thing needs no `describe`.
         "vitest/require-top-level-describe": "off",

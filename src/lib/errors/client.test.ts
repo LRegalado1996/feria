@@ -23,40 +23,40 @@ describe("reportError", () => {
     const error = new ORPCError("INTERNAL_SERVER_ERROR", {
       data: {
         eventId: "server-event",
-        procedure: "post.create",
+        procedure: "category.create",
         requestId: "r1",
       },
     });
 
     const eventId = reportError(error, {
-      action: "Post.create_failed",
-      context: { postId: 3 },
+      action: "Category.create_failed",
+      context: { categoryId: 3 },
     });
 
     expect(eventId).toBe("browser-event");
     expect(sentry.captureException).toHaveBeenCalledExactlyOnceWith(error);
     expect(sentry.scope.setTag.mock.calls).toEqual([
-      ["action", "Post.create_failed"],
-      ["procedure", "post.create"],
+      ["action", "Category.create_failed"],
+      ["procedure", "category.create"],
       ["request_id", "r1"],
       ["server_event_id", "server-event"],
     ]);
     expect(sentry.scope.setContext).toHaveBeenCalledExactlyOnceWith("details", {
-      postId: 3,
+      categoryId: 3,
     });
   });
 
   test("leaves an action breadcrumb before the event", () => {
     reportError(new ORPCError("INTERNAL_SERVER_ERROR"), {
-      action: "Post.create_failed",
-      context: { postId: 3 },
+      action: "Category.create_failed",
+      context: { categoryId: 3 },
     });
 
     expect(sentry.addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
       category: "action",
       level: "info",
-      message: "Post.create_failed",
-      data: { postId: 3, code: "INTERNAL_SERVER_ERROR" },
+      message: "Category.create_failed",
+      data: { categoryId: 3, code: "INTERNAL_SERVER_ERROR" },
     });
     expect(sentry.addBreadcrumb.mock.invocationCallOrder[0]).toBeLessThan(
       sentry.captureException.mock.invocationCallOrder[0] ?? 0
@@ -65,20 +65,22 @@ describe("reportError", () => {
 
   test("keeps a typed business error a breadcrumb", () => {
     expect(
-      reportError(new ORPCError("UNAUTHORIZED"), { action: "Post.list_failed" })
+      reportError(new ORPCError("UNAUTHORIZED"), {
+        action: "Category.list_failed",
+      })
     ).toBeNull();
     expect(sentry.captureException).not.toHaveBeenCalled();
     expect(sentry.addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
       category: "action",
       level: "info",
-      message: "Post.list_failed",
+      message: "Category.list_failed",
       data: { code: "UNAUTHORIZED" },
     });
   });
 
   test("keeps a request that never got a response a warning breadcrumb", () => {
     const eventId = reportError(new TypeError("Failed to fetch"), {
-      action: "Post.list_failed",
+      action: "Category.list_failed",
     });
 
     expect(eventId).toBeNull();
@@ -86,7 +88,7 @@ describe("reportError", () => {
     expect(sentry.addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
       category: "action",
       level: "warning",
-      message: "Post.list_failed",
+      message: "Category.list_failed",
       data: {},
     });
   });

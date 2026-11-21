@@ -1,17 +1,17 @@
 import "@/styles/globals.css";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { Anton, Geist } from "next/font/google";
+import { Anybody, Geist } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { EnvironmentMarker } from "@/app/_components/molecules/environment-marker";
+import { VercelInsights } from "@/app/_components/molecules/vercel-insights";
 import { AppProviders } from "@/app/_components/organisms/app-providers";
 import { getDictionary } from "@/content";
 import { BRAND_NAME } from "@/lib/brand/logo";
 import { DEFAULT_LOCALE, isLocale, LOCALES } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
+import { storeThemeStyle } from "@/styles/theme";
 
 interface LocaleParams {
   params: Promise<{ locale: string }>;
@@ -68,11 +68,12 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-// The storefront's display face (design.md § Storefront). It has one weight.
-const anton = Anton({
+// The storefront's wide face (design.md § Storefront): variable, with its
+// width axis, which the theme sets to 135% (`src/styles/globals.css`).
+const anybody = Anybody({
+  axes: ["wdth"],
   subsets: ["latin"],
-  variable: "--font-anton",
-  weight: "400",
+  variable: "--font-anybody",
 });
 
 export default async function RootLayout({
@@ -87,11 +88,13 @@ export default async function RootLayout({
     // next-themes sets the theme class on <html> before React hydrates, so
     // the server's markup cannot know it.
     <html
-      className={`${geist.variable} ${anton.variable}`}
+      className={`${geist.variable} ${anybody.variable}`}
       lang={locale}
       suppressHydrationWarning
     >
-      <body>
+      {/* The store's colors, from the theme file, for everything below; the
+          attribute makes CSS derive the muted ones from them here. */}
+      <body data-store-palette="" style={storeThemeStyle()}>
         {/* First in <body>: chrome rendered later at the same z-index paints
             over the line, never the other way round. */}
         <EnvironmentMarker locale={locale} />
@@ -100,12 +103,7 @@ export default async function RootLayout({
         </AppProviders>
         {/* Vercel serves their scripts once Analytics and Speed Insights are
             enabled in the project; anywhere else the scripts 404. */}
-        {process.env.VERCEL === "1" ? (
-          <>
-            <Analytics />
-            <SpeedInsights />
-          </>
-        ) : null}
+        {process.env.VERCEL === "1" ? <VercelInsights /> : null}
       </body>
     </html>
   );

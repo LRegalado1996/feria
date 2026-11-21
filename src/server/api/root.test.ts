@@ -1,7 +1,11 @@
 import { expect, test, vi } from "vitest";
 
 import { appRouter } from "./root";
-import { postRouter } from "./routers/post";
+import { comingSoonRouter } from "./routers/coming-soon";
+import { orderRouter } from "./routers/order";
+import { pageRouter } from "./routers/page";
+import { storeRouter } from "./routers/store";
+import { uploadRouter } from "./routers/upload";
 
 vi.mock("@/env", () => ({
   env: {
@@ -10,9 +14,24 @@ vi.mock("@/env", () => ({
   },
 }));
 
-// Every key here is a public URL prefix (`/api/orpc/post/...`): a router
+// Every key here is a public URL prefix (`/api/orpc/order/...`): a router
 // mounted by accident is reachable, and one dropped is a 404 for every client.
 test("mounts each domain router at its own key, and nothing else", () => {
-  expect(Object.keys(appRouter)).toEqual(["post"]);
-  expect(appRouter.post).toBe(postRouter);
+  expect(Object.keys(appRouter)).toEqual([
+    "admin",
+    "attribute",
+    "catalog",
+    "category",
+    "comingSoon",
+    "order",
+    "page",
+    "product",
+    "store",
+    "upload",
+  ]);
+  expect(appRouter.comingSoon).toBe(comingSoonRouter);
+  expect(appRouter.page).toBe(pageRouter);
+  expect(appRouter.order).toBe(orderRouter);
+  expect(appRouter.store).toBe(storeRouter);
+  expect(appRouter.upload).toBe(uploadRouter);
 });

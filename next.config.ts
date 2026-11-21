@@ -1,7 +1,9 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { withBotId } from "botid/next/config";
 import type { NextConfig } from "next";
 
 import "./src/env.js";
+import { blobImagePatterns } from "./src/lib/blob/host";
 
 // ── Security headers ─────────────────────────────────────────────────────────
 // Here and not in vercel.json, so a standalone or Docker build sends them too.
@@ -35,6 +37,12 @@ const config: NextConfig = {
     turbopackRustReactCompiler: true,
   },
 
+  // Uploaded images (FER-011) are served by `next/image` from this
+  // deployment's own Blob store only, the host its token names.
+  images: {
+    remotePatterns: blobImagePatterns(process.env.BLOB_READ_WRITE_TOKEN),
+  },
+
   headers: async () =>
     await Promise.resolve([{ source: "/(.*)", headers: SECURITY_HEADERS }]),
 
@@ -52,7 +60,9 @@ const config: NextConfig = {
 // Inert without a DSN at runtime. Source maps upload only with
 // SENTRY_AUTH_TOKEN (plus SENTRY_ORG and SENTRY_PROJECT), so a local build
 // needs no Sentry credentials.
-export default withSentryConfig(config, {
+// BotID (FER-026) adds the rewrites its browser script and checks travel
+// through; they are inert off Vercel, where the script is never loaded.
+export default withSentryConfig(withBotId(config), {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,

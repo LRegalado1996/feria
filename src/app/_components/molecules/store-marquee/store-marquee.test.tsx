@@ -102,6 +102,19 @@ describe("StoreMarquee", () => {
     expect(track).not.toHaveClass("[animation-play-state:paused]!");
   });
 
+  test("speaks in the wide display face, extra bold and uppercase", () => {
+    const { track } = setup();
+
+    expect(track).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "uppercase",
+      "text-lg",
+      "md:text-2xl"
+    );
+    expect(track).not.toHaveClass("tracking-display");
+  });
+
   test("has nothing to pause under reduced motion: the button goes away", () => {
     const { pause } = setup();
 

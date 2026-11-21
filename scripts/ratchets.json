@@ -93,9 +93,9 @@
     {
       "id": "report-error-action-format",
       "title": "A reportError action outside the Domain.snake_action convention",
-      "rationale": "The action is the primary tag on every browser event and the key alert rules filter on, so one spelling has to win: `Post.createFailed` and `Post.create_failed` are two tag values nobody thinks to search together. Matches a capitalised domain with an uppercase letter in the suffix only, so unrelated dotted strings are not flagged. Held at zero from the day the ratchet was added.",
+      "rationale": "The action is the primary tag on every browser event and the key alert rules filter on, so one spelling has to win: `Category.createFailed` and `Category.create_failed` are two tag values nobody thinks to search together. Matches a capitalised domain with an uppercase letter in the suffix only, so unrelated dotted strings are not flagged. Held at zero from the day the ratchet was added.",
       "guardrail": "AGENTS.md § Error reporting: actions are `Domain.snake_action`",
-      "fix": "Spell the suffix in snake_case (`Post.create_failed`, not `Post.createFailed`) and rename every occurrence, the test that asserts it included.",
+      "fix": "Spell the suffix in snake_case (`Category.create_failed`, not `Category.createFailed`) and rename every occurrence, the test that asserts it included.",
       "pattern": "action:\\s*\"[A-Z][A-Za-z0-9]*\\.[a-z0-9_]*[A-Z][A-Za-z0-9_]*\"",
       "siteKeyPattern": "^\\s*(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+([A-Za-z0-9_$]+)|^\\s*(?:export\\s+)?const\\s+([A-Za-z0-9_$]+)\\s*(?::[^=]*)?=\\s*(?:async\\s*)?(?:function|\\(|[A-Za-z0-9_$]+\\s*=>)",
       "include": ["src/**/*.ts", "src/**/*.tsx"],
@@ -207,7 +207,7 @@
       "rationale": "The storefront has its own visual language (design.md § Storefront): a display face set uppercase, fluid sizes, a marquee, and the five store colors a store overrides on its own pages. The admin keeps the calm back-office rules, which ban all-caps labels and moving bands. These utilities are allowed only in storefront components (a `store-` directory in a component tier) and storefront routes, so the two languages cannot leak into each other one class at a time. Held at zero from the day the ratchet was added.",
       "guardrail": "design.md § Storefront: where it differs from the admin, and where its styles may be used",
       "fix": "In the admin, use the roles in design.md § Typography and copy and the app tokens. If the screen is part of the storefront, build it from the `store-*` components and keep its own layout in a `store-*` organism the route renders (design.md § Storefront: where it applies).",
-      "pattern": "-store-(?:background|surface|foreground|contrast|accent|muted|line)\\b|\\bstore-display-|\\bstore-eyebrow\\b|animate-store-|\\bfont-display\\b|\\buppercase\\b|\\b(?:tracking|leading)-(?:display|eyebrow)\\b",
+      "pattern": "-store-(?:background|surface|foreground|contrast|accent|danger|muted|line)\\b|\\bstore-display-|\\bstore-eyebrow\\b|animate-store-|\\bfont-display\\b|\\buppercase\\b|\\b(?:tracking|leading)-(?:display|eyebrow)\\b",
       "include": [
         "src/app/**/*.ts",
         "src/app/**/*.tsx",

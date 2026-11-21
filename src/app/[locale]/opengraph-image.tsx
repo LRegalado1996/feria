@@ -1,5 +1,5 @@
 import { renderLogoImage } from "@/lib/brand/logo-image";
-import { STORE_PALETTE } from "@/styles/store-palette";
+import { STORE_THEME } from "@/styles/theme";
 
 export { BRAND_NAME as alt } from "@/lib/brand/logo";
 export const size = { height: 630, width: 1200 };
@@ -15,7 +15,7 @@ export const contentType = "image/png";
 export default function OpenGraphImage() {
   return renderLogoImage({
     ...size,
-    background: STORE_PALETTE.foreground,
+    background: STORE_THEME.contrast,
     colorway: "accent",
     logoWidth: 580,
     variant: "full",

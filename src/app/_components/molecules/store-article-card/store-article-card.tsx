@@ -7,7 +7,7 @@ import {
   StorePriceTag,
   type StorePriceTagProps,
 } from "@/app/_components/atoms/store-price-tag";
-import { getDictionary } from "@/content";
+import type { Dictionary } from "@/content";
 import { cn } from "@/lib/utils";
 
 export type StoreArticleCardProps = Pick<
@@ -21,16 +21,57 @@ export type StoreArticleCardProps = Pick<
   href: string;
   /** `null` while the article has no photo. */
   image: { alt: string; src: string } | null;
-  /** Marks a recent article. A reduced price outranks it: one badge a card. */
+  /** Marks a recent article with a label on its tile, unless it is sold out. */
   isNew?: boolean;
+  /**
+   * Its words, from `getDictionary` on the server or `useDictionary` in the
+   * browser, so the card renders in either.
+   */
+  labels: {
+    card: Dictionary["storefront"]["articleCard"];
+    price: Dictionary["storefront"]["price"];
+  };
   name: string;
+  /**
+   * `two` keeps the name's height at two lines, clamping a longer one: for a
+   * row whose cards change after they are first shown (the suggestions
+   * under an article), so the row does not grow or shrink. `auto`, the
+   * default, lets the name take the lines it needs.
+   */
+  nameLines?: "auto" | "two";
+  /**
+   * The language the name is in, when it may differ from the page's (an
+   * article with no English title on an English page): set on the name
+   * only, never on the card's interface text.
+   */
+  nameLang?: string;
+  /**
+   * The photo's widths for the browser to pick from, as the caller lays
+   * cards out: one of `STORE_CARD_SIZES`.
+   */
+  sizes?: string;
+  /** Marks an article that cannot be bought now: its price says "Agotado". */
+  unavailable?: boolean;
 };
 
 /**
- * An article in a grid or a slider: its photo, its name and its price. The
- * whole card is one link, named after the article: the name is the anchor and
- * its hit area is stretched over the card, so there is one tab stop and no
- * interactive element inside another. Server-only, like the price it shows.
+ * How wide a card's photo is shown, for the browser to pick a file: in a
+ * grid of four columns on a computer and two on a phone, or as a slide of
+ * `molecules/store-article-row` (a quarter of a computer, two thirds of a
+ * phone). In this module, which the server can read, not in the row's.
+ */
+export const STORE_CARD_SIZES = {
+  grid: "(min-width: 768px) 25vw, 50vw",
+  row: "(min-width: 1024px) 24vw, (min-width: 640px) 40vw, 62vw",
+} as const;
+
+/**
+ * An article in a grid or a row (FER-039): its photo on a grey tile, cropped
+ * square, an optional "Nuevo" label on the tile's corner, the name in the
+ * display face and the price in regular type. Sold out, the name dims and
+ * the price line says so. The whole card is one link, named after the
+ * article: the name is the anchor and its hit area is stretched over the
+ * card, so there is one tab stop and no interactive element inside another.
  */
 function StoreArticleCard({
   amount,
@@ -40,30 +81,40 @@ function StoreArticleCard({
   href,
   image,
   isNew = false,
+  labels,
   locale,
   name,
+  nameLang,
+  nameLines = "auto",
   previousAmount = null,
+  sizes = STORE_CARD_SIZES.grid,
+  unavailable = false,
 }: StoreArticleCardProps) {
-  const { articleCard } = getDictionary(locale).storefront;
-  const sale = previousAmount !== null && previousAmount > amount;
+  const articleCard = labels.card;
 
   return (
     <article
       className={cn(
-        "group relative flex flex-col gap-3 text-store-foreground has-[a:focus-visible]:outline-3 has-[a:focus-visible]:outline-offset-4 has-[a:focus-visible]:outline-store-foreground",
+        // The ring is drawn inside the card: a row clips what sticks out.
+        "group relative flex min-w-0 flex-col text-store-foreground has-[a:focus-visible]:outline-3 has-[a:focus-visible]:-outline-offset-3 has-[a:focus-visible]:outline-store-foreground",
         className
       )}
       data-slot="store-article-card"
+      data-unavailable={unavailable}
     >
-      <div className="relative aspect-4/5 overflow-hidden bg-store-line">
+      <div
+        className="relative aspect-square overflow-hidden bg-store-surface"
+        data-slot="store-article-card-tile"
+      >
         {image ? (
           <Image
             alt={image.alt}
-            className="object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transition-none"
+            className={cn(
+              "object-cover motion-safe:transition-transform motion-safe:duration-300 motion-safe:group-hover:scale-103",
+              unavailable && "opacity-60"
+            )}
             fill
-            // A card is 280px in a desktop row and about two thirds of a
-            // phone's width in a slider.
-            sizes="(min-width: 768px) 280px, 65vw"
+            sizes={sizes}
             src={image.src}
           />
         ) : (
@@ -75,32 +126,44 @@ function StoreArticleCard({
             {articleCard.noImage}
           </div>
         )}
-        {sale ? (
-          <StoreBadge className="absolute top-3 left-3" tone="contrast">
-            {articleCard.badgeSale}
-          </StoreBadge>
-        ) : null}
-        {isNew && !sale ? (
-          <StoreBadge className="absolute top-3 left-3" tone="accent">
+        {isNew && !unavailable ? (
+          <StoreBadge className="absolute top-2.5 left-2.5">
             {articleCard.badgeNew}
           </StoreBadge>
         ) : null}
       </div>
-      <Heading className="font-display store-display-title leading-none font-normal tracking-display uppercase">
+      <Heading
+        className={cn(
+          "mt-3 mb-1 font-display text-xs leading-tight font-extrabold wrap-anywhere uppercase group-hover:underline group-hover:underline-offset-4",
+          nameLines === "two" && "line-clamp-2 min-h-[2lh]",
+          unavailable && "text-store-muted"
+        )}
+      >
         <Link
           // The focus ring is drawn on the card, which is what the link covers.
           className="outline-none after:absolute after:inset-0"
           href={href}
+          lang={nameLang}
         >
           {name}
         </Link>
       </Heading>
-      <StorePriceTag
-        amount={amount}
-        currency={currency}
-        locale={locale}
-        previousAmount={previousAmount}
-      />
+      {unavailable ? (
+        <p
+          className="text-sm text-store-muted"
+          data-slot="store-article-card-sold-out"
+        >
+          {articleCard.unavailable}
+        </p>
+      ) : (
+        <StorePriceTag
+          amount={amount}
+          currency={currency}
+          labels={labels.price}
+          locale={locale}
+          previousAmount={previousAmount}
+        />
+      )}
     </article>
   );
 }

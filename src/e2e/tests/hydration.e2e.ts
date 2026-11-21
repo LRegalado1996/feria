@@ -1,7 +1,15 @@
 import type { Page } from "@playwright/test";
 
-import { expect, IGNORE_HTTPS_ERRORS, requireBaseURL, test } from "../fixtures";
-import { HomePage } from "../page-objects/home.page";
+import {
+  expect,
+  IGNORE_HTTPS_ERRORS,
+  requireBaseURL,
+  test,
+  uniquePhone,
+  uniqueTag,
+} from "../fixtures";
+import { placeOrder } from "../fixtures/place-order";
+import { AdminSignInPage } from "../page-objects/admin-sign-in.page";
 
 // React reports a hydration mismatch through `onRecoverableError`, which its
 // default handler forwards to console.error. A production build minifies the
@@ -32,21 +40,44 @@ function collectHydrationErrors(page: Page): string[] {
 // Hydration happens only on a full document load, never on a client-side
 // navigation, so every case starts with `goto`. Deliberately not
 // `networkidle`: the assertions on hydrated behaviour below are the gate.
-test.describe("Home hydration", () => {
-  test("the feed hydrates without a React mismatch", async ({
+test.describe("Hydration", () => {
+  // Signed in as the worker's user: every login is an admin (FER-038).
+  test("the orders list hydrates without a React mismatch", async ({
     authenticatedPage: page,
     db,
   }) => {
-    // Seconds old when the page renders: its relative time ("now", "3 seconds
-    // ago") is the text that differed between the server and the browser.
-    const post = await db.seed.createPost();
+    const tag = uniqueTag();
+    const jewels = await db.seed.createCategory({
+      nameEs: `Joyas ${tag}`,
+      slug: `joyas-${tag}`,
+    });
+    const ring = await db.seed.createArticle({
+      categoryId: jewels.id,
+      priceAmount: 50_000,
+      title: "Anillo",
+    });
+    // Seconds old when the list renders: its relative time ("hace unos
+    // segundos") is the text that differed between the server and the
+    // browser. A phone of its own, since the hourly limit counts by phone,
+    // and the list searched by it: other specs' orders can fill its first
+    // page.
+    const phone = uniquePhone();
+    const order = await placeOrder(page.request, {
+      customerName: "Ana",
+      customerPhone: phone.international,
+      productId: ring.id,
+    });
     const errors = collectHydrationErrors(page);
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto(`/admin/orders?q=${phone.national}`, {
+      waitUntil: "domcontentloaded",
+    });
 
-    await new HomePage(page).expectPost(post.name);
-    // The compose box enables its button only once React owns the form.
-    await new HomePage(page).fillPostContent("typed after hydration");
+    await expect(page.getByTestId(`order-row-${order.code}`)).toBeVisible();
+    // The sound switch is enabled only once React owns the screen.
+    await expect(
+      page.getByRole("button", { name: "Sonido cuando llega un pedido" })
+    ).toBeEnabled();
 
     expect(errors).toEqual([]);
   });
@@ -64,10 +95,10 @@ test.describe("Home hydration", () => {
     const page = await context.newPage();
     const errors = collectHydrationErrors(page);
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/admin/sign-in", { waitUntil: "domcontentloaded" });
 
-    // The mode switch is a React handler: it answers only after hydration.
-    await new HomePage(page).switchToSignUp();
+    // The submit button is enabled only once React owns the form.
+    await new AdminSignInPage(page).waitForForm();
 
     expect(errors).toEqual([]);
     await context.close();

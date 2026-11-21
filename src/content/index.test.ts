@@ -36,12 +36,12 @@ function placeholdersByKey(dictionary: Dictionary) {
 
 describe("getDictionary", () => {
   test.each([
-    ["es", "Hola de nuevo", "Reintentar"],
-    ["en", "Welcome back", "Try again"],
+    ["es", "Iniciar sesión", "Reintentar"],
+    ["en", "Sign In", "Try again"],
   ] as const)("returns the %s interface text", (locale, welcome, tryAgain) => {
     const dictionary = getDictionary(locale);
 
-    expect(dictionary.auth.welcome.title).toBe(welcome);
+    expect(dictionary.auth.signIn.submit).toBe(welcome);
     expect(dictionary.common.tryAgain).toBe(tryAgain);
   });
 });

@@ -5,6 +5,8 @@ import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import "dotenv/config";
 
+import type { StoreWorkerFixtures } from "./fixtures/store.fixture";
+
 const __dirname = import.meta.dirname;
 
 const isCI = !!process.env.CI;
@@ -55,12 +57,15 @@ function resolveWorkers(): number | undefined {
     : undefined;
 }
 
-export default defineConfig({
+// The one worker option the projects set: the coming-soon switch (FER-034).
+export default defineConfig<object, Pick<StoreWorkerFixtures, "storefront">>({
   testDir: "./tests",
   outputDir: "./test-results",
 
-  // Every test may run beside any other: a worker owns its user, and a spec
-  // asserts only on rows it created (src/e2e/AGENTS.md).
+  // Every test of the parallel project may run beside any other: a worker
+  // owns its user, and a spec asserts only on rows it created; the few that
+  // change what every spec reads run first, one at a time (`serial` below,
+  // src/e2e/AGENTS.md).
   fullyParallel: true,
   forbidOnly: isCI,
   // Zero, everywhere. A retry-pass is a defect report thrown away: a race the
@@ -109,12 +114,36 @@ export default defineConfig({
     timeout: 60_000,
   },
 
+  // No `storageState` in either project: it would override the user
+  // fixture's, which signs the default `page` in as the worker's own user.
   projects: [
+    {
+      // The specs of the closed store (FER-034): its worker publishes the
+      // coming-soon page through the admin's API before its tests, and takes
+      // it down after them, so the store is closed for these alone. First
+      // and alone, since every other spec reads the open store.
+      name: "closed",
+      testMatch: /.*\.closed\.e2e\.ts/,
+      workers: 1,
+      use: { ...devices["Desktop Chrome"], storefront: "closed" },
+    },
+    {
+      // The specs that change what every spec reads: the store's settings,
+      // or the store's whole list (a reorder, the orders' counts). Alone, in
+      // one worker, before the parallel project starts; Playwright runs a
+      // dependency in full under a file filter and never repeats it under
+      // `--repeat-each`.
+      name: "serial",
+      testMatch: /.*\.serial\.e2e\.ts/,
+      dependencies: ["closed"],
+      workers: 1,
+      use: { ...devices["Desktop Chrome"] },
+    },
     {
       name: "chromium",
       testMatch: /.*\.e2e\.ts/,
-      // No `storageState` here: it would override the user fixture's, which
-      // signs the default `page` in as the worker's own user.
+      testIgnore: [/.*\.serial\.e2e\.ts/, /.*\.closed\.e2e\.ts/],
+      dependencies: ["serial"],
       use: { ...devices["Desktop Chrome"] },
     },
   ],
@@ -140,15 +169,10 @@ export default defineConfig({
             // and never honoured on a production deploy
             // (src/server/better-auth/config.ts).
             E2E_DISABLE_AUTH_RATE_LIMIT: "true",
-            // One server shows both positions of the launch switch: a spec
-            // sends `x-e2e-storefront-launched` to close or open the store
-            // for its own requests. Read only by the server Playwright
-            // starts, and never honoured on a production deploy
-            // (src/lib/env/launch.ts).
-            E2E_STOREFRONT_LAUNCH_OVERRIDE: "true",
-            // Open unless a spec's header says otherwise, whatever the
-            // developer's `.env` holds.
-            STOREFRONT_LAUNCHED: "true",
+            // A Blob token of the right shape, so the server signs upload
+            // tokens (FER-011). Specs answer the browser's uploads
+            // themselves (`page.route`): nothing reaches a real store.
+            BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_E2eStore_e2eNotASecret",
           },
         },
 });

@@ -7,7 +7,7 @@ const { storage } = createLoggerStorage("withEvlog() context", "evlog:next");
 /**
  * The current request's wide-event logger, or `undefined` outside a request
  * wrapped in `withEvlog` (the RSC `caller`, a script, a test), so
- * `safeRequestLogger()?.set({ post: { op: "create", id } })` is safe anywhere.
+ * `safeRequestLogger()?.set({ category: { op: "create", id } })` is safe anywhere.
  */
 export function safeRequestLogger() {
   return storage.getStore();

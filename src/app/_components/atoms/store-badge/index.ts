@@ -1,5 +1,1 @@
-export {
-  StoreBadge,
-  type StoreBadgeProps,
-  storeBadgeVariants,
-} from "./store-badge";
+export { StoreBadge, type StoreBadgeProps } from "./store-badge";

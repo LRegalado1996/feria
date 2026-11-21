@@ -35,7 +35,7 @@ vi.mock("@/server/api/root", async () => {
         throw Object.assign(new Error("duplicate key"), { code: "23505" });
       }),
       crash: publicProcedure.handler(() => {
-        throw new Error('relation "post" does not exist');
+        throw new Error('relation "category" does not exist');
       }),
     },
   };
@@ -159,7 +159,9 @@ describe("oRPC route", () => {
       },
     });
     expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ message: 'relation "post" does not exist' }),
+      expect.objectContaining({
+        message: 'relation "category" does not exist',
+      }),
       { procedure: "crash", requestId: "req-9" }
     );
   });

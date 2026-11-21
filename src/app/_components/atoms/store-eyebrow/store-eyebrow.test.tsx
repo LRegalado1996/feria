@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
-import { StoreEyebrow, type StoreEyebrowProps } from "./store-eyebrow";
+import {
+  StoreEyebrow,
+  type StoreEyebrowProps,
+  storeEyebrowVariants,
+} from "./store-eyebrow";
 
 function setup(props: StoreEyebrowProps = {}) {
   render(<StoreEyebrow {...props}>Christmas fair</StoreEyebrow>);
@@ -10,13 +14,19 @@ function setup(props: StoreEyebrowProps = {}) {
 }
 
 describe("StoreEyebrow", () => {
-  test("is a paragraph in the eyebrow role, muted on the background", () => {
+  test("is a small paragraph in the display face, muted on the background", () => {
     const { eyebrow } = setup();
 
     expect(eyebrow.tagName).toBe("P");
     expect(eyebrow).toHaveAttribute("data-slot", "store-eyebrow");
     expect(eyebrow).toHaveAttribute("data-tone", "default");
-    expect(eyebrow).toHaveClass("store-eyebrow", "text-store-muted");
+    expect(eyebrow).toHaveClass(
+      "font-display",
+      "font-extrabold",
+      "uppercase",
+      "text-xs",
+      "text-store-muted"
+    );
     expect(eyebrow).not.toHaveClass("text-store-contrast-muted");
   });
 
@@ -31,7 +41,13 @@ describe("StoreEyebrow", () => {
   test("keeps a caller's class and attributes", () => {
     const { eyebrow } = setup({ className: "mb-2", id: "fair" });
 
-    expect(eyebrow).toHaveClass("mb-2", "store-eyebrow");
+    expect(eyebrow).toHaveClass("mb-2", "font-display");
     expect(eyebrow).toHaveAttribute("id", "fair");
+  });
+
+  test("exposes its tones", () => {
+    expect(storeEyebrowVariants({ tone: "contrast" })).toContain(
+      "text-store-contrast-muted"
+    );
   });
 });

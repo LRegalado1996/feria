@@ -72,7 +72,7 @@ const RELATIVE_DIVISIONS: {
  * `date` relative to `now`, which the caller passes in rather than this
  * reading the clock: a render that reads `Date.now()` disagrees with its own
  * hydration, and the React Compiler memoizes it as if it were pure. A `date`
- * ahead of `now` (a post created since the clock last ticked) reads "now".
+ * ahead of `now` (an order placed since the clock last ticked) reads "now".
  */
 export function formatRelativeTime(
   date: Date,
@@ -129,6 +129,19 @@ export function formatPrice(
   );
 }
 
+/**
+ * How a price's currency is written beside its figure, as `formatPrice`
+ * writes it: `$` and `US$` in Spanish, `UYU` and `USD` in English. For a
+ * field that takes an amount and shows its currency inside it.
+ */
+export function formatCurrencySign(currency: Currency, locale: Locale): string {
+  return (
+    priceFormat(INTL_LOCALES[locale], currency, "0")
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? currency
+  );
+}
+
 const integerFormat = cached(
   (tag: string) => new Intl.NumberFormat(tag, { maximumFractionDigits: 0 })
 );
@@ -139,6 +152,32 @@ const integerFormat = cached(
  */
 export function formatInteger(value: number, locale: Locale): string {
   return integerFormat(INTL_LOCALES[locale]).format(value);
+}
+
+const percentFormat = cached(
+  (tag: string) =>
+    new Intl.NumberFormat(tag, { maximumFractionDigits: 0, style: "percent" })
+);
+
+/**
+ * A share from 0 to 100 as a whole percentage in the language's notation
+ * (an upload's progress): `46%` for 45.6, rounded, never a fraction.
+ */
+export function formatPercent(value: number, locale: Locale): string {
+  return percentFormat(INTL_LOCALES[locale]).format(value / 100);
+}
+
+const listFormat = cached(
+  (tag: string) =>
+    new Intl.ListFormat(tag, { style: "long", type: "conjunction" })
+);
+
+/**
+ * Names joined as a sentence says them: "Cadenas, Anillos y Aros" in
+ * Spanish, "Chains, Rings, and Earrings" in English.
+ */
+export function formatList(items: readonly string[], locale: Locale): string {
+  return listFormat(INTL_LOCALES[locale]).format(items);
 }
 
 const dateFormat = cached(
@@ -157,33 +196,253 @@ export function formatDate(date: Date, locale: Locale): string {
   return dateFormat(INTL_LOCALES[locale]).format(date);
 }
 
-const numberSeparators = cached((tag: string) => {
-  const parts = new Intl.NumberFormat(tag).formatToParts(12_345.6);
-  const separator = (type: "decimal" | "group") =>
-    parts.find((part) => part.type === type)?.value ?? "";
-
-  return { decimal: separator("decimal"), group: separator("group") };
-});
+const calendarDayFormat = cached(
+  (tag: string) =>
+    new Intl.DateTimeFormat(tag, {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+      year: "numeric",
+    })
+);
 
 /**
- * What a user typed into a number field, in their language's notation, as the
- * plain `-1234.5` text `Number()` reads: grouping separators dropped, the
- * decimal separator turned into a dot. "1.500,5" in Spanish and "1,500.5" in
- * English are both 1500.5; hard-coding either convention would read the other
- * as 1.5005.
+ * A day kept as `YYYY-MM-DD` (a start or end date, FER-020) as the language
+ * writes it ("5 dic 2026"). The day is a day, not an instant, so it is read
+ * and written at UTC midnight and never shifts by a time zone.
  */
-export function toPlainNumberText(typed: string, locale: Locale): string {
-  const { decimal, group } = numberSeparators(INTL_LOCALES[locale]);
+export function formatCalendarDay(day: string, locale: Locale): string {
+  return calendarDayFormat(INTL_LOCALES[locale]).format(
+    new Date(`${day}T00:00:00Z`)
+  );
+}
 
-  return typed.replaceAll(group, "").replaceAll(decimal, ".");
+const businessClock = cached(
+  () =>
+    new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+    })
+);
+
+/** The business time zone's calendar and clock at `now`, as numbers. */
+function businessParts(now: Date) {
+  const parts = Object.fromEntries(
+    businessClock()
+      .formatToParts(now)
+      .map((part) => [part.type, part.value])
+  );
+
+  return {
+    day: `${parts.year}-${parts.month}-${parts.day}`,
+    secondOfDay:
+      Number(parts.hour) * 3600 +
+      Number(parts.minute) * 60 +
+      Number(parts.second),
+  };
+}
+
+/**
+ * The business day `now` falls on (`YYYY-MM-DD` in `APP_TIME_ZONE`): the
+ * one helper every "today" comes from (docs/agents/database.md § Time), so
+ * a banner that ends on December 5 shows until midnight in Montevideo, not
+ * in UTC.
+ */
+export function businessDay(now: Date): string {
+  return businessParts(now).day;
+}
+
+/** Whole seconds from `now` to the next business day's midnight, at least 1. */
+export function secondsUntilNextBusinessDay(now: Date): number {
+  return Math.max(1, 86_400 - businessParts(now).secondOfDay);
+}
+
+const decimalSeparator = cached(
+  (tag: string) =>
+    new Intl.NumberFormat(tag)
+      .formatToParts(1.5)
+      .find((part) => part.type === "decimal")?.value ?? "."
+);
+
+/** What a number field's text stands for. */
+export type TypedNumber =
+  | { kind: "empty" }
+  | { kind: "number"; value: number }
+  | { kind: "refused"; reason: "decimal" | "unreadable" };
+
+// Spaces, no-break spaces and narrow no-break spaces: what a pasted figure
+// groups its thousands with in several languages. Inside a figure they are
+// read only as that grouping, in the integer part.
+const SPACE = /[\s\u00A0\u202F]/u;
+const SPACES = /[\s\u00A0\u202F]/gu;
+const GROUPED_BY_SPACE = /^[1-9]\d{0,2}(?:[\s\u00A0\u202F]\d{3})+$/u;
+// The minus sign some sources paste instead of a hyphen.
+const MINUS_SIGN = "\u2212";
+// A JavaScript number holds 15 significant digits exactly; beyond that
+// `Number()` rounds the figure silently. No price or count gets near it.
+const MOST_SIGNIFICANT_DIGITS = 15;
+// Beyond six decimals `String()` writes a value in exponent form ("1e-7"),
+// and a long enough run of zeros reads as 0: no price or count needs more.
+const MOST_DECIMALS = 6;
+const DIGITS_AND_SEPARATORS = /^[\d.,]+$/u;
+const GROUPED_BY_DOT = /^[1-9]\d{0,2}(?:\.\d{3})+$/u;
+const GROUPED_BY_COMMA = /^[1-9]\d{0,2}(?:,\d{3})+$/u;
+const THOUSANDS_DIGITS = 3;
+
+/** The integer digits of `text` when it is grouped by `separator`, or null. */
+function readGrouped(text: string, separator: "," | "."): string | null {
+  const grouped = separator === "." ? GROUPED_BY_DOT : GROUPED_BY_COMMA;
+  return grouped.test(text) ? text.replaceAll(separator, "") : null;
+}
+
+/**
+ * What a person typed or pasted into a number field, whatever the page's
+ * language and whatever keypad their phone shows (FER-035). The keypad follows
+ * the phone's region, not the page, so the notation cannot come from the
+ * locale: either separator is read the same way on `/` and on `/en`.
+ *
+ * - One separator followed by one or two digits (or none yet) is the decimal
+ *   point: `12,50` and `12.50` are twelve and a half.
+ * - One separator followed by exactly three digits groups thousands, the way a
+ *   Uruguayan writes a price: `1.500` and `1,500` are fifteen hundred. A price
+ *   never has three decimals.
+ * - Both separators: the last one is the decimal point and the other groups
+ *   thousands (`1.500,25`, `1,500.25`).
+ * - Anything else that could be read two ways (`0,500`, `1.23.4`, `1234,567`)
+ *   is refused instead of guessed, so a value never changes magnitude
+ *   silently.
+ */
+export function readTypedNumber(
+  typed: string,
+  { allowDecimal = true }: { allowDecimal?: boolean } = {}
+): TypedNumber {
+  const trimmed = typed.trim().replace(MINUS_SIGN, "-");
+  const negative = trimmed.startsWith("-");
+  const signless = negative ? trimmed.slice(1) : trimmed;
+  const body = readSpaceGrouping(signless);
+
+  if (body === null) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  if (body === "" || body === "." || body === ",") {
+    return { kind: "empty" };
+  }
+
+  if (!DIGITS_AND_SEPARATORS.test(body)) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  const reading = readDigits(body);
+
+  if (reading === null) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  if (reading.fraction !== null && !allowDecimal) {
+    return { kind: "refused", reason: "decimal" };
+  }
+
+  // Trailing zeros of a fraction change nothing ("12,50" is "12,5"), so they
+  // count toward neither limit: the field's own rewrite pads three decimals.
+  const fraction = (reading.fraction ?? "").replace(/0+$/u, "");
+  const significant = `${reading.integer}${fraction}`.replace(/^0+/u, "");
+
+  if (
+    fraction.length > MOST_DECIMALS ||
+    significant.length > MOST_SIGNIFICANT_DIGITS
+  ) {
+    return { kind: "refused", reason: "unreadable" };
+  }
+
+  // The leading 0 stands in for an integer part left out (",5" is "0.5").
+  const value = Number(
+    `${negative ? "-" : ""}0${reading.integer}.${fraction}0`
+  );
+
+  // `-0` reads back as "0" anyway; a field never holds a negative zero.
+  return { kind: "number", value: value === 0 ? 0 : value };
+}
+
+/**
+ * The figure with its space grouping removed, or null when a space sits
+ * anywhere but between groups of three in the integer part: `12 50` is not
+ * twelve hundred and fifty, it is a typo.
+ */
+function readSpaceGrouping(signless: string): string | null {
+  if (!SPACE.test(signless)) {
+    return signless;
+  }
+
+  const firstSeparatorAt = signless.search(/[.,]/u);
+  const integer =
+    firstSeparatorAt === -1 ? signless : signless.slice(0, firstSeparatorAt);
+  const rest = firstSeparatorAt === -1 ? "" : signless.slice(firstSeparatorAt);
+
+  return GROUPED_BY_SPACE.test(integer) && !SPACE.test(rest)
+    ? `${integer.replaceAll(SPACES, "")}${rest}`
+    : null;
+}
+
+/** The integer and fraction digits of an unsigned figure, or null. */
+function readDigits(
+  body: string
+): { fraction: string | null; integer: string } | null {
+  const lastSeparatorAt = Math.max(
+    body.lastIndexOf("."),
+    body.lastIndexOf(",")
+  );
+
+  if (lastSeparatorAt === -1) {
+    return { integer: body, fraction: null };
+  }
+
+  const last = body[lastSeparatorAt] === "." ? "." : ",";
+  const other = last === "." ? "," : ".";
+  const before = body.slice(0, lastSeparatorAt);
+  const after = body.slice(lastSeparatorAt + 1);
+
+  if (before.includes(other)) {
+    // Both separators: the last is the decimal point, the other groups.
+    const integer = readGrouped(before, other);
+    return integer === null || before.includes(last)
+      ? null
+      : { integer, fraction: after };
+  }
+
+  if (before.includes(last)) {
+    // The same separator more than once can only group thousands.
+    const integer = readGrouped(body, last);
+    return integer === null ? null : { integer, fraction: null };
+  }
+
+  if (after.length === THOUSANDS_DIGITS) {
+    // `1.500` is fifteen hundred; `0,500` or `1234,567` could be either.
+    const integer = readGrouped(body, last);
+    return integer === null ? null : { integer, fraction: null };
+  }
+
+  return { integer: before, fraction: after };
 }
 
 /**
  * The other direction: plain `-1234.5` text written with the language's
  * decimal separator and no grouping ("-1234,5" in Spanish), which is what a
- * number field shows while it is being typed in. `toPlainNumberText` reads it
- * back to the same number.
+ * number field shows once focus leaves it. `readTypedNumber` reads it back to
+ * the same number, three decimals included.
  */
 export function fromPlainNumberText(plain: string, locale: Locale): string {
-  return plain.replace(".", numberSeparators(INTL_LOCALES[locale]).decimal);
+  // Three decimals would read back as a thousands group ("1,234" is 1234), so
+  // they get a trailing zero that keeps them a fraction ("1,2340").
+  const [integer = "", fraction] = plain.split(".");
+  const written =
+    fraction?.length === THOUSANDS_DIGITS ? `${integer}.${fraction}0` : plain;
+
+  return written.replace(".", decimalSeparator(INTL_LOCALES[locale]));
 }

@@ -65,7 +65,9 @@ describe("health route", () => {
   test("serves nothing but the health router", async () => {
     const { execute, get } = setup();
 
-    const response = await get("/posts");
+    // A path the app's own router serves (`admin.me`): a health handler
+    // that reached past its router would answer it, not 404.
+    const response = await get("/admin/me");
 
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not found");

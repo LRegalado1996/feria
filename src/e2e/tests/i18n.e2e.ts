@@ -1,204 +1,338 @@
-import { expect, requireBaseURL, test } from "../fixtures";
+import type { Page } from "@playwright/test";
+
+import { expect, IGNORE_HTTPS_ERRORS, requireBaseURL, test } from "../fixtures";
 import { completeRpcAction } from "../fixtures/complete-rpc-action";
-import { HomePage } from "../page-objects/home.page";
+import { AdminSignInPage } from "../page-objects/admin-sign-in.page";
+import { AdminPage } from "../page-objects/admin.page";
+import { StorePage } from "../page-objects/store.page";
 
 const QUERY = "?ref=qr&color=dorado";
 const DARK_CLASS = /\bdark\b/;
+const BINGBOT =
+  "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)";
 
+/**
+ * Every `selector` link names `pathname` on this origin. Head metadata has no
+ * role, label or test id to be found by. Every match is read: the
+ * prerendered shell and the request can each write the tags, and React
+ * merges them only when they are identical. They differ when a build and its
+ * server disagree on the port, as CI and `pnpm e2e:ci` do (built for :3000,
+ * served elsewhere). So one tag must be the page's full URL on this origin,
+ * and any other may differ from it in the port alone: never in the scheme,
+ * the host or the path. Streamed metadata lands with the page's content or
+ * just after it, so the first is waited for.
+ */
+async function expectLinks(
+  page: Page,
+  origin: string,
+  selector: string,
+  pathname: string
+) {
+  const expected = new URL(pathname, origin);
+  const read = async () =>
+    (
+      await page
+        .locator(selector)
+        .evaluateAll((links) =>
+          links.map((link) => link.getAttribute("href") ?? "")
+        )
+    ).map((href) => new URL(href));
+
+  await expect
+    .poll(async () => (await read()).map((url) => url.href))
+    .toContain(expected.href);
+  expect(
+    (await read()).filter(
+      (url) =>
+        url.protocol !== expected.protocol ||
+        url.hostname !== expected.hostname ||
+        url.pathname !== expected.pathname ||
+        url.username !== "" ||
+        url.password !== "" ||
+        url.search !== "" ||
+        url.hash !== ""
+    )
+  ).toEqual([]);
+}
+
+/**
+ * The home at `path` declares itself canonical and names both languages, in
+ * `scope` of the document (`head ` or all of it).
+ */
+async function expectAlternates(
+  page: Page,
+  origin: string,
+  { path, scope }: { path: string; scope: "" | "head " }
+) {
+  await expectLinks(page, origin, `${scope}link[rel="canonical"]`, path);
+  await expectLinks(
+    page,
+    origin,
+    `${scope}link[rel="alternate"][hreflang="es"]`,
+    "/"
+  );
+  await expectLinks(
+    page,
+    origin,
+    `${scope}link[rel="alternate"][hreflang="en"]`,
+    "/en"
+  );
+  await expectLinks(
+    page,
+    origin,
+    `${scope}link[rel="alternate"][hreflang="x-default"]`,
+    "/"
+  );
+}
+
+// The storefront's own texts per language are in `tests/store/`; these are
+// the addresses: the admin and its sign-in, and the links the store's home
+// (`/`, FER-038) gives search engines.
 test.describe("Languages, signed out", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("the same page is Spanish at / and English at /en", async ({ page }) => {
-    const homePage = new HomePage(page);
-
-    await page.goto("/");
-
-    await expect(
-      page.getByRole("heading", { name: "Hola de nuevo" })
-    ).toBeVisible();
-    await expect(homePage.getButton("Iniciar sesión")).toBeVisible();
-    await homePage.expectDocumentLanguage("es");
-
-    await page.goto("/en");
-
-    await expect(
-      page.getByRole("heading", { name: "Welcome back" })
-    ).toBeVisible();
-    await expect(homePage.getButton("Sign In")).toBeVisible();
-    await homePage.expectDocumentLanguage("en");
-  });
-
-  test("the toggle switches language on the same page and keeps the query string, there and back", async ({
+  test("the same page is Spanish at its address and English under /en", async ({
     page,
   }) => {
-    // A dark system theme, to see that switching language keeps it.
-    await page.emulateMedia({ colorScheme: "dark" });
-    const homePage = new HomePage(page);
-    await page.goto(`/${QUERY}`);
-    await homePage.expectDocumentLanguage("es");
+    const signIn = new AdminSignInPage(page);
 
-    // The query string reaches the link once React has read the URL: the
-    // prerendered shell is the same for every query.
-    await expect(homePage.getLocaleToggle()).toHaveAttribute(
-      "href",
-      `/en${QUERY}`
-    );
-    await expect(homePage.getLocaleToggle()).toHaveText("English");
-    await homePage.getLocaleToggle().click();
+    await page.goto("/admin/sign-in");
 
-    await expect(page).toHaveURL(`/en${QUERY}`);
     await expect(
-      page.getByRole("heading", { name: "Welcome back" })
+      page.getByRole("heading", { name: "Panel de tu tienda" })
     ).toBeVisible();
-    await homePage.expectDocumentLanguage("en");
-    await expect(page.locator("html")).toHaveClass(DARK_CLASS);
+    await expect(signIn.getButton("Iniciar sesión")).toBeVisible();
+    await signIn.expectDocumentLanguage("es");
 
-    await expect(homePage.getLocaleToggle()).toHaveAttribute(
-      "href",
-      `/${QUERY}`
-    );
-    await expect(homePage.getLocaleToggle()).toHaveText("Español");
-    await homePage.getLocaleToggle().click();
+    await page.goto("/en/admin/sign-in");
 
-    await expect(page).toHaveURL(`/${QUERY}`);
     await expect(
-      page.getByRole("heading", { name: "Hola de nuevo" })
+      page.getByRole("heading", { name: "Your store's admin" })
     ).toBeVisible();
-    await homePage.expectDocumentLanguage("es");
+    await expect(signIn.getButton("Sign In")).toBeVisible();
+    await signIn.expectDocumentLanguage("en");
   });
 
   test("a Spanish page has one address: /es redirects to the unprefixed URL", async ({
     page,
   }) => {
-    await page.goto(`/es${QUERY}`);
+    await page.goto(`/es/admin/sign-in${QUERY}`);
 
-    await expect(page).toHaveURL(`/${QUERY}`);
+    await expect(page).toHaveURL(`/admin/sign-in${QUERY}`);
     await expect(
-      page.getByRole("heading", { name: "Hola de nuevo" })
+      page.getByRole("heading", { name: "Panel de tu tienda" })
     ).toBeVisible();
   });
 
-  for (const { canonical, path } of [
-    { path: "/", canonical: "/" },
-    { path: "/en", canonical: "/en" },
-  ]) {
-    test(`${path} declares itself canonical and names both languages to search engines`, async ({
+  for (const path of ["/", "/en"]) {
+    // The home reads the store per request, so Next streams its metadata
+    // after the shell, into <body>, for a browser and for Googlebot, which
+    // runs the page's script (`generateMetadata` § Streaming metadata).
+    test(`${path} declares itself canonical and names both languages to a crawler that runs the page's script`, async ({
       baseURL,
       page,
     }) => {
-      const origin = requireBaseURL(baseURL);
       await page.goto(path);
+      await new StorePage(page).waitForLoad();
 
-      // <head> metadata has no role, label or test id to be found by. Every
-      // match is read: the prerendered shell and the request each write the
-      // tags, and React merges them only when they are identical. They differ
-      // when a build and its server disagree on the port, as CI and
-      // `pnpm e2e:ci` do (built for :3000, served elsewhere). So one tag must
-      // be the page's full URL on this origin, and any other may differ from
-      // it in the port alone: never in the scheme, the host or the path.
-      const expectLinks = async (selector: string, pathname: string) => {
-        const expected = new URL(pathname, origin);
-        const hrefs = await page
-          .locator(selector)
-          .evaluateAll((links) =>
-            links.map((link) => link.getAttribute("href") ?? "")
-          );
-        const urls = hrefs.map((href) => new URL(href));
+      await expectAlternates(page, requireBaseURL(baseURL), {
+        path,
+        scope: "",
+      });
+    });
 
-        expect(urls.map((url) => url.href)).toContain(expected.href);
-        expect(
-          urls.filter(
-            (url) =>
-              url.protocol !== expected.protocol ||
-              url.hostname !== expected.hostname ||
-              url.pathname !== expected.pathname ||
-              url.username !== "" ||
-              url.password !== "" ||
-              url.search !== "" ||
-              url.hash !== ""
-          )
-        ).toEqual([]);
-      };
+    // A crawler that reads only the HTML, such as Bingbot, gets the metadata
+    // in <head>: Next renders it before the page for such crawlers.
+    test(`${path} declares the same in <head> to a crawler that reads only the HTML`, async ({
+      baseURL,
+      browser,
+    }) => {
+      const origin = requireBaseURL(baseURL);
+      // A hand-made context gets none of the config's `use` options. Scripts
+      // off, as this crawler reads: under `next dev` (`pnpm e2e`) the page's
+      // script moves metadata streamed into <body> up to <head>, which would
+      // pass this test with the HTML holding none there.
+      const context = await browser.newContext({
+        baseURL: origin,
+        ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+        javaScriptEnabled: false,
+        userAgent: BINGBOT,
+      });
 
-      await expectLinks('head link[rel="canonical"]', canonical);
-      await expectLinks('head link[rel="alternate"][hreflang="es"]', "/");
-      await expectLinks('head link[rel="alternate"][hreflang="en"]', "/en");
-      await expectLinks(
-        'head link[rel="alternate"][hreflang="x-default"]',
-        "/"
-      );
+      try {
+        const page = await context.newPage();
+        await page.goto(path);
+        // Visible, not only attached: a boundary's content that React
+        // streams apart from the first response sits in a `<div hidden>`
+        // that only a script reveals, so this crawler would never see it
+        // (docs/agents/nextjs.md § Store pages).
+        await new StorePage(page).waitForLoad();
+
+        await expectAlternates(page, origin, { path, scope: "head " });
+      } finally {
+        await context.close();
+      }
     });
   }
 
-  test("signing in on the English page lands on the English home", async ({
+  test("signing in on the English page lands on the English admin's orders", async ({
     identity,
     page,
   }) => {
-    const homePage = new HomePage(page);
-    await page.goto("/en");
+    const signIn = new AdminSignInPage(page);
+    await page.goto("/en/admin/sign-in");
     // The submit button is enabled only once React owns the form.
-    await expect(homePage.getButton("Sign In")).toBeEnabled();
-    await homePage.fillField("Email", identity.email);
-    await homePage.fillField("Password", identity.password);
+    await expect(signIn.getButton("Sign In")).toBeEnabled();
+    await signIn.fillField("Email", identity.email);
+    await signIn.fillField("Password", identity.password);
 
     await completeRpcAction(
       page,
       "/api/auth/sign-in/email",
       async () => {
-        await homePage.getButton("Sign In").click();
+        await signIn.getButton("Sign In").click();
       },
       { input: { email: identity.email } }
     );
 
-    await expect(homePage.getButton("Sign out")).toBeVisible();
-    await expect(page).toHaveURL("/en");
-    await homePage.expectDocumentLanguage("en");
+    await expect(signIn.getButton("Sign out")).toBeVisible();
+    // `/en/admin` opens the orders (FER-038): the destination's content,
+    // then its address.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Orders" })
+    ).toBeVisible();
+    await expect(page).toHaveURL("/en/admin/orders");
+    await signIn.expectDocumentLanguage("en");
   });
 });
 
 test.describe("Languages, signed in", () => {
-  test("the feed is in English under /en, and the toggle brings it back to Spanish", async ({
-    authenticatedPage: page,
-  }) => {
-    const homePage = new HomePage(page);
-    await page.goto("/en");
+  for (const { name, viewport } of [
+    { name: "a computer", viewport: { height: 800, width: 1280 } },
+    // On a phone the pill is in the menu (FER-040).
+    { name: "a phone", viewport: { height: 844, width: 390 } },
+  ]) {
+    test(`on ${name}, the pill switches language on the same page and keeps the query string, there and back`, async ({
+      authenticatedPage: page,
+    }) => {
+      await page.setViewportSize(viewport);
+      // A dark system theme, to see that switching language keeps it.
+      await page.emulateMedia({ colorScheme: "dark" });
+      const admin = new AdminPage(page);
+      const reachToggle = async () => {
+        if (viewport.width < 768) {
+          await admin.openMenu();
+        }
+      };
+      // A section that stays where it is: `/admin` itself opens the orders.
+      await page.goto(`/admin/products${QUERY}`);
+      await admin.waitForLoad();
+      await admin.expectDocumentLanguage("es");
+      await reachToggle();
+      await expect(admin.getButton("Cerrar sesión")).toBeVisible();
 
-    await expect(page.getByRole("heading", { name: "Feed" })).toBeVisible();
-    await expect(homePage.getButton("Sign out")).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "New post" })).toBeVisible();
-    await homePage.expectDocumentLanguage("en");
+      // The query string reaches the link once React has read the URL: the
+      // prerendered shell is the same for every query.
+      await expect(admin.localeToggle()).toHaveAttribute(
+        "href",
+        `/en/admin/products${QUERY}`
+      );
+      await expect(admin.localeToggle()).toHaveAccessibleName("English");
+      await expect(admin.localeToggle()).toHaveAccessibleDescription(
+        "Idioma actual: español"
+      );
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await admin.localeToggle().click();
 
-    await homePage.getLocaleToggle().click();
+      await expect(page).toHaveURL(`/en/admin/products${QUERY}`);
+      await expect(admin.heading()).toHaveText("Articles");
+      await admin.expectDocumentLanguage("en");
+      await expect(page.locator("html")).toHaveClass(DARK_CLASS);
+      await reachToggle();
+      await expect(admin.getButton("Sign out")).toBeVisible();
 
-    await expect(page).toHaveURL("/");
-    await expect(
-      page.getByRole("heading", { name: "Muro" }).filter({ visible: true })
-    ).toBeVisible();
-    await expect(homePage.getButton("Cerrar sesión")).toBeVisible();
-    await homePage.expectDocumentLanguage("es");
-  });
+      await expect(admin.localeToggle()).toHaveAttribute(
+        "href",
+        `/admin/products${QUERY}`
+      );
+      await expect(admin.localeToggle()).toHaveAccessibleName("Español");
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "end"
+      );
+      await admin.localeToggle().click();
+
+      await expect(page).toHaveURL(`/admin/products${QUERY}`);
+      await expect(admin.heading()).toHaveText("Artículos");
+      await admin.expectDocumentLanguage("es");
+    });
+  }
+
+  // Next hides the page it leaves and shows it again, state and all, both
+  // on Back and on a link back to it (the Next guide "Preserving UI state").
+  for (const { name, comeBack } of [
+    {
+      name: "Back",
+      comeBack: async (_admin: AdminPage, page: Page) => {
+        await page.goBack();
+      },
+    },
+    {
+      name: "the pill",
+      comeBack: async (admin: AdminPage) => {
+        await expect(admin.localeToggle()).toHaveAttribute(
+          "href",
+          "/admin/products"
+        );
+        await admin.localeToggle().click();
+      },
+    },
+  ]) {
+    test(`the Spanish page shown again by ${name} rests on Spanish and switches again`, async ({
+      authenticatedPage: page,
+    }) => {
+      const admin = new AdminPage(page);
+      await page.goto("/admin/products");
+      await admin.waitForLoad();
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
+
+      await comeBack(admin, page);
+
+      await expect(page).toHaveURL("/admin/products");
+      await expect(admin.heading()).toHaveText("Artículos");
+      await expect(admin.localeToggleThumb()).toHaveAttribute(
+        "data-side",
+        "start"
+      );
+      await admin.localeToggle().click();
+      await expect(page).toHaveURL("/en/admin/products");
+      await expect(admin.heading()).toHaveText("Articles");
+    });
+  }
 
   for (const { path, signOut } of [
-    { path: "/", signOut: "Cerrar sesión" },
-    { path: "/en", signOut: "Sign out" },
+    { path: "/admin", signOut: "Cerrar sesión" },
+    { path: "/en/admin", signOut: "Sign out" },
   ]) {
-    test(`the navbar of ${path} fits a phone: nothing is cut off and the page does not scroll sideways`, async ({
+    test(`the menu of ${path} fits a phone: nothing is cut off and the page does not scroll sideways`, async ({
       authenticatedPage: page,
     }) => {
       await page.setViewportSize({ width: 375, height: 720 });
-      const homePage = new HomePage(page);
+      const admin = new AdminPage(page);
 
-      await page.goto(path);
+      await admin.goto(path);
+      // On a phone the language and sign-out are in the menu (FER-040).
+      await admin.expectNoHorizontalScroll();
+      await admin.openMenu();
 
-      await expect(homePage.getButton(signOut)).toBeInViewport({ ratio: 1 });
-      await expect(homePage.getLocaleToggle()).toBeInViewport({ ratio: 1 });
-      expect(
-        await page.evaluate(
-          () =>
-            document.documentElement.scrollWidth -
-            document.documentElement.clientWidth
-        )
-      ).toBe(0);
+      await expect(admin.getButton(signOut)).toBeInViewport({ ratio: 1 });
+      await expect(admin.localeToggle()).toBeInViewport({ ratio: 1 });
+      await admin.expectNoHorizontalScroll();
     });
   }
 });

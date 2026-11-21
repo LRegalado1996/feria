@@ -22,7 +22,7 @@ export interface HydrationOutcome {
  * renders agree. It fakes the clock itself and restores it, so a test stays
  * self-contained.
  *
- *   const { errors } = collectHydrationErrors(<Feed />, { serverNowMs, clientNowMs });
+ *   const { errors } = collectHydrationErrors(<OrderManager {...props} />, { serverNowMs, clientNowMs });
  *   expect(errors).toEqual([]);
  */
 export function collectHydrationErrors(

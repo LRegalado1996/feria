@@ -5,13 +5,13 @@ import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
 const storeChipVariants = cva(
-  // 44px tall: a filter is tapped with a thumb.
-  "inline-flex min-h-11 items-center justify-center border border-store-foreground px-4 text-base font-medium transition-colors focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-store-foreground",
+  // A pill 44px tall: a filter is tapped with a thumb.
+  "inline-flex min-h-11 items-center justify-center rounded-full border-2 border-store-foreground px-4 text-sm font-medium transition-colors focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-foreground",
   {
     variants: {
       selected: {
         true: "bg-store-foreground text-store-background",
-        false: "text-store-foreground hover:bg-store-line",
+        false: "text-store-foreground hover:bg-store-surface",
       },
     },
     defaultVariants: { selected: false },

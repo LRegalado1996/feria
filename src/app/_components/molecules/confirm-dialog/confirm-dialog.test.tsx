@@ -29,7 +29,7 @@ function setup(
             onOpenChange(next);
           }}
           open={open}
-          title="Delete this post?"
+          title="Delete this category?"
           {...props}
         />
       </>
@@ -45,7 +45,9 @@ describe("ConfirmDialog", () => {
   test("asks with a title, a description and the two answers", () => {
     setup();
 
-    const dialog = screen.getByRole("dialog", { name: "Delete this post?" });
+    const dialog = screen.getByRole("dialog", {
+      name: "Delete this category?",
+    });
     expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
@@ -108,6 +110,15 @@ describe("ConfirmDialog", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel" })
     ).not.toBeInTheDocument();
+  });
+
+  test("draws the confirm button as asked, for a change that is easily undone", () => {
+    setup({ confirmLabel: "Move it", confirmVariant: "default" });
+
+    expect(screen.getByRole("button", { name: "Move it" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
   });
 
   test("hands the close to the caller to place focus", async () => {

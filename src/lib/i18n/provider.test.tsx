@@ -12,7 +12,7 @@ function Probe() {
   return (
     <p>
       {value
-        ? `${value.locale}: ${value.dictionary.auth.welcome.title}`
+        ? `${value.locale}: ${value.dictionary.auth.signIn.submit}`
         : "no provider"}
     </p>
   );
@@ -20,8 +20,8 @@ function Probe() {
 
 describe("I18nProvider", () => {
   test.each([
-    ["es", "es: Hola de nuevo"],
-    ["en", "en: Welcome back"],
+    ["es", "es: Iniciar sesión"],
+    ["en", "en: Sign In"],
   ] as const)(
     "hands its children the %s locale and its dictionary",
     (locale, expected) => {

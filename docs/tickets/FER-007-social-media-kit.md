@@ -11,6 +11,7 @@ Lucas can publish tidy, consistent posts in minutes and has what the stall needs
 
 ## Scope
 
+- Everything in the palette, type and logo rules of [FER-039](FER-039-storefront-redesign.md): the full logo (tag, LR, MARKET), never the mark alone.
 - Profile pictures and bios for Instagram and TikTok, in Spanish.
 - Templates as editable sources plus exported PNGs: feed post 1080×1350, story and TikTok cover 1080×1920, carousel slides, story highlight covers.
 - Template set: new article, price drop, "find us at the fair" with dates December 5 to January 5, best sellers, how to order by WhatsApp.
