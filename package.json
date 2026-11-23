@@ -115,7 +115,7 @@
     "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
     "oxlint-tsgolint": "7.0.2005",
-    "postcss": "8.5.32",
+    "postcss": "8.5.33",
     "tailwindcss": "4.3.5",
     "tsrs": "0.20.1-ts7.1.0-beta",
     "tsx": "4.23.15",
