@@ -466,13 +466,13 @@ export const admin: Dictionary["admin"] = {
       coverHint: "The order the banners of the top carousel go through.",
       down: "Move down: {name}",
       errors: {
-        featuredCount: "Choose none, or 2 to 4 featured articles.",
+        featuredCount: "Choose none, or 2 to 16 featured articles.",
         save: "We couldn't save the order. Your changes are still here: try again.",
         repeated:
           "A row or a banner is listed twice. Reload the page to see the saved order.",
       },
       featured: "Featured",
-      featuredHint: "Choose 2 to 4 articles, or none.",
+      featuredHint: "Choose 2 to 16 articles, or none.",
       full: "There are {max} already: remove one to add another.",
       hint: "Under the cover, from top to bottom: the categories, the best sellers, the featured articles, the banners between rows and the spotlights.",
       none: "None yet.",

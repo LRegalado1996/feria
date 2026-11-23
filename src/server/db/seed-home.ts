@@ -447,7 +447,7 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   if (!anyFeatured) {
     const ids = await articleIds(tx, storeId, SEED_FEATURED);
 
-    // None or two to four: one alone is not a featured row.
+    // None or two to sixteen: one alone is not a featured row.
     if (ids.length >= 2) {
       await tx
         .insert(featuredProduct)

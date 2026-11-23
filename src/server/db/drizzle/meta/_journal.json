@@ -190,6 +190,13 @@
       "when": 1795143455152,
       "tag": "0026_page_address_required",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795458683183,
+      "tag": "0027_featured_up_to_sixteen",
+      "breakpoints": true
     }
   ]
 }

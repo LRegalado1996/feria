@@ -404,7 +404,7 @@ function CuratedList({
  * the carousel's order; the sequence under it (the categories' rows, the
  * best sellers, the featured articles and the banners between rows), each
  * moved up and down; and the two curated rows, picked from the published
- * articles, up to ten best sellers and none or two to four featured. Each
+ * articles, up to ten best sellers and none or two to sixteen featured. Each
  * entry says when the storefront leaves it out. One form, saved whole from
  * the screen's top bar (`id`).
  */

@@ -108,6 +108,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-069](FER-069-unknown-store-address-404.md)      | An unknown store address answers 404                | P1       | todo        |
 | [FER-070](FER-070-home-address-307.md)               | The home's own address answers a 307                | P2       | todo        |
 | [FER-074](FER-074-home-wording.md)                   | The store's home is called "Home" in every language | P1       | done        |
+| [FER-075](FER-075-featured-row-and-cover-title.md)   | A longer "Destacados" row, a smaller cover title    | P1       | in progress |
 
 ### M5 Metrics
 

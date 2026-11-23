@@ -10,9 +10,13 @@ import { uploadedImageSchema } from "@/lib/schemas/upload";
 
 /** The curated "best sellers" row holds at most this many articles. */
 export const RANKING_MAX = 10;
-/** The "featured" row holds none, or two to four articles (FER-020). */
+/**
+ * The "featured" row holds none, or two to sixteen articles (FER-020,
+ * FER-075): one alone is not a row, and sixteen is four screens of the
+ * storefront's carousel on a computer.
+ */
 export const FEATURED_MIN = 2;
-export const FEATURED_MAX = 4;
+export const FEATURED_MAX = 16;
 /** The bar's line on a computer, and its shorter twin for a phone. */
 export const ANNOUNCEMENT_TEXT_MAX_LENGTH = 120;
 export const ANNOUNCEMENT_SHORT_TEXT_MAX_LENGTH = 40;
@@ -407,7 +411,7 @@ function unique(ids: readonly unknown[]): boolean {
  * the sequence under it (the categories' rows, "best sellers", "featured"
  * and the banners between rows); and the store's curated lists the page's
  * editor holds, the best sellers, up to ten in their order, and the
- * featured articles, none or two to four. Saved whole.
+ * featured articles, none or two to sixteen. Saved whole.
  */
 export const savePageLayoutSchema = z.object({
   coverBannerIds: z
@@ -727,7 +731,7 @@ export interface PageLayoutFormFields {
 /**
  * A page's order form's fields, read into what `page.saveLayout` takes,
  * with the page's words for the one rule a person can break by hand (the
- * featured articles are none or two to four; the lists cap the rest) and
+ * featured articles are none or two to sixteen; the lists cap the rest) and
  * for a cover or rows that list an entry twice, which the lists never do
  * by hand but the save would refuse.
  */

@@ -380,6 +380,127 @@ test.describe("The storefront's home", () => {
     await store.expectNoHorizontalScroll();
   });
 
+  // FER-075. The featured row takes up to sixteen articles and pages like
+  // any other row; the cover's title is a caption, not the banner's big line.
+  test("the featured row shows sixteen articles and pages like the other rows, and the cover's title is a small caption that never widens a 360 px phone", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const short = tag.slice(0, 8);
+    const shelf = await db.seed.createCategory({
+      nameEs: `Destacables ${tag}`,
+      slug: `destacables-${tag}`,
+    });
+    const names = Array.from(
+      { length: 16 },
+      (_unused, index) =>
+        `Destacado ${String(index + 1).padStart(2, "0")} ${tag}`
+    );
+    const featured: number[] = [];
+
+    for (const title of names) {
+      // One at a time: the row's order is the order they are listed in.
+      const article = await db.seed.createArticle({
+        categoryId: shelf.id,
+        priceAmount: 59_000,
+        title,
+      });
+      featured.push(article.id);
+    }
+
+    // Its first word is wider than a 360 px phone at the caption's size.
+    const longTitle = `Superburbujeromegagigante ${short} para toda la feria`;
+    const shortTitle = `Portada ${short}`;
+    const long = await db.seed.createBanner({
+      image: PHOTOS.ring,
+      link: { categoryId: shelf.id },
+      placement: "cover",
+      titleEs: longTitle,
+    });
+    const brief = await db.seed.createBanner({
+      image: PHOTOS.necklace,
+      link: { categoryId: shelf.id },
+      placement: "cover",
+      titleEs: shortTitle,
+    });
+    const before = await homeEdit.read();
+    const others = before.coverBannerIds.filter(
+      (id) => id !== long.id && id !== brief.id
+    );
+    const sections: PageSection[] = [
+      { kind: "featured" },
+      ...before.sections.filter((section) => section.kind !== "featured"),
+    ];
+    const layout = {
+      featuredProductIds: featured,
+      rankingProductIds: before.rankingProductIds,
+      sections,
+    };
+    /**
+     * How many lines a title takes: its height over a line's, which is the
+     * display face's 1.05 of its size (`--leading-display`).
+     */
+    const lines = async (title: Locator, fontSize: number) => {
+      const size = await title.boundingBox();
+
+      return Math.round((size?.height ?? 0) / (fontSize * 1.05));
+    };
+    const store = new StorePage(page);
+
+    // A phone: the long title first.
+    await homeEdit.saveLayout({
+      ...layout,
+      coverBannerIds: [long.id, brief.id, ...others],
+    });
+    await page.setViewportSize({ height: 780, width: 360 });
+    await store.goto();
+    const wrapped = store
+      .getHomeCover()
+      .getByRole("heading", { level: 2, name: longTitle });
+    await expect(wrapped).toBeVisible();
+    await expect(wrapped).toHaveCSS("font-size", "18px");
+    expect(await lines(wrapped, 18)).toBeGreaterThan(1);
+    const box = await wrapped.boundingBox();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 361)).toBeLessThanOrEqual(360);
+    await store.expectNoHorizontalScroll();
+
+    // A computer: the short title first, on one line, at a row heading's
+    // size (the banner's big line would be 54 px here).
+    await homeEdit.saveLayout({
+      ...layout,
+      coverBannerIds: [brief.id, long.id, ...others],
+    });
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await store.goto();
+    const caption = store
+      .getHomeCover()
+      .getByRole("heading", { level: 2, name: shortTitle });
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS("font-size", "28px");
+    expect(await lines(caption, 28)).toBe(1);
+
+    // The featured row: all sixteen in their order, no "Ver todo", and the
+    // round arrow pages it as it does any row.
+    const row = store.getHomeSection("Destacados");
+    await expect(row.getByRole("heading", { level: 3 })).toHaveText(names);
+    await expect(row.getByRole("link", { name: /^Ver todo/u })).toHaveCount(0);
+    const card = (index: number) =>
+      row.getByRole("link", { exact: true, name: names[index] });
+    await expect(card(0)).toBeInViewport();
+    await expect(card(15)).not.toBeInViewport();
+    // The arrow shows once the carousel has measured its cards: the row is
+    // React's.
+    const next = row.getByRole("button", { name: "Ver más de Destacados" });
+    await expect(next).toBeVisible();
+    await next.click();
+    await expect(card(0)).not.toBeInViewport();
+    await expect(card(4)).toBeInViewport();
+    await store.expectNoHorizontalScroll();
+  });
+
   // FER-059. An article in the spotlight, right under the cover: the dark
   // block catches the eye as one scrolls; its name, photo and words lead to
   // the article, and its button adds it to the cart.

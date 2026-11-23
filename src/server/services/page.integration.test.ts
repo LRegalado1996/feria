@@ -785,6 +785,73 @@ describe("saving the home's order", () => {
     });
   });
 
+  test("keeps sixteen featured articles in their order, shows them all on the page, and the table refuses a seventeenth place (FER-075)", async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const row = await addCategory(tx, storeId);
+      const made = await Promise.all(
+        Array.from(
+          { length: 17 },
+          async () => await addArticle(tx, { categoryId: row.id, storeId })
+        )
+      );
+      const ids = made.map((article) => article.id);
+
+      // Not the order they were made in: the order saved is the one kept.
+      const sixteen = [...ids.slice(8, 16), ...ids.slice(0, 8)];
+      const [extra] = ids.slice(16);
+
+      await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: sixteen,
+          rankingProductIds: [],
+          sections: [{ kind: "featured" }],
+        },
+      });
+
+      const saved = await tx
+        .select({
+          position: featuredProduct.position,
+          productId: featuredProduct.productId,
+        })
+        .from(featuredProduct)
+        .where(eq(featuredProduct.storeId, storeId))
+        .orderBy(asc(featuredProduct.position));
+      expect(saved).toEqual(
+        sixteen.map((productId, position) => ({ position, productId }))
+      );
+      const content = await getPageContent(tx, {
+        currencyCode: "UYU",
+        locale: "es",
+        pageId,
+        storeId,
+        today: TODAY,
+      });
+      const featured = content.sections.find(
+        (section) => section.kind === "featured"
+      );
+      expect(
+        featured?.kind === "featured"
+          ? featured.articles.map((article) => article.id)
+          : null
+      ).toEqual(sixteen);
+
+      // In a savepoint: the refused insert must not abort the test's own
+      // transaction.
+      await expect(
+        tx.transaction(async (inner) => {
+          await inner
+            .insert(featuredProduct)
+            .values({ position: 16, productId: extra ?? 0, storeId });
+        })
+      ).rejects.toMatchObject({
+        cause: { constraint: "featured_product_position_range" },
+      });
+    });
+  });
+
   test("writes the order whole: places numbered from 0, what was left out after the rest, the curated rows and the cover in order", async () => {
     await onEmptyHome(async (tx, storeId, pageId) => {
       const one = await addCategory(tx, storeId);

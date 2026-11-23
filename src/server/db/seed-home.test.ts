@@ -515,7 +515,7 @@ describe("the seed's home content", () => {
     expect(wrong).toEqual([]);
   });
 
-  test("every curated title is a seeded article's, and the featured are two to four", () => {
+  test("every curated title is a seeded article's, and the featured are a row the admin's save would take", () => {
     const titles = new Set(SEED_ARTICLES.map((article) => article.title.es));
 
     expect(
@@ -525,7 +525,7 @@ describe("the seed's home content", () => {
     ).toEqual([]);
     expect(SEED_BEST_SELLERS.length).toBeLessThanOrEqual(10);
     expect(SEED_FEATURED.length).toBeGreaterThanOrEqual(2);
-    expect(SEED_FEATURED.length).toBeLessThanOrEqual(4);
+    expect(SEED_FEATURED.length).toBeLessThanOrEqual(16);
   });
 
   test("the spotlight's article is a seeded one, and its words pass the rules the admin's saves hold them to", () => {

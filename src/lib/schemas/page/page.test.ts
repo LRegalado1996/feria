@@ -100,6 +100,11 @@ function makeBanner(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The ids 1 to `count`: a curated list of that many articles. */
+function idsUpTo(count: number): number[] {
+  return Array.from({ length: count }, (_unused, index) => index + 1);
+}
+
 function makeLayout(overrides: Record<string, unknown> = {}) {
   return {
     coverBannerIds: [],
@@ -396,8 +401,9 @@ describe("savePageLayoutSchema", () => {
     ["a best seller twice", { rankingProductIds: [1, 1] }, false],
     ["one featured", { featuredProductIds: [1] }, false],
     ["two featured", { featuredProductIds: [1, 2] }, true],
-    ["four featured", { featuredProductIds: [1, 2, 3, 4] }, true],
-    ["five featured", { featuredProductIds: [1, 2, 3, 4, 5] }, false],
+    ["no featured", { featuredProductIds: [] }, true],
+    ["sixteen featured", { featuredProductIds: idsUpTo(16) }, true],
+    ["seventeen featured", { featuredProductIds: idsUpTo(17) }, false],
     ["a featured twice", { featuredProductIds: [1, 1] }, false],
     ["a cover banner twice", { coverBannerIds: [3, 3] }, false],
     [
@@ -663,8 +669,8 @@ describe("createPageLayoutFormSchema", () => {
     [0, true],
     [1, false],
     [2, true],
-    [4, true],
-    [5, false],
+    [16, true],
+    [17, false],
   ])("%s featured are accepted: %s", (count, accepted) => {
     const result = schema.safeParse(
       makeFields({

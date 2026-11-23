@@ -70,16 +70,38 @@ describe("StoreBanner", () => {
     );
   });
 
-  test("sets its title in the display face, at the banner's size, as plain text unless given a level", () => {
+  test("sets its title in the display face, as plain text unless given a level", () => {
     setup();
 
     const title = screen.getByText("Burbujas para toda la feria");
     expect(title.tagName).toBe("P");
+    expect(title).toHaveClass("font-display", "uppercase");
+  });
+
+  test.each([undefined, "row"] as const)(
+    "between two rows (size %s), its title is the banner's big line, stacked under 15 characters",
+    (size) => {
+      setup({ size });
+
+      const title = screen.getByText("Burbujas para toda la feria");
+      expect(title).toHaveClass("store-display-banner", "max-w-[15ch]");
+      expect(title).not.toHaveClass("store-display-section");
+    }
+  );
+
+  test("on the cover, its title is a small caption that may run the cover's width, clear of the carousel's controls, and wraps rather than overflow (FER-075)", () => {
+    setup({ size: "cover" });
+
+    const title = screen.getByText("Burbujas para toda la feria");
     expect(title).toHaveClass(
-      "font-display",
-      "store-display-banner",
-      "uppercase"
+      "store-display-section",
+      "max-w-full",
+      "md:max-w-[calc(100%-21rem)]",
+      "wrap-anywhere"
     );
+    expect(title).not.toHaveClass("store-display-banner");
+    expect(title).not.toHaveClass("max-w-[15ch]");
+    expect(title).not.toHaveClass("truncate");
   });
 
   test.each(["h2", "h3"] as const)(

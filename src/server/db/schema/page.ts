@@ -304,7 +304,7 @@ export const rankingEntry = pgTable(
 );
 
 /**
- * The "featured" articles (FER-020): none, or two to four in their order
+ * The "featured" articles (FER-020): none, or two to sixteen in their order
  * (the two is the schema's, since a save replaces them all). The same rule
  * as the best sellers for an article that cannot be bought.
  */

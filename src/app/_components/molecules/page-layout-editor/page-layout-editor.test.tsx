@@ -401,12 +401,12 @@ describe("PageLayoutEditor", () => {
 
   test.each([
     ["home-layout-best-sellers", "ranking", 10],
-    ["home-layout-featured", "featured", 4],
+    ["home-layout-featured", "featured", 16],
   ] as const)("%s is full at %s's cap of %s", (testId, name, max) => {
     const { card } = setup({
       fields: makeFields({
-        [name]: CHOICES.slice(0, max).map((choice) => ({
-          productId: choice.id,
+        [name]: Array.from({ length: max }, (_unused, index) => ({
+          productId: index + 1,
         })),
       }),
     });
@@ -423,21 +423,27 @@ describe("PageLayoutEditor", () => {
     ).toBeInTheDocument();
   });
 
-  test("one below the cap still takes another", () => {
-    const { card } = setup({
-      fields: makeFields({
-        ranking: CHOICES.slice(0, 9).map((choice) => ({
-          productId: choice.id,
-        })),
-      }),
-    });
+  test.each([
+    ["home-layout-best-sellers", "ranking", 9],
+    ["home-layout-featured", "featured", 15],
+  ] as const)(
+    "%s still takes another at %s's %s, one below the cap",
+    (testId, name, count) => {
+      const { card } = setup({
+        fields: makeFields({
+          [name]: Array.from({ length: count }, (_unused, index) => ({
+            productId: index + 1,
+          })),
+        }),
+      });
+      const list = within(card(testId));
 
-    expect(
-      within(card("home-layout-best-sellers")).getByRole("combobox", {
-        name: "Article to add",
-      })
-    ).toBeEnabled();
-  });
+      expect(
+        list.getByRole("combobox", { name: "Article to add" })
+      ).toBeEnabled();
+      expect(list.queryByText(/remove one to add another/u)).toBeNull();
+    }
+  );
 
   test("refuses a single featured article, saving nothing", async () => {
     const { card, onSave, submit } = setup({
@@ -448,7 +454,7 @@ describe("PageLayoutEditor", () => {
 
     expect(
       await within(card("home-layout-featured")).findByRole("alert")
-    ).toHaveTextContent("Choose none, or 2 to 4 featured articles.");
+    ).toHaveTextContent("Choose none, or 2 to 16 featured articles.");
     expect(onSave).not.toHaveBeenCalled();
   });
 

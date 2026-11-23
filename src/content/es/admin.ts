@@ -481,13 +481,13 @@ export const admin = {
       coverHint: "El orden en que pasan los banners del carrusel de arriba.",
       down: "Bajar: {name}",
       errors: {
-        featuredCount: "Elegí ninguno, o de 2 a 4 artículos destacados.",
+        featuredCount: "Elegí ninguno, o de 2 a 16 artículos destacados.",
         save: "No pudimos guardar el orden. Tus cambios siguen acá: probá de nuevo.",
         repeated:
           "Hay una fila o un banner repetido. Recargá la página para ver el orden guardado.",
       },
       featured: "Destacados",
-      featuredHint: "Elegí de 2 a 4 artículos, o ninguno.",
+      featuredHint: "Elegí de 2 a 16 artículos, o ninguno.",
       full: "Ya hay {max}: quitá uno para agregar otro.",
       hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados, los banners entre filas y las vidrieras.",
       none: "Ninguno todavía.",
