@@ -489,6 +489,9 @@ test.describe("The storefront's home", () => {
     await expect(row.getByRole("link", { name: /^Ver todo/u })).toHaveCount(0);
     const card = (index: number) =>
       row.getByRole("link", { exact: true, name: names[index] });
+    // The row sits under the cover: a card's name is below the fold until
+    // the page scrolls to it.
+    await card(0).scrollIntoViewIfNeeded();
     await expect(card(0)).toBeInViewport();
     await expect(card(15)).not.toBeInViewport();
     // The arrow shows once the carousel has measured its cards: the row is
