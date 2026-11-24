@@ -70,6 +70,29 @@ describe("StoreBanner", () => {
     );
   });
 
+  test.each(["cover", "row"] as const)(
+    "as a %s, draws no shade over its photo: the title and the button's line carry a text shadow instead (FER-077)",
+    (size) => {
+      const { root } = setup({ size });
+
+      const words = required(
+        root.querySelector('[data-slot="store-banner-words"]')
+      );
+      expect(words).toHaveClass("store-display-shadow");
+      expect(words).toContainElement(
+        screen.getByText("Burbujas para toda la feria")
+      );
+      expect(words).toContainElement(screen.getByText("Comprar ahora"));
+      // Nothing but the photo and the words: no layer between them.
+      expect(
+        [...root.querySelectorAll<HTMLElement>(":scope > *")].map(
+          (child) => child.dataset.slot
+        )
+      ).toEqual(["store-picture", "store-banner-words"]);
+      expect(root.innerHTML).not.toMatch(/bg-linear|gradient/u);
+    }
+  );
+
   test("sets its title in the display face, as plain text unless given a level", () => {
     setup();
 

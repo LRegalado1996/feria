@@ -26,8 +26,8 @@ export interface StoreCatalogCoverProps {
  * from there up, and on a phone too when there is no phone image. The box
  * has its height before the photo arrives, and the photo is cropped to
  * fill it. It is the page's largest image: fetched first, never lazily.
- * The one gradient the storefront allows rises from the bottom so the
- * white title reads on any photo.
+ * Nothing shades the photo (FER-077, Lucas): the white title carries a
+ * text shadow of the ink instead (`store-display-shadow`), as a banner's.
  */
 function StoreCatalogCover({
   children,
@@ -51,12 +51,11 @@ function StoreCatalogCover({
         phone={cover.phone}
         priority
       />
-      {/* The one gradient of the storefront: legibility, not decoration. */}
+      {/* No shade over the photo (FER-077): the title carries its own. */}
       <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-store-foreground/75 to-transparent to-60%"
-      />
-      <div className="absolute inset-x-4 bottom-5.5 md:inset-x-7 md:bottom-7.5">
+        className="absolute inset-x-4 bottom-5.5 store-display-shadow md:inset-x-7 md:bottom-7.5"
+        data-slot="store-catalog-cover-words"
+      >
         {children}
       </div>
     </div>

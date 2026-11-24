@@ -94,8 +94,9 @@ export type StoreBannerProps = VariantProps<typeof storeBannerVariants> & {
  * A full-width photo with its title and "Comprar ahora →" on its bottom-left
  * corner (FER-039), one link to where it leads. The title is big between
  * two rows and a small caption on the cover (FER-075). The photo is decoration: the
- * title says what the link is, so a screen reader hears it once. A shade
- * rises from the bottom so the white words read on any photo. Art direction
+ * title says what the link is, so a screen reader hears it once. Nothing
+ * shades the photo (FER-077, Lucas): the white words carry a text shadow of
+ * the ink instead (`store-display-shadow`). Art direction
  * (`atoms/store-picture`): a phone shows the banner's phone crop when it
  * has one. The box has its height before the photo arrives.
  */
@@ -123,12 +124,11 @@ function StoreBanner({
         phone={phoneImage}
         priority={priority}
       />
-      {/* The one gradient of the storefront: legibility, not decoration. */}
-      <span
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-store-foreground/75 to-transparent to-60%"
-      />
-      <div className="absolute inset-x-4 bottom-5.5 flex flex-col items-start md:inset-x-7 md:bottom-7.5">
+      {/* No shade over the photo (FER-077): the words carry their own. */}
+      <div
+        className="absolute inset-x-4 bottom-5.5 flex flex-col items-start store-display-shadow md:inset-x-7 md:bottom-7.5"
+        data-slot="store-banner-words"
+      >
         <Title
           className={storeBannerTitleVariants({ size })}
           data-slot="store-banner-title"

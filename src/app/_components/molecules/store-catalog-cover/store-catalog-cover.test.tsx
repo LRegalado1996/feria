@@ -71,14 +71,17 @@ test("is fetched first, never lazily, as wide as the window and nearly as tall, 
   expect(root.className).not.toMatch(/aspect-/u);
 });
 
-test("puts the page's title over the photo, above the one shade the storefront allows", () => {
+test("puts the page's title over the photo with a text shadow of its own, and no shade over the photo (FER-077)", () => {
   const { root } = setup();
+  const title = within(root).getByRole("heading", { level: 1 });
 
-  expect(within(root).getByRole("heading", { level: 1 })).toHaveTextContent(
-    "Anillos"
-  );
-  expect(root.querySelector('[aria-hidden="true"]')).toHaveClass(
-    "bg-linear-to-t",
-    "from-store-foreground/75"
-  );
+  expect(title).toHaveTextContent("Anillos");
+  expect(title.parentElement).toHaveClass("store-display-shadow");
+  // Nothing but the photo and the words: no layer between them.
+  expect(
+    [...root.querySelectorAll<HTMLElement>(":scope > *")].map(
+      (child) => child.dataset.slot
+    )
+  ).toEqual(["store-picture", "store-catalog-cover-words"]);
+  expect(root.innerHTML).not.toMatch(/bg-linear|gradient/u);
 });

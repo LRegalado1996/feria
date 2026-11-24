@@ -15,6 +15,7 @@ import {
 import { interceptBlobStore, seedPhoto } from "../../fixtures/blob-store";
 import type { DbFixture } from "../../fixtures/db.fixture";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectWordsOverPhoto } from "../../fixtures/expect-words-over-photo";
 import type { HomeEdit } from "../../fixtures/store.fixture";
 import { AdminHomePage } from "../../page-objects/admin-home.page";
 import { StorePage } from "../../page-objects/store.page";
@@ -185,6 +186,10 @@ test.describe("The storefront's home", () => {
       name: `${titles.cover} Comprar ahora`,
     });
     await expect(first).toHaveAttribute("href", `/${shelf.slug}`);
+    // No shade over the photo: the title and the button's line carry a
+    // text shadow (FER-077).
+    await expectWordsOverPhoto(first, first.getByText(titles.cover));
+    await expectWordsOverPhoto(first, first.getByText("Comprar ahora"));
     // The cover's first photo is the page's priority image, the computer's
     // here; the others wait.
     const photo = first.getByTestId("store-banner-photo");
@@ -228,6 +233,7 @@ test.describe("The storefront's home", () => {
       .getHomeSection(titles.between)
       .getByRole("link", { name: `${titles.between} Ver todo el catálogo` });
     await expect(between).toHaveAttribute("href", "/productos");
+    await expectWordsOverPhoto(between, between.getByText(titles.between));
     await expect(between.getByTestId("store-banner-photo")).toHaveAttribute(
       "loading",
       "lazy"
