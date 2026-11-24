@@ -246,10 +246,13 @@ function StoreFooter({
             data-testid="store-footer-contact"
           >
             {/* The heading leads to the contact page too: it is what a
-                shopper presses first. */}
+                shopper presses first. On a phone it is a thumb's target,
+                44 px tall inside the heading's own line (the margins give
+                back what the height takes), and the keyboard's focus is
+                the ring the footer's other links draw. */}
             <h2 className={HEADING_CLASS} id="store-footer-contact">
               <Link
-                className="underline-offset-4 outline-none hover:underline focus-visible:underline"
+                className="underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent max-md:-my-3.5 max-md:inline-flex max-md:min-h-11 max-md:items-center"
                 data-testid="store-footer-contact-heading-link"
                 href={localizePath(CONTACT_PATH, locale)}
               >

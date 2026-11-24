@@ -451,6 +451,28 @@ test.describe("Storefront shell", () => {
       .getByRole("link", { name: /WhatsApp/u })
       .boundingBox();
     expect(whatsapp?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // So is the "Contacto" heading's link, without making its heading
+    // taller than the "Ayuda" one; from the keyboard it draws the ring the
+    // footer's other links draw.
+    const contactHeading = footer.getByRole("heading", { name: "Contacto" });
+    const headingLink = contactHeading.getByRole("link", { name: "Contacto" });
+    expect(
+      (await headingLink.boundingBox())?.height ?? 0
+    ).toBeGreaterThanOrEqual(44);
+    expect((await contactHeading.boundingBox())?.height).toBe(
+      (await footer.getByRole("heading", { name: "Ayuda" }).boundingBox())
+        ?.height
+    );
+    await headingLink.focus();
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await expect(headingLink).toBeFocused();
+    expect(
+      await headingLink.evaluate((link) => {
+        const style = getComputedStyle(link);
+        return [style.outlineStyle, style.outlineWidth];
+      })
+    ).toEqual(["solid", "3px"]);
     await storePage.expectNoHorizontalScroll();
   });
 
