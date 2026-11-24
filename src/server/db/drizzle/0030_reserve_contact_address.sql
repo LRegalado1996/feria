@@ -9,23 +9,22 @@
 -- page then wins over it until that row is renamed by hand. Running it
 -- twice converges (reserve-contact-address-migration.integration.test.ts).
 --
--- First, each such store's category lock, the one `lockStoreCategories`
+-- First, every store's category lock, the one `lockStoreCategories`
 -- takes before a category or a page picks its address: a category being
 -- created while this runs has read the addresses already, and could take
 -- the very `contacto-2` a page is renamed to here (each table's unique
 -- constraint sees only its own rows). With the lock, that write finishes
--- before the rename, or reads the addresses after it.
+-- before the rename, or reads the addresses after it. Every store, not
+-- only those with a `contacto` row found now: one could gain its row
+-- between that look and the table lock.
 DO $$
 DECLARE
   held record;
 BEGIN
   FOR held IN
-    SELECT "storeId" FROM "category" WHERE "slug" = 'contacto'
-    UNION
-    SELECT "storeId" FROM "page" WHERE "slug" = 'contacto'
-    ORDER BY "storeId"
+    SELECT "id" FROM "store" ORDER BY "id"
   LOOP
-    PERFORM pg_advisory_xact_lock(hashtext('category:' || held."storeId"));
+    PERFORM pg_advisory_xact_lock(hashtext('category:' || held."id"));
   END LOOP;
 END $$;--> statement-breakpoint
 LOCK TABLE "category", "page" IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint

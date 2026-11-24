@@ -149,25 +149,18 @@ describe("migration 0030: no category or page at the contact page's address", ()
       await applyMigration(tx);
 
       expect(await categorySlugs(tx, [kept])).toEqual([own]);
-      // Nothing to rename: no category write is made to wait.
-      expect(await categoryLockIsFree(storeId)).toBe(true);
     });
   });
 
-  test.each([
-    ["a category", addCategory],
-    ["a page", addPage],
-  ] as const)(
-    "with %s at contacto, holds the store's category lock, so no category picks its address while the rows are renamed",
-    async (_what, add) => {
-      await rolledBack(async (tx, storeId) => {
-        await add(tx, storeId, "contacto");
-        expect(await categoryLockIsFree(storeId)).toBe(true);
+  test("holds the store's category lock from before it looks for rows to rename, so no category or page picks its address meanwhile", async () => {
+    await rolledBack(async (tx, storeId) => {
+      expect(await categoryLockIsFree(storeId)).toBe(true);
 
-        await applyMigration(tx);
+      // Even with no row at `contacto` yet: one could arrive before the
+      // table lock.
+      await applyMigration(tx);
 
-        expect(await categoryLockIsFree(storeId)).toBe(false);
-      });
-    }
-  );
+      expect(await categoryLockIsFree(storeId)).toBe(false);
+    });
+  });
 });

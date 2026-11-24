@@ -34,7 +34,7 @@ Taken while building, for Lucas to confirm:
 
 The migration only renames rows that hold `contacto`, and only if there are any. The previous build, still serving while it runs, could still create one in that window; the contact page then wins over it until the row is renamed by hand.
 
-The migration takes each such store's category lock (the one a category or a page takes before it picks its address) before it renames, so a category being created at that moment cannot take the `contacto-2` a page is renamed to.
+The migration takes every store's category lock (the one a category or a page takes before it picks its address) before it renames, so a category being created at that moment cannot take the `contacto-2` a page is renamed to.
 
 After the new build is live, check each environment once; this must answer no row:
 
