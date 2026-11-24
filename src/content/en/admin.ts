@@ -676,7 +676,7 @@ export const admin: Dictionary["admin"] = {
       locationEn: "Where to find us, in English",
       locationEs: "Where to find us, in Spanish",
       locationHint:
-        "One short line: the fair, the stall, the street and the hours. It shows in the store's footer. Left empty, it is not shown.",
+        "One short line: the fair, the stall, the street and the hours. It shows in the store's footer and on the contact page. Left empty in one language, that language's pages show the other's line; left empty in both, it is not shown.",
       socialHint: "Leave it empty and the store won't show it.",
       taglineEn: "Tagline in English",
       taglineEs: "Tagline in Spanish",

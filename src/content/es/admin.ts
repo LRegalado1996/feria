@@ -694,7 +694,7 @@ export const admin = {
       locationEn: "Dónde encontrarnos, en inglés",
       locationEs: "Dónde encontrarnos, en español",
       locationHint:
-        "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda. Si lo dejás vacío, no se muestra.",
+        "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda y en la página de contacto. Si lo dejás vacío en un idioma, sus páginas muestran la línea del otro; vacío en los dos, no se muestra.",
       name: "Nombre de la tienda",
       socialHint: "Si lo dejás vacío, la tienda no lo muestra.",
       taglineEn: "Frase en inglés",

@@ -230,7 +230,7 @@ describe("SettingsForm", () => {
     expect(field("Where to find us, in English")).toHaveValue("");
     expect(field("Where to find us, in English")).toHaveAttribute("lang", "en");
     expect(field("Where to find us, in English")).toHaveAccessibleDescription(
-      "One short line: the fair, the stall, the street and the hours. It shows in the store's footer. Left empty, it is not shown."
+      "One short line: the fair, the stall, the street and the hours. It shows in the store's footer and on the contact page. Left empty in one language, that language's pages show the other's line; left empty in both, it is not shown."
     );
     expect(
       screen.getByRole("region", { name: "Contact and socials" })
@@ -266,6 +266,26 @@ describe("SettingsForm", () => {
     });
   });
 
+  test("sends a line of exactly 200 characters whole", async () => {
+    const { field, onSave, save, user } = setup();
+    const line = "x".repeat(200);
+    await user.click(field("Where to find us, in Spanish"));
+    await user.paste(line);
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          translations: [
+            { ...SPANISH, location: line },
+            { ...ENGLISH, location: null },
+          ],
+        })
+      );
+    });
+  });
+
   test("refuses a line longer than 200 characters under its field, sending nothing", async () => {
     const { field, onSave, save, user } = setup();
     await user.click(field("Where to find us, in Spanish"));
@@ -288,7 +308,7 @@ describe("SettingsForm", () => {
 
     expect(field("Dónde encontrarnos, en español")).toHaveValue("");
     expect(field("Dónde encontrarnos, en inglés")).toHaveAccessibleDescription(
-      "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda. Si lo dejás vacío, no se muestra."
+      "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda y en la página de contacto. Si lo dejás vacío en un idioma, sus páginas muestran la línea del otro; vacío en los dos, no se muestra."
     );
   });
 
