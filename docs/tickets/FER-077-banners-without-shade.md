@@ -20,7 +20,7 @@ Taken while building, for Lucas to confirm:
 
 ## Known cost
 
-On a very light photo (white or pale behind the bottom-left corner) the white words read by their outline only, at less contrast than the shade gave, and can fall under WCAG AA there. This is the trade Lucas chose. A banner's photo is chosen or cropped with something darker than white behind that corner.
+On a very light photo (white or pale behind the bottom-left corner) the white words read by their outline only, at less contrast than the shade gave, and can fall under WCAG AA there. This is the trade Lucas chose. A banner's or a cover's photo is chosen or cropped dark enough behind that corner for the words to hold AA, checked as drawn on the phone's crop and the computer's (`design.md` § Storefront).
 
 ## Scope
 
