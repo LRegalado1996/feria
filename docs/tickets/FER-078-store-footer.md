@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P1
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-014, FER-044, FER-076, FER-079
 
 ## Goal

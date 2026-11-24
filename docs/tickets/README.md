@@ -108,12 +108,12 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-069](FER-069-unknown-store-address-404.md)      | An unknown store address answers 404                | P1       | todo        |
 | [FER-070](FER-070-home-address-307.md)               | The home's own address answers a 307                | P2       | todo        |
 | [FER-074](FER-074-home-wording.md)                   | The store's home is called "Home" in every language | P1       | done        |
-| [FER-075](FER-075-featured-row-and-cover-title.md)   | A longer "Destacados" row, a smaller cover title    | P1       | in progress |
-| [FER-076](FER-076-how-to-buy-block.md)               | "Cómo comprar" as a block of the home               | P1       | in progress |
-| [FER-077](FER-077-banners-without-shade.md)          | Banners without the shade: a text shadow instead    | P1       | in progress |
-| [FER-078](FER-078-store-footer.md)                   | A footer with all a small shop's footer should have | P1       | in progress |
-| [FER-079](FER-079-hide-empty-categories.md)          | Empty categories are hidden from the storefront     | P1       | in progress |
-| [FER-080](FER-080-contact-page.md)                   | A contact page                                      | P1       | in progress |
+| [FER-075](FER-075-featured-row-and-cover-title.md)   | A longer "Destacados" row, a smaller cover title    | P1       | done        |
+| [FER-076](FER-076-how-to-buy-block.md)               | "Cómo comprar" as a block of the home               | P1       | done        |
+| [FER-077](FER-077-banners-without-shade.md)          | Banners without the shade: a text shadow instead    | P1       | done        |
+| [FER-078](FER-078-store-footer.md)                   | A footer with all a small shop's footer should have | P1       | done        |
+| [FER-079](FER-079-hide-empty-categories.md)          | Empty categories are hidden from the storefront     | P1       | done        |
+| [FER-080](FER-080-contact-page.md)                   | A contact page                                      | P1       | done        |
 
 ### M5 Metrics
 
