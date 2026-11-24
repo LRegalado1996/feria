@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES } from "@/test/i18n";
+import { required } from "@/test/required";
 
 import { StoreHowToBuy, type StoreHowToBuyProps } from "./store-how-to-buy";
 
@@ -22,16 +23,17 @@ function setup({
     />
   );
   const block = screen.getByRole("region");
-  const [steps, payments] = within(block).getAllByRole("list");
+  const lists = within(block).getAllByRole("list");
+  const steps = required(lists[0]);
 
   return {
     block,
+    payments: required(lists[1]),
     /** Each step as a screen reader hears it: its name, then its line. */
-    steps: within(steps as HTMLElement)
+    steps: within(steps)
       .getAllByRole("listitem")
       .map((step) => [...step.querySelectorAll("p")].map((p) => p.textContent)),
-    stepsList: steps as HTMLElement,
-    payments: payments as HTMLElement,
+    stepsList: steps,
   };
 }
 
