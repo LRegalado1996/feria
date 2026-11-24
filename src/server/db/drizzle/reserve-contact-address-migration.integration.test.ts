@@ -92,6 +92,19 @@ async function pageSlugs(tx: DatabaseClient, ids: number[]) {
   return ids.map((id) => rows.find((row) => row.id === id)?.slug);
 }
 
+/**
+ * Whether another connection could take the store's category lock right
+ * now: `false` while the transaction under test holds it. The probe's own
+ * lock, when it gets one, ends with its statement.
+ */
+async function categoryLockIsFree(storeId: number) {
+  const { rows } = await db.execute<{ free: boolean }>(
+    sql`select pg_try_advisory_xact_lock(hashtext(${`category:${storeId}`})) as free`
+  );
+
+  return rows[0]?.free;
+}
+
 describe("migration 0030: no category or page at the contact page's address", () => {
   test("a category at contacto takes the first address free among categories and pages, the others stay, and a replay changes nothing", async () => {
     await rolledBack(async (tx, storeId) => {
@@ -136,6 +149,25 @@ describe("migration 0030: no category or page at the contact page's address", ()
       await applyMigration(tx);
 
       expect(await categorySlugs(tx, [kept])).toEqual([own]);
+      // Nothing to rename: no category write is made to wait.
+      expect(await categoryLockIsFree(storeId)).toBe(true);
     });
   });
+
+  test.each([
+    ["a category", addCategory],
+    ["a page", addPage],
+  ] as const)(
+    "with %s at contacto, holds the store's category lock, so no category picks its address while the rows are renamed",
+    async (_what, add) => {
+      await rolledBack(async (tx, storeId) => {
+        await add(tx, storeId, "contacto");
+        expect(await categoryLockIsFree(storeId)).toBe(true);
+
+        await applyMigration(tx);
+
+        expect(await categoryLockIsFree(storeId)).toBe(false);
+      });
+    }
+  );
 });

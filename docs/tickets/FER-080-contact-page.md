@@ -34,6 +34,18 @@ Taken while building, for Lucas to confirm:
 
 The migration only renames rows that hold `contacto`, and only if there are any. The previous build, still serving while it runs, could still create one in that window; the contact page then wins over it until the row is renamed by hand.
 
+The migration takes each such store's category lock (the one a category or a page takes before it picks its address) before it renames, so a category being created at that moment cannot take the `contacto-2` a page is renamed to.
+
+After the new build is live, check each environment once; this must answer no row:
+
+```sql
+SELECT 'category' AS kind, id FROM category WHERE slug = 'contacto'
+UNION ALL
+SELECT 'page', id FROM page WHERE slug = 'contacto';
+```
+
+A row there was written by the old build during the deploy. The rename stays a migration and not a post-cutover repair script (`docs/agents/database.md` § One-shot data repairs) because the rows that can exist are the ones already there when it runs, as with `0015` (FER-043); the window needs the store's one admin to create a category or page named "Contacto" during the minutes of a deploy, on a store that has not opened.
+
 ## Acceptance criteria
 
 - `/contacto` and `/en/contacto` answer 200 with the page in each language, its own title and description, its canonical address and its twin.
