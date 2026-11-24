@@ -8,6 +8,7 @@ import { store, storeTranslation } from "@/server/db/schema";
 const TRANSLATION_COLUMNS = {
   description: storeTranslation.description,
   locale: storeTranslation.locale,
+  location: storeTranslation.location,
   tagline: storeTranslation.tagline,
 };
 
@@ -29,7 +30,12 @@ function toStoreRow(values: UpdateStoreValues) {
   };
 }
 
-/** The store's texts as rows of `store_translation`, column by column too. */
+/**
+ * The store's texts as rows of `store_translation`, column by column too.
+ * A text sent without a location (a tab opened before the field existed,
+ * FER-078) writes none: a new row then has none, and an existing row keeps
+ * its own (`writesLocation`).
+ */
 function toTranslationRows(
   storeId: number,
   translations: Readonly<UpdateStoreValues["translations"]>
@@ -37,9 +43,23 @@ function toTranslationRows(
   return translations.map((translation) => ({
     description: translation.description,
     locale: translation.locale,
+    location: translation.location,
     storeId,
     tagline: translation.tagline,
   }));
+}
+
+/**
+ * Whether an edit says where to find the store: every text it sends names
+ * a location, a text or `null`. One that names none leaves the stored
+ * locations alone.
+ */
+function writesLocation(
+  translations: Readonly<UpdateStoreValues["translations"]>
+): boolean {
+  return translations.every(
+    (translation) => translation.location !== undefined
+  );
 }
 
 /**
@@ -59,7 +79,12 @@ export async function findStore(db: DatabaseClient) {
     },
     with: {
       translations: {
-        columns: { description: true, locale: true, tagline: true },
+        columns: {
+          description: true,
+          locale: true,
+          location: true,
+          tagline: true,
+        },
       },
     },
   });
@@ -82,7 +107,9 @@ export async function getStore(db: DatabaseClient) {
 
 /**
  * Replaces everything a person can set on the store, texts included: a
- * language left out of `translations` loses its text. The currency stays as
+ * language left out of `translations` loses its text. Where to find the
+ * store is replaced too when the edit names it, and kept when it does not
+ * (`writesLocation`). The currency stays as
  * it is, and comes back with the rest. The row is locked
  * first and every write names its id, all in one transaction, so a reader
  * never sees the new name with the old texts.
@@ -139,6 +166,9 @@ export async function updateStore(
             .onConflictDoUpdate({
               set: {
                 description: sql`excluded."description"`,
+                ...(writesLocation(values.translations)
+                  ? { location: sql`excluded."location"` }
+                  : {}),
                 tagline: sql`excluded."tagline"`,
                 updatedAt: sql`excluded."updatedAt"`,
               },

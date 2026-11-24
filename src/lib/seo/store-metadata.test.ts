@@ -6,11 +6,13 @@ const TEXTS = [
   {
     description: "Joyas.",
     locale: "es" as const,
+    location: null,
     tagline: "Joyas en la feria",
   },
   {
     description: "Jewelry.",
     locale: "en" as const,
+    location: null,
     tagline: "Jewelry at the fair",
   },
 ];

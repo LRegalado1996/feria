@@ -556,7 +556,7 @@ describe("getPageContent", () => {
     expect(db.query.pageSection.findMany).not.toHaveBeenCalled();
   });
 
-  test("leads a banner to its category's page under its group, or to its address", async () => {
+  test("leads a banner to its category's page under its group, or to its address; a category with no published article is not linked (FER-079)", async () => {
     const { db, read } = setup();
     db.query.banner.findMany.mockResolvedValue([
       makeBannerRow({
@@ -566,7 +566,9 @@ describe("getPageContent", () => {
       }),
       makeBannerRow({
         id: 2,
-        linkCategory: { parent: null, slug: "burbujeros" },
+        // Relojes holds no published article: the storefront lists it
+        // nowhere, so the banner shows without a link.
+        linkCategory: { parent: null, slug: "relojes" },
         linkCategoryId: 2,
       }),
       makeBannerRow({
@@ -585,10 +587,46 @@ describe("getPageContent", () => {
 
     expect(cover.map(({ href, title }) => ({ href, title }))).toEqual([
       { href: "/bijouterie/anillos", title: "Burbujas" },
-      { href: "/burbujeros", title: "Burbujas" },
+      { href: null, title: "Burbujas" },
       // No words at all: an empty title, in the page's language.
       { href: "https://instagram.com/lr", title: "" },
     ]);
+  });
+
+  test("leads a banner to a group that holds no article itself while one of its categories does (FER-079)", async () => {
+    const { db, read } = setup();
+    db.query.category.findMany.mockResolvedValue([
+      {
+        id: 5,
+        parentId: null,
+        position: 0,
+        showInHeader: true,
+        slug: "bijouterie",
+        translations: [{ locale: "es", name: "Bijouterie" }],
+      },
+      {
+        id: 1,
+        parentId: 5,
+        position: 1,
+        showInHeader: true,
+        slug: "anillos",
+        translations: [{ locale: "es", name: "Anillos" }],
+      },
+    ]);
+    db.query.banner.findMany.mockResolvedValue([
+      makeBannerRow({
+        id: 1,
+        linkCategory: { parent: null, slug: "bijouterie" },
+        linkCategoryId: 5,
+      }),
+    ]);
+    db.query.pageCoverBanner.findMany.mockResolvedValue([
+      { bannerId: 1, position: 0 },
+    ]);
+
+    const { cover } = await read();
+
+    expect(cover.map(({ href }) => href)).toEqual(["/bijouterie"]);
   });
 });
 
@@ -770,8 +808,10 @@ describe("getPageCuration", () => {
           titleEn: null,
           titleEs: "Anillos",
         },
+        // Aros holds only a draft: the storefront lists it nowhere, so
+        // the preview's banner leads nowhere either (FER-079).
         expect.objectContaining({
-          href: "/aros",
+          href: null,
           id: 3,
           link: { categoryId: 4, kind: "category" },
         }),
@@ -826,6 +866,26 @@ describe("getPageCuration", () => {
       params: [STORE_ID],
       sql: '"store"."id" = $1',
     });
+  });
+
+  test("a banner leads to its category once the category holds a published article (FER-079)", async () => {
+    const { db, read } = setup();
+    db.query.product.findMany.mockResolvedValue([
+      {
+        categoryId: 4,
+        id: 10,
+        images: [],
+        isAvailable: false,
+        priceAmount: 990,
+        slug: "anillo",
+        status: "published",
+        translations: [{ locale: "es", title: "Anillo" }],
+      },
+    ]);
+
+    const { banners } = await read();
+
+    expect(banners.find((row) => row.id === 3)?.href).toBe("/aros");
   });
 
   test("answers a null announcement before one is written", async () => {

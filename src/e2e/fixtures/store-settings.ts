@@ -3,16 +3,22 @@ import type { APIRequestContext } from "@playwright/test";
 import type { SaveAnnouncementValues } from "../../lib/schemas/page";
 import type { UpdateStoreValues } from "../../lib/schemas/store";
 
-/** The store's texts during a run, one per language. */
+/**
+ * The store's texts during a run, one per language. Where to find the
+ * store (FER-078) is written in Spanish only, so an English page shows the
+ * Spanish line, marked as Spanish.
+ */
 export const STORE_TEXTS = {
   en: {
     description: "Handmade rings and chains.",
     locale: "en",
+    location: null,
     tagline: "Jewelry at the fair",
   },
   es: {
     description: "Anillos y cadenas hechos a mano.",
     locale: "es",
+    location: "Feria de prueba · Puesto 7 · Desde las 18 h",
     tagline: "Joyas en la feria",
   },
 } as const;

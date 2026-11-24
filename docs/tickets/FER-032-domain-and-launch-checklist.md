@@ -11,8 +11,8 @@ The store is live on its own domain and has been checked the way a stranger with
 
 ## Scope
 
-- Choose `tienda.lucasregalado.com` or `shop.lucasregalado.com` (the Spanish one fits the audience; the other can redirect to it). Add it in Vercel and create the DNS record.
-- Update `BETTER_AUTH_URL`, trusted origins, canonical URLs, the sitemap and the share images to the new domain; redirect the Vercel URL to it.
+- The domain is `market.lucasregalado.com` (Lucas, 2026-11-24; the earlier candidates were `tienda.` and `shop.lucasregalado.com`). It is added in Vercel, and Production's `BETTER_AUTH_URL` points at it.
+- Check on the domain that the trusted origins, canonical URLs, the sitemap and the share images follow `BETTER_AUTH_URL` (they read the origin through `src/lib/seo/origin.ts`; nothing in `src` names a domain); redirect the Vercel URL to it.
 - Submit the sitemap in Google Search Console.
 - Checklist, each item ticked in the PR:
   - Full purchase on an iPhone and an Android phone, on mobile data, in both languages.

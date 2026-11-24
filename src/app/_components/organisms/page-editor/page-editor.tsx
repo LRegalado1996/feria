@@ -643,26 +643,26 @@ function HomeOnly({
 }
 
 /**
- * The blocks a page that is not the home can be given (FER-060): each of
- * the store's categories' rows and the two curated rows, named as the
- * order names them; `undefined` for the home, which shows them all.
+ * The blocks a page can be given by hand, named as the order names them:
+ * "how to buy" on any page (FER-076), and, on a page that is not the home
+ * (FER-060), each of the store's categories' rows and the two curated
+ * rows, which the home always shows.
  */
 function blocksOf(
   data: PageCurationData,
   describeSection: (section: PageSection) => PageLayoutEntry
-): PageLayoutBlockChoice[] | undefined {
-  if (data.page.isHome) {
-    return undefined;
-  }
-
-  const sections: PageSection[] = [
-    { kind: "best_sellers" },
-    { kind: "featured" },
-    ...data.categories.map((row) => ({
-      categoryId: row.id,
-      kind: "category" as const,
-    })),
-  ];
+): PageLayoutBlockChoice[] {
+  const sections: PageSection[] = data.page.isHome
+    ? [{ kind: "how_to_buy" }]
+    : [
+        { kind: "how_to_buy" },
+        { kind: "best_sellers" },
+        { kind: "featured" },
+        ...data.categories.map((row) => ({
+          categoryId: row.id,
+          kind: "category" as const,
+        })),
+      ];
 
   return sections.map((section) => ({
     name: describeSection(section).name,
@@ -911,6 +911,14 @@ function CurationScreen({ data }: { data: PageCurationData }) {
         }),
         note: null,
         warning: articleWarning(articles.get(productId), copy.layout.warnings),
+      };
+    }
+
+    if (section.kind === "how_to_buy") {
+      return {
+        name: copy.layout.howToBuy,
+        note: copy.layout.howToBuyNote,
+        warning: null,
       };
     }
 

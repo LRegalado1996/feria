@@ -31,11 +31,13 @@ const STORE = {
     {
       description: "Anillos y cadenas.",
       locale: "es" as const,
+      location: null,
       tagline: "Hola",
     },
     {
       description: "Rings and chains.",
       locale: "en" as const,
+      location: null,
       tagline: "Hello",
     },
   ],

@@ -1,7 +1,11 @@
 import type { MetadataRoute } from "next";
 import { connection } from "next/server";
 
-import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
+import {
+  ALL_ARTICLES_PATH,
+  articlePath,
+  CONTACT_PATH,
+} from "@/lib/catalog/paths";
 import { DEFAULT_LOCALE, LOCALES, type Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/origin";
@@ -39,6 +43,7 @@ function latest(dates: Date[]) {
 
 /**
  * `sitemap.xml` (FER-024): the store's home, the page of all its articles,
+ * its contact page (FER-080),
  * each group and category page that lists one (FER-043), every published
  * page built from sections but the home (FER-060) and every published
  * article, in Spanish and English. Read at request time, so a new article
@@ -77,6 +82,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...entries(origin, "/", store.updatedAt),
     ...entries(origin, ALL_ARTICLES_PATH, catalogChanged),
+    // The contact page (FER-080) says the store's own details: it changes
+    // with the store's settings.
+    ...entries(origin, CONTACT_PATH, store.updatedAt),
     // Every group and category page with a published article (FER-043),
     // changed with the catalog or with its own texts.
     ...categories.flatMap((category) =>

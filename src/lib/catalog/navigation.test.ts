@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   catalogNavigation,
+  categoriesWithArticles,
   headerCategories,
   type NavigationCategory,
   navigationOrder,
@@ -106,5 +107,40 @@ describe("headerCategories", () => {
     expect(headerCategories([shown(CHAINS, false), shown(RINGS)])).toEqual([
       shown(RINGS),
     ]);
+  });
+});
+
+describe("categoriesWithArticles (FER-079)", () => {
+  test.each([
+    {
+      name: "a category that holds one, and its group with it",
+      shown: [BIJOUTERIE, RINGS],
+      stocked: [RINGS.id],
+    },
+    {
+      name: "a category in no group that holds one",
+      shown: [BUBBLES],
+      stocked: [BUBBLES.id],
+    },
+    {
+      name: "a group that holds one itself, without its empty categories",
+      shown: [BIJOUTERIE],
+      stocked: [BIJOUTERIE.id],
+    },
+    {
+      name: "every category, each holding one",
+      shown: STORE,
+      stocked: [CHAINS.id, RINGS.id, BUBBLES.id],
+    },
+    { name: "none when nothing is published", shown: [], stocked: [] },
+  ])("keeps $name, in the store's order", ({ shown, stocked }) => {
+    expect(categoriesWithArticles(STORE, new Set(stocked))).toEqual(shown);
+  });
+
+  test("a category whose group the list does not hold still shows by its own articles", () => {
+    const orphan = makeCategory({ id: 9, parentId: 99 });
+
+    expect(categoriesWithArticles([orphan], new Set([9]))).toEqual([orphan]);
+    expect(categoriesWithArticles([orphan], new Set([99]))).toEqual([]);
   });
 });

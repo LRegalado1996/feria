@@ -66,6 +66,9 @@ export const design = {
     },
     revealBody:
       "Este bloque sube y se aclara una sola vez, cuando entra en pantalla al bajar.",
+    // A made-up place: the footer's sample of a store's own line (FER-078).
+    location:
+      "Feria del Parque · Puesto 12 · Av. de los Plátanos · Desde las 18 h",
     rowTitle: "Novedades",
     section: { lineOne: "Collares", lineTwo: "y anillos" },
     spotlight: {
@@ -82,6 +85,7 @@ export const design = {
     chips: "Chips y etiquetas",
     countUp: "Número que cuenta",
     cover: "Portada que se mueve",
+    howToBuy: "Cómo comprar",
     link: "Enlace con flecha",
     logo: "Logo",
     marquee: "Banda en movimiento",

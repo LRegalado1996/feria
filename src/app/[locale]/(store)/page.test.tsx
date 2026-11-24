@@ -104,11 +104,13 @@ vi.mock("./store-page-footer", () => ({
 const SPANISH = {
   description: "Anillos y cadenas hechos a mano.",
   locale: "es",
+  location: null,
   tagline: "Joyas en la feria",
 } as const;
 const ENGLISH = {
   description: "Handmade rings and chains.",
   locale: "en",
+  location: null,
   tagline: "Jewelry at the fair",
 } as const;
 
@@ -383,6 +385,32 @@ describe("StoreHomePage", () => {
         name: "Burbujero pez",
         numberOfItems: 1,
       },
+    ]);
+  });
+
+  test('"how to buy" holds no article: it adds no list to the structured data (FER-076)', async () => {
+    await setup({
+      content: {
+        cover: [],
+        sections: [
+          { key: "how_to_buy", kind: "how_to_buy" },
+          {
+            articles: [makeCard("anillo", "Anillo")],
+            key: "featured",
+            kind: "featured",
+          },
+        ],
+      },
+    });
+
+    expect(structuredData()).toEqual([
+      expect.objectContaining({ "@type": "WebSite" }),
+      expect.objectContaining({ "@type": "Organization" }),
+      expect.objectContaining({
+        "@type": "ItemList",
+        name: "Destacados",
+        numberOfItems: 1,
+      }),
     ]);
   });
 

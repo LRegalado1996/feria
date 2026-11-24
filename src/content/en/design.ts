@@ -63,6 +63,7 @@ export const design: Dictionary["design"] = {
     },
     revealBody:
       "This block rises and fades in once, when it scrolls into view.",
+    location: "Park Fair · Stall 12 · Plane Tree Avenue · From 6 pm",
     rowTitle: "Just arrived",
     section: { lineOne: "Necklaces", lineTwo: "and rings" },
     spotlight: {
@@ -79,6 +80,7 @@ export const design: Dictionary["design"] = {
     chips: "Chips and labels",
     countUp: "Count-up",
     cover: "Moving cover",
+    howToBuy: "How to buy",
     link: "Arrow link",
     logo: "Logo",
     marquee: "Marquee band",

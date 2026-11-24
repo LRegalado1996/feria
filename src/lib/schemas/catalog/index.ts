@@ -502,6 +502,7 @@ export const RESERVED_CATEGORY_SLUGS = [
   "brand",
   "cart",
   "coming-soon",
+  "contacto",
   "design",
   "en",
   "es",

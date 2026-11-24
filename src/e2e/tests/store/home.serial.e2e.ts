@@ -15,6 +15,7 @@ import {
 import { interceptBlobStore, seedPhoto } from "../../fixtures/blob-store";
 import type { DbFixture } from "../../fixtures/db.fixture";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectWordsOverPhoto } from "../../fixtures/expect-words-over-photo";
 import type { HomeEdit } from "../../fixtures/store.fixture";
 import { AdminHomePage } from "../../page-objects/admin-home.page";
 import { StorePage } from "../../page-objects/store.page";
@@ -185,6 +186,10 @@ test.describe("The storefront's home", () => {
       name: `${titles.cover} Comprar ahora`,
     });
     await expect(first).toHaveAttribute("href", `/${shelf.slug}`);
+    // No shade over the photo: the title and the button's line carry a
+    // text shadow (FER-077).
+    await expectWordsOverPhoto(first, first.getByText(titles.cover));
+    await expectWordsOverPhoto(first, first.getByText("Comprar ahora"));
     // The cover's first photo is the page's priority image, the computer's
     // here; the others wait.
     const photo = first.getByTestId("store-banner-photo");
@@ -228,6 +233,7 @@ test.describe("The storefront's home", () => {
       .getHomeSection(titles.between)
       .getByRole("link", { name: `${titles.between} Ver todo el catálogo` });
     await expect(between).toHaveAttribute("href", "/productos");
+    await expectWordsOverPhoto(between, between.getByText(titles.between));
     await expect(between.getByTestId("store-banner-photo")).toHaveAttribute(
       "loading",
       "lazy"
@@ -377,6 +383,130 @@ test.describe("The storefront's home", () => {
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
     await expect(card(0)).toBeInViewport();
+    await store.expectNoHorizontalScroll();
+  });
+
+  // FER-075. The featured row takes up to sixteen articles and pages like
+  // any other row; the cover's title is a caption, not the banner's big line.
+  test("the featured row shows sixteen articles and pages like the other rows, and the cover's title is a small caption that never widens a 360 px phone", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const short = tag.slice(0, 8);
+    const shelf = await db.seed.createCategory({
+      nameEs: `Destacables ${tag}`,
+      slug: `destacables-${tag}`,
+    });
+    const names = Array.from(
+      { length: 16 },
+      (_unused, index) =>
+        `Destacado ${String(index + 1).padStart(2, "0")} ${tag}`
+    );
+    const featured: number[] = [];
+
+    for (const title of names) {
+      // One at a time: the row's order is the order they are listed in.
+      const article = await db.seed.createArticle({
+        categoryId: shelf.id,
+        priceAmount: 59_000,
+        title,
+      });
+      featured.push(article.id);
+    }
+
+    // Its first word is wider than a 360 px phone at the caption's size.
+    const longTitle = `Superburbujeromegagigante ${short} para toda la feria`;
+    const shortTitle = `Portada ${short}`;
+    const long = await db.seed.createBanner({
+      image: PHOTOS.ring,
+      link: { categoryId: shelf.id },
+      placement: "cover",
+      titleEs: longTitle,
+    });
+    const brief = await db.seed.createBanner({
+      image: PHOTOS.necklace,
+      link: { categoryId: shelf.id },
+      placement: "cover",
+      titleEs: shortTitle,
+    });
+    const before = await homeEdit.read();
+    const others = before.coverBannerIds.filter(
+      (id) => id !== long.id && id !== brief.id
+    );
+    const sections: PageSection[] = [
+      { kind: "featured" },
+      ...before.sections.filter((section) => section.kind !== "featured"),
+    ];
+    const layout = {
+      featuredProductIds: featured,
+      rankingProductIds: before.rankingProductIds,
+      sections,
+    };
+    /**
+     * How many lines a title takes: its height over a line's, which is the
+     * display face's 1.05 of its size (`--leading-display`).
+     */
+    const lines = async (title: Locator, fontSize: number) => {
+      const size = await title.boundingBox();
+
+      return Math.round((size?.height ?? 0) / (fontSize * 1.05));
+    };
+    const store = new StorePage(page);
+
+    // A phone: the long title first.
+    await homeEdit.saveLayout({
+      ...layout,
+      coverBannerIds: [long.id, brief.id, ...others],
+    });
+    await page.setViewportSize({ height: 780, width: 360 });
+    await store.goto();
+    const wrapped = store
+      .getHomeCover()
+      .getByRole("heading", { level: 2, name: longTitle });
+    await expect(wrapped).toBeVisible();
+    await expect(wrapped).toHaveCSS("font-size", "18px");
+    expect(await lines(wrapped, 18)).toBeGreaterThan(1);
+    const box = await wrapped.boundingBox();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 361)).toBeLessThanOrEqual(360);
+    await store.expectNoHorizontalScroll();
+
+    // A computer: the short title first, on one line, at a row heading's
+    // size (the banner's big line would be 54 px here).
+    await homeEdit.saveLayout({
+      ...layout,
+      coverBannerIds: [brief.id, long.id, ...others],
+    });
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await store.goto();
+    const caption = store
+      .getHomeCover()
+      .getByRole("heading", { level: 2, name: shortTitle });
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS("font-size", "28px");
+    expect(await lines(caption, 28)).toBe(1);
+
+    // The featured row: all sixteen in their order, no "Ver todo", and the
+    // round arrow pages it as it does any row.
+    const row = store.getHomeSection("Destacados");
+    await expect(row.getByRole("heading", { level: 3 })).toHaveText(names);
+    await expect(row.getByRole("link", { name: /^Ver todo/u })).toHaveCount(0);
+    const card = (index: number) =>
+      row.getByRole("link", { exact: true, name: names[index] });
+    // The row sits under the cover: a card's name is below the fold until
+    // the page scrolls to it.
+    await card(0).scrollIntoViewIfNeeded();
+    await expect(card(0)).toBeInViewport();
+    await expect(card(15)).not.toBeInViewport();
+    // The arrow shows once the carousel has measured its cards: the row is
+    // React's.
+    const next = row.getByRole("button", { name: "Ver más de Destacados" });
+    await expect(next).toBeVisible();
+    await next.click();
+    await expect(card(0)).not.toBeInViewport();
+    await expect(card(4)).toBeInViewport();
     await store.expectNoHorizontalScroll();
   });
 
@@ -532,6 +662,150 @@ test.describe("The storefront's home", () => {
         "href",
         `/productos/${article.slug}`
       );
+    } finally {
+      await context.close();
+    }
+  });
+
+  // FER-076. How to buy, as a block of the page: words, not a picture.
+  test('the "how to buy" block shows right under the cover in both languages: three steps in order, the ways to pay and the way into the catalog; side by side on a computer, stacked on a 360 px phone', async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    await curateHome(db, homeEdit);
+    const curated = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: curated.coverBannerIds,
+      featuredProductIds: curated.featuredProductIds,
+      rankingProductIds: curated.rankingProductIds,
+      sections: [
+        { kind: "how_to_buy" },
+        ...curated.sections.filter((section) => section.kind !== "how_to_buy"),
+      ],
+    });
+    const store = new StorePage(page);
+    const block = page.getByTestId("store-how-to-buy");
+    const steps = block.getByRole("list").first().getByRole("listitem");
+    /** Each step's left and top edge, to tell a row from a stack. */
+    const edges = async () =>
+      await steps.evaluateAll((items) =>
+        items.map((item) => {
+          const { left, top } = item.getBoundingClientRect();
+
+          return { left: Math.round(left), top: Math.round(top) };
+        })
+      );
+
+    // A computer: right under the cover, apart from it by the cards' gutter.
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await store.goto();
+    await expect(store.getHomeSections().first()).toHaveAttribute(
+      "data-kind",
+      "how_to_buy"
+    );
+    await expect(
+      block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
+    ).toBeVisible();
+    const cover = await store.getHomeCover().boundingBox();
+    const box = await block.boundingBox();
+    expect(box?.width).toBe(1440);
+    expect((box?.y ?? 0) - ((cover?.y ?? 0) + (cover?.height ?? 0))).toBe(14);
+    // An ordered list, in the order the steps happen.
+    await expect(steps).toHaveText([
+      "01ElegíMirá el catálogo en la web.",
+      "02Agregá al carritoDejá tu nombre y tu celular.",
+      "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+    ]);
+    await expect(
+      block.getByRole("list", { name: "Pagás con" }).getByRole("listitem")
+    ).toHaveText([
+      "Efectivo",
+      "Tarjetas de crédito y débito",
+      "Mercado Pago",
+      "Transferencia bancaria",
+    ]);
+    await expect(
+      block.getByRole("link", { name: "Ver el catálogo" })
+    ).toHaveAttribute("href", "/productos");
+    // Side by side: one line, three columns.
+    const wide = await edges();
+    expect(new Set(wide.map((edge) => edge.top)).size).toBe(1);
+    expect(new Set(wide.map((edge) => edge.left)).size).toBe(3);
+
+    // A 360 px phone: the steps stack and nothing widens the page.
+    await page.setViewportSize({ height: 780, width: 360 });
+    await store.goto();
+    await expect(block).toBeVisible();
+    const narrow = await edges();
+    expect(new Set(narrow.map((edge) => edge.left)).size).toBe(1);
+    // Each lower than the one before it.
+    const [one, two, three] = narrow.map((edge) => edge.top);
+    expect(two ?? 0).toBeGreaterThan(one ?? 0);
+    expect(three ?? 0).toBeGreaterThan(two ?? 0);
+    await store.expectNoHorizontalScroll();
+
+    // In English, its English words, leading to the catalog in English.
+    await store.gotoEnglish();
+    await expect(
+      block.getByRole("heading", { level: 2, name: "Buy in 3 steps" })
+    ).toBeVisible();
+    await expect(
+      block.getByRole("list", { name: "Pay with" }).getByRole("listitem")
+    ).toHaveText([
+      "Cash",
+      "Credit and debit cards",
+      "Mercado Pago",
+      "Bank transfer",
+    ]);
+    await expect(
+      block.getByRole("link", { name: "See the catalog" })
+    ).toHaveAttribute("href", "/en/productos");
+  });
+
+  test('a crawler that runs no script finds the "how to buy" block\'s steps and ways to pay in the HTML', async ({
+    baseURL,
+    browser,
+    db,
+    homeEdit,
+  }) => {
+    await curateHome(db, homeEdit);
+    const curated = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: curated.coverBannerIds,
+      featuredProductIds: curated.featuredProductIds,
+      rankingProductIds: curated.rankingProductIds,
+      sections: [
+        { kind: "how_to_buy" },
+        ...curated.sections.filter((section) => section.kind !== "how_to_buy"),
+      ],
+    });
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      userAgent: BINGBOT,
+    });
+
+    try {
+      const page = await context.newPage();
+      await new StorePage(page).goto();
+      const block = page.getByTestId("store-how-to-buy");
+
+      await expect(
+        block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
+      ).toBeVisible();
+      await expect(
+        block.getByRole("list").first().getByRole("listitem")
+      ).toHaveText([
+        "01ElegíMirá el catálogo en la web.",
+        "02Agregá al carritoDejá tu nombre y tu celular.",
+        "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+      ]);
+      await expect(block.getByText("Mercado Pago")).toBeVisible();
+      await expect(
+        block.getByRole("link", { name: "Ver el catálogo" })
+      ).toHaveAttribute("href", "/productos");
     } finally {
       await context.close();
     }

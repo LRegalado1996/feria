@@ -2,7 +2,17 @@ import { expect, test } from "vitest";
 
 import { RESERVED_CATEGORY_SLUGS } from "@/lib/schemas/catalog";
 
-import { ALL_ARTICLES_PATH, articlePath, categoryPath } from "./paths";
+import {
+  ALL_ARTICLES_PATH,
+  articlePath,
+  CONTACT_PATH,
+  categoryPath,
+} from "./paths";
+
+test("the contact page is /contacto, an address no category or page can take (FER-080)", () => {
+  expect(CONTACT_PATH).toBe("/contacto");
+  expect(RESERVED_CATEGORY_SLUGS).toContain(CONTACT_PATH.slice(1));
+});
 
 test("the page of all articles is /productos, in either language", () => {
   expect(ALL_ARTICLES_PATH).toBe("/productos");

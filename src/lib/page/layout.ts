@@ -28,18 +28,25 @@ interface SectionTargets {
   spotlights: ReadonlySet<number>;
 }
 
-/** Whether what `section` shows is still there: a curated row always is. */
+/**
+ * Whether what `section` shows is still there: a kind with no target (a
+ * curated row, "how to buy") always is.
+ */
 function sectionTargetExists(
   section: PageSection,
   { banners, categories, spotlights }: SectionTargets
 ): boolean {
-  return (
-    (section.kind === "category" && categories.has(section.categoryId)) ||
-    (section.kind === "banner" && banners.has(section.bannerId)) ||
-    (section.kind === "spotlight" && spotlights.has(section.spotlightId)) ||
-    section.kind === "best_sellers" ||
-    section.kind === "featured"
-  );
+  if (section.kind === "category") {
+    return categories.has(section.categoryId);
+  }
+
+  if (section.kind === "banner") {
+    return banners.has(section.bannerId);
+  }
+
+  return section.kind === "spotlight"
+    ? spotlights.has(section.spotlightId)
+    : true;
 }
 
 /**
@@ -49,8 +56,10 @@ function sectionTargetExists(
  * yet (one added in another tab). On the home (`fillIn`), a page never
  * saved opens on "best sellers", then "featured", then its categories, and
  * a category added since the last save comes after the rest, in the
- * categories' own order; another page holds only what it was given. The admin's screen, its preview and the storefront
- * all read the sequence through here, so the three agree.
+ * categories' own order; another page holds only what it was given.
+ * "How to buy" (FER-076) is never filled in: it is on a page, the home
+ * too, only once the admin adds it. The admin's screen, its preview and
+ * the storefront all read the sequence through here, so the three agree.
  */
 export function resolvePageSections(
   saved: readonly PageSection[],
@@ -269,3 +278,10 @@ export function sameLayoutList(
  * first, right under the cover, where scrolling meets it (FER-059).
  */
 export const DEFAULT_SPOTLIGHT_INDEX = 0;
+
+/**
+ * Where "how to buy" goes when the admin adds it to a page (FER-076):
+ * first, right under the cover, the place it was asked for. The order's
+ * arrows move it from there.
+ */
+export const DEFAULT_HOW_TO_BUY_INDEX = 0;

@@ -32,6 +32,30 @@ const storeBannerVariants = cva(
   }
 );
 
+/**
+ * The title's size follows the banner's (FER-075). On the cover it is a
+ * caption under the artwork, at a row heading's size and on one line
+ * wherever the window fits it; a title longer than the window wraps, even
+ * inside a word, and never widens the page. From `md` up it stops 21rem
+ * short of the right edge: the corner the cover's carousel keeps for its
+ * controls (six 44 px dots and the pause button, 19.5rem), which the old
+ * 15ch cap used to clear. Between two rows it is the banner's loud line:
+ * big, and capped so it breaks into a short stack.
+ */
+const storeBannerTitleVariants = cva(
+  "font-display leading-display font-extrabold wrap-anywhere uppercase",
+  {
+    variants: {
+      size: {
+        cover:
+          "max-w-full store-display-section text-balance md:max-w-[calc(100%-21rem)]",
+        row: "max-w-[15ch] store-display-banner",
+      },
+    },
+    defaultVariants: { size: "row" },
+  }
+);
+
 export type StoreBannerProps = VariantProps<typeof storeBannerVariants> & {
   className?: string;
   /**
@@ -68,9 +92,11 @@ export type StoreBannerProps = VariantProps<typeof storeBannerVariants> & {
 
 /**
  * A full-width photo with its title and "Comprar ahora →" on its bottom-left
- * corner (FER-039), one link to where it leads. The photo is decoration: the
- * title says what the link is, so a screen reader hears it once. A shade
- * rises from the bottom so the white words read on any photo. Art direction
+ * corner (FER-039), one link to where it leads. The title is big between
+ * two rows and a small caption on the cover (FER-075). The photo is decoration: the
+ * title says what the link is, so a screen reader hears it once. Nothing
+ * shades the photo (FER-077, Lucas): the white words carry a text shadow of
+ * the ink instead (`store-display-shadow`). Art direction
  * (`atoms/store-picture`): a phone shows the banner's phone crop when it
  * has one. The box has its height before the photo arrives.
  */
@@ -98,14 +124,13 @@ function StoreBanner({
         phone={phoneImage}
         priority={priority}
       />
-      {/* The one gradient of the storefront: legibility, not decoration. */}
-      <span
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-store-foreground/75 to-transparent to-60%"
-      />
-      <div className="absolute inset-x-4 bottom-5.5 flex flex-col items-start md:inset-x-7 md:bottom-7.5">
+      {/* No shade over the photo (FER-077): the words carry their own. */}
+      <div
+        className="absolute inset-x-4 bottom-5.5 flex flex-col items-start store-display-shadow md:inset-x-7 md:bottom-7.5"
+        data-slot="store-banner-words"
+      >
         <Title
-          className="max-w-[15ch] font-display store-display-banner leading-display font-extrabold wrap-anywhere uppercase"
+          className={storeBannerTitleVariants({ size })}
           data-slot="store-banner-title"
           lang={lang}
         >

@@ -12,6 +12,7 @@ import {
   uniqueTag,
 } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
+import { expectWordsOverPhoto } from "../../fixtures/expect-words-over-photo";
 import { StorePage } from "../../page-objects/store.page";
 
 // FER-043. Each test seeds a group of its own in the one store every spec
@@ -218,6 +219,11 @@ test.describe("Catalog pages", () => {
       await expect(
         cover.getByRole("heading", { level: 1, name: `Anillos ${tag}` })
       ).toBeVisible();
+      // No shade over the photo: the title carries a text shadow (FER-077).
+      await expectWordsOverPhoto(
+        cover,
+        cover.getByRole("heading", { level: 1, name: `Anillos ${tag}` })
+      );
       // Loaded, not just placed: the browser chose a source and drew it.
       await expect
         .poll(

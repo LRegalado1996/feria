@@ -11,11 +11,13 @@ import { SettingsForm, type SettingsFormStore } from "./settings-form";
 const SPANISH = {
   description: "Anillos y cadenas.",
   locale: "es",
+  location: null,
   tagline: "Joyas en la feria",
 } as const;
 const ENGLISH = {
   description: "Rings and chains.",
   locale: "en",
+  location: null,
   tagline: "Jewelry at the fair",
 } as const;
 
@@ -62,7 +64,15 @@ function setup({
 
       // The server keeps the number in E.164: here, as another one entirely,
       // so the test sees the form show what was stored, not what was typed.
-      return { ...store, ...values, whatsappNumber: "+59891000000" };
+      return {
+        ...store,
+        ...values,
+        translations: values.translations.map((text) => ({
+          ...text,
+          location: text.location ?? null,
+        })),
+        whatsappNumber: "+59891000000",
+      };
     }
   );
   renderWithI18n(
@@ -201,6 +211,105 @@ describe("SettingsForm", () => {
         whatsappNumber: "+59898765432",
       });
     });
+  });
+
+  test("opens with where to find the store in each language, marked with it, and says what the line is for (FER-078)", () => {
+    const { field } = setup({
+      store: makeStore({
+        translations: [
+          { ...SPANISH, location: "Feria del Parque · Puesto 12" },
+          ENGLISH,
+        ],
+      }),
+    });
+
+    expect(field("Where to find us, in Spanish")).toHaveValue(
+      "Feria del Parque · Puesto 12"
+    );
+    expect(field("Where to find us, in Spanish")).toHaveAttribute("lang", "es");
+    expect(field("Where to find us, in English")).toHaveValue("");
+    expect(field("Where to find us, in English")).toHaveAttribute("lang", "en");
+    expect(field("Where to find us, in English")).toHaveAccessibleDescription(
+      "One short line: the fair, the stall, the street and the hours. It shows in the store's footer and on the contact page. Left empty in one language, that language's pages show the other's line; left empty in both, it is not shown."
+    );
+    expect(
+      screen.getByRole("region", { name: "Contact and socials" })
+    ).toContainElement(field("Where to find us, in Spanish"));
+  });
+
+  test("sends where to find the store as typed, and a cleared one as none (FER-078)", async () => {
+    const { field, onSave, save, user } = setup({
+      store: makeStore({
+        translations: [
+          SPANISH,
+          { ...ENGLISH, location: "Park Fair · Stall 12" },
+        ],
+      }),
+    });
+    await user.type(
+      field("Where to find us, in Spanish"),
+      " Feria del Parque · Puesto 12 "
+    );
+    await user.clear(field("Where to find us, in English"));
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          translations: [
+            { ...SPANISH, location: "Feria del Parque · Puesto 12" },
+            { ...ENGLISH, location: null },
+          ],
+        })
+      );
+    });
+  });
+
+  test("sends a line of exactly 200 characters whole", async () => {
+    const { field, onSave, save, user } = setup();
+    const line = "x".repeat(200);
+    await user.click(field("Where to find us, in Spanish"));
+    await user.paste(line);
+
+    await save();
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          translations: [
+            { ...SPANISH, location: line },
+            { ...ENGLISH, location: null },
+          ],
+        })
+      );
+    });
+  });
+
+  test("refuses a line longer than 200 characters under its field, sending nothing", async () => {
+    const { field, onSave, save, user } = setup();
+    await user.click(field("Where to find us, in Spanish"));
+    await user.paste("x".repeat(201));
+
+    await save();
+
+    expect(
+      await screen.findByText("Use up to 200 characters.", { exact: true })
+    ).toBeVisible();
+    expect(field("Where to find us, in Spanish")).toHaveAttribute(
+      "aria-invalid",
+      "true"
+    );
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("in Spanish, names the line in Spanish", () => {
+    const { field } = setup({ locale: "es" });
+
+    expect(field("Dónde encontrarnos, en español")).toHaveValue("");
+    expect(field("Dónde encontrarnos, en inglés")).toHaveAccessibleDescription(
+      "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda y en la página de contacto. Si lo dejás vacío en un idioma, sus páginas muestran la línea del otro; vacío en los dos, no se muestra."
+    );
   });
 
   test("shows the settings as they were stored once saved", async () => {

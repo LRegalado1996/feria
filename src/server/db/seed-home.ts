@@ -115,15 +115,18 @@ export const SEED_ROW_BANNERS: SeedBanner[] = [
 ];
 
 /**
- * The home's sequence under the cover: the curated rows, the categories by
- * slug and the banners between rows by their index in `SEED_ROW_BANNERS`.
- * A category the store lacks is skipped; one not listed goes last.
+ * The home's sequence under the cover: "how to buy" first, right under the
+ * cover (FER-076), then the curated rows, the categories by slug and the
+ * banners between rows by their index in `SEED_ROW_BANNERS`. A category
+ * the store lacks is skipped; one not listed goes last.
  */
 const SEED_SEQUENCE: (
   | { banner: number }
+  | { block: "how_to_buy" }
   | { category: string }
   | { curated: "best_sellers" | "featured" }
 )[] = [
+  { block: "how_to_buy" },
   { curated: "best_sellers" },
   { banner: 0 },
   { category: "burbujeros" },
@@ -148,10 +151,14 @@ export const SEED_BEST_SELLERS = [
 ];
 
 /**
- * The article spotlight right under the cover (FER-059): the fish bubble
- * gun, by its Spanish title, with its label and phrase in both languages.
+ * The article spotlight (FER-059): the fish bubble gun, by its Spanish
+ * title, with its label and phrase in both languages. It goes right after
+ * its own category's row (`after`), or right after "how to buy" when the
+ * store lacks that category: never against "how to buy", another dark
+ * block the window's width (FER-076).
  */
 export const SEED_SPOTLIGHT = {
+  after: "burbujeros",
   title: "Burbujero pez",
   words: {
     labelEn: "New",
@@ -161,6 +168,7 @@ export const SEED_SPOTLIGHT = {
       "Tira burbujas sin parar. El que más piden los chicos en la feria.",
   },
 } satisfies {
+  after: string;
   title: string;
   words: Pick<
     CreateSpotlightValues,
@@ -263,8 +271,9 @@ async function insertBanner(
 /**
  * The home's demo content (FER-020, also FER-031's): the announcement, the
  * cover's three banners and two between rows, the order of the home page's
- * blocks (FER-058), an article spotlight right under the cover (FER-059),
- * the best sellers and the featured articles. Each part only when the store
+ * blocks (FER-058) starting with "how to buy" (FER-076), an article
+ * spotlight after its category's row (FER-059), the best sellers and the
+ * featured articles. Each part only when the store
  * has none of it yet, so a second run, or a home the admin already curated,
  * is left alone. Answers what it added.
  */
@@ -338,6 +347,32 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   // An order the admin saved stays, banners or not: the banners between
   // rows added above go after it, since a banner shows between the rows
   // only where a section places it (FER-058).
+  // The order a home never saved gets: empty when it has one already.
+  const listed = lastSection
+    ? []
+    : SEED_SEQUENCE.flatMap((entry): PageSection[] => {
+        if ("curated" in entry) {
+          return [{ kind: entry.curated }];
+        }
+
+        if ("block" in entry) {
+          return [{ kind: entry.block }];
+        }
+
+        const id =
+          "banner" in entry
+            ? rowBannerIds[entry.banner]
+            : categoryIds.get(entry.category);
+
+        if (id === undefined) {
+          return [];
+        }
+
+        return "banner" in entry
+          ? [{ bannerId: id, kind: "banner" }]
+          : [{ categoryId: id, kind: "category" }];
+      });
+
   if (lastSection) {
     if (rowBannerIds.length > 0) {
       await tx.insert(pageSection).values(
@@ -352,24 +387,6 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
       );
     }
   } else {
-    const listed = SEED_SEQUENCE.flatMap((entry): PageSection[] => {
-      if ("curated" in entry) {
-        return [{ kind: entry.curated }];
-      }
-
-      const id =
-        "banner" in entry
-          ? rowBannerIds[entry.banner]
-          : categoryIds.get(entry.category);
-
-      if (id === undefined) {
-        return [];
-      }
-
-      return "banner" in entry
-        ? [{ bannerId: id, kind: "banner" }]
-        : [{ categoryId: id, kind: "category" }];
-    });
     const placed = new Set(
       listed.flatMap((entry) =>
         entry.kind === "category" ? [entry.categoryId] : []
@@ -402,10 +419,16 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   if (!anySpotlight) {
     const [productId] = await articleIds(tx, storeId, [SEED_SPOTLIGHT.title]);
 
-    // Through the service, as the admin adds one: first on the home page,
-    // right under the cover, or last after an order the admin saved and
-    // the banners placed after it above (the index is clamped to the
+    // Through the service, as the admin adds one: on a home never saved,
+    // right after its category's row, or after "how to buy" when the store
+    // lacks the category; last after an order the admin saved and the
+    // banners placed after it above (the index is clamped to the
     // sequence's end), which keep their order.
+    const afterId = categoryIds.get(SEED_SPOTLIGHT.after);
+    const afterRow = listed.findIndex(
+      (entry) => entry.kind === "category" && entry.categoryId === afterId
+    );
+
     if (productId !== undefined) {
       await createSpotlight(tx, {
         storeId,
@@ -413,7 +436,9 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
           ...SEED_SPOTLIGHT.words,
           pageId,
           productId,
-          rowsIndex: lastSection ? Number.MAX_SAFE_INTEGER : 0,
+          rowsIndex: lastSection
+            ? Number.MAX_SAFE_INTEGER
+            : Math.max(afterRow, 0) + 1,
         },
       });
       added.spotlight = true;
@@ -447,7 +472,7 @@ export async function seedHome(tx: DatabaseClient, storeId: number) {
   if (!anyFeatured) {
     const ids = await articleIds(tx, storeId, SEED_FEATURED);
 
-    // None or two to four: one alone is not a featured row.
+    // None or two to sixteen: one alone is not a featured row.
     if (ids.length >= 2) {
       await tx
         .insert(featuredProduct)

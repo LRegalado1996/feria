@@ -1,5 +1,5 @@
 import type { Dictionary } from "@/content/es";
-import { articlePath } from "@/lib/catalog/paths";
+import { articlePath, CONTACT_PATH } from "@/lib/catalog/paths";
 import { catalogHref, EMPTY_CATALOG_QUERY } from "@/lib/catalog/query";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
@@ -90,6 +90,7 @@ export function buildStoreLlms({
     ),
     ...section("Optional", [
       `- [${copy.catalog}](${url(catalogHref(locale, EMPTY_CATALOG_QUERY))})`,
+      `- [${copy.contact}](${url(localizePath(CONTACT_PATH, locale))})`,
       `- [${copy.otherLanguage}](${url(
         localizePath("/llms.txt", otherLocale)
       )})`,

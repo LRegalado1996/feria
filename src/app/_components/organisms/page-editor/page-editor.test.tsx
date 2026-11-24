@@ -393,6 +393,41 @@ describe("PageEditor", () => {
     ).toEqual(["Bubble guns", "Rings", "Signet ring", "Cadena corona"]);
   });
 
+  test('on the home, "how to buy" is the one block to add: added, it leads the order with its note and the preview draws it under the cover (FER-076)', async () => {
+    const { loaded, user } = setup();
+    await loaded();
+    const add = within(screen.getByTestId("page-add-block"));
+
+    expect(
+      add.getAllByRole("option").map((option) => option.textContent)
+    ).toEqual(["Choose…", "How to buy"]);
+    const preview = within(screen.getByTestId("store-page-preview"));
+    expect(preview.queryByTestId("store-how-to-buy")).toBeNull();
+
+    await user.selectOptions(
+      add.getByRole("combobox", { name: "Block to add" }),
+      "how_to_buy"
+    );
+    await user.click(add.getByRole("button", { name: "Add block" }));
+
+    const [first] = screen.getAllByTestId("home-layout-rows-item");
+    expect(first).toHaveTextContent(
+      "How to buyThe 3 steps to buy and the ways to pay."
+    );
+    // Drawn before the save, right under the cover, above every row.
+    const block = preview.getByTestId("store-how-to-buy");
+    expect(block).toHaveAccessibleName("Buy in 3 steps");
+    expect(
+      preview.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)
+    ).toEqual([
+      "Bubble guns",
+      "Buy in 3 steps",
+      "Rings",
+      "Signet ring",
+      "Cadena corona",
+    ]);
+  });
+
   test("the preview shows the announcement as it is typed, before it is saved", async () => {
     const { loaded, user } = setup({ data: makeHomeCuration() });
     await loaded();
@@ -1641,7 +1676,7 @@ describe("PageEditor on a page that is not the home (FER-060)", () => {
       within(screen.getByTestId("page-add-block"))
         .getAllByRole("option")
         .map((option) => option.textContent)
-    ).toEqual(["Choose…", "Best sellers", "Featured", "Rings"]);
+    ).toEqual(["Choose…", "How to buy", "Best sellers", "Featured", "Rings"]);
   });
 
   test("a block added and one taken out, not saved yet, stay so when the page is read again", async () => {

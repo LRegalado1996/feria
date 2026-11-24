@@ -342,7 +342,7 @@ describe("the banners on the storefront", () => {
     });
   });
 
-  test("lead to a published article, a category under its group or an address; an article no longer published leaves the banner without a link", async () => {
+  test("lead to a published article, a category under its group or an address; an article no longer published, or a category left with none, leaves the banner without a link", async () => {
     await onEmptyHome(async (tx, storeId, pageId) => {
       const group = await addCategory(tx, storeId);
       const child = await addCategory(tx, storeId, group.id);
@@ -376,17 +376,15 @@ describe("the banners on the storefront", () => {
         "https://instagram.com/lr-market",
       ]);
 
-      // Deleting the article clears the link; the banner stays.
+      // Deleting the article clears the link; the banner stays. It was
+      // the category's only published article, so the storefront no
+      // longer lists the category and its banner leads nowhere either
+      // (FER-079).
       await tx.delete(product).where(eq(product.id, article.id));
 
       expect(
         (await readContent(tx, storeId)).cover.map((shown) => shown.href)
-      ).toEqual([
-        null,
-        null,
-        `/${group.slug}/${child.slug}`,
-        "https://instagram.com/lr-market",
-      ]);
+      ).toEqual([null, null, null, "https://instagram.com/lr-market"]);
     });
   });
 });
@@ -782,6 +780,158 @@ describe("saving the home's order", () => {
         code: "BAD_REQUEST",
         message: "That banner is between rows, not in the cover",
       });
+    });
+  });
+
+  test("keeps sixteen featured articles in their order, shows them all on the page, and the table refuses a seventeenth place (FER-075)", async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const row = await addCategory(tx, storeId);
+      const made = await Promise.all(
+        Array.from(
+          { length: 17 },
+          async () => await addArticle(tx, { categoryId: row.id, storeId })
+        )
+      );
+      const ids = made.map((article) => article.id);
+
+      // Not the order they were made in: the order saved is the one kept.
+      const sixteen = [...ids.slice(8, 16), ...ids.slice(0, 8)];
+      const [extra] = ids.slice(16);
+
+      await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: sixteen,
+          rankingProductIds: [],
+          sections: [{ kind: "featured" }],
+        },
+      });
+
+      const saved = await tx
+        .select({
+          position: featuredProduct.position,
+          productId: featuredProduct.productId,
+        })
+        .from(featuredProduct)
+        .where(eq(featuredProduct.storeId, storeId))
+        .orderBy(asc(featuredProduct.position));
+      expect(saved).toEqual(
+        sixteen.map((productId, position) => ({ position, productId }))
+      );
+      const content = await getPageContent(tx, {
+        currencyCode: "UYU",
+        locale: "es",
+        pageId,
+        storeId,
+        today: TODAY,
+      });
+      const featured = content.sections.find(
+        (section) => section.kind === "featured"
+      );
+      expect(
+        featured?.kind === "featured"
+          ? featured.articles.map((article) => article.id)
+          : null
+      ).toEqual(sixteen);
+
+      // In a savepoint: the refused insert must not abort the test's own
+      // transaction.
+      await expect(
+        tx.transaction(async (inner) => {
+          await inner
+            .insert(featuredProduct)
+            .values({ position: 16, productId: extra ?? 0, storeId });
+        })
+      ).rejects.toMatchObject({
+        cause: { constraint: "featured_product_position_range" },
+      });
+    });
+  });
+
+  test('"how to buy" is saved where the order puts it, shows there on the page, stays out of a home that never added it, and the table refuses it twice (FER-076)', async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const shelf = await addCategory(tx, storeId);
+      await addArticle(tx, { categoryId: shelf.id, storeId });
+      const shown = async () =>
+        (await readContent(tx, storeId)).sections
+          .map((section) => section.key)
+          .filter((key) =>
+            ["how_to_buy", `category:${String(shelf.id)}`].includes(key)
+          );
+
+      // The home's rule fills in the rows, never this block.
+      await expect(shown()).resolves.toEqual([`category:${String(shelf.id)}`]);
+
+      const saved = await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: [],
+          rankingProductIds: [],
+          // The home's order always names its curated rows: one left
+          // out would be put back first.
+          sections: [
+            { kind: "how_to_buy" },
+            { categoryId: shelf.id, kind: "category" },
+            { kind: "best_sellers" },
+            { kind: "featured" },
+          ],
+        },
+      });
+
+      expect(saved.sections.slice(0, 2)).toEqual([
+        { kind: "how_to_buy" },
+        { categoryId: shelf.id, kind: "category" },
+      ]);
+      await expect(shown()).resolves.toEqual([
+        "how_to_buy",
+        `category:${String(shelf.id)}`,
+      ]);
+      const [first] = await tx
+        .select({
+          bannerId: pageSection.bannerId,
+          categoryId: pageSection.categoryId,
+          kind: pageSection.kind,
+          spotlightId: pageSection.spotlightId,
+        })
+        .from(pageSection)
+        .where(eq(pageSection.pageId, pageId))
+        .orderBy(asc(pageSection.position))
+        .limit(1);
+      expect(first).toEqual({
+        bannerId: null,
+        categoryId: null,
+        kind: "how_to_buy",
+        spotlightId: null,
+      });
+
+      // Once per page: a second one is refused by the table itself. In a
+      // savepoint, so the refusal does not abort the test's transaction.
+      await expect(
+        tx.transaction(async (inner) => {
+          await inner
+            .insert(pageSection)
+            .values({ kind: "how_to_buy", pageId, position: 9000, storeId });
+        })
+      ).rejects.toMatchObject({
+        cause: { constraint: "page_section_untargeted_once" },
+      });
+
+      // Saved without it, it leaves the page.
+      await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: [],
+          rankingProductIds: [],
+          sections: [{ categoryId: shelf.id, kind: "category" }],
+        },
+      });
+      await expect(shown()).resolves.toEqual([`category:${String(shelf.id)}`]);
     });
   });
 

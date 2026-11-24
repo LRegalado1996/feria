@@ -180,8 +180,9 @@ What the repository needs outside the code. The hosting half is [FER-002](docs/t
 
    | Environment | Branch | URL                                                       | Database (Neon) | Images (Blob)     |
    | ----------- | ------ | --------------------------------------------------------- | --------------- | ----------------- |
-   | Production  | `main` | <https://feria-blond.vercel.app>                          | `feria-db`      | `feria-images`    |
+   | Production  | `main` | <https://market.lucasregalado.com>                        | `feria-db`      | `feria-images`    |
    | QA          | `qa`   | <https://feria-git-qa-lucas-projects-628ba363.vercel.app> | `feria-db-qa`   | `feria-images-qa` |
+   - Production's public address is its own domain, `market.lucasregalado.com`; `feria-blond.vercel.app` stays as the address Vercel generated for the project. The code names neither: the site's origin (canonical URLs, the sitemap, `robots.txt`, share images, `llms.txt`) comes from `BETTER_AUTH_URL` through `src/lib/seo/origin.ts`, which Production sets to the domain.
    - The two databases are separate Neon projects, installed from the Vercel Marketplace: nothing written in QA can reach production. The production one is connected to Production only, the QA one to Preview only.
    - QA and every preview sit behind Vercel Authentication: open them signed in to Vercel, or with `vercel curl <url>/api/health`. Production is public.
    - The build migrates before it compiles (`buildCommand` in [`vercel.json`](vercel.json)). Check a deployment with `/api/health`, which answers `{"db":"ok"}`.

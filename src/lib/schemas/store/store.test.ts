@@ -182,6 +182,39 @@ describe("updateStoreSchema", () => {
     expect(STORE_CURRENCIES).toEqual(["UYU", "USD"]);
   });
 
+  test("takes where to find the store with a text, trimmed, a blank one as none; left out, it stays left out (FER-078)", () => {
+    const text = { description: "Rings.", locale: "es", tagline: "Hola" };
+    const locationOf = (location?: string | null) =>
+      updateStoreSchema.parse(
+        makeStore({
+          translations: [location === undefined ? text : { ...text, location }],
+        })
+      ).translations[0];
+
+    expect(locationOf("  Feria del Parque · Puesto 12 ")).toEqual({
+      ...text,
+      location: "Feria del Parque · Puesto 12",
+    });
+    expect(locationOf("   ")).toEqual({ ...text, location: null });
+    expect(locationOf(null)).toEqual({ ...text, location: null });
+    // A tab opened before the field existed names none: the service then
+    // keeps the stored one.
+    expect(locationOf()).toEqual(text);
+  });
+
+  test("holds where to find the store to 200 characters", () => {
+    const text = { description: "Rings.", locale: "es", tagline: "Hola" };
+
+    expect(
+      issuesOf({ translations: [{ ...text, location: "x".repeat(200) }] })
+    ).toEqual([]);
+    expect(
+      issuesOf({ translations: [{ ...text, location: "x".repeat(201) }] })
+    ).toEqual([
+      ["translations.0.location", "Keep the location to 200 characters"],
+    ]);
+  });
+
   test("refuses two texts in the same language", () => {
     const text = { description: "Rings.", locale: "es", tagline: "Hola" };
 
@@ -225,6 +258,7 @@ const FORM_MESSAGES = {
   descriptionTooLong: "descriptionTooLong",
   instagramInvalid: "instagramInvalid",
   linkTooLong: "linkTooLong",
+  locationTooLong: "locationTooLong",
   nameRequired: "nameRequired",
   nameTooLong: "nameTooLong",
   taglineRequired: "taglineRequired",
@@ -241,6 +275,8 @@ function makeFields(
     descriptionEn: "Rings and chains.",
     descriptionEs: "Anillos y cadenas.",
     instagramUrl: "https://instagram.com/sample",
+    locationEn: "",
+    locationEs: "",
     name: "Sample Store",
     taglineEn: "Hello",
     taglineEs: "Hola",
@@ -290,11 +326,37 @@ describe("createStoreSettingsFormSchema", () => {
       name: "Sample Store",
       tiktokUrl: null,
       translations: [
-        { description: "Anillos y cadenas.", locale: "es", tagline: "Hola" },
-        { description: "Rings and chains.", locale: "en", tagline: "Hello" },
+        {
+          description: "Anillos y cadenas.",
+          locale: "es",
+          location: null,
+          tagline: "Hola",
+        },
+        {
+          description: "Rings and chains.",
+          locale: "en",
+          location: null,
+          tagline: "Hello",
+        },
       ],
       whatsappNumber: "+59899123456",
     });
+  });
+
+  test("sends where to find the store in each language, trimmed, a blank one as none (FER-078)", () => {
+    const sent = createStoreSettingsFormSchema(FORM_MESSAGES).parse(
+      makeFields({
+        locationEn: "   ",
+        locationEs: "  Feria del Parque · Puesto 12 ",
+      })
+    );
+
+    expect(
+      sent.translations.map(({ locale, location }) => [locale, location])
+    ).toEqual([
+      ["es", "Feria del Parque · Puesto 12"],
+      ["en", null],
+    ]);
   });
 
   test("what it sends is what the API accepts, as it is", () => {
@@ -362,6 +424,8 @@ describe("createStoreSettingsFormSchema", () => {
     ["descriptionEs", "", "descriptionRequired"],
     ["descriptionEn", "  ", "descriptionRequired"],
     ["descriptionEn", "x".repeat(601), "descriptionTooLong"],
+    ["locationEs", "x".repeat(201), "locationTooLong"],
+    ["locationEn", "x".repeat(201), "locationTooLong"],
     ["instagramUrl", "instagram.com/sample", "instagramInvalid"],
     ["instagramUrl", "https://tiktok.com/@sample", "instagramInvalid"],
     ["tiktokUrl", "http://tiktok.com/@sample", "tiktokInvalid"],
@@ -378,6 +442,7 @@ describe("createStoreSettingsFormSchema", () => {
     ["name", "x".repeat(80)],
     ["taglineEs", "x".repeat(120)],
     ["descriptionEn", "x".repeat(600)],
+    ["locationEs", "x".repeat(200)],
     [
       "tiktokUrl",
       `https://tiktok.com/${"a".repeat(2048 - "https://tiktok.com/".length)}`,

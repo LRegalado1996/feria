@@ -484,11 +484,14 @@ test("gives the home its announcement, banners, rows, best sellers and featured 
           : `banner:${titleOf.get(row.bannerId) ?? ""}`
       )
     ).toEqual([
-      // The article spotlight right under the cover (FER-059).
-      "spotlight",
+      // "How to buy" right under the cover (FER-076).
+      "how_to_buy",
       "best_sellers",
       "banner:Encontranos en la feria",
       "burbujeros",
+      // The article spotlight after its category's row (FER-059), never
+      // against "how to buy", the other dark block.
+      "spotlight",
       "featured",
       "cadenas",
       "anillos",

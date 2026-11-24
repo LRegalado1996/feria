@@ -321,6 +321,32 @@
   font-size: clamp(1.125rem, 0.85rem + 1.2vw, 1.75rem);
 }
 
+/*
+ * White words over a photo (a banner's title and its "Comprar ahora", a
+ * catalog cover's title): no shade is drawn over the photo (FER-077), so
+ * the words carry their own. Three layers of the ink: a tight edge that
+ * outlines each letter, a short drop that anchors it, and a soft halo that
+ * darkens the photo right behind the line. An icon in the line (the arrow)
+ * takes the same edge and halo as a drop shadow, which `text-shadow` does
+ * not give an SVG. On a very light photo the words still read by their
+ * outline, at less contrast than a shade gave: design.md § Storefront.
+ */
+@utility store-display-shadow {
+  text-shadow:
+    0 0 1px color-mix(in srgb, var(--store-foreground) 90%, transparent),
+    0 1px 3px color-mix(in srgb, var(--store-foreground) 75%, transparent),
+    0 2px 18px color-mix(in srgb, var(--store-foreground) 60%, transparent);
+
+  & svg {
+    filter: drop-shadow(
+        0 1px 2px color-mix(in srgb, var(--store-foreground) 75%, transparent)
+      )
+      drop-shadow(
+        0 2px 10px color-mix(in srgb, var(--store-foreground) 60%, transparent)
+      );
+  }
+}
+
 /* The search panel's one field: never under 16 px, so iOS does not zoom. */
 @utility store-display-search {
   font-size: clamp(1rem, 0.4rem + 2.6vw, 2.5rem);

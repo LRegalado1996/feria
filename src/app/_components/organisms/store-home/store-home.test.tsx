@@ -233,6 +233,32 @@ describe("StoreHome", () => {
     }
   );
 
+  test('"how to buy" alone is nothing to buy: the store still introduces itself (FER-076)', () => {
+    const { view } = setup({
+      content: {
+        cover: [],
+        sections: [{ key: "how_to_buy", kind: "how_to_buy" }],
+      },
+    });
+
+    expect(view).toHaveAttribute("data-kind", "intro");
+    expect(screen.queryByTestId("store-how-to-buy")).toBeNull();
+  });
+
+  test('beside a row, "how to buy" shows on the home', () => {
+    const { view } = setup({
+      content: {
+        cover: [],
+        sections: [{ key: "how_to_buy", kind: "how_to_buy" }, ROW],
+      },
+    });
+
+    expect(view).toHaveAttribute("data-kind", "sections");
+    expect(screen.getByTestId("store-how-to-buy")).toHaveAccessibleName(
+      "Comprá en 3 pasos"
+    );
+  });
+
   test("a store with nothing to show and no texts still shows its name and the way in", () => {
     const { view } = setup({
       content: { cover: [], sections: [] },

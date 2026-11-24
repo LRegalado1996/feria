@@ -273,7 +273,15 @@ describe("createPage", () => {
     });
   });
 
-  test.each(["productos", "admin", "en", "Regalos", "regalos-", ""])(
+  test.each([
+    "productos",
+    "contacto",
+    "admin",
+    "en",
+    "Regalos",
+    "regalos-",
+    "",
+  ])(
     "refuses %j, an address the site uses or no address at all, as BAD_REQUEST before any read",
     async (slug) => {
       const { db, tx } = setup();

@@ -172,6 +172,49 @@ export const storefront = {
     browse: "Ver el catálogo",
     featured: "Destacados",
   },
+  // The "how to buy" block of a page (FER-076): three steps, in order, then
+  // how to pay and the way into the catalog.
+  howToBuy: {
+    browse: "Ver el catálogo",
+    steps: {
+      cart: {
+        text: "Dejá tu nombre y tu celular.",
+        title: "Agregá al carrito",
+      },
+      choose: {
+        text: "Mirá el catálogo en la web.",
+        title: "Elegí",
+      },
+      delivery: {
+        text: "Retirás en el puesto o te lo mandamos.",
+        title: "Coordinamos la entrega",
+      },
+    },
+    title: "Comprá en 3 pasos",
+  },
+  // How an order is paid, said by the "how to buy" block and the footer.
+  payments: {
+    cards: "Tarjetas de crédito y débito",
+    cash: "Efectivo",
+    mercadoPago: "Mercado Pago",
+    title: "Pagás con",
+    transfer: "Transferencia bancaria",
+  },
+  // The contact page (FER-080): how to reach the store, from its settings.
+  contact: {
+    browse: "Ver el catálogo",
+    // The page's description for search engines and share cards.
+    description:
+      "Cómo contactar a {store}: WhatsApp, redes y dónde encontrarnos.",
+    follow: "Seguinos",
+    lead: "Escribinos, pasá por el puesto o seguinos en las redes.",
+    // For a store that has loaded no way to reach it yet.
+    none: "Todavía no cargamos nuestros datos de contacto. Mientras tanto, mirá el catálogo y hacé tu pedido desde acá.",
+    title: "Contacto",
+    whatsappBody:
+      "Es la forma más rápida: preguntanos por un artículo, por tu pedido o por la entrega.",
+    whatsappTitle: "Escribinos por WhatsApp",
+  },
   cover: {
     goTo: "Ver la portada {current}",
     label: "Portada",
@@ -223,6 +266,11 @@ export const storefront = {
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
     catalog: "Catálogo",
+    // The footer's contact block (FER-078): where the store is, WhatsApp
+    // and the social links.
+    contact: "Contacto",
+    // The footer's link to the contact page (FER-080), under "Ayuda".
+    contactPage: "Página de contacto",
     closeMenu: "Cerrar el menú",
     // The first link of a group's list on the header's line (FER-044): the
     // group's own page.
@@ -236,13 +284,15 @@ export const storefront = {
       retry: "Probar de nuevo",
       title: "No pudimos mostrar esta página",
     },
-    follow: "Seguinos",
     footer: "Pie de la tienda",
     help: "Ayuda",
     home: "Home",
+    // How to buy, in one line: the block's three steps (FER-076).
     howToOrder:
-      "Elegí lo que te guste, agregalo al carrito y dejá tu nombre: te escribimos para coordinar la entrega.",
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos el pago y la entrega: retirás en el puesto o te lo mandamos.",
     instagram: "Instagram de {store}",
+    // Over the store's own line that says where to find it (FER-078).
+    location: "Dónde encontrarnos",
     logo: "{brand}, ir a la home",
     menu: "Menú",
     // The logo at the top of the phone menu, which leads home (FER-050).
@@ -268,6 +318,7 @@ export const storefront = {
       text: "Hace más de 20 años que mi familia arma su puesto en la feria navideña. Empecé ayudando a mis padres y hace unos 10 años tengo el mío. Vendimos de todo: zapatos, ropa, juguetes, perfumes. Este año venimos con bijouterie y pistolas de burbujas: pasá por el puesto 86 o pedí desde acá.",
     },
     tiktok: "TikTok de {store}",
-    whatsapp: "Escribinos por WhatsApp",
+    // Before the store's number, which the link shows in its local form.
+    whatsapp: "WhatsApp",
   },
 };
