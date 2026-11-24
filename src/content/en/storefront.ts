@@ -160,6 +160,31 @@ export const storefront: Dictionary["storefront"] = {
     browse: "See the catalog",
     featured: "Featured",
   },
+  howToBuy: {
+    browse: "See the catalog",
+    steps: {
+      cart: {
+        text: "Leave your name and your mobile number.",
+        title: "Add to cart",
+      },
+      choose: {
+        text: "Browse the catalog on the site.",
+        title: "Choose",
+      },
+      delivery: {
+        text: "Pick it up at the stall or we send it to you.",
+        title: "We arrange delivery",
+      },
+    },
+    title: "Buy in 3 steps",
+  },
+  payments: {
+    cards: "Credit and debit cards",
+    cash: "Cash",
+    mercadoPago: "Mercado Pago",
+    title: "Pay with",
+    transfer: "Bank transfer",
+  },
   cover: {
     goTo: "Show cover {current}",
     label: "Cover",

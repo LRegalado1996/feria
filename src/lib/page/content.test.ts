@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 
 import {
   composePageSections,
+  isOffer,
   type PageBanner,
+  type PageContentSection,
   type PageSectionSources,
   pageHref,
 } from "./content";
@@ -121,6 +123,15 @@ describe("composePageSections", () => {
     ).toEqual([]);
   });
 
+  test('"how to buy" shows wherever it was placed: its words are the interface\'s (FER-076)', () => {
+    expect(
+      composePageSections(
+        [{ kind: "how_to_buy" }, { kind: "featured" }],
+        makeSources({ featured: [] })
+      )
+    ).toEqual([{ key: "how_to_buy", kind: "how_to_buy" }]);
+  });
+
   test("a row with one article shows", () => {
     expect(
       composePageSections(
@@ -128,5 +139,18 @@ describe("composePageSections", () => {
         makeSources({ featured: ["sello"] })
       )
     ).toEqual([{ articles: ["sello"], key: "featured", kind: "featured" }]);
+  });
+});
+
+describe("isOffer (FER-076)", () => {
+  const cases: [PageContentSection<string>, boolean][] = [
+    [{ key: "how_to_buy", kind: "how_to_buy" }, false],
+    [{ articles: ["sello"], key: "featured", kind: "featured" }, true],
+    [{ banner: makeBanner(), key: "banner:9", kind: "banner" }, true],
+    [{ key: "spotlight:5", kind: "spotlight", spotlight: SPOTLIGHT }, true],
+  ];
+
+  test.each(cases)("%o offers something: %s", (section, offers) => {
+    expect(isOffer(section)).toBe(offers);
   });
 });

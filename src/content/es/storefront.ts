@@ -172,6 +172,34 @@ export const storefront = {
     browse: "Ver el catálogo",
     featured: "Destacados",
   },
+  // The "how to buy" block of a page (FER-076): three steps, in order, then
+  // how to pay and the way into the catalog.
+  howToBuy: {
+    browse: "Ver el catálogo",
+    steps: {
+      cart: {
+        text: "Dejá tu nombre y tu celular.",
+        title: "Agregá al carrito",
+      },
+      choose: {
+        text: "Mirá el catálogo en la web.",
+        title: "Elegí",
+      },
+      delivery: {
+        text: "Retirás en el puesto o te lo mandamos.",
+        title: "Coordinamos la entrega",
+      },
+    },
+    title: "Comprá en 3 pasos",
+  },
+  // How an order is paid, said by the "how to buy" block and the footer.
+  payments: {
+    cards: "Tarjetas de crédito y débito",
+    cash: "Efectivo",
+    mercadoPago: "Mercado Pago",
+    title: "Pagás con",
+    transfer: "Transferencia bancaria",
+  },
   cover: {
     goTo: "Ver la portada {current}",
     label: "Portada",

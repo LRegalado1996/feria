@@ -170,15 +170,16 @@ describe("seedHome", () => {
       spotlight: true,
     });
 
-    // The fish bubble gun (the first best seller, 100), first on the home
-    // page, right under the cover, through the service as the admin adds one.
+    // The fish bubble gun (the first best seller, 100), through the
+    // service as the admin adds one: right after its category's row, the
+    // fourth place of the order below, never against "how to buy".
     expect(createSpotlight).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: STORE_ID,
       values: {
         ...SEED_SPOTLIGHT.words,
         pageId: 3,
         productId: 100,
-        rowsIndex: 0,
+        rowsIndex: 4,
       },
     });
     expect(lockStorePages).toHaveBeenCalledExactlyOnceWith(db, STORE_ID);
@@ -259,17 +260,19 @@ describe("seedHome", () => {
         row.bannerId ?? row.categoryId,
       ])
     ).toEqual([
-      [0, "best_sellers", null],
-      [1, "banner", 4],
-      [2, "category", 1],
-      [3, "featured", null],
-      [4, "category", 3],
-      [5, "category", 4],
-      [6, "banner", 5],
-      [7, "category", 5],
-      [8, "category", 6],
+      // "How to buy" opens the home, right under the cover (FER-076).
+      [0, "how_to_buy", null],
+      [1, "best_sellers", null],
+      [2, "banner", 4],
+      [3, "category", 1],
+      [4, "featured", null],
+      [5, "category", 3],
+      [6, "category", 4],
+      [7, "banner", 5],
+      [8, "category", 5],
+      [9, "category", 6],
       // Bijouterie, a group with no row of its own in the list, goes last.
-      [9, "category", 2],
+      [10, "category", 2],
     ]);
     // A store with no banner and no order has nothing to replace.
     expect(db.$.delete).not.toHaveBeenCalled();
@@ -423,7 +426,7 @@ describe("seedHome", () => {
       rowsOf(inserts[0]?.values).map(
         (row) => row.bannerId ?? row.categoryId ?? row.kind
       )
-    ).toEqual(["best_sellers", 1, "featured", 3, 4, 5, 6, 2]);
+    ).toEqual(["how_to_buy", "best_sellers", 1, "featured", 3, 4, 5, 6, 2]);
   });
 
   test("on a store missing some categories and articles, skips what it cannot find, and adds no featured row of one", async () => {
@@ -448,12 +451,31 @@ describe("seedHome", () => {
     // A banner whose category is missing has no link.
     expect(inserts[2]?.values).toMatchObject({ linkCategoryId: null });
     expect(rowsOf(inserts.at(-1)?.values).map((row) => row.kind)).toEqual([
+      "how_to_buy",
       "best_sellers",
       "banner",
       "category",
       "featured",
       "banner",
     ]);
+  });
+
+  test('on a store without the spotlight\'s category, puts the spotlight right after "how to buy"', async () => {
+    const { db, run } = setup({
+      categories: CATEGORIES.filter((row) => row.slug !== SEED_SPOTLIGHT.after),
+    });
+
+    await run();
+
+    expect(createSpotlight).toHaveBeenCalledExactlyOnceWith(db, {
+      storeId: STORE_ID,
+      values: {
+        ...SEED_SPOTLIGHT.words,
+        pageId: 3,
+        productId: 100,
+        rowsIndex: 1,
+      },
+    });
   });
 
   test("throws when a banner's insert answers no row", async () => {

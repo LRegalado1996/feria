@@ -45,7 +45,8 @@ export type BannerPlacement = (typeof BANNER_PLACEMENTS)[number];
 /**
  * The blocks a page is built from (FER-058): what one place of its sequence
  * under the cover holds. A category's row, one of the two curated rows, or
- * a banner between rows. A new block is one kind here, its content table,
+ * a banner between rows, an article spotlight, or the "how to buy" block
+ * (FER-076). A new block is one kind here, its content table,
  * its target column on `page_section` and one renderer
  * (`docs/project/data-model.md` § Pages and sections).
  */
@@ -55,9 +56,21 @@ export const PAGE_SECTION_KINDS = [
   "featured",
   "banner",
   "spotlight",
+  "how_to_buy",
 ] as const;
 
 export type PageSectionKind = (typeof PAGE_SECTION_KINDS)[number];
+
+/**
+ * The kinds that name no target: the two curated rows, whose lists are the
+ * store's, and "how to buy" (FER-076), whose words are the interface's. A
+ * page holds each at most once (`page_section_untargeted_once`).
+ */
+export const UNTARGETED_SECTION_KINDS = [
+  "best_sellers",
+  "featured",
+  "how_to_buy",
+] as const satisfies readonly PageSectionKind[];
 
 /** What a banner's link points at: nothing, an article, a category, a URL. */
 export const BANNER_LINK_KINDS = [
@@ -383,6 +396,7 @@ export const pageSectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("featured") }),
   z.object({ bannerId: bodyIdSchema, kind: z.literal("banner") }),
   z.object({ kind: z.literal("spotlight"), spotlightId: bodyIdSchema }),
+  z.object({ kind: z.literal("how_to_buy") }),
 ]);
 
 export type PageSection = z.infer<typeof pageSectionSchema>;

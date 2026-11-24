@@ -82,6 +82,7 @@ export const design = {
     chips: "Chips y etiquetas",
     countUp: "Número que cuenta",
     cover: "Portada que se mueve",
+    howToBuy: "Cómo comprar",
     link: "Enlace con flecha",
     logo: "Logo",
     marquee: "Banda en movimiento",

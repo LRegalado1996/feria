@@ -27,6 +27,11 @@ const BLOCKS: PageLayoutBlockChoice[] = [
   { name: "Featured", section: { kind: "featured" } },
 ];
 
+/** What the home can be given: FER-020's rule fills in the rest (FER-076). */
+const HOME_BLOCKS: PageLayoutBlockChoice[] = [
+  { name: "How to buy", section: { kind: "how_to_buy" } },
+];
+
 /** Twelve published articles, `Article 1` to `Article 12`. */
 const CHOICES = Array.from({ length: 12 }, (_value, index) => ({
   id: index + 1,
@@ -38,6 +43,7 @@ const NAMES: Record<string, string> = {
   best_sellers: "Best sellers",
   category: "Rings",
   featured: "Featured",
+  how_to_buy: "How to buy",
 };
 
 function describeSection(section: PageSection): PageLayoutEntry {
@@ -82,7 +88,7 @@ function Harness({
   locale,
   onSave,
 }: {
-  blocks?: readonly PageLayoutBlockChoice[];
+  blocks: readonly PageLayoutBlockChoice[];
   fields: PageLayoutFormFields;
   locale: Locale;
   onSave: (values: SavePageLayoutValues) => Promise<boolean>;
@@ -122,7 +128,7 @@ function Harness({
 }
 
 function setup({
-  blocks,
+  blocks = HOME_BLOCKS,
   fields = makeFields(),
   locale = "en",
   saves = true,
@@ -230,15 +236,68 @@ describe("PageLayoutEditor on a page that is not the home (FER-060)", () => {
     ]);
   });
 
-  test("the home is given no block and loses none: FER-020's rule fills it", () => {
+  test("the home is given no row and loses none: FER-020's rule fills it", () => {
     setup();
 
-    expect(screen.queryByTestId("page-add-block")).toBeNull();
+    expect(
+      within(screen.getByTestId("page-add-block"))
+        .getAllByRole("option")
+        .map((option) => option.textContent)
+    ).toEqual(["Choose…", "How to buy"]);
     expect(
       within(screen.getByTestId("home-layout-rows")).queryByRole("button", {
         name: /^Remove/u,
       })
     ).toBeNull();
+  });
+
+  test('"how to buy" is added first, right under the cover, on the home too, and can be taken out again (FER-076)', async () => {
+    const { names, onSave, submit, user } = setup();
+    const add = screen.getByTestId("page-add-block");
+
+    await user.selectOptions(
+      within(add).getByRole("combobox", { name: "Block to add" }),
+      "how_to_buy"
+    );
+    await user.click(within(add).getByRole("button", { name: "Add block" }));
+
+    expect(names("home-layout-rows")).toEqual([
+      "How to buy",
+      "Best sellers",
+      "Banner: Fair",
+      "Rings",
+      "Featured",
+    ]);
+    // Once on the page it is not offered twice.
+    expect(screen.getByText("No more blocks to add.")).toBeInTheDocument();
+    const rows = screen.getByTestId("home-layout-rows");
+    // The one entry the home can lose.
+    expect(
+      within(rows)
+        .getAllByRole("button", { name: /^Remove/u })
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual(["Remove: How to buy"]);
+
+    await submit();
+
+    expect(onSave.mock.calls[0]?.[0].sections).toEqual([
+      { kind: "how_to_buy" },
+      { kind: "best_sellers" },
+      { bannerId: 33, kind: "banner" },
+      { categoryId: 4, kind: "category" },
+      { kind: "featured" },
+    ]);
+
+    await user.click(
+      within(rows).getByRole("button", { name: "Remove: How to buy" })
+    );
+
+    expect(names("home-layout-rows")).toEqual([
+      "Best sellers",
+      "Banner: Fair",
+      "Rings",
+      "Featured",
+    ]);
   });
 
   test("says the curated lists are the same on every page", () => {

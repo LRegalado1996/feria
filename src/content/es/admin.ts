@@ -489,7 +489,11 @@ export const admin = {
       featured: "Destacados",
       featuredHint: "Elegí de 2 a 16 artículos, o ninguno.",
       full: "Ya hay {max}: quitá uno para agregar otro.",
-      hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados, los banners entre filas y las vidrieras.",
+      hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados, los banners entre filas, las vidrieras y el bloque «Cómo comprar».",
+      // The "how to buy" block in the order's list (FER-076), and what it
+      // says under its name: its words are the same on every page.
+      howToBuy: "Cómo comprar",
+      howToBuyNote: "Los 3 pasos para comprar y los medios de pago.",
       none: "Ninguno todavía.",
       pending: "Guardando…",
       remove: "Quitar: {name}",

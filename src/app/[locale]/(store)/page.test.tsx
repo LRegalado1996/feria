@@ -386,6 +386,32 @@ describe("StoreHomePage", () => {
     ]);
   });
 
+  test('"how to buy" holds no article: it adds no list to the structured data (FER-076)', async () => {
+    await setup({
+      content: {
+        cover: [],
+        sections: [
+          { key: "how_to_buy", kind: "how_to_buy" },
+          {
+            articles: [makeCard("anillo", "Anillo")],
+            key: "featured",
+            kind: "featured",
+          },
+        ],
+      },
+    });
+
+    expect(structuredData()).toEqual([
+      expect.objectContaining({ "@type": "WebSite" }),
+      expect.objectContaining({ "@type": "Organization" }),
+      expect.objectContaining({
+        "@type": "ItemList",
+        name: "Destacados",
+        numberOfItems: 1,
+      }),
+    ]);
+  });
+
   test("a home with nothing to show tells search engines only about the site and the store", async () => {
     await setup({ content: { cover: [], sections: [] } });
 

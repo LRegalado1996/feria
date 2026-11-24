@@ -667,6 +667,150 @@ test.describe("The storefront's home", () => {
     }
   });
 
+  // FER-076. How to buy, as a block of the page: words, not a picture.
+  test('the "how to buy" block shows right under the cover in both languages: three steps in order, the ways to pay and the way into the catalog; side by side on a computer, stacked on a 360 px phone', async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    await curateHome(db, homeEdit);
+    const curated = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: curated.coverBannerIds,
+      featuredProductIds: curated.featuredProductIds,
+      rankingProductIds: curated.rankingProductIds,
+      sections: [
+        { kind: "how_to_buy" },
+        ...curated.sections.filter((section) => section.kind !== "how_to_buy"),
+      ],
+    });
+    const store = new StorePage(page);
+    const block = page.getByTestId("store-how-to-buy");
+    const steps = block.getByRole("list").first().getByRole("listitem");
+    /** Each step's left and top edge, to tell a row from a stack. */
+    const edges = async () =>
+      await steps.evaluateAll((items) =>
+        items.map((item) => {
+          const { left, top } = item.getBoundingClientRect();
+
+          return { left: Math.round(left), top: Math.round(top) };
+        })
+      );
+
+    // A computer: right under the cover, apart from it by the cards' gutter.
+    await page.setViewportSize({ height: 900, width: 1440 });
+    await store.goto();
+    await expect(store.getHomeSections().first()).toHaveAttribute(
+      "data-kind",
+      "how_to_buy"
+    );
+    await expect(
+      block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
+    ).toBeVisible();
+    const cover = await store.getHomeCover().boundingBox();
+    const box = await block.boundingBox();
+    expect(box?.width).toBe(1440);
+    expect((box?.y ?? 0) - ((cover?.y ?? 0) + (cover?.height ?? 0))).toBe(14);
+    // An ordered list, in the order the steps happen.
+    await expect(steps).toHaveText([
+      "01ElegíMirá el catálogo en la web.",
+      "02Agregá al carritoDejá tu nombre y tu celular.",
+      "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+    ]);
+    await expect(
+      block.getByRole("list", { name: "Pagás con" }).getByRole("listitem")
+    ).toHaveText([
+      "Efectivo",
+      "Tarjetas de crédito y débito",
+      "Mercado Pago",
+      "Transferencia bancaria",
+    ]);
+    await expect(
+      block.getByRole("link", { name: "Ver el catálogo" })
+    ).toHaveAttribute("href", "/productos");
+    // Side by side: one line, three columns.
+    const wide = await edges();
+    expect(new Set(wide.map((edge) => edge.top)).size).toBe(1);
+    expect(new Set(wide.map((edge) => edge.left)).size).toBe(3);
+
+    // A 360 px phone: the steps stack and nothing widens the page.
+    await page.setViewportSize({ height: 780, width: 360 });
+    await store.goto();
+    await expect(block).toBeVisible();
+    const narrow = await edges();
+    expect(new Set(narrow.map((edge) => edge.left)).size).toBe(1);
+    // Each lower than the one before it.
+    const [one, two, three] = narrow.map((edge) => edge.top);
+    expect(two ?? 0).toBeGreaterThan(one ?? 0);
+    expect(three ?? 0).toBeGreaterThan(two ?? 0);
+    await store.expectNoHorizontalScroll();
+
+    // In English, its English words, leading to the catalog in English.
+    await store.gotoEnglish();
+    await expect(
+      block.getByRole("heading", { level: 2, name: "Buy in 3 steps" })
+    ).toBeVisible();
+    await expect(
+      block.getByRole("list", { name: "Pay with" }).getByRole("listitem")
+    ).toHaveText([
+      "Cash",
+      "Credit and debit cards",
+      "Mercado Pago",
+      "Bank transfer",
+    ]);
+    await expect(
+      block.getByRole("link", { name: "See the catalog" })
+    ).toHaveAttribute("href", "/en/productos");
+  });
+
+  test('a crawler that runs no script finds the "how to buy" block\'s steps and ways to pay in the HTML', async ({
+    baseURL,
+    browser,
+    db,
+    homeEdit,
+  }) => {
+    await curateHome(db, homeEdit);
+    const curated = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: curated.coverBannerIds,
+      featuredProductIds: curated.featuredProductIds,
+      rankingProductIds: curated.rankingProductIds,
+      sections: [
+        { kind: "how_to_buy" },
+        ...curated.sections.filter((section) => section.kind !== "how_to_buy"),
+      ],
+    });
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      userAgent: BINGBOT,
+    });
+
+    try {
+      const page = await context.newPage();
+      await new StorePage(page).goto();
+      const block = page.getByTestId("store-how-to-buy");
+
+      await expect(
+        block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
+      ).toBeVisible();
+      await expect(
+        block.getByRole("list").first().getByRole("listitem")
+      ).toHaveText([
+        "01ElegíMirá el catálogo en la web.",
+        "02Agregá al carritoDejá tu nombre y tu celular.",
+        "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+      ]);
+      await expect(block.getByText("Mercado Pago")).toBeVisible();
+      await expect(
+        block.getByRole("link", { name: "Ver el catálogo" })
+      ).toHaveAttribute("href", "/productos");
+    } finally {
+      await context.close();
+    }
+  });
+
   // A crawler that reads only the HTML (Bingbot) gets only what the server
   // wrote in place (docs/agents/nextjs.md § Store pages): every section must
   // be in the first response, behind no boundary.

@@ -26,6 +26,7 @@ import {
   RANKING_MAX,
   SPOTLIGHT_LABEL_MAX_LENGTH,
   SPOTLIGHT_PHRASE_MAX_LENGTH,
+  UNTARGETED_SECTION_KINDS,
 } from "@/lib/schemas/page";
 
 import { category, product } from "./catalog";
@@ -380,17 +381,19 @@ export const spotlightTranslation = pgTable(
   ]
 );
 
+/** Kinds as a SQL list, for a CHECK or an index's predicate. */
+const kindList = (kinds: readonly string[]) =>
+  sql.raw(kinds.map((kind) => `'${kind}'`).join(", "));
+
 /** The kinds as a SQL list, for the CHECK that holds `kind` to them. */
-const sectionKinds = sql.raw(
-  PAGE_SECTION_KINDS.map((kind) => `'${kind}'`).join(", ")
-);
+const sectionKinds = kindList(PAGE_SECTION_KINDS);
 
 /**
  * One place of a page's sequence under its cover (FER-058, after FER-020's
  * `home_section`), in `position` order: a block of the catalogue
  * (`PAGE_SECTION_KINDS`). Each kind with a target names it in its own
  * column, held beside its kind by a CHECK of its own; a kind with none (the
- * curated rows) appears once per page. `kind` is text held by a CHECK, not
+ * curated rows, "how to buy") appears once per page. `kind` is text held by a CHECK, not
  * an enum: adding a block rewrites the CHECK in one migration, where a new
  * enum value could not be used in the transaction that adds it
  * (docs/agents/database.md § Migrations). Deleting the page, a category or
@@ -420,7 +423,7 @@ export const pageSection = pgTable(
     unique().on(table.pageId, table.spotlightId),
     uniqueIndex("page_section_untargeted_once")
       .on(table.pageId, table.kind)
-      .where(sql`${table.kind} IN ('best_sellers', 'featured')`),
+      .where(sql`${table.kind} IN (${kindList(UNTARGETED_SECTION_KINDS)})`),
     index().on(table.storeId, table.categoryId),
     index().on(table.bannerId),
     index().on(table.spotlightId),

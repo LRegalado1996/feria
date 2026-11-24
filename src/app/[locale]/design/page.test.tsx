@@ -132,6 +132,7 @@ describe("DesignPage", () => {
         "Row of articles",
         "Banner",
         "Article spotlight",
+        "How to buy",
         "Moving cover",
         "Marquee band",
         "Bubbles",
@@ -154,6 +155,7 @@ describe("DesignPage", () => {
         "Fila de artículos",
         "Banner",
         "Artículo en vidriera",
+        "Cómo comprar",
         "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",
@@ -177,6 +179,27 @@ describe("DesignPage", () => {
       ).toEqual(sections);
     }
   );
+
+  test('shows the "how to buy" block: its title, its three steps and the ways to pay', async () => {
+    await setup();
+
+    const block = within(screen.getByTestId("design-how-to-buy"));
+
+    expect(
+      block.getByRole("heading", { level: 3, name: "Buy in 3 steps" })
+    ).toBeVisible();
+    expect(
+      block.getAllByRole("listitem").map((item) => item.textContent)
+    ).toEqual([
+      "01ChooseBrowse the catalog on the site.",
+      "02Add to cartLeave your name and your mobile number.",
+      "03We arrange deliveryPick it up at the stall or we send it to you.",
+      "Cash",
+      "Credit and debit cards",
+      "Mercado Pago",
+      "Bank transfer",
+    ]);
+  });
 
   test("shows the article spotlight: the name, its pill, its phrase, and the button that adds it", async () => {
     await setup();

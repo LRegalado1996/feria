@@ -92,7 +92,20 @@ export type PageRow<Article> =
 export type PageContentSection<Article> =
   | PageRow<Article>
   | { banner: PageBanner; key: string; kind: "banner" }
-  | { key: string; kind: "spotlight"; spotlight: PageSpotlight<Article> };
+  | { key: string; kind: "spotlight"; spotlight: PageSpotlight<Article> }
+  /** "How to buy" (FER-076): its words are the interface's, so it holds none. */
+  | { key: string; kind: "how_to_buy" };
+
+/**
+ * Whether a section sells something or leads somewhere: every kind but
+ * "how to buy", which explains how to order what the others show. A home
+ * with nothing else introduces the store instead (`organisms/store-home`).
+ */
+export function isOffer<Article>(
+  section: PageContentSection<Article>
+): boolean {
+  return section.kind !== "how_to_buy";
+}
 
 /**
  * What a page of the storefront shows right now (FER-058, after FER-020's
@@ -102,7 +115,8 @@ export type PageContentSection<Article> =
  * only with published articles, the curated rows ("best sellers",
  * "featured") only with articles that are published and available, a
  * banner only while it is on and inside its days, an article spotlight
- * only while its article is published and can be bought. Either part can be
+ * only while its article is published and can be bought, "how to buy"
+ * wherever the admin placed it. Either part can be
  * empty: a new store's home is `{ cover: [], sections: [] }`.
  */
 export interface PageContent<Article> {
@@ -150,6 +164,10 @@ export function composePageSections<Article>(
       const spotlight = sources.spotlights.get(section.spotlightId);
 
       return spotlight ? [{ key, kind: "spotlight", spotlight }] : [];
+    }
+
+    if (section.kind === "how_to_buy") {
+      return [{ key, kind: "how_to_buy" }];
     }
 
     if (section.kind === "category") {

@@ -850,6 +850,91 @@ describe("saving the home's order", () => {
     });
   });
 
+  test('"how to buy" is saved where the order puts it, shows there on the page, stays out of a home that never added it, and the table refuses it twice (FER-076)', async () => {
+    await onEmptyHome(async (tx, storeId, pageId) => {
+      const shelf = await addCategory(tx, storeId);
+      await addArticle(tx, { categoryId: shelf.id, storeId });
+      const shown = async () =>
+        (await readContent(tx, storeId)).sections
+          .map((section) => section.key)
+          .filter((key) =>
+            ["how_to_buy", `category:${String(shelf.id)}`].includes(key)
+          );
+
+      // The home's rule fills in the rows, never this block.
+      await expect(shown()).resolves.toEqual([`category:${String(shelf.id)}`]);
+
+      const saved = await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: [],
+          rankingProductIds: [],
+          // The home's order always names its curated rows: one left
+          // out would be put back first.
+          sections: [
+            { kind: "how_to_buy" },
+            { categoryId: shelf.id, kind: "category" },
+            { kind: "best_sellers" },
+            { kind: "featured" },
+          ],
+        },
+      });
+
+      expect(saved.sections.slice(0, 2)).toEqual([
+        { kind: "how_to_buy" },
+        { categoryId: shelf.id, kind: "category" },
+      ]);
+      await expect(shown()).resolves.toEqual([
+        "how_to_buy",
+        `category:${String(shelf.id)}`,
+      ]);
+      const [first] = await tx
+        .select({
+          bannerId: pageSection.bannerId,
+          categoryId: pageSection.categoryId,
+          kind: pageSection.kind,
+          spotlightId: pageSection.spotlightId,
+        })
+        .from(pageSection)
+        .where(eq(pageSection.pageId, pageId))
+        .orderBy(asc(pageSection.position))
+        .limit(1);
+      expect(first).toEqual({
+        bannerId: null,
+        categoryId: null,
+        kind: "how_to_buy",
+        spotlightId: null,
+      });
+
+      // Once per page: a second one is refused by the table itself. In a
+      // savepoint, so the refusal does not abort the test's transaction.
+      await expect(
+        tx.transaction(async (inner) => {
+          await inner
+            .insert(pageSection)
+            .values({ kind: "how_to_buy", pageId, position: 9000, storeId });
+        })
+      ).rejects.toMatchObject({
+        cause: { constraint: "page_section_untargeted_once" },
+      });
+
+      // Saved without it, it leaves the page.
+      await savePageLayout(tx, {
+        storeId,
+        values: {
+          pageId,
+          coverBannerIds: [],
+          featuredProductIds: [],
+          rankingProductIds: [],
+          sections: [{ categoryId: shelf.id, kind: "category" }],
+        },
+      });
+      await expect(shown()).resolves.toEqual([`category:${String(shelf.id)}`]);
+    });
+  });
+
   test("writes the order whole: places numbered from 0, what was left out after the rest, the curated rows and the cover in order", async () => {
     await onEmptyHome(async (tx, storeId, pageId) => {
       const one = await addCategory(tx, storeId);

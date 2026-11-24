@@ -21,6 +21,7 @@ import { StoreArticleRow } from "@/app/_components/molecules/store-article-row";
 import { StoreBanner } from "@/app/_components/molecules/store-banner";
 import { StoreBubbles } from "@/app/_components/molecules/store-bubbles";
 import { StoreCoverCarousel } from "@/app/_components/molecules/store-cover-carousel";
+import { StoreHowToBuy } from "@/app/_components/molecules/store-how-to-buy";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import { StoreFooter } from "@/app/_components/organisms/store-footer";
@@ -470,6 +471,13 @@ export default async function DesignPage({ params }: DesignPageProps) {
           locale={locale}
           phrase={{ lang: locale, text: sample.spotlight.phrase }}
         />
+      </section>
+
+      <section className="flex flex-col gap-6" data-testid="design-how-to-buy">
+        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+          {sections.howToBuy}
+        </h2>
+        <StoreHowToBuy copy={storefront} headingLevel="h3" href="#cards" />
       </section>
 
       <section
