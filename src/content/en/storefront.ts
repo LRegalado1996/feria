@@ -185,6 +185,18 @@ export const storefront: Dictionary["storefront"] = {
     title: "Pay with",
     transfer: "Bank transfer",
   },
+  contact: {
+    browse: "See the catalog",
+    description:
+      "How to contact {store}: WhatsApp, social profiles and where to find us.",
+    follow: "Follow us",
+    lead: "Write to us, stop by the stall or follow us.",
+    none: "We have not added our contact details yet. Meanwhile, browse the catalog and order from here.",
+    title: "Contact",
+    whatsappBody:
+      "It is the fastest way: ask us about an article, your order or the delivery.",
+    whatsappTitle: "Write to us on WhatsApp",
+  },
   cover: {
     goTo: "Show cover {current}",
     label: "Cover",
@@ -237,6 +249,7 @@ export const storefront: Dictionary["storefront"] = {
     catalog: "Catalog",
     closeMenu: "Close the menu",
     contact: "Contact",
+    contactPage: "Contact page",
     groupAll: "View all",
     groupToggle: "{name}: its categories",
     copyright: "© {store}",

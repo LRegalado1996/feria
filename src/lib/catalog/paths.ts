@@ -6,6 +6,15 @@
 export const ALL_ARTICLES_PATH = "/productos";
 
 /**
+ * The store's contact page (FER-080), on the same Spanish path in both
+ * languages. A page of its own, in a folder of its own, which the router
+ * prefers over a category's one-segment address; and no category, group
+ * or page built from sections can be `contacto`
+ * (`RESERVED_CATEGORY_SLUGS`), so none is ever shadowed by it.
+ */
+export const CONTACT_PATH = "/contacto";
+
+/**
  * An article's page, under all articles' (`/productos/anillo-sello`): a
  * category can never be `productos` (`RESERVED_CATEGORY_SLUGS`), so the two
  * never meet.

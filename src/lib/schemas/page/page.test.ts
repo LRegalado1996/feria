@@ -1007,6 +1007,7 @@ describe("pages (FER-060)", () => {
     ["", false],
     // Paths the site answers itself.
     ["productos", false],
+    ["contacto", false],
     ["admin", false],
     ["en", false],
     ["cart", false],

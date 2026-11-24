@@ -1,0 +1,46 @@
+-- FER-080: `/contacto` is the store's contact page, a path of the site
+-- from now on (`RESERVED_CATEGORY_SLUGS`). A category or a page built from
+-- sections made before could hold that address and would be shadowed by
+-- the contact page: nobody could reach it. Each such row takes the first
+-- `contacto-2`, `contacto-3`... that neither a category nor a page of its
+-- store has, since the two share one address space (FER-060), as
+-- `firstFreeSlug` names a new one. Only rows are renamed: the build still
+-- serving while this runs can still write the address, and the contact
+-- page then wins over it until that row is renamed by hand. Running it
+-- twice converges (reserve-contact-address-migration.integration.test.ts).
+LOCK TABLE "category", "page" IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
+DO $$
+DECLARE
+  clash record;
+  suffix integer;
+BEGIN
+  FOR clash IN
+    SELECT 'category' AS "kind", "id", "storeId" FROM "category"
+    WHERE "slug" = 'contacto'
+    UNION ALL
+    SELECT 'page' AS "kind", "id", "storeId" FROM "page"
+    WHERE "slug" = 'contacto'
+    ORDER BY "kind", "id"
+  LOOP
+    suffix := 2;
+    WHILE EXISTS (
+      SELECT 1 FROM "category"
+      WHERE "storeId" = clash."storeId" AND "slug" = 'contacto-' || suffix
+    ) OR EXISTS (
+      SELECT 1 FROM "page"
+      WHERE "storeId" = clash."storeId" AND "slug" = 'contacto-' || suffix
+    ) LOOP
+      suffix := suffix + 1;
+    END LOOP;
+
+    IF clash."kind" = 'category' THEN
+      UPDATE "category"
+      SET "slug" = 'contacto-' || suffix, "updatedAt" = now()
+      WHERE "id" = clash."id";
+    ELSE
+      UPDATE "page"
+      SET "slug" = 'contacto-' || suffix, "updatedAt" = now()
+      WHERE "id" = clash."id";
+    END IF;
+  END LOOP;
+END $$;

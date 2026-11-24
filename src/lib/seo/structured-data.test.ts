@@ -44,6 +44,33 @@ function makeArticle(overrides: Partial<ArticleFields> = {}): ArticleFields {
   };
 }
 
+describe("storeOrganization: how to reach the store (FER-080)", () => {
+  test("given its number, says it as a contact point in international format", () => {
+    expect(
+      storeOrganization(makeStore({ whatsappNumber: "+59899123456" }))
+    ).toEqual({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      contactPoint: {
+        "@type": "ContactPoint",
+        contactType: "customer service",
+        telephone: "+59899123456",
+      },
+      name: "LR Market",
+      url: "https://feria.example/lr-market",
+    });
+  });
+
+  test.each([[null], [undefined]])(
+    "with %s for a number, names no contact point",
+    (whatsappNumber) => {
+      expect(
+        storeOrganization(makeStore({ whatsappNumber }))
+      ).not.toHaveProperty("contactPoint");
+    }
+  );
+});
+
 describe("storeOrganization", () => {
   test("names the store with its home, logo and every profile it has", () => {
     expect(

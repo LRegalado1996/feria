@@ -82,6 +82,7 @@ describe("buildStoreLlms", () => {
         "## Optional",
         "",
         `- [Catálogo completo](${ORIGIN}/productos)`,
+        `- [Contacto](${ORIGIN}/contacto)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")
@@ -112,6 +113,7 @@ describe("buildStoreLlms", () => {
         "## Optional",
         "",
         `- [Full catalog](${ORIGIN}/en/productos)`,
+        `- [Contact](${ORIGIN}/en/contacto)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -162,6 +164,7 @@ describe("buildStoreLlms", () => {
         "## Optional",
         "",
         `- [Full catalog](${ORIGIN}/en/productos)`,
+        `- [Contact](${ORIGIN}/en/contacto)`,
         `- [Versión en español](${ORIGIN}/llms.txt)`,
         "",
       ].join("\n")
@@ -183,6 +186,7 @@ describe("buildStoreLlms", () => {
         "## Optional",
         "",
         `- [Catálogo completo](${ORIGIN}/productos)`,
+        `- [Contacto](${ORIGIN}/contacto)`,
         `- [English version](${ORIGIN}/en/llms.txt)`,
         "",
       ].join("\n")

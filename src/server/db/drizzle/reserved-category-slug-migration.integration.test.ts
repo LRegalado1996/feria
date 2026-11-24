@@ -77,15 +77,17 @@ async function rolledBack(
   await expect(run).rejects.toThrow(ROLLED_BACK);
 }
 
+// The paths the site answered when 0015 was written: `contacto` was
+// reserved later, by 0030 (FER-080), which renames its own.
+const RESERVED_BY_0015 = RESERVED_CATEGORY_SLUGS.filter(
+  (slug) => slug !== "contacto"
+);
+
 describe("migration 0015: no category on a reserved path", () => {
   test("gives every reserved slug the first free one of its store, leaves the others, and converges when replayed", async () => {
     await rolledBack(async (tx, storeId) => {
       const own = `anillos-${uniqueTag()}`;
-      const reserved = await addCategories(
-        tx,
-        storeId,
-        RESERVED_CATEGORY_SLUGS
-      );
+      const reserved = await addCategories(tx, storeId, RESERVED_BY_0015);
       // `productos-2` is taken, so "Productos" becomes `productos-3`.
       const kept = await addCategories(tx, storeId, ["productos-2", own]);
       const ids = [...reserved, ...kept].map((row) => row.id);
@@ -94,7 +96,7 @@ describe("migration 0015: no category on a reserved path", () => {
       await applyMigration(tx);
 
       expect(await slugsOf(tx, ids)).toEqual([
-        ...RESERVED_CATEGORY_SLUGS.map((slug) =>
+        ...RESERVED_BY_0015.map((slug) =>
           slug === "productos" ? "productos-3" : `${slug}-2`
         ),
         "productos-2",

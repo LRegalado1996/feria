@@ -317,6 +317,23 @@ describe("StoreFooter", () => {
     }
   );
 
+  test.each([
+    ["en", "Help", "Contact page", "/en/contacto"],
+    ["es", "Ayuda", "Página de contacto", "/contacto"],
+  ] as const)(
+    "in %s, %s leads to the contact page, whatever the store has loaded (FER-080)",
+    (locale, heading, name, href) => {
+      const { footer } = setup({ locale });
+
+      const link = within(
+        within(footer).getByRole("region", { name: heading })
+      ).getByRole("link", { name });
+      expect(link).toHaveAttribute("href", href);
+      // On this site: the same tab.
+      expect(link).not.toHaveAttribute("target");
+    }
+  );
+
   test("with no category, the shop links lead to all articles alone", () => {
     const { footer } = setup({ categories: [] });
 

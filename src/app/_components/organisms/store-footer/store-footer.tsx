@@ -8,7 +8,7 @@ import {
   catalogNavigation,
   type NavigationCategory,
 } from "@/lib/catalog/navigation";
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, CONTACT_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
@@ -75,7 +75,8 @@ const PAYMENTS = ["cash", "cards", "mercadoPago", "transfer"] as const;
  * who they are (the full logo and, under it, Pepe's own story of the
  * stall, signed, FER-044); what they sell (the catalog, then each group
  * and each category in none that has something published, in the header's
- * order); how to buy and how to pay (one line, then the ways to pay); and
+ * order); how to buy and how to pay (one line, then the ways to pay, then
+ * the way to the contact page, FER-080); and
  * how to reach them: where the store is (its own line, from its
  * settings), its WhatsApp as a chat link that shows the number as people
  * here write it, and Instagram and TikTok, each only when the store has
@@ -228,6 +229,15 @@ function StoreFooter({
               </li>
             ))}
           </ul>
+          {/* Always there, whatever the store has loaded: the contact
+              page says so itself (FER-080). */}
+          <Link
+            className={cn(LINK_CLASS, "mt-2")}
+            data-testid="store-footer-contact-page"
+            href={localizePath(CONTACT_PATH, locale)}
+          >
+            {copy.contactPage}
+          </Link>
         </section>
         {hasContact ? (
           <section

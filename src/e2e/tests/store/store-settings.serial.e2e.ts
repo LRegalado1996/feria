@@ -14,6 +14,63 @@ import { StorePage } from "../../page-objects/store.page";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe("Editing the store", () => {
+  // FER-080. The contact page says only what the store loaded.
+  test("the contact page of a store with no contact data says so and offers the catalog, with no empty tile; once the data is back, so are its tiles", async ({
+    page,
+    storeEdit,
+  }) => {
+    const contact = page.getByTestId("store-contact");
+    // Visited first, so the page as it was is what the cache holds.
+    await page.goto("/contacto");
+    await expect(
+      contact.getByRole("link", { name: /WhatsApp/u })
+    ).toBeVisible();
+
+    await storeEdit.update({
+      instagramUrl: null,
+      tiktokUrl: null,
+      translations: [
+        { ...STORE_TEXTS.es, location: null },
+        { ...STORE_TEXTS.en, location: null },
+      ],
+      whatsappNumber: null,
+    });
+    await page.goto("/contacto");
+
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Contacto"
+    );
+    await expect(contact.getByTestId("store-contact-lead")).toHaveText(
+      "Todavía no cargamos nuestros datos de contacto. Mientras tanto, mirá el catálogo y hacé tu pedido desde acá."
+    );
+    await expect(contact.getByRole("region")).toHaveCount(1);
+    await expect(
+      contact
+        .getByRole("region", { name: "Comprá en 3 pasos" })
+        .getByRole("link", { name: "Ver el catálogo" })
+    ).toHaveAttribute("href", "/productos");
+    await expect(contact.getByRole("link", { name: /WhatsApp/u })).toHaveCount(
+      0
+    );
+    await new StorePage(page).expectNoHorizontalScroll();
+
+    // Only where it is: that tile and how to buy, with the usual line.
+    await storeEdit.update({
+      instagramUrl: null,
+      tiktokUrl: null,
+      whatsappNumber: null,
+    });
+    await page.goto("/contacto");
+
+    await expect(contact.getByRole("region")).toHaveCount(2);
+    await expect(
+      contact.getByRole("region", { name: "Dónde encontrarnos" })
+    ).toContainText(STORE_TEXTS.es.location);
+    await expect(contact.getByTestId("store-contact-lead")).toHaveText(
+      "Escribinos, pasá por el puesto o seguinos en las redes."
+    );
+  });
+
   test("an edit through the API reaches the cached storefront at once: name, texts and links", async ({
     page,
     storeEdit,

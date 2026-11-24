@@ -200,6 +200,21 @@ export const storefront = {
     title: "Pagás con",
     transfer: "Transferencia bancaria",
   },
+  // The contact page (FER-080): how to reach the store, from its settings.
+  contact: {
+    browse: "Ver el catálogo",
+    // The page's description for search engines and share cards.
+    description:
+      "Cómo contactar a {store}: WhatsApp, redes y dónde encontrarnos.",
+    follow: "Seguinos",
+    lead: "Escribinos, pasá por el puesto o seguinos en las redes.",
+    // For a store that has loaded no way to reach it yet.
+    none: "Todavía no cargamos nuestros datos de contacto. Mientras tanto, mirá el catálogo y hacé tu pedido desde acá.",
+    title: "Contacto",
+    whatsappBody:
+      "Es la forma más rápida: preguntanos por un artículo, por tu pedido o por la entrega.",
+    whatsappTitle: "Escribinos por WhatsApp",
+  },
   cover: {
     goTo: "Ver la portada {current}",
     label: "Portada",
@@ -254,6 +269,8 @@ export const storefront = {
     // The footer's contact block (FER-078): where the store is, WhatsApp
     // and the social links.
     contact: "Contacto",
+    // The footer's link to the contact page (FER-080), under "Ayuda".
+    contactPage: "Página de contacto",
     closeMenu: "Cerrar el menú",
     // The first link of a group's list on the header's line (FER-044): the
     // group's own page.
