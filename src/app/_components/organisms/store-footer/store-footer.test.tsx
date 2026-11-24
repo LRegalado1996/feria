@@ -218,6 +218,25 @@ describe("StoreFooter", () => {
   });
 
   test.each([
+    ["en", "Contact", "/en/contacto"],
+    ["es", "Contacto", "/contacto"],
+  ] as const)(
+    "in %s, the %s heading itself leads to the contact page",
+    (locale, heading, href) => {
+      const { footer } = setup({
+        locale,
+        store: makeStore({ whatsappNumber: "+1" }),
+      });
+
+      expect(
+        within(
+          within(footer).getByRole("heading", { level: 2, name: heading })
+        ).getByRole("link", { name: heading })
+      ).toHaveAttribute("href", href);
+    }
+  );
+
+  test.each([
     ["en", "Contact", "Where to find us"],
     ["es", "Contacto", "Dónde encontrarnos"],
   ] as const)(

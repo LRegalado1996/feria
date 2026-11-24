@@ -245,8 +245,16 @@ function StoreFooter({
             className={cn(BLOCK_CLASS, "min-w-0")}
             data-testid="store-footer-contact"
           >
+            {/* The heading leads to the contact page too: it is what a
+                shopper presses first. */}
             <h2 className={HEADING_CLASS} id="store-footer-contact">
-              {copy.contact}
+              <Link
+                className="underline-offset-4 outline-none hover:underline focus-visible:underline"
+                data-testid="store-footer-contact-heading-link"
+                href={localizePath(CONTACT_PATH, locale)}
+              >
+                {copy.contact}
+              </Link>
             </h2>
             {location ? (
               <div
