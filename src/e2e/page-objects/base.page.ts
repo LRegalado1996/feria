@@ -54,6 +54,40 @@ export abstract class BasePage {
     );
   }
 
+  /**
+   * Where a `<link>` of the document points: the one with this `rel`, and
+   * this `hreflang` when it has twins (the page in another language);
+   * `null` when the document has none. Read off the DOM, like the rest of
+   * the head: poll it when the page may still be arriving.
+   */
+  async readLinkHref(rel: string, hreflang?: string): Promise<string | null> {
+    return await this.page.evaluate(
+      ([wantedRel, wantedLang]) =>
+        [...document.querySelectorAll("link")]
+          .find(
+            (link) =>
+              link.getAttribute("rel") === wantedRel &&
+              (wantedLang === undefined ||
+                link.getAttribute("hreflang") === wantedLang)
+          )
+          ?.getAttribute("href") ?? null,
+      [rel, hreflang] as const
+    );
+  }
+
+  /**
+   * The page's structured data: each JSON-LD block of the document, parsed,
+   * in order. A script has no role and no test id either. Read through a
+   * locator, so it works in a context that runs no script (a crawler's).
+   */
+  async readStructuredData(): Promise<unknown[]> {
+    const blocks = await this.page
+      .locator('script[type="application/ld+json"]')
+      .allTextContents();
+
+    return blocks.map((block): unknown => JSON.parse(block));
+  }
+
   /** The document's language, which screen readers and search engines read. */
   async expectDocumentLanguage(lang: "en" | "es"): Promise<void> {
     await expect(this.page.locator("html")).toHaveAttribute("lang", lang);

@@ -46,7 +46,7 @@ test.describe("The contact page", () => {
     const response = await page.goto("/contacto");
 
     expect(response?.status()).toBe(200);
-    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    await storePage.expectDocumentLanguage("es");
     const contact = page.getByTestId("store-contact");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       "Contacto"
@@ -102,21 +102,21 @@ test.describe("The contact page", () => {
       .toBe(
         `Cómo contactar a ${STORE_SETTINGS.name}: WhatsApp, redes y dónde encontrarnos.`
       );
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-      "href",
-      /^https?:\/\/[^/]+\/contacto$/u
-    );
-    await expect(
-      page.locator('link[rel="alternate"][hreflang="en"]')
-    ).toHaveAttribute("href", /^https?:\/\/[^/]+\/en\/contacto$/u);
+    await expect
+      .poll(async () => await storePage.readLinkHref("canonical"))
+      .toMatch(/^https?:\/\/[^/]+\/contacto$/u);
+    await expect
+      .poll(async () => await storePage.readLinkHref("alternate", "en"))
+      .toMatch(/^https?:\/\/[^/]+\/en\/contacto$/u);
   });
 
   test("in English at /en/contacto: the page's words in English, the store's own line as it was written, and the catalog in English", async ({
     page,
   }) => {
+    const storePage = new StorePage(page);
     await page.goto("/en/contacto");
 
-    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+    await storePage.expectDocumentLanguage("en");
     const contact = page.getByTestId("store-contact");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Contact");
     await expect(
@@ -134,10 +134,9 @@ test.describe("The contact page", () => {
         .getByRole("link", { name: "See the catalog" })
     ).toHaveAttribute("href", "/en/productos");
     await expect(page).toHaveTitle(`Contact · ${STORE_SETTINGS.name}`);
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
-      "href",
-      /^https?:\/\/[^/]+\/en\/contacto$/u
-    );
+    await expect
+      .poll(async () => await storePage.readLinkHref("canonical"))
+      .toMatch(/^https?:\/\/[^/]+\/en\/contacto$/u);
   });
 
   test("on a computer the moss tile sits beside the grey ones; on a 360 px phone they are one column and nothing scrolls sideways", async ({
@@ -221,12 +220,9 @@ test.describe("The contact page", () => {
       ).toHaveAttribute("href", WA_HREF);
       await expect(contact).toContainText(STORE_TEXTS.es.location);
       await expect(contact).toContainText("Mercado Pago");
-      await expect(new StorePage(page).getFooter()).toBeVisible();
-      const data = await page
-        .locator('script[type="application/ld+json"]')
-        .first()
-        .textContent();
-      const parsed: unknown = JSON.parse(data ?? "[]");
+      const storePage = new StorePage(page);
+      await expect(storePage.getFooter()).toBeVisible();
+      const [parsed] = await storePage.readStructuredData();
       const organization: unknown = Array.isArray(parsed) ? parsed[0] : null;
       expect(organization).toMatchObject({
         "@type": "Organization",

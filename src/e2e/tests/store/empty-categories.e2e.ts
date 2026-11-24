@@ -99,14 +99,16 @@ test.describe("Categories with no published article", () => {
     // changes only when a write drops the catalog's cache.
     const footerOnArticle = async () => {
       await page.goto(bubbleGunPath);
+      const shop = store
+        .getFooter()
+        .getByRole("navigation", { name: "Tienda" });
+      // The list is read once, so the footer is waited for first: its
+      // catalog link is there whatever the categories are.
+      await expect(
+        shop.getByRole("link", { exact: true, name: "Catálogo" })
+      ).toBeVisible();
 
-      return ours(
-        await store
-          .getFooter()
-          .getByRole("navigation", { name: "Tienda" })
-          .getByRole("link")
-          .allTextContents()
-      );
+      return ours(await shop.getByRole("link").allTextContents());
     };
     const menuOnArticle = async () => {
       await page.goto(bubbleGunPath);
