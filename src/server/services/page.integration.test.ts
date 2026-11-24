@@ -342,7 +342,7 @@ describe("the banners on the storefront", () => {
     });
   });
 
-  test("lead to a published article, a category under its group or an address; an article no longer published leaves the banner without a link", async () => {
+  test("lead to a published article, a category under its group or an address; an article no longer published, or a category left with none, leaves the banner without a link", async () => {
     await onEmptyHome(async (tx, storeId, pageId) => {
       const group = await addCategory(tx, storeId);
       const child = await addCategory(tx, storeId, group.id);
@@ -376,17 +376,15 @@ describe("the banners on the storefront", () => {
         "https://instagram.com/lr-market",
       ]);
 
-      // Deleting the article clears the link; the banner stays.
+      // Deleting the article clears the link; the banner stays. It was
+      // the category's only published article, so the storefront no
+      // longer lists the category and its banner leads nowhere either
+      // (FER-079).
       await tx.delete(product).where(eq(product.id, article.id));
 
       expect(
         (await readContent(tx, storeId)).cover.map((shown) => shown.href)
-      ).toEqual([
-        null,
-        null,
-        `/${group.slug}/${child.slug}`,
-        "https://instagram.com/lr-market",
-      ]);
+      ).toEqual([null, null, null, "https://instagram.com/lr-market"]);
     });
   });
 });

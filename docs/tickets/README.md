@@ -110,6 +110,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-074](FER-074-home-wording.md)                   | The store's home is called "Home" in every language | P1       | done        |
 | [FER-075](FER-075-featured-row-and-cover-title.md)   | A longer "Destacados" row, a smaller cover title    | P1       | in progress |
 | [FER-077](FER-077-banners-without-shade.md)          | Banners without the shade: a text shadow instead    | P1       | in progress |
+| [FER-079](FER-079-hide-empty-categories.md)          | Empty categories are hidden from the storefront     | P1       | in progress |
 
 ### M5 Metrics
 

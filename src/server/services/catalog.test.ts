@@ -15,6 +15,7 @@ import {
   listCategories,
   listCategoryArticles,
   listPublishedProducts,
+  listShownCategories,
   listRelatedPool,
   listRelatedProducts,
 } from "./catalog";
@@ -172,18 +173,86 @@ describe("listCategories", () => {
   });
 });
 
+/** A category's row as `listCategories` reads it. */
+function makeCategoryRow(
+  id: number,
+  parentId: number | null,
+  slug: string
+): Record<string, unknown> {
+  return {
+    id,
+    parentId,
+    position: id,
+    showInHeader: true,
+    slug,
+    translations: [{ locale: "es", name: slug }],
+  };
+}
+
+describe("listShownCategories", () => {
+  test("lists only the categories with a published article, and a group only while one of its categories has one (FER-079)", async () => {
+    const { db } = setup();
+    db.query.category.findMany.mockResolvedValue([
+      // A group whose category Anillos holds an article: both show.
+      makeCategoryRow(1, null, "bijouterie"),
+      makeCategoryRow(2, 1, "anillos"),
+      // Aros, in the same group, holds none.
+      makeCategoryRow(3, 1, "aros"),
+      // A group whose only category holds none: neither shows.
+      makeCategoryRow(4, null, "juguetes"),
+      makeCategoryRow(5, 4, "autos"),
+      // In no group, with an article; and in no group, with none.
+      makeCategoryRow(6, null, "burbujeros"),
+      makeCategoryRow(7, null, "relojes"),
+    ]);
+    db.$["select.orderBy"].mockResolvedValue([
+      { categoryId: 2, count: 1 },
+      { categoryId: 6, count: 3 },
+    ]);
+
+    const shown = await listShownCategories(db as never, {
+      locale: "es",
+      storeId: STORE_ID,
+    });
+
+    expect(shown.map(({ id, path }) => ({ id, path }))).toEqual([
+      { id: 1, path: "/bijouterie" },
+      { id: 2, path: "/bijouterie/anillos" },
+      { id: 6, path: "/burbujeros" },
+    ]);
+    // The rule is the rows' own: published, sold out or not.
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
+      params: [STORE_ID, "published"],
+      sql: '("product"."storeId" = $1 and "product"."status" = $2 and "product"."categoryId" is not null)',
+    });
+  });
+
+  test("a store with no published article lists no category", async () => {
+    const { db } = setup();
+    db.query.category.findMany.mockResolvedValue([
+      makeCategoryRow(1, null, "bijouterie"),
+      makeCategoryRow(2, 1, "anillos"),
+    ]);
+
+    await expect(
+      listShownCategories(db as never, { locale: "es", storeId: STORE_ID })
+    ).resolves.toEqual([]);
+  });
+});
+
 /** A category's row as `getCategoryPage` reads it, a group with no cover. */
 function makePageRow(overrides: Record<string, unknown> = {}) {
   return {
     children: [
       {
+        id: 61,
         slug: "anillos",
         translations: [
           { locale: "es", name: "Anillos" },
           { locale: "en", name: "Rings" },
         ],
       },
-      { slug: "aros", translations: [{ locale: "es", name: "Aros" }] },
+      { id: 62, slug: "aros", translations: [{ locale: "es", name: "Aros" }] },
     ],
     coverHeight: null,
     coverPhoneHeight: null,
@@ -218,6 +287,10 @@ describe("getCategoryPage", () => {
   test("reads a group's page in the asked language: its categories under it, its texts, no cover", async () => {
     const { configOf, db } = setup();
     db.query.category.findFirst.mockResolvedValue(makePageRow());
+    db.$["select.orderBy"].mockResolvedValue([
+      { categoryId: 61, count: 2 },
+      { categoryId: 62, count: 1 },
+    ]);
 
     await expect(
       getCategoryPage(db as never, {
@@ -237,6 +310,7 @@ describe("getCategoryPage", () => {
       ],
       cover: null,
       id: 6,
+      isShown: true,
       lang: "en",
       name: "Jewelry",
       parent: null,
@@ -312,6 +386,61 @@ describe("getCategoryPage", () => {
       seoTitle: null,
     });
   });
+
+  test("a group lists only its categories with a published article, and shows while one has (FER-079)", async () => {
+    const { db } = setup();
+    db.query.category.findFirst.mockResolvedValue(makePageRow());
+    db.$["select.orderBy"].mockResolvedValue([{ categoryId: 62, count: 1 }]);
+
+    await expect(
+      getCategoryPage(db as never, {
+        locale: "es",
+        slug: "bijouterie",
+        storeId: STORE_ID,
+      })
+    ).resolves.toMatchObject({
+      children: [
+        { lang: "es", name: "Aros", path: "/bijouterie/aros", slug: "aros" },
+      ],
+      isShown: true,
+    });
+  });
+
+  test.each([
+    {
+      children: makePageRow().children,
+      name: "a group whose categories hold none",
+      shown: false,
+      stocked: [],
+    },
+    {
+      children: [],
+      name: "a category that holds none",
+      shown: false,
+      stocked: [{ categoryId: 61, count: 4 }],
+    },
+    {
+      children: [],
+      name: "a category that holds one",
+      shown: true,
+      stocked: [{ categoryId: 6, count: 1 }],
+    },
+  ])(
+    "$name is shown on the storefront: $shown (FER-079)",
+    async ({ children, shown, stocked }) => {
+      const { db } = setup();
+      db.query.category.findFirst.mockResolvedValue(makePageRow({ children }));
+      db.$["select.orderBy"].mockResolvedValue(stocked);
+
+      const page = await getCategoryPage(db as never, {
+        locale: "es",
+        slug: "bijouterie",
+        storeId: STORE_ID,
+      });
+
+      expect(page).toMatchObject({ children: [], isShown: shown });
+    }
+  );
 
   test("answers null for a slug the store has no category at", async () => {
     const { db } = setup();

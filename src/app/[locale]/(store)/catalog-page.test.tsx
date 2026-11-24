@@ -147,6 +147,7 @@ const BIJOUTERIE_PAGE: CategoryPage = {
   ],
   cover: null,
   id: 6,
+  isShown: true,
   lang: "es",
   name: "Bijouterie",
   parent: null,
@@ -160,6 +161,7 @@ const RINGS_PAGE: CategoryPage = {
   children: [],
   cover: COVER,
   id: 3,
+  isShown: true,
   lang: "es",
   name: "Anillos",
   parent: {
@@ -659,6 +661,22 @@ describe("catalogMetadata", () => {
     const { metadata } = setup({ category: "anillos", group: "bijouterie" });
 
     expect(await metadata()).not.toHaveProperty("robots");
+  });
+
+  test("keeps a category the storefront does not list (no published article) out of the index, its page still answering (FER-079)", async () => {
+    const { catalog, metadata, show } = setup({
+      category: "anillos",
+      group: "bijouterie",
+      pages: { ...PAGES, anillos: { ...RINGS_PAGE, isShown: false } },
+    });
+
+    await expect(metadata()).resolves.toMatchObject({
+      alternates: { canonical: "/bijouterie/anillos" },
+      robots: { follow: true, index: false },
+      title: { absolute: "Anillos · LR Market" },
+    });
+    await show();
+    expect(catalog()).toMatchObject({ heading: "Anillos" });
   });
 });
 

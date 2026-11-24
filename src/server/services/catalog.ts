@@ -15,6 +15,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import { coverOf, imageOf } from "@/lib/catalog/cover";
+import { categoriesWithArticles } from "@/lib/catalog/navigation";
 import { categoryPath } from "@/lib/catalog/paths";
 import {
   RELATED_FILL_BELOW,
@@ -89,10 +90,42 @@ export async function listCategories(
 
 export type PublicCategory = Awaited<ReturnType<typeof listCategories>>[number];
 
+/** The ids of the categories that hold a published article themselves. */
+async function stockedCategoryIds(
+  db: DatabaseClient,
+  storeId: number
+): Promise<Set<number>> {
+  const counts = await countPublishedByCategory(db, { storeId });
+
+  return new Set(counts.map((row) => row.categoryId));
+}
+
+/**
+ * The categories the storefront lists (FER-079): {@link listCategories}
+ * less those with no published article, and less a group whose categories
+ * all have none (`categoriesWithArticles`). The header, the phone menu,
+ * the footer and the catalog's filter panel read this one; the admin and a
+ * page's rows read them all.
+ */
+export async function listShownCategories(
+  db: DatabaseClient,
+  scope: StoreScope & { locale: Locale }
+) {
+  const categories = await listCategories(db, scope);
+
+  return categoriesWithArticles(
+    categories,
+    await stockedCategoryIds(db, scope.storeId)
+  );
+}
+
 /**
  * One category's page (FER-043) by its slug, in `locale`: its name, its
- * group's, the categories it holds when it is a group, its texts for search
- * engines and its cover; `null` when the store has no such category.
+ * group's, the categories it holds when it is a group (those with a
+ * published article, FER-079), its texts for search engines and its cover;
+ * `null` when the store has no such category. `isShown` says whether the
+ * storefront lists it: with no published article, in itself or in one of
+ * its categories, its page answers a direct visit and nothing links to it.
  */
 export async function getCategoryPage(
   db: DatabaseClient,
@@ -121,7 +154,7 @@ export async function getCategoryPage(
     where: and(eq(category.storeId, storeId), eq(category.slug, slug)),
     with: {
       children: {
-        columns: { slug: true },
+        columns: { id: true, slug: true },
         orderBy: [asc(category.position), asc(category.id)],
         with: { translations: { columns: { locale: true, name: true } } },
       },
@@ -137,6 +170,8 @@ export async function getCategoryPage(
     return null;
   }
 
+  const stocked = await stockedCategoryIds(db, storeId);
+  const children = found.children.filter((child) => stocked.has(child.id));
   const text = pickTranslation(found.translations, locale);
   const name = text?.name ?? "";
   const parent = found.parent
@@ -150,7 +185,7 @@ export async function getCategoryPage(
     : null;
 
   return {
-    children: found.children.map((child) => {
+    children: children.map((child) => {
       const childName = pickTranslation(child.translations, locale);
 
       return {
@@ -173,6 +208,7 @@ export async function getCategoryPage(
       name
     ),
     id: found.id,
+    isShown: stocked.has(found.id) || children.length > 0,
     lang: text?.locale ?? locale,
     name,
     parent,

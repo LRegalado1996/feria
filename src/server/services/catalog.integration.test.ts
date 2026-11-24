@@ -12,17 +12,20 @@ import {
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
 
 import {
+  getCategoryPage,
   getPublishedProduct,
   listCartProducts,
   listCategories,
   listPublishedProducts,
   listRelatedProducts,
+  listShownCategories,
 } from "./catalog";
 import {
   createProduct,
   deleteProduct,
   publishProduct,
   setProductAvailability,
+  unpublishProduct,
 } from "./product";
 
 vi.mock("@/env", () => ({
@@ -572,6 +575,95 @@ describe("public catalog", () => {
       { lang: "en", name: "Chains", slug: chains.slug },
       { lang: "es", name: `Anillos ${tag}`, slug: rings.slug },
     ]);
+  });
+
+  test("the storefront lists a category only while it holds a published article, sold out or not, and a group while one of its categories does (FER-079)", async () => {
+    const storeId = await theStoreId(db);
+    const tag = uniqueTag();
+    const group = await makeCategory(storeId, `bijou-${tag}`, {
+      es: `Bijou ${tag}`,
+    });
+    const rings = await makeCategory(storeId, `anillos-${tag}`, {
+      es: `Anillos ${tag}`,
+    });
+    const earrings = await makeCategory(storeId, `aros-${tag}`, {
+      es: `Aros ${tag}`,
+    });
+    const watches = await makeCategory(storeId, `relojes-${tag}`, {
+      es: `Relojes ${tag}`,
+    });
+    await db
+      .update(category)
+      .set({ parentId: group.id })
+      .where(inArray(category.id, [rings.id, earrings.id]));
+    // In the list's order: equal positions, so by id, as they were made.
+    const own = [group.id, rings.id, earrings.id, watches.id];
+    const shown = async () =>
+      onlyIds(
+        await listShownCategories(db, { locale: "es", storeId }),
+        own
+      ).map((row) => row.id);
+    const page = async (slug: string) => {
+      const found = await getCategoryPage(db, { locale: "es", slug, storeId });
+
+      return {
+        children: found?.children.map((child) => child.slug),
+        isShown: found?.isShown,
+      };
+    };
+
+    // Nothing published yet: a draft does not count.
+    const ring = await makeArticle(storeId, {
+      categoryId: rings.id,
+      publish: false,
+      title: `Anillo ${tag}`,
+    });
+    await expect(shown()).resolves.toEqual([]);
+    await expect(page(group.slug)).resolves.toEqual({
+      children: [],
+      isShown: false,
+    });
+    // Every category is still read by the admin's and the pages' list.
+    expect(
+      onlyIds(await listCategories(db, { locale: "es", storeId }), own).map(
+        (row) => row.id
+      )
+    ).toEqual(own);
+
+    // Its first published article: the category and its group show.
+    await db.transaction(
+      async (tx) => await publishProduct(tx, { id: ring.id, storeId })
+    );
+    await expect(shown()).resolves.toEqual([group.id, rings.id]);
+    await expect(page(group.slug)).resolves.toEqual({
+      children: [rings.slug],
+      isShown: true,
+    });
+    await expect(page(earrings.slug)).resolves.toEqual({
+      children: [],
+      isShown: false,
+    });
+
+    // Sold out, it still shows: the rule is the rows', published.
+    await db.transaction(
+      async (tx) =>
+        await setProductAvailability(tx, {
+          id: ring.id,
+          isAvailable: false,
+          storeId,
+        })
+    );
+    await expect(shown()).resolves.toEqual([group.id, rings.id]);
+
+    // Its last published article back to a draft: both leave.
+    await db.transaction(
+      async (tx) => await unpublishProduct(tx, { id: ring.id, storeId })
+    );
+    await expect(shown()).resolves.toEqual([]);
+    await expect(page(rings.slug)).resolves.toEqual({
+      children: [],
+      isShown: false,
+    });
   });
 
   test("related articles share the category, never include the article itself or a draft", async () => {

@@ -30,7 +30,7 @@ const {
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
-  listCategories,
+  listShownCategories,
   listCategoryArticles,
   listRelatedPool,
 } = vi.hoisted(() => ({
@@ -39,7 +39,7 @@ const {
   getAllArticlesCover: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getCategoryPage: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   getPublishedProduct: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
-  listCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  listShownCategories: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   listRelatedPool: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
 }));
 
@@ -52,7 +52,7 @@ vi.mock("@/server/services/catalog", () => ({
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
-  listCategories,
+  listShownCategories,
   listCategoryArticles,
   listRelatedPool,
 }));
@@ -92,7 +92,7 @@ function setup({ error }: { error?: Error } = {}) {
   const counts = [{ categoryId: 3, count: 4 }];
   const cards = [{ id: 11, title: "Ring" }];
   listRelatedPool.mockResolvedValue(related);
-  listCategories.mockResolvedValue(categories);
+  listShownCategories.mockResolvedValue(categories);
   countPublishedByCategory.mockResolvedValue(counts);
   listCategoryArticles.mockResolvedValue(cards);
 
@@ -209,7 +209,7 @@ describe("readCategories", () => {
 
     await expect(read("en")).resolves.toBe(categories);
 
-    expect(listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(listShownCategories).toHaveBeenCalledExactlyOnceWith(db, {
       locale: "en",
       storeId: 7,
     });

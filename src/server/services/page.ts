@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { isOwnBlobUrl } from "@/lib/blob/paths";
 import { imageOf } from "@/lib/catalog/cover";
+import { categoriesWithArticles } from "@/lib/catalog/navigation";
 import { articlePath, categoryPath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { pickTranslation } from "@/lib/i18n/pick-translation";
@@ -367,10 +368,15 @@ type BannerRow = Awaited<ReturnType<typeof readBanners>>[number];
 
 /**
  * Where a banner leads on the storefront: its article's page while the
- * article is published (a draft's page is a 404), its category's page, or
- * its address; `null` for none.
+ * article is published (a draft's page is a 404), its category's page
+ * while the storefront lists the category (`shownCategoryIds`: one with no
+ * published article is linked from nowhere, FER-079), or its address;
+ * `null` for none.
  */
-function bannerHref(row: BannerRow): string | null {
+function bannerHref(
+  row: BannerRow,
+  shownCategoryIds: ReadonlySet<number>
+): string | null {
   if (row.linkProduct) {
     return row.linkProduct.status === "published"
       ? articlePath(row.linkProduct.slug)
@@ -378,22 +384,29 @@ function bannerHref(row: BannerRow): string | null {
   }
 
   if (row.linkCategory) {
-    return categoryPath({
-      parentSlug: row.linkCategory.parent?.slug ?? null,
-      slug: row.linkCategory.slug,
-    });
+    return row.linkCategoryId !== null &&
+      shownCategoryIds.has(row.linkCategoryId)
+      ? categoryPath({
+          parentSlug: row.linkCategory.parent?.slug ?? null,
+          slug: row.linkCategory.slug,
+        })
+      : null;
   }
 
   return row.linkUrl;
 }
 
 /** A banner as the storefront shows it, in `locale` or the language it has. */
-function toPageBanner(row: BannerRow, locale: Locale): PageBanner {
+function toPageBanner(
+  row: BannerRow,
+  locale: Locale,
+  shownCategoryIds: ReadonlySet<number>
+): PageBanner {
   const words = pickTranslation(row.translations, locale);
 
   return {
     ctaLabel: words?.ctaLabel ?? null,
-    href: bannerHref(row),
+    href: bannerHref(row, shownCategoryIds),
     id: row.id,
     image: {
       height: row.imageHeight,
@@ -493,11 +506,7 @@ export async function getPageContent(
       return { cover: [], sections: [] };
     }
 
-    const banners = new Map(
-      (await readBanners(tx, storeId))
-        .filter((row) => isShowing(row, today))
-        .map((row) => [row.id, toPageBanner(row, locale)])
-    );
+    const bannerRows = await readBanners(tx, storeId);
     const cover = await readCover(tx, pageId);
     const saved = await readSavedSections(tx, pageId);
     const categories = await listCategories(tx, { locale, storeId });
@@ -508,6 +517,17 @@ export async function getPageContent(
       spotlightIds: sectionSpotlightIds(saved),
     });
     const categoryRows = await readCategoryRows(tx, storeId);
+    // The categories the storefront lists: a banner leads only to those.
+    const shownCategoryIds = new Set(
+      categoriesWithArticles(categories, new Set(categoryRows.keys())).map(
+        (entry) => entry.id
+      )
+    );
+    const banners = new Map(
+      bannerRows
+        .filter((row) => isShowing(row, today))
+        .map((row) => [row.id, toPageBanner(row, locale, shownCategoryIds)])
+    );
     const curated = await readCurated(tx, storeId);
     // An unplaced spotlight cannot show: neither it nor its article is read.
     const spotlights = await readSpotlights(
@@ -711,6 +731,20 @@ export async function getPageCuration(
     const spotlights = await readSpotlights(tx, storeId);
     const curated = await readCurated(tx, storeId);
     const slugOf = new Map(categories.map((row) => [row.id, row.slug]));
+    // As the storefront reads them: the preview's banners lead where the
+    // page's will.
+    const shownCategoryIds = new Set(
+      categoriesWithArticles(
+        categories,
+        new Set(
+          articles.flatMap((row) =>
+            row.status === "published" && row.categoryId !== null
+              ? [row.categoryId]
+              : []
+          )
+        )
+      ).map((row) => row.id)
+    );
     const placementOf = (id: number): BannerPlacement | null => {
       if (coverBannerIds.includes(id)) {
         return "cover";
@@ -742,7 +776,7 @@ export async function getPageCuration(
         ctaLabelEn: textIn(row.translations, "en")?.ctaLabel ?? null,
         ctaLabelEs: textIn(row.translations, "es")?.ctaLabel ?? null,
         endsOn: row.endsOn,
-        href: bannerHref(row),
+        href: bannerHref(row, shownCategoryIds),
         id: row.id,
         image: {
           height: row.imageHeight,

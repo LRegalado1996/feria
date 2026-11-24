@@ -43,9 +43,16 @@ test.describe("Category order", () => {
     const slugs = new Set(CATEGORIES.map(([, slug]) => `${slug}-${tag}`));
 
     for (const [name, slug] of CATEGORIES) {
-      await db.seed.createCategory({
+      const created = await db.seed.createCategory({
         nameEs: `${name} ${tag}`,
         slug: `${slug}-${tag}`,
+      });
+      // The storefront lists a category only with a published article
+      // (FER-079).
+      await db.seed.createArticle({
+        categoryId: created.id,
+        priceAmount: 50_000,
+        title: `${name} uno ${tag}`,
       });
     }
 
