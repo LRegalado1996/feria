@@ -15,13 +15,19 @@ export interface Crumb {
   url: string;
 }
 
-/** The store as schema.org knows a seller: its name, home and profiles. */
+/**
+ * The store as schema.org knows a seller: its name, home and profiles.
+ * Given its number (the contact page, FER-080), also how to reach it: a
+ * `ContactPoint` with the number in international format, which the store
+ * answers on WhatsApp.
+ */
 export function storeOrganization(store: {
   instagramUrl: string | null;
   logoUrl: string | null;
   name: string;
   tiktokUrl: string | null;
   url: string;
+  whatsappNumber?: string | null;
 }) {
   const sameAs = [store.instagramUrl, store.tiktokUrl].filter(
     (link) => link !== null
@@ -34,6 +40,15 @@ export function storeOrganization(store: {
     url: store.url,
     ...(store.logoUrl ? { logo: store.logoUrl } : {}),
     ...(sameAs.length > 0 ? { sameAs } : {}),
+    ...(store.whatsappNumber
+      ? {
+          contactPoint: {
+            "@type": "ContactPoint",
+            contactType: "customer service",
+            telephone: store.whatsappNumber,
+          },
+        }
+      : {}),
   };
 }
 

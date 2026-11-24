@@ -11,6 +11,7 @@ import {
   StorePageFooter,
   StreamedStoreFooter,
   StreamedStoreFooterResolver,
+  storeLocation,
 } from "./store-page-footer";
 
 const { connection, readCategories, readStore } = vi.hoisted(() => ({
@@ -37,9 +38,16 @@ vi.mock("@/app/_components/organisms/store-footer", () => ({
     className,
     copy,
     locale,
+    location,
+    payments,
     store,
   }: StoreFooterProps) => (
-    <footer className={className} data-testid="footer">
+    <footer
+      className={className}
+      data-location={location ? `${location.lang}: ${location.text}` : "none"}
+      data-payments={payments.title}
+      data-testid="footer"
+    >
       {[
         store.name,
         copy.footer,
@@ -54,11 +62,13 @@ vi.mock("@/app/_components/organisms/store-footer", () => ({
 const SPANISH = {
   description: "Anillos y cadenas.",
   locale: "es",
+  location: null,
   tagline: "Joyas en la feria",
 } as const;
 const ENGLISH = {
   description: "Rings and chains.",
   locale: "en",
+  location: null,
   tagline: "Jewelry at the fair",
 } as const;
 
@@ -119,6 +129,71 @@ describe("StorePageFooter", () => {
     render(await StorePageFooter({ locale: "es", store: makeStore() }));
 
     expect(screen.getByTestId("footer")).toHaveClass("mt-auto");
+  });
+});
+
+describe("where to find the store (FER-078)", () => {
+  const FAIR_ES = "Feria del Parque · Puesto 12";
+  const FAIR_EN = "Park Fair · Stall 12";
+
+  test.each([
+    ["es", FAIR_ES, FAIR_EN, { lang: "es", text: FAIR_ES }],
+    ["en", FAIR_ES, FAIR_EN, { lang: "en", text: FAIR_EN }],
+    // Written in one language only: said in that one, marked as it.
+    ["en", FAIR_ES, null, { lang: "es", text: FAIR_ES }],
+    ["es", null, FAIR_EN, { lang: "en", text: FAIR_EN }],
+    ["es", null, null, null],
+  ] as const)(
+    "on a page in %s, a store that wrote %j in Spanish and %j in English says %j",
+    (locale, spanish, english, shown) => {
+      const store = makeStore({
+        translations: [
+          { ...SPANISH, location: spanish },
+          { ...ENGLISH, location: english },
+        ],
+      });
+
+      expect(storeLocation(store, locale)).toEqual(shown);
+    }
+  );
+
+  test("a store with no texts yet says none", () => {
+    expect(storeLocation(makeStore({ translations: [] }), "es")).toBeNull();
+  });
+
+  test.each([
+    ["es", "es: Feria del Parque · Puesto 12", "Pagás con"],
+    ["en", "es: Feria del Parque · Puesto 12", "Pay with"],
+  ] as const)(
+    "in %s, hands the footer the store's line and the ways to pay in the page's language",
+    async (locale, location, payments) => {
+      render(
+        await StorePageFooter({
+          locale,
+          store: makeStore({
+            translations: [{ ...SPANISH, location: FAIR_ES }, ENGLISH],
+          }),
+        })
+      );
+
+      expect(screen.getByTestId("footer")).toHaveAttribute(
+        "data-location",
+        location
+      );
+      expect(screen.getByTestId("footer")).toHaveAttribute(
+        "data-payments",
+        payments
+      );
+    }
+  );
+
+  test("hands the footer no line for a store that wrote none", async () => {
+    render(await StorePageFooter({ locale: "es", store: makeStore() }));
+
+    expect(screen.getByTestId("footer")).toHaveAttribute(
+      "data-location",
+      "none"
+    );
   });
 });
 

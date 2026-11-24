@@ -14,7 +14,7 @@ const services = vi.hoisted(() => ({
   getPublishedProductRef: vi.fn(),
   listCartProducts: vi.fn(),
   listCatalogFilters: vi.fn(),
-  listCategories: vi.fn(),
+  listShownCategories: vi.fn(),
   listPublishedProducts: vi.fn(),
   listRelatedProducts: vi.fn(),
   resolveCatalogFilters: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock("@/server/services/catalog", () => ({
   getPublishedProduct: services.getPublishedProduct,
   getPublishedProductRef: services.getPublishedProductRef,
   listCartProducts: services.listCartProducts,
-  listCategories: services.listCategories,
+  listShownCategories: services.listShownCategories,
   listPublishedProducts: services.listPublishedProducts,
   listRelatedProducts: services.listRelatedProducts,
 }));
@@ -111,12 +111,12 @@ function makeIds(count: number) {
 describe("catalog router", () => {
   test("lists the store's categories in the visitor's language, scoped by the store", async () => {
     const { categories, db } = setup();
-    services.listCategories.mockResolvedValue([{ id: 1, name: "Chains" }]);
+    services.listShownCategories.mockResolvedValue([{ id: 1, name: "Chains" }]);
 
     await expect(categories({ locale: "en" })).resolves.toEqual([
       { id: 1, name: "Chains" },
     ]);
-    expect(services.listCategories).toHaveBeenCalledExactlyOnceWith(db, {
+    expect(services.listShownCategories).toHaveBeenCalledExactlyOnceWith(db, {
       locale: "en",
       storeId: 7,
     });
@@ -326,7 +326,7 @@ describe("catalog router", () => {
           slug: "cadena",
         })
       ).rejects.toMatchObject(STORE_NOT_FOUND);
-      expect(services.listCategories).not.toHaveBeenCalled();
+      expect(services.listShownCategories).not.toHaveBeenCalled();
       expect(services.listCatalogFilters).not.toHaveBeenCalled();
       expect(services.resolveCatalogFilters).not.toHaveBeenCalled();
       expect(services.listPublishedProducts).not.toHaveBeenCalled();

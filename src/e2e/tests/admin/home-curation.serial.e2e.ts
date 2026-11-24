@@ -326,6 +326,88 @@ test.describe("Home curation", () => {
     ).toHaveCount(0);
   });
 
+  // FER-076. "Cómo comprar" is a block of the page like the rows: the home
+  // gets it only once the admin adds it, and loses it the same way.
+  test('"Cómo comprar" added from "Agregar bloque" goes first under the cover, shows in the preview and on the home, and leaves once taken out', async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    // Something to sell, placed by the home's own rule: a home with nothing
+    // else introduces the store instead.
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Fila ${tag}`,
+      slug: `fila-${tag}`,
+    });
+    await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 79_000,
+      title: `Anillo ${tag}`,
+    });
+    // A home that already holds the block (a seeded database) starts
+    // without it; the fixture saves the order back when the test ends.
+    const before = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: before.coverBannerIds,
+      featuredProductIds: before.featuredProductIds,
+      rankingProductIds: before.rankingProductIds,
+      sections: before.sections.filter(
+        (section) => section.kind !== "how_to_buy"
+      ),
+    });
+    const home = new AdminHomePage(page);
+    await home.open();
+    const rows = home.getByTestId("home-layout-rows");
+    const store = new StorePage(page);
+
+    // The one block the home can be given: its rows are all there already.
+    const picker = rows.getByRole("combobox", { name: "Bloque para agregar" });
+    await expect(picker.getByRole("option")).toHaveText([
+      "Elegí…",
+      "Cómo comprar",
+    ]);
+    await picker.selectOption({ label: "Cómo comprar" });
+    await rows.getByRole("button", { name: "Agregar bloque" }).click();
+
+    const first = home.getByTestId("home-layout-rows-item").first();
+    await expect(first).toContainText("Cómo comprar");
+    await expect(first).toContainText(
+      "Los 3 pasos para comprar y los medios de pago."
+    );
+    await expect(
+      rows.getByText("No hay más bloques para agregar.")
+    ).toBeVisible();
+    // Drawn in the preview before it is saved.
+    await expect(home.preview().getByText("Comprá en 3 pasos")).toBeAttached();
+    await home.saveOrder();
+
+    await store.goto();
+    await expect(store.getHomeSections().first()).toHaveAttribute(
+      "data-kind",
+      "how_to_buy"
+    );
+    await expect(
+      store
+        .getHomeSections()
+        .first()
+        .getByRole("region", { name: "Comprá en 3 pasos" })
+    ).toBeVisible();
+
+    // Taken out and saved, it leaves the home.
+    await home.open();
+    await home
+      .getByTestId("home-layout-rows")
+      .getByRole("button", { name: "Quitar: Cómo comprar" })
+      .click();
+    await expect(home.preview().getByText("Comprá en 3 pasos")).toHaveCount(0);
+    await home.saveOrder();
+
+    await store.goto();
+    await expect(store.getHomeView()).toHaveAttribute("data-kind", "sections");
+    await expect(page.getByTestId("store-how-to-buy")).toHaveCount(0);
+  });
+
   test("a spotlight whose article is sold out is flagged beside it", async ({
     db,
     homeEdit,

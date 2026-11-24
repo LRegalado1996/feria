@@ -18,7 +18,12 @@ const INPUT = {
   name: "Renamed Store",
   tiktokUrl: null,
   translations: [
-    { description: "Anillos.", locale: "es" as const, tagline: "Hola" },
+    {
+      description: "Anillos.",
+      locale: "es" as const,
+      location: null,
+      tagline: "Hola",
+    },
   ],
   whatsappNumber: "+59898765432",
 };

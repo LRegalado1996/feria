@@ -1,0 +1,2 @@
+ALTER TABLE "featured_product" DROP CONSTRAINT "featured_product_position_range";--> statement-breakpoint
+ALTER TABLE "featured_product" ADD CONSTRAINT "featured_product_position_range" CHECK ("featured_product"."position" >= 0 AND "featured_product"."position" < 16);

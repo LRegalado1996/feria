@@ -16,7 +16,7 @@ Rewritten on 2026-11-16 to the structure of the reference store ([FER-039](FER-0
 - Tables `announcement`, `banner`, `ranking_entry`, `featured_product` and their translations, with services and routers.
 - **Announcement bar:** one line of text in both languages, an optional link, an active switch, optional start and end dates. First content: "Encontranos en la feria, del 5/12 al 5/1".
 - **Banners:** a photo with a phone and a computer crop preview, title and button label in both languages, link (an article, a category or a URL), active switch, optional start and end dates. Each banner goes either in the cover, the carousel at the top of the home that moves through its banners on its own, or between two rows, at a position chosen here.
-- **Rows:** the home's rows of articles are the store's categories (those with published articles), in an order chosen here, plus two curated ones: "best sellers" (pick and order up to ten; curated by hand, not computed from orders) and "featured" (two to four).
+- **Rows:** the home's rows of articles are the store's categories (those with published articles), in an order chosen here, plus two curated ones: "best sellers" (pick and order up to ten; curated by hand, not computed from orders) and "featured" (two to four; two to sixteen since [FER-075](FER-075-featured-row-and-cover-title.md)).
 - A preview of the home with the current choices before saving.
 - Built in the admin shell and cards of FER-040, and comfortable on a phone.
 

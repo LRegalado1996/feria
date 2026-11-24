@@ -18,11 +18,13 @@ vi.mock("@/env", () => ({
 const SPANISH = {
   description: "Anillos y cadenas.",
   locale: "es",
+  location: null,
   tagline: "Hola",
 } as const;
 const ENGLISH = {
   description: "Rings and chains.",
   locale: "en",
+  location: null,
   tagline: "Hello",
 } as const;
 
@@ -36,7 +38,12 @@ const snapshots: {
     "currencyCode" | "instagramUrl" | "name" | "tiktokUrl" | "whatsappNumber"
   >;
   id: number;
-  texts: { description: string; locale: "en" | "es"; tagline: string }[];
+  texts: {
+    description: string;
+    locale: "en" | "es";
+    location: string | null;
+    tagline: string;
+  }[];
 }[] = [];
 
 afterEach(async () => {
@@ -116,7 +123,12 @@ async function waitUntilBlocked() {
 /** The store's texts, Spanish first (the locale type's order). */
 async function textsOf(storeId: number) {
   return await db.query.storeTranslation.findMany({
-    columns: { description: true, locale: true, tagline: true },
+    columns: {
+      description: true,
+      locale: true,
+      location: true,
+      tagline: true,
+    },
     orderBy: storeTranslation.locale,
     where: eq(storeTranslation.storeId, storeId),
   });
@@ -200,6 +212,81 @@ describe("updateStore", () => {
       whatsappNumber: null,
     });
     expect(await textsOf(id)).toEqual([{ ...ENGLISH, tagline: "Hello again" }]);
+  });
+
+  test("keeps where to find the store per language: written, read back by the storefront, kept by an edit that does not name it, cleared by one that does (FER-078)", async () => {
+    const { id } = await setup();
+    const fair = "Feria del Parque · Puesto 12 · Desde las 18 h";
+
+    await updateStore(
+      db,
+      makeValues({
+        translations: [{ ...SPANISH, location: fair }, ENGLISH],
+      })
+    );
+
+    // In whatever order the read answers its two texts.
+    expect((await findStore(db))?.translations).toEqual(
+      expect.arrayContaining([{ ...SPANISH, location: fair }, ENGLISH])
+    );
+
+    // A tab opened before the field existed sends texts with no location:
+    // the rest is replaced, the stored line stays.
+    const { location: _unsent, ...staleSpanish } = SPANISH;
+    const { location: _unsentToo, ...staleEnglish } = ENGLISH;
+    await updateStore(
+      db,
+      makeValues({
+        translations: [
+          { ...staleSpanish, tagline: "Hola de nuevo" },
+          staleEnglish,
+        ],
+      })
+    );
+
+    expect(await textsOf(id)).toEqual([
+      { ...SPANISH, location: fair, tagline: "Hola de nuevo" },
+      ENGLISH,
+    ]);
+
+    // Named as none, it goes.
+    await updateStore(db, makeValues());
+
+    expect(await textsOf(id)).toEqual([SPANISH, ENGLISH]);
+  });
+
+  test.each([
+    ["an empty line", ""],
+    ["one of 201 characters", "x".repeat(201)],
+  ])(
+    "the table refuses %s as where to find the store, written straight into it",
+    async (_case, location) => {
+      const { id } = await setup();
+      await updateStore(db, makeValues());
+
+      await expect(
+        db
+          .update(storeTranslation)
+          .set({ location })
+          .where(eq(storeTranslation.storeId, id))
+      ).rejects.toMatchObject({
+        cause: { constraint: "store_translation_location_length" },
+      });
+    }
+  );
+
+  test("the table keeps a line of 200 characters", async () => {
+    const { id } = await setup();
+    await updateStore(db, makeValues({ translations: [SPANISH] }));
+
+    await db
+      .update(storeTranslation)
+      .set({ location: "x".repeat(200) })
+      .where(eq(storeTranslation.storeId, id));
+
+    expect(await textsOf(id)).toEqual([
+      { ...SPANISH, location: "x".repeat(200) },
+    ]);
   });
 
   test("never changes the currency, whatever the values carry: it is fixed per store", async () => {

@@ -84,30 +84,37 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M4 Storefront and orders
 
-| ID                                                   | Title                                               | Priority | Status      |
-| ---------------------------------------------------- | --------------------------------------------------- | -------- | ----------- |
-| [FER-021](FER-021-storefront-shell.md)               | Storefront shell                                    | P0       | done        |
-| [FER-022](FER-022-home-view.md)                      | Home view                                           | P0       | done        |
-| [FER-023](FER-023-catalog-view.md)                   | Catalog view                                        | P0       | done        |
-| [FER-024](FER-024-article-view-and-seo.md)           | Article view and SEO                                | P0       | in progress |
-| [FER-025](FER-025-order-domain.md)                   | Order domain                                        | P0       | done        |
-| [FER-026](FER-026-cart-and-checkout.md)              | Cart and checkout                                   | P0       | in progress |
-| [FER-027](FER-027-order-management.md)               | Order management in the admin                       | P0       | done        |
-| [FER-028](FER-028-whatsapp-phone-verification.md)    | Phone verification by WhatsApp code                 | P2       | todo        |
-| [FER-039](FER-039-storefront-redesign.md)            | Storefront redesign                                 | P0       | done        |
-| [FER-042](FER-042-catalog-for-html-only-crawlers.md) | Catalog content for crawlers that run no script     | P1       | superseded  |
-| [FER-043](FER-043-category-groups-and-pages.md)      | Category groups and a page of their own for each    | P0       | done        |
-| [FER-044](FER-044-catalog-round.md)                  | Catalog round: header, catalog pages, footer        | P0       | done        |
-| [FER-045](FER-045-cart-drawer.md)                    | Cart side panel and a gallery that goes round       | P0       | done        |
-| [FER-050](FER-050-storefront-round.md)               | Storefront round: menu, grid, footer, confirm       | P0       | done        |
-| [FER-051](FER-051-order-stepper-and-admin-round.md)  | Order stepper, the order pages and an admin round   | P0       | done        |
-| [FER-049](FER-049-share-card-blob-photos.md)         | An article's share card draws its uploaded photo    | P1       | todo        |
-| [FER-058](FER-058-pages-built-from-sections.md)      | Pages built from sections: the home is the first    | P0       | done        |
-| [FER-059](FER-059-home-article-spotlight.md)         | An article in the spotlight on the home             | P0       | done        |
-| [FER-060](FER-060-pages-from-the-admin.md)           | Pages built from sections, from the admin           | P0       | done        |
-| [FER-069](FER-069-unknown-store-address-404.md)      | An unknown store address answers 404                | P1       | todo        |
-| [FER-070](FER-070-home-address-307.md)               | The home's own address answers a 307                | P2       | todo        |
-| [FER-074](FER-074-home-wording.md)                   | The store's home is called "Home" in every language | P1       | done        |
+| ID                                                      | Title                                                             | Priority | Status      |
+| ------------------------------------------------------- | ----------------------------------------------------------------- | -------- | ----------- |
+| [FER-021](FER-021-storefront-shell.md)                  | Storefront shell                                                  | P0       | done        |
+| [FER-022](FER-022-home-view.md)                         | Home view                                                         | P0       | done        |
+| [FER-023](FER-023-catalog-view.md)                      | Catalog view                                                      | P0       | done        |
+| [FER-024](FER-024-article-view-and-seo.md)              | Article view and SEO                                              | P0       | in progress |
+| [FER-025](FER-025-order-domain.md)                      | Order domain                                                      | P0       | done        |
+| [FER-026](FER-026-cart-and-checkout.md)                 | Cart and checkout                                                 | P0       | in progress |
+| [FER-027](FER-027-order-management.md)                  | Order management in the admin                                     | P0       | done        |
+| [FER-028](FER-028-whatsapp-phone-verification.md)       | Phone verification by WhatsApp code                               | P2       | todo        |
+| [FER-039](FER-039-storefront-redesign.md)               | Storefront redesign                                               | P0       | done        |
+| [FER-042](FER-042-catalog-for-html-only-crawlers.md)    | Catalog content for crawlers that run no script                   | P1       | superseded  |
+| [FER-043](FER-043-category-groups-and-pages.md)         | Category groups and a page of their own for each                  | P0       | done        |
+| [FER-044](FER-044-catalog-round.md)                     | Catalog round: header, catalog pages, footer                      | P0       | done        |
+| [FER-045](FER-045-cart-drawer.md)                       | Cart side panel and a gallery that goes round                     | P0       | done        |
+| [FER-050](FER-050-storefront-round.md)                  | Storefront round: menu, grid, footer, confirm                     | P0       | done        |
+| [FER-051](FER-051-order-stepper-and-admin-round.md)     | Order stepper, the order pages and an admin round                 | P0       | done        |
+| [FER-049](FER-049-share-card-blob-photos.md)            | An article's share card draws its uploaded photo                  | P1       | todo        |
+| [FER-058](FER-058-pages-built-from-sections.md)         | Pages built from sections: the home is the first                  | P0       | done        |
+| [FER-059](FER-059-home-article-spotlight.md)            | An article in the spotlight on the home                           | P0       | done        |
+| [FER-060](FER-060-pages-from-the-admin.md)              | Pages built from sections, from the admin                         | P0       | done        |
+| [FER-069](FER-069-unknown-store-address-404.md)         | An unknown store address answers 404                              | P1       | todo        |
+| [FER-070](FER-070-home-address-307.md)                  | The home's own address answers a 307                              | P2       | todo        |
+| [FER-074](FER-074-home-wording.md)                      | The store's home is called "Home" in every language               | P1       | done        |
+| [FER-075](FER-075-featured-row-and-cover-title.md)      | A longer "Destacados" row, a smaller cover title                  | P1       | done        |
+| [FER-076](FER-076-how-to-buy-block.md)                  | "Cómo comprar" as a block of the home                             | P1       | done        |
+| [FER-077](FER-077-banners-without-shade.md)             | Banners without the shade: a text shadow instead                  | P1       | done        |
+| [FER-078](FER-078-store-footer.md)                      | A footer with all a small shop's footer should have               | P1       | done        |
+| [FER-079](FER-079-hide-empty-categories.md)             | Empty categories are hidden from the storefront                   | P1       | done        |
+| [FER-080](FER-080-contact-page.md)                      | A contact page                                                    | P1       | done        |
+| [FER-081](FER-081-unlisted-parent-in-the-breadcrumb.md) | An empty category's breadcrumb does not link to an unlisted group | P2       | todo        |
 
 ### M5 Metrics
 

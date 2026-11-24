@@ -122,7 +122,8 @@ const loadCatalogPage = cache(
 
     const copy = getDictionary(locale).storefront.catalog;
     // As of now, not cached: the header, the footer and the filter panel
-    // list them, and this page is read per request anyway.
+    // list them (those with a published article, FER-079), and this page
+    // is read per request anyway.
     const [categories, filters] = await Promise.all([
       caller.catalog.categories({ locale }),
       caller.catalog.filters({ locale }),
@@ -291,8 +292,11 @@ export async function catalogMetadata(
     },
     // A search result is not a page of its own for a search engine, nor is
     // a later page of a list (FER-044): its articles move as the store
-    // orders them, and each has its own page. Its links are followed.
-    ...(query.q || loaded.startCursor
+    // orders them, and each has its own page. Nor is a category the
+    // storefront does not list, one with no published article (FER-079):
+    // its page answers a direct visit, and the sitemap leaves it out too.
+    // Its links are followed.
+    ...(query.q || loaded.startCursor || page?.isShown === false
       ? { robots: { follow: true, index: false } }
       : {}),
     title: { absolute: ownTitle ?? storeTitle(title, store.name) },

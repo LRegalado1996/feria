@@ -12,6 +12,7 @@ import {
   deletePageSchema,
   isPageSlug,
   PAGE_NAME_MAX_LENGTH,
+  PAGE_SECTION_KINDS,
   PAGE_SEO_DESCRIPTION_MAX_LENGTH,
   PAGE_SEO_TITLE_MAX_LENGTH,
   type PageFormFields,
@@ -30,6 +31,7 @@ import {
   isSitePath,
   saveAnnouncementSchema,
   savePageLayoutSchema,
+  UNTARGETED_SECTION_KINDS,
   updateBannerSchema,
 } from ".";
 
@@ -98,6 +100,11 @@ function makeBanner(overrides: Record<string, unknown> = {}) {
     titleEs: "Burbujeros",
     ...overrides,
   };
+}
+
+/** The ids 1 to `count`: a curated list of that many articles. */
+function idsUpTo(count: number): number[] {
+  return Array.from({ length: count }, (_unused, index) => index + 1);
 }
 
 function makeLayout(overrides: Record<string, unknown> = {}) {
@@ -223,8 +230,44 @@ describe("pageSectionKey", () => {
     [{ kind: "best_sellers" }, "best_sellers"],
     [{ kind: "featured" }, "featured"],
     [{ kind: "spotlight", spotlightId: 51 }, "spotlight:51"],
+    [{ kind: "how_to_buy" }, "how_to_buy"],
   ] as const)("%o is %s", (section, key) => {
     expect(pageSectionKey(section)).toBe(key);
+  });
+});
+
+describe('the "how to buy" block (FER-076)', () => {
+  test("is a kind with no target, which a page holds at most once", () => {
+    expect(PAGE_SECTION_KINDS).toContain("how_to_buy");
+    expect(UNTARGETED_SECTION_KINDS).toEqual([
+      "best_sellers",
+      "featured",
+      "how_to_buy",
+    ]);
+  });
+
+  test("a page's order takes it once, anywhere in its sequence", () => {
+    expect(
+      savePageLayoutSchema.parse({
+        coverBannerIds: [],
+        featuredProductIds: [],
+        rankingProductIds: [],
+        sections: [{ kind: "how_to_buy" }, { kind: "best_sellers" }],
+      }).sections
+    ).toEqual([{ kind: "how_to_buy" }, { kind: "best_sellers" }]);
+  });
+
+  test("a page's order refuses it twice", () => {
+    const parsed = savePageLayoutSchema.safeParse({
+      coverBannerIds: [],
+      featuredProductIds: [],
+      rankingProductIds: [],
+      sections: [{ kind: "how_to_buy" }, { kind: "how_to_buy" }],
+    });
+
+    expect(parsed.error?.issues.map((issue) => issue.message)).toEqual([
+      "Give each row and banner once",
+    ]);
   });
 });
 
@@ -396,8 +439,9 @@ describe("savePageLayoutSchema", () => {
     ["a best seller twice", { rankingProductIds: [1, 1] }, false],
     ["one featured", { featuredProductIds: [1] }, false],
     ["two featured", { featuredProductIds: [1, 2] }, true],
-    ["four featured", { featuredProductIds: [1, 2, 3, 4] }, true],
-    ["five featured", { featuredProductIds: [1, 2, 3, 4, 5] }, false],
+    ["no featured", { featuredProductIds: [] }, true],
+    ["sixteen featured", { featuredProductIds: idsUpTo(16) }, true],
+    ["seventeen featured", { featuredProductIds: idsUpTo(17) }, false],
     ["a featured twice", { featuredProductIds: [1, 1] }, false],
     ["a cover banner twice", { coverBannerIds: [3, 3] }, false],
     [
@@ -663,8 +707,8 @@ describe("createPageLayoutFormSchema", () => {
     [0, true],
     [1, false],
     [2, true],
-    [4, true],
-    [5, false],
+    [16, true],
+    [17, false],
   ])("%s featured are accepted: %s", (count, accepted) => {
     const result = schema.safeParse(
       makeFields({
@@ -963,6 +1007,7 @@ describe("pages (FER-060)", () => {
     ["", false],
     // Paths the site answers itself.
     ["productos", false],
+    ["contacto", false],
     ["admin", false],
     ["en", false],
     ["cart", false],

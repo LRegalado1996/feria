@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { PageSection } from "@/lib/schemas/page";
 
 import {
+  DEFAULT_HOW_TO_BUY_INDEX,
   DEFAULT_ROWS_INDEX,
   DEFAULT_SPOTLIGHT_INDEX,
   followServerLayout,
@@ -69,6 +70,27 @@ describe("resolvePageSections", () => {
       makeCategory(6),
       makeBanner(9),
     ]);
+  });
+
+  test('"how to buy" stays where it was saved and is never filled in, on the home either (FER-076)', () => {
+    const targets = { categoryIds: [1], rowBannerIds: [], spotlightIds: [] };
+
+    expect(
+      resolvePageSections([BEST, { kind: "how_to_buy" }, FEATURED], targets)
+    ).toEqual([BEST, { kind: "how_to_buy" }, FEATURED, makeCategory(1)]);
+    // A home that never saved it does not get it.
+    expect(resolvePageSections([], targets)).toEqual([
+      BEST,
+      FEATURED,
+      makeCategory(1),
+    ]);
+    // Another page keeps it among the blocks it was given.
+    expect(
+      resolvePageSections([{ kind: "how_to_buy" }], {
+        ...targets,
+        fillIn: false,
+      })
+    ).toEqual([{ kind: "how_to_buy" }]);
   });
 
   test("keeps the article spotlights still on the page in their places, and puts one with no place after the rest", () => {
@@ -139,6 +161,16 @@ describe("placePageSection", () => {
     expect(
       placePageSection(sections, makeSpotlight(2), DEFAULT_SPOTLIGHT_INDEX)
     ).toEqual([makeSpotlight(2), BEST, makeCategory(1), FEATURED]);
+  });
+
+  test('"how to buy" is added first, right under the cover (FER-076)', () => {
+    expect(
+      placePageSection(
+        sections,
+        { kind: "how_to_buy" },
+        DEFAULT_HOW_TO_BUY_INDEX
+      )
+    ).toEqual([{ kind: "how_to_buy" }, BEST, makeCategory(1), FEATURED]);
   });
 });
 

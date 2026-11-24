@@ -160,6 +160,43 @@ export const storefront: Dictionary["storefront"] = {
     browse: "See the catalog",
     featured: "Featured",
   },
+  howToBuy: {
+    browse: "See the catalog",
+    steps: {
+      cart: {
+        text: "Leave your name and your mobile number.",
+        title: "Add to cart",
+      },
+      choose: {
+        text: "Browse the catalog on the site.",
+        title: "Choose",
+      },
+      delivery: {
+        text: "Pick it up at the stall or we send it to you.",
+        title: "We arrange delivery",
+      },
+    },
+    title: "Buy in 3 steps",
+  },
+  payments: {
+    cards: "Credit and debit cards",
+    cash: "Cash",
+    mercadoPago: "Mercado Pago",
+    title: "Pay with",
+    transfer: "Bank transfer",
+  },
+  contact: {
+    browse: "See the catalog",
+    description:
+      "How to contact {store}: WhatsApp, social profiles and where to find us.",
+    follow: "Follow us",
+    lead: "Write to us, stop by the stall or follow us.",
+    none: "We have not added our contact details yet. Meanwhile, browse the catalog and order from here.",
+    title: "Contact",
+    whatsappBody:
+      "It is the fastest way: ask us about an article, your order or the delivery.",
+    whatsappTitle: "Write to us on WhatsApp",
+  },
   cover: {
     goTo: "Show cover {current}",
     label: "Cover",
@@ -211,6 +248,8 @@ export const storefront: Dictionary["storefront"] = {
     cartEmpty: "Cart, empty",
     catalog: "Catalog",
     closeMenu: "Close the menu",
+    contact: "Contact",
+    contactPage: "Contact page",
     groupAll: "View all",
     groupToggle: "{name}: its categories",
     copyright: "© {store}",
@@ -220,13 +259,13 @@ export const storefront: Dictionary["storefront"] = {
       retry: "Try again",
       title: "We could not show this page",
     },
-    follow: "Follow us",
     footer: "Store footer",
     help: "Help",
     home: "Home",
     howToOrder:
-      "Pick what you like, add it to the cart and leave your name: we write to you to arrange the delivery.",
+      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange payment and delivery: pick it up at the stall or we send it to you.",
     instagram: "{store} on Instagram",
+    location: "Where to find us",
     logo: "{brand}, go to the home page",
     menu: "Menu",
     // The logo at the top of the phone menu, which leads home (FER-050).
@@ -250,6 +289,6 @@ export const storefront: Dictionary["storefront"] = {
       text: "For more than 20 years my family has set up its stall at the Christmas fair. I started out helping my parents, and for about 10 years now I have had my own. We have sold a bit of everything: shoes, clothes, toys, perfumes. This year we are bringing jewelry and bubble guns: come by stall 86 or order from here.",
     },
     tiktok: "{store} on TikTok",
-    whatsapp: "Write to us on WhatsApp",
+    whatsapp: "WhatsApp",
   },
 };

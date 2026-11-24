@@ -481,15 +481,19 @@ export const admin = {
       coverHint: "El orden en que pasan los banners del carrusel de arriba.",
       down: "Bajar: {name}",
       errors: {
-        featuredCount: "Elegí ninguno, o de 2 a 4 artículos destacados.",
+        featuredCount: "Elegí ninguno, o de 2 a 16 artículos destacados.",
         save: "No pudimos guardar el orden. Tus cambios siguen acá: probá de nuevo.",
         repeated:
           "Hay una fila o un banner repetido. Recargá la página para ver el orden guardado.",
       },
       featured: "Destacados",
-      featuredHint: "Elegí de 2 a 4 artículos, o ninguno.",
+      featuredHint: "Elegí de 2 a 16 artículos, o ninguno.",
       full: "Ya hay {max}: quitá uno para agregar otro.",
-      hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados, los banners entre filas y las vidrieras.",
+      hint: "Debajo de la portada, de arriba hacia abajo: las categorías, los más vendidos, los destacados, los banners entre filas, las vidrieras y el bloque «Cómo comprar».",
+      // The "how to buy" block in the order's list (FER-076), and what it
+      // says under its name: its words are the same on every page.
+      howToBuy: "Cómo comprar",
+      howToBuyNote: "Los 3 pasos para comprar y los medios de pago.",
       none: "Ninguno todavía.",
       pending: "Guardando…",
       remove: "Quitar: {name}",
@@ -671,6 +675,7 @@ export const admin = {
         "Pegá el enlace completo de Instagram, por ejemplo https://instagram.com/tu-tienda",
       linkTooLong: "El enlace es demasiado largo.",
       load: "No pudimos cargar los ajustes.",
+      locationTooLong: "Usá hasta 200 caracteres.",
       nameRequired: "Escribí el nombre de la tienda.",
       nameTooLong: "Usá hasta 80 caracteres.",
       save: "No pudimos guardar los ajustes. Lo que escribiste sigue acá: probá de nuevo.",
@@ -685,6 +690,11 @@ export const admin = {
       descriptionEn: "Descripción en inglés",
       descriptionEs: "Descripción en español",
       instagramUrl: "Enlace de Instagram",
+      // Where to find the store (FER-078): one line the footer shows.
+      locationEn: "Dónde encontrarnos, en inglés",
+      locationEs: "Dónde encontrarnos, en español",
+      locationHint:
+        "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda y en la página de contacto. Si lo dejás vacío en un idioma, sus páginas muestran la línea del otro; vacío en los dos, no se muestra.",
       name: "Nombre de la tienda",
       socialHint: "Si lo dejás vacío, la tienda no lo muestra.",
       taglineEn: "Frase en inglés",

@@ -388,6 +388,8 @@ describe("createCategory", () => {
   test.each([
     ["Cart", "cart-2"],
     ["Productos", "productos-2"],
+    // The contact page's address (FER-080).
+    ["Contacto", "contacto-2"],
     ["EN", "en-2"],
     ["Admin", "admin-2"],
     ["Cartera", "cartera"],

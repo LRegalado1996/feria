@@ -73,7 +73,7 @@ Small supporting text is a gray mixed from ink and white (`store-muted`, about `
 
 - Volt is a fill, or text on moss (the header's links, the footer's headings). Never text on white or the tile: it cannot be read there.
 - One accent, the same all year. There is no festive palette: the fair is said with words and photos, not with a second color.
-- No gradients, glows or glass. A banner's photo takes a shade rising from its bottom so its white words read: legibility, not decoration.
+- No gradients, glows or glass. A banner's photo takes no shade (FER-077): its white words carry a small text shadow of the ink so they read, legibility, not decoration.
 
 ## Type
 

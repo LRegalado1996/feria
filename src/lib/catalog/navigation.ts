@@ -79,3 +79,26 @@ export function headerCategories<
       (entry.parentId !== null && shown.has(entry.parentId))
   );
 }
+
+/**
+ * The categories a shopper is shown (FER-079): those holding a published
+ * article, the rule a page's rows already follow (a category's row shows
+ * only with published articles, sold out or not), and each group with at
+ * least one such category. `stocked` are the ids that hold one directly.
+ * A category with none is linked from nowhere on the storefront: the
+ * header, the phone menu, the footer, the filter panel, a banner. Its page
+ * still answers a direct visit; the admin lists them all.
+ */
+export function categoriesWithArticles<
+  Category extends { id: number; parentId: number | null },
+>(categories: readonly Category[], stocked: ReadonlySet<number>): Category[] {
+  const groups = new Set(
+    categories.flatMap((entry) =>
+      entry.parentId !== null && stocked.has(entry.id) ? [entry.parentId] : []
+    )
+  );
+
+  return categories.filter(
+    (entry) => stocked.has(entry.id) || groups.has(entry.id)
+  );
+}

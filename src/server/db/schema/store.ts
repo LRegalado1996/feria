@@ -24,7 +24,10 @@ import {
   PAGE_SEO_DESCRIPTION_MAX_LENGTH,
   PAGE_SEO_TITLE_MAX_LENGTH,
 } from "@/lib/schemas/page";
-import { STORE_CURRENCIES } from "@/lib/schemas/store";
+import {
+  STORE_CURRENCIES,
+  STORE_LOCATION_MAX_LENGTH,
+} from "@/lib/schemas/store";
 
 import { coverChecks } from "./cover";
 import { localeEnum } from "./locale";
@@ -113,6 +116,9 @@ export const storeTranslation = pgTable(
     description: text().notNull(),
     // What the catalog's cover shows (FER-043).
     catalogCoverAlt: text(),
+    // Where to find the store (FER-078): one short line the footer shows,
+    // in the store's own words; none until the admin writes it.
+    location: text(),
     createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
       .notNull()
       .defaultNow(),
@@ -128,6 +134,10 @@ export const storeTranslation = pgTable(
     check(
       "store_translation_catalog_cover_alt_length",
       sql`char_length(${table.catalogCoverAlt}) <= ${sql.raw(String(COVER_ALT_MAX_LENGTH))}`
+    ),
+    check(
+      "store_translation_location_length",
+      sql`char_length(${table.location}) BETWEEN 1 AND ${sql.raw(String(STORE_LOCATION_MAX_LENGTH))}`
     ),
   ]
 );

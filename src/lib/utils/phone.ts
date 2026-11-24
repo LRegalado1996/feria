@@ -37,3 +37,16 @@ export function normalizePhone(typed: string): string | null {
 
   return null;
 }
+
+/**
+ * A stored number (international format, `+59899123456`) as people in the
+ * store's country write it, for the eye (FER-078): a Uruguayan mobile in
+ * its local form, `099 123 456`. Any other number stays as stored: its
+ * country code is what makes it dialable from here. A link still takes the
+ * stored number (`wa.me`).
+ */
+export function formatLocalPhone(stored: string): string {
+  const mobile = /^\+598(9\d)(\d{3})(\d{3})$/u.exec(stored);
+
+  return mobile ? `0${mobile[1]} ${mobile[2]} ${mobile[3]}` : stored;
+}

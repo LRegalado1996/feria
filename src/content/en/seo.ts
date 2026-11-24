@@ -5,6 +5,7 @@ export const seo: Dictionary["seo"] = {
     articles: "Articles",
     categories: "Categories",
     catalog: "Full catalog",
+    contact: "Contact",
     otherLanguage: "Versión en español",
     pages: "Pages",
   },

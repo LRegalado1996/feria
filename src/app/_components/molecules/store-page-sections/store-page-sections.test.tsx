@@ -367,6 +367,63 @@ describe("StorePageSections", () => {
     }
   );
 
+  test.each([
+    ["es", "Comprá en 3 pasos", "Ver el catálogo", "/productos"],
+    ["en", "Buy in 3 steps", "See the catalog", "/en/productos"],
+  ] as const)(
+    'in %s, draws "how to buy" under its h2, leading to the catalog in the page\'s language (FER-076)',
+    (locale, title, browse, href) => {
+      const { sections } = setup({
+        locale,
+        sections: [
+          { key: "how_to_buy", kind: "how_to_buy" },
+          categorySection(),
+        ],
+      });
+
+      const [block] = sections();
+      expect(block).toHaveAttribute("data-kind", "how_to_buy");
+      expect(
+        within(required(block)).getByRole("heading", { level: 2, name: title })
+      ).toBeVisible();
+      expect(
+        within(required(block)).getByRole("link", { name: browse })
+      ).toHaveAttribute("href", href);
+    }
+  );
+
+  test.each([
+    [
+      "under the cover",
+      true,
+      [{ key: "how_to_buy", kind: "how_to_buy" }, categorySection()],
+      ["mt-2.5", ""],
+    ],
+    [
+      "above a spotlight",
+      false,
+      [{ key: "how_to_buy", kind: "how_to_buy" }, spotlightSection()],
+      ["", "mt-2.5"],
+    ],
+    [
+      "under a row",
+      false,
+      [categorySection(), { key: "how_to_buy", kind: "how_to_buy" }],
+      ["", ""],
+    ],
+  ] as const)(
+    '"how to buy" %s keeps the gutter a full-width block keeps',
+    (_case, afterBanner, sequence, gutters) => {
+      const { sections } = setup({ afterBanner, sections: [...sequence] });
+
+      expect(
+        sections().map((section) =>
+          section.classList.contains("mt-2.5") ? "mt-2.5" : ""
+        )
+      ).toEqual(gutters);
+    }
+  );
+
   test("a banner under a row needs no gutter: the row's own room is there", () => {
     const { sections } = setup({ afterBanner: true });
 

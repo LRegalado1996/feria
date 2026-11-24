@@ -16,7 +16,8 @@ interface ListedArticle {
  * What a page's blocks tell search engines and assistants (FER-022,
  * FER-058): each row as a list of its articles and each article in the
  * spotlight as a list of one (FER-059), named as on the page, in its order
- * there. Banners link elsewhere and list nothing.
+ * there. Banners link elsewhere and list nothing, nor does "how to buy",
+ * which holds no article.
  */
 export function sectionLists(
   content: PageContent<ListedArticle>,
@@ -29,7 +30,7 @@ export function sectionLists(
   });
 
   return content.sections.flatMap((section) => {
-    if (section.kind === "banner") {
+    if (section.kind === "banner" || section.kind === "how_to_buy") {
       return [];
     }
 

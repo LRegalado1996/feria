@@ -160,6 +160,7 @@ const pageSectionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("featured") }),
   z.object({ bannerId: z.number(), kind: z.literal("banner") }),
   z.object({ kind: z.literal("spotlight"), spotlightId: z.number() }),
+  z.object({ kind: z.literal("how_to_buy") }),
 ]);
 
 /** What the teardown reads of `page.get`'s answer; the rest is dropped. */

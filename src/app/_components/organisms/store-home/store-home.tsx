@@ -9,7 +9,7 @@ import {
 } from "@/app/_components/organisms/store-intro";
 import type { Dictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
-import { type PageContent, pageHref } from "@/lib/page/content";
+import { isOffer, type PageContent, pageHref } from "@/lib/page/content";
 
 export interface StoreHomeProps {
   /** The way into the catalog, for a home with nothing else to show. */
@@ -37,7 +37,8 @@ export interface StoreHomeProps {
  * with the season, which the page's one heading should not. A screen reader
  * and a crawler read the name first, then each banner and row as an `h2`.
  *
- * A store with nothing to show yet (no banner, no article published)
+ * A store with nothing to show yet (no banner, no article published; a
+ * "how to buy" block alone does not count, FER-076)
  * introduces itself instead (`organisms/store-intro`): its name as a
  * visible `h1`, its tagline, its description and the way into its catalog,
  * so a new store never opens on a blank page.
@@ -52,7 +53,8 @@ function StoreHome({
 }: StoreHomeProps) {
   const hasCover = content.cover.length > 0;
 
-  if (!hasCover && content.sections.length === 0) {
+  // "How to buy" alone is nothing to buy: the store introduces itself.
+  if (!(hasCover || content.sections.some(isOffer))) {
     return (
       <div
         data-kind="intro"

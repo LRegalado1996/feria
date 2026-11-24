@@ -1,4 +1,4 @@
-import { Camera, MessageCircle, Music2 } from "lucide-react";
+import { Camera, MapPin, MessageCircle, Music2 } from "lucide-react";
 import Link from "next/link";
 
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
@@ -8,24 +8,34 @@ import {
   catalogNavigation,
   type NavigationCategory,
 } from "@/lib/catalog/navigation";
-import { ALL_ARTICLES_PATH } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, CONTACT_PATH } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
 import { cn } from "@/lib/utils";
+import { formatLocalPhone } from "@/lib/utils/phone";
 
 /** Where the credit leads: Lucas's own site, as he chose on 2026-11-14. */
 export const CREDIT_URL = "https://lucasregalado.com";
 
 export interface StoreFooterProps {
   /**
-   * The store's categories, in their order, for the shop's links: the
-   * groups and the categories in none, as the header lists them (FER-044).
+   * The categories the storefront lists (those with a published article,
+   * FER-079), in their order, for the shop's links: the groups and the
+   * categories in none, as the header lists them (FER-044).
    */
   categories: readonly NavigationCategory[];
   className?: string;
   copy: Dictionary["storefront"]["shell"];
   locale: Locale;
+  /**
+   * Where to find the store (FER-078): the store's own line, from its
+   * settings, in the language it is in; `null` or left out when it has
+   * none, and the footer then says nothing of it.
+   */
+  location?: { lang: string; text: string } | null;
+  /** The ways to pay, the "how to buy" block's own list (FER-076). */
+  payments: Dictionary["storefront"]["payments"];
   store: {
     instagramUrl: string | null;
     name: string;
@@ -56,21 +66,36 @@ const BLOCK_CLASS =
  */
 const LIST_CLASS = "flex flex-wrap gap-x-6 lg:block";
 
+/** The ways to pay, in the order the "how to buy" block lists them. */
+const PAYMENTS = ["cash", "cards", "mercadoPago", "transfer"] as const;
+
 /**
  * Every page of the store ends here (FER-021, FER-039): dark, with the
- * accent for its headings. The full logo and, under it, Pepe's own story
- * of the stall, signed (FER-044); the shop's links (the catalog, then each
- * group and each category in none, in the header's order); help (how to
- * order, and a WhatsApp chat when the store has it); Instagram and TikTok
- * when it has them; and a quiet credit to Lucas Regalado.
+ * accent for its headings. What a small shop's footer answers (FER-078):
+ * who they are (the full logo and, under it, Pepe's own story of the
+ * stall, signed, FER-044); what they sell (the catalog, then each group
+ * and each category in none that has something published, in the header's
+ * order); how to buy and how to pay (one line, then the ways to pay, then
+ * the way to the contact page, FER-080); and
+ * how to reach them: where the store is (its own line, from its
+ * settings), its WhatsApp as a chat link that shows the number as people
+ * here write it, and Instagram and TikTok, each only when the store has
+ * it. Last, "© store" and a quiet credit to Lucas Regalado.
  */
 function StoreFooter({
   categories,
   className,
   copy,
   locale,
+  location = null,
+  payments,
   store,
 }: StoreFooterProps) {
+  const hasContact =
+    location !== null ||
+    store.whatsappNumber !== null ||
+    store.instagramUrl !== null ||
+    store.tiktokUrl !== null;
   const socials = [
     store.instagramUrl
       ? {
@@ -103,7 +128,7 @@ function StoreFooter({
       {/* Spread across the whole width from `lg` up, after the reference
           store's footer: the story against the left edge, the last block
           against the right, even gaps between however many blocks the
-          store has (three without social links, four with them). Below
+          store has (three with no way to reach it, four with one). Below
           `lg` the blocks stack, one under the other, each with room and a
           hairline between it and the next, as the reference's phone footer
           does, so they read as separate things (FER-050). */}
@@ -172,40 +197,112 @@ function StoreFooter({
         </nav>
         <section
           aria-labelledby="store-footer-help"
-          className={BLOCK_CLASS}
+          className={cn(BLOCK_CLASS, "min-w-0")}
           data-testid="store-footer-help"
         >
           <h2 className={HEADING_CLASS} id="store-footer-help">
             {copy.help}
           </h2>
-          <p className="max-w-xs text-sm text-store-contrast-muted">
+          <p
+            className="max-w-xs text-sm text-store-contrast-muted"
+            data-testid="store-footer-how-to-order"
+          >
             {copy.howToOrder}
           </p>
-          {store.whatsappNumber ? (
-            <a
-              className={cn(LINK_CLASS, "mt-2")}
-              data-testid="store-footer-whatsapp"
-              // wa.me takes the number as digits only.
-              href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <MessageCircle aria-hidden="true" className="size-5 shrink-0" />
-              {copy.whatsapp}
-              <span className="sr-only"> {copy.newTab}</span>
-            </a>
-          ) : null}
-        </section>
-        {socials.length > 0 ? (
-          <section
-            aria-labelledby="store-footer-follow"
-            className={BLOCK_CLASS}
-            data-testid="store-footer-follow"
+          <p
+            className="mt-4 text-sm text-store-background"
+            id="store-footer-payments"
           >
-            <h2 className={HEADING_CLASS} id="store-footer-follow">
-              {copy.follow}
+            {payments.title}
+          </p>
+          {/* One line of words apart by dots, which only the eye needs:
+              a screen reader hears a list of four. */}
+          <ul
+            aria-labelledby="store-footer-payments"
+            className="mt-1 max-w-xs text-sm text-store-contrast-muted"
+            data-testid="store-footer-payments"
+          >
+            {PAYMENTS.map((payment, index) => (
+              <li className="inline" key={payment}>
+                {index > 0 ? <span aria-hidden="true"> · </span> : null}
+                {payments[payment]}
+              </li>
+            ))}
+          </ul>
+          {/* Always there, whatever the store has loaded: the contact
+              page says so itself (FER-080). */}
+          <Link
+            className={cn(LINK_CLASS, "mt-2")}
+            data-testid="store-footer-contact-page"
+            href={localizePath(CONTACT_PATH, locale)}
+          >
+            {copy.contactPage}
+          </Link>
+        </section>
+        {hasContact ? (
+          <section
+            aria-labelledby="store-footer-contact"
+            className={cn(BLOCK_CLASS, "min-w-0")}
+            data-testid="store-footer-contact"
+          >
+            {/* The heading leads to the contact page too: it is what a
+                shopper presses first. On a phone it is a thumb's target,
+                44 px tall inside the heading's own line (the margins give
+                back what the height takes), and the keyboard's focus is
+                the ring the footer's other links draw. */}
+            <h2 className={HEADING_CLASS} id="store-footer-contact">
+              <Link
+                className="underline-offset-4 hover:underline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent max-md:-my-3.5 max-md:inline-flex max-md:min-h-11 max-md:items-center"
+                data-testid="store-footer-contact-heading-link"
+                href={localizePath(CONTACT_PATH, locale)}
+              >
+                {copy.contact}
+              </Link>
             </h2>
+            {location ? (
+              <div
+                className="mb-2 flex max-w-xs items-start gap-2.5 text-sm"
+                data-testid="store-footer-location"
+              >
+                <MapPin aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-store-background">{copy.location}</p>
+                  {/* The store's own words: they may be long, with no
+                      space to break at. */}
+                  <address
+                    className="mt-1 wrap-anywhere text-store-contrast-muted not-italic"
+                    lang={location.lang}
+                  >
+                    {location.text}
+                  </address>
+                </div>
+              </div>
+            ) : null}
             <ul className={LIST_CLASS}>
+              {store.whatsappNumber ? (
+                <li>
+                  <a
+                    className={LINK_CLASS}
+                    data-testid="store-footer-whatsapp"
+                    // wa.me takes the number as digits only.
+                    href={`https://wa.me/${store.whatsappNumber.replaceAll(/\D/gu, "")}`}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    <MessageCircle
+                      aria-hidden="true"
+                      className="size-5 shrink-0"
+                    />
+                    <span>
+                      {copy.whatsapp}{" "}
+                      <span className="tabular-nums">
+                        {formatLocalPhone(store.whatsappNumber)}
+                      </span>
+                    </span>
+                    <span className="sr-only"> {copy.newTab}</span>
+                  </a>
+                </li>
+              ) : null}
               {socials.map(({ Icon, href, key, label }) => (
                 <li key={key}>
                   <a

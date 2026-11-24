@@ -5,9 +5,10 @@ import {
 } from "@/app/_components/molecules/store-article-card";
 import { StoreArticleRow } from "@/app/_components/molecules/store-article-row";
 import { StoreBanner } from "@/app/_components/molecules/store-banner";
+import { StoreHowToBuy } from "@/app/_components/molecules/store-how-to-buy";
 import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import type { Dictionary } from "@/content";
-import { articlePath } from "@/lib/catalog/paths";
+import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import {
@@ -54,11 +55,15 @@ export interface StorePageSectionsProps {
 
 /**
  * Whether a section is a block the width of the window (a banner, a
- * spotlight): one right under another, or under the cover, keeps the
- * cards' gutter from it, so two of them never fuse.
+ * spotlight, "how to buy"): one right under another, or under the cover,
+ * keeps the cards' gutter from it, so two of them never fuse.
  */
 function isFullBleed(section: PageContentSection<StorePageArticle>): boolean {
-  return section.kind === "banner" || section.kind === "spotlight";
+  return (
+    section.kind === "banner" ||
+    section.kind === "spotlight" ||
+    section.kind === "how_to_buy"
+  );
 }
 
 /** A row's heading: its category's name, or the curated row's own. */
@@ -181,6 +186,16 @@ function PageBlock({
     );
   }
 
+  if (section.kind === "how_to_buy") {
+    return (
+      <StoreHowToBuy
+        copy={copy}
+        headingLevel={headingLevel}
+        href={localizePath(ALL_ARTICLES_PATH, locale)}
+      />
+    );
+  }
+
   return (
     <HomeArticleRow
       copy={copy}
@@ -194,7 +209,8 @@ function PageBlock({
 /**
  * A page's blocks under its cover (FER-022, FER-058), in the order the
  * admin set (FER-020): rows of the catalog's cards, and between them photo
- * banners and article spotlights (FER-059) the width of the window. The
+ * banners, article spotlights (FER-059) and the "how to buy" block
+ * (FER-076) the width of the window. The
  * storefront's pages and the admin's preview all draw them here, so the
  * preview is the page: one renderer per block kind. A full-width block
  * directly under another one (or under the cover) keeps a gutter from it,

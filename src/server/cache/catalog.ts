@@ -10,7 +10,7 @@ import {
   getAllArticlesCover,
   getCategoryPage,
   getPublishedProduct,
-  listCategories,
+  listShownCategories,
   listCategoryArticles,
   listRelatedPool,
 } from "@/server/services/catalog";
@@ -130,17 +130,20 @@ export async function readCategoryArticles(
 }
 
 /**
- * The store's categories in their order, named in `locale`, cached with its
- * catalog (FER-039): the header and the footer of every store page list
- * them, an article's static page included, so adding, renaming, reordering
- * or deleting one drops the tag.
+ * The categories the storefront lists (those with a published article,
+ * FER-079), in their order, named in `locale`, cached with its catalog
+ * (FER-039): the header and the footer of every store page list them, an
+ * article's static page included, so adding, renaming, reordering or
+ * deleting one drops the tag, and so does publishing a category's first
+ * article or unpublishing its last (every article write that reaches the
+ * storefront drops it).
  */
 export async function readCategories(store: { id: number }, locale: Locale) {
   "use cache";
   cacheLife("hours");
   cacheTag(catalogTag(store.id));
 
-  return await listCategories(db, { locale, storeId: store.id });
+  return await listShownCategories(db, { locale, storeId: store.id });
 }
 
 /**

@@ -107,6 +107,8 @@ describe("sitemap", () => {
       ...pair("/", "/en", STORE_UPDATED),
       // The catalog changed when its newest article did.
       ...pair("/productos", "/en/productos", RING_UPDATED),
+      // The contact page says the store's details: dated by the store.
+      ...pair("/contacto", "/en/contacto", STORE_UPDATED),
       // A page's address is the same in both languages (FER-043). It
       // changed with the catalog, or later with its own texts.
       ...pair("/bijouterie", "/en/bijouterie", RING_UPDATED),
@@ -146,6 +148,7 @@ describe("sitemap", () => {
     await expect(sitemap()).resolves.toEqual([
       ...pair("/", "/en", STORE_UPDATED),
       ...pair("/productos", "/en/productos", STORE_UPDATED),
+      ...pair("/contacto", "/en/contacto", STORE_UPDATED),
     ]);
   });
 

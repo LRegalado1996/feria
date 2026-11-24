@@ -4,6 +4,7 @@ export const seo = {
     articles: "Artículos",
     categories: "Categorías",
     catalog: "Catálogo completo",
+    contact: "Contacto",
     otherLanguage: "English version",
     pages: "Páginas",
   },

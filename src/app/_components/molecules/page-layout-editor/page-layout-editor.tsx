@@ -20,6 +20,7 @@ import {
 } from "@/app/_components/molecules/form";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { DEFAULT_HOW_TO_BUY_INDEX } from "@/lib/page/layout";
 import {
   FEATURED_MAX,
   type PageLayoutFormFields,
@@ -45,7 +46,7 @@ export interface PageLayoutChoice {
   name: string;
 }
 
-/** A block a page that is not the home can be given (FER-060). */
+/** A block a page can be given by hand (FER-060, FER-076). */
 export interface PageLayoutBlockChoice {
   name: string;
   section: PageSection;
@@ -53,12 +54,14 @@ export interface PageLayoutBlockChoice {
 
 export interface PageLayoutEditorProps {
   /**
-   * The blocks the page can be given, for a page that is not the home
-   * (FER-060): with it, each category's row and curated row of the page
-   * can be taken out, and those not on it added. Without it (the home,
-   * which shows every category and both curated rows), neither.
+   * The blocks the page can be given by hand: those of them on the page
+   * can be taken out, and those not on it added. A page that is not the
+   * home takes each category's row, the curated rows (FER-060) and "how
+   * to buy" (FER-076); the home, which always shows every category and
+   * both curated rows, only "how to buy". A banner or a spotlight is
+   * never one: it leaves a page from its own form.
    */
-  blocks?: readonly PageLayoutBlockChoice[];
+  blocks: readonly PageLayoutBlockChoice[];
   /** The published articles the curated rows can take. */
   choices: readonly PageLayoutChoice[];
   className?: string;
@@ -208,19 +211,6 @@ function LayoutItem({
         ) : null}
       </div>
     </li>
-  );
-}
-
-/**
- * Whether a place is a block given by hand on a page that is not the home
- * (FER-060), which its editor can take out: a category's row or a curated
- * row. A banner or a spotlight leaves a page from its own form.
- */
-function isGivenBlock(section: PageSection): boolean {
-  return (
-    section.kind === "category" ||
-    section.kind === "best_sellers" ||
-    section.kind === "featured"
   );
 }
 
@@ -404,9 +394,10 @@ function CuratedList({
  * the carousel's order; the sequence under it (the categories' rows, the
  * best sellers, the featured articles and the banners between rows), each
  * moved up and down; and the two curated rows, picked from the published
- * articles, up to ten best sellers and none or two to four featured. Each
+ * articles, up to ten best sellers and none or two to sixteen featured. Each
  * entry says when the storefront leaves it out. One form, saved whole from
- * the screen's top bar (`id`).
+ * the screen's top bar (`id`). "Agregar bloque" offers the blocks the page
+ * can be given and does not hold yet (`blocks`).
  */
 function PageLayoutEditor({
   blocks,
@@ -420,6 +411,8 @@ function PageLayoutEditor({
   onSave,
 }: PageLayoutEditorProps) {
   const copy = useDictionary().admin.home.layout;
+  // What can be added can be taken out again.
+  const given = new Set(blocks.map((block) => pageSectionKey(block.section)));
   const cover = useFieldArray({ control: form.control, name: "cover" });
   const sections = useFieldArray({ control: form.control, name: "sections" });
   const { errors, isSubmitting } = useFormState({ control: form.control });
@@ -500,7 +493,7 @@ function PageLayoutEditor({
                     sections.move(from, to);
                   }}
                   onRemove={
-                    blocks && isGivenBlock(field.section)
+                    given.has(pageSectionKey(field.section))
                       ? () => {
                           sections.remove(index);
                         }
@@ -515,17 +508,21 @@ function PageLayoutEditor({
                 {sectionsError}
               </p>
             ) : null}
-            {blocks ? (
-              <AddBlock
-                blocks={blocks}
-                onAdd={(section) => {
+            <AddBlock
+              blocks={blocks}
+              onAdd={(section) => {
+                // "How to buy" goes where it was asked for, right under
+                // the cover; any other block after the rest.
+                if (section.kind === "how_to_buy") {
+                  sections.insert(DEFAULT_HOW_TO_BUY_INDEX, { section });
+                } else {
                   sections.append({ section });
-                }}
-                taken={sections.fields.map((field) =>
-                  pageSectionKey(field.section)
-                )}
-              />
-            ) : null}
+                }
+              }}
+              taken={sections.fields.map((field) =>
+                pageSectionKey(field.section)
+              )}
+            />
           </LayoutCard>
           <LayoutCard
             hint={`${copy.bestSellersHint} ${copy.sharedList}`}

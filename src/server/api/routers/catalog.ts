@@ -15,7 +15,7 @@ import {
   getPublishedProduct,
   getPublishedProductRef,
   listCartProducts,
-  listCategories,
+  listShownCategories,
   listPublishedProducts,
   listRelatedProducts,
 } from "@/server/services/catalog";
@@ -47,7 +47,7 @@ export const catalogRouter = {
     .handler(async ({ context, input }) => {
       const store = await getStore(context.db);
 
-      return await listCategories(context.db, {
+      return await listShownCategories(context.db, {
         locale: input.locale,
         storeId: store.id,
       });
@@ -55,7 +55,8 @@ export const catalogRouter = {
     .route({
       method: "GET",
       path: "/categories",
-      summary: "List a store's categories in their order",
+      summary:
+        "List the store's categories with published articles, in their order",
       tags: ["catalog"],
     }),
 

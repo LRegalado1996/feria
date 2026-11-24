@@ -1,0 +1,2 @@
+ALTER TABLE "store_translation" ADD COLUMN "location" text;--> statement-breakpoint
+ALTER TABLE "store_translation" ADD CONSTRAINT "store_translation_location_length" CHECK (char_length("store_translation"."location") BETWEEN 1 AND 200);
