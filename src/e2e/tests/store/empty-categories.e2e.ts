@@ -148,7 +148,7 @@ test.describe("Categories with no published article", () => {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
       await expect(
-        page.getByRole("heading", { name: "Todavía no hay artículos" })
+        page.getByRole("heading", { name: "No encontramos nada" })
       ).toBeVisible();
       await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
         "content",
