@@ -123,7 +123,28 @@ describe("composePageSections", () => {
     ).toEqual([]);
   });
 
-  test('"how to buy" shows wherever it was placed: its words are the interface\'s (FER-076)', () => {
+  test('"how to buy" shows where it was placed, between the rows around it (FER-076)', () => {
+    expect(
+      composePageSections(
+        [
+          { kind: "featured" },
+          { kind: "how_to_buy" },
+          { kind: "best_sellers" },
+        ],
+        makeSources()
+      )
+    ).toEqual([
+      { articles: ["esclavas", "sello"], key: "featured", kind: "featured" },
+      { key: "how_to_buy", kind: "how_to_buy" },
+      {
+        articles: ["pez", "corona"],
+        key: "best_sellers",
+        kind: "best_sellers",
+      },
+    ]);
+  });
+
+  test('"how to buy" needs no article: its words are the interface\'s, so it shows beside a row left out', () => {
     expect(
       composePageSections(
         [{ kind: "how_to_buy" }, { kind: "featured" }],

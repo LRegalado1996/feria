@@ -150,10 +150,9 @@ test.describe("Categories with no published article", () => {
       await expect(
         page.getByRole("heading", { name: "No encontramos nada" })
       ).toBeVisible();
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-        "content",
-        "noindex, follow"
-      );
+      await expect
+        .poll(async () => await store.readMeta("robots"))
+        .toBe("noindex, follow");
     }
 
     // Published: Anillos shows, and its group with it; Aros and Relojes,
@@ -192,7 +191,7 @@ test.describe("Categories with no published article", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       `Anillos ${tag}`
     );
-    await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
+    await expect.poll(async () => await store.readMeta("robots")).toBeNull();
 
     // Unpublished again: both leave, everywhere, at once.
     await setPublished(page, ring.id, false);
