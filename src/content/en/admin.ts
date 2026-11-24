@@ -661,6 +661,7 @@ export const admin: Dictionary["admin"] = {
       nameTooLong: "Use up to 80 characters.",
       save: "We couldn't save the settings. What you wrote is still here: try again.",
       taglineRequired: "Write the tagline.",
+      locationTooLong: "Use up to 200 characters.",
       taglineTooLong: "Use up to 120 characters.",
       tiktokInvalid:
         "Paste the full TikTok link, such as https://tiktok.com/@your-store",
@@ -672,6 +673,10 @@ export const admin: Dictionary["admin"] = {
       descriptionEs: "Description in Spanish",
       instagramUrl: "Instagram link",
       name: "Store name",
+      locationEn: "Where to find us, in English",
+      locationEs: "Where to find us, in Spanish",
+      locationHint:
+        "One short line: the fair, the stall, the street and the hours. It shows in the store's footer. Left empty, it is not shown.",
       socialHint: "Leave it empty and the store won't show it.",
       taglineEn: "Tagline in English",
       taglineEs: "Tagline in Spanish",

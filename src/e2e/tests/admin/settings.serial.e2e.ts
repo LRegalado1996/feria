@@ -49,6 +49,45 @@ test.describe("Company settings", () => {
     );
   });
 
+  // FER-078. Where to find the store is the store's own line: the footer
+  // says it as soon as it is saved, and stops once it is cleared.
+  test("where to find the store, written in the settings, shows in the storefront's footer on the next visit, and leaves once cleared", async ({
+    page,
+    storeEdit: _restoresTheSettings,
+  }) => {
+    const line = `Feria nueva · Puesto ${uniqueTag()}`;
+    const store = new StorePage(page);
+    const place = () => store.getFooter().getByTestId("store-footer-location");
+    // Visited first, so the cached storefront holds the line as it was.
+    await store.goto();
+    await expect(place()).toContainText(STORE_TEXTS.es.location);
+    const settings = new AdminSettingsPage(page);
+    await settings.open();
+    const field = settings.field("Dónde encontrarnos, en español");
+    await expect(field).toHaveValue(STORE_TEXTS.es.location);
+    await expect(settings.field("Dónde encontrarnos, en inglés")).toHaveValue(
+      ""
+    );
+
+    await field.fill(line);
+    await settings.save({ name: STORE_SETTINGS.name });
+
+    await store.goto();
+    await expect(place()).toHaveText(`Dónde encontrarnos${line}`);
+
+    // Cleared in both languages, the footer says nothing of it; the rest
+    // of the contact block stays.
+    await settings.open();
+    await settings.field("Dónde encontrarnos, en español").fill("");
+    await settings.save({ name: STORE_SETTINGS.name });
+
+    await store.goto();
+    await expect(
+      store.getFooter().getByRole("link", { name: /WhatsApp/u })
+    ).toBeVisible();
+    await expect(place()).toHaveCount(0);
+  });
+
   test("a changed tagline describes the home's share card on the next visit", async ({
     page,
     storeEdit: _restoresTheSettings,

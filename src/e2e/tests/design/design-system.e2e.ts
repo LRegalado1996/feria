@@ -41,6 +41,7 @@ test.describe("Storefront design system", () => {
         "Fila de artículos",
         "Banner",
         "Artículo en vidriera",
+        "Cómo comprar",
         "Portada que se mueve",
         "Banda en movimiento",
         "Burbujas",
@@ -49,7 +50,7 @@ test.describe("Storefront design system", () => {
         // The sample footer's own headings close the gallery.
         "Tienda",
         "Ayuda",
-        "Seguinos",
+        "Contacto",
       ]);
       await expect(
         designPage.getSection("cards").getByRole("article")

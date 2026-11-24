@@ -540,6 +540,8 @@ export default async function DesignPage({ params }: DesignPageProps) {
           categories={categories}
           copy={storefront.shell}
           locale={locale}
+          location={{ lang: locale, text: sample.location }}
+          payments={storefront.payments}
           store={SAMPLE_STORE}
         />
       </section>

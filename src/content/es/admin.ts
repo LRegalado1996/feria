@@ -675,6 +675,7 @@ export const admin = {
         "Pegá el enlace completo de Instagram, por ejemplo https://instagram.com/tu-tienda",
       linkTooLong: "El enlace es demasiado largo.",
       load: "No pudimos cargar los ajustes.",
+      locationTooLong: "Usá hasta 200 caracteres.",
       nameRequired: "Escribí el nombre de la tienda.",
       nameTooLong: "Usá hasta 80 caracteres.",
       save: "No pudimos guardar los ajustes. Lo que escribiste sigue acá: probá de nuevo.",
@@ -689,6 +690,11 @@ export const admin = {
       descriptionEn: "Descripción en inglés",
       descriptionEs: "Descripción en español",
       instagramUrl: "Enlace de Instagram",
+      // Where to find the store (FER-078): one line the footer shows.
+      locationEn: "Dónde encontrarnos, en inglés",
+      locationEs: "Dónde encontrarnos, en español",
+      locationHint:
+        "Una línea corta: la feria, el puesto, la calle y el horario. Sale en el pie de la tienda. Si lo dejás vacío, no se muestra.",
       name: "Nombre de la tienda",
       socialHint: "Si lo dejás vacío, la tienda no lo muestra.",
       taglineEn: "Frase en inglés",

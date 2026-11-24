@@ -88,7 +88,12 @@ describe("findStore", () => {
       },
       with: {
         translations: {
-          columns: { description: true, locale: true, tagline: true },
+          columns: {
+            description: true,
+            locale: true,
+            location: true,
+            tagline: true,
+          },
         },
       },
     });
@@ -262,6 +267,79 @@ describe("updateStore", () => {
       description: 'excluded."description"',
       tagline: 'excluded."tagline"',
       updatedAt: 'excluded."updatedAt"',
+    });
+  });
+});
+
+describe("updateStore: where to find the store (FER-078)", () => {
+  /** The columns an edit's upsert overwrites on a text that exists. */
+  function overwrittenBy(db: ReturnType<typeof setup>["db"]) {
+    const conflict = db.$["insert.onConflictDoUpdate"].mock.calls[0]?.[0] as {
+      set: Record<string, unknown>;
+    };
+
+    return Object.fromEntries(
+      Object.entries(conflict.set).map(([column, value]) => [
+        column,
+        renderSql(value),
+      ])
+    );
+  }
+
+  test("an edit that names it in every text writes it, a text or none, over the stored one", async () => {
+    const { db, update } = setup();
+    const texts = [
+      { ...SPANISH, location: "Feria del Parque · Puesto 12" },
+      { ...ENGLISH, location: null },
+    ];
+
+    await update(makeValues({ translations: texts }));
+
+    expect(db.$["insert.values"]).toHaveBeenCalledExactlyOnceWith([
+      { ...SPANISH, location: "Feria del Parque · Puesto 12", storeId: 7 },
+      { ...ENGLISH, location: null, storeId: 7 },
+    ]);
+    expect(overwrittenBy(db)).toEqual({
+      description: 'excluded."description"',
+      location: 'excluded."location"',
+      tagline: 'excluded."tagline"',
+      updatedAt: 'excluded."updatedAt"',
+    });
+  });
+
+  test.each([
+    ["names it in no text", [SPANISH, ENGLISH]],
+    [
+      "names it in one text only",
+      [{ ...SPANISH, location: "Feria del Parque" }, ENGLISH],
+    ],
+  ])(
+    "an edit that %s (a tab opened before the field existed) keeps the stored ones",
+    async (_case, texts) => {
+      const { db, update } = setup();
+
+      await update(makeValues({ translations: texts }));
+
+      expect(overwrittenBy(db)).toEqual({
+        description: 'excluded."description"',
+        tagline: 'excluded."tagline"',
+        updatedAt: 'excluded."updatedAt"',
+      });
+    }
+  );
+
+  test("reads it back with each text", async () => {
+    const stored = [{ ...SPANISH, location: "Feria del Parque" }];
+    const { db, update } = setup({ translations: stored });
+
+    await expect(
+      update(makeValues({ translations: stored }))
+    ).resolves.toMatchObject({ translations: stored });
+    expect(db.$["insert.returning"]).toHaveBeenCalledExactlyOnceWith({
+      description: storeTranslation.description,
+      locale: storeTranslation.locale,
+      location: storeTranslation.location,
+      tagline: storeTranslation.tagline,
     });
   });
 });

@@ -34,6 +34,8 @@ export interface SettingsFormStore {
   translations: readonly {
     description: string;
     locale: Locale;
+    /** Where to find the store (FER-078), or `null` for none. */
+    location: string | null;
     tagline: string;
   }[];
   whatsappNumber: string | null;
@@ -62,6 +64,12 @@ const TEXT_FIELDS = [
   ["descriptionEn", "en", "textarea"],
 ] as const;
 
+/** Where to find the store, one optional line per language (FER-078). */
+const LOCATION_FIELDS = [
+  ["locationEs", "es"],
+  ["locationEn", "en"],
+] as const;
+
 /** The fields as the form holds them: strings, `""` for nothing. */
 function fieldsOf(store: SettingsFormStore): StoreSettingsFormFields {
   const text = (locale: Locale) =>
@@ -71,6 +79,8 @@ function fieldsOf(store: SettingsFormStore): StoreSettingsFormFields {
     descriptionEn: text("en")?.description ?? "",
     descriptionEs: text("es")?.description ?? "",
     instagramUrl: store.instagramUrl ?? "",
+    locationEn: text("en")?.location ?? "",
+    locationEs: text("es")?.location ?? "",
     name: store.name,
     taglineEn: text("en")?.tagline ?? "",
     taglineEs: text("es")?.tagline ?? "",
@@ -110,8 +120,9 @@ function SettingsCard({
 
 /**
  * The company's settings (FER-014), in the admin's cards: the store's name,
- * its tagline and description in both languages, its WhatsApp number and
- * its Instagram and TikTok links. The currency is shown, not edited: it is
+ * its tagline and description in both languages, its WhatsApp number, its
+ * Instagram and TikTok links, and where to find it, one optional line in
+ * each language that the footer shows (FER-078). The currency is shown, not edited: it is
  * fixed per store (decided 2026-11-18), so the form never sends it. The WhatsApp number is read as typed
  * (`createStoreSettingsFormSchema`) and shown, once saved, as it was kept.
  * Errors show under their field, and a failed save keeps everything typed.
@@ -227,6 +238,27 @@ function SettingsForm({ className, id, onSave, store }: SettingsFormProps) {
                 </FormItem>
               )}
             />
+            <div className="grid gap-4 md:grid-cols-2">
+              {LOCATION_FIELDS.map(([name, lang]) => (
+                <FormField
+                  control={form.control}
+                  key={name}
+                  name={name}
+                  render={({ field }) => (
+                    <FormItem className="min-w-0">
+                      <FormLabel>{copy.fields[name]}</FormLabel>
+                      <FormControl>
+                        <Input {...field} autoComplete="off" lang={lang} />
+                      </FormControl>
+                      <FormDescription>
+                        {copy.fields.locationHint}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ))}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               {(["instagramUrl", "tiktokUrl"] as const).map((name) => (
                 <FormField

@@ -104,11 +104,13 @@ vi.mock("./store-page-footer", () => ({
 const SPANISH = {
   description: "Anillos y cadenas hechos a mano.",
   locale: "es",
+  location: null,
   tagline: "Joyas en la feria",
 } as const;
 const ENGLISH = {
   description: "Handmade rings and chains.",
   locale: "en",
+  location: null,
   tagline: "Jewelry at the fair",
 } as const;
 

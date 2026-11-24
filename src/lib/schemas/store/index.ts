@@ -13,6 +13,11 @@ export const STORE_CURRENCIES = [
 export const STORE_NAME_MAX_LENGTH = 80;
 export const STORE_TAGLINE_MAX_LENGTH = 120;
 export const STORE_DESCRIPTION_MAX_LENGTH = 600;
+/**
+ * Where to find the store, as one short line (FER-078): the fair, the
+ * stall, the street, the hours, in the store's own words.
+ */
+export const STORE_LOCATION_MAX_LENGTH = 200;
 
 const URL_MAX_LENGTH = 2048;
 
@@ -87,6 +92,21 @@ const storeTranslationSchema = z.object({
       `Keep the description to ${STORE_DESCRIPTION_MAX_LENGTH} characters`
     ),
   locale: z.enum(LOCALES),
+  /**
+   * Where to find the store (FER-078), or `null` for none; blank reads as
+   * none. Optional in the request: a tab opened before this field existed
+   * sends none, and the stored one is then kept, never emptied.
+   */
+  location: z
+    .string()
+    .trim()
+    .max(
+      STORE_LOCATION_MAX_LENGTH,
+      `Keep the location to ${STORE_LOCATION_MAX_LENGTH} characters`
+    )
+    .nullable()
+    .transform((text) => (text === "" ? null : text))
+    .optional(),
   tagline: z
     .string()
     .trim()
@@ -154,6 +174,7 @@ export interface StoreSettingsFormMessages {
   descriptionTooLong: string;
   instagramInvalid: string;
   linkTooLong: string;
+  locationTooLong: string;
   nameRequired: string;
   nameTooLong: string;
   taglineRequired: string;
@@ -174,8 +195,9 @@ function blankAsNull<Output extends string>(schema: z.ZodType<Output, string>) {
 /**
  * The settings form's fields (FER-014), as the form holds them: every one a
  * string, `""` included. Parsed, they are what `store.update` takes: the
- * store's name, its texts in both languages (both required), its WhatsApp
- * number in E.164 and its links, a blank number or link as `null`.
+ * store's name, its texts in both languages (both required), where to find
+ * it in each (optional, blank as `null`, FER-078), its WhatsApp number in
+ * E.164 and its links, a blank number or link as `null`.
  *
  * The WhatsApp number is read the way a person types it: spaces, dots,
  * dashes and parentheses are dropped, `00` before the country code becomes
@@ -197,10 +219,18 @@ export function createStoreSettingsFormSchema(
     .min(1, messages.descriptionRequired)
     .max(STORE_DESCRIPTION_MAX_LENGTH, messages.descriptionTooLong);
 
+  const location = z
+    .string()
+    .trim()
+    .max(STORE_LOCATION_MAX_LENGTH, messages.locationTooLong)
+    .transform((typed) => (typed === "" ? null : typed));
+
   return z
     .object({
       descriptionEn: description,
       descriptionEs: description,
+      locationEn: location,
+      locationEs: location,
       instagramUrl: blankAsNull(
         storeLink({
           hosts: INSTAGRAM_HOSTS,
@@ -249,14 +279,26 @@ export function createStoreSettingsFormSchema(
       ({
         descriptionEn,
         descriptionEs,
+        locationEn,
+        locationEs,
         taglineEn,
         taglineEs,
         ...columns
       }): UpdateStoreValues => ({
         ...columns,
         translations: [
-          { description: descriptionEs, locale: "es", tagline: taglineEs },
-          { description: descriptionEn, locale: "en", tagline: taglineEn },
+          {
+            description: descriptionEs,
+            locale: "es",
+            location: locationEs,
+            tagline: taglineEs,
+          },
+          {
+            description: descriptionEn,
+            locale: "en",
+            location: locationEn,
+            tagline: taglineEn,
+          },
         ],
       })
     );

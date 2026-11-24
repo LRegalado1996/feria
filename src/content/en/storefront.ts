@@ -236,6 +236,7 @@ export const storefront: Dictionary["storefront"] = {
     cartEmpty: "Cart, empty",
     catalog: "Catalog",
     closeMenu: "Close the menu",
+    contact: "Contact",
     groupAll: "View all",
     groupToggle: "{name}: its categories",
     copyright: "© {store}",
@@ -245,13 +246,13 @@ export const storefront: Dictionary["storefront"] = {
       retry: "Try again",
       title: "We could not show this page",
     },
-    follow: "Follow us",
     footer: "Store footer",
     help: "Help",
     home: "Home",
     howToOrder:
-      "Pick what you like, add it to the cart and leave your name: we write to you to arrange the delivery.",
+      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange the delivery: pick it up at the stall or we send it to you.",
     instagram: "{store} on Instagram",
+    location: "Where to find us",
     logo: "{brand}, go to the home page",
     menu: "Menu",
     // The logo at the top of the phone menu, which leads home (FER-050).
@@ -275,6 +276,6 @@ export const storefront: Dictionary["storefront"] = {
       text: "For more than 20 years my family has set up its stall at the Christmas fair. I started out helping my parents, and for about 10 years now I have had my own. We have sold a bit of everything: shoes, clothes, toys, perfumes. This year we are bringing jewelry and bubble guns: come by stall 86 or order from here.",
     },
     tiktok: "{store} on TikTok",
-    whatsapp: "Write to us on WhatsApp",
+    whatsapp: "WhatsApp",
   },
 };

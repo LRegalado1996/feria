@@ -111,6 +111,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-075](FER-075-featured-row-and-cover-title.md)   | A longer "Destacados" row, a smaller cover title    | P1       | in progress |
 | [FER-076](FER-076-how-to-buy-block.md)               | "Cómo comprar" as a block of the home               | P1       | in progress |
 | [FER-077](FER-077-banners-without-shade.md)          | Banners without the shade: a text shadow instead    | P1       | in progress |
+| [FER-078](FER-078-store-footer.md)                   | A footer with all a small shop's footer should have | P1       | in progress |
 | [FER-079](FER-079-hide-empty-categories.md)          | Empty categories are hidden from the storefront     | P1       | in progress |
 
 ### M5 Metrics

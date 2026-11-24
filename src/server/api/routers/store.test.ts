@@ -114,7 +114,12 @@ describe("store.get", () => {
       expect.objectContaining({
         with: {
           translations: {
-            columns: { description: true, locale: true, tagline: true },
+            columns: {
+              description: true,
+              locale: true,
+              location: true,
+              tagline: true,
+            },
           },
         },
       })

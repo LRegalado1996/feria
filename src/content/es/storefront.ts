@@ -251,6 +251,9 @@ export const storefront = {
     cartCountOne: "Carrito, 1 unidad",
     cartEmpty: "Carrito, vacío",
     catalog: "Catálogo",
+    // The footer's contact block (FER-078): where the store is, WhatsApp
+    // and the social links.
+    contact: "Contacto",
     closeMenu: "Cerrar el menú",
     // The first link of a group's list on the header's line (FER-044): the
     // group's own page.
@@ -264,13 +267,15 @@ export const storefront = {
       retry: "Probar de nuevo",
       title: "No pudimos mostrar esta página",
     },
-    follow: "Seguinos",
     footer: "Pie de la tienda",
     help: "Ayuda",
     home: "Home",
+    // How to buy, in one line: the block's three steps (FER-076).
     howToOrder:
-      "Elegí lo que te guste, agregalo al carrito y dejá tu nombre: te escribimos para coordinar la entrega.",
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos.",
     instagram: "Instagram de {store}",
+    // Over the store's own line that says where to find it (FER-078).
+    location: "Dónde encontrarnos",
     logo: "{brand}, ir a la home",
     menu: "Menú",
     // The logo at the top of the phone menu, which leads home (FER-050).
@@ -296,6 +301,7 @@ export const storefront = {
       text: "Hace más de 20 años que mi familia arma su puesto en la feria navideña. Empecé ayudando a mis padres y hace unos 10 años tengo el mío. Vendimos de todo: zapatos, ropa, juguetes, perfumes. Este año venimos con bijouterie y pistolas de burbujas: pasá por el puesto 86 o pedí desde acá.",
     },
     tiktok: "TikTok de {store}",
-    whatsapp: "Escribinos por WhatsApp",
+    // Before the store's number, which the link shows in its local form.
+    whatsapp: "WhatsApp",
   },
 };

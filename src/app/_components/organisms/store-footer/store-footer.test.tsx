@@ -53,10 +53,12 @@ function makeStore(overrides: Partial<Store> = {}): Store {
 function setup({
   categories = CATEGORIES,
   locale = "en",
+  location,
   store = makeStore(),
 }: {
   categories?: StoreFooterProps["categories"];
   locale?: Locale;
+  location?: StoreFooterProps["location"];
   store?: Store;
 } = {}) {
   render(
@@ -65,6 +67,8 @@ function setup({
       className="custom"
       copy={DICTIONARIES[locale].storefront.shell}
       locale={locale}
+      location={location}
+      payments={DICTIONARIES[locale].storefront.payments}
       store={store}
     />
   );
@@ -88,22 +92,23 @@ function setup({
 const NEW_TAB = " (opens in a new tab)";
 const IG = [`LR Market on Instagram${NEW_TAB}`, INSTAGRAM];
 const TT = [`LR Market on TikTok${NEW_TAB}`, TIKTOK];
-const WA = [`Write to us on WhatsApp${NEW_TAB}`, "https://wa.me/59899123456"];
+// The link shows the number as people here write it; `wa.me` takes digits.
+const WA = [`WhatsApp 099 123 456${NEW_TAB}`, "https://wa.me/59899123456"];
 
 describe("StoreFooter", () => {
   test.each([
     [{}, []],
     [{ instagramUrl: INSTAGRAM }, [IG]],
     [{ tiktokUrl: TIKTOK }, [TT]],
-    [{ whatsappNumber: "+598 99 123 456" }, [WA]],
+    [{ whatsappNumber: "+59899123456" }, [WA]],
     [{ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }, [IG, TT]],
     [{ instagramUrl: INSTAGRAM, whatsappNumber: "+59899123456" }, [WA, IG]],
-    [{ tiktokUrl: TIKTOK, whatsappNumber: "+598-99-123-456" }, [WA, TT]],
+    [{ tiktokUrl: TIKTOK, whatsappNumber: "+59899123456" }, [WA, TT]],
     [
       {
         instagramUrl: INSTAGRAM,
         tiktokUrl: TIKTOK,
-        whatsappNumber: "+598 99 123 456",
+        whatsappNumber: "+59899123456",
       },
       [WA, IG, TT],
     ],
@@ -115,18 +120,18 @@ describe("StoreFooter", () => {
 
   test.each([
     [
-      "three blocks, without social links",
+      "three blocks, with no way to reach the store",
       makeStore(),
       ["store-footer-brand", "store-footer-shop", "store-footer-help"],
     ],
     [
-      "four blocks, with them",
+      "four blocks, with one",
       makeStore({ instagramUrl: INSTAGRAM, tiktokUrl: TIKTOK }),
       [
         "store-footer-brand",
         "store-footer-shop",
         "store-footer-help",
-        "store-footer-follow",
+        "store-footer-contact",
       ],
     ],
   ])(
@@ -175,7 +180,7 @@ describe("StoreFooter", () => {
 
   test.each([
     ["store-footer-shop", makeStore()],
-    ["store-footer-follow", makeStore({ instagramUrl: INSTAGRAM })],
+    ["store-footer-contact", makeStore({ instagramUrl: INSTAGRAM })],
   ])(
     "below lg, %s puts its title on its own line and its links side by side on one line under it, one under the other from lg up",
     (testId, store) => {
@@ -191,13 +196,95 @@ describe("StoreFooter", () => {
     }
   );
 
-  test("leaves out the follow section when the store has no social link", () => {
-    const { footer } = setup({ store: makeStore({ whatsappNumber: "+1" }) });
+  test("leaves out the contact block when the store has no way to reach it: no place, no WhatsApp, no social link", () => {
+    const { footer } = setup();
 
     expect(
-      within(footer).queryByRole("heading", { name: "Follow us" })
+      within(footer).queryByRole("heading", { name: "Contact" })
     ).toBeNull();
+    expect(within(footer).queryByTestId("store-footer-contact")).toBeNull();
   });
+
+  test.each([
+    ["where it is", { location: { lang: "es", text: "Feria del Parque" } }],
+    ["a WhatsApp number", { store: makeStore({ whatsappNumber: "+1" }) }],
+    ["a social link", { store: makeStore({ tiktokUrl: TIKTOK }) }],
+  ])("shows the contact block for a store with only %s", (_case, options) => {
+    const { footer } = setup(options);
+
+    expect(
+      within(footer).getByRole("region", { name: "Contact" })
+    ).toBeVisible();
+  });
+
+  test.each([
+    ["en", "Contact", "Where to find us"],
+    ["es", "Contacto", "Dónde encontrarnos"],
+  ] as const)(
+    "in %s, %s says where to find the store in the store's own words, marked with their language (FER-078)",
+    (locale, heading, label) => {
+      const { footer } = setup({
+        locale,
+        location: {
+          lang: "es",
+          text: "Feria del Parque · Puesto 12 · Desde las 18 h",
+        },
+      });
+
+      const place = within(
+        within(footer).getByRole("region", { name: heading })
+      ).getByTestId("store-footer-location");
+      expect(place).toHaveTextContent(
+        `${label}Feria del Parque · Puesto 12 · Desde las 18 h`
+      );
+      const address = required(place.querySelector("address"));
+      expect(address).toHaveTextContent(
+        /^Feria del Parque · Puesto 12 · Desde las 18 h$/u
+      );
+      expect(address).toHaveAttribute("lang", "es");
+      // The store's own words may have no space to break at.
+      expect(address).toHaveClass("wrap-anywhere");
+    }
+  );
+
+  test("says nothing of a place the store did not write", () => {
+    const { footer } = setup({
+      location: null,
+      store: makeStore({ whatsappNumber: "+59899123456" }),
+    });
+
+    expect(within(footer).queryByTestId("store-footer-location")).toBeNull();
+    expect(footer).not.toHaveTextContent("Where to find us");
+  });
+
+  test.each([
+    [
+      "a Uruguayan mobile, as it is written here",
+      "+59899123456",
+      "099 123 456",
+    ],
+    [
+      "a number of another country, as stored",
+      "+5491112345678",
+      "+5491112345678",
+    ],
+  ])(
+    "its WhatsApp link shows %s, and leads to the chat by its digits",
+    (_case, stored, shown) => {
+      const { footer } = setup({
+        store: makeStore({ whatsappNumber: stored }),
+      });
+
+      const link = within(footer).getByTestId("store-footer-whatsapp");
+      expect(link).toHaveAccessibleName(
+        `WhatsApp ${shown} (opens in a new tab)`
+      );
+      expect(link).toHaveAttribute(
+        "href",
+        `https://wa.me/${stored.replace("+", "")}`
+      );
+    }
+  );
 
   test.each([
     ["en", "Shop", "Catalog", "/en"],
@@ -244,14 +331,47 @@ describe("StoreFooter", () => {
   });
 
   test.each([
-    ["en", "Help", "Pick what you like, add it to the cart"],
-    ["es", "Ayuda", "Elegí lo que te guste, agregalo al carrito"],
-  ] as const)("in %s, %s says how to order", (locale, heading, howTo) => {
-    const { footer } = setup({ locale });
+    [
+      "en",
+      "Help",
+      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange the delivery: pick it up at the stall or we send it to you.",
+      "Pay with",
+      ["Cash", "Credit and debit cards", "Mercado Pago", "Bank transfer"],
+    ],
+    [
+      "es",
+      "Ayuda",
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos.",
+      "Pagás con",
+      [
+        "Efectivo",
+        "Tarjetas de crédito y débito",
+        "Mercado Pago",
+        "Transferencia bancaria",
+      ],
+    ],
+  ] as const)(
+    "in %s, %s says how to buy in one line, then the ways to pay as a list named by its title",
+    (locale, heading, howTo, title, ways) => {
+      const { footer } = setup({ locale });
 
-    const help = within(footer).getByRole("region", { name: heading });
-    expect(help).toHaveTextContent(howTo);
-  });
+      const help = within(
+        within(footer).getByRole("region", { name: heading })
+      );
+      expect(help.getByTestId("store-footer-how-to-order")).toHaveTextContent(
+        new RegExp(`^${howTo}$`, "u")
+      );
+      const payments = help.getByRole("list", { name: title });
+      // A screen reader hears four items; the dots between are for the eye.
+      expect(
+        within(payments)
+          .getAllByRole("listitem")
+          // Each item's own words, without the dot drawn before it.
+          .map((item) => item.textContent.replace(/^ · /u, ""))
+      ).toEqual(ways);
+      expect(payments).toHaveTextContent(ways.join(" · "));
+    }
+  );
 
   test.each([
     ["en", "/en", "LR Market, go to the home page"],
@@ -334,7 +454,7 @@ describe("StoreFooter", () => {
     });
 
     expect(outside().map(([name]) => name)).toEqual([
-      "Escribinos por WhatsApp (se abre en otra pestaña)",
+      "WhatsApp 099 123 456 (se abre en otra pestaña)",
       "Instagram de LR Market (se abre en otra pestaña)",
       "TikTok de LR Market (se abre en otra pestaña)",
     ]);

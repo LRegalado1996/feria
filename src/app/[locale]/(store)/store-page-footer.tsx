@@ -5,9 +5,32 @@ import { StoreFooter } from "@/app/_components/organisms/store-footer";
 import { getDictionary } from "@/content";
 import type { NavigationCategory } from "@/lib/catalog/navigation";
 import type { Locale } from "@/lib/i18n/config";
+import { LOCALES } from "@/lib/i18n/config";
 import { readCategories } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import type { PublicStore } from "@/server/services/store";
+
+/**
+ * Where to find the store (FER-078), as the footer shows it: the line the
+ * admin wrote in the page's language, else the one in the other language,
+ * marked with the language it is in; `null` when the store wrote none.
+ */
+export function storeLocation(
+  store: Pick<PublicStore, "translations">,
+  locale: Locale
+): { lang: Locale; text: string } | null {
+  for (const lang of [locale, ...LOCALES.filter((other) => other !== locale)]) {
+    const text = store.translations.find(
+      (translation) => translation.locale === lang
+    )?.location;
+
+    if (text) {
+      return { lang, text };
+    }
+  }
+
+  return null;
+}
 
 /**
  * The footer every store page ends with (FER-021, FER-039), from the store
@@ -25,13 +48,17 @@ export async function StorePageFooter({
   locale: Locale;
   store: PublicStore;
 }) {
+  const { storefront } = getDictionary(locale);
+
   return (
     <StoreFooter
       categories={categories ?? (await readCategories(store, locale))}
       // At the bottom of a short page too: the content region is a column.
       className="mt-auto"
-      copy={getDictionary(locale).storefront.shell}
+      copy={storefront.shell}
       locale={locale}
+      location={storeLocation(store, locale)}
+      payments={storefront.payments}
       store={store}
     />
   );

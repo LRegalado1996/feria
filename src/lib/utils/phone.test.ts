@@ -1,6 +1,24 @@
 import { describe, expect, test } from "vitest";
 
-import { normalizePhone } from "./phone";
+import { formatLocalPhone, normalizePhone } from "./phone";
+
+describe("formatLocalPhone (FER-078)", () => {
+  test.each([
+    // A Uruguayan mobile, as people here write it.
+    ["+59899123456", "099 123 456"],
+    ["+59891000000", "091 000 000"],
+    // Anything else keeps its country code: it is what makes it dialable.
+    ["+5491112345678", "+5491112345678"],
+    ["+12345678", "+12345678"],
+    // A Uruguayan landline is not a mobile, nor is a mobile a digit short
+    // or long.
+    ["+59821234567", "+59821234567"],
+    ["+5989912345", "+5989912345"],
+    ["+598991234567", "+598991234567"],
+  ])("shows %j as %j", (stored, shown) => {
+    expect(formatLocalPhone(stored)).toBe(shown);
+  });
+});
 
 describe("normalizePhone", () => {
   test.each([

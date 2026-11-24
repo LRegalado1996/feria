@@ -275,25 +275,31 @@ test.describe("Storefront shell", () => {
       db,
       page,
     }) => {
-      // A category of the test's own, so the shop lists more than the
-      // catalog; a catalog page reads the categories as they are now.
+      // A category of the test's own, with an article (one with none is
+      // not listed, FER-079), so the shop lists more than the catalog; a
+      // catalog page reads the categories as they are now.
       const tag = uniqueTag();
-      await db.seed.createCategory({
+      const earrings = await db.seed.createCategory({
         nameEs: `Aros ${tag}`,
         slug: `aros-${tag}`,
+      });
+      await db.seed.createArticle({
+        categoryId: earrings.id,
+        priceAmount: 50_000,
+        title: `Aro ${tag}`,
       });
       const storePage = new StorePage(page);
       await page.goto("/productos");
       const footer = storePage.getFooter();
       await footer.scrollIntoViewIfNeeded();
       const shop = footer.getByRole("navigation", { name: "Tienda" });
-      // The run's store has Instagram: four blocks, in this order.
+      // The run's store can be reached: four blocks, in this order.
       const blocks = await Promise.all(
         [
           footer.getByTestId("store-footer-brand"),
           shop,
           footer.getByRole("region", { name: "Ayuda" }),
-          footer.getByRole("region", { name: "Seguinos" }),
+          footer.getByRole("region", { name: "Contacto" }),
         ].map(boxOf)
       );
 
@@ -360,6 +366,94 @@ test.describe("Storefront shell", () => {
       await expectSideBySide();
     });
   });
+  // FER-078. What a small shop's footer answers: how to buy and pay, and
+  // how to reach the store, from the store's own settings.
+  test("the footer says how to buy and pay, and how to reach the store: where it is in the store's own words, its WhatsApp as people here write it, in both languages", async ({
+    page,
+  }) => {
+    const storePage = new StorePage(page);
+    await storePage.goto();
+    const footer = storePage.getFooter();
+
+    const help = footer.getByRole("region", { name: "Ayuda" });
+    await expect(help.getByTestId("store-footer-how-to-order")).toHaveText(
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos."
+    );
+    await expect(
+      help.getByRole("list", { name: "Pagás con" }).getByRole("listitem")
+    ).toHaveText([
+      "Efectivo",
+      /Tarjetas de crédito y débito$/u,
+      /Mercado Pago$/u,
+      /Transferencia bancaria$/u,
+    ]);
+
+    const contact = footer.getByRole("region", { name: "Contacto" });
+    // The store's own line, from its settings; nothing in the code says it.
+    await expect(contact.getByTestId("store-footer-location")).toHaveText(
+      `Dónde encontrarnos${STORE_TEXTS.es.location}`
+    );
+    const whatsapp = contact.getByRole("link", { name: /WhatsApp/u });
+    await expect(whatsapp).toHaveAccessibleName(
+      "WhatsApp 099 123 456 (se abre en otra pestaña)"
+    );
+    await expect(whatsapp).toHaveAttribute(
+      "href",
+      `https://wa.me/${STORE_SETTINGS.whatsappNumber.slice(1)}`
+    );
+
+    // In English: the page's words in English, the store's line as it was
+    // written, marked as Spanish.
+    await storePage.gotoEnglish();
+    const english = storePage.getFooter();
+    await expect(
+      english
+        .getByRole("region", { name: "Help" })
+        .getByRole("list", { name: "Pay with" })
+        .getByRole("listitem")
+    ).toHaveText([
+      "Cash",
+      /Credit and debit cards$/u,
+      /Mercado Pago$/u,
+      /Bank transfer$/u,
+    ]);
+    const place = english
+      .getByRole("region", { name: "Contact" })
+      .getByTestId("store-footer-location");
+    await expect(place).toHaveText(
+      `Where to find us${STORE_TEXTS.es.location}`
+    );
+    await expect(place.getByText(STORE_TEXTS.es.location)).toHaveAttribute(
+      "lang",
+      "es"
+    );
+  });
+
+  test("at 360 px, the footer's contact and help blocks fit the page: nothing scrolls sideways", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ height: 780, width: 360 });
+    const storePage = new StorePage(page);
+    await storePage.goto();
+    const footer = storePage.getFooter();
+    await footer.scrollIntoViewIfNeeded();
+
+    for (const block of [
+      footer.getByRole("region", { name: "Ayuda" }),
+      footer.getByRole("region", { name: "Contacto" }),
+    ]) {
+      const box = await block.boundingBox();
+      expect(box?.x).toBe(16);
+      expect(box?.width).toBe(360 - 32);
+    }
+    // The WhatsApp link is a thumb's target.
+    const whatsapp = await footer
+      .getByRole("link", { name: /WhatsApp/u })
+      .boundingBox();
+    expect(whatsapp?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await storePage.expectNoHorizontalScroll();
+  });
+
   test("the footer tells Pepe's story, shows only the links the store has, and the credit", async ({
     page,
   }) => {
@@ -381,7 +475,7 @@ test.describe("Storefront shell", () => {
       footer.getByRole("link", { name: `Instagram de ${STORE_SETTINGS.name}` })
     ).toHaveAttribute("href", STORE_SETTINGS.instagramUrl);
     await expect(
-      footer.getByRole("link", { name: "Escribinos por WhatsApp" })
+      footer.getByRole("link", { name: /WhatsApp/u })
     ).toHaveAttribute(
       "href",
       `https://wa.me/${STORE_SETTINGS.whatsappNumber.slice(1)}`
@@ -402,13 +496,13 @@ test.describe("Storefront shell", () => {
       await storePage.goto();
       const footer = storePage.getFooter();
       await footer.scrollIntoViewIfNeeded();
-      // The run's store has Instagram: four blocks (FER-044).
+      // The run's store can be reached: four blocks (FER-044, FER-078).
       const boxes = await Promise.all(
         [
           footer.getByTestId("store-footer-brand"),
           footer.getByRole("navigation", { name: "Tienda" }),
           footer.getByRole("region", { name: "Ayuda" }),
-          footer.getByRole("region", { name: "Seguinos" }),
+          footer.getByRole("region", { name: "Contacto" }),
         ].map(async (block) => await block.boundingBox())
       );
       const credit = await footer

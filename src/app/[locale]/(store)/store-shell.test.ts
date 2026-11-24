@@ -77,6 +77,7 @@ function pageEntry(locale: string) {
 const SPANISH = {
   description: "Anillos y cadenas.",
   locale: "es",
+  location: null,
   tagline: "Burbujeros y joyas en la feria",
 } as const;
 
