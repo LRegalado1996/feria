@@ -272,7 +272,7 @@ export const storefront = {
     home: "Home",
     // How to buy, in one line: the block's three steps (FER-076).
     howToOrder:
-      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos.",
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos el pago y la entrega: retirás en el puesto o te lo mandamos.",
     instagram: "Instagram de {store}",
     // Over the store's own line that says where to find it (FER-078).
     location: "Dónde encontrarnos",

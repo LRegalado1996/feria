@@ -334,14 +334,14 @@ describe("StoreFooter", () => {
     [
       "en",
       "Help",
-      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange the delivery: pick it up at the stall or we send it to you.",
+      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange payment and delivery: pick it up at the stall or we send it to you.",
       "Pay with",
       ["Cash", "Credit and debit cards", "Mercado Pago", "Bank transfer"],
     ],
     [
       "es",
       "Ayuda",
-      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos.",
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos el pago y la entrega: retirás en el puesto o te lo mandamos.",
       "Pagás con",
       [
         "Efectivo",

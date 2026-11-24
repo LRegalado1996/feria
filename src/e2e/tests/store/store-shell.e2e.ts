@@ -377,7 +377,7 @@ test.describe("Storefront shell", () => {
 
     const help = footer.getByRole("region", { name: "Ayuda" });
     await expect(help.getByTestId("store-footer-how-to-order")).toHaveText(
-      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos la entrega: retirás en el puesto o te lo mandamos."
+      "Elegí en el catálogo, agregá al carrito con tu nombre y tu celular, y coordinamos el pago y la entrega: retirás en el puesto o te lo mandamos."
     );
     await expect(
       help.getByRole("list", { name: "Pagás con" }).getByRole("listitem")

@@ -250,7 +250,7 @@ export const storefront: Dictionary["storefront"] = {
     help: "Help",
     home: "Home",
     howToOrder:
-      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange the delivery: pick it up at the stall or we send it to you.",
+      "Choose from the catalog, add to the cart with your name and your mobile number, and we arrange payment and delivery: pick it up at the stall or we send it to you.",
     instagram: "{store} on Instagram",
     location: "Where to find us",
     logo: "{brand}, go to the home page",
