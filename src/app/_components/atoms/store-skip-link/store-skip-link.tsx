@@ -15,10 +15,8 @@ import { cn } from "@/lib/utils";
 /** The id of the content the scope's skip link leads to. */
 const SkipTarget = createContext<string | null>(null);
 
-/** The scope's id, which only its skip link and its content may read. */
-function useSkipTarget(component: string): string {
-  const id = use(SkipTarget);
-
+/** The scope's id, read with `use(SkipTarget)`: none outside a scope. */
+function scopeTarget(id: string | null, component: string): string {
   if (id === null) {
     throw new Error(`${component} renders inside a StoreSkipScope`);
   }
@@ -59,7 +57,7 @@ function StoreSkipLink({
   onClick,
   ...props
 }: StoreSkipLinkProps) {
-  const target = useSkipTarget("StoreSkipLink");
+  const target = scopeTarget(use(SkipTarget), "StoreSkipLink");
 
   const skip = (event: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(event);
@@ -99,7 +97,7 @@ export type StoreSkipTargetProps = ComponentProps<"div"> & {
  * a stop of the Tab order.
  */
 function StoreSkipTarget({ asChild = false, ...props }: StoreSkipTargetProps) {
-  const id = useSkipTarget("StoreSkipTarget");
+  const id = scopeTarget(use(SkipTarget), "StoreSkipTarget");
   const Comp = asChild ? Slot.Root : "div";
 
   return (

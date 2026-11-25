@@ -71,6 +71,7 @@ for (const [size, viewport] of SIZES) {
       await expectOneMain(admin, "Pedidos");
       // On the first load the page's first Tab reaches the skip link.
       await page.keyboard.press("Tab");
+      await expect(admin.skipLink()).toBeFocused();
       await expectSkipToScreen(page, admin);
 
       // React must own the links before they navigate in place: a click
@@ -96,13 +97,15 @@ for (const [size, viewport] of SIZES) {
         .poll(async () => await admin.everyMain().count())
         .toBeGreaterThan(1);
 
-      // And back, through the navigation: the browser's back button would
-      // first undo the skip link's jump, which stays on the same screen.
-      await open("Artículos");
+      // And back, with the browser's Back: the skip link leaves no jump in
+      // the history to undo, and Next shows the kept screens again.
+      await page.goBack();
+      await expect(admin.heading()).toHaveText("Artículos");
       await expectOneMain(admin, "Artículos");
       await expectSkipToScreen(page, admin);
 
-      await open("Pedidos");
+      await page.goBack();
+      await expect(admin.heading()).toHaveText("Pedidos");
       await expectOneMain(admin, "Pedidos");
       await expectSkipToScreen(page, admin);
     });

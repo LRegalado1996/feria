@@ -185,6 +185,17 @@ describe("AdminMenu", () => {
     });
   });
 
+  test("stays open for a section opened in another tab", async () => {
+    const { open, user } = setup();
+    const panel = await open();
+
+    await user.keyboard("{Control>}");
+    await user.click(within(panel).getByRole("link", { name: "Categories" }));
+    await user.keyboard("{/Control}");
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   test("closes when the window widens to the sidebar's layout, and stops listening once closed", async () => {
     const { media, open } = setup();
     await open();

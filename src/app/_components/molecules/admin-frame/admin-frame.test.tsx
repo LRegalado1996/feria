@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import Link from "next/link";
 import { describe, expect, test } from "vitest";
 
@@ -69,6 +70,21 @@ describe("AdminFrame", () => {
       expect(skip).toHaveAttribute("href", `#${main.id}`);
       expect(document.querySelectorAll(`[id="${main.id}"]`)).toHaveLength(1);
     }
+  });
+
+  test("moves focus into its own screen, keeping the address free of the jump's #", async () => {
+    // The screen on show is the last; the ones before are kept, hidden.
+    const { frame } = setup({ frames: 2 });
+    const { main, skip } = frame(1);
+    const clicks: Event[] = [];
+    skip.addEventListener("click", (event) => {
+      clicks.push(event);
+    });
+
+    await userEvent.setup().click(skip);
+
+    expect(main).toHaveFocus();
+    expect(clicks.map((event) => event.defaultPrevented)).toEqual([true]);
   });
 
   test("sets the sidebar in a banner beside the screen from md up, hidden on a phone", () => {

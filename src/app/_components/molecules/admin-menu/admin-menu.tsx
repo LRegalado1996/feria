@@ -5,6 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { createContext, type ReactNode, use, useEffect, useState } from "react";
 
 import { Button } from "@/app/_components/atoms/button";
+import { followedLink } from "@/lib/admin/followed-link";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { cn } from "@/lib/utils";
 
@@ -75,11 +76,10 @@ function AdminMenu({ children, panel }: AdminMenuProps) {
               // On the click's way up, after the link's own handler has
               // started the navigation in place (FER-064): closed on the way
               // down, the panel and its link are gone before that handler
-              // runs, and the browser loads the whole document again.
-              if (
-                event.target instanceof Element &&
-                event.target.closest("a")
-              ) {
+              // runs, and the browser loads the whole document again. A
+              // link opened in another tab leaves this page, and the panel,
+              // as they are.
+              if (followedLink(event)) {
                 setOpen(false);
               }
             }}

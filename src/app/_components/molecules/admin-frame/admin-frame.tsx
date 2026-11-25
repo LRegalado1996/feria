@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentProps, type ReactNode, useId } from "react";
+import { type ComponentProps, type ReactNode, useId, useRef } from "react";
 
 import { useDictionary } from "@/lib/hooks/i18n";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,7 @@ function AdminFrame({
 }: AdminFrameProps) {
   const { admin } = useDictionary();
   const mainId = useId();
+  const main = useRef<HTMLElement>(null);
 
   return (
     <div
@@ -42,13 +43,22 @@ function AdminFrame({
       <a
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2"
         href={`#${mainId}`}
+        // Once React owns it, it moves focus itself: the address keeps no
+        // `#` of an id the next render does not give again, and Back has
+        // no jump to undo. Before then, the browser's own jump does it.
+        onClick={(event) => {
+          if (main.current) {
+            event.preventDefault();
+            main.current.focus();
+          }
+        }}
       >
         {admin.shell.skipToContent}
       </a>
       <header className="sticky top-0 hidden h-dvh border-r border-sidebar-border md:block">
         {sidebar}
       </header>
-      <main className="min-w-0" id={mainId} tabIndex={-1}>
+      <main className="min-w-0" id={mainId} ref={main} tabIndex={-1}>
         {children}
       </main>
     </div>

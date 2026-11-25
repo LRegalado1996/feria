@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from "@testing-library/react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import { Activity } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -28,6 +29,7 @@ afterEach(() => {
 
 function setup({
   classNames,
+  inDialog = false,
   locale = "es",
   pathname = "/",
   reducedMotion = false,
@@ -35,6 +37,8 @@ function setup({
   tone,
 }: {
   classNames?: LocaleToggleProps["classNames"];
+  /** Inside a panel, as a phone's menu (a Radix dialog) holds it. */
+  inDialog?: boolean;
   locale?: Locale;
   pathname?: string;
   reducedMotion?: boolean;
@@ -47,9 +51,21 @@ function setup({
 
   // Next hides a page it leaves in an `<Activity>` and shows it again on
   // Back, state and all (the Next guide "Preserving UI state").
+  const toggle = (
+    <LocaleToggle className="custom" classNames={classNames} tone={tone} />
+  );
   const page = (mode: "hidden" | "visible") => (
     <Activity mode={mode}>
-      <LocaleToggle className="custom" classNames={classNames} tone={tone} />
+      {inDialog ? (
+        <DialogPrimitive.Root open>
+          <DialogPrimitive.Content aria-describedby={undefined}>
+            <DialogPrimitive.Title>Menu</DialogPrimitive.Title>
+            {toggle}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Root>
+      ) : (
+        toggle
+      )}
     </Activity>
   );
   const { rerender } = renderWithI18n(page("visible"), { locale });
@@ -241,6 +257,22 @@ describe("LocaleToggle", () => {
     expect(part("locale-toggle-code")).toHaveClass(
       "motion-reduce:transition-none"
     );
+  });
+
+  test("inside a panel, which closes as the link is followed, nothing waits for a slide no one would see", () => {
+    vi.useFakeTimers();
+    const { link, thumb } = setup({ inDialog: true });
+
+    const proceeded = fireEvent.click(link);
+
+    // Left to the link, which navigates at once: the press is not held,
+    // the thumb stays, and nothing navigates once a slide would have ended.
+    expect(proceeded).toBe(true);
+    expect(thumb()).toHaveAttribute("data-side", "start");
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(push).not.toHaveBeenCalled();
   });
 
   test.each([

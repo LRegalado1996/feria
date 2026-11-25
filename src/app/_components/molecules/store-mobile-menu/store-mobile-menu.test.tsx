@@ -182,6 +182,17 @@ describe("StoreMobileMenu", () => {
     });
   });
 
+  test("stays open for a link opened in another tab", async () => {
+    const { open, panel, user } = setup();
+    const dialog = await open();
+
+    await user.keyboard("{Control>}");
+    await user.click(dialog.getByRole("link", { name: "Catalog" }));
+    await user.keyboard("{/Control}");
+
+    expect(panel()).toBeVisible();
+  });
+
   test("stays open when something that is not a link is clicked", async () => {
     const { open, panel, user } = setup();
     const dialog = await open();
