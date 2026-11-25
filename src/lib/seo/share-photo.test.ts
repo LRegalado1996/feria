@@ -244,7 +244,10 @@ describe("sharePhotoSource", () => {
         }),
     });
 
-    await expect(source()).resolves.toMatch(/^data:image\/jpeg;base64,\/9j\//u);
+    // Every byte, in order: both bodies are the same 8 MiB once joined.
+    await expect(source()).resolves.toBe(
+      `data:image/jpeg;base64,${Buffer.from(jpegOf(SHARE_PHOTO_MAX_BYTES)).toString("base64")}`
+    );
   });
 
   test("a body that says it is past the size is not read at all", async () => {
