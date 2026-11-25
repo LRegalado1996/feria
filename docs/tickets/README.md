@@ -128,12 +128,13 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M6 Launch
 
-| ID                                                | Title                                                 | Priority | Status |
-| ------------------------------------------------- | ----------------------------------------------------- | -------- | ------ |
-| [FER-031](FER-031-launch-content.md)              | Launch content for the fair                           | P0       | todo   |
-| [FER-032](FER-032-domain-and-launch-checklist.md) | Custom domain and launch checklist                    | P0       | done   |
-| [FER-082](FER-082-indexnow-on-publish.md)         | Tell Bing at once when the catalog changes (IndexNow) | P2       | todo   |
-| [FER-083](FER-083-production-errors-in-sentry.md) | The production errors Sentry holds                    | P1       | todo   |
+| ID                                                          | Title                                                 | Priority | Status |
+| ----------------------------------------------------------- | ----------------------------------------------------- | -------- | ------ |
+| [FER-031](FER-031-launch-content.md)                        | Launch content for the fair                           | P0       | todo   |
+| [FER-032](FER-032-domain-and-launch-checklist.md)           | Custom domain and launch checklist                    | P0       | done   |
+| [FER-082](FER-082-indexnow-on-publish.md)                   | Tell Bing at once when the catalog changes (IndexNow) | P2       | todo   |
+| [FER-083](FER-083-production-errors-in-sentry.md)           | The production errors Sentry holds                    | P1       | done   |
+| [FER-087](FER-087-article-share-card-without-a-redirect.md) | An article's share card answers without a redirect    | P2       | todo   |
 
 ## Dependency sketch
 

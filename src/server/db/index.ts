@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 
 import { env } from "@/env";
 import { sanitizeForLog } from "@/lib/redaction";
+import { CONNECT_RETRY, CONNECT_TIMEOUT_MS } from "@/server/db/connect-retry";
 import { withExplicitSslMode } from "@/server/db/connection-string";
 import { ResilientPool } from "@/server/db/resilient-pool";
 import * as schema from "@/server/db/schema";
@@ -60,28 +61,44 @@ function createPool(): ResilientPool {
       // timeout retires the pool between them and pays a fresh connection on
       // the next request.
       idleTimeoutMillis: 30_000,
-      // Per attempt. Neon usually opens a connection in under a second, even
-      // waking a suspended compute; one stuck this long is dead, and a new
-      // one beats waiting on it.
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
     },
     {
       // Opening a connection, never a statement, is retried (`ResilientPool`).
-      attempts: 3,
-      baseDelayMs: 200,
+      ...CONNECT_RETRY,
       onRetry: (error, attempt) => {
         warn("Db.connect_retry", error, { attempt });
       },
     }
   );
 
-  // node-postgres re-throws an idle client's error (the platform suspended
-  // the instance, the pooler retired the socket) as an uncaught exception
-  // that kills the function, unless the pool has a listener. The pool
-  // replaces the client on the next query, so it is a warning and a Sentry
-  // breadcrumb on whatever fails next, never an issue of its own.
+  // A client whose connection dies emits `error` (the pooler's "server conn
+  // crashed?", a socket the platform retired), and an `error` nobody listens
+  // to is an uncaught exception that takes the whole instance down, with
+  // every request it is serving. pg-pool listens only while a client sits
+  // idle and takes its listener off at checkout, so a client that dies
+  // between two statements of a transaction had none. This one stays for the
+  // client's life. Whoever holds the client still gets the failure from its
+  // next statement, so each event (Postgres's goodbye and the socket closing
+  // are two) is a warning and a Sentry breadcrumb on whatever fails next,
+  // never an issue of its own.
+  const reported = new WeakSet<Error>();
+  pool.on("connect", (client) => {
+    client.on("error", (error) => {
+      reported.add(error);
+      warn("Db.client_error", error);
+    });
+  });
+
+  // pg-pool passes an idle client's error on as its own `error`, and throws
+  // it when the pool has no listener. The client's listener above has already
+  // reported it, except for a client that never finished connecting, which
+  // has none: that error is reported here. The pool replaces the client on
+  // the next query.
   pool.on("error", (error) => {
-    warn("Db.pool_client_error", error);
+    if (!reported.has(error)) {
+      warn("Db.client_error", error);
+    }
   });
 
   // Closes idle connections before Vercel suspends the instance, so a dead
