@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { NavigationCategory } from "@/lib/catalog/navigation";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { required } from "@/test/required";
 import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { type StoreAnnouncement, StoreFrame } from "./store-frame";
@@ -36,33 +37,60 @@ function deferred<T>() {
 async function setup({
   announcement,
   categories,
+  pages = 1,
 }: {
   announcement?: Promise<StoreAnnouncement | null>;
   categories?: Promise<readonly NavigationCategory[]>;
+  /** How many store pages the document holds, as after navigating. */
+  pages?: number;
 } = {}) {
   // Awaited: a render that suspends only resumes inside an awaited act.
   await act(async () => {
     renderWithI18n(
-      <StoreFrame
-        announcement={announcement}
-        categories={categories}
-        copy={DICTIONARIES.es.storefront.shell}
-        currentPath="/productos"
-        locale="es"
-      >
-        <main>Contenido</main>
-      </StoreFrame>,
+      <>
+        {Array.from({ length: pages }, (_, index) => (
+          // The pages left behind are kept, hidden; the last is on show.
+          <div hidden={index < pages - 1} key={index}>
+            <StoreFrame
+              announcement={announcement}
+              categories={categories}
+              copy={DICTIONARIES.es.storefront.shell}
+              currentPath="/productos"
+              locale="es"
+            >
+              <main>Contenido</main>
+            </StoreFrame>
+          </div>
+        ))}
+      </>,
       // The cart's side panel reads the shop through the query client.
       { locale: "es", wrapper: createQueryWrapper() }
     );
     await Promise.resolve();
   });
 
+  /** A page's frame, its header, its content and its skip link. */
+  const page = (index: number) => {
+    const frame = required(
+      document.querySelectorAll<HTMLElement>('[data-slot="store-frame"]')[index]
+    );
+    const header = within(frame).getByTestId("store-header");
+
+    return {
+      frame,
+      header,
+      main: within(frame).getByTestId("store-main"),
+      skip: within(header).getByRole("link", {
+        hidden: true,
+        name: "Saltar al contenido",
+      }),
+    };
+  };
+
   return {
     bar: () => screen.queryByTestId("store-announcement-bar"),
-    frame: document.querySelector('[data-slot="store-frame"]'),
-    header: screen.getByTestId("store-header"),
-    main: screen.getByTestId("store-main"),
+    ...page(pages - 1),
+    page,
     user: userEvent.setup(),
   };
 }
@@ -73,17 +101,27 @@ afterEach(() => {
 
 describe("StoreFrame", () => {
   test("puts the page under the header, in the content the skip link leads to", async () => {
-    const { frame, header, main } = await setup();
+    const { frame, header, main, skip } = await setup();
 
-    // An id of the frame's own (FER-064), the one its skip link leads to.
-    expect(main.id).not.toBe("");
-    expect(
-      within(header).getByRole("link", { name: "Saltar al contenido" })
-    ).toHaveAttribute("href", `#${main.id}`);
+    expect(skip).toHaveAttribute("href", `#${main.id}`);
     expect(main).toHaveAttribute("tabindex", "-1");
     expect(within(main).getByRole("main")).toHaveTextContent("Contenido");
     expect(frame?.firstElementChild).toBe(header);
     expect(header.nextElementSibling).toBe(main);
+  });
+
+  test("gives each page's content an id of its own, which only that page's skip link leads to", async () => {
+    // Next keeps the pages left behind mounted, hidden (FER-064).
+    const { page } = await setup({ pages: 2 });
+
+    const pages = [page(0), page(1)];
+    expect(pages[0]?.main.id).not.toBe(pages[1]?.main.id);
+
+    for (const { main, skip } of pages) {
+      expect(main.id).not.toBe("");
+      expect(skip).toHaveAttribute("href", `#${main.id}`);
+      expect(document.querySelectorAll(`[id="${main.id}"]`)).toHaveLength(1);
+    }
   });
 
   test("without words for the bar, has no bar", async () => {
