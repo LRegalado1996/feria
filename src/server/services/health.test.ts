@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { isSingleConnectAttempt } from "@/server/db/resilient-pool";
 import { createMockDatabase } from "@/server/test/context";
 import { renderSql } from "@/server/test/render-sql";
 
@@ -31,5 +32,20 @@ describe("pingDatabase", () => {
 
     await expect(pingDatabase(db as never)).rejects.toBe(failure);
     expect(queries()).toEqual(["select 1"]);
+  });
+
+  test("sends it where the pool opens a connection once, never retried", async () => {
+    const { db } = setup();
+    let single: boolean | undefined;
+    db.$.execute.mockImplementation(async () => {
+      single = isSingleConnectAttempt();
+      return await Promise.resolve([]);
+    });
+
+    await pingDatabase(db as never);
+
+    expect(single).toBe(true);
+    // The scope ends with the ping.
+    expect(isSingleConnectAttempt()).toBe(false);
   });
 });

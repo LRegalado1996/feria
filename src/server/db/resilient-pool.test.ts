@@ -2,7 +2,11 @@ import { Client, Pool } from "pg";
 import type { PoolClient } from "pg";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { ResilientPool } from "./resilient-pool";
+import {
+  isSingleConnectAttempt,
+  ResilientPool,
+  withSingleConnectAttempt,
+} from "./resilient-pool";
 
 const TIMEOUT = new Error("Connection terminated due to connection timeout");
 const DENIED = Object.assign(new Error("password authentication failed"), {
@@ -83,6 +87,29 @@ describe("ResilientPool", () => {
     await expect(pool.connect()).resolves.toBe(client);
     expect(checkout).toHaveBeenCalledTimes(2);
     expect(onRetry).toHaveBeenCalledExactlyOnceWith(TIMEOUT, 1);
+  });
+
+  test("inside a single-attempt scope a transient failure is not retried", async () => {
+    const { checkout, onRetry, pool } = setup([TIMEOUT]);
+
+    await expect(
+      withSingleConnectAttempt(async () => await pool.connect())
+    ).rejects.toBe(TIMEOUT);
+    expect(checkout).toHaveBeenCalledOnce();
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  test("the single-attempt scope covers only what runs in it", async () => {
+    const { client, pool } = setup([]);
+
+    expect(isSingleConnectAttempt()).toBe(false);
+    await expect(
+      withSingleConnectAttempt(async () => {
+        expect(isSingleConnectAttempt()).toBe(true);
+        return await pool.connect();
+      })
+    ).resolves.toBe(client);
+    expect(isSingleConnectAttempt()).toBe(false);
   });
 
   test("a permanent failure is not retried", async () => {

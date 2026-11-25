@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { Pool } from "pg";
 import type { PoolClient, PoolConfig } from "pg";
 
@@ -5,6 +7,23 @@ import { connectWithRetry } from "./connect-retry";
 import type { ConnectRetryOptions } from "./connect-retry";
 
 type ConnectCallback = Parameters<Pool["connect"]>[0];
+
+const singleAttempt = new AsyncLocalStorage<true>();
+
+/**
+ * Runs `run` with every connection it opens tried once, never retried: for
+ * the health probe, whose job is to see the outage a retry would hide.
+ */
+export async function withSingleConnectAttempt<T>(
+  run: () => Promise<T>
+): Promise<T> {
+  return await singleAttempt.run(true, run);
+}
+
+/** Whether the code running now is inside `withSingleConnectAttempt`. */
+export function isSingleConnectAttempt(): boolean {
+  return singleAttempt.getStore() === true;
+}
 
 function noop(): void {
   // The release handle of a connection that was never handed out.
@@ -56,7 +75,7 @@ export class ResilientPool extends Pool {
   ): Promise<PoolClient> | undefined {
     const connected = connectWithRetry(
       async () => await super.connect(),
-      this.#retry
+      isSingleConnectAttempt() ? { ...this.#retry, attempts: 1 } : this.#retry
     );
 
     if (!callback) {
