@@ -156,8 +156,8 @@ describe("ResilientPool", () => {
     expect(error).toHaveProperty("message", "socket gone");
   });
 
-  test("pg's `query` checks out through the retrying connect", async () => {
-    const { client, pool } = setup([TIMEOUT]);
+  test("pg's `query` checks out through the retrying connect and sends its statement once", async () => {
+    const { checkout, client, pool, release } = setup([TIMEOUT]);
     const query = vi.fn(
       (
         _text: string,
@@ -169,9 +169,17 @@ describe("ResilientPool", () => {
     );
     Object.assign(client, { query });
 
-    await expect(pool.query("select 1 as ok")).resolves.toEqual({
+    await expect(pool.query("select $1::int as ok", [1])).resolves.toEqual({
       rows: [{ ok: 1 }],
     });
-    expect(query).toHaveBeenCalledOnce();
+    // Two checkouts, the retried one included; the statement only once, on
+    // the client the second one handed out, which goes back to the pool.
+    expect(checkout).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledExactlyOnceWith(
+      "select $1::int as ok",
+      [1],
+      expect.any(Function)
+    );
+    expect(release).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 });
