@@ -40,3 +40,14 @@ regexes = [
   '''^vercel_blob_rw_Integration_s3cretPart$''',
   '''^integration-cron-secret-0123456789$''',
 ]
+
+[[allowlists]]
+description = "FER-032: IndexNow's key is public by design (Bing reads it from https://market.lucasregalado.com/<key>.txt to trust a submission). Exactly this value, in the files that serve, test and document it"
+condition = "AND"
+paths = [
+  '''^public/239a2df8583d65e79cf2271b09b4c09c\.txt$''',
+  '''^src/e2e/tests/store/seo\.e2e\.ts$''',
+  '''^src/proxy\.test\.ts$''',
+  '''^docs/tickets/FER-0(32|82)-[a-z-]+\.md$''',
+]
+regexes = ['''^239a2df8583d65e79cf2271b09b4c09c$''']
