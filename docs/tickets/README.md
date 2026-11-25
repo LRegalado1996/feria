@@ -101,7 +101,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-045](FER-045-cart-drawer.md)                             | Cart side panel and a gallery that goes round                     | P0       | done        |
 | [FER-050](FER-050-storefront-round.md)                        | Storefront round: menu, grid, footer, confirm                     | P0       | done        |
 | [FER-051](FER-051-order-stepper-and-admin-round.md)           | Order stepper, the order pages and an admin round                 | P0       | done        |
-| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | todo        |
+| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | done        |
 | [FER-058](FER-058-pages-built-from-sections.md)               | Pages built from sections: the home is the first                  | P0       | done        |
 | [FER-059](FER-059-home-article-spotlight.md)                  | An article in the spotlight on the home                           | P0       | done        |
 | [FER-060](FER-060-pages-from-the-admin.md)                    | Pages built from sections, from the admin                         | P0       | done        |

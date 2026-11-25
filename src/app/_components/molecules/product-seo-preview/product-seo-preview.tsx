@@ -55,9 +55,6 @@ function ProductSeoPreview({
     { description: description.trim(), title: title.trim() || "…" },
     store
   );
-  // The card's renderer fetches only a photo on this site (`ownUrl()`).
-  const sharePhotoUrl = mainPhotoUrl?.startsWith("/") ? mainPhotoUrl : null;
-
   return (
     <div
       className={cn("grid gap-4", className)}
@@ -94,7 +91,7 @@ function ProductSeoPreview({
           {copy.share}
         </figcaption>
         <StoreSharePreview
-          photoUrl={sharePhotoUrl}
+          photoUrl={mainPhotoUrl}
           price={
             price === null
               ? null
@@ -107,9 +104,6 @@ function ProductSeoPreview({
           storeName={store.name}
           title={search.title}
         />
-        {mainPhotoUrl !== null && sharePhotoUrl === null ? (
-          <p className="text-xs text-muted-foreground">{copy.shareNoPhoto}</p>
-        ) : null}
       </figure>
     </div>
   );

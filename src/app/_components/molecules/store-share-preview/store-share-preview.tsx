@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 export interface StoreSharePreviewProps {
   className?: string;
   /**
-   * The photo the card draws, or `null`: the card's renderer fetches only a
-   * photo on this site (`ownUrl()`), and shows the moss block otherwise.
+   * The photo the card draws (the article's main photo: on this site or in
+   * this deployment's Blob store, FER-049), or `null`: the moss block.
    */
   photoUrl: string | null;
   /** The price as the card writes it, or `null` while there is none. */
