@@ -121,6 +121,9 @@ function ProductListHead({ query }: ProductListHeadProps) {
             </th>
           );
         })}
+        <th className="font-normal" role="columnheader" scope="col">
+          <span className="sr-only">{copy.columns.actions}</span>
+        </th>
       </tr>
     </thead>
   );

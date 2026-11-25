@@ -188,19 +188,58 @@ test.describe("Article page", () => {
     );
   });
 
-  test("offers no share button: the page is shared from the browser (FER-045)", async ({
+  // FER-019, reversing FER-045's choice at Lucas's request: a small circle
+  // beside the magnifier. Chromium here has no share sheet, so it copies.
+  test("shares from a small circle beside the photos' magnifier: where there is no share sheet it copies the article's address and says so", async ({
+    context,
     db,
     page,
   }) => {
     const { article } = await setup({ db });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.addInitScript(() => {
+      Reflect.deleteProperty(Navigator.prototype, "share");
+    });
     await page.goto(`/productos/${article.slug}`);
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Anillo de plata" })
-    ).toBeVisible();
+    const corner = page
+      .getByTestId("store-gallery")
+      .locator('[data-slot="store-gallery-actions"]');
+    // The magnifier, then "Compartir".
+    await expect
+      .poll(
+        async () =>
+          await corner
+            .getByRole("button")
+            .evaluateAll((buttons) =>
+              buttons.map((button) => button.getAttribute("aria-label"))
+            )
+      )
+      .toEqual(["Ampliar la foto", "Compartir"]);
+    const share = corner.getByRole("button", { name: "Compartir" });
+    // The icon alone, a 36 px circle.
+    await expect(share).toHaveText("");
+    const box = await share.boundingBox();
+    expect(Math.round(box?.width ?? 0)).toBe(36);
+    // Not among the actions under the purchase any more.
     await expect(page.getByRole("button", { name: "Compartir" })).toHaveCount(
-      0
+      1
     );
+
+    // Enabled once React owns it: a press on the server's HTML does nothing.
+    await expect(share).toBeEnabled();
+    await share.click();
+
+    // An invisible mark may follow, so a second copy is said again.
+    await expect(page.getByTestId("store-article-share-status")).toHaveText(
+      /^Enlace copiado: pegalo donde quieras\.\u2060?$/u
+    );
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => await navigator.clipboard.readText())
+      )
+      .toMatch(new RegExp(`/productos/${article.slug}$`, "u"));
   });
 
   for (const width of [375, 1440]) {

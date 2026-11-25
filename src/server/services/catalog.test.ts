@@ -522,6 +522,18 @@ describe("getAllArticlesCover", () => {
   });
 });
 
+/**
+ * The store's order (FER-019) as SQL, its two parameters (`FEATURED_MAX`
+ * and the day) numbered from `first`.
+ */
+function storeRank(first: number) {
+  return (
+    'coalesce((select "featured_product"."position" from "featured_product" ' +
+    'where "featured_product"."storeId" = "product"."storeId" and "featured_product"."productId" = "product"."id"), ' +
+    `$${first}::int + (hashtext("product"."id"::text || ':' || $${first + 1}::text) & 1073741823))`
+  );
+}
+
 describe("listPublishedProducts", () => {
   async function list(
     db: ReturnType<typeof setup>["db"],
@@ -529,6 +541,7 @@ describe("listPublishedProducts", () => {
   ) {
     return await listPublishedProducts(db as never, {
       currencyCode: "UYU",
+      day: "2026-11-25",
       limit: 2,
       locale: "es",
       storeId: STORE_ID,
@@ -551,8 +564,9 @@ describe("listPublishedProducts", () => {
       sql: '("category"."id" = "product"."categoryId" and "category"."storeId" = $1)',
     });
     expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(product);
+    // The featured first, then the day's shuffle; the id breaks a tie.
     expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(
-      '"product"."position" asc, "product"."id" asc'
+      `${storeRank(1)} asc, "product"."id" asc`
     );
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(3);
     // An empty page asks no card query.
@@ -654,8 +668,8 @@ describe("listPublishedProducts", () => {
     '("product"."storeId" = $1 and "product"."status" = $2 and ';
 
   test.each([
-    [undefined, '"product"."position" asc, "product"."id" asc'],
-    ["position", '"product"."position" asc, "product"."id" asc'],
+    [undefined, `${storeRank(1)} asc, "product"."id" asc`],
+    ["position", `${storeRank(1)} asc, "product"."id" asc`],
     ["newest", '"product"."publishedAt" desc, "product"."id" desc'],
     ["price_asc", '"product"."priceAmount" asc, "product"."id" asc'],
     ["price_desc", '"product"."priceAmount" desc, "product"."id" desc'],
@@ -665,22 +679,29 @@ describe("listPublishedProducts", () => {
     await list(db, sort === undefined ? {} : { sort });
 
     expect(renderOrderBy(db.$["select.orderBy"].mock.calls[0])).toBe(orderBy);
-    // The page reads each sort's key, for the next cursor.
-    expect(db.$.select.mock.calls[0]).toEqual([
-      {
-        id: product.id,
-        position: product.position,
-        priceAmount: product.priceAmount,
-        publishedAt: product.publishedAt,
-      },
-    ]);
+    // The page reads each sort's key, for the next cursor: the store's
+    // order's is the article's rank on the day.
+    const [columns] = db.$.select.mock.calls[0] ?? [];
+    expect(columns).toMatchObject({
+      id: product.id,
+      priceAmount: product.priceAmount,
+      publishedAt: product.publishedAt,
+    });
+    const position =
+      typeof columns === "object" && columns !== null && "position" in columns
+        ? columns.position
+        : undefined;
+    expect(renderQuery(position)).toEqual({
+      params: [16, "2026-11-25"],
+      sql: storeRank(1),
+    });
   });
 
   test.each([
     [
       "position",
       { id: 40, position: 12, sort: "position" },
-      '("product"."position", "product"."id") > ($3::int, $4::int))',
+      `(${storeRank(3)}, "product"."id") > ($5::int, $6::int))`,
       12,
     ],
     [
@@ -709,7 +730,11 @@ describe("listPublishedProducts", () => {
       await list(db, { cursor, sort });
 
       expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0])).toEqual({
-        params: [STORE_ID, "published", key, 40],
+        // The store's order compares its rank on the day.
+        params:
+          sort === "position"
+            ? [STORE_ID, "published", 16, "2026-11-25", key, 40]
+            : [STORE_ID, "published", key, 40],
         sql: `${BASE_WHERE}${predicate}`,
       });
     }
@@ -769,9 +794,18 @@ describe("listPublishedProducts", () => {
   }
 
   test.each([
-    ["position", {}, { id: 4, position: 2, sort: "position" }],
-    // The first place a reorder can give (FER-019) is a place too.
-    ["position", { position: 0 }, { id: 4, position: 0, sort: "position" }],
+    // The store's order carries the day it was dealt for (FER-019).
+    [
+      "position",
+      {},
+      { day: "2026-11-25", id: 4, position: 2, sort: "position" },
+    ],
+    // The first place in "Destacados" is a place too.
+    [
+      "position",
+      { position: 0 },
+      { day: "2026-11-25", id: 4, position: 0, sort: "position" },
+    ],
     [
       "newest",
       {},
@@ -801,6 +835,34 @@ describe("listPublishedProducts", () => {
       });
     }
   );
+
+  test("a cursor from another day goes on in that day's order, and hands that day on: no repeat or gap past midnight", async () => {
+    const { db } = setup();
+    db.$["select.limit"].mockResolvedValue(pageRows({}));
+    db.query.product.findMany.mockResolvedValue([cardRow(5), cardRow(4)]);
+
+    await expect(
+      list(db, {
+        cursor: { day: "2026-11-24", id: 40, position: 12, sort: "position" },
+        sort: "position",
+      })
+    ).resolves.toMatchObject({
+      nextCursor: { day: "2026-11-24", id: 4, position: 2, sort: "position" },
+    });
+    // Ranked, compared and ordered by the cursor's day, not today's.
+    const [columns] = db.$.select.mock.calls[0] ?? [];
+    const position =
+      typeof columns === "object" && columns !== null && "position" in columns
+        ? columns.position
+        : undefined;
+    expect(renderQuery(position).params).toEqual([16, "2026-11-24"]);
+    expect(renderQuery(db.$["select.where"].mock.calls[0]?.[0]).params).toEqual(
+      [STORE_ID, "published", 16, "2026-11-24", 12, 40]
+    );
+    expect(
+      renderQuery(db.$["select.orderBy"].mock.calls[0]?.[0]).params
+    ).toEqual([16, "2026-11-24"]);
+  });
 
   test("has no next cursor for an empty page, even with a row past it", async () => {
     const { db } = setup();

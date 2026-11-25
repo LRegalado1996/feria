@@ -249,6 +249,7 @@ describe("drafts without a title (FER-017)", () => {
       listPublishedProducts(db, {
         category: own.slug,
         currencyCode: "UYU",
+        day: "2026-11-25",
         limit: 24,
         locale: "en",
         storeId,

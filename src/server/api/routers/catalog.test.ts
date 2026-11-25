@@ -52,7 +52,15 @@ const STORE = { currencyCode: "USD", id: 7 };
  * A signed-out visitor; the store's row is there unless told not (a database
  * whose migrations have not run).
  */
+/**
+ * 23:30 on November 24 in Montevideo, already the 25th in UTC: the store's
+ * order follows the business day, not the server's.
+ */
+const LATE_EVENING = new Date("2026-11-25T02:30:00.000Z");
+
 function setup({ storeExists = true } = {}) {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(LATE_EVENING);
   const { mockCtx } = createUnauthenticatedMockContext();
   services.getStore.mockImplementation(async () => {
     if (storeExists) {
@@ -151,6 +159,7 @@ describe("catalog router", () => {
     expect(services.listPublishedProducts).toHaveBeenCalledExactlyOnceWith(db, {
       category: "cadenas",
       currencyCode: "USD",
+      day: "2026-11-24",
       limit: 24,
       locale: "es",
       q: "oro",
@@ -176,9 +185,11 @@ describe("catalog router", () => {
     });
     expect(services.listPublishedProducts).toHaveBeenCalledExactlyOnceWith(db, {
       currencyCode: "USD",
+      // The business day in Montevideo, shuffling the store's order.
+      day: "2026-11-24",
       limit: 24,
       locale: "en",
-      // No sort asked: the store's own order (FER-044).
+      // No sort asked: the store's own order (FER-019).
       sort: "position",
       storeId: 7,
       valueGroups: [],

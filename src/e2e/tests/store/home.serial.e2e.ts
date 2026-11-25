@@ -1,7 +1,7 @@
 import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
-import type { PageSection } from "../../../lib/schemas/page";
+import { FEATURED_MAX, type PageSection } from "../../../lib/schemas/page";
 import { product } from "../../../server/db/schema";
 import {
   expect,
@@ -51,7 +51,10 @@ function samePlace(a: PageSection, b: PageSection): boolean {
  * The test's own home, placed first: a cover of two banners (the first
  * with a phone crop), then a category's row, a banner between rows, the
  * best sellers (two of the row's articles, the second first) and another
- * category's row; whatever the store had follows.
+ * category's row; whatever the store had follows. The row's three articles
+ * lead "Destacados", in the order they were made, so the row shows them in
+ * that order: the store's order puts the featured first (FER-019) and deals
+ * the rest anew each day.
  */
 async function curateHome(db: DbFixture["db"], homeEdit: HomeEdit) {
   const tag = uniqueTag();
@@ -85,11 +88,12 @@ async function curateHome(db: DbFixture["db"], homeEdit: HomeEdit) {
     priceAmount: 89_000,
     title: `Cadena ${tag}`,
   });
-  await db.seed.createArticle({
+  const third = await db.seed.createArticle({
     categoryId: shelf.id,
     priceAmount: 49_000,
     title: `Aros ${tag}`,
   });
+  const mineFirst = [first.id, second.id, third.id];
   await db.seed.createArticle({
     categoryId: other.id,
     priceAmount: 99_000,
@@ -133,7 +137,10 @@ async function curateHome(db: DbFixture["db"], homeEdit: HomeEdit) {
         (id) => id !== cover.id && id !== coverTwo.id
       ),
     ],
-    featuredProductIds: before.featuredProductIds,
+    featuredProductIds: [
+      ...mineFirst,
+      ...before.featuredProductIds.filter((id) => !mineFirst.includes(id)),
+    ].slice(0, FEATURED_MAX),
     rankingProductIds: [second.id, first.id],
     sections: [
       ...mine,
@@ -963,5 +970,57 @@ test.describe("The storefront's home", () => {
     await expect(
       store.getHomeSection("Más vendidos").getByRole("heading", { level: 3 })
     ).toHaveText([titles.bubbles, titles.ring]);
+  });
+});
+
+// FER-019. The catalog's order: the home's "Destacados" first, in their
+// order, then the rest dealt once a day. Serial: "Destacados" is the store's.
+test.describe("the catalog's order", () => {
+  test("a category's page lists the home's featured first, in their order, then the rest, the same on every visit of the day", async ({
+    db,
+    homeEdit,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Orden ${tag}`,
+      slug: `orden-${tag}`,
+    });
+    const made: { id: number; title: string }[] = [];
+
+    for (const name of ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]) {
+      const title = `${name} ${tag}`;
+      const article = await db.seed.createArticle({
+        categoryId: shelf.id,
+        priceAmount: 100_000,
+        title,
+      });
+      made.push({ id: article.id, title });
+    }
+
+    // The last made and the second, in that order: only "Destacados" puts
+    // them first.
+    const [cinco, dos] = [made[4], made[1]];
+    const before = await homeEdit.read();
+    await homeEdit.saveLayout({
+      coverBannerIds: before.coverBannerIds,
+      featuredProductIds: [cinco?.id ?? 0, dos?.id ?? 0],
+      rankingProductIds: before.rankingProductIds,
+      sections: before.sections,
+    });
+    const grid = page
+      .getByTestId("store-catalog-grid")
+      .filter({ visible: true })
+      .getByRole("heading", { level: 2 });
+
+    await page.goto(`/${shelf.slug}`);
+    await expect(grid).toHaveCount(5);
+    const first = await grid.allTextContents();
+    expect(first.slice(0, 2)).toEqual([cinco?.title, dos?.title]);
+    expect(new Set(first)).toEqual(new Set(made.map((row) => row.title)));
+
+    // Another visit the same day reads the same order.
+    await page.reload();
+    await expect(grid).toHaveText(first);
   });
 });

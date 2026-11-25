@@ -5,6 +5,7 @@
 import { ChevronRight, CircleCheck, ImageOff, PencilLine } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import type { Dictionary } from "@/content";
 import type { Locale } from "@/lib/i18n/config";
@@ -22,6 +23,8 @@ export type ProductListItem = Awaited<
 >["items"][number];
 
 export interface ProductListRowProps {
+  /** The row's own controls (its menu, `product-row-menu`), in the last cell. */
+  actions?: ReactNode;
   copy: Dictionary["articles"]["list"];
   currency: Currency;
   /** The wizard on this article, built by the caller. */
@@ -34,12 +37,13 @@ export interface ProductListRowProps {
 
 /**
  * The columns of a row from `xl` up, which the list's header shares: the
- * cover, the title, the category, the price, the status, the last change.
+ * cover, the title, the category, the price, the status, the last change,
+ * the row's menu.
  * Below `xl`, beside the sidebar, the fixed ones would leave the title no
  * room (as the orders found): a row is a card there.
  */
 export const PRODUCT_ROW_COLUMNS =
-  "xl:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,10rem)_7rem_10rem_9rem]";
+  "xl:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,10rem)_7rem_10rem_9rem_2rem]";
 
 /** A category's name in the page's language, else the Spanish one. */
 function nameIn(
@@ -52,15 +56,17 @@ function nameIn(
 }
 
 /**
- * One article of the admin's list (FER-017, FER-019; its quick edits come
- * later in FER-019): its cover, its title (or "Sin título", a blank draft),
+ * One article of the admin's list (FER-017, FER-019): its cover, its title (or "Sin título", a blank draft),
  * its category, its price, whether it is a draft or published and whether
  * it can be bought, and how long ago it last changed. A row of the list's
  * table, its cells under the column names from `xl` up and a card below;
  * the title is the one link, stretched over the whole row, so a tap anywhere
  * opens the wizard on it and a screen reader hears one link per article.
+ * Its menu (`actions`) sits above the link: the top right corner of a card,
+ * the last column of the table.
  */
 function ProductListRow({
+  actions,
   copy,
   currency,
   href,
@@ -100,7 +106,10 @@ function ProductListRow({
           </>
         )}
       </td>
-      <td role="cell" className="min-w-0">
+      <td
+        role="cell"
+        className={cn("min-w-0", actions !== undefined && "pr-9 xl:pr-0")}
+      >
         <Link
           className={cn(
             "block truncate text-base font-medium outline-none after:absolute after:inset-0 after:rounded-lg xl:text-sm xl:after:rounded-none",
@@ -173,6 +182,15 @@ function ProductListRow({
         </time>
         <ChevronRight aria-hidden className="size-4 shrink-0" />
       </td>
+      {actions === undefined ? null : (
+        <td
+          role="cell"
+          className="absolute top-2 right-2 xl:static xl:flex xl:justify-end"
+          data-testid="product-row-actions"
+        >
+          {actions}
+        </td>
+      )}
     </tr>
   );
 }

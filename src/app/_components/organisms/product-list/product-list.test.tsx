@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { ListAttribute } from "@/lib/admin/product-filters";
 import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
+import { publishRefusalMessage } from "@/lib/catalog/publish-gaps";
 import type { ProductsPage } from "@/lib/hooks/product";
 import type { Locale } from "@/lib/i18n/config";
 import { makeStoreCategory } from "@/test/factories/store-category";
@@ -14,7 +15,14 @@ import { createQueryWrapper } from "@/test/setup-helpers";
 
 import { ProductList } from "./product-list";
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const { push, reportError, toast } = vi.hoisted(() => ({
+  push: vi.fn(),
+  reportError: vi.fn(),
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+
+vi.mock("sonner", () => ({ toast }));
+vi.mock("@/lib/errors/client", () => ({ reportError }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
@@ -22,8 +30,10 @@ vi.mock("next/navigation", () => ({
 
 // The shared client mock (`@/test/mocks/orpc-client`) reads the JSON alone,
 // so a date stays a string; the rows need the dates the real client revives
-// (oRPC's `meta`). This one revives the list's, over the same MSW handlers.
-vi.mock("@/lib/orpc/client", () => {
+// (oRPC's `meta`). This one revives the list's, over the same MSW handlers,
+// and throws a refusal as the real client does: an `ORPCError` with its code.
+vi.mock("@/lib/orpc/client", async () => {
+  const { ORPCError } = await import("@orpc/client");
   /** A page of `product.list` with its articles' dates read back as dates. */
   const withDates = (json: unknown) => {
     if (
@@ -58,10 +68,14 @@ vi.mock("@/lib/orpc/client", () => {
         method: "POST",
       }
     );
-    const body: { json?: unknown; message?: string } = await response.json();
+    const body: { code?: string; json?: unknown; message?: string } =
+      await response.json();
 
     if (!response.ok) {
-      throw new Error(body.message);
+      throw new ORPCError(body.code ?? "INTERNAL_SERVER_ERROR", {
+        message: body.message,
+        status: response.status,
+      });
     }
 
     return path === "product/list" ? withDates(body.json) : body.json;
@@ -80,6 +94,9 @@ vi.mock("@/lib/orpc/client", () => {
         queryKey: [...segments, { input }],
         ...options,
       }),
+      mutationOptions: () => ({
+        mutationFn: async (input: unknown) => await call(path, input),
+      }),
     };
   };
 
@@ -87,7 +104,14 @@ vi.mock("@/lib/orpc/client", () => {
     orpc: {
       attribute: { list: procedure("attribute/list") },
       category: { list: procedure("category/list") },
-      product: { list: procedure("product/list") },
+      product: {
+        delete: procedure("product/delete"),
+        // Deleting forgets the article's own read.
+        get: procedure("product/get"),
+        list: procedure("product/list"),
+        publish: procedure("product/publish"),
+        unpublish: procedure("product/unpublish"),
+      },
     },
   };
 });
@@ -787,5 +811,365 @@ describe("ProductList", () => {
     expect(
       screen.getByRole("link", { name: "Nuevo artículo" })
     ).toHaveAttribute("href", "/admin/products/new");
+  });
+});
+
+describe("ProductList row actions (FER-019)", () => {
+  /** How a write answers: as asked, failing, or refusing an incomplete draft. */
+  type Outcome = "fails" | "incomplete" | "works";
+
+  /**
+   * The list with its two rows, "Artículo 9" published and "Artículo 8" a
+   * draft, the row menus' writes answering as told.
+   */
+  function setupActions({
+    deleteFails = false,
+    leaves = false,
+    publishes = "works",
+    rows = [makeItem(9), makeItem(8, { status: "draft" })],
+    unpublishes = "works",
+  }: {
+    deleteFails?: boolean;
+    /**
+     * Whether a row a write changed leaves the list read after it, as under
+     * a status filter or once deleted.
+     */
+    leaves?: boolean;
+    publishes?: Outcome;
+    rows?: ListedItem[];
+    unpublishes?: Outcome;
+  } = {}) {
+    const changed = new Set<number>();
+    const idOf = (input: unknown) =>
+      typeof input === "object" && input !== null && "id" in input
+        ? Number(input.id)
+        : 0;
+    const view = setup({
+      answer: () =>
+        makePage(rows.filter((row) => !(leaves && changed.has(row.id)))),
+    });
+    const publish = vi.fn((input: unknown) => {
+      changed.add(idOf(input));
+      return { id: 8 };
+    });
+    const unpublish = vi.fn((input: unknown) => {
+      changed.add(idOf(input));
+      return { id: 9 };
+    });
+    const remove = vi.fn((input: unknown) => {
+      changed.add(idOf(input));
+      return { id: 9 };
+    });
+    const answer = (
+      outcome: Outcome,
+      path: "product.publish" | "product.unpublish",
+      handler: typeof publish
+    ) => {
+      if (outcome === "fails") {
+        return createOrpcErrorHandler(path, REFUSAL);
+      }
+
+      if (outcome === "incomplete") {
+        return createOrpcErrorHandler(path, {
+          code: "BAD_REQUEST",
+          message: publishRefusalMessage(["image", "price"]),
+          status: 400,
+        });
+      }
+
+      return createOrpcHandler(path, handler);
+    };
+    server.use(
+      answer(publishes, "product.publish", publish),
+      answer(unpublishes, "product.unpublish", unpublish),
+      deleteFails
+        ? createOrpcErrorHandler("product.delete", REFUSAL)
+        : createOrpcHandler("product.delete", remove)
+    );
+    const menuOf = async (title: string) =>
+      await screen.findByRole("button", { name: `Actions for “${title}”` });
+
+    return {
+      ...view,
+      choose: async (
+        title: string,
+        item: "Delete" | "Hide from the store" | "Show in the store"
+      ) => {
+        const menu = await menuOf(title);
+        await view.user.click(menu);
+        await view.user.click(
+          await screen.findByRole("menuitem", { name: item })
+        );
+
+        return menu;
+      },
+      publish,
+      remove,
+      unpublish,
+    };
+  }
+
+  test("hiding a published article takes it off the store at once, says so and reads the list again", async () => {
+    const { choose, list, publish, unpublish } = setupActions();
+
+    await choose("Artículo 9", "Hide from the store");
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledExactlyOnceWith(
+        "Article hidden: it no longer shows in the store."
+      );
+    });
+    expect(unpublish).toHaveBeenCalledExactlyOnceWith({ id: 9 });
+    expect(publish).not.toHaveBeenCalled();
+    // No question first: it undoes from the same menu.
+    expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test("showing a draft publishes it, says so and reads the list again", async () => {
+    const { choose, list, publish, unpublish } = setupActions();
+
+    await choose("Artículo 8", "Show in the store");
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledExactlyOnceWith(
+        "Article published: it now shows in the store."
+      );
+    });
+    expect(publish).toHaveBeenCalledExactlyOnceWith({ id: 8 });
+    expect(unpublish).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test("a draft that still lacks something says to open it, and is not reported: the refusal is expected", async () => {
+    const { choose } = setupActions({ publishes: "incomplete" });
+
+    await choose("Artículo 8", "Show in the store");
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        "It is missing something to be published: open it and complete it."
+      );
+    });
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      "a hide",
+      { unpublishes: "fails" },
+      "Artículo 9",
+      "Hide from the store",
+      "We couldn't hide it. Try again.",
+      "Products.hide_product",
+    ],
+    [
+      "a publish",
+      { publishes: "fails" },
+      "Artículo 8",
+      "Show in the store",
+      "We couldn't publish it. Try again.",
+      "Products.show_product",
+    ],
+    [
+      "a hide refused as if incomplete",
+      { unpublishes: "incomplete" },
+      "Artículo 9",
+      "Hide from the store",
+      "We couldn't hide it. Try again.",
+      "Products.hide_product",
+    ],
+  ] as const)(
+    "%s that fails says so and is reported",
+    async (_case, outcomes, title, item, message, action) => {
+      const { choose } = setupActions(outcomes);
+
+      await choose(title, item);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledExactlyOnceWith(message);
+      });
+      expect(reportError).toHaveBeenCalledExactlyOnceWith(expect.any(Error), {
+        action,
+      });
+    }
+  );
+
+  test("deleting asks first, naming the article and what happens to its photos and orders", async () => {
+    const { choose, remove } = setupActions();
+
+    await choose("Artículo 8", "Delete");
+
+    const dialog = await screen.findByTestId("confirm-dialog");
+    expect(within(dialog).getByRole("heading")).toHaveTextContent(
+      "Delete this article?"
+    );
+    expect(dialog).toHaveTextContent(
+      "“Artículo 8” is deleted with its photos. Orders that already include it do not change."
+    );
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  test("confirming deletes that article, says so and reads the list again", async () => {
+    const { choose, list, remove, user } = setupActions();
+
+    await choose("Artículo 8", "Delete");
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledExactlyOnceWith("Article deleted.");
+    });
+    expect(remove).toHaveBeenCalledExactlyOnceWith({ id: 8 });
+    await waitFor(() => {
+      expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test("once the deleted row is gone, focus goes to the table", async () => {
+    const { choose, user } = setupActions({ leaves: true });
+
+    await choose("Artículo 8", "Delete");
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("table")).toHaveFocus();
+    });
+    expect(screen.queryByText("Artículo 8")).not.toBeInTheDocument();
+  });
+
+  test("deleting the last row of the list, the table goes too: focus goes to Filters", async () => {
+    const { choose, user } = setupActions({
+      leaves: true,
+      rows: [makeItem(9)],
+    });
+
+    await choose("Artículo 9", "Delete");
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Filters/u })).toHaveFocus();
+    });
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  test("hiding an article from a list it then leaves (a status filter) hands focus to the table, not the page's body", async () => {
+    const { choose } = setupActions({ leaves: true });
+
+    await choose("Artículo 9", "Hide from the store");
+
+    await waitFor(() => {
+      expect(screen.queryByText("Artículo 9")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("table")).toHaveFocus();
+    });
+  });
+
+  test("hiding an article that stays in the list leaves focus on its menu", async () => {
+    const { choose, list } = setupActions();
+
+    const menu = await choose("Artículo 9", "Hide from the store");
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(menu).toHaveFocus();
+    });
+  });
+
+  test("each row waits for its own change: one row's answer leaves the other's item off while it is on its way", async () => {
+    const view = setupActions();
+    let releaseHide: (() => void) | undefined;
+    let releaseShow: (() => void) | undefined;
+    const hideGate = new Promise<void>((resolve) => {
+      releaseHide = resolve;
+    });
+    const showGate = new Promise<void>((resolve) => {
+      releaseShow = resolve;
+    });
+    server.use(
+      createOrpcHandler("product.unpublish", async () => {
+        await hideGate;
+        return { id: 9 };
+      }),
+      createOrpcHandler("product.publish", async () => {
+        await showGate;
+        return { id: 8 };
+      })
+    );
+    const itemOf = async (title: string, name: string) => {
+      await view.user.click(
+        await screen.findByRole("button", { name: `Actions for “${title}”` })
+      );
+      const item = await screen.findByRole("menuitem", { name });
+      return item;
+    };
+
+    await view.choose("Artículo 9", "Hide from the store");
+    await view.choose("Artículo 8", "Show in the store");
+    releaseHide?.();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        "Article hidden: it no longer shows in the store."
+      );
+    });
+
+    // The draft's publish is still on its way: its item stays off.
+    expect(await itemOf("Artículo 8", "Show in the store")).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    );
+    await view.user.keyboard("{Escape}");
+    releaseShow?.();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        "Article published: it now shows in the store."
+      );
+    });
+  });
+
+  test("cancelling deletes nothing and gives focus back to the row's menu", async () => {
+    const { choose, remove, user } = setupActions();
+
+    const menu = await choose("Artículo 8", "Delete");
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(menu).toHaveFocus();
+    });
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  test("a delete that fails says so and is reported", async () => {
+    const { choose, user } = setupActions({ deleteFails: true });
+
+    await choose("Artículo 8", "Delete");
+    await user.click(await screen.findByTestId("confirm-dialog-confirm"));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+        "We couldn't delete it. Try again."
+      );
+    });
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: "Internal server error" }),
+      { action: "Products.delete_product" }
+    );
+  });
+
+  test("an untitled draft's menu is named by the list's word for it", async () => {
+    setup({ answer: () => makePage([makeItem(9, { title: null })]) });
+
+    expect(
+      await screen.findByRole("button", { name: "Actions for “Untitled”" })
+    ).toBeVisible();
   });
 });

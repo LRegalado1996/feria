@@ -436,11 +436,13 @@ describe("the rows on the storefront", () => {
       ).toEqual([
         ["best_sellers", [[ready.id, true]]],
         ["featured", [[ready.id, true]]],
+        // In the store's order (FER-019): "Destacados" first, in its own
+        // order, so the sold-out one leads.
         [
           `category:${String(shelf.id)}`,
           [
-            [ready.id, true],
             [soldOut.id, false],
+            [ready.id, true],
           ],
         ],
       ]);

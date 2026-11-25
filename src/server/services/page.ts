@@ -59,6 +59,7 @@ import {
   listCategories,
   loadCards,
   type ProductCard,
+  storeOrderRank,
 } from "@/server/services/catalog";
 import type { BlobStore } from "@/server/services/upload";
 
@@ -458,14 +459,19 @@ export async function findShowingAnnouncement(
 
 /**
  * Up to `PAGE_CATEGORY_ROW_MAX` published articles of each category, in
- * the store's own order (the catalog's default, FER-044).
+ * the store's own order on `today` (the catalog's default: the featured
+ * first, then the day's shuffle, `storeOrderRank`, FER-019).
  */
-async function readCategoryRows(db: DatabaseClient, storeId: number) {
+async function readCategoryRows(
+  db: DatabaseClient,
+  storeId: number,
+  today: string
+) {
   const rows = await db
     .select({ categoryId: product.categoryId, id: product.id })
     .from(product)
     .where(and(eq(product.storeId, storeId), eq(product.status, "published")))
-    .orderBy(asc(product.position), asc(product.id));
+    .orderBy(asc(storeOrderRank(today)), asc(product.id));
   const byCategory = new Map<number, number[]>();
 
   for (const row of rows) {
@@ -516,7 +522,7 @@ export async function getPageContent(
       rowBannerIds: sectionBannerIds(saved),
       spotlightIds: sectionSpotlightIds(saved),
     });
-    const categoryRows = await readCategoryRows(tx, storeId);
+    const categoryRows = await readCategoryRows(tx, storeId, today);
     // The categories the storefront lists: a banner leads only to those.
     const shownCategoryIds = new Set(
       categoriesWithArticles(categories, new Set(categoryRows.keys())).map(

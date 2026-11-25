@@ -8,6 +8,10 @@ export const storefront = {
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
     askWhatsapp: "Consultar por WhatsApp",
+    share: "Compartir",
+    shareCopied: "Enlace copiado: pegalo donde quieras.",
+    shareFailed:
+      "No pudimos copiar el enlace. Copiá la dirección de arriba del navegador.",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
     breadcrumb: "Ruta",
     // Like the header's first link (FER-044).
