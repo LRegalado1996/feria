@@ -96,14 +96,15 @@ describe("createORPCContext", () => {
   });
 
   test("a failure report without a request id carries none", async () => {
-    getSession.mockRejectedValueOnce(new Error("headers unavailable"));
+    const failure = new Error("headers unavailable");
+    getSession.mockRejectedValueOnce(failure);
 
     await createORPCContext({ headers: new Headers() });
 
-    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
-      expect.any(Error),
-      { action: "Api.read_session", requestId: undefined }
-    );
+    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(failure, {
+      action: "Api.read_session",
+      requestId: undefined,
+    });
   });
 
   test("a public procedure still answers when the session could not be read", async () => {

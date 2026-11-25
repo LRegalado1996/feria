@@ -20,12 +20,15 @@ export function withExplicitSslMode(connectionString: string): string {
   }
 
   const url = new URL(connectionString);
-  const mode = url.searchParams.get("sslmode");
+  // pg reads the parameters in order, so a repeated one counts by its last
+  // value: that is the one to judge, and `set` leaves it the only one.
+  const last = (name: string) => url.searchParams.getAll(name).at(-1);
+  const mode = last("sslmode");
 
   if (
-    mode === null ||
+    mode === undefined ||
     !VERIFY_FULL_ALIASES.has(mode) ||
-    url.searchParams.get("uselibpqcompat") === "true"
+    last("uselibpqcompat") === "true"
   ) {
     return connectionString;
   }

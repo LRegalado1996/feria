@@ -30,8 +30,25 @@ describe("withExplicitSslMode", () => {
       `${NEON}?uselibpqcompat=true&sslmode=require`,
     ],
     ["an unparseable string", "not a url"],
+    // pg keeps the last of a repeated parameter.
+    [
+      "a repeated sslmode whose last value is disable",
+      `${NEON}?sslmode=require&sslmode=disable`,
+    ],
+    [
+      "libpq semantics opted into by the last of a repeated flag",
+      `${NEON}?uselibpqcompat=false&uselibpqcompat=true&sslmode=require`,
+    ],
   ])("leaves %s as it came", (_case, connectionString) => {
     expect(withExplicitSslMode(connectionString)).toBe(connectionString);
+  });
+
+  test("judges a repeated sslmode by its last value, and leaves one", () => {
+    const url = new URL(
+      withExplicitSslMode(`${NEON}?sslmode=disable&sslmode=require`)
+    );
+
+    expect(url.searchParams.getAll("sslmode")).toEqual(["verify-full"]);
   });
 
   test("still rewrites when libpq compatibility is named but off", () => {
