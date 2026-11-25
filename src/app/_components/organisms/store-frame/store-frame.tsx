@@ -1,9 +1,12 @@
 import { type ReactNode, Suspense, use } from "react";
 
 import { StoreAnnouncementBar } from "@/app/_components/atoms/store-announcement-bar";
+import {
+  StoreSkipScope,
+  StoreSkipTarget,
+} from "@/app/_components/atoms/store-skip-link";
 import { StoreCartPanel } from "@/app/_components/organisms/store-cart-panel";
 import {
-  STORE_MAIN_ID,
   StoreHeader,
   type StoreHeaderProps,
 } from "@/app/_components/organisms/store-header";
@@ -46,7 +49,8 @@ function Announcement({
 
 /**
  * What every store page sits in (FER-039): the lime bar, the header, then
- * the page, which the skip link leads to, and the cart's side panel
+ * the page, which the skip link leads to (an id of this frame's own,
+ * FER-064: a page left behind stays mounted, hidden), and the cart's side panel
  * (FER-045), which the header's cart and the article's "Agregar al carrito"
  * open. Each page renders its own frame, with what it read of the store (a
  * static article page) or a promise of it (a page read per request), since
@@ -57,25 +61,25 @@ function Announcement({
 function StoreFrame({ announcement, children, ...header }: StoreFrameProps) {
   return (
     <div className="flex flex-1 flex-col" data-slot="store-frame">
-      <StoreCartPanel>
-        {announcement ? (
-          <Suspense fallback={<StoreAnnouncementBar placeholder />}>
-            <Announcement announcement={announcement} />
-          </Suspense>
-        ) : null}
-        <StoreHeader {...header} />
-        {/* Its top clears the sticky header when the skip link scrolls to
-            it. */}
-        <div
-          className="flex flex-1 scroll-mt-20 flex-col"
-          data-slot="store-main"
-          data-testid="store-main"
-          id={STORE_MAIN_ID}
-          tabIndex={-1}
-        >
-          {children}
-        </div>
-      </StoreCartPanel>
+      <StoreSkipScope>
+        <StoreCartPanel>
+          {announcement ? (
+            <Suspense fallback={<StoreAnnouncementBar placeholder />}>
+              <Announcement announcement={announcement} />
+            </Suspense>
+          ) : null}
+          <StoreHeader {...header} />
+          {/* Its top clears the sticky header when the skip link scrolls to
+              it. */}
+          <StoreSkipTarget
+            className="flex flex-1 scroll-mt-20 flex-col"
+            data-slot="store-main"
+            data-testid="store-main"
+          >
+            {children}
+          </StoreSkipTarget>
+        </StoreCartPanel>
+      </StoreSkipScope>
     </div>
   );
 }

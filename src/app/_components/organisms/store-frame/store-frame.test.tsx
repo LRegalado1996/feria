@@ -75,7 +75,11 @@ describe("StoreFrame", () => {
   test("puts the page under the header, in the content the skip link leads to", async () => {
     const { frame, header, main } = await setup();
 
-    expect(main).toHaveAttribute("id", "store-main");
+    // An id of the frame's own (FER-064), the one its skip link leads to.
+    expect(main.id).not.toBe("");
+    expect(
+      within(header).getByRole("link", { name: "Saltar al contenido" })
+    ).toHaveAttribute("href", `#${main.id}`);
     expect(main).toHaveAttribute("tabindex", "-1");
     expect(within(main).getByRole("main")).toHaveTextContent("Contenido");
     expect(frame?.firstElementChild).toBe(header);
