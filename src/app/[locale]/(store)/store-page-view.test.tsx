@@ -230,6 +230,15 @@ describe("storePageMetadata", () => {
       openGraph: {
         description:
           "Christmas gifts at LR Market. See the prices and order online.",
+        images: [
+          {
+            alt: "LR Market",
+            height: 630,
+            type: "image/png",
+            url: "/en/opengraph-image",
+            width: 1200,
+          },
+        ],
         siteName: "LR Market",
         title: "Christmas gifts · LR Market",
         type: "website",

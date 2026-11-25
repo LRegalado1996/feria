@@ -491,8 +491,19 @@ describe("proxy matcher", () => {
     "/en/brand/lr-market-logo.svg",
     "/seeds",
     "/en/seed/ring-1.jpg",
-    // The template's icon is gone: the tab icon is generated (`/icon`).
-    "/favicon.ico",
+    // Only the icons' own addresses, not the paths they once had nor ones
+    // that end alike.
+    "/icon",
+    "/apple-icon",
+    "/icon-png",
+    "/en/favicon.ico",
+    // Only a 32-hex-character name at the root is a key file, not a store's
+    // llms.txt nor a shorter or longer name.
+    "/239a2df8583d65e79cf2271b09b4c09.txt",
+    "/239a2df8583d65e79cf2271b09b4c09c0.txt",
+    "/en/239a2df8583d65e79cf2271b09b4c09c.txt",
+    "/239A2DF8583D65E79CF2271B09B4C09C.txt",
+    "/productos/icon.png",
   ])("runs on %s", (path) => {
     expect(matches(path)).toBe(true);
   });
@@ -503,12 +514,14 @@ describe("proxy matcher", () => {
     "/_vercel/insights/script.js",
     "/monitoring",
     "/monitoring/envelope",
-    "/icon",
-    "/apple-icon",
+    "/favicon.ico",
+    "/icon.png",
+    "/apple-icon.png",
     "/brand/lr-market-logo.svg",
     "/seed/ring-1.jpg",
     "/robots.txt",
     "/sitemap.xml",
+    "/239a2df8583d65e79cf2271b09b4c09c.txt",
     // BotID's script and its checks, which `withBotId` rewrites to Vercel.
     "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js",
     "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/check",

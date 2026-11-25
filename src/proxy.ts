@@ -207,8 +207,12 @@ export const config = {
   // Everything except what never has a language: Next's own assets, Vercel's
   // endpoints, BotID's script and checks (FER-026: `withBotId` rewrites them
   // after the proxy, which would otherwise send them to `/es/...` and a 404),
-  // the Sentry tunnel, the generated brand images and the files in `public/`,
-  // by name or by folder. The share card is generated per language
+  // the Sentry tunnel, the brand's icons (`/favicon.ico`, `/icon.png`,
+  // `/apple-icon.png`: rewritten to `/es/...`, the storefront would answer
+  // a page where a crawler expects an image) and the files in `public/`, by
+  // name or by folder: IndexNow's key file is 32 hex characters and `.txt`
+  // at the root, its name the key, so the pattern says that much and no
+  // more. The share card is generated per language
   // (`app/[locale]/opengraph-image.tsx`) and is an image, not a page: its
   // Spanish URL keeps the `/es` a page would be redirected away from, so a
   // crawler gets it in one request. `robots.txt` and `sitemap.xml` are
@@ -219,6 +223,6 @@ export const config = {
   // (`/api/docs/spec.json`); a test holds this list to `public/` and to the
   // languages, so a new file or language fails until it is added.
   matcher: [
-    "/((?!_next/|_vercel/|149e9513-01fa-4fb0-aad4-566afd725d1b/|monitoring(?:/|$)|brand/|seed/|(?:icon|apple-icon)$|(?:robots\\.txt|sitemap\\.xml)$|(?:es|en)/opengraph-image$).*)",
+    "/((?!_next/|_vercel/|149e9513-01fa-4fb0-aad4-566afd725d1b/|monitoring(?:/|$)|brand/|seed/|(?:favicon\\.ico|icon\\.png|apple-icon\\.png)$|(?:robots\\.txt|sitemap\\.xml)$|[0-9a-f]{32}\\.txt$|(?:es|en)/opengraph-image$).*)",
   ],
 };

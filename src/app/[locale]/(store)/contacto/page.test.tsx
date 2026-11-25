@@ -316,6 +316,15 @@ describe("the contact page's metadata", () => {
         description,
         openGraph: {
           description,
+          images: [
+            {
+              alt: "LR Market",
+              height: 630,
+              type: "image/png",
+              url: `/${locale}/opengraph-image`,
+              width: 1200,
+            },
+          ],
           siteName: "Sample Store",
           title,
           type: "website",
