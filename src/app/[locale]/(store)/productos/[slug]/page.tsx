@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { ArticleViewCount } from "@/app/_components/atoms/article-view-count";
 import { JsonLd } from "@/app/_components/atoms/json-ld";
 import { StoreArticle } from "@/app/_components/organisms/store-article";
 import { StoreFrame } from "@/app/_components/organisms/store-frame";
@@ -189,6 +190,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           shareUrl={url}
           whatsappHref={whatsappHref}
         />
+        {/* The session's view, counted from the browser (FER-029). */}
+        <ArticleViewCount productId={article.id} />
       </main>
       <StorePageFooter locale={locale} store={store} />
     </StoreFrame>

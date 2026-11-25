@@ -3,6 +3,7 @@ import { attributeRouter } from "@/server/api/routers/attribute";
 import { catalogRouter } from "@/server/api/routers/catalog";
 import { categoryRouter } from "@/server/api/routers/category";
 import { comingSoonRouter } from "@/server/api/routers/coming-soon";
+import { metricsRouter } from "@/server/api/routers/metrics";
 import { orderRouter } from "@/server/api/routers/order";
 import { pageRouter } from "@/server/api/routers/page";
 import { productRouter } from "@/server/api/routers/product";
@@ -15,6 +16,7 @@ export const appRouter = {
   catalog: catalogRouter,
   category: categoryRouter,
   comingSoon: comingSoonRouter,
+  metrics: metricsRouter,
   order: orderRouter,
   page: pageRouter,
   product: productRouter,

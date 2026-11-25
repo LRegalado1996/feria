@@ -65,6 +65,13 @@ vi.mock("@/app/_components/organisms/store-article", () => ({
   },
 }));
 
+// The count has its own tests; here it shows which article it counts.
+vi.mock("@/app/_components/atoms/article-view-count", () => ({
+  ArticleViewCount: ({ productId }: { productId: number }) => (
+    <div data-testid="article-view-count">{productId}</div>
+  ),
+}));
+
 // The frame's parts have their own tests (`store-shell.test.ts`).
 vi.mock("../../store-shell", () => ({ shellOf }));
 
@@ -339,6 +346,16 @@ describe("ArticlePage", () => {
       locale: "en",
       shellOf: "Sample Store en",
     });
+  });
+
+  test("counts a view of its own article, inside the page's main", async () => {
+    const { show } = setup({ article: makeArticle({ id: 58 }) });
+
+    await show();
+
+    const main = screen.getByTestId("store-article").parentElement;
+    expect(main).toContainElement(screen.getByTestId("article-view-count"));
+    expect(screen.getByTestId("article-view-count")).toHaveTextContent(/^58$/u);
   });
 
   test("ends with the store's footer, after the article, in the page's language", async () => {

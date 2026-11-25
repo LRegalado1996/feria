@@ -43,13 +43,12 @@ export function clientAddress(ip: string): string {
 }
 
 /**
- * The client's key for the hourly order limit (FER-025): a keyed hash of the
- * address the platform reports (`x-real-ip`, set by Vercel; a client cannot
- * forge it there), so the database never holds an IP. `null` when there is
- * none, as on a local server: then only the per-phone limit applies, never
- * one shared bucket for every unknown client (docs/agents/security.md).
+ * A keyed hash of `purpose` and the client's address as the platform
+ * reports it (`x-real-ip`, set by Vercel; a client cannot forge it there),
+ * so the database never holds an IP. `null` without an address or a secret,
+ * as on a local server.
  */
-export function orderClientKey(headers: Headers): string | null {
+function keyedClient(headers: Headers, purpose: string): string | null {
   const ip = ipAddress({ headers });
   // Required in production, where the platform gives the IP; a local server
   // may run without one.
@@ -60,6 +59,29 @@ export function orderClientKey(headers: Headers): string | null {
   }
 
   return createHmac("sha256", secret)
-    .update(`order-client:${clientAddress(ip)}`)
+    .update(`${purpose}:${clientAddress(ip)}`)
     .digest("base64url");
+}
+
+/**
+ * The client's key for the hourly order limit (FER-025). `null` when there
+ * is none: then only the per-phone limit applies, never one shared bucket
+ * for every unknown client (docs/agents/security.md).
+ */
+export function orderClientKey(headers: Headers): string | null {
+  return keyedClient(headers, "order-client");
+}
+
+/**
+ * The client's bucket for one daily cap of the view counts (FER-029): what
+ * it counted (`subject`, the visit or one article) on `day`, hashed with its
+ * address, so a stored bucket names neither, and the same client's buckets
+ * of two days or two articles cannot be linked. `null` when there is no
+ * address: the caps are then skipped, never one shared bucket.
+ */
+export function metricsBucket(
+  headers: Headers,
+  { day, subject }: { day: string; subject: string }
+): string | null {
+  return keyedClient(headers, `metrics:${day}:${subject}`);
 }

@@ -123,7 +123,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 | ID                                      | Title                   | Priority | Status |
 | --------------------------------------- | ----------------------- | -------- | ------ |
-| [FER-029](FER-029-view-tracking.md)     | View and visit tracking | P1       | todo   |
+| [FER-029](FER-029-view-tracking.md)     | View and visit tracking | P1       | done   |
 | [FER-030](FER-030-metrics-dashboard.md) | Metrics dashboard       | P1       | todo   |
 
 ### M6 Launch

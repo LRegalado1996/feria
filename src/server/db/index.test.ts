@@ -182,6 +182,7 @@ describe("database client", () => {
         "customerOrder",
         "featuredProduct",
         "homeSection",
+        "metricRateLimit",
         "orderItem",
         "orderStatusEvent",
         "page",
@@ -193,6 +194,7 @@ describe("database client", () => {
         "productImage",
         "productImageTranslation",
         "productTranslation",
+        "productViewDaily",
         "rankingEntry",
         "rateLimit",
         "session",
@@ -200,6 +202,7 @@ describe("database client", () => {
         "spotlightTranslation",
         "store",
         "storeTranslation",
+        "storeVisitDaily",
         "user",
         "verification",
       ])
