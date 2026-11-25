@@ -41,7 +41,7 @@ test.describe("Article page", () => {
   // production build it must be drawn per request: prerendered, the fetch
   // is IO the build cannot cache and the card answers 500 (production on
   // 2026-11-25, Sentry FERIA-M).
-  test("its share card answers a PNG with the article's photo, larger than the plain block of an article without one", async ({
+  test("its share card answers a JPEG with the article's photo, heavier than the plain block of an article without one and light enough for WhatsApp", async ({
     db,
     page,
     request,
@@ -73,10 +73,16 @@ test.describe("Article page", () => {
     const withPhoto = await card(article.slug);
     const plain = await card(bare.slug);
 
-    expect([withPhoto.status, withPhoto.type]).toEqual([200, "image/png"]);
-    expect([plain.status, plain.type]).toEqual([200, "image/png"]);
-    // A photo's detail weighs far more than the flat moss block.
-    expect(withPhoto.bytes).toBeGreaterThan(plain.bytes * 2);
+    expect([withPhoto.status, withPhoto.type]).toEqual([200, "image/jpeg"]);
+    expect([plain.status, plain.type]).toEqual([200, "image/jpeg"]);
+    // The plain block is a whole card too (its name and price drawn), and a
+    // photo's detail weighs more than the flat moss block.
+    expect(plain.bytes).toBeGreaterThan(5 * 1024);
+    expect(withPhoto.bytes).toBeGreaterThan(plain.bytes * 1.5);
+    // WhatsApp shows no image for a heavy card: one of 585 KB showed and
+    // one of 800 KB did not (production, 2026-11-25). As PNG this card
+    // weighed several hundred KB.
+    expect(withPhoto.bytes).toBeLessThan(300 * 1024);
   });
 
   test("the gallery's round arrow steps through the photos and goes round past the last, and the one in view opens full screen", async ({
