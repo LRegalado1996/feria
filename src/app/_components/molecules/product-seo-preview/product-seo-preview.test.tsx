@@ -96,9 +96,6 @@ describe("ProductSeoPreview", () => {
     expect(screen.getByTestId("store-share-preview-photo")).toHaveStyle({
       backgroundImage: 'url("/seed/ring-2.jpg")',
     });
-    expect(
-      screen.queryByText(/For now the share card shows the photo only/u)
-    ).not.toBeInTheDocument();
   });
 
   test("draws an untitled article without a price, and no photo", () => {
@@ -117,22 +114,14 @@ describe("ProductSeoPreview", () => {
     expect(
       screen.getByTestId("store-share-preview-photo").style.backgroundImage
     ).toBe("");
-    expect(
-      screen.queryByText(/For now the share card shows the photo only/u)
-    ).not.toBeInTheDocument();
   });
 
-  test("says the card leaves out a main photo stored elsewhere", () => {
+  test("draws a main photo of the Blob store, as the card now does (FER-049)", () => {
     setup({ mainPhotoUrl: BLOB_PHOTO });
 
-    expect(
-      screen.getByTestId("store-share-preview-photo").style.backgroundImage
-    ).toBe("");
-    expect(
-      screen.getByText(
-        "For now the share card shows the photo only when it is stored on this site."
-      )
-    ).toBeVisible();
+    expect(screen.getByTestId("store-share-preview-photo")).toHaveStyle({
+      backgroundImage: `url("${BLOB_PHOTO}")`,
+    });
   });
 
   test("in Spanish, says it in Spanish", () => {
@@ -142,10 +131,8 @@ describe("ProductSeoPreview", () => {
     expect(screen.getByTestId("store-share-preview")).toHaveTextContent(
       "$ 1.290"
     );
-    expect(
-      screen.getByText(
-        "Por ahora la tarjeta para compartir muestra la foto solo si está guardada en este sitio."
-      )
-    ).toBeVisible();
+    expect(screen.getByTestId("store-share-preview-photo")).toHaveStyle({
+      backgroundImage: `url("${BLOB_PHOTO}")`,
+    });
   });
 });

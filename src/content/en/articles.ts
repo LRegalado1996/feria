@@ -163,8 +163,6 @@ export const articles: Dictionary["articles"] = {
         heading: "Search and sharing",
         hint: "Made from the title, the description and the main photo.",
         share: "How it looks when the link is shared",
-        shareNoPhoto:
-          "For now the share card shows the photo only when it is stored on this site.",
       },
       spanish: "Spanish",
       title: "Title",
