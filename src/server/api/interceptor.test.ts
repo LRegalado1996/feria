@@ -1,25 +1,17 @@
 import { ORPCError } from "@orpc/server";
-import { APIError } from "better-auth/api";
 import { DrizzleQueryError } from "drizzle-orm";
 import { describe, expect, test, vi } from "vitest";
 
 import { ERROR_WHYS } from "@/lib/errors";
 
-import { createObservedContext, interceptErrors } from "./interceptor";
+import { interceptErrors } from "./interceptor";
 
-const { captureExceptionWithScope, getSession, requestLog } = vi.hoisted(
-  () => ({
-    captureExceptionWithScope: vi.fn((): string | null => "event-1"),
-    getSession: vi.fn(
-      async (): Promise<{ headers: Headers; response: unknown }> =>
-        await Promise.resolve({ headers: new Headers(), response: null })
-    ),
-    requestLog: { error: vi.fn(), set: vi.fn() },
-  })
-);
+const { captureExceptionWithScope, requestLog } = vi.hoisted(() => ({
+  captureExceptionWithScope: vi.fn((): string | null => "event-1"),
+  requestLog: { error: vi.fn(), set: vi.fn() },
+}));
 
 vi.mock("@/lib/sentry", () => ({ captureExceptionWithScope }));
-vi.mock("@/server/better-auth", () => ({ auth: { api: { getSession } } }));
 vi.mock("@/server/api/utils/logger", () => ({
   safeRequestLogger: () => requestLog,
 }));
@@ -139,46 +131,5 @@ describe("interceptErrors", () => {
       new Error("boom"),
       { outcome: { code: "INTERNAL_SERVER_ERROR", eventId: undefined } }
     );
-  });
-});
-
-describe("createObservedContext", () => {
-  test("builds the context from the request, reporting nothing", async () => {
-    const resHeaders = new Headers();
-
-    const created = await createObservedContext({
-      headers: context.headers,
-      resHeaders,
-    });
-
-    expect(created).toMatchObject({
-      headers: context.headers,
-      resHeaders,
-      session: null,
-    });
-    expect(captureExceptionWithScope).not.toHaveBeenCalled();
-  });
-
-  test("reports a failure and rethrows it", async () => {
-    const failure = new Error("pool exhausted");
-    getSession.mockRejectedValueOnce(failure);
-
-    await expect(
-      createObservedContext({ headers: context.headers })
-    ).rejects.toBe(failure);
-    expect(captureExceptionWithScope).toHaveBeenCalledWith(failure, {
-      action: "Api.create_context",
-      requestId: "req-1",
-    });
-  });
-
-  test("leaves Better Auth's own APIError to its logger", async () => {
-    const failure = new APIError("INTERNAL_SERVER_ERROR");
-    getSession.mockRejectedValueOnce(failure);
-
-    await expect(
-      createObservedContext({ headers: new Headers() })
-    ).rejects.toBe(failure);
-    expect(captureExceptionWithScope).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { NextRequest } from "next/server";
 import { describe, expect, test, vi } from "vitest";
 
@@ -47,10 +48,10 @@ const MAX_BODY_BYTES = 4_250_000;
 
 function setup({
   sessionHeaders = new Headers(),
-  contextFailure,
-}: { sessionHeaders?: Headers; contextFailure?: Error } = {}) {
-  if (contextFailure) {
-    getSession.mockRejectedValueOnce(contextFailure);
+  sessionFailure,
+}: { sessionHeaders?: Headers; sessionFailure?: Error } = {}) {
+  if (sessionFailure) {
+    getSession.mockRejectedValueOnce(sessionFailure);
   } else {
     getSession.mockResolvedValueOnce({
       headers: sessionHeaders,
@@ -194,14 +195,16 @@ describe("oRPC route", () => {
     }
   );
 
-  test("reports a context that failed to build and rethrows", async () => {
-    const contextFailure = new Error("pool exhausted");
-    const { post } = setup({ contextFailure });
+  test("a session that cannot be read still answers a public procedure, reporting nothing more", async () => {
+    // Better Auth has logged and reported its cause by the time it throws.
+    const { post } = setup({
+      sessionFailure: new APIError("INTERNAL_SERVER_ERROR"),
+    });
 
-    await expect(post("echo", { text: "hi" })).rejects.toBe(contextFailure);
-    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
-      contextFailure,
-      { action: "Api.create_context", requestId: undefined }
-    );
+    const response = await post("echo", { text: "hi" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ json: "hi" });
+    expect(captureExceptionWithScope).not.toHaveBeenCalled();
   });
 });

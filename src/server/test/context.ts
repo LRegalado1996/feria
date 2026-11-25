@@ -19,6 +19,8 @@ export interface Context {
       userId: string;
     };
   } | null;
+  /** Why the session could not be read, when it could not. */
+  sessionFailure: { error: unknown } | null;
 }
 
 // The type argument is explicit: with a bare `Mock`, a value-returning
@@ -84,6 +86,7 @@ export interface MockContext {
   db: MockDatabase;
   headers: Headers;
   session: Context["session"];
+  sessionFailure: Context["sessionFailure"];
 }
 
 const BUILDER_OPERATIONS = new Set([
@@ -226,6 +229,7 @@ export function createMockContext(
     session: sessionOverrides
       ? { ...defaultSession, ...sessionOverrides }
       : defaultSession,
+    sessionFailure: null,
     headers: new Headers(),
   };
 
@@ -245,6 +249,7 @@ export function createUnauthenticatedMockContext(): {
   const mockCtx: MockContext = {
     db: createMockDatabase(),
     session: null,
+    sessionFailure: null,
     headers: new Headers(),
   };
 

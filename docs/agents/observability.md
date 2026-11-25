@@ -31,6 +31,8 @@ An issue is something a developer must fix. Everything else is a breadcrumb or n
 - **A capability the deployment is not configured for** is a typed `SERVICE_UNAVAILABLE` with a `why` from `ERROR_WHYS` (uploads without `BLOB_READ_WRITE_TOKEN`, FER-051): the interceptor passes it through untouched, so the server reports nothing, and the client that asked reports it once with `reportError` (someone must configure it), beside a plain message instead of a crash.
 - A new noise filter matches the observed signature positively (a code, an exact digest, a frame URL) and gets a test. Never filter by exclusion ("every `TypeError` except…"): it hides the next real failure.
 - Better Auth's error-level log lines reach Sentry through `betterAuthLogger`, once per incident (the underlying error, never Better Auth's `APIError` wrapper).
+- **A session that cannot be read is not the request's failure.** `createORPCContext` keeps it as `context.sessionFailure` and goes on with no session, so a public procedure (and every RSC page through `caller`) still answers a signed-in visitor; `adminProcedure` throws it, a reported 500, never a sign-in prompt. Better Auth reports the cause of its own `APIError`, so the context reports only a failure from anywhere else (`Api.read_session`).
+- **Database hiccups are breadcrumbs, not issues:** a retried connection attempt (`Db.connect_retry`) and an idle client's error (`Db.pool_client_error`) are a warning line and a breadcrumb. Only the failure that survives the retries reaches Sentry, through whatever caught it.
 
 ## Logging
 
