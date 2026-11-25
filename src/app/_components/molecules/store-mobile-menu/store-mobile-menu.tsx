@@ -5,6 +5,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { type ReactNode, useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
+import { isPlainClick } from "@/lib/cart/paths";
 
 export interface StoreMobileMenuProps {
   /** The menu's content, rendered by the server: the links and the language. */
@@ -66,8 +67,17 @@ function StoreMobileMenu({
             event.preventDefault();
           }
         }}
-        onClickCapture={(event) => {
-          if (event.target instanceof Element && event.target.closest("a")) {
+        // On the click's way up, after the link's own handler has started
+        // the navigation in place (FER-064): closed on the way down, the
+        // panel and its link are gone before that handler runs, and the
+        // browser loads the whole document again. A link opened in another
+        // tab leaves this page, and the menu, as they are.
+        onClick={(event) => {
+          if (
+            isPlainClick(event) &&
+            event.target instanceof Element &&
+            event.target.closest("a")
+          ) {
             setOpen(false);
           }
         }}

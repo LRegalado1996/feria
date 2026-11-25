@@ -14,6 +14,10 @@ import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { StorePriceTag } from "@/app/_components/atoms/store-price-tag";
 import { StoreReveal } from "@/app/_components/atoms/store-reveal";
 import {
+  StoreSkipScope,
+  StoreSkipTarget,
+} from "@/app/_components/atoms/store-skip-link";
+import {
   STORE_CARD_SIZES,
   StoreArticleCard,
 } from "@/app/_components/molecules/store-article-card";
@@ -25,10 +29,7 @@ import { StoreHowToBuy } from "@/app/_components/molecules/store-how-to-buy";
 import { StoreMarquee } from "@/app/_components/molecules/store-marquee";
 import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import { StoreFooter } from "@/app/_components/organisms/store-footer";
-import {
-  STORE_MAIN_ID,
-  StoreHeader,
-} from "@/app/_components/organisms/store-header";
+import { StoreHeader } from "@/app/_components/organisms/store-header";
 import { type Dictionary, getDictionary } from "@/content";
 import { detectStableEnvironment, isProductionDeploy } from "@/lib/env/deploy";
 import { buildAlternates } from "@/lib/i18n/metadata";
@@ -218,333 +219,355 @@ export default async function DesignPage({ params }: DesignPageProps) {
   const cardLabels = { card: storefront.articleCard, price: storefront.price };
 
   return (
-    <main
-      className="flex min-h-screen flex-col gap-16 bg-store-background pb-24 text-store-foreground"
-      data-slot="design-page"
-      data-testid="design-page"
-      // The target of the sample header's skip link.
-      id={STORE_MAIN_ID}
-      tabIndex={-1}
-    >
-      <header className="bg-store-contrast py-12 md:py-20">
-        <div className={SECTION_CLASS}>
-          <StoreEyebrow tone="contrast">{design.intro.eyebrow}</StoreEyebrow>
-          <StoreHeading
-            accentLine={1}
-            as="h1"
-            className="text-store-background"
-            lines={[design.intro.title.lineOne, design.intro.title.lineTwo]}
-            size="hero"
-          />
-          <p className="max-w-prose text-base text-store-background">
-            {design.intro.lead}
-          </p>
-        </div>
-      </header>
-
-      <section className={SECTION_CLASS} data-testid="design-logo">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.logo}</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="flex items-center justify-center bg-store-surface p-10">
-            <StoreLogo className="h-32" />
-          </div>
-          <div className="flex items-center justify-center bg-store-contrast p-10">
-            <StoreLogo className="h-32" />
-          </div>
-          <div className="flex items-center justify-center bg-store-surface p-10">
-            <StoreLogo className="h-32" tone="contrast" />
-          </div>
-          {/* The sizes the storefront sets it at: the phone's header, the
-              computer's, the footer's. The mark alone is only an icon. */}
-          <div className="flex flex-wrap items-center justify-center gap-6 bg-store-contrast p-6 md:p-10">
-            <StoreLogo className="h-10" />
-            <StoreLogo className="h-12.5" />
-            <StoreLogo className="h-15.5" />
-            <StoreLogo className="h-8" variant="mark" />
-          </div>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-palette">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.palette}</h2>
-        <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {SWATCHES.map(([name, fill]) => (
-            <li className="flex flex-col gap-2" key={name}>
-              <span
-                aria-hidden="true"
-                className={`block aspect-video border border-store-line ${fill}`}
-              />
-              <span className="font-mono text-xs">store-{name}</span>
-              <span className="text-sm text-store-muted">
-                {sample.palette[name]}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-type">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.type}</h2>
-        <div className="flex flex-col gap-4 bg-store-contrast p-6 md:p-10">
-          <StoreEyebrow tone="contrast">{sample.eyebrow}</StoreEyebrow>
-          <StoreHeading
-            accentLine={1}
-            as="h3"
-            className="text-store-background"
-            lines={heroLines}
-            size="hero"
-          />
-        </div>
-        <div className="flex flex-col gap-4 bg-store-surface p-6 md:p-10">
-          <StoreEyebrow>{sample.eyebrow}</StoreEyebrow>
-          <StoreHeading as="h3" lines={sectionLines} size="section" />
-          <p className="max-w-prose text-base">{sample.body}</p>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-buttons">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.buttons}</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <StoreButton size="lg">{sample.buttons.primary}</StoreButton>
-          <StoreButton variant="outline">{sample.buttons.outline}</StoreButton>
-          <StoreButton variant="ghost">{sample.buttons.ghost}</StoreButton>
-          <StoreButton
-            aria-label={sample.buttons.primary}
-            size="icon-lg"
-            variant="accent"
-          >
-            <ArrowRight aria-hidden="true" />
-          </StoreButton>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 bg-store-contrast p-4">
-          <StoreButton variant="contrast">
-            {sample.buttons.contrast}
-          </StoreButton>
-          <StoreButton
-            aria-label={storefront.shell.search}
-            size="icon"
-            variant="contrast"
-          >
-            <Search aria-hidden="true" />
-          </StoreButton>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-chips" id="chips">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.chips}</h2>
-        <ul className="flex flex-wrap gap-2">
-          {chips.map((chip, index) => (
-            <li key={chip}>
-              <StoreChip asChild selected={index === 0}>
-                <a
-                  aria-current={index === 0 ? "true" : undefined}
-                  href="#chips"
-                >
-                  {chip}
-                </a>
-              </StoreChip>
-            </li>
-          ))}
-        </ul>
-        <div className="flex flex-wrap items-center gap-2 bg-store-surface p-4">
-          <StoreBadge>{storefront.articleCard.badgeNew}</StoreBadge>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-price">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.price}</h2>
-        <div className="flex flex-col gap-4">
-          <StorePriceTag
-            amount={129_000}
-            currency="UYU"
-            labels={storefront.price}
-            locale={locale}
-            size="lg"
-          />
-          <StorePriceTag
-            amount={1250}
-            currency="USD"
-            labels={storefront.price}
-            locale={locale}
-          />
-          <StorePriceTag
-            amount={89_000}
-            currency="UYU"
-            labels={storefront.price}
-            locale={locale}
-            previousAmount={129_000}
-          />
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-link">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.link}</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="bg-store-surface p-6">
-            <StoreArrowLink href="#cards">{sample.linkLabel}</StoreArrowLink>
-          </div>
-          <div className="bg-store-contrast p-6">
-            <StoreArrowLink href="#cards" tone="contrast">
-              {sample.linkLabel}
-            </StoreArrowLink>
-          </div>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-count-up">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.countUp}</h2>
-        <p className="flex flex-wrap items-end gap-x-4 gap-y-1 bg-store-accent p-6">
-          <StoreCountUp
-            className="font-display store-display-figure leading-display font-extrabold"
-            data-testid="design-count-up-figure"
-            value={SAMPLE_COUNT}
-          />
-          <span className="pb-2 text-base font-medium">
-            {sample.countLabel}
-          </span>
-        </p>
-      </section>
-
-      <section className="flex flex-col" data-testid="design-cards" id="cards">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.cards}
-        </h2>
-        <StoreArticleRow
-          headingLevel="h3"
-          items={buildSampleArticles(sample.articles).map((article) => ({
-            content: (
-              <StoreArticleCard
-                amount={article.amount}
-                currency={article.currency}
-                headingLevel="h3"
-                href="#cards"
-                image={{ alt: article.name, src: article.photo }}
-                isNew={article.isNew}
-                labels={cardLabels}
-                locale={locale}
-                name={article.name}
-                previousAmount={article.previousAmount}
-                sizes={STORE_CARD_SIZES.row}
-                unavailable={article.unavailable}
-              />
-            ),
-            id: article.name,
-          }))}
-          title={sample.rowTitle}
-          viewAllHref="#cards"
-        />
-      </section>
-
-      <section className="flex flex-col gap-6" data-testid="design-banner">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.banner}
-        </h2>
-        <StoreBanner
-          href="#cover"
-          image={EARRINGS_PHOTO}
-          shopNow={storefront.banner.shopNow}
-          title={sample.banners.earrings}
-        />
-      </section>
-
-      <section className="flex flex-col gap-6" data-testid="design-spotlight">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.spotlight}
-        </h2>
-        <StoreSpotlight
-          article={{
-            cover: {
-              alt: sample.articles.bubbleGun,
-              url: "/seed/bubble-gun-2.jpg",
-            },
-            currencyCode: "UYU",
-            id: 1,
-            lang: locale,
-            priceAmount: 79_000,
-            title: sample.articles.bubbleGun,
-          }}
-          copy={storefront}
-          headingLevel="h3"
-          href="#cards"
-          id={1}
-          label={{ lang: locale, text: sample.spotlight.label }}
-          locale={locale}
-          phrase={{ lang: locale, text: sample.spotlight.phrase }}
-        />
-      </section>
-
-      <section className="flex flex-col gap-6" data-testid="design-how-to-buy">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.howToBuy}
-        </h2>
-        <StoreHowToBuy copy={storefront} headingLevel="h3" />
-      </section>
-
-      <section
-        className="flex flex-col gap-6"
-        data-testid="design-cover"
-        id="cover"
-      >
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.cover}
-        </h2>
-        <StoreCoverCarousel banners={banners} />
-      </section>
-
-      <section className="flex flex-col gap-6" data-testid="design-marquee">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.marquee}
-        </h2>
-        <StoreMarquee items={marquee} tone="contrast" />
-        <StoreMarquee items={marquee} tone="accent" />
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-bubbles">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.bubbles}</h2>
-        {/* Positioned and tall: the burst is drawn over this block. */}
-        <div className="relative flex min-h-80 items-start bg-store-contrast p-6">
-          <StoreBubbles label={comingSoon.bubbles}>
-            <StoreLogo className="h-14" />
-          </StoreBubbles>
-        </div>
-      </section>
-
-      <section className={SECTION_CLASS} data-testid="design-reveal">
-        <h2 className={SECTION_TITLE_CLASS}>{sections.reveal}</h2>
-        <StoreReveal
-          className="flex flex-col gap-4 bg-store-surface p-6 md:p-10"
-          data-testid="design-reveal-block"
+    // The page is the target of the sample header's skip link.
+    <StoreSkipScope>
+      <StoreSkipTarget asChild>
+        <main
+          className="flex min-h-screen flex-col gap-16 bg-store-background pb-24 text-store-foreground"
+          data-slot="design-page"
+          data-testid="design-page"
         >
-          <StoreHeading as="h3" lines={sectionLines} size="section" />
-          <p className="max-w-prose text-base">{sample.revealBody}</p>
-        </StoreReveal>
-      </section>
+          <header className="bg-store-contrast py-12 md:py-20">
+            <div className={SECTION_CLASS}>
+              <StoreEyebrow tone="contrast">
+                {design.intro.eyebrow}
+              </StoreEyebrow>
+              <StoreHeading
+                accentLine={1}
+                as="h1"
+                className="text-store-background"
+                lines={[design.intro.title.lineOne, design.intro.title.lineTwo]}
+                size="hero"
+              />
+              <p className="max-w-prose text-base text-store-background">
+                {design.intro.lead}
+              </p>
+            </div>
+          </header>
 
-      <section className="flex flex-col gap-6" data-testid="design-shell">
-        <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
-          {sections.shell}
-        </h2>
-        <div>
-          <StoreAnnouncementBar>{sample.announcement}</StoreAnnouncementBar>
-          {/* Not sticky here: it would stay over the rest of the gallery.
+          <section className={SECTION_CLASS} data-testid="design-logo">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.logo}</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex items-center justify-center bg-store-surface p-10">
+                <StoreLogo className="h-32" />
+              </div>
+              <div className="flex items-center justify-center bg-store-contrast p-10">
+                <StoreLogo className="h-32" />
+              </div>
+              <div className="flex items-center justify-center bg-store-surface p-10">
+                <StoreLogo className="h-32" tone="contrast" />
+              </div>
+              {/* The sizes the storefront sets it at: the phone's header, the
+              computer's, the footer's. The mark alone is only an icon. */}
+              <div className="flex flex-wrap items-center justify-center gap-6 bg-store-contrast p-6 md:p-10">
+                <StoreLogo className="h-10" />
+                <StoreLogo className="h-12.5" />
+                <StoreLogo className="h-15.5" />
+                <StoreLogo className="h-8" variant="mark" />
+              </div>
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-palette">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.palette}</h2>
+            <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {SWATCHES.map(([name, fill]) => (
+                <li className="flex flex-col gap-2" key={name}>
+                  <span
+                    aria-hidden="true"
+                    className={`block aspect-video border border-store-line ${fill}`}
+                  />
+                  <span className="font-mono text-xs">store-{name}</span>
+                  <span className="text-sm text-store-muted">
+                    {sample.palette[name]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-type">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.type}</h2>
+            <div className="flex flex-col gap-4 bg-store-contrast p-6 md:p-10">
+              <StoreEyebrow tone="contrast">{sample.eyebrow}</StoreEyebrow>
+              <StoreHeading
+                accentLine={1}
+                as="h3"
+                className="text-store-background"
+                lines={heroLines}
+                size="hero"
+              />
+            </div>
+            <div className="flex flex-col gap-4 bg-store-surface p-6 md:p-10">
+              <StoreEyebrow>{sample.eyebrow}</StoreEyebrow>
+              <StoreHeading as="h3" lines={sectionLines} size="section" />
+              <p className="max-w-prose text-base">{sample.body}</p>
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-buttons">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.buttons}</h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <StoreButton size="lg">{sample.buttons.primary}</StoreButton>
+              <StoreButton variant="outline">
+                {sample.buttons.outline}
+              </StoreButton>
+              <StoreButton variant="ghost">{sample.buttons.ghost}</StoreButton>
+              <StoreButton
+                aria-label={sample.buttons.primary}
+                size="icon-lg"
+                variant="accent"
+              >
+                <ArrowRight aria-hidden="true" />
+              </StoreButton>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 bg-store-contrast p-4">
+              <StoreButton variant="contrast">
+                {sample.buttons.contrast}
+              </StoreButton>
+              <StoreButton
+                aria-label={storefront.shell.search}
+                size="icon"
+                variant="contrast"
+              >
+                <Search aria-hidden="true" />
+              </StoreButton>
+            </div>
+          </section>
+
+          <section
+            className={SECTION_CLASS}
+            data-testid="design-chips"
+            id="chips"
+          >
+            <h2 className={SECTION_TITLE_CLASS}>{sections.chips}</h2>
+            <ul className="flex flex-wrap gap-2">
+              {chips.map((chip, index) => (
+                <li key={chip}>
+                  <StoreChip asChild selected={index === 0}>
+                    <a
+                      aria-current={index === 0 ? "true" : undefined}
+                      href="#chips"
+                    >
+                      {chip}
+                    </a>
+                  </StoreChip>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2 bg-store-surface p-4">
+              <StoreBadge>{storefront.articleCard.badgeNew}</StoreBadge>
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-price">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.price}</h2>
+            <div className="flex flex-col gap-4">
+              <StorePriceTag
+                amount={129_000}
+                currency="UYU"
+                labels={storefront.price}
+                locale={locale}
+                size="lg"
+              />
+              <StorePriceTag
+                amount={1250}
+                currency="USD"
+                labels={storefront.price}
+                locale={locale}
+              />
+              <StorePriceTag
+                amount={89_000}
+                currency="UYU"
+                labels={storefront.price}
+                locale={locale}
+                previousAmount={129_000}
+              />
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-link">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.link}</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="bg-store-surface p-6">
+                <StoreArrowLink href="#cards">
+                  {sample.linkLabel}
+                </StoreArrowLink>
+              </div>
+              <div className="bg-store-contrast p-6">
+                <StoreArrowLink href="#cards" tone="contrast">
+                  {sample.linkLabel}
+                </StoreArrowLink>
+              </div>
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-count-up">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.countUp}</h2>
+            <p className="flex flex-wrap items-end gap-x-4 gap-y-1 bg-store-accent p-6">
+              <StoreCountUp
+                className="font-display store-display-figure leading-display font-extrabold"
+                data-testid="design-count-up-figure"
+                value={SAMPLE_COUNT}
+              />
+              <span className="pb-2 text-base font-medium">
+                {sample.countLabel}
+              </span>
+            </p>
+          </section>
+
+          <section
+            className="flex flex-col"
+            data-testid="design-cards"
+            id="cards"
+          >
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.cards}
+            </h2>
+            <StoreArticleRow
+              headingLevel="h3"
+              items={buildSampleArticles(sample.articles).map((article) => ({
+                content: (
+                  <StoreArticleCard
+                    amount={article.amount}
+                    currency={article.currency}
+                    headingLevel="h3"
+                    href="#cards"
+                    image={{ alt: article.name, src: article.photo }}
+                    isNew={article.isNew}
+                    labels={cardLabels}
+                    locale={locale}
+                    name={article.name}
+                    previousAmount={article.previousAmount}
+                    sizes={STORE_CARD_SIZES.row}
+                    unavailable={article.unavailable}
+                  />
+                ),
+                id: article.name,
+              }))}
+              title={sample.rowTitle}
+              viewAllHref="#cards"
+            />
+          </section>
+
+          <section className="flex flex-col gap-6" data-testid="design-banner">
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.banner}
+            </h2>
+            <StoreBanner
+              href="#cover"
+              image={EARRINGS_PHOTO}
+              shopNow={storefront.banner.shopNow}
+              title={sample.banners.earrings}
+            />
+          </section>
+
+          <section
+            className="flex flex-col gap-6"
+            data-testid="design-spotlight"
+          >
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.spotlight}
+            </h2>
+            <StoreSpotlight
+              article={{
+                cover: {
+                  alt: sample.articles.bubbleGun,
+                  url: "/seed/bubble-gun-2.jpg",
+                },
+                currencyCode: "UYU",
+                id: 1,
+                lang: locale,
+                priceAmount: 79_000,
+                title: sample.articles.bubbleGun,
+              }}
+              copy={storefront}
+              headingLevel="h3"
+              href="#cards"
+              id={1}
+              label={{ lang: locale, text: sample.spotlight.label }}
+              locale={locale}
+              phrase={{ lang: locale, text: sample.spotlight.phrase }}
+            />
+          </section>
+
+          <section
+            className="flex flex-col gap-6"
+            data-testid="design-how-to-buy"
+          >
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.howToBuy}
+            </h2>
+            <StoreHowToBuy copy={storefront} headingLevel="h3" />
+          </section>
+
+          <section
+            className="flex flex-col gap-6"
+            data-testid="design-cover"
+            id="cover"
+          >
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.cover}
+            </h2>
+            <StoreCoverCarousel banners={banners} />
+          </section>
+
+          <section className="flex flex-col gap-6" data-testid="design-marquee">
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.marquee}
+            </h2>
+            <StoreMarquee items={marquee} tone="contrast" />
+            <StoreMarquee items={marquee} tone="accent" />
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-bubbles">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.bubbles}</h2>
+            {/* Positioned and tall: the burst is drawn over this block. */}
+            <div className="relative flex min-h-80 items-start bg-store-contrast p-6">
+              <StoreBubbles label={comingSoon.bubbles}>
+                <StoreLogo className="h-14" />
+              </StoreBubbles>
+            </div>
+          </section>
+
+          <section className={SECTION_CLASS} data-testid="design-reveal">
+            <h2 className={SECTION_TITLE_CLASS}>{sections.reveal}</h2>
+            <StoreReveal
+              className="flex flex-col gap-4 bg-store-surface p-6 md:p-10"
+              data-testid="design-reveal-block"
+            >
+              <StoreHeading as="h3" lines={sectionLines} size="section" />
+              <p className="max-w-prose text-base">{sample.revealBody}</p>
+            </StoreReveal>
+          </section>
+
+          <section className="flex flex-col gap-6" data-testid="design-shell">
+            <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
+              {sections.shell}
+            </h2>
+            <div>
+              <StoreAnnouncementBar>{sample.announcement}</StoreAnnouncementBar>
+              {/* Not sticky here: it would stay over the rest of the gallery.
               Its categories read already, as a catalog page hands them, so
               they are in the HTML before any script runs. */}
-          <StoreHeader
-            categories={categories}
-            className="static"
-            copy={storefront.shell}
-            locale={locale}
-          />
-        </div>
-        <StoreFooter
-          categories={categories}
-          copy={storefront.shell}
-          locale={locale}
-          location={{ lang: locale, text: sample.location }}
-          payments={storefront.payments}
-          store={SAMPLE_STORE}
-        />
-      </section>
-    </main>
+              <StoreHeader
+                categories={categories}
+                className="static"
+                copy={storefront.shell}
+                locale={locale}
+              />
+            </div>
+            <StoreFooter
+              categories={categories}
+              copy={storefront.shell}
+              locale={locale}
+              location={{ lang: locale, text: sample.location }}
+              payments={storefront.payments}
+              store={SAMPLE_STORE}
+            />
+          </section>
+        </main>
+      </StoreSkipTarget>
+    </StoreSkipScope>
   );
 }

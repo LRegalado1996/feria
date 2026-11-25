@@ -12,6 +12,7 @@ import {
 } from "../../fixtures";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectInPlace } from "../../fixtures/expect-in-place";
 import { StorePage } from "../../page-objects/store.page";
 
 // FER-045. Each test seeds articles of its own, in a category of its own;
@@ -257,9 +258,16 @@ test.describe("Cart panel", () => {
     const panel = storePage.getCartPanel();
     await expect(storePage.getCartPanelLine("Collar dorado")).toBeVisible();
 
-    await panel.getByRole("link", { name: "Hacer el pedido" }).click();
+    // In place: the panel closes only once the link has started its
+    // navigation (FER-064).
+    await expectInPlace(page, async () => {
+      await panel.getByRole("link", { name: "Hacer el pedido" }).click();
 
-    await expect(page).toHaveURL("/cart");
+      await expect(page).toHaveURL("/cart");
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Tu pedido" })
+      ).toBeVisible();
+    });
     // Closed at once: nothing of the panel is left over the checkout.
     await expectDialogRemoved(page, panel);
     const checkout = page.getByTestId("store-checkout");

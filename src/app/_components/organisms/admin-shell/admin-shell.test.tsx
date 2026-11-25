@@ -99,13 +99,14 @@ describe("AdminShell", () => {
     setup();
 
     const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("id", "admin-main");
     expect(within(main).getByText("Section content")).toBeInTheDocument();
+    // The frame's own id (FER-064), never a fixed one.
+    expect(main.id).not.toBe("");
     expect(
       screen.getByRole("link", { name: "Skip to content" })
-    ).toHaveAttribute("href", "#admin-main");
+    ).toHaveAttribute("href", `#${main.id}`);
     const shell = screen.getByTestId("admin-shell");
-    expect(shell).toHaveAttribute("data-slot", "admin-shell");
+    expect(shell).toHaveAttribute("data-slot", "admin-frame");
     expect(shell).toHaveClass("bg-sidebar");
   });
 
@@ -229,7 +230,7 @@ describe("AdminShell", () => {
 
     expect(
       screen.getByRole("link", { name: "Saltar al contenido" })
-    ).toHaveAttribute("href", "#admin-main");
+    ).toHaveAttribute("href", `#${screen.getByRole("main").id}`);
     expect(
       within(banner()).getByRole("button", { name: "Cerrar sesión" })
     ).toBeInTheDocument();

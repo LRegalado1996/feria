@@ -1,1 +1,8 @@
-export { StoreSkipLink, type StoreSkipLinkProps } from "./store-skip-link";
+export {
+  StoreSkipLink,
+  type StoreSkipLinkProps,
+  StoreSkipScope,
+  type StoreSkipScopeProps,
+  StoreSkipTarget,
+  type StoreSkipTargetProps,
+} from "./store-skip-link";

@@ -33,6 +33,20 @@ export interface StoreCartPanelProps {
  */
 type Leaving = "now" | "slide";
 
+/**
+ * The link a click inside the panel follows in this tab, or `null`: none
+ * beside the links, or for a click that opens one in another tab (a
+ * modifier key), which leaves the panel open.
+ */
+function followedLink(
+  event: Parameters<typeof isPlainClick>[0] & { target: EventTarget | null }
+): HTMLAnchorElement | null {
+  const link =
+    event.target instanceof Element ? event.target.closest("a[href]") : null;
+
+  return link instanceof HTMLAnchorElement && isPlainClick(event) ? link : null;
+}
+
 /** What the open panel shows: the cart, its total and the way on. */
 function PanelBody({
   added,
@@ -353,30 +367,34 @@ function StoreCartPanel({ children }: StoreCartPanelProps) {
           )}
           data-slot="dialog-content"
           data-testid="store-cart-panel"
-          onClickCapture={(event) => {
-            const link =
-              event.target instanceof Element
-                ? event.target.closest("a[href]")
-                : null;
+          onClick={(event) => {
+            const link = followedLink(event);
 
-            if (
-              !(link instanceof HTMLAnchorElement) ||
-              event.defaultPrevented ||
-              !isPlainClick(event)
-            ) {
-              return;
+            // Another page: closed at once, on the click's way up, after
+            // the link's own handler has started the navigation in place
+            // (FER-064). Closed on the way down, the panel and its link are
+            // gone before that handler runs, and the browser loads the
+            // whole document again.
+            if (link && !isSamePage(link.href, window.location)) {
+              setLeaving("now");
+              setOpen(false);
             }
+          }}
+          onClickCapture={(event) => {
+            const link = followedLink(event);
 
-            if (isSamePage(link.href, window.location)) {
-              // Already there ("Hacer el pedido" on the checkout page): the
-              // panel closes, and the page stays as it is.
+            // Already there ("Hacer el pedido" on the checkout page): held
+            // on the way down, before the link's handler sees it, so nothing
+            // navigates; the panel slides out and the page stays as it is.
+            if (
+              link &&
+              !event.defaultPrevented &&
+              isSamePage(link.href, window.location)
+            ) {
               event.preventDefault();
               setLeaving("slide");
-            } else {
-              setLeaving("now");
+              setOpen(false);
             }
-
-            setOpen(false);
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
