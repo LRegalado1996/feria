@@ -143,7 +143,7 @@ function setup({
     http.get(
       "http://localhost:3000/uploads/*",
       () =>
-        new HttpResponse(new Uint8Array([4, 5, 6]), {
+        new HttpResponse(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), {
           headers: { "content-type": "image/jpeg" },
         })
     )
@@ -222,7 +222,7 @@ describe("ArticleOpenGraphImage", () => {
     const { photo } = await draw();
 
     expect(photo.style.backgroundImage).toBe(
-      'url("data:image/jpeg;base64,BAUG")'
+      'url("data:image/jpeg;base64,/9j/4A==")'
     );
     expect(photo.style.backgroundSize).toBe("cover");
   });
@@ -239,9 +239,12 @@ describe("ArticleOpenGraphImage", () => {
       http.get(
         url,
         () =>
-          new HttpResponse(new Uint8Array([1, 2, 3]), {
-            headers: { "content-type": "image/webp" },
-          })
+          new HttpResponse(
+            new Uint8Array([
+              0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+            ]),
+            { headers: { "content-type": "image/webp" } }
+          )
       )
     );
     const { draw } = setup({
@@ -253,7 +256,7 @@ describe("ArticleOpenGraphImage", () => {
     const { photo } = await draw();
 
     expect(photo.style.backgroundImage).toBe(
-      'url("data:image/webp;base64,AQID")'
+      'url("data:image/webp;base64,UklGRgQAAABXRUJQ")'
     );
   });
 

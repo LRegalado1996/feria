@@ -8,8 +8,6 @@ export const SHARE_PHOTO_TIMEOUT_MS = 3000;
 /** Past any photo the wizard uploads (2400 px a side, re-encoded). */
 export const SHARE_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
 
-const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-
 /**
  * The photos that already failed on this server instance: a crawler asks
  * for the same card again and again, and one report per photo is enough.
@@ -24,6 +22,78 @@ interface SharePhotoOptions {
   timeoutMs?: number;
 }
 
+/**
+ * The first bytes each accepted type starts with. A body that claims to be
+ * a photo but is not one would fail the renderer after this helper returns,
+ * the whole card's failure; it is the block here instead.
+ */
+const SIGNATURES: Record<string, (bytes: Uint8Array) => boolean> = {
+  "image/jpeg": (bytes) =>
+    bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
+  "image/png": (bytes) =>
+    [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every(
+      (byte, at) => bytes[at] === byte
+    ),
+  "image/webp": (bytes) =>
+    new TextDecoder().decode(bytes.subarray(0, 4)) === "RIFF" &&
+    new TextDecoder().decode(bytes.subarray(8, 12)) === "WEBP",
+};
+
+/**
+ * Lets the rest of a body go unread, without waiting for the connection to
+ * agree: a refused photo is the block at once. Cancelling a stream this
+ * code holds (unlocked, or through its own reader) does not reject.
+ */
+function dropBody(
+  body: ReadableStream | ReadableStreamDefaultReader | null | undefined
+): void {
+  void body?.cancel();
+}
+
+/**
+ * The body's bytes, read as they arrive and given up on past
+ * `SHARE_PHOTO_MAX_BYTES`: a large body is never held whole in memory.
+ */
+async function readCapped(response: Response): Promise<Uint8Array> {
+  const declared = Number(response.headers.get("content-length"));
+
+  if (declared > SHARE_PHOTO_MAX_BYTES) {
+    dropBody(response.body);
+    throw new Error("The photo is larger than a share card takes");
+  }
+
+  const reader = response.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+
+  for (;;) {
+    const chunk = await reader?.read();
+
+    if (!chunk || chunk.done) {
+      break;
+    }
+
+    size += chunk.value.byteLength;
+
+    if (size > SHARE_PHOTO_MAX_BYTES) {
+      dropBody(reader);
+      throw new Error("The photo is larger than a share card takes");
+    }
+
+    chunks.push(chunk.value);
+  }
+
+  const bytes = new Uint8Array(size);
+  let at = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+
+  return bytes;
+}
+
 /** Fetches a photo of this site or its Blob store, refusing anything that is not one. */
 async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   const response = await fetch(url, {
@@ -32,21 +102,24 @@ async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   });
 
   if (!response.ok) {
+    dropBody(response.body);
     throw new Error(`The photo's server answered ${response.status}`);
   }
 
   const type = response.headers.get("content-type")?.split(";")[0]?.trim();
+  const looksLike = type === undefined ? undefined : SIGNATURES[type];
 
-  if (type === undefined || !PHOTO_TYPES.has(type)) {
+  if (looksLike === undefined) {
+    dropBody(response.body);
     throw new Error(
       "The photo's server answered something that is not a photo"
     );
   }
 
-  const bytes = await response.arrayBuffer();
+  const bytes = await readCapped(response);
 
-  if (bytes.byteLength > SHARE_PHOTO_MAX_BYTES) {
-    throw new Error("The photo is larger than a share card takes");
+  if (!looksLike(bytes)) {
+    throw new Error("The photo's bytes are not the type its server named");
   }
 
   return `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
