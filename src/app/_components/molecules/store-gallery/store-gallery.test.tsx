@@ -220,8 +220,10 @@ describe("StoreGallery", () => {
             '[data-slot="store-gallery-actions"]'
           )
         )
-      ).getAllByRole("button")
-    ).toHaveLength(1);
+      )
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual(["Ampliar la foto"]);
   });
 
   test("zooms into the photo in view, full screen, and closes back to the gallery", async () => {

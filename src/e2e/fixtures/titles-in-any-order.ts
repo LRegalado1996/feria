@@ -10,11 +10,25 @@ export async function expectTitlesInAnyOrder(
   titles: Locator,
   expected: readonly string[]
 ): Promise<string[]> {
-  // As many as expected and the same set: no title missing, none twice.
-  await expect(titles).toHaveCount(expected.length);
-  await expect
-    .poll(async () => new Set(await titles.allTextContents()))
-    .toEqual(new Set(expected));
+  /** How often each title shows: a title twice is not the same list. */
+  const tally = (list: readonly string[]) => {
+    const counts = new Map<string, number>();
 
-  return await titles.allTextContents();
+    for (const title of list) {
+      counts.set(title, (counts.get(title) ?? 0) + 1);
+    }
+
+    return counts;
+  };
+  let seen: string[] = [];
+
+  // One read per try, checked whole and handed back as it was checked.
+  await expect
+    .poll(async () => {
+      seen = await titles.allTextContents();
+      return tally(seen);
+    })
+    .toEqual(tally(expected));
+
+  return seen;
 }
