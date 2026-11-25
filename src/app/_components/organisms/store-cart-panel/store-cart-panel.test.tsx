@@ -9,6 +9,7 @@ import {
   useCartPanel,
 } from "@/lib/hooks/cart";
 import type { Locale } from "@/lib/i18n/config";
+import { browserClick } from "@/test/browser-click";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { required } from "@/test/required";
@@ -640,7 +641,12 @@ describe("StoreCartPanel", () => {
     const { opener } = await open();
     await shown();
 
-    await user.click(screen.getByRole("link", { name: "Place the order" }));
+    // As a browser delivers it: the panel must still be there, with its
+    // link, when the link's own handler runs (FER-064).
+    await browserClick(
+      user,
+      screen.getByRole("link", { name: "Place the order" })
+    );
 
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/en/cart");
     await waitFor(() => {

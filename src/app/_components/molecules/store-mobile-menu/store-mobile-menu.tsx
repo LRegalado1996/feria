@@ -66,7 +66,11 @@ function StoreMobileMenu({
             event.preventDefault();
           }
         }}
-        onClickCapture={(event) => {
+        // On the click's way up, after the link's own handler has started
+        // the navigation in place (FER-064): closed on the way down, the
+        // panel and its link are gone before that handler runs, and the
+        // browser loads the whole document again.
+        onClick={(event) => {
           if (event.target instanceof Element && event.target.closest("a")) {
             setOpen(false);
           }

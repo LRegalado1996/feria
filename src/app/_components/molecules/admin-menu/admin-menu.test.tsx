@@ -1,9 +1,10 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Link from "next/link";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
+import { browserClick } from "@/test/browser-click";
 import { renderWithI18n } from "@/test/i18n";
 import { stubReducedMotion } from "@/test/reduced-motion";
 
@@ -18,12 +19,21 @@ function setup({ locale = "en" }: { locale?: Locale } = {}) {
   // The stub answers any media query; the menu asks for the window's width.
   const media = stubReducedMotion(false);
   const user = userEvent.setup();
+  // What a link's own handler saw: next/link's starts the navigation there.
+  const followed = vi.fn<(href: string | null) => void>();
 
   renderWithI18n(
     <AdminMenu
       panel={
         <nav aria-label="Admin sections">
-          <Link href="/en/admin/orders">Orders</Link>
+          <Link
+            href="/en/admin/orders"
+            onClick={(event) => {
+              followed(event.currentTarget.getAttribute("href"));
+            }}
+          >
+            Orders
+          </Link>
           <Link href="/en/admin/categories">Categories</Link>
           <button type="button">Theme</button>
         </nav>
@@ -48,6 +58,7 @@ function setup({ locale = "en" }: { locale?: Locale } = {}) {
 
   return {
     button,
+    followed,
     media,
     open: async () => {
       await user.click(button());
@@ -154,6 +165,21 @@ describe("AdminMenu", () => {
 
     await user.click(within(panel).getByRole("link", { name: "Categories" }));
 
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  test("closes only after the chosen section's own handler has run, so it navigates in place", async () => {
+    const { followed, open, user } = setup();
+    const panel = await open();
+
+    await browserClick(
+      user,
+      within(panel).getByRole("link", { name: "Orders" })
+    );
+
+    expect(followed).toHaveBeenCalledExactlyOnceWith("/en/admin/orders");
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });

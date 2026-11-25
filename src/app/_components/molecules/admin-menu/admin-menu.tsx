@@ -70,8 +70,12 @@ function AdminMenu({ children, panel }: AdminMenuProps) {
             className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-lg outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-left md:hidden"
             data-slot="dialog-content"
             data-testid="admin-menu"
-            onClickCapture={(event) => {
+            onClick={(event) => {
               // A section or the language was chosen: the page changes.
+              // On the click's way up, after the link's own handler has
+              // started the navigation in place (FER-064): closed on the way
+              // down, the panel and its link are gone before that handler
+              // runs, and the browser loads the whole document again.
               if (
                 event.target instanceof Element &&
                 event.target.closest("a")
