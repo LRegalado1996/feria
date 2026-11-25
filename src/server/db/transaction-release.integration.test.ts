@@ -164,7 +164,8 @@ describe("db.transaction releases its pool client", () => {
 
     await expect(
       db.transaction(async (tx) => {
-        await tx.execute(sql`select 1`);
+        // On the pool's one connection: a table only this session sees.
+        await tx.execute(sql`create temp table rollback_probe (id int)`);
         throw new Error("refused on purpose");
       })
     ).rejects.toMatchObject({ message: "refused on purpose" });
@@ -173,5 +174,11 @@ describe("db.transaction releases its pool client", () => {
       total: 1,
     });
     expect(await selectOne()).toBe(1);
+    // Rolled back: without the rollback the next transaction's begin would
+    // only warn, and its commit would keep the table.
+    const { rows } = await db.execute<{ probe: string | null }>(
+      sql`select to_regclass('pg_temp.rollback_probe')::text as probe`
+    );
+    expect(rows).toEqual([{ probe: null }]);
   });
 });
