@@ -11,7 +11,7 @@ A link to an article pasted into WhatsApp or Instagram shows the article's own p
 
 ## Scope
 
-- The card fetches a photo from this deployment's own Blob store: the host derived from `BLOB_READ_WRITE_TOKEN` (`readBlobStore`, `isOwnBlobUrl`), never any other host, so an address in the database cannot make the renderer fetch an arbitrary URL.
+- The card fetches a photo from this deployment's own Blob store (the host derived from `BLOB_READ_WRITE_TOKEN`: `readBlobStore`, `isOwnBlobUrl`), as well as one on this site as it already did (`ownUrl()`, the seed's photos), never any other host, so an address in the database cannot make the renderer fetch an arbitrary URL.
 - A fetch that fails or is slow falls back to the block, within the renderer's time budget; it is reported once, not per crawler hit.
 - The wizard's share preview drops its note and shows the photo the card will draw.
 - Unit tests for the host rule on both sides (own store, another store, another host); an e2e that the card's response is an image built with the photo (or a unit test on the renderer's input when the e2e cannot see it).
@@ -19,7 +19,7 @@ A link to an article pasted into WhatsApp or Instagram shows the article's own p
 ## Acceptance criteria
 
 - A published article with an uploaded photo shares with that photo on WhatsApp (checked by hand on a real phone).
-- A photo URL on any host other than this deployment's Blob store is never fetched.
+- A photo URL on any host other than this site and this deployment's Blob store is never fetched.
 
 ## Outcome
 
