@@ -161,6 +161,40 @@ describe("StoreGallery", () => {
     }
   );
 
+  test.each([
+    [1, ["foto 1", "foto 2", "foto 3"]],
+    [2, ["foto 1", "foto 2", "foto 3", "foto 4"]],
+  ] as const)(
+    "before the page is idle, %i steps on draw each photo reached and the one that peeks beside it",
+    async (steps, shown) => {
+      const { arrow, user } = setup({ count: 5, idle: false });
+
+      for (let step = 0; step < steps; step += 1) {
+        await user.click(required(arrow()));
+      }
+
+      expect(
+        screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+      ).toEqual(shown.map((photo) => `Anillo solitario, ${photo}`));
+    }
+  );
+
+  test("going back round to the last photo before the page is idle draws it, and the ones between stay on their tiles", async () => {
+    const { embla } = setup({ count: 5, idle: false });
+
+    act(() => {
+      embla.fake.scrollPrev();
+    });
+
+    expect(
+      screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+    ).toEqual([
+      "Anillo solitario, foto 1",
+      "Anillo solitario, foto 2",
+      "Anillo solitario, foto 5",
+    ]);
+  });
+
   test("where Embla could not go round, its round arrow shows the next photo, then leads back to the first", async () => {
     const { arrow, embla, status, user } = setup({ loop: false });
 

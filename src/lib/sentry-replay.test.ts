@@ -2,19 +2,21 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { REPLAY_DELAY_MS, addReplayAfterLoad } from "./sentry-replay";
 
-const { reportError } = vi.hoisted(() => ({
+const { reportError, whenPageIdle } = vi.hoisted(() => ({
   reportError: vi.fn<(error: unknown, options: { action: string }) => null>(),
+  whenPageIdle:
+    vi.fn<(callback: () => void, options: { win: Window }) => void>(),
 }));
 
 vi.mock("@/lib/errors/client", () => ({ reportError }));
+vi.mock("@/lib/utils/page-idle", () => ({ whenPageIdle }));
 
 /**
- * A loaded page whose idle moment comes at once (Safari's path: the next
- * turn), and an SDK whose recorder the loader adds, or a chunk that fails.
+ * A page that is not idle yet (`idle()` makes it so), and an SDK whose
+ * recorder the loader adds, or a chunk that fails.
  */
 function setup({ fails = false }: { fails?: boolean } = {}) {
   vi.useFakeTimers();
-  vi.stubGlobal("requestIdleCallback", undefined);
   const integration = { name: "Replay" };
   const addIntegration = vi.fn<(added: typeof integration) => void>();
   const replayIntegration = vi.fn(() => integration);
@@ -27,9 +29,20 @@ function setup({ fails = false }: { fails?: boolean } = {}) {
     return { addIntegration, replayIntegration };
   });
 
-  addReplayAfterLoad(load);
+  addReplayAfterLoad(load, window);
+  const [[onIdle, options] = []] = whenPageIdle.mock.calls;
 
-  return { addIntegration, failure, integration, load };
+  return {
+    addIntegration,
+    failure,
+    /** The page settles: what waited for it runs. */
+    idle: () => {
+      onIdle?.();
+    },
+    integration,
+    load,
+    options,
+  };
 }
 
 afterEach(() => {
@@ -38,8 +51,14 @@ afterEach(() => {
 
 describe("addReplayAfterLoad", () => {
   test("loads the recorder only once the page has been idle for the delay, then adds it", async () => {
-    const { addIntegration, integration, load } = setup();
+    const { addIntegration, idle, integration, load, options } = setup();
 
+    // However long the page takes to settle, nothing loads before it does.
+    expect(options).toEqual({ win: window });
+    await vi.advanceTimersByTimeAsync(REPLAY_DELAY_MS * 3);
+    expect(load).not.toHaveBeenCalled();
+
+    idle();
     await vi.advanceTimersByTimeAsync(REPLAY_DELAY_MS - 1);
     expect(load).not.toHaveBeenCalled();
 
@@ -49,8 +68,9 @@ describe("addReplayAfterLoad", () => {
   });
 
   test("a recorder that fails to load is reported, and nothing is added", async () => {
-    const { addIntegration, failure } = setup({ fails: true });
+    const { addIntegration, failure, idle } = setup({ fails: true });
 
+    idle();
     await vi.advanceTimersByTimeAsync(REPLAY_DELAY_MS);
 
     expect(reportError).toHaveBeenCalledExactlyOnceWith(failure, {

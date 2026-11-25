@@ -20,7 +20,7 @@ Measured for [FER-024](FER-024-article-view-and-seo.md) on 2026-11-25 (Lighthous
 
 ## Scope
 
-- Measure the three pages on production first: the changes above were deployed after the measurement.
+- Measure the three pages on production first, once FER-024's changes above are deployed: a measurement taken before the deploy reflects the previous version (85 on the article).
 - Ship less script to the store's pages: move work from client components to server components where a component only renders, keep the query and oRPC providers out of store pages that do not read through them, load the cart's validation without zod's whole classic API, and weigh client tracing on the store (a privacy and observability call for Lucas, not a tweak).
 - Record the scores per page in this ticket.
 
