@@ -85,6 +85,19 @@ test.describe("robots.txt", () => {
   });
 });
 
+test.describe("IndexNow", () => {
+  test("the key file answers its own name, as plain text, with no redirect: what Bing reads to trust a submission", async ({
+    request,
+  }) => {
+    const key = "239a2df8583d65e79cf2271b09b4c09c";
+    const response = await request.get(`/${key}.txt`, { maxRedirects: 0 });
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("text/plain");
+    expect(await response.text()).toBe(key);
+  });
+});
+
 test.describe("sitemap.xml", () => {
   test("lists the store's home, catalog and published article in both languages, never a draft", async ({
     db,

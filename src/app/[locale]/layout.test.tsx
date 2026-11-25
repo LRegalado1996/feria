@@ -148,6 +148,15 @@ describe("generateMetadata", () => {
         metadataBase: new URL("http://localhost:3000"),
         title: "LR Market",
         description,
+        icons: {
+          apple: [
+            { sizes: "180x180", type: "image/png", url: "/apple-icon.png" },
+          ],
+          icon: [
+            { sizes: "48x48", type: "image/x-icon", url: "/favicon.ico" },
+            { sizes: "96x96", type: "image/png", url: "/icon.png" },
+          ],
+        },
         openGraph: {
           description,
           siteName: "LR Market",

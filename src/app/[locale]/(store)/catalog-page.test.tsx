@@ -582,7 +582,7 @@ describe("catalogMetadata", () => {
     });
   });
 
-  test("takes the admin's own title whole, and gives no share image without a cover", async () => {
+  test("takes the admin's own title whole, and shares the brand's card without a cover", async () => {
     const { metadata } = setup({
       group: "bijouterie",
       pages: {
@@ -596,6 +596,15 @@ describe("catalogMetadata", () => {
     expect(result.openGraph).toEqual({
       description:
         "Comprá Bijouterie en LR Market: Cadenas y Anillos. Mirá los precios y hacé tu pedido online.",
+      images: [
+        {
+          alt: "LR Market",
+          height: 630,
+          type: "image/png",
+          url: "/es/opengraph-image",
+          width: 1200,
+        },
+      ],
       siteName: "LR Market",
       title: "Bijouterie de la feria",
       type: "website",

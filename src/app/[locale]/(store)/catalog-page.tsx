@@ -26,6 +26,7 @@ import { readLocale } from "@/lib/i18n/read-locale";
 import { caller } from "@/lib/orpc/server";
 import { DEFAULT_PRODUCT_SORT } from "@/lib/schemas/catalog";
 import { absoluteUrl } from "@/lib/seo/origin";
+import { defaultShareImage } from "@/lib/seo/share-card";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import { breadcrumbList, collectionPage } from "@/lib/seo/structured-data";
 import { formatList } from "@/lib/utils/format";
@@ -241,7 +242,7 @@ async function resolve({ params, searchParams }: CatalogPageProps) {
  * and its share card (FER-043): the admin's texts when there are some,
  * else words made from the page's and the store's names; with a filter or
  * a search, the selection's. The cover is the share card when there is
- * one.
+ * one, else the brand's card.
  */
 export async function catalogMetadata(
   props: CatalogPageProps
@@ -274,18 +275,17 @@ export async function catalogMetadata(
     description,
     openGraph: {
       description: sharedDescription,
-      ...(cover
-        ? {
-            images: [
-              {
-                alt: cover.alt,
-                height: cover.computer.height,
-                url: absoluteUrl(cover.computer.url),
-                width: cover.computer.width,
-              },
-            ],
-          }
-        : {}),
+      // Without a cover, the brand's card.
+      images: [
+        cover
+          ? {
+              alt: cover.alt,
+              height: cover.computer.height,
+              url: absoluteUrl(cover.computer.url),
+              width: cover.computer.width,
+            }
+          : defaultShareImage(loaded.locale),
+      ],
       siteName: store.name,
       title: ownTitle ?? shared,
       type: "website",

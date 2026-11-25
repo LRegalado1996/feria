@@ -12,6 +12,7 @@ import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { absoluteUrl } from "@/lib/seo/origin";
+import { defaultShareImage } from "@/lib/seo/share-card";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import {
   breadcrumbList,
@@ -57,6 +58,7 @@ export async function generateMetadata({
     description,
     openGraph: {
       description,
+      images: [defaultShareImage(locale)],
       siteName: store.name,
       title: copy.title,
       type: "website",

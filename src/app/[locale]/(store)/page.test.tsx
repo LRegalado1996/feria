@@ -486,6 +486,15 @@ describe("generateMetadata", () => {
         description: text.description,
         openGraph: {
           description: text.tagline,
+          images: [
+            {
+              alt: "LR Market",
+              height: 630,
+              type: "image/png",
+              url: `/${locale}/opengraph-image`,
+              width: 1200,
+            },
+          ],
           siteName: "Sample Store",
           type: "website",
         },
@@ -534,6 +543,15 @@ describe("generateMetadata", () => {
     expect(metadata.description).toBe("Regalos para todos.");
     expect(metadata.openGraph).toEqual({
       description: "Regalos para todos.",
+      images: [
+        {
+          alt: "LR Market",
+          height: 630,
+          type: "image/png",
+          url: "/en/opengraph-image",
+          width: 1200,
+        },
+      ],
       siteName: "Sample Store",
       type: "website",
     });

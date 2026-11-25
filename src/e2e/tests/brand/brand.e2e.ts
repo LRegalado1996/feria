@@ -1,6 +1,7 @@
 import { expect, test } from "../../fixtures";
 import { AdminSignInPage } from "../../page-objects/admin-sign-in.page";
 import { AdminPage } from "../../page-objects/admin.page";
+import { StorePage } from "../../page-objects/store.page";
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
@@ -34,7 +35,7 @@ test.describe("Brand identity", () => {
   // The identity is the same for everyone: no session decides it.
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("a page links a generated tab icon and home-screen icon", async ({
+  test("a page links the favicon, the tab icon and the home-screen icon at addresses no deploy changes, each a square of its size", async ({
     page,
   }) => {
     const signIn = new AdminSignInPage(page);
@@ -42,15 +43,18 @@ test.describe("Brand identity", () => {
     await signIn.goto();
 
     const head = await signIn.readHeadTags();
+    const linked = (rel: string) =>
+      head.filter((tag) => tag.key === rel).map((tag) => tag.href);
 
-    for (const [rel, path, size] of [
-      ["icon", "/icon", 32],
-      ["apple-touch-icon", "/apple-icon", 180],
+    // No hash in a query: a search engine keeps the icon it found at a URL.
+    expect(linked("icon")).toEqual(["/favicon.ico", "/icon.png"]);
+    expect(linked("apple-touch-icon")).toEqual(["/apple-icon.png"]);
+
+    for (const [path, size] of [
+      ["/icon.png", 96],
+      ["/apple-icon.png", 180],
     ] as const) {
-      const href = head.find((tag) => tag.key === rel)?.href ?? "";
-      expect(href.split("?")[0]).toBe(path);
-
-      const response = await page.request.get(href);
+      const response = await page.request.get(path, { maxRedirects: 0 });
 
       expect(response.status()).toBe(200);
       expect(response.headers()["content-type"]).toBe("image/png");
@@ -60,6 +64,50 @@ test.describe("Brand identity", () => {
       });
     }
   });
+
+  test("/favicon.ico answers the brand's 48 px mark as an icon file, not a page", async ({
+    request,
+  }) => {
+    const response = await request.get("/favicon.ico", { maxRedirects: 0 });
+    const body = await response.body();
+
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toBe("image/x-icon");
+    // An ICO header holding one image, the PNG after its 22 bytes.
+    expect([body.readUInt16LE(2), body.readUInt16LE(4)]).toEqual([1, 1]);
+    expect(readPngSize(body.subarray(22))).toEqual({ height: 48, width: 48 });
+  });
+
+  for (const [path, prefix] of [
+    ["/", "/es"],
+    ["/en/contacto", "/en"],
+  ] as const) {
+    test(`a link to ${path}, a store page with no picture of its own, shares the brand's 1200 by 630 card`, async ({
+      page,
+    }) => {
+      const storePage = new StorePage(page);
+
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+
+      await expect
+        .poll(async () => await storePage.readMeta("og:image"))
+        .not.toBeNull();
+      const image = new URL((await storePage.readMeta("og:image")) ?? "");
+      expect(image.pathname).toBe(`${prefix}/opengraph-image`);
+      expect(await storePage.readMeta("og:image:alt")).toBe("LR Market");
+
+      const card = await page.request.get(image.pathname, { maxRedirects: 0 });
+
+      expect(card.status()).toBe(200);
+      expect(card.headers()["content-type"]).toBe("image/png");
+      expect(readPngSize(await card.body())).toEqual({
+        height: 630,
+        width: 1200,
+      });
+    });
+  }
 
   for (const [path, prefix, heading, description] of [
     [

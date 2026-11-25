@@ -14,6 +14,7 @@ import { pickTranslation } from "@/lib/i18n/pick-translation";
 import { readLocale } from "@/lib/i18n/read-locale";
 import type { PageContent } from "@/lib/page/content";
 import { absoluteUrl } from "@/lib/seo/origin";
+import { defaultShareImage } from "@/lib/seo/share-card";
 import { storeMetadata } from "@/lib/seo/store-metadata";
 import {
   STORE_LOGO_PATH,
@@ -71,11 +72,15 @@ export async function generateMetadata({
       home?.seoDescription ??
       pickTranslation(store.translations, locale)?.description,
     // A share card says what search engines read when the home has its own
-    // words, as any page's does; else the store's tagline.
-    openGraph:
-      home?.seoDescription == null
-        ? shared.openGraph
-        : { ...shared.openGraph, description: home.seoDescription },
+    // words, as any page's does; else the store's tagline. Its picture is
+    // the brand's card.
+    openGraph: {
+      ...shared.openGraph,
+      ...(home?.seoDescription == null
+        ? {}
+        : { description: home.seoDescription }),
+      images: [defaultShareImage(locale)],
+    },
     // The home is the store itself: no "· Store" after its own name.
     title: { absolute: home?.seoTitle ?? store.name },
   };
