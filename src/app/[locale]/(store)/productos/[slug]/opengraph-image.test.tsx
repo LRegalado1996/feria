@@ -46,6 +46,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/cache/store", () => ({ readStore }));
 vi.mock("@/server/cache/catalog", () => ({ readPublishedArticle }));
 vi.mock("next/og", () => ({ ImageResponse }));
+// The photo's cached read runs as a plain function outside a Next render.
+vi.mock("next/cache", () => ({ cacheLife: vi.fn() }));
 vi.mock("@/server/api/utils/blob-store", () => ({ readBlobStore }));
 
 // Five distinct colors, so each part of the card shows which one it took.

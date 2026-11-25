@@ -37,6 +37,48 @@ async function setup(
 }
 
 test.describe("Article page", () => {
+  // FER-049. The share card fetches the article's photo itself, so on a
+  // production build it must be drawn per request: prerendered, the fetch
+  // is IO the build cannot cache and the card answers 500 (production on
+  // 2026-11-25, Sentry FERIA-M).
+  test("its share card answers a PNG with the article's photo, larger than the plain block of an article without one", async ({
+    db,
+    page,
+    request,
+  }) => {
+    const { article, rings } = await setup({ db });
+    const bare = await db.seed.createArticle({
+      categoryId: rings.id,
+      images: 0,
+      priceAmount: 120_000,
+      title: "Anillo sin foto",
+    });
+    /** The card the page names, fetched as a crawler would. */
+    const card = async (slug: string) => {
+      await page.goto(`/productos/${slug}`);
+      const address = await page
+        .locator('meta[property="og:image"]')
+        .first()
+        .getAttribute("content");
+      const url = new URL(address ?? "", "http://localhost");
+      const response = await request.get(`${url.pathname}${url.search}`);
+
+      return {
+        bytes: (await response.body()).byteLength,
+        status: response.status(),
+        type: response.headers()["content-type"],
+      };
+    };
+
+    const withPhoto = await card(article.slug);
+    const plain = await card(bare.slug);
+
+    expect([withPhoto.status, withPhoto.type]).toEqual([200, "image/png"]);
+    expect([plain.status, plain.type]).toEqual([200, "image/png"]);
+    // A photo's detail weighs far more than the flat moss block.
+    expect(withPhoto.bytes).toBeGreaterThan(plain.bytes * 2);
+  });
+
   test("the gallery's round arrow steps through the photos and goes round past the last, and the one in view opens full screen", async ({
     db,
     page,
