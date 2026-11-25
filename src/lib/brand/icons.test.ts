@@ -14,12 +14,14 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
 
 // The renderer has its own tests; here it shows what each icon asks of it,
 // and answers a PNG's bytes the way an `ImageResponse` does.
-vi.mock("./logo-image", () => ({
-  renderLogoImage: (options: unknown) => ({
+const renderLogoImage = vi.hoisted(() =>
+  vi.fn((options: unknown) => ({
     arrayBuffer: async () => await Promise.resolve(new Uint8Array(PNG).buffer),
     options,
-  }),
-}));
+  }))
+);
+
+vi.mock("./logo-image", () => ({ renderLogoImage }));
 
 // The header's moss, the theme's contrast color.
 const MOSS = "#262a1d";
@@ -76,6 +78,15 @@ describe("renderFavicon", () => {
     const response = await renderFavicon();
     const body = new Uint8Array(await response.arrayBuffer());
 
+    // Drawn at 48 px, the size the ICO directory then states.
+    expect(renderLogoImage).toHaveBeenCalledExactlyOnceWith({
+      background: null,
+      colorway: "accent",
+      height: 48,
+      logoWidth: 48,
+      variant: "mark",
+      width: 48,
+    });
     expect(response.headers.get("content-type")).toBe("image/x-icon");
     // The directory entry's side, then the PNG after the 22-byte header.
     expect([body[6], body[7]]).toEqual([48, 48]);

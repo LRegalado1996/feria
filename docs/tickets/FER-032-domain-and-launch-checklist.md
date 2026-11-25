@@ -47,6 +47,7 @@ Added on 2026-11-24 with the domain: every search engine and AI assistant should
 
 ## Done (2026-11-25)
 
+- Launched: the coming-soon page is taken down, so the store is open to the public (`/coming-soon` answers 307 to `/`, the home answers 200 with the store, checked on 2026-11-25). Lucas gave the go-ahead on 2026-11-25: he wants it indexed and shared.
 - Production already declared the domain on 2026-11-25 (Production's `BETTER_AUTH_URL` changed on 2026-11-24, and PR #87's deploy built with it): canonical, `hreflang`, `og:url`, `robots.txt`, all 318 `<loc>` of `sitemap.xml` and every link of `llms.txt`, checked with `curl` on the home, `/en`, a category and an article. Signing in to the admin works on the domain.
 - `feria-blond.vercel.app` redirects (308) to the same path and query on the domain, from the project's Domains settings (Lucas's yes, 2026-11-25). QA keeps its own address; the code names neither host.
 - Three articles' structured data matches the page: a `Product` with its name, photos, price in UYU and availability. Google's Rich Results Test on one finds three valid items; the two optional fields it misses (shipping, returns) are [FER-084](FER-084-shipping-and-returns-in-structured-data.md).
