@@ -2,6 +2,8 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
 import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
+import { useLocale } from "@/lib/hooks/i18n";
+import { useProductsAddress } from "@/lib/hooks/product";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/hooks/ui";
 import type { Locale } from "@/lib/i18n/config";
 import { renderWithI18n } from "@/test/i18n";
@@ -25,15 +27,19 @@ function makeQuery(overrides: Partial<ProductsQuery> = {}): ProductsQuery {
   };
 }
 
+/** The search over the list's own address, as the list renders it. */
+function SearchOver({ query }: { query: ProductsQuery }) {
+  const address = useProductsAddress(query, useLocale());
+
+  return <ProductSearch address={address} className="custom" query={query} />;
+}
+
 function setup({
   locale = "en",
   query = makeQuery(),
 }: { locale?: Locale; query?: ProductsQuery } = {}) {
   vi.useFakeTimers();
-  const view = renderWithI18n(
-    <ProductSearch className="custom" query={query} />,
-    { locale }
-  );
+  const view = renderWithI18n(<SearchOver query={query} />, { locale });
   const field = () =>
     screen.getByRole("searchbox", {
       name: locale === "es" ? "Buscar artículos" : "Search articles",

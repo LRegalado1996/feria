@@ -515,14 +515,12 @@ describe("ProductList", () => {
     await screen.findByTestId("product-row-9");
 
     await user.click(screen.getByTestId("product-filters-button"));
-    await user.click(
-      within(screen.getByTestId("product-filters-sheet")).getByRole("button", {
-        name: "Apply",
-      })
-    );
+    const sheet = screen.getByTestId("product-filters-sheet");
+    await user.click(within(sheet).getByRole("radio", { name: "Draft" }));
+    await user.click(within(sheet).getByRole("button", { name: "Apply" }));
 
     expect(push).toHaveBeenCalledExactlyOnceWith(
-      "/en/admin/products?category=anillos&f.color=dorado",
+      "/en/admin/products?status=draft&category=anillos&f.color=dorado",
       { scroll: false }
     );
   });

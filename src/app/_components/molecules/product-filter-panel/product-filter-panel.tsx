@@ -1,7 +1,6 @@
 "use client";
 
 import { SlidersHorizontal } from "lucide-react";
-import { useRouter } from "next/navigation";
 import {
   type ReactNode,
   type Ref,
@@ -39,10 +38,9 @@ import {
   EMPTY_PRODUCTS_QUERY,
   type ProductsQuery,
   productsListInput,
-  productsPath,
 } from "@/lib/admin/products";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
-import { useProducts } from "@/lib/hooks/product";
+import { type ProductsAddress, useProducts } from "@/lib/hooks/product";
 import { interpolate } from "@/lib/i18n/interpolate";
 import {
   CATALOG_FILTER_VALUES_MAX,
@@ -56,6 +54,8 @@ import { formatInteger } from "@/lib/utils/format";
 export interface ProductFilterPanelProps {
   /** How many filter values narrow the list now (`activeFilterChips`). */
   activeCount: number;
+  /** The list's address, which "Aplicar" asks for its change. */
+  address: ProductsAddress;
   /**
    * The store's filters and categories, `undefined` while not read (or
    * failed): the address's own selection then stays as it is on "Aplicar".
@@ -199,6 +199,7 @@ function toggled(list: readonly string[], item: string): string[] {
 
 /** The open panel: its fields from the address, its count, its actions. */
 function PanelForm({
+  address,
   attributes,
   attributesFailed,
   categories,
@@ -209,6 +210,7 @@ function PanelForm({
   query,
 }: Pick<
   ProductFilterPanelProps,
+  | "address"
   | "attributes"
   | "attributesFailed"
   | "categories"
@@ -222,21 +224,22 @@ function PanelForm({
   const { articles, common } = useDictionary();
   const copy = articles.list;
   const locale = useLocale();
-  const router = useRouter();
   const form = useForm<FilterFormValues>({
     defaultValues: filterFormValues(query),
   });
-  // The address changed under the open sheet (back, forward): the choice
-  // starts again from it, or "Aplicar" would write the old one back.
-  const address = productsPath(locale, query);
-  const startedFrom = useRef(address);
+  // The filters in the address changed under the open sheet (back,
+  // forward): the choice starts again from them, or "Aplicar" would write
+  // the old ones back. Only the filters: a search typed before opening the
+  // sheet that lands meanwhile keeps what is being chosen.
+  const applied = JSON.stringify(filterFormValues(query));
+  const startedFrom = useRef(applied);
 
   useEffect(() => {
-    if (startedFrom.current !== address) {
-      startedFrom.current = address;
+    if (startedFrom.current !== applied) {
+      startedFrom.current = applied;
       form.reset(filterFormValues(query));
     }
-  }, [address, form, query]);
+  }, [applied, form, query]);
   const [status, availability, chosenCategories, chosenValues] = useWatch({
     control: form.control,
     name: ["status", "availability", "categories", "values"],
@@ -298,12 +301,10 @@ function PanelForm({
         noValidate
         onSubmit={(event) => {
           void form.handleSubmit((submitted) => {
-            router.push(
-              productsPath(
-                locale,
-                applyFilterForm(query, submitted, { attributes, categories })
-              ),
-              { scroll: false }
+            // On the newest selection asked for: a search still on its way
+            // is kept (FER-056).
+            address.push((base) =>
+              applyFilterForm(base, submitted, { attributes, categories })
             );
             onApplied();
           })(event);
@@ -638,6 +639,7 @@ function PanelForm({
  */
 function ProductFilterPanel({
   activeCount,
+  address,
   attributes,
   attributesFailed,
   categories,
@@ -693,6 +695,7 @@ function ProductFilterPanel({
           <SheetDescription>{copy.description}</SheetDescription>
         </SheetHeader>
         <PanelForm
+          address={address}
           attributes={attributes}
           attributesFailed={attributesFailed}
           categories={categories}

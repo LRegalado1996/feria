@@ -43,6 +43,7 @@ import {
   type ProductsPage,
   useDeleteProduct,
   useProducts,
+  useProductsAddress,
   usePublishProduct,
   useUnpublishProduct,
 } from "@/lib/hooks/product";
@@ -241,6 +242,7 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const locale = useLocale();
   const now = useNow(renderedAt);
   const products = useProducts(productsListInput(query, locale));
+  const address = useProductsAddress(query, locale);
   // `undefined` until read: the filter panel keeps the address's selection
   // rather than drop it as unknown to a list it has not got.
   const categoriesRead = useStoreCategories();
@@ -434,10 +436,15 @@ function ProductList({ query, renderedAt }: ProductListProps) {
             className="flex flex-wrap items-center gap-2"
             data-testid="product-list-toolbar"
           >
-            <ProductSearch className="flex-[1_1_16rem]" query={query} />
+            <ProductSearch
+              address={address}
+              className="flex-[1_1_16rem]"
+              query={query}
+            />
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
               <ProductFilterPanel
                 activeCount={chips.length}
+                address={address}
                 attributes={attributes}
                 attributesFailed={failedUnread(attributesRead)}
                 categories={categories}

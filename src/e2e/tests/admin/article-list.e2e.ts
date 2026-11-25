@@ -121,6 +121,36 @@ test.describe("the article list", () => {
     await expect(list.searchField()).toHaveValue(`Anillo oro ${tag}`);
   });
 
+  test("a search typed and the filters applied at once both stay in the address (FER-056)", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    const list = new AdminProductsPage(page);
+    await list.goto(`?q=${tag}`);
+    // Once React owns the screen (the sheet opens), the race is the next
+    // steps': typing, then "Aplicar" inside the search's 300 ms wait or
+    // while its replace commits.
+    await list.openFilters();
+    await page.keyboard.press("Escape");
+    await expectDialogRemoved(page, list.sheet());
+
+    await list.searchField().fill(`Anillo plata ${tag}`);
+    await list.filtersButton().click();
+    await list.statusChoice("Publicado").click();
+    await list.sheet().getByRole("button", { name: "Aplicar" }).click();
+
+    await expect
+      .poll(() => {
+        const params = new URL(page.url()).searchParams;
+
+        return [params.get("q"), params.get("status")];
+      })
+      .toEqual([`Anillo plata ${tag}`, "published"]);
+    await list.expectTitles([`Anillo plata ${tag}`]);
+    await expect(list.searchField()).toHaveValue(`Anillo plata ${tag}`);
+  });
+
   test("filters by category, status, availability and a store filter from the sheet, by keyboard", async ({
     db,
     page,
