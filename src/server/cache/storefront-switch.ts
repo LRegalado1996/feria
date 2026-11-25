@@ -15,10 +15,11 @@ export const SWITCH_TTL_MS = 5000;
 
 /**
  * How long a page request waits for the switch before it gives up and
- * treats the store as closed. It covers a first connection attempt that
- * hangs to its limit, the pool's backoff, a second attempt and the read
- * itself: with a wait as short as one attempt, the retry could never save a
- * read, and a cold instance showed an open store as closed.
+ * treats the store as closed. Past a first connection attempt that hangs to
+ * its limit and the pool's backoff, it leaves close to four seconds for the
+ * second attempt and the read: with a wait as short as one attempt, the
+ * retry could never save a read, and a cold instance showed an open store as
+ * closed. Two attempts that both hang still end here, closed and reported.
  */
 export const SWITCH_TIMEOUT_MS = 7000;
 

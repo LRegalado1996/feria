@@ -237,21 +237,43 @@ describe("database client", () => {
     });
   });
 
-  test("listens to the pool's own error without reporting the client's twice", async () => {
+  test("listens to the pool's own error without reporting a client's twice", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const { pool } = await setup();
-    const listener = pool.listeners.error;
+    const { clientListeners, pool } = await setup();
+    const died = new Error("server conn crashed?");
 
     // Without a listener, pg-pool throws an idle client's error.
     expect(pool.on.mock.calls.map(([event]) => event)).toEqual([
       "connect",
       "error",
     ]);
-    expect(listener).toEqual(expect.any(Function));
-    listener?.(new Error("server conn crashed?"));
+    // An idle client's error reaches its own listener, then the pool's.
+    clientListeners.get("error")?.(died);
+    pool.listeners.error?.(died);
 
-    expect(warn).not.toHaveBeenCalled();
-    expect(addBreadcrumb).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledOnce();
+    expect(addBreadcrumb).toHaveBeenCalledOnce();
+  });
+
+  test("reports the error of a client that never finished connecting, which has no listener of its own", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { pool } = await setup();
+
+    pool.listeners.error?.(new Error("Connection terminated unexpectedly"));
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({
+        level: "warn",
+        action: "Db.client_error",
+        name: "Error",
+        message: "Connection terminated unexpectedly",
+      })
+    );
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
+      category: "db.pool",
+      level: "warning",
+      message: "Db.client_error Error: Connection terminated unexpectedly",
+    });
   });
 
   test("reuses the pool across reloads outside production", async () => {

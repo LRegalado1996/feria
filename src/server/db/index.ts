@@ -42,10 +42,6 @@ function warn(
   });
 }
 
-function acknowledge(): void {
-  // The listener pg-pool needs to exist; the client's own listener reports.
-}
-
 function createPool(): ResilientPool {
   const pool = new ResilientPool(
     {
@@ -83,18 +79,27 @@ function createPool(): ResilientPool {
   // idle and takes its listener off at checkout, so a client that dies
   // between two statements of a transaction had none. This one stays for the
   // client's life. Whoever holds the client still gets the failure from its
-  // next statement, so this is a warning and a Sentry breadcrumb on whatever
-  // fails next, never an issue of its own.
+  // next statement, so each event (Postgres's goodbye and the socket closing
+  // are two) is a warning and a Sentry breadcrumb on whatever fails next,
+  // never an issue of its own.
+  const reported = new WeakSet<Error>();
   pool.on("connect", (client) => {
     client.on("error", (error) => {
+      reported.add(error);
       warn("Db.client_error", error);
     });
   });
 
   // pg-pool passes an idle client's error on as its own `error`, and throws
   // it when the pool has no listener. The client's listener above has already
-  // reported it; the pool replaces the client on the next query.
-  pool.on("error", acknowledge);
+  // reported it, except for a client that never finished connecting, which
+  // has none: that error is reported here. The pool replaces the client on
+  // the next query.
+  pool.on("error", (error) => {
+    if (!reported.has(error)) {
+      warn("Db.client_error", error);
+    }
+  });
 
   // Closes idle connections before Vercel suspends the instance, so a dead
   // socket is not handed to the next request. A no-op off Vercel.

@@ -256,14 +256,14 @@ describe("isStorefrontClosed", () => {
     ]).toEqual([5000, 7000, 4000]);
   });
 
-  test("waits long enough for a connection that needed a second attempt", () => {
-    // A first attempt that hangs to its limit, the longest backoff before
-    // the second, and a second attempt as slow as an attempt may be.
-    const retried =
-      CONNECT_TIMEOUT_MS + CONNECT_RETRY.baseDelayMs + CONNECT_TIMEOUT_MS;
+  test("past one hung connection attempt, leaves the retry and the read their time", () => {
+    // What a second attempt and the read's four round trips may take from
+    // the proxy's region, the farthest from the database, with room to spare.
+    const RETRY_AND_READ_MS = 3500;
+    // A first attempt that hangs to its limit, and the longest backoff
+    // before the second (`backoffMs`: at most the base delay).
+    const lost = CONNECT_TIMEOUT_MS + CONNECT_RETRY.baseDelayMs;
 
-    expect(CONNECT_TIMEOUT_MS).toBe(3000);
-    expect(CONNECT_RETRY).toEqual({ attempts: 3, baseDelayMs: 200 });
-    expect(SWITCH_TIMEOUT_MS).toBeGreaterThan(retried);
+    expect(SWITCH_TIMEOUT_MS - lost).toBeGreaterThanOrEqual(RETRY_AND_READ_MS);
   });
 });

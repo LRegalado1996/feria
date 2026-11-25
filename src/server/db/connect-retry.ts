@@ -64,6 +64,10 @@ export function isTransientConnectError(error: unknown): error is Error {
  * every round trip of the handshake as well. An attempt stuck this long is
  * dead, and a new one beats waiting on it: short enough that whoever bounds
  * a read (the storefront switch) still has time for the retry.
+ *
+ * pg-pool gives a request waiting for a free connection the same limit
+ * (every connection busy): that one fails with "timeout exceeded when trying
+ * to connect" and is not retried.
  */
 export const CONNECT_TIMEOUT_MS = 3000;
 
