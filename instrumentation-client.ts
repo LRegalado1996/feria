@@ -3,7 +3,6 @@ import {
   type EventHint,
   extraErrorDataIntegration,
   init,
-  replayIntegration,
   zodErrorsIntegration,
 } from "@sentry/nextjs";
 import { initBotId } from "botid/client/core";
@@ -16,6 +15,7 @@ import {
   sentryDataCollection,
   tracesSampleRate,
 } from "./src/lib/sentry-options";
+import { addReplayAfterLoad } from "./src/lib/sentry-replay";
 
 export { captureRouterTransitionStart as onRouterTransitionStart } from "@sentry/nextjs";
 
@@ -46,9 +46,10 @@ if (dsn && environment) {
     integrations: [
       zodErrorsIntegration(),
       extraErrorDataIntegration({ depth: 3 }),
-      replayIntegration(),
     ],
   });
+  // The recorder joins once the page has settled, in its own chunk.
+  addReplayAfterLoad(async () => await import("@sentry/nextjs"));
 }
 
 // BotID (FER-026): only on Vercel, where the server can check what this
