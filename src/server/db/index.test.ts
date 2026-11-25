@@ -247,8 +247,24 @@ describe("database client", () => {
       "connect",
       "error",
     ]);
-    // An idle client's error reaches its own listener, then the pool's.
+    // An idle client's error reaches its own listener, which reports it,
     clientListeners.get("error")?.(died);
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({
+        level: "warn",
+        action: "Db.client_error",
+        name: "Error",
+        message: "server conn crashed?",
+      })
+    );
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
+      category: "db.pool",
+      level: "warning",
+      message: "Db.client_error Error: server conn crashed?",
+    });
+
+    // then the pool's, which adds nothing.
     pool.listeners.error?.(died);
 
     expect(warn).toHaveBeenCalledOnce();

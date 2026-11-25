@@ -20,6 +20,10 @@ export const SWITCH_TTL_MS = 5000;
  * second attempt and the read: with a wait as short as one attempt, the
  * retry could never save a read, and a cold instance showed an open store as
  * closed. Two attempts that both hang still end here, closed and reported.
+ *
+ * A longer wait does not make an answer older: the wait is mostly for the
+ * connection, and the answer is as old as its statement, which Postgres
+ * cancels at `SWITCH_STATEMENT_TIMEOUT_MS`, inside the window.
  */
 export const SWITCH_TIMEOUT_MS = 7000;
 
