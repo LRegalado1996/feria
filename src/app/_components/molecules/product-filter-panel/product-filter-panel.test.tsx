@@ -123,6 +123,7 @@ function makeCount(total: number, totalCapped = false) {
 function setup({
   activeCount = 0,
   attributes = ATTRIBUTES,
+  attributesFailed = false,
   categories = CATEGORIES,
   categoriesFailed = false,
   listsRead = true,
@@ -133,6 +134,8 @@ function setup({
 }: {
   activeCount?: number;
   attributes?: ListAttribute[];
+  /** Whether the store's filters' read failed (they are then unread). */
+  attributesFailed?: boolean;
   categories?: typeof CATEGORIES;
   /** Whether the categories' read failed (they are then unread). */
   categoriesFailed?: boolean;
@@ -145,14 +148,17 @@ function setup({
 } = {}) {
   const list = vi.fn(() => makeCount(total, totalCapped));
   const retry = vi.fn<() => void>();
+  const retryAttributes = vi.fn<() => void>();
   server.use(createOrpcHandler("product.list", list));
   const panel = (shown: ProductsQuery) => (
     <ProductFilterPanel
       activeCount={activeCount}
-      attributes={listsRead ? attributes : undefined}
+      attributes={listsRead && !attributesFailed ? attributes : undefined}
+      attributesFailed={attributesFailed}
       categories={listsRead && !categoriesFailed ? categories : undefined}
       categoriesFailed={categoriesFailed}
       className="custom"
+      onRetryAttributes={retryAttributes}
       onRetryCategories={retry}
       query={shown}
     />
@@ -179,6 +185,7 @@ function setup({
       view.rerender(panel(shown));
     },
     retry,
+    retryAttributes,
     sheet,
     user,
   };
@@ -306,6 +313,66 @@ describe("ProductFilterPanel", () => {
       within(category).getByRole("button", { name: "Try again" })
     );
     expect(retry).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  test("says the store's filters failed to load, with a retry of their own, and keeps the categories", async () => {
+    const { open, retry, retryAttributes, user } = setup({
+      attributesFailed: true,
+    });
+
+    const sheet = await open();
+    const failed = within(sheet).getByTestId("filter-attributes-failed");
+
+    expect(failed).toHaveAttribute("role", "alert");
+    expect(failed).toHaveTextContent("We couldn't load the store's filters.");
+    expect(within(sheet).queryByRole("group", { name: "Color" })).toBeNull();
+    expect(
+      within(within(sheet).getByRole("group", { name: "Category" })).getByRole(
+        "checkbox",
+        { name: /^Rings/u }
+      )
+    ).toBeInTheDocument();
+    const again = within(failed).getByRole("button", { name: "Try again" });
+    expect(again).toHaveAccessibleDescription(
+      "We couldn't load the store's filters."
+    );
+    await user.click(again);
+    expect(retryAttributes).toHaveBeenCalledExactlyOnceWith();
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  test("with both reads failed, each retry reads its own list again, in Spanish", async () => {
+    const { open, retry, retryAttributes, user } = setup({
+      attributesFailed: true,
+      categoriesFailed: true,
+      locale: "es",
+    });
+
+    const sheet = await open();
+
+    expect(
+      within(sheet)
+        .getAllByRole("alert")
+        .map((alert) => alert.textContent)
+    ).toEqual([
+      "No pudimos cargar las categorías.Reintentar",
+      "No pudimos cargar los filtros de la tienda.Reintentar",
+    ]);
+    await user.click(
+      within(within(sheet).getByTestId("filter-categories-failed")).getByRole(
+        "button",
+        { name: "Reintentar" }
+      )
+    );
+    expect(retry).toHaveBeenCalledExactlyOnceWith();
+    expect(retryAttributes).not.toHaveBeenCalled();
+    await user.click(
+      within(within(sheet).getByTestId("filter-attributes-failed")).getByRole(
+        "button",
+        { name: "Reintentar" }
+      )
+    );
+    expect(retryAttributes).toHaveBeenCalledExactlyOnceWith();
   });
 
   test("holds the categories' place while they load, never saying there are none", async () => {

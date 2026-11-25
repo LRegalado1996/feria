@@ -20,6 +20,7 @@ import {
   STORE_PRODUCTS_COUNT_CAP,
   type StoreProductSort,
 } from "@/lib/schemas/catalog";
+import { readSearchText } from "@/lib/schemas/search";
 
 /** The article wizard's steps (FER-017), in their order. */
 export const WIZARD_STEPS = ["photos", "details", "review"] as const;
@@ -112,7 +113,7 @@ function oneOf<T extends string>(
 export function readProductsQuery(raw: RawSearchParams): ProductsQuery {
   const pageText = single(raw.page) ?? "";
   const page = PAGE_PATTERN.test(pageText) ? Number(pageText) : 1;
-  const q = single(raw.q)?.trim().slice(0, SEARCH_MAX_LENGTH) ?? "";
+  const q = readSearchText(single(raw.q), SEARCH_MAX_LENGTH);
   const sort =
     oneOf(STORE_PRODUCT_SORTS, single(raw.sort)) ?? DEFAULT_STORE_PRODUCT_SORT;
   const filters = Object.entries(raw)
@@ -143,7 +144,7 @@ export function readProductsQuery(raw: RawSearchParams): ProductsQuery {
       STORE_PRODUCT_SORT_DIRECTIONS[sort],
     filters,
     page: page >= 1 && page <= STORE_PRODUCTS_COUNT_CAP ? page : 1,
-    q: q === "" ? null : q,
+    q,
     sort,
     status: oneOf(PRODUCT_STATUSES, single(raw.status)),
   };

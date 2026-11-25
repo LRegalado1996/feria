@@ -106,6 +106,21 @@ test.describe("the article list", () => {
     await expect(list.searchField()).toBeFocused();
   });
 
+  test("an address whose search holds U+0000 lists that search without it, never an error", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    const list = new AdminProductsPage(page);
+
+    // Postgres refuses the character in text: read as is, the list failed.
+    await list.goto(`?q=${encodeURIComponent(`Anillo oro\u0000 ${tag}`)}`);
+
+    await list.expectTitles([`Anillo oro ${tag}`]);
+    await expect(list.count()).toHaveText("1 artículo");
+    await expect(list.searchField()).toHaveValue(`Anillo oro ${tag}`);
+  });
+
   test("filters by category, status, availability and a store filter from the sheet, by keyboard", async ({
     db,
     page,

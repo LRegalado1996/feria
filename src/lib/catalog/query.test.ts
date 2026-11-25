@@ -89,6 +89,8 @@ describe("readCatalogQuery", () => {
     ["100 characters", "x".repeat(100), "x".repeat(100)],
     ["past 100 characters, cut", "x".repeat(101), "x".repeat(100)],
     ["between spaces, trimmed first", ` ${"x".repeat(100)} `, "x".repeat(100)],
+    ["holding U+0000, without it", "ar\u0000o", "aro"],
+    ["of U+0000 only, as none", "\u0000", null],
   ])("reads a search %s", (_case, q, expected) => {
     expect(readCatalogQuery({ q }, null).q).toBe(expected);
   });

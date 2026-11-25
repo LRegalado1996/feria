@@ -64,6 +64,7 @@ export const articles = {
       button: "Filtros",
       buttonActive: "Filtros, {count} activos",
       buttonActiveOne: "Filtros, 1 activo",
+      attributesFailed: "No pudimos cargar los filtros de la tienda.",
       categoriesFailed: "No pudimos cargar las categorías.",
       category: "Categoría",
       clear: "Limpiar",

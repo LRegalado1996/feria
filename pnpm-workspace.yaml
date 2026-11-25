@@ -35,3 +35,13 @@ overrides:
   # GHSA-qx2v-qp2m-jg93, GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849 and
   # GHSA-fxqj-rqcc-2cmp (via next)
   "postcss@<8.5.23": ^8.5.23
+
+# Fixes of a pinned release that upstream shipped only in a later major. A
+# bump of the package fails the install until its patch is dropped or redone,
+# so none outlives the release that makes it unnecessary.
+#
+# drizzle-orm: 1.0.0-rc.6's transaction release, backported (FER-057). 0.45.4
+# kept a pool client checked out for good when `begin` failed on a dropped
+# connection; proof in src/server/db/transaction-release.integration.test.ts.
+patchedDependencies:
+  drizzle-orm@0.45.4: patches/drizzle-orm@0.45.4.patch
