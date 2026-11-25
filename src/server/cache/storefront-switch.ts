@@ -21,9 +21,12 @@ export const SWITCH_TTL_MS = 5000;
  * retry could never save a read, and a cold instance showed an open store as
  * closed. Two attempts that both hang still end here, closed and reported.
  *
- * A longer wait does not make an answer older: the wait is mostly for the
+ * A longer wait rarely makes an answer older: the wait is mostly for the
  * connection, and the answer is as old as its statement, which Postgres
- * cancels at `SWITCH_STATEMENT_TIMEOUT_MS`, inside the window.
+ * cancels at `SWITCH_STATEMENT_TIMEOUT_MS`, inside the window. Only an
+ * answer held up on its way back can reach the requests waiting for it
+ * older than the window, and never older than this wait; it is not kept
+ * (`until` counts from when it was asked), so the next request reads again.
  */
 export const SWITCH_TIMEOUT_MS = 7000;
 
