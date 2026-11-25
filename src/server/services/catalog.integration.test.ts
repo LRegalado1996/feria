@@ -1,15 +1,18 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+import { FEATURED_MAX } from "@/lib/schemas/page";
 import { db } from "@/server/db";
 import {
   category,
   categoryTranslation,
+  featuredProduct,
   product,
   productImage,
   productImageTranslation,
 } from "@/server/db/schema";
 import { onlyIds, theStoreId, uniqueTag } from "@/server/test/one-store";
+import { required } from "@/test/required";
 
 import {
   getCategoryPage,
@@ -180,6 +183,7 @@ const list = async (
 ) =>
   await listPublishedProducts(db, {
     currencyCode: "UYU",
+    day: "2026-11-25",
     limit: 24,
     locale: "es",
     storeId,
@@ -355,95 +359,85 @@ describe("public catalog", () => {
     expect(pageThree.nextCursor).toBeNull();
   });
 
-  test("lists in the store's own order by default, a new article last, across pages without a repeat (FER-044)", async () => {
+  test("lists the home's featured first, in their order, then the rest shuffled for the day, the same all day and across pages without a repeat (FER-019)", async () => {
     const { chains, storeId, tag } = await setup();
     const made: { id: number; slug: string }[] = [];
 
-    for (const title of ["Primera", "Segunda", "Tercera"]) {
+    for (let index = 0; index < 8; index += 1) {
       made.push(
         await makeArticle(storeId, {
           categoryId: chains.id,
-          title: `${title} ${tag}`,
+          title: `Orden ${String(index)} ${tag}`,
         })
       );
     }
 
-    // Each published as it was made: the newest first would read Primera
-    // last, so only the store's order reads it first.
-    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
-    // Added while the visitor reads page one: it goes after every other.
-    const added = await makeArticle(storeId, {
-      categoryId: chains.id,
-      title: `Cuarta ${tag}`,
-    });
-    const pageTwo = await list(storeId, {
-      category: chains.slug,
-      cursor: pageOne.nextCursor ?? undefined,
-      limit: 2,
-    });
-    const [second] = made.slice(1, 2);
-    const positions = await db
-      .select({ id: product.id, position: product.position })
-      .from(product)
-      .where(
-        inArray(
-          product.id,
-          [...made, added].map((row) => row.id)
-        )
+    // Two of them in "Destacados", in two of the store's free places, the
+    // one made later in the earlier place: only the featured order reads it
+    // first.
+    const taken = new Set(
+      (
+        await db
+          .select({ position: featuredProduct.position })
+          .from(featuredProduct)
+          .where(eq(featuredProduct.storeId, storeId))
+      ).map((row) => row.position)
+    );
+    const [early, late] = Array.from({ length: FEATURED_MAX }, (_, at) => at)
+      .filter((at) => !taken.has(at))
+      .slice(0, 2);
+    const [first, second] = [made[5], made[2]];
+    await db.insert(featuredProduct).values([
+      { position: required(early), productId: required(first).id, storeId },
+      { position: required(late), productId: required(second).id, storeId },
+    ]);
+    const slugs = async (day: string) =>
+      (await list(storeId, { category: chains.slug, day })).items.map(
+        (item) => item.slug
       );
-    const positionOf = new Map(positions.map((row) => [row.id, row.position]));
 
-    expect(
-      [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
-    ).toEqual([...made, added].map((row) => row.slug));
-    expect(pageOne.nextCursor).toEqual({
-      id: second?.id,
-      position: positionOf.get(second?.id ?? 0),
-      sort: "position",
-    });
-    expect(pageTwo.nextCursor).toBeNull();
-    // Each later one numbered after the one before.
-    const numbers = [...made, added].map((row) => positionOf.get(row.id) ?? 0);
-    expect(
-      numbers.every(
-        (value, index) => index === 0 || value > (numbers[index - 1] ?? value)
-      )
-    ).toBe(true);
-  });
+    const today = await slugs("2026-11-25");
 
-  test("ties in the store's order are broken by id, never repeating a row", async () => {
-    const { chains, storeId, tag } = await setup();
-    const made: { id: number; slug: string }[] = [];
+    expect(today.slice(0, 2)).toEqual([first?.slug, second?.slug]);
+    expect(new Set(today)).toEqual(new Set(made.map((row) => row.slug)));
+    // The same order all day.
+    expect(await slugs("2026-11-25")).toEqual(today);
+    // Paged two at a time, the day's order without a repeat or a gap.
+    const paged: string[] = [];
+    let cursor: Awaited<ReturnType<typeof list>>["nextCursor"] = null;
 
-    for (const title of ["A", "B", "C"]) {
-      made.push(
-        await makeArticle(storeId, {
-          categoryId: chains.id,
-          title: `Empate ${title} ${tag}`,
-        })
-      );
+    do {
+      const page = await list(storeId, {
+        category: chains.slug,
+        cursor: cursor ?? undefined,
+        day: "2026-11-25",
+        limit: 2,
+      });
+      paged.push(...page.items.map((item) => item.slug));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    expect(paged).toEqual(today);
+    // Another day, the featured stay first and the rest are dealt again:
+    // six articles share one order on a day once in 720, so one of five
+    // other days differs.
+    const otherDays = await Promise.all(
+      [
+        "2026-11-26",
+        "2026-11-27",
+        "2026-11-28",
+        "2026-11-29",
+        "2026-11-30",
+      ].map(slugs)
+    );
+
+    for (const order of otherDays) {
+      expect(order.slice(0, 2)).toEqual([first?.slug, second?.slug]);
     }
 
-    // One place for all three, as a reorder could leave them.
-    await db
-      .update(product)
-      .set({ position: 7 })
-      .where(
-        inArray(
-          product.id,
-          made.map((row) => row.id)
-        )
-      );
-    const pageOne = await list(storeId, { category: chains.slug, limit: 2 });
-    const pageTwo = await list(storeId, {
-      category: chains.slug,
-      cursor: pageOne.nextCursor ?? undefined,
-      limit: 2,
-    });
-
-    expect(
-      [...pageOne.items, ...pageTwo.items].map((item) => item.slug)
-    ).toEqual(made.map((row) => row.slug));
+    expect(otherDays.some((order) => order.join(",") !== today.join(","))).toBe(
+      true
+    );
   });
 
   test.each([

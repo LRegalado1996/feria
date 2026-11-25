@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P1
-- **Status:** todo
+- **Status:** in progress
 - **Depends on:** FER-017, FER-024
 
 ## Goal
@@ -20,6 +20,13 @@ A link to an article pasted into WhatsApp or Instagram shows the article's own p
 
 - A published article with an uploaded photo shares with that photo on WhatsApp (checked by hand on a real phone).
 - A photo URL on any host other than this deployment's Blob store is never fetched.
+
+## Outcome
+
+- `sharePhotoSource` (`src/lib/seo/share-photo.ts`) decides what the card (`(store)/productos/[slug]/opengraph-image.tsx`) draws for the article's first photo: a photo on this site (the seed's) or of this deployment's Blob store (`readBlobStore()`, `isOwnBlobUrl` with the `product` purpose: its host, its folder, a name the upload gave) is fetched by the card with `redirect: "error"` and a three-second limit, read in pieces and given up on past 8 MB (a larger `Content-Length` is not read at all), checked to be a JPEG, PNG or WebP by its type and its first bytes, and handed to the renderer as a data address (WebP included: the renderer reads it); anything else the plain block. The renderer never fetches a photo itself: it refuses a private address such as `localhost`, and a photo it cannot fetch or decode fails the whole card with a 500, where this one's failure is the block. A photo that fails, is slow or is not a photo is the block too, reported (`ShareCard.fetch_photo`) once per photo per server instance.
+- The wizard's "Búsqueda y compartir" preview (`molecules/product-seo-preview`) draws the main photo wherever it is stored and no longer says the card leaves it out.
+- Unit tests: the host rule on both sides (this store, another Blob store, another host, another deployment's folder, another purpose's folder, no Blob store), each failure reported once over two requests, the size limit at and past it, the timeout; the card's renderer input for a Blob photo is its data address.
+- **Left to close it (the first acceptance criterion), after it reaches production:** paste an article's link into WhatsApp on a phone and see its photo on the card (Lucas did it for FER-024 on 2026-11-25: title, description and price showed, the photo was the block). WhatsApp keeps a link's first preview for a while, so check with an article not shared before.
 
 ## Reporting
 

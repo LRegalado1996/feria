@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import useEmblaCarousel from "embla-carousel-react";
+import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
@@ -13,6 +14,11 @@ import { StoreGallery, type StoreGalleryImage } from "./store-gallery";
 
 vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
 
+// When the page is idle has its own tests: here each test says whether it is.
+const { usePageIdle } = vi.hoisted(() => ({ usePageIdle: vi.fn(() => true) }));
+
+vi.mock("@/lib/hooks/ui/use-page-idle", () => ({ usePageIdle }));
+
 function makeImages(count: number): StoreGalleryImage[] {
   return Array.from({ length: count }, (_, index) => ({
     alt: `Anillo solitario, foto ${index + 1}`,
@@ -24,22 +30,29 @@ function makeImages(count: number): StoreGalleryImage[] {
 }
 
 function setup({
+  actions,
   count = 3,
+  idle = true,
   locale = "es",
   loop = true,
   snaps = count,
 }: {
+  actions?: ReactNode;
   count?: number;
+  /** Whether the page has had its idle moment. */
+  idle?: boolean;
   locale?: Locale;
   /** Whether Embla could go round: it gives up when the photos are few. */
   loop?: boolean;
   snaps?: number;
 } = {}) {
   stubReducedMotion(false);
+  usePageIdle.mockReturnValue(idle);
   const embla = createFakeEmbla({ loop, snaps });
   vi.mocked(useEmblaCarousel).mockReturnValue(embla.hook);
   renderWithI18n(
     <StoreGallery
+      actions={actions}
       className="custom"
       images={makeImages(count)}
       title="Anillo solitario"
@@ -126,6 +139,66 @@ describe("StoreGallery", () => {
     ]);
   });
 
+  test.each([
+    [false, ["Anillo solitario, foto 1", "Anillo solitario, foto 2"]],
+    [
+      true,
+      [
+        "Anillo solitario, foto 1",
+        "Anillo solitario, foto 2",
+        "Anillo solitario, foto 3",
+        "Anillo solitario, foto 4",
+      ],
+    ],
+  ])(
+    "with the page idle %s, holds the photos past the second on their grey tiles until then",
+    (idle, shown) => {
+      setup({ count: 4, idle });
+
+      expect(
+        screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+      ).toEqual(shown);
+      // Every photo keeps its place in the row, on its tile.
+      expect(
+        document.querySelectorAll('[data-slot="store-gallery"] .aspect-square')
+      ).toHaveLength(4);
+    }
+  );
+
+  test.each([
+    [1, ["foto 1", "foto 2", "foto 3"]],
+    [2, ["foto 1", "foto 2", "foto 3", "foto 4"]],
+  ] as const)(
+    "before the page is idle, %i steps on draw each photo reached and the one that peeks beside it",
+    async (steps, shown) => {
+      const { arrow, user } = setup({ count: 5, idle: false });
+
+      for (let step = 0; step < steps; step += 1) {
+        await user.click(required(arrow()));
+      }
+
+      expect(
+        screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+      ).toEqual(shown.map((photo) => `Anillo solitario, ${photo}`));
+    }
+  );
+
+  test("going back round to the last photo before the page is idle draws it, and the ones between stay on their tiles", async () => {
+    const { embla } = setup({ count: 5, idle: false });
+
+    act(() => {
+      embla.fake.scrollPrev();
+    });
+
+    expect(
+      screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+    ).toEqual([
+      "Anillo solitario, foto 1",
+      "Anillo solitario, foto 2",
+      "Anillo solitario, foto 5",
+    ]);
+  });
+
   test("where Embla could not go round, its round arrow shows the next photo, then leads back to the first", async () => {
     const { arrow, embla, status, user } = setup({ loop: false });
 
@@ -185,6 +258,43 @@ describe("StoreGallery", () => {
     expect(status()).toBeNull();
   });
 
+  test("the magnifier is a small circle in the top-left corner, the page's own controls after it (FER-019)", () => {
+    setup({ actions: <button type="button">Compartir</button> });
+
+    const corner = required(
+      document.querySelector<HTMLElement>('[data-slot="store-gallery-actions"]')
+    );
+    expect(corner).toHaveClass("absolute", "top-2.5", "left-2.5", "gap-2");
+    expect(
+      within(corner)
+        .getAllByRole("button")
+        .map(
+          (button) => button.getAttribute("aria-label") ?? button.textContent
+        )
+    ).toEqual(["Ampliar la foto", "Compartir"]);
+    expect(
+      within(corner).getByRole("button", {
+        name: "Ampliar la foto",
+      })
+    ).toHaveAttribute("data-size", "icon-sm");
+  });
+
+  test("with no controls of the page's, the corner holds the magnifier alone", () => {
+    setup();
+
+    expect(
+      within(
+        required(
+          document.querySelector<HTMLElement>(
+            '[data-slot="store-gallery-actions"]'
+          )
+        )
+      )
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual(["Ampliar la foto"]);
+  });
+
   test("zooms into the photo in view, full screen, and closes back to the gallery", async () => {
     const { arrow, user } = setup();
     await user.click(required(arrow()));
@@ -237,6 +347,31 @@ describe("StoreGallery", () => {
       expect(tile).toHaveClass("aspect-square", "bg-store-surface");
       expect(screen.queryByRole("region")).toBeNull();
       expect(screen.queryByRole("button")).toBeNull();
+      expect(
+        document.querySelector('[data-slot="store-gallery-actions"]')
+      ).toBeNull();
     }
   );
+
+  test("with no photo there is nothing to zoom, but the page's own controls stay in the corner (FER-019)", () => {
+    renderWithI18n(
+      <StoreGallery
+        actions={<button type="button">Compartir</button>}
+        images={[]}
+        title="Anillo"
+      />,
+      { locale: "es" }
+    );
+
+    const corner = required(
+      document.querySelector<HTMLElement>('[data-slot="store-gallery-actions"]')
+    );
+    expect(corner).toHaveClass("absolute", "top-2.5", "left-2.5");
+    expect(corner.parentElement).toHaveClass("relative");
+    expect(
+      within(corner)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+    ).toEqual(["Compartir"]);
+  });
 });

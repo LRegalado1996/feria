@@ -1,11 +1,45 @@
 import { ORPCError, os } from "@orpc/server";
+import { isAPIError } from "better-auth/api";
 import { z } from "zod";
 
 import { appErrorDataSchema } from "@/lib/errors";
+import { captureExceptionWithScope } from "@/lib/sentry";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 import { auth } from "@/server/better-auth";
 import { db } from "@/server/db";
 import { findAdminStore } from "@/server/services/access";
+
+/**
+ * The request's session, or why it could not be read. A failed read (the
+ * database unreachable for longer than the pool's retries) is not the
+ * request's failure: a public procedure needs no session, so a visitor who
+ * happens to be signed in still gets the page. `adminProcedure` throws the
+ * failure, so the admin gets the reported 500 rather than a sign-in prompt.
+ * Better Auth logs and reports the cause of its own `APIError` first
+ * (`betterAuthLogger`); anything else is reported here.
+ */
+async function readSession(opts: { headers: Headers; resHeaders?: Headers }) {
+  try {
+    // When the session cache cookie is missing or expired, Better Auth reads
+    // the database and mints a fresh one on its response headers. Forwarded,
+    // the browser keeps a valid cache; dropped, every later request reads the
+    // database again.
+    const { headers: authHeaders, response: session } =
+      await auth.api.getSession({ headers: opts.headers, returnHeaders: true });
+    for (const cookie of authHeaders.getSetCookie()) {
+      opts.resHeaders?.append("set-cookie", cookie);
+    }
+    return { session, sessionFailure: null };
+  } catch (error) {
+    if (!isAPIError(error)) {
+      captureExceptionWithScope(error, {
+        action: "Api.read_session",
+        requestId: opts.headers.get("x-request-id") ?? undefined,
+      });
+    }
+    return { session: null, sessionFailure: { error } };
+  }
+}
 
 /**
  * `resHeaders` and `signal` exist only on an HTTP request: the RSC `caller`
@@ -17,19 +51,11 @@ export const createORPCContext = async (opts: {
   resHeaders?: Headers;
   signal?: AbortSignal;
 }) => {
-  // When the session cache cookie is missing or expired, Better Auth reads the
-  // database and mints a fresh one on its response headers. Forwarded, the
-  // browser keeps a valid cache; dropped, every later request reads the
-  // database again.
-  const { headers: authHeaders, response: session } = await auth.api.getSession(
-    { headers: opts.headers, returnHeaders: true }
-  );
-  for (const cookie of authHeaders.getSetCookie()) {
-    opts.resHeaders?.append("set-cookie", cookie);
-  }
+  const { session, sessionFailure } = await readSession(opts);
   return {
     db,
     session,
+    sessionFailure,
     ...opts,
   };
 };
@@ -82,7 +108,8 @@ export const publicProcedure = o.use(timingMiddleware);
  * the database (a session can outlive its user for minutes) and the handler
  * gets the store, the table's one row, as `context.store`: it filters every
  * query by `context.store.id`, and no procedure takes a store from its input.
- * A missing session or login answers UNAUTHORIZED.
+ * A missing session or login answers UNAUTHORIZED; a session that could not
+ * be read is thrown as the failure it was.
  *
  * The order is session, input, then the database. A later `.input()` places
  * validation after every middleware added before it; the initial index of -1
@@ -95,6 +122,10 @@ export const adminProcedure = os
   .errors(ERRORS)
   .use(timingMiddleware)
   .use(async ({ context, next }) => {
+    if (context.sessionFailure) {
+      throw context.sessionFailure.error;
+    }
+
     if (!context.session?.user) {
       throw new ORPCError("UNAUTHORIZED");
     }

@@ -4,15 +4,13 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import type { NextRequest } from "next/server";
 
 import { getBaseUrl } from "@/lib/orpc/get-base-url";
-import {
-  createObservedContext,
-  interceptErrors,
-} from "@/server/api/interceptor";
+import { interceptErrors } from "@/server/api/interceptor";
+import { createORPCContext } from "@/server/api/orpc";
 import { appRouter } from "@/server/api/root";
 import { auth } from "@/server/better-auth";
 
 const createContext = async (req: NextRequest) =>
-  await createObservedContext({
+  await createORPCContext({
     headers: req.headers,
   });
 

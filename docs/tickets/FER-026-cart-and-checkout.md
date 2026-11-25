@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-025, FER-023, FER-024
 
 ## Goal
@@ -41,7 +41,7 @@ The order page is reached without a login, so it is addressed by `token`, is not
 - Phone verification (FER-028) is not built: the order page shows only the confirmation.
 - E2E (`src/e2e/tests/store/checkout.e2e.ts`): two articles, a quantity changed, the order placed and its page checked; a double tap makes one order and the cart is empty after it; a sold-out article blocks the order until removed; the English copy.
 - **Since [FER-045](FER-045-cart-drawer.md)** (Lucas, 2026-11-18) the cart is a side panel again, the drawer this ticket first asked for: adding an article or the header's cart opens it on any store page, with the lines, their steppers and flags, the total and "Hacer el pedido". `/cart` is now the checkout (`organisms/store-checkout`): the order's summary, read only, with "Editar el carrito" opening the panel, and the form. Everything above about prices, flags, holds, the request key and the limits still holds, in both; the shared logic is `useCartLines` (`src/lib/hooks/cart/use-cart-lines.ts`).
-- **Pending:** "the order appears in the store's admin" is FER-027's screen; here the order is in the database the moment it is placed (checked by the e2e), with no step by the shopper. "On a phone with one hand" is by design (every control full width or 44 px or more, the submit at the bottom), checked at 375 px, not on a device.
+- **Closed** (Lucas, 2026-11-25). "The order appears in the store's admin" holds since [FER-027](FER-027-order-management.md): a placed order is listed at `/admin/orders` with no step by the shopper. "On a phone with one hand" is by design (every control full width or 44 px or more, the submit at the bottom), checked at 375 px; Lucas accepted it without a check on a device.
 
 ## Reporting
 

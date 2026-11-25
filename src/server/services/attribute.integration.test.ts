@@ -170,6 +170,7 @@ async function setup() {
     const { items } = await listPublishedProducts(db, {
       category: categorySlug,
       currencyCode: "UYU",
+      day: "2026-11-25",
       limit: 24,
       locale: "es",
       storeId,

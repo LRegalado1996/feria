@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P0
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-017, FER-040
 
 ## Goal
@@ -36,7 +36,14 @@ Lucas's, on 2026-11-18, looking at FER-017's simple list ("la página está bien
 - **Sorting by column** (Lucas, the same day): the headers of the computer's table sort (title and category in the page's language with the row's own fallbacks, price, status, last change), an arrow on the active one, a second click turning it round, `aria-sort` on the header; "Ordenar" offers the same on a phone. Applied in SQL before the page, the id breaking ties. An article without the key (no title, no category, no price) comes last both ways. Availability is not a column of its own: the filter covers it. Changing the order, a filter or the search goes back to page 1. The default stays the most recent change first.
 - **A row is a table row**: the title is the one link, stretched over the row; a column "Modificado" ("hace 2 horas") from `xl` up, where the table starts (below it, beside the sidebar, the columns left the title no room).
 
-Still to do in this ticket: inline actions (availability, price, publish, duplicate, delete), bulk edit, "share this selection", reordering by position.
+Lucas's, on 2026-11-25, closing the ticket ("lo que no nombre lo descartás"):
+
+- **Each row's menu** ("⋯", above the row's link so a tap on it never opens the wizard): "Ocultar de la web" on a published article, "Mostrar en la web" on a draft, at once and without asking, since it undoes from the same place (Lucas: duplicating was "al pedo", hiding quickly is what he wanted); and "Eliminar", which asks first, naming the article and saying its photos go and past orders do not change (they hold their own copy). Each ends in a toast; a draft that still lacks something is refused by the server and the toast says to open it. Duplicating was built, then dropped at Lucas's request before the PR.
+- **"Compartir" on an article's page**, reversing FER-045's choice: a small white circle with the share icon on the photos, beside the magnifier (both 36 px circles, a 44 px target each). On a phone it opens the phone's share sheet with the article's name and address; elsewhere it copies the address and a moss note under the circle says so. Storefront only.
+- **The catalog's order replaces reordering by hand**: the home's "Destacados" first, in their order, then every other published article shuffled once per business day (America/Montevideo), the same for everyone all day. The catalog, each category's page and the home's category rows follow it; "Más recientes" and the price sorts are unchanged. `product.position` no longer orders the storefront.
+- Dropped: inline price and availability, bulk edit, "share this selection" and reordering by hand.
+
+The acceptance criteria above are replaced by these: from the list, hide a published article (it leaves the store at once) and show it again; a draft that lacks something is not shown and says why; delete after a question; share an article from its photos; a category's page lists the featured first, in their order, the same all day. E2E covers each.
 
 ## Reporting
 

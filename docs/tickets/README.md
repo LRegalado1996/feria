@@ -58,29 +58,29 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M3 Admin
 
-| ID                                                     | Title                                                        | Priority | Status      |
-| ------------------------------------------------------ | ------------------------------------------------------------ | -------- | ----------- |
-| [FER-013](FER-013-admin-shell.md)                      | Admin shell and sign-in                                      | P0       | done        |
-| [FER-035](FER-035-number-input-decimal-separators.md)  | Number input that accepts either decimal separator           | P0       | done        |
-| [FER-014](FER-014-store-management.md)                 | Company settings                                             | P0       | done        |
-| [FER-015](FER-015-user-management.md)                  | User management                                              | P1       | todo        |
-| [FER-016](FER-016-category-management.md)              | Category management                                          | P0       | done        |
-| [FER-017](FER-017-article-wizard.md)                   | Article upload wizard                                        | P0       | done        |
-| [FER-018](FER-018-ai-autofill.md)                      | Fill the article from its photos with Claude                 | P0       | todo        |
-| [FER-019](FER-019-article-list.md)                     | Article list and quick edits                                 | P0       | in progress |
-| [FER-020](FER-020-home-curation.md)                    | Home curation: announcement, banners, rows                   | P0       | done        |
-| [FER-040](FER-040-admin-redesign.md)                   | Admin redesign                                               | P0       | done        |
-| [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)    | The bottom bar stays above the iPhone keyboard               | P1       | done        |
-| [FER-054](FER-054-article-save-conflicts.md)           | Saving one article from two tabs                             | P2       | todo        |
-| [FER-055](FER-055-photo-grid-swipe.md)                 | Swiping over the wizard's photos scrolls                     | P2       | todo        |
-| [FER-056](FER-056-list-search-and-filters-race.md)     | A pending search and "Aplicar" can lose each other           | P2       | todo        |
-| [FER-057](FER-057-article-list-review-follow-ups.md)   | Follow-ups from the article list's last review               | P1       | todo        |
-| [FER-064](FER-064-admin-main-landmark-once.md)         | The admin has one main landmark after navigating             | P1       | todo        |
-| [FER-065](FER-065-place-blocks-by-section-key.md)      | A block's place between rows follows the row, not a number   | P2       | todo        |
-| [FER-066](FER-066-page-sequence-limit.md)              | One limit on a page's blocks, on every path that adds one    | P2       | todo        |
-| [FER-067](FER-067-banner-photo-cleanup-race.md)        | A banner photo is never deleted while a save starts using it | P2       | todo        |
-| [FER-068](FER-068-stale-order-save.md)                 | Saving a page's order from an old screen asks first          | P2       | todo        |
-| [FER-071](FER-071-settings-form-follows-newer-read.md) | The store settings form follows a newer read                 | P2       | todo        |
+| ID                                                     | Title                                                        | Priority | Status |
+| ------------------------------------------------------ | ------------------------------------------------------------ | -------- | ------ |
+| [FER-013](FER-013-admin-shell.md)                      | Admin shell and sign-in                                      | P0       | done   |
+| [FER-035](FER-035-number-input-decimal-separators.md)  | Number input that accepts either decimal separator           | P0       | done   |
+| [FER-014](FER-014-store-management.md)                 | Company settings                                             | P0       | done   |
+| [FER-015](FER-015-user-management.md)                  | User management                                              | P1       | todo   |
+| [FER-016](FER-016-category-management.md)              | Category management                                          | P0       | done   |
+| [FER-017](FER-017-article-wizard.md)                   | Article upload wizard                                        | P0       | done   |
+| [FER-018](FER-018-ai-autofill.md)                      | Fill the article from its photos with Claude                 | P0       | todo   |
+| [FER-019](FER-019-article-list.md)                     | Article list and quick edits                                 | P0       | done   |
+| [FER-020](FER-020-home-curation.md)                    | Home curation: announcement, banners, rows                   | P0       | done   |
+| [FER-040](FER-040-admin-redesign.md)                   | Admin redesign                                               | P0       | done   |
+| [FER-053](FER-053-bottom-bar-above-ios-keyboard.md)    | The bottom bar stays above the iPhone keyboard               | P1       | done   |
+| [FER-054](FER-054-article-save-conflicts.md)           | Saving one article from two tabs                             | P2       | todo   |
+| [FER-055](FER-055-photo-grid-swipe.md)                 | Swiping over the wizard's photos scrolls                     | P2       | todo   |
+| [FER-056](FER-056-list-search-and-filters-race.md)     | A pending search and "Aplicar" can lose each other           | P2       | todo   |
+| [FER-057](FER-057-article-list-review-follow-ups.md)   | Follow-ups from the article list's last review               | P1       | todo   |
+| [FER-064](FER-064-admin-main-landmark-once.md)         | The admin has one main landmark after navigating             | P1       | todo   |
+| [FER-065](FER-065-place-blocks-by-section-key.md)      | A block's place between rows follows the row, not a number   | P2       | todo   |
+| [FER-066](FER-066-page-sequence-limit.md)              | One limit on a page's blocks, on every path that adds one    | P2       | todo   |
+| [FER-067](FER-067-banner-photo-cleanup-race.md)        | A banner photo is never deleted while a save starts using it | P2       | todo   |
+| [FER-068](FER-068-stale-order-save.md)                 | Saving a page's order from an old screen asks first          | P2       | todo   |
+| [FER-071](FER-071-settings-form-follows-newer-read.md) | The store settings form follows a newer read                 | P2       | todo   |
 
 ### M4 Storefront and orders
 
@@ -89,9 +89,10 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-021](FER-021-storefront-shell.md)                        | Storefront shell                                                  | P0       | done        |
 | [FER-022](FER-022-home-view.md)                               | Home view                                                         | P0       | done        |
 | [FER-023](FER-023-catalog-view.md)                            | Catalog view                                                      | P0       | done        |
-| [FER-024](FER-024-article-view-and-seo.md)                    | Article view and SEO                                              | P0       | in progress |
+| [FER-024](FER-024-article-view-and-seo.md)                    | Article view and SEO                                              | P0       | done        |
+| [FER-085](FER-085-store-pages-at-95.md)                       | Store pages at 95 on Lighthouse mobile                            | P2       | todo        |
 | [FER-025](FER-025-order-domain.md)                            | Order domain                                                      | P0       | done        |
-| [FER-026](FER-026-cart-and-checkout.md)                       | Cart and checkout                                                 | P0       | in progress |
+| [FER-026](FER-026-cart-and-checkout.md)                       | Cart and checkout                                                 | P0       | done        |
 | [FER-027](FER-027-order-management.md)                        | Order management in the admin                                     | P0       | done        |
 | [FER-028](FER-028-whatsapp-phone-verification.md)             | Phone verification by WhatsApp code                               | P2       | todo        |
 | [FER-039](FER-039-storefront-redesign.md)                     | Storefront redesign                                               | P0       | done        |
@@ -101,7 +102,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-045](FER-045-cart-drawer.md)                             | Cart side panel and a gallery that goes round                     | P0       | done        |
 | [FER-050](FER-050-storefront-round.md)                        | Storefront round: menu, grid, footer, confirm                     | P0       | done        |
 | [FER-051](FER-051-order-stepper-and-admin-round.md)           | Order stepper, the order pages and an admin round                 | P0       | done        |
-| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | todo        |
+| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | in progress |
 | [FER-058](FER-058-pages-built-from-sections.md)               | Pages built from sections: the home is the first                  | P0       | done        |
 | [FER-059](FER-059-home-article-spotlight.md)                  | An article in the spotlight on the home                           | P0       | done        |
 | [FER-060](FER-060-pages-from-the-admin.md)                    | Pages built from sections, from the admin                         | P0       | done        |
@@ -116,6 +117,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-080](FER-080-contact-page.md)                            | A contact page                                                    | P1       | done        |
 | [FER-081](FER-081-unlisted-parent-in-the-breadcrumb.md)       | An empty category's breadcrumb does not link to an unlisted group | P2       | todo        |
 | [FER-084](FER-084-shipping-and-returns-in-structured-data.md) | Shipping and returns in an article's structured data              | P2       | todo        |
+| [FER-086](FER-086-how-to-buy-lighter.md)                      | A lighter "how to buy" block and smaller cover controls           | P1       | done        |
 
 ### M5 Metrics
 

@@ -49,6 +49,8 @@ describe("ProductListHead", () => {
       ["Price", "none", "/en/admin/products?sort=price"],
       ["Status", "none", "/en/admin/products?sort=status"],
       ["Updated", "descending", "/en/admin/products?dir=asc"],
+      // The rows' menus (FER-019): named for the ear, not sortable.
+      ["Actions", null, null],
     ]);
   });
 
@@ -63,6 +65,7 @@ describe("ProductListHead", () => {
       ["Price", "ascending", "/en/admin/products?q=anillo&sort=price&dir=desc"],
       ["Status", "none", "/en/admin/products?q=anillo&sort=status"],
       ["Updated", "none", "/en/admin/products?q=anillo"],
+      ["Actions", null, null],
     ]);
   });
 
@@ -134,6 +137,7 @@ describe("ProductListHead", () => {
       ["columnheader", "ascending"],
       ["columnheader", "none"],
       ["columnheader", "none"],
+      ["columnheader", null],
     ]);
   });
 
@@ -143,7 +147,7 @@ describe("ProductListHead", () => {
 
     expect(
       headers.map((header) => header.classList.contains("text-right"))
-    ).toEqual([false, false, false, true, false, false]);
+    ).toEqual([false, false, false, true, false, false, false]);
   });
 
   test("in Spanish, says it in Spanish", () => {
@@ -156,6 +160,7 @@ describe("ProductListHead", () => {
       "Precio",
       "Estado",
       "Modificado",
+      "Acciones",
     ]);
     expect(link("price")).toHaveAccessibleName(
       "Ordenar: Precio, de menor a mayor"

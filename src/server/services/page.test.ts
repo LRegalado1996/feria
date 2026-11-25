@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 
+import { asc } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 
-import type {
-  CreateBannerValues,
-  SaveAnnouncementValues,
-  SavePageLayoutValues,
-  CreateSpotlightValues,
-  UpdateBannerValues,
+import {
+  type CreateBannerValues,
+  FEATURED_MAX,
+  type SaveAnnouncementValues,
+  type SavePageLayoutValues,
+  type CreateSpotlightValues,
+  type UpdateBannerValues,
 } from "@/lib/schemas/page";
 import {
   announcement,
@@ -28,6 +30,7 @@ import {
 import { createMockDatabase, type MockDatabase } from "@/server/test/context";
 import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
 
+import { storeOrderRank } from "./catalog";
 import {
   createBanner,
   createSpotlight,
@@ -526,10 +529,18 @@ describe("getPageContent", () => {
       sql: '("product"."storeId" = $1 and "product"."status" = $2)',
     });
     expect(readsOf(db).tables).toEqual([store, product]);
-    // The first twelve of each category are the store's first twelve.
-    expect(
-      db.$["select.orderBy"].mock.calls.map((terms) => renderOrderBy(terms))
-    ).toEqual(['"product"."position" asc, "product"."id" asc']);
+    // The first twelve of each category are the store's first twelve on the
+    // day (FER-019): the featured first, then the day's shuffle.
+    const calls = db.$["select.orderBy"].mock.calls;
+    expect(calls.map((terms) => renderOrderBy(terms))).toEqual([
+      renderOrderBy([asc(storeOrderRank(TODAY)), asc(product.id)]),
+    ]);
+    expect(renderQuery(calls[0]?.[0]).params).toEqual([FEATURED_MAX, TODAY]);
+    // The store's own "Destacados" place, else the day's hash.
+    expect(renderOrderBy(calls[0])).toContain(
+      '"featured_product"."storeId" = "product"."storeId" and "featured_product"."productId" = "product"."id"'
+    );
+    expect(renderOrderBy(calls[0])).toContain("hashtext(");
   });
 
   test("an empty store's page holds nothing", async () => {

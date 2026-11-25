@@ -6,6 +6,7 @@ import {
   listProductsSchema,
   listRelatedProductsSchema,
 } from "@/lib/schemas/catalog";
+import { businessDay } from "@/lib/utils/format";
 import { publicProcedure } from "@/server/api/orpc";
 import {
   listCatalogFilters,
@@ -90,6 +91,8 @@ export const catalogRouter = {
       return await listPublishedProducts(context.db, {
         ...query,
         currencyCode: store.currencyCode,
+        // The store's order is shuffled once per business day (FER-019).
+        day: businessDay(new Date()),
         storeId: store.id,
         valueGroups,
       });

@@ -1302,6 +1302,21 @@ describe("productCursorSchema", () => {
   test.each<[string, Record<string, unknown>, boolean]>([
     ["the store's order's key", { position: 12, sort: "position" }, true],
     ["a position of 0", { position: 0, sort: "position" }, true],
+    [
+      "the store's order with its day",
+      { day: "2026-11-25", position: 12, sort: "position" },
+      true,
+    ],
+    [
+      "the store's order with a day not written as one",
+      { day: "25/11/2026", position: 12, sort: "position" },
+      false,
+    ],
+    [
+      "a price order with a day",
+      { ...ASC, day: "2026-11-25", priceAmount: 69_000 },
+      false,
+    ],
     ["a negative position", { position: -1, sort: "position" }, false],
     [
       "a position past int4",

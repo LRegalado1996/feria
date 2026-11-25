@@ -79,11 +79,22 @@ const cursorIntegerSchema = z
   .pipe(z.number().int().min(0).max(INT4_MAX));
 
 /**
+ * A business day as the store's order is dealt for it (`YYYY-MM-DD`, a real
+ * month and day; the year is only bounded loosely, the day is never a date
+ * the database reads).
+ */
+const orderDaySchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/u);
+
+/**
  * The keyset cursor of the public list: the sort that made it and the last
  * row's key in that sort, whole (`position`, `publishedAt` or `priceAmount`,
  * then `id` to break ties), so a page never repeats or skips a row while
  * others are inserted. Both price orders share a key, so the sort itself is
- * what tells a cursor from one apart from the other.
+ * what tells a cursor from one apart from the other. The store's order
+ * carries the day it was dealt for too (FER-019), so a list opened before
+ * midnight goes on in that day's order after it.
  */
 export const productCursorSchema = z
   .object({
@@ -91,6 +102,8 @@ export const productCursorSchema = z
     sort: z.enum(PRODUCT_SORTS),
     // The key of that sort (`PRODUCT_SORT_KEYS`), and only that one.
     position: cursorIntegerSchema.optional(),
+    // The day the store's order was dealt for, with that order's key only.
+    day: orderDaySchema.optional(),
     priceAmount: cursorIntegerSchema.optional(),
     // Postgres has no year 0, so a cursor from it would fail in the database.
     publishedAt: z.iso
@@ -108,6 +121,10 @@ export const productCursorSchema = z
           (PRODUCT_SORT_KEYS[cursor.sort] === key)
       ),
     "A cursor carries its sort's key, and only it"
+  )
+  .refine(
+    (cursor) => cursor.day === undefined || cursor.sort === "position",
+    "Only the store's order is dealt for a day"
   );
 
 /**

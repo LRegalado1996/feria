@@ -8,6 +8,10 @@ export const storefront = {
       "Agregamos {added}: con ellos tenés {max}, el máximo por pedido.",
     addToCart: "Agregar al carrito",
     askWhatsapp: "Consultar por WhatsApp",
+    share: "Compartir",
+    shareCopied: "Enlace copiado: pegalo donde quieras.",
+    shareFailed:
+      "No pudimos copiar el enlace. Copiá la dirección de arriba del navegador.",
     askWhatsappText: "¡Hola! Te escribo por «{title}»: {url}",
     breadcrumb: "Ruta",
     // Like the header's first link (FER-044).
@@ -175,7 +179,9 @@ export const storefront = {
   // The "how to buy" block of a page (FER-076): three steps, in order, then
   // how to pay and the way into the catalog.
   howToBuy: {
-    browse: "Ver el catálogo",
+    // The block's name for a screen reader (FER-086); the contact page
+    // shows `title` over its own steps.
+    label: "Cómo comprar",
     steps: {
       cart: {
         text: "Dejá tu nombre y tu celular.",
@@ -186,13 +192,17 @@ export const storefront = {
         title: "Elegí",
       },
       delivery: {
-        text: "Retirás en el puesto o te lo mandamos.",
-        title: "Coordinamos la entrega",
+        text: "En el puesto o te lo mandamos.",
+        title: "Te lo entregamos",
+      },
+      pay: {
+        text: "Aceptamos todos los medios de pago.",
+        title: "Pagá como quieras",
       },
     },
     title: "Comprá en 3 pasos",
   },
-  // How an order is paid, said by the "how to buy" block and the footer.
+  // How an order is paid, said by the footer and the contact page.
   payments: {
     cards: "Tarjetas de crédito y débito",
     cash: "Efectivo",

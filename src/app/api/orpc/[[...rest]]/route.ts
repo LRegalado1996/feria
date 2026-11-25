@@ -3,10 +3,8 @@ import { ResponseHeadersPlugin } from "@orpc/server/plugins";
 import type { NextRequest } from "next/server";
 
 import { withEvlog } from "@/lib/evlog";
-import {
-  createObservedContext,
-  interceptErrors,
-} from "@/server/api/interceptor";
+import { interceptErrors } from "@/server/api/interceptor";
+import { createORPCContext } from "@/server/api/orpc";
 import { appRouter } from "@/server/api/root";
 
 const handler = new RPCHandler(appRouter, {
@@ -41,7 +39,7 @@ function createNativeRequest(request: NextRequest): Request {
 }
 
 async function handleRequest(request: NextRequest) {
-  const context = await createObservedContext({
+  const context = await createORPCContext({
     headers: request.headers,
     resHeaders: new Headers(),
     signal: request.signal,

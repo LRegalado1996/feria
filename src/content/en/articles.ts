@@ -3,6 +3,27 @@ import type { Dictionary } from "@/content/es";
 // The admin's articles (FER-017): the list and the wizard that loads one.
 export const articles: Dictionary["articles"] = {
   list: {
+    actions: {
+      delete: "Delete",
+      deleteConfirm: "Delete",
+      deleteDescription:
+        "“{title}” is deleted with its photos. Orders that already include it do not change.",
+      deletePending: "Deleting…",
+      deleteTitle: "Delete this article?",
+      deleted: "Article deleted.",
+      errors: {
+        delete: "We couldn't delete it. Try again.",
+        hide: "We couldn't hide it. Try again.",
+        incomplete:
+          "It is missing something to be published: open it and complete it.",
+        show: "We couldn't publish it. Try again.",
+      },
+      hidden: "Article hidden: it no longer shows in the store.",
+      hide: "Hide from the store",
+      menu: "Actions for “{title}”",
+      show: "Show in the store",
+      shown: "Article published: it now shows in the store.",
+    },
     availability: {
       available: "Available",
       unavailable: "Not available",
@@ -14,6 +35,7 @@ export const articles: Dictionary["articles"] = {
       value: "{filter}: {value}",
     },
     columns: {
+      actions: "Actions",
       article: "Article",
       category: "Category",
       photo: "Photo",
@@ -163,8 +185,6 @@ export const articles: Dictionary["articles"] = {
         heading: "Search and sharing",
         hint: "Made from the title, the description and the main photo.",
         share: "How it looks when the link is shared",
-        shareNoPhoto:
-          "For now the share card shows the photo only when it is stored on this site.",
       },
       spanish: "Spanish",
       title: "Title",

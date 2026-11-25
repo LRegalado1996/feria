@@ -3,8 +3,10 @@ import { ImageResponse } from "next/og";
 
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
-import { ownUrl } from "@/lib/seo/origin";
+import { siteOrigin } from "@/lib/seo/origin";
+import { sharePhotoSource } from "@/lib/seo/share-photo";
 import { formatPrice } from "@/lib/utils/format";
+import { readBlobStore } from "@/server/api/utils/blob-store";
 import { readPublishedArticle } from "@/server/cache/catalog";
 import { readStore } from "@/server/cache/store";
 import { STORE_THEME } from "@/styles/theme";
@@ -50,8 +52,8 @@ export async function generateImageMetadata({
 }
 
 /**
- * An article's share card (FER-024): its first photo beside its name and
- * price, in the store's colors (the theme file, FER-038), so a link pasted
+ * An article's share card (FER-024, FER-049): its first photo beside its
+ * name and price, in the store's colors (the theme file, FER-038), so a link pasted
  * into WhatsApp shows what is for sale and for how much.
  */
 export default async function ArticleOpenGraphImage({
@@ -68,8 +70,14 @@ export default async function ArticleOpenGraphImage({
   const { article, store } = found;
 
   const [photo] = article.images;
-  // Only a photo on this site: the renderer fetches it from the server.
-  const photoUrl = photo ? ownUrl(photo.url) : null;
+  // A photo on this site, or one of this deployment's Blob store fetched
+  // here within a time limit (FER-049); anything else, the plain block.
+  const photoUrl = photo
+    ? await sharePhotoSource(photo.url, {
+        blobStore: readBlobStore(),
+        origin: siteOrigin(),
+      })
+    : null;
 
   return new ImageResponse(
     <div

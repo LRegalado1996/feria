@@ -290,11 +290,11 @@ describe("ArticlePage", () => {
   });
 
   test.each([
-    ["es", makeArticle()],
-    ["en", makeEnglishArticle()],
+    ["es", makeArticle(), `${ORIGIN}/productos/anillo-de-plata`],
+    ["en", makeEnglishArticle(), `${ORIGIN}/en/productos/anillo-de-plata`],
   ] as const)(
-    "in %s, hands the organism the article read in that language, its copy and the articles beside it",
-    async (locale, article) => {
+    "in %s, hands the organism the article read in that language, its copy, the articles beside it and its whole address to share (FER-019)",
+    async (locale, article, shareUrl) => {
       const { related, show, store } = setup({
         english: makeEnglishArticle(),
         locale,
@@ -317,6 +317,7 @@ describe("ArticlePage", () => {
         copy: DICTIONARIES[locale].storefront,
         locale,
         related,
+        shareUrl,
         whatsappHref: null,
       });
       expect(screen.getByTestId("store-article").parentElement?.tagName).toBe(

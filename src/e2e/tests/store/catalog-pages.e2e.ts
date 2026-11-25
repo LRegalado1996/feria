@@ -13,6 +13,7 @@ import {
 } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectWordsOverPhoto } from "../../fixtures/expect-words-over-photo";
+import { expectTitlesInAnyOrder } from "../../fixtures/titles-in-any-order";
 import { StorePage } from "../../page-objects/store.page";
 
 // FER-043. Each test seeds a group of its own in the one store every spec
@@ -125,7 +126,10 @@ test.describe("Catalog pages", () => {
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(
         `Anillos ${tag}`
       );
-      await expect(titles(page)).toHaveText(["Anillo sello", "Anillo flor"]);
+      await expectTitlesInAnyOrder(titles(page), [
+        "Anillo sello",
+        "Anillo flor",
+      ]);
       await expect(trail(page)).toHaveText([
         "Home",
         `Bijou ${tag}`,
@@ -160,7 +164,7 @@ test.describe("Catalog pages", () => {
 
     await page.goto(`/${group.slug}`);
 
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Anillo sello",
       "Anillo flor",
       "Aro perla",
@@ -174,7 +178,7 @@ test.describe("Catalog pages", () => {
 
     await page.goto(`/en${ringsPath}`);
 
-    await expect(titles(page)).toHaveText(["Anillo sello", "Anillo flor"]);
+    await expectTitlesInAnyOrder(titles(page), ["Anillo sello", "Anillo flor"]);
     expect(
       new URL(
         (await page.locator('link[rel="canonical"]').getAttribute("href")) ?? ""
@@ -329,7 +333,7 @@ test.describe("Catalog pages", () => {
     await menu.getByRole("link", { name: `Anillos ${tag}` }).click();
 
     await expect(page).toHaveURL(ringsPath);
-    await expect(titles(page)).toHaveText(["Anillo sello", "Anillo flor"]);
+    await expectTitlesInAnyOrder(titles(page), ["Anillo sello", "Anillo flor"]);
   });
 });
 

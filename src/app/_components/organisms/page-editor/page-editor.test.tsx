@@ -412,16 +412,16 @@ describe("PageEditor", () => {
 
     const [first] = screen.getAllByTestId("home-layout-rows-item");
     expect(first).toHaveTextContent(
-      "How to buyThe 3 steps to buy and the ways to pay."
+      "How to buyThe steps to buy, from the catalog to paying."
     );
     // Drawn before the save, right under the cover, above every row.
     const block = preview.getByTestId("store-how-to-buy");
-    expect(block).toHaveAccessibleName("Buy in 3 steps");
+    expect(block).toHaveAccessibleName("How to buy");
     expect(
       preview.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)
     ).toEqual([
       "Bubble guns",
-      "Buy in 3 steps",
+      "How to buy",
       "Rings",
       "Signet ring",
       "Cadena corona",

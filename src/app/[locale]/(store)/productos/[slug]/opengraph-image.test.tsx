@@ -1,43 +1,52 @@
 import { render } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import type { PublishedProduct } from "@/server/services/catalog";
 import type { PublicStore } from "@/server/services/store";
+import { server } from "@/test/msw";
 
 import ArticleOpenGraphImage, {
   generateImageMetadata,
 } from "./opengraph-image";
 
-const { ImageResponse, readPublishedArticle, readStore } = vi.hoisted(() => ({
-  // Records what it was asked to draw; the drawing itself is next/og's.
-  ImageResponse: vi.fn(
-    class FakeImageResponse {
-      element: ReactElement;
-      options: unknown;
+const { ImageResponse, readBlobStore, readPublishedArticle, readStore } =
+  vi.hoisted(() => ({
+    // Records what it was asked to draw; the drawing itself is next/og's.
+    ImageResponse: vi.fn(
+      class FakeImageResponse {
+        element: ReactElement;
+        options: unknown;
 
-      constructor(element: ReactElement, options: unknown) {
-        this.element = element;
-        this.options = options;
+        constructor(element: ReactElement, options: unknown) {
+          this.element = element;
+          this.options = options;
+        }
       }
-    }
-  ),
-  readPublishedArticle:
-    vi.fn<
-      (
-        store: PublicStore,
-        slug: string,
-        locale: Locale
-      ) => Promise<PublishedProduct | null>
-    >(),
-  readStore: vi.fn<() => Promise<PublicStore | null>>(),
-}));
+    ),
+    readPublishedArticle:
+      vi.fn<
+        (
+          store: PublicStore,
+          slug: string,
+          locale: Locale
+        ) => Promise<PublishedProduct | null>
+      >(),
+    readStore: vi.fn<() => Promise<PublicStore | null>>(),
+    // No Blob store unless a test gives the deployment one.
+    readBlobStore: vi.fn(
+      (): { host: string; namespace: "production"; token: string } | null =>
+        null
+    ),
+  }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/cache/store", () => ({ readStore }));
 vi.mock("@/server/cache/catalog", () => ({ readPublishedArticle }));
 vi.mock("next/og", () => ({ ImageResponse }));
+vi.mock("@/server/api/utils/blob-store", () => ({ readBlobStore }));
 
 // Five distinct colors, so each part of the card shows which one it took.
 // The real file pairs the foreground and the contrast on one color.
@@ -129,6 +138,16 @@ function setup({
   store?: PublicStore | null;
 } = {}) {
   readStore.mockResolvedValue(store);
+  // This site answers its photos, as the seed's are served.
+  server.use(
+    http.get(
+      "http://localhost:3000/uploads/*",
+      () =>
+        new HttpResponse(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), {
+          headers: { "content-type": "image/jpeg" },
+        })
+    )
+  );
   readPublishedArticle.mockImplementation(
     async (asked, askedSlug) =>
       await Promise.resolve(
@@ -197,15 +216,48 @@ describe("ArticleOpenGraphImage", () => {
     ]);
   });
 
-  test("covers its photo block with the article's first photo, by its absolute address", async () => {
+  test("covers its photo block with the article's first photo on this site, from the bytes it fetched", async () => {
     const { draw } = setup();
 
     const { photo } = await draw();
 
     expect(photo.style.backgroundImage).toBe(
-      'url("http://localhost:3000/uploads/anillo.jpg")'
+      'url("data:image/jpeg;base64,/9j/4A==")'
     );
     expect(photo.style.backgroundSize).toBe("cover");
+  });
+
+  test("draws a photo of the deployment's Blob store from the bytes it fetched (FER-049)", async () => {
+    const host = "store123.public.blob.vercel-storage.com";
+    const url = `https://${host}/production/product/0b6f1a0e-6d1c-4c0a-9a43-6c5a3f0e2b11.webp`;
+    readBlobStore.mockReturnValue({
+      host,
+      namespace: "production",
+      token: "vercel_blob_rw_store123_secret",
+    });
+    server.use(
+      http.get(
+        url,
+        () =>
+          new HttpResponse(
+            new Uint8Array([
+              0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+            ]),
+            { headers: { "content-type": "image/webp" } }
+          )
+      )
+    );
+    const { draw } = setup({
+      article: makeArticle({
+        images: [{ alt: "Anillo", height: 800, id: 1, url, width: 800 }],
+      }),
+    });
+
+    const { photo } = await draw();
+
+    expect(photo.style.backgroundImage).toBe(
+      'url("data:image/webp;base64,UklGRgQAAABXRUJQ")'
+    );
   });
 
   test.each([

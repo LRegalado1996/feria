@@ -477,7 +477,7 @@ export default async function DesignPage({ params }: DesignPageProps) {
         <h2 className={`${SECTION_CLASS} ${SECTION_TITLE_CLASS}`}>
           {sections.howToBuy}
         </h2>
-        <StoreHowToBuy copy={storefront} headingLevel="h3" href="#cards" />
+        <StoreHowToBuy copy={storefront} headingLevel="h3" />
       </section>
 
       <section

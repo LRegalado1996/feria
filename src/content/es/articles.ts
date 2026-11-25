@@ -1,6 +1,28 @@
 // The admin's articles (FER-017): the list and the wizard that loads one.
 export const articles = {
   list: {
+    // A row's menu (FER-019): hide it from the store or show it again, or
+    // delete it after asking.
+    actions: {
+      delete: "Eliminar",
+      deleteConfirm: "Eliminar",
+      deleteDescription:
+        "Se borra «{title}» con sus fotos. Los pedidos que ya lo incluyen no cambian.",
+      deletePending: "Eliminando…",
+      deleteTitle: "¿Eliminar este artículo?",
+      deleted: "Artículo eliminado.",
+      errors: {
+        delete: "No pudimos eliminarlo. Probá de nuevo.",
+        hide: "No pudimos ocultarlo. Probá de nuevo.",
+        incomplete: "Le falta algo para publicarse: abrilo y completalo.",
+        show: "No pudimos publicarlo. Probá de nuevo.",
+      },
+      hidden: "Artículo oculto: ya no se ve en la tienda.",
+      hide: "Ocultar de la web",
+      menu: "Acciones de «{title}»",
+      show: "Mostrar en la web",
+      shown: "Artículo publicado: ya se ve en la tienda.",
+    },
     availability: {
       available: "Disponible",
       unavailable: "No disponible",
@@ -13,6 +35,7 @@ export const articles = {
       value: "{filter}: {value}",
     },
     columns: {
+      actions: "Acciones",
       article: "Artículo",
       category: "Categoría",
       photo: "Foto",
@@ -168,8 +191,6 @@ export const articles = {
         heading: "Búsqueda y compartir",
         hint: "Se arma solo con el título, la descripción y la foto principal.",
         share: "Así se ve al compartir el enlace",
-        shareNoPhoto:
-          "Por ahora la tarjeta para compartir muestra la foto solo si está guardada en este sitio.",
       },
       spanish: "Español",
       title: "Título",

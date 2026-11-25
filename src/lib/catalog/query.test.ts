@@ -202,6 +202,11 @@ describe("cursorParam and readCatalogCursor", () => {
   test.each([
     ["the store's order", { id: 7, position: 0, sort: "position" }, "0.7"],
     [
+      "the store's order with the day it was dealt for (FER-019)",
+      { day: "2026-11-25", id: 7, position: 1_073_741_839, sort: "position" },
+      "1073741839.7.20261125",
+    ],
+    [
       "a price order",
       { id: 48, priceAmount: 69_000, sort: "price_desc" },
       "69000.48",
@@ -243,8 +248,25 @@ describe("cursorParam and readCatalogCursor", () => {
     ["with an id past the database's integers", "1.2147483648"],
     ["with a key past the database's integers", "2147483648.1"],
     ["a key too long to be one", "1234567890123456.1"],
+    ["with a day too short", "120.5.2026112"],
+    ["with a thirteenth month", "120.5.20261325"],
+    ["with a day 0", "120.5.20261100"],
   ])("reads a cursor %s as the first page", (_case, cursor) => {
     expect(readCatalogCursor({ cursor }, "price_asc")).toBeNull();
+  });
+
+  test("a day belongs to the store's order only: on another sort's link it is the first page", () => {
+    expect(
+      readCatalogCursor({ cursor: "120.5.20261125" }, "price_asc")
+    ).toBeNull();
+    expect(readCatalogCursor({ cursor: "120.5.20261125" }, "position")).toEqual(
+      {
+        day: "2026-11-25",
+        id: 5,
+        position: 120,
+        sort: "position",
+      }
+    );
   });
 
   test("reads the highest key and id the database holds", () => {
