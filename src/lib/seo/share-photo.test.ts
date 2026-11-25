@@ -307,6 +307,31 @@ describe("sharePhotoSource", () => {
     );
   });
 
+  test("a refused body that will not be cancelled is still the block at once, its cancel reported, never an unhandled rejection", async () => {
+    const gone = new Error("The body already failed");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          cancel() {
+            throw gone;
+          },
+        }),
+        { status: 503 }
+      )
+    );
+    const url = `https://${HOST}/production/product/${randomUUID()}.webp`;
+
+    await expect(
+      sharePhotoSource(url, { blobStore: BLOB_STORE, origin: ORIGIN })
+    ).resolves.toBeNull();
+    await vi.waitFor(() => {
+      expect(captureExceptionWithScope).toHaveBeenCalledWith(gone, {
+        action: "ShareCard.drop_photo",
+      });
+    });
+    fetchSpy.mockRestore();
+  });
+
   test("waits three seconds by default and takes photos up to 8 MB", () => {
     expect([SHARE_PHOTO_TIMEOUT_MS, SHARE_PHOTO_MAX_BYTES]).toEqual([
       3000,

@@ -40,14 +40,18 @@ const SIGNATURES: Record<string, (bytes: Uint8Array) => boolean> = {
 };
 
 /**
- * Lets the rest of a body go unread, without waiting for the connection to
- * agree: a refused photo is the block at once. Cancelling a stream this
- * code holds (unlocked, or through its own reader) does not reject.
+ * Lets the rest of a body go unread. Nobody waits for it: a refused photo is
+ * the block at once. A body that already failed may refuse to be cancelled;
+ * that is caught here, reported, and never left an unhandled rejection.
  */
-function dropBody(
+async function dropBody(
   body: ReadableStream | ReadableStreamDefaultReader | null | undefined
-): void {
-  void body?.cancel();
+): Promise<void> {
+  try {
+    await body?.cancel();
+  } catch (error) {
+    captureExceptionWithScope(error, { action: "ShareCard.drop_photo" });
+  }
 }
 
 /**
@@ -58,7 +62,7 @@ async function readCapped(response: Response): Promise<Uint8Array> {
   const declared = Number(response.headers.get("content-length"));
 
   if (declared > SHARE_PHOTO_MAX_BYTES) {
-    dropBody(response.body);
+    void dropBody(response.body);
     throw new Error("The photo is larger than a share card takes");
   }
 
@@ -76,7 +80,7 @@ async function readCapped(response: Response): Promise<Uint8Array> {
     size += chunk.value.byteLength;
 
     if (size > SHARE_PHOTO_MAX_BYTES) {
-      dropBody(reader);
+      void dropBody(reader);
       throw new Error("The photo is larger than a share card takes");
     }
 
@@ -102,7 +106,7 @@ async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   });
 
   if (!response.ok) {
-    dropBody(response.body);
+    void dropBody(response.body);
     throw new Error(`The photo's server answered ${response.status}`);
   }
 
@@ -110,7 +114,7 @@ async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   const looksLike = type === undefined ? undefined : SIGNATURES[type];
 
   if (looksLike === undefined) {
-    dropBody(response.body);
+    void dropBody(response.body);
     throw new Error(
       "The photo's server answered something that is not a photo"
     );
