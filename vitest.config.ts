@@ -8,7 +8,11 @@ const alias = { "@": path.resolve(import.meta.dirname, "./src") };
 // Plain TypeScript tests run in Node and TSX tests in happy-dom. An exception
 // is listed here by path (relative to the repo root), so a test cannot silently
 // pay for DOM emulation it does not need, or lose the DOM it does.
-const DOM_DEPENDENT_TYPESCRIPT_TESTS: string[] = [];
+const DOM_DEPENDENT_TYPESCRIPT_TESTS: string[] = [
+  // The page's load event, its ready state and idle callbacks.
+  "src/lib/utils/page-idle.test.ts",
+  "src/lib/sentry-replay.test.ts",
+];
 const NODE_SAFE_TSX_TESTS: string[] = [];
 
 // Integration tests need Postgres: they run from vitest.integration.config.ts.

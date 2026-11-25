@@ -13,6 +13,11 @@ import { StoreGallery, type StoreGalleryImage } from "./store-gallery";
 
 vi.mock("embla-carousel-react", () => ({ default: vi.fn() }));
 
+// When the page is idle has its own tests: here each test says whether it is.
+const { usePageIdle } = vi.hoisted(() => ({ usePageIdle: vi.fn(() => true) }));
+
+vi.mock("@/lib/hooks/ui/use-page-idle", () => ({ usePageIdle }));
+
 function makeImages(count: number): StoreGalleryImage[] {
   return Array.from({ length: count }, (_, index) => ({
     alt: `Anillo solitario, foto ${index + 1}`,
@@ -25,17 +30,21 @@ function makeImages(count: number): StoreGalleryImage[] {
 
 function setup({
   count = 3,
+  idle = true,
   locale = "es",
   loop = true,
   snaps = count,
 }: {
   count?: number;
+  /** Whether the page has had its idle moment. */
+  idle?: boolean;
   locale?: Locale;
   /** Whether Embla could go round: it gives up when the photos are few. */
   loop?: boolean;
   snaps?: number;
 } = {}) {
   stubReducedMotion(false);
+  usePageIdle.mockReturnValue(idle);
   const embla = createFakeEmbla({ loop, snaps });
   vi.mocked(useEmblaCarousel).mockReturnValue(embla.hook);
   renderWithI18n(
@@ -125,6 +134,32 @@ describe("StoreGallery", () => {
       ["lazy", null],
     ]);
   });
+
+  test.each([
+    [false, ["Anillo solitario, foto 1", "Anillo solitario, foto 2"]],
+    [
+      true,
+      [
+        "Anillo solitario, foto 1",
+        "Anillo solitario, foto 2",
+        "Anillo solitario, foto 3",
+        "Anillo solitario, foto 4",
+      ],
+    ],
+  ])(
+    "with the page idle %s, holds the photos past the second on their grey tiles until then",
+    (idle, shown) => {
+      setup({ count: 4, idle });
+
+      expect(
+        screen.getAllByRole("img").map((photo) => photo.getAttribute("alt"))
+      ).toEqual(shown);
+      // Every photo keeps its place in the row, on its tile.
+      expect(
+        document.querySelectorAll('[data-slot="store-gallery"] .aspect-square')
+      ).toHaveLength(4);
+    }
+  );
 
   test("where Embla could not go round, its round arrow shows the next photo, then leads back to the first", async () => {
     const { arrow, embla, status, user } = setup({ loop: false });

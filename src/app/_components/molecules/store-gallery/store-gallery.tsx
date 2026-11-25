@@ -13,6 +13,7 @@ import {
   useCarousel,
 } from "@/app/_components/molecules/carousel";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { usePageIdle } from "@/lib/hooks/ui";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { cn } from "@/lib/utils";
 
@@ -148,15 +149,24 @@ const GALLERY_SIZES = {
 } as const;
 
 /**
+ * The photos in the server's HTML: the one in view and the next, which
+ * peeks in. The rest join once the page is idle (FER-024): fetched with the
+ * first, they competed with it on a phone.
+ */
+const PHOTOS_AT_ONCE = 2;
+
+/**
  * An article's photos (FER-024, FER-039, FER-045): large, on the grey
  * tile, in a carousel that goes round, which a finger or a mouse drags, a
  * trackpad swipes, the arrow keys step through and the round arrow pages;
  * the photo in view opens full screen, where the phone's own pinch zooms. The first photo loads first;
- * every photo is in the server's HTML, so it is read without the script.
+ * the server's HTML holds the first two (`PHOTOS_AT_ONCE`), and the rest
+ * join once the page is idle, each on its grey tile until then.
  */
 function StoreGallery({ className, images, title }: StoreGalleryProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
+  const pageIdle = usePageIdle();
 
   if (images.length === 0) {
     return (
@@ -201,20 +211,22 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
             {/* Square on a phone; on a computer as tall as most screens
                 hold beside the article's name and price. */}
             <div className="relative aspect-square bg-store-surface md:aspect-auto md:h-160">
-              <Image
-                alt={image.alt}
-                className="object-cover"
-                // The first photo is what the visitor came for: fetched at
-                // once and ahead of the rest (`priority` is deprecated since
-                // Next 16); the others wait until they near the view.
-                fetchPriority={position === 0 ? "high" : undefined}
-                fill
-                loading={position === 0 ? "eager" : "lazy"}
-                sizes={
-                  images.length > 1 ? GALLERY_SIZES.row : GALLERY_SIZES.one
-                }
-                src={image.url}
-              />
+              {position < PHOTOS_AT_ONCE || pageIdle ? (
+                <Image
+                  alt={image.alt}
+                  className="object-cover"
+                  // The first photo is what the visitor came for: fetched at
+                  // once and ahead of the rest (`priority` is deprecated since
+                  // Next 16); the others wait until they near the view.
+                  fetchPriority={position === 0 ? "high" : undefined}
+                  fill
+                  loading={position === 0 ? "eager" : "lazy"}
+                  sizes={
+                    images.length > 1 ? GALLERY_SIZES.row : GALLERY_SIZES.one
+                  }
+                  src={image.url}
+                />
+              ) : null}
             </div>
           </CarouselItem>
         ))}
