@@ -247,28 +247,29 @@ describe("database client", () => {
       "connect",
       "error",
     ]);
-    // An idle client's error reaches its own listener, which reports it,
-    clientListeners.get("error")?.(died);
-
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      JSON.stringify({
-        level: "warn",
-        action: "Db.client_error",
-        name: "Error",
-        message: "server conn crashed?",
-      })
-    );
-    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
+    const line = JSON.stringify({
+      level: "warn",
+      action: "Db.client_error",
+      name: "Error",
+      message: "server conn crashed?",
+    });
+    const breadcrumb = {
       category: "db.pool",
       level: "warning",
       message: "Db.client_error Error: server conn crashed?",
-    });
+    };
 
-    // then the pool's, which adds nothing.
+    // An idle client's error reaches its own listener, which reports it,
+    clientListeners.get("error")?.(died);
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(line);
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith(breadcrumb);
+
+    // then the pool's, which adds nothing: still that one report.
     pool.listeners.error?.(died);
 
-    expect(warn).toHaveBeenCalledOnce();
-    expect(addBreadcrumb).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledExactlyOnceWith(line);
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith(breadcrumb);
   });
 
   test("reports the error of a client that never finished connecting, which has no listener of its own", async () => {
