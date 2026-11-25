@@ -70,13 +70,47 @@ describe("sharePhotoSource", () => {
     expect(requests).toEqual([url]);
   });
 
-  test("a photo on this site is its own address, for the renderer, and nothing is fetched here", async () => {
+  test.each([
+    ["by its path", "/seed/ring-1.jpg"],
+    ["by its whole address", `${ORIGIN}/seed/ring-1.jpg`],
+  ])(
+    "a photo on this site, %s, is fetched here too and comes back as a data address: the renderer never fetches it",
+    async (_how, address) => {
+      const requests: string[] = [];
+      server.use(
+        http.get(`${ORIGIN}/seed/*`, ({ request }) => {
+          requests.push(request.url);
+          return new HttpResponse(PHOTO, {
+            headers: { "content-type": "image/jpeg" },
+          });
+        })
+      );
+
+      await expect(
+        sharePhotoSource(address, { blobStore: BLOB_STORE, origin: ORIGIN })
+      ).resolves.toBe(
+        `data:image/jpeg;base64,${Buffer.from(PHOTO).toString("base64")}`
+      );
+      expect(requests).toEqual([`${ORIGIN}/seed/ring-1.jpg`]);
+    }
+  );
+
+  test("a photo on this site that fails is the block, reported, not the whole card's failure", async () => {
+    const path = `/seed/${randomUUID()}.jpg`;
+    server.use(
+      http.get(
+        `${ORIGIN}/seed/*`,
+        () => new HttpResponse(null, { status: 404 })
+      )
+    );
+
     await expect(
-      sharePhotoSource("/seed/ring-1.jpg", {
-        blobStore: BLOB_STORE,
-        origin: ORIGIN,
-      })
-    ).resolves.toBe(`${ORIGIN}/seed/ring-1.jpg`);
+      sharePhotoSource(path, { blobStore: null, origin: ORIGIN })
+    ).resolves.toBeNull();
+    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: "The photo's server answered 404" }),
+      { action: "ShareCard.fetch_photo" }
+    );
   });
 
   test.each([
@@ -115,7 +149,7 @@ describe("sharePhotoSource", () => {
     [
       "an error status",
       () => new HttpResponse(null, { status: 503 }),
-      "The Blob store answered 503",
+      "The photo's server answered 503",
     ],
     [
       "something that is not a photo",
@@ -123,7 +157,7 @@ describe("sharePhotoSource", () => {
         new HttpResponse("<html></html>", {
           headers: { "content-type": "text/html" },
         }),
-      "The Blob store answered something that is not a photo",
+      "The photo's server answered something that is not a photo",
     ],
     [
       "a photo past the size a card takes",

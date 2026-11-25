@@ -24,7 +24,7 @@ interface SharePhotoOptions {
   timeoutMs?: number;
 }
 
-/** Fetches a photo of the Blob store, refusing anything that is not one. */
+/** Fetches a photo of this site or its Blob store, refusing anything that is not one. */
 async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   const response = await fetch(url, {
     redirect: "error",
@@ -32,13 +32,15 @@ async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`The Blob store answered ${response.status}`);
+    throw new Error(`The photo's server answered ${response.status}`);
   }
 
   const type = response.headers.get("content-type")?.split(";")[0]?.trim();
 
   if (type === undefined || !PHOTO_TYPES.has(type)) {
-    throw new Error("The Blob store answered something that is not a photo");
+    throw new Error(
+      "The photo's server answered something that is not a photo"
+    );
   }
 
   const bytes = await response.arrayBuffer();
@@ -52,30 +54,32 @@ async function fetchPhoto(url: string, timeoutMs: number): Promise<string> {
 
 /**
  * What an article's share card draws for its photo (FER-049): a photo on
- * this site as its own address, which the renderer fetches; a photo of this
- * deployment's own Blob store fetched here, within `timeoutMs`, and handed
- * over as a data address; anything else `null`, the card's plain block.
- * Only an address that passes `isOwnBlobUrl` is ever fetched, so a row
- * naming another host (or the cloud's metadata address) cannot make the
- * server fetch it. A photo that fails, is slow or is not a photo is the
+ * this site (the seed's) or of this deployment's own Blob store, fetched
+ * here within `timeoutMs` and handed over as a data address; anything else
+ * `null`, the card's plain block. The renderer never fetches a photo
+ * itself: it refuses a private address such as `localhost`, and its failure
+ * is the whole card's (a 500) where this one's is the block. Only this
+ * site's addresses and those that pass `isOwnBlobUrl` are ever fetched, so
+ * a row naming another host (or the cloud's metadata address) cannot make
+ * the server fetch it. A photo that fails, is slow or is not a photo is the
  * block too, reported once per server instance rather than per crawler hit.
  */
 export async function sharePhotoSource(
   url: string,
   { blobStore, origin, timeoutMs = SHARE_PHOTO_TIMEOUT_MS }: SharePhotoOptions
 ): Promise<string | null> {
-  const onSite = ownUrl(url, origin);
+  const source =
+    ownUrl(url, origin) ??
+    (blobStore && isOwnBlobUrl(url, { ...blobStore, purpose: "product" })
+      ? url
+      : null);
 
-  if (onSite) {
-    return onSite;
-  }
-
-  if (!blobStore || !isOwnBlobUrl(url, { ...blobStore, purpose: "product" })) {
+  if (source === null) {
     return null;
   }
 
   try {
-    return await fetchPhoto(url, timeoutMs);
+    return await fetchPhoto(source, timeoutMs);
   } catch (error) {
     if (!reported.has(url)) {
       reported.add(url);

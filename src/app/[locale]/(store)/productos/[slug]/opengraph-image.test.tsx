@@ -138,6 +138,16 @@ function setup({
   store?: PublicStore | null;
 } = {}) {
   readStore.mockResolvedValue(store);
+  // This site answers its photos, as the seed's are served.
+  server.use(
+    http.get(
+      "http://localhost:3000/uploads/*",
+      () =>
+        new HttpResponse(new Uint8Array([4, 5, 6]), {
+          headers: { "content-type": "image/jpeg" },
+        })
+    )
+  );
   readPublishedArticle.mockImplementation(
     async (asked, askedSlug) =>
       await Promise.resolve(
@@ -206,13 +216,13 @@ describe("ArticleOpenGraphImage", () => {
     ]);
   });
 
-  test("covers its photo block with the article's first photo, by its absolute address", async () => {
+  test("covers its photo block with the article's first photo on this site, from the bytes it fetched", async () => {
     const { draw } = setup();
 
     const { photo } = await draw();
 
     expect(photo.style.backgroundImage).toBe(
-      'url("http://localhost:3000/uploads/anillo.jpg")'
+      'url("data:image/jpeg;base64,BAUG")'
     );
     expect(photo.style.backgroundSize).toBe("cover");
   });
