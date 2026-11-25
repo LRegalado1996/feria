@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import type { ReactElement } from "react";
+import { isValidElement, type ReactElement } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
@@ -12,35 +12,57 @@ import ArticleOpenGraphImage, {
   generateImageMetadata,
 } from "./opengraph-image";
 
-const { ImageResponse, readBlobStore, readPublishedArticle, readStore } =
-  vi.hoisted(() => ({
-    // Records what it was asked to draw; the drawing itself is next/og's.
-    ImageResponse: vi.fn(
-      class FakeImageResponse {
-        element: ReactElement;
-        options: unknown;
+const {
+  captureExceptionWithScope,
+  cardJpeg,
+  ImageResponse,
+  readBlobStore,
+  readPublishedArticle,
+  readStore,
+} = vi.hoisted(() => ({
+  captureExceptionWithScope:
+    vi.fn<(error: unknown, scope: { action: string }) => string | null>(),
+  // The encoder has its own tests: here it answers bytes of its own.
+  cardJpeg: vi.fn(
+    async (_png: ArrayBuffer, _background: string): Promise<Buffer> =>
+      await Promise.resolve(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7]))
+  ),
+  // Records what it was asked to draw; the drawing itself is next/og's.
+  // Its PNG is four bytes, and it caches as the real one says it does.
+  ImageResponse: vi.fn(
+    class FakeImageResponse {
+      element: ReactElement;
+      headers = new Headers({
+        "cache-control": "public, immutable, no-transform, max-age=31536000",
+      });
+      options: unknown;
 
-        constructor(element: ReactElement, options: unknown) {
-          this.element = element;
-          this.options = options;
-        }
+      constructor(element: ReactElement, options: unknown) {
+        this.element = element;
+        this.options = options;
       }
-    ),
-    readPublishedArticle:
-      vi.fn<
-        (
-          store: PublicStore,
-          slug: string,
-          locale: Locale
-        ) => Promise<PublishedProduct | null>
-      >(),
-    readStore: vi.fn<() => Promise<PublicStore | null>>(),
-    // No Blob store unless a test gives the deployment one.
-    readBlobStore: vi.fn(
-      (): { host: string; namespace: "production"; token: string } | null =>
-        null
-    ),
-  }));
+
+      async arrayBuffer(): Promise<ArrayBuffer> {
+        return await Promise.resolve(
+          new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer
+        );
+      }
+    }
+  ),
+  readPublishedArticle:
+    vi.fn<
+      (
+        store: PublicStore,
+        slug: string,
+        locale: Locale
+      ) => Promise<PublishedProduct | null>
+    >(),
+  readStore: vi.fn<() => Promise<PublicStore | null>>(),
+  // No Blob store unless a test gives the deployment one.
+  readBlobStore: vi.fn(
+    (): { host: string; namespace: "production"; token: string } | null => null
+  ),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/cache/store", () => ({ readStore }));
@@ -49,6 +71,8 @@ vi.mock("next/og", () => ({ ImageResponse }));
 // The photo's cached read runs as a plain function outside a Next render.
 vi.mock("next/cache", () => ({ cacheLife: vi.fn() }));
 vi.mock("@/server/api/utils/blob-store", () => ({ readBlobStore }));
+vi.mock("@/lib/seo/card-jpeg", () => ({ cardJpeg }));
+vi.mock("@/lib/sentry", () => ({ captureExceptionWithScope }));
 
 // Five distinct colors, so each part of the card shows which one it took.
 // The real file pairs the foreground and the contrast on one color.
@@ -188,6 +212,23 @@ function setup({
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** The style of the card's photo block, as the element handed to the renderer has it. */
+function photoBlockStyle(card: unknown): Record<string, unknown> {
+  const children: unknown =
+    isValidElement(card) && isRecord(card.props) ? card.props.children : null;
+  const block: unknown = Array.isArray(children) ? children[0] : children;
+
+  return isValidElement(block) &&
+    isRecord(block.props) &&
+    isRecord(block.props.style)
+    ? block.props.style
+    : {};
+}
+
 describe("ArticleOpenGraphImage", () => {
   test.each([
     ["es", "ANILLO DE PLATA", `US$${NBSP}1.250,50`],
@@ -276,18 +317,68 @@ describe("ArticleOpenGraphImage", () => {
 
       const { photo } = await draw();
 
-      expect(photo.style.backgroundImage).toBe("");
+      // The shorthand alone: no address to draw.
+      expect(photo.style.backgroundImage).not.toContain("url(");
       expect(photo.style.backgroundColor).toBe("#cc0003");
     }
   );
+
+  test("answers the card as a JPEG, light enough for WhatsApp: the renderer's PNG encoded, cached as the renderer says", async () => {
+    const { request } = setup();
+
+    const response = await request();
+
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    expect(response.headers.get("cache-control")).toBe(
+      "public, immutable, no-transform, max-age=31536000"
+    );
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([
+      0xff, 0xd8, 0xff, 0xe0, 7,
+    ]);
+    // Handed the PNG the renderer drew, whole, and the card's background.
+    const [png, background] = cardJpeg.mock.calls[0] ?? [];
+    expect(background).toBe("#bb0002");
+    expect([...new Uint8Array(png ?? new ArrayBuffer(0))]).toEqual([
+      0x89, 0x50, 0x4e, 0x47,
+    ]);
+  });
+
+  test("an encoder that fails still answers the card, as the PNG it was, and is reported", async () => {
+    const failure = new Error("The encoder is not there");
+    cardJpeg.mockRejectedValueOnce(failure);
+    const { request } = setup();
+
+    const response = await request();
+
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([
+      0x89, 0x50, 0x4e, 0x47,
+    ]);
+    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(failure, {
+      action: "ShareCard.encode_jpeg",
+    });
+  });
 
   test("paints the photo block in the contrast color when the article has no photo", async () => {
     const { draw } = setup({ article: makeArticle({ images: [] }) });
 
     const { photo } = await draw();
 
-    expect(photo.style.backgroundImage).toBe("");
+    // The shorthand alone: no address to draw.
+    expect(photo.style.backgroundImage).not.toContain("url(");
     expect(photo.style.backgroundColor).toBe("#cc0003");
+  });
+
+  test("a card with no photo names no background image at all: the renderer fails on one of `undefined`, and the card with it", async () => {
+    const { request } = setup({ article: makeArticle({ images: [] }) });
+
+    await request();
+
+    // The element as the renderer gets it, not as a browser would draw it.
+    const [element] = ImageResponse.mock.calls[0] ?? [];
+    const style = photoBlockStyle(element);
+    expect(Object.keys(style)).not.toContain("backgroundImage");
+    expect(style.background).toBe("#cc0003");
   });
 
   test("paints the theme's background, foreground and contrast, never the store's data", async () => {
@@ -346,14 +437,14 @@ describe("generateImageMetadata", () => {
     ["the build's sample", "", { slug: "__sample__" }],
     ["a language the product does not speak", "", { locale: "fr" }],
   ] as const)(
-    "for %s, describes one 1200×630 PNG card whose alt text is %j",
+    "for %s, describes one 1200×630 JPEG card whose alt text is %j",
     async (_case, alt, options) => {
       const { metadata } = setup(options);
 
       await expect(metadata()).resolves.toEqual([
         {
           alt,
-          contentType: "image/png",
+          contentType: "image/jpeg",
           id: "card",
           size: { height: 630, width: 1200 },
         },
