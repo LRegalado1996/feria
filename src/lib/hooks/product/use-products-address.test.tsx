@@ -155,6 +155,50 @@ describe("useProductsAddress", () => {
     ]);
   });
 
+  test("a change back to the address shown forgets the ones before it: a later back to one of them is an address from elsewhere", () => {
+    const { address, asked, show } = setup();
+
+    act(() => {
+      address().replace(SEARCH("a"));
+      // Cleared at once: back to the address shown, `?q=a` never arrives.
+      address().replace((base) => ({ ...base, q: null }));
+    });
+    // Back (or forward) lands on `?q=a` later.
+    show(makeQuery({ q: "a" }));
+    act(() => {
+      address().push(DRAFTS);
+    });
+
+    expect(asked().at(-1)).toEqual([
+      "push",
+      "/en/admin/products?q=a&status=draft",
+      { scroll: false },
+    ]);
+  });
+
+  test("a search holding U+0000 asks for its address without it, and knows it as its own when it arrives", () => {
+    const { address, asked, show } = setup();
+
+    act(() => {
+      address().replace(SEARCH("aro\u0000"));
+      address().push(DRAFTS);
+    });
+    show(makeQuery({ q: "aro" }));
+    act(() => {
+      address().replace(SEARCH("anillo"));
+    });
+
+    expect(asked()).toEqual([
+      ["replace", "/en/admin/products?q=aro", { scroll: false }],
+      ["push", "/en/admin/products?q=aro&status=draft", { scroll: false }],
+      [
+        "replace",
+        "/en/admin/products?q=anillo&status=draft",
+        { scroll: false },
+      ],
+    ]);
+  });
+
   test("builds the address in the page's language", () => {
     const { address, asked } = setup(makeQuery(), "es");
 

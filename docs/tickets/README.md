@@ -81,6 +81,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-067](FER-067-banner-photo-cleanup-race.md)        | A banner photo is never deleted while a save starts using it | P2       | todo   |
 | [FER-068](FER-068-stale-order-save.md)                 | Saving a page's order from an old screen asks first          | P2       | todo   |
 | [FER-071](FER-071-settings-form-follows-newer-read.md) | The store settings form follows a newer read                 | P2       | todo   |
+| [FER-088](FER-088-list-links-and-pending-search.md)    | The article list's links keep a search still on its way      | P2       | todo   |
 
 ### M4 Storefront and orders
 

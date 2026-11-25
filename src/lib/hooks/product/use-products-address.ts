@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 
 import { type ProductsQuery, productsPath } from "@/lib/admin/products";
 import type { Locale } from "@/lib/i18n/config";
+import { SEARCH_MAX_LENGTH } from "@/lib/schemas/catalog";
+import { readSearchText } from "@/lib/schemas/search";
 
 /** A change to the list's selection, made on the newest one asked for. */
 export type ProductsQueryChange = (base: ProductsQuery) => ProductsQuery;
@@ -56,7 +58,13 @@ export function useProductsAddress(
   });
 
   const go = (change: ProductsQueryChange, method: "push" | "replace") => {
-    const next = change(latest.current);
+    const changed = change(latest.current);
+    // The search as the page will read it back (`readProductsQuery`), so its
+    // address is recognised as this list's own when it arrives.
+    const next = {
+      ...changed,
+      q: readSearchText(changed.q, SEARCH_MAX_LENGTH),
+    };
     const path = productsPath(locale, next);
 
     if (path === productsPath(locale, latest.current)) {
@@ -64,7 +72,11 @@ export function useProductsAddress(
     }
 
     latest.current = next;
-    asked.current = [...asked.current, path];
+    // Back to the address shown: the router keeps only the last navigation,
+    // so the ones asked for before it never arrive, and this one shows
+    // nothing new. None stays to pass for this list's own later (back to
+    // one of them is an address from elsewhere).
+    asked.current = path === seen.current ? [] : [...asked.current, path];
     router[method](path, { scroll: false });
   };
 
