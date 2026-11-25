@@ -248,8 +248,8 @@ describe("StoreContact", () => {
       )
     ).toEqual([
       ["Choose", "Browse the catalog on the site."],
-      ["Add to cart", "Leave your name and your mobile number."],
-      ["We arrange delivery", "Pick it up at the stall or we send it to you."],
+      ["Add to cart", "Leave your name and mobile."],
+      ["We deliver it", "At the stall, or we send it."],
     ]);
     expect(
       within(tile.getByRole("list", { name: "Pay with" }))

@@ -667,8 +667,9 @@ test.describe("The storefront's home", () => {
     }
   });
 
-  // FER-076. How to buy, as a block of the page: words, not a picture.
-  test('the "how to buy" block shows right under the cover in both languages: three steps in order, the ways to pay and the way into the catalog; side by side on a computer, stacked on a 360 px phone', async ({
+  // FER-076, made lighter in FER-086. How to buy, as a block of the page:
+  // words, not a picture.
+  test('the "how to buy" block shows flush under the cover in both languages: four steps in order, paying last, and no link; in a row on a computer, stacked on a 360 px phone', async ({
     db,
     homeEdit,
     page,
@@ -697,41 +698,33 @@ test.describe("The storefront's home", () => {
         })
       );
 
-    // A computer: right under the cover, apart from it by the cards' gutter.
+    // A computer: right under the cover, touching it, with no strip of white.
     await page.setViewportSize({ height: 900, width: 1440 });
     await store.goto();
     await expect(store.getHomeSections().first()).toHaveAttribute(
       "data-kind",
       "how_to_buy"
     );
+    // Its title is for a screen reader: the circles say it to the eye.
     await expect(
-      block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
-    ).toBeVisible();
+      block.getByRole("heading", { level: 2, name: "Cómo comprar" })
+    ).toBeAttached();
     const cover = await store.getHomeCover().boundingBox();
     const box = await block.boundingBox();
     expect(box?.width).toBe(1440);
-    expect((box?.y ?? 0) - ((cover?.y ?? 0) + (cover?.height ?? 0))).toBe(14);
-    // An ordered list, in the order the steps happen.
+    expect((box?.y ?? 0) - ((cover?.y ?? 0) + (cover?.height ?? 0))).toBe(0);
+    // An ordered list, in the order the steps happen, with no figures.
     await expect(steps).toHaveText([
-      "01ElegíMirá el catálogo en la web.",
-      "02Agregá al carritoDejá tu nombre y tu celular.",
-      "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+      "ElegíMirá el catálogo en la web.",
+      "Agregá al carritoDejá tu nombre y tu celular.",
+      "Te lo entregamosEn el puesto o te lo mandamos.",
+      "Pagá como quierasAceptamos todos los medios de pago.",
     ]);
-    await expect(
-      block.getByRole("list", { name: "Pagás con" }).getByRole("listitem")
-    ).toHaveText([
-      "Efectivo",
-      "Tarjetas de crédito y débito",
-      "Mercado Pago",
-      "Transferencia bancaria",
-    ]);
-    await expect(
-      block.getByRole("link", { name: "Ver el catálogo" })
-    ).toHaveAttribute("href", "/productos");
-    // Side by side: one line, three columns.
+    await expect(block.getByRole("link")).toHaveCount(0);
+    // In a row: one line, four columns.
     const wide = await edges();
     expect(new Set(wide.map((edge) => edge.top)).size).toBe(1);
-    expect(new Set(wide.map((edge) => edge.left)).size).toBe(3);
+    expect(new Set(wide.map((edge) => edge.left)).size).toBe(4);
 
     // A 360 px phone: the steps stack and nothing widens the page.
     await page.setViewportSize({ height: 780, width: 360 });
@@ -740,30 +733,26 @@ test.describe("The storefront's home", () => {
     const narrow = await edges();
     expect(new Set(narrow.map((edge) => edge.left)).size).toBe(1);
     // Each lower than the one before it.
-    const [one, two, three] = narrow.map((edge) => edge.top);
+    const [one, two, three, four] = narrow.map((edge) => edge.top);
     expect(two ?? 0).toBeGreaterThan(one ?? 0);
     expect(three ?? 0).toBeGreaterThan(two ?? 0);
+    expect(four ?? 0).toBeGreaterThan(three ?? 0);
     await store.expectNoHorizontalScroll();
 
-    // In English, its English words, leading to the catalog in English.
+    // In English, its English words.
     await store.gotoEnglish();
     await expect(
-      block.getByRole("heading", { level: 2, name: "Buy in 3 steps" })
-    ).toBeVisible();
-    await expect(
-      block.getByRole("list", { name: "Pay with" }).getByRole("listitem")
-    ).toHaveText([
-      "Cash",
-      "Credit and debit cards",
-      "Mercado Pago",
-      "Bank transfer",
+      block.getByRole("heading", { level: 2, name: "How to buy" })
+    ).toBeAttached();
+    await expect(steps).toHaveText([
+      "ChooseBrowse the catalog on the site.",
+      "Add to cartLeave your name and mobile.",
+      "We deliver itAt the stall, or we send it.",
+      "Pay your wayWe take every way to pay.",
     ]);
-    await expect(
-      block.getByRole("link", { name: "See the catalog" })
-    ).toHaveAttribute("href", "/en/productos");
   });
 
-  test('a crawler that runs no script finds the "how to buy" block\'s steps and ways to pay in the HTML', async ({
+  test('a crawler that runs no script finds the "how to buy" block\'s title and its four steps in the HTML', async ({
     baseURL,
     browser,
     db,
@@ -793,19 +782,16 @@ test.describe("The storefront's home", () => {
       const block = page.getByTestId("store-how-to-buy");
 
       await expect(
-        block.getByRole("heading", { level: 2, name: "Comprá en 3 pasos" })
-      ).toBeVisible();
+        block.getByRole("heading", { level: 2, name: "Cómo comprar" })
+      ).toBeAttached();
       await expect(
         block.getByRole("list").first().getByRole("listitem")
       ).toHaveText([
-        "01ElegíMirá el catálogo en la web.",
-        "02Agregá al carritoDejá tu nombre y tu celular.",
-        "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+        "ElegíMirá el catálogo en la web.",
+        "Agregá al carritoDejá tu nombre y tu celular.",
+        "Te lo entregamosEn el puesto o te lo mandamos.",
+        "Pagá como quierasAceptamos todos los medios de pago.",
       ]);
-      await expect(block.getByText("Mercado Pago")).toBeVisible();
-      await expect(
-        block.getByRole("link", { name: "Ver el catálogo" })
-      ).toHaveAttribute("href", "/productos");
     } finally {
       await context.close();
     }

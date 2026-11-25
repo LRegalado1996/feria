@@ -493,7 +493,7 @@ export const admin = {
       // The "how to buy" block in the order's list (FER-076), and what it
       // says under its name: its words are the same on every page.
       howToBuy: "Cómo comprar",
-      howToBuyNote: "Los 3 pasos para comprar y los medios de pago.",
+      howToBuyNote: "Los pasos para comprar, del catálogo al pago.",
       none: "Ninguno todavía.",
       pending: "Guardando…",
       remove: "Quitar: {name}",

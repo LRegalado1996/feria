@@ -161,10 +161,12 @@ export const storefront: Dictionary["storefront"] = {
     featured: "Featured",
   },
   howToBuy: {
-    browse: "See the catalog",
+    // The block's name for a screen reader (FER-086); the contact page
+    // shows `title` over its own steps.
+    label: "How to buy",
     steps: {
       cart: {
-        text: "Leave your name and your mobile number.",
+        text: "Leave your name and mobile.",
         title: "Add to cart",
       },
       choose: {
@@ -172,8 +174,12 @@ export const storefront: Dictionary["storefront"] = {
         title: "Choose",
       },
       delivery: {
-        text: "Pick it up at the stall or we send it to you.",
-        title: "We arrange delivery",
+        text: "At the stall, or we send it.",
+        title: "We deliver it",
+      },
+      pay: {
+        text: "We take every way to pay.",
+        title: "Pay your way",
       },
     },
     title: "Buy in 3 steps",

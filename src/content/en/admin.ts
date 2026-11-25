@@ -483,7 +483,7 @@ export const admin: Dictionary["admin"] = {
       sharedList: "This list is the same on every page.",
       saved: "Order saved.",
       howToBuy: "How to buy",
-      howToBuyNote: "The 3 steps to buy and the ways to pay.",
+      howToBuyNote: "The steps to buy, from the catalog to paying.",
       spotlightRow: "Spotlight: {name}",
       submit: "Save order",
       title: "Page order",

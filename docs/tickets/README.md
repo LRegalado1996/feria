@@ -116,6 +116,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-080](FER-080-contact-page.md)                            | A contact page                                                    | P1       | done        |
 | [FER-081](FER-081-unlisted-parent-in-the-breadcrumb.md)       | An empty category's breadcrumb does not link to an unlisted group | P2       | todo        |
 | [FER-084](FER-084-shipping-and-returns-in-structured-data.md) | Shipping and returns in an article's structured data              | P2       | todo        |
+| [FER-086](FER-086-how-to-buy-lighter.md)                      | A lighter "how to buy" block and smaller cover controls           | P1       | done        |
 
 ### M5 Metrics
 

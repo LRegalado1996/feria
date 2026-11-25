@@ -368,11 +368,11 @@ describe("StorePageSections", () => {
   );
 
   test.each([
-    ["es", "Comprá en 3 pasos", "Ver el catálogo", "/productos"],
-    ["en", "Buy in 3 steps", "See the catalog", "/en/productos"],
+    ["es", "Cómo comprar"],
+    ["en", "How to buy"],
   ] as const)(
-    'in %s, draws "how to buy" under its h2, leading to the catalog in the page\'s language (FER-076)',
-    (locale, title, browse, href) => {
+    'in %s, draws "how to buy" under its h2 (FER-076), with no link: its steps are the whole block (FER-086)',
+    (locale, title) => {
       const { sections } = setup({
         locale,
         sections: [
@@ -385,10 +385,8 @@ describe("StorePageSections", () => {
       expect(block).toHaveAttribute("data-kind", "how_to_buy");
       expect(
         within(required(block)).getByRole("heading", { level: 2, name: title })
-      ).toBeVisible();
-      expect(
-        within(required(block)).getByRole("link", { name: browse })
-      ).toHaveAttribute("href", href);
+      ).toBeInTheDocument();
+      expect(within(required(block)).queryByRole("link")).toBeNull();
     }
   );
 
@@ -397,30 +395,35 @@ describe("StorePageSections", () => {
       "under the cover",
       true,
       [{ key: "how_to_buy", kind: "how_to_buy" }, categorySection()],
-      ["mt-2.5", ""],
+    ],
+    [
+      "under a banner",
+      false,
+      [bannerSection(), { key: "how_to_buy", kind: "how_to_buy" }],
+    ],
+    [
+      "above a banner",
+      false,
+      [{ key: "how_to_buy", kind: "how_to_buy" }, bannerSection()],
     ],
     [
       "above a spotlight",
       false,
       [{ key: "how_to_buy", kind: "how_to_buy" }, spotlightSection()],
-      ["", "mt-2.5"],
     ],
     [
       "under a row",
       false,
       [categorySection(), { key: "how_to_buy", kind: "how_to_buy" }],
-      ["", ""],
     ],
   ] as const)(
-    '"how to buy" %s keeps the gutter a full-width block keeps',
-    (_case, afterBanner, sequence, gutters) => {
+    '"how to buy" %s sits flush, with no gutter of white (FER-086)',
+    (_case, afterBanner, sequence) => {
       const { sections } = setup({ afterBanner, sections: [...sequence] });
 
       expect(
-        sections().map((section) =>
-          section.classList.contains("mt-2.5") ? "mt-2.5" : ""
-        )
-      ).toEqual(gutters);
+        sections().map((section) => section.classList.contains("mt-2.5"))
+      ).toEqual([false, false]);
     }
   );
 
