@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P1
-- **Status:** in progress
+- **Status:** done
 - **Depends on:** FER-017, FER-024
 
 ## Goal
@@ -28,7 +28,7 @@ A link to an article pasted into WhatsApp or Instagram shows the article's own p
 - Unit tests: the host rule on both sides (this store, another Blob store, another host, another deployment's folder, another purpose's folder, no Blob store), each failure reported once over two requests, the size limit at and past it, the timeout; the card's renderer input for a Blob photo is its data address.
 - **Fixed after the first deploy (2026-11-25):** every article's card answered 500 in production. The photo's fetch ran inside the card, a static metadata route, and Cache Components refuses IO no cache holds while prerendering (Sentry FERIA-M); it never showed locally, where `next dev` renders per request. The fetch now goes through a cached read (`readSharePhoto`), and an e2e asks a production build for an article's card and expects a PNG larger than a bare article's.
 - **A lighter card (2026-11-25):** on production WhatsApp showed the title and description but no image for cards of 800 KB, and showed the one of 585 KB (Lucas's tests). The card is now a JPEG of about 60 KB (`cardJpeg`, `sharp` as a direct dependency, approved by Lucas; it was already installed through Next), drawn inside a cached function with its photo. Found on the way: a card without a drawable photo had an empty body, because the renderer fails on `backgroundImage: undefined`; the key is now left out, and the e2e checks that card's weight too.
-- **Left to close it (the first acceptance criterion), after it reaches production:** paste an article's link into WhatsApp on a phone and see its photo on the card (Lucas did it for FER-024 on 2026-11-25: title, description and price showed, the photo was the block). WhatsApp keeps a link's first preview for a while, so check with an article not shared before.
+- **Closed** (Lucas, 2026-11-25). With the light card in production (#99), an article's link pasted into WhatsApp on a phone shows its photo on the card. A photo on any host other than this site or this deployment's Blob store is never fetched (`sharePhotoSource`, tested on both sides).
 
 ## Reporting
 
