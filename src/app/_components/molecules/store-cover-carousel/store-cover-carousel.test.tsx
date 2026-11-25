@@ -379,6 +379,26 @@ describe("StoreCoverCarousel", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
+  test("its controls are a 44 px thumb's target on a phone and 32 px from md up, where a pointer uses them (FER-086)", () => {
+    const { pause } = setup();
+
+    const targets = [
+      ...screen.getAllByRole("button", { name: /^Ver la portada/u }),
+      required(pause()),
+    ];
+    for (const target of targets) {
+      expect(target).toHaveClass("size-11", "md:size-8");
+    }
+    const [dot] = screen
+      .getAllByRole("button", { name: /^Ver la portada/u })
+      .map((button) => button.querySelector('[aria-hidden="true"]'));
+    expect(dot).toHaveClass("size-2.5", "md:size-2");
+    expect(required(pause()).querySelector("svg")).toHaveClass(
+      "size-5",
+      "md:size-4"
+    );
+  });
+
   test("never moves under reduced motion, and offers no pause button", () => {
     const { pause, track } = setup({ reduced: true });
 

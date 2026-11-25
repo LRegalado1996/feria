@@ -373,13 +373,15 @@ test.describe("Home curation", () => {
     const first = home.getByTestId("home-layout-rows-item").first();
     await expect(first).toContainText("Cómo comprar");
     await expect(first).toContainText(
-      "Los 3 pasos para comprar y los medios de pago."
+      "Los pasos para comprar, del catálogo al pago."
     );
     await expect(
       rows.getByText("No hay más bloques para agregar.")
     ).toBeVisible();
     // Drawn in the preview before it is saved.
-    await expect(home.preview().getByText("Comprá en 3 pasos")).toBeAttached();
+    await expect(
+      home.preview().getByRole("region", { name: "Cómo comprar" })
+    ).toBeAttached();
     await home.saveOrder();
 
     await store.goto();
@@ -391,7 +393,7 @@ test.describe("Home curation", () => {
       store
         .getHomeSections()
         .first()
-        .getByRole("region", { name: "Comprá en 3 pasos" })
+        .getByRole("region", { name: "Cómo comprar" })
     ).toBeVisible();
 
     // Taken out and saved, it leaves the home.
@@ -400,7 +402,9 @@ test.describe("Home curation", () => {
       .getByTestId("home-layout-rows")
       .getByRole("button", { name: "Quitar: Cómo comprar" })
       .click();
-    await expect(home.preview().getByText("Comprá en 3 pasos")).toHaveCount(0);
+    await expect(
+      home.preview().getByRole("region", { name: "Cómo comprar" })
+    ).toHaveCount(0);
     await home.saveOrder();
 
     await store.goto();

@@ -215,7 +215,9 @@ function RotatingCover({
       </CarouselContent>
       {/* The title and its link sit at the bottom left: on a phone, whose
           title can take the whole width, the controls go top right; from
-          `md` up, bottom right, across from the title. */}
+          `md` up, bottom right, across from the title, and smaller there
+          (FER-086): a pointer needs no 44 px thumb's target, and 32 px
+          still clears WCAG's 24. */}
       <div
         className="absolute top-3 right-3 flex items-center rounded-full bg-store-contrast p-0.5 md:top-auto md:right-7 md:bottom-7.5"
         data-slot="store-cover-carousel-controls"
@@ -227,7 +229,7 @@ function RotatingCover({
             <button
               aria-current={current ? "true" : undefined}
               aria-label={interpolate(copy.goTo, { current: index + 1 })}
-              className="group/dot inline-flex size-11 items-center justify-center rounded-full focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent"
+              className="group/dot inline-flex size-11 items-center justify-center rounded-full focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-store-accent md:size-8"
               key={banner.id}
               onClick={() => {
                 scrollTo(index);
@@ -237,7 +239,7 @@ function RotatingCover({
               <span
                 aria-hidden="true"
                 className={cn(
-                  "size-2.5 rounded-full border-2 border-store-accent",
+                  "size-2.5 rounded-full border-2 border-store-accent md:size-2 md:border-[1.5px]",
                   current
                     ? "bg-store-accent"
                     : "group-hover/dot:bg-store-accent/40"
@@ -250,6 +252,7 @@ function RotatingCover({
           <StoreButton
             aria-label={copy.pause}
             aria-pressed={paused}
+            className="md:size-8"
             onClick={() => {
               setPaused((value) => !value);
             }}
@@ -257,9 +260,9 @@ function RotatingCover({
             variant="contrast"
           >
             {paused ? (
-              <Play aria-hidden="true" />
+              <Play aria-hidden="true" className="size-5 md:size-4" />
             ) : (
-              <Pause aria-hidden="true" />
+              <Pause aria-hidden="true" className="size-5 md:size-4" />
             )}
           </StoreButton>
         )}

@@ -180,24 +180,21 @@ describe("DesignPage", () => {
     }
   );
 
-  test('shows the "how to buy" block: its title, its three steps and the ways to pay', async () => {
+  test('shows the "how to buy" block: its title for a screen reader and its four steps', async () => {
     await setup();
 
     const block = within(screen.getByTestId("design-how-to-buy"));
 
     expect(
-      block.getByRole("heading", { level: 3, name: "Buy in 3 steps" })
-    ).toBeVisible();
+      block.getByRole("heading", { level: 3, name: "How to buy" })
+    ).toBeInTheDocument();
     expect(
       block.getAllByRole("listitem").map((item) => item.textContent)
     ).toEqual([
-      "01ChooseBrowse the catalog on the site.",
-      "02Add to cartLeave your name and your mobile number.",
-      "03We arrange deliveryPick it up at the stall or we send it to you.",
-      "Cash",
-      "Credit and debit cards",
-      "Mercado Pago",
-      "Bank transfer",
+      "ChooseBrowse the catalog on the site.",
+      "Add to cartLeave your name and mobile.",
+      "We deliver itAt the stall, or we send it.",
+      "Pay your wayWe take every way to pay.",
     ]);
   });
 
