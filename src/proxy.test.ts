@@ -521,7 +521,6 @@ describe("proxy matcher", () => {
     "/seed/ring-1.jpg",
     "/robots.txt",
     "/sitemap.xml",
-    // IndexNow's key file, at the root.
     "/239a2df8583d65e79cf2271b09b4c09c.txt",
     // BotID's script and its checks, which `withBotId` rewrites to Vercel.
     "/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js",

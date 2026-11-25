@@ -4,7 +4,7 @@
 - **Priority:** P0
 - **Status:** done
 - **Depends on:** FER-031
-- **Follow-ups:** FER-082, FER-083
+- **Follow-ups:** FER-082, FER-083, FER-084
 
 ## Goal
 
@@ -39,7 +39,7 @@ The store is live on its own domain and has been checked the way a stranger with
 
 Added on 2026-11-24 with the domain: every search engine and AI assistant should find the store there, once.
 
-- The icons are served at fixed addresses (`/favicon.ico` 48 px, `/icon.png` 96 px, `/apple-icon.png` 180 px), not Next's `icon.tsx`, whose URL carries a hash that changes on every build: Google fetches a favicon on a slow crawl of its own and wants a stable URL, a square whose side is a multiple of 48 px. `/favicon.ico` answered the storefront's HTML before (the proxy rewrote it to `/es/favicon.ico`).
+- The icons are served at fixed addresses (`/favicon.ico` 48 px, `/icon.png` 96 px, `/apple-icon.png` 180 px), not Next's `icon.tsx` at 32 px, whose URL carries a query hashed from the file, new with every edit of it: Google fetches a favicon on a slow crawl of its own and wants a stable URL, a square whose side is a multiple of 48 px. `/favicon.ico` answered the storefront's HTML before (the proxy rewrote it to `/es/favicon.ico`).
 - The home, the catalog without a cover, a store page and the contact page share the brand's card (`og:image`): a page's own `openGraph` replaced the one Next adds by itself.
 - Bing: the site `https://market.lucasregalado.com` added in Bing Webmaster Tools and verified (CNAME in Cloudflare; no code), its sitemap submitted. Bing's index feeds ChatGPT search and Copilot.
 - Google: the domain property `lucasregalado.com` (verified by DNS) covers the subdomain. Submit the sitemap; request indexing by hand of the home and `/contacto` in both languages, once the stable icon is in production. Lucas asks again once the catalog is loaded.
@@ -49,7 +49,8 @@ Added on 2026-11-24 with the domain: every search engine and AI assistant should
 
 - Production already declared the domain on 2026-11-25 (Production's `BETTER_AUTH_URL` changed on 2026-11-24, and PR #87's deploy built with it): canonical, `hreflang`, `og:url`, `robots.txt`, all 318 `<loc>` of `sitemap.xml` and every link of `llms.txt`, checked with `curl` on the home, `/en`, a category and an article. Signing in to the admin works on the domain.
 - `feria-blond.vercel.app` redirects (308) to the same path and query on the domain, from the project's Domains settings (Lucas's yes, 2026-11-25). QA keeps its own address; the code names neither host.
-- Three articles' structured data matches the page: a `Product` with its name, photos, price in UYU and availability.
+- Three articles' structured data matches the page: a `Product` with its name, photos, price in UYU and availability. Google's Rich Results Test on one finds three valid items; the two optional fields it misses (shipping, returns) are [FER-084](FER-084-shipping-and-returns-in-structured-data.md).
+- Bing: site verified by CNAME in Cloudflare, sitemap submitted. Google: sitemap submitted to the `lucasregalado.com` property, read at once, 318 pages found.
 
 ## Reporting
 

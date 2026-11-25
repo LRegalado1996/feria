@@ -24,7 +24,8 @@ Found on 2026-11-25 while checking for FER-032 that Sentry receives production e
 
 ## Acceptance criteria
 
-- No unresolved production issue in Sentry without a note or a ticket.
+- Each issue listed above is investigated: its cause is written in its Sentry note, and it is fixed here or resolved with the reason it needs no fix. A ticket of its own is allowed only for a fix too large for this one, and it names the cause.
+- No unresolved production issue in Sentry without a note.
 
 ## Reporting
 

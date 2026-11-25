@@ -275,7 +275,8 @@ export async function catalogMetadata(
     description,
     openGraph: {
       description: sharedDescription,
-      // Without a cover, the brand's card.
+      // This `openGraph` replaces the layout's, card included: a page
+      // without a cover names the brand's card again.
       images: [
         cover
           ? {

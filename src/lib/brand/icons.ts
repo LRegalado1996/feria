@@ -8,7 +8,8 @@ import { renderLogoImage } from "./logo-image";
 /**
  * The site's icons, each at a fixed address: a search engine fetches the
  * icon on a slow crawl of its own and wants a URL that never changes, where
- * Next's `icon.tsx` convention adds a hash that changes with every build.
+ * Next's `icon.tsx` convention adds a query hashed from the file, so every
+ * edit of it moves the icon to a new URL.
  * Google asks for a square whose side is a multiple of 48 px. The proxy
  * leaves the three paths alone (`src/proxy.ts`).
  */
