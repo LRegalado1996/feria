@@ -12,6 +12,7 @@ import {
 import type { ReactNode } from "react";
 
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
+import { AdminFrame } from "@/app/_components/molecules/admin-frame";
 import { AdminMenu } from "@/app/_components/molecules/admin-menu";
 import { AdminNav } from "@/app/_components/molecules/admin-nav";
 import { LocaleToggle } from "@/app/_components/molecules/locale-toggle";
@@ -53,8 +54,9 @@ export interface AdminShellProps {
  * The admin's chrome (FER-013, FER-040): the full logo, the sections with
  * their icons and the orders' count, and the signed-in login with the
  * language, the theme and sign-out. From `md` up it is a sidebar the height
- * of the window, beside the page on a grey canvas; on a phone the same
- * content opens as a panel from the menu button in the page's top bar
+ * of the window, beside the page on a grey canvas (`molecules/admin-frame`,
+ * with the skip link and the main landmark); on a phone the same content
+ * opens as a panel from the menu button in the page's top bar
  * (`molecules/admin-page`). The same list for every login, since every
  * login is an admin (FER-038). Rendered by each page after it has checked
  * the session: the navigation is never the authorization, the page and the
@@ -78,24 +80,9 @@ function AdminShell({
 
   return (
     <AdminMenu panel={sidebar}>
-      <div
-        className="min-h-dvh bg-sidebar text-sidebar-foreground md:grid md:grid-cols-[16rem_minmax(0,1fr)]"
-        data-slot="admin-shell"
-        data-testid="admin-shell"
-      >
-        <a
-          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2"
-          href="#admin-main"
-        >
-          {dictionary.shell.skipToContent}
-        </a>
-        <header className="sticky top-0 hidden h-dvh border-r border-sidebar-border md:block">
-          {sidebar}
-        </header>
-        <main className="min-w-0" id="admin-main" tabIndex={-1}>
-          {children}
-        </main>
-      </div>
+      <AdminFrame data-testid="admin-shell" sidebar={sidebar}>
+        {children}
+      </AdminFrame>
     </AdminMenu>
   );
 }
