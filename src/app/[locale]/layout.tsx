@@ -7,6 +7,7 @@ import { EnvironmentMarker } from "@/app/_components/molecules/environment-marke
 import { VercelInsights } from "@/app/_components/molecules/vercel-insights";
 import { AppProviders } from "@/app/_components/organisms/app-providers";
 import { getDictionary } from "@/content";
+import { SITE_ICONS } from "@/lib/brand/icons";
 import { BRAND_NAME } from "@/lib/brand/logo";
 import { DEFAULT_LOCALE, isLocale, LOCALES } from "@/lib/i18n/config";
 import { readLocale } from "@/lib/i18n/read-locale";
@@ -44,9 +45,10 @@ export async function generateMetadata({
     ),
     title: metadata.title,
     description: metadata.description,
+    // The tab and home-screen icons, at addresses no build changes.
+    icons: SITE_ICONS,
     // The share card's text. Next adds its image by itself from
-    // `opengraph-image.tsx` beside this file, as it adds the tab and
-    // home-screen icons from `app/icon.tsx` and `app/apple-icon.tsx`.
+    // `opengraph-image.tsx` beside this file.
     openGraph: {
       description: metadata.description,
       siteName: BRAND_NAME,

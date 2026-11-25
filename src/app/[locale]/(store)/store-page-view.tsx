@@ -14,6 +14,7 @@ import { buildAlternates } from "@/lib/i18n/metadata";
 import { localizePath } from "@/lib/i18n/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 import { absoluteUrl } from "@/lib/seo/origin";
+import { defaultShareImage } from "@/lib/seo/share-card";
 import { storeTitle } from "@/lib/seo/store-metadata";
 import { breadcrumbList } from "@/lib/seo/structured-data";
 import { isAdminRequest } from "@/server/better-auth/admin-request";
@@ -100,6 +101,8 @@ export function storePageMetadata({
     description,
     openGraph: {
       description,
+      // A page has no picture of its own to share: the brand's card.
+      images: [defaultShareImage(locale)],
       siteName: store.name,
       title,
       type: "website",
