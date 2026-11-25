@@ -57,6 +57,19 @@ export function isTransientConnectError(error: unknown): error is Error {
   return TRANSIENT_MESSAGES.has(error.message);
 }
 
+/**
+ * How long one attempt to open a connection may take. Neon usually answers
+ * in under a second, even waking a suspended compute; the proxy, which runs
+ * in the region nearest the visitor, pays its distance to the database on
+ * every round trip of the handshake as well. An attempt stuck this long is
+ * dead, and a new one beats waiting on it: short enough that whoever bounds
+ * a read (the storefront switch) still has time for the retry.
+ */
+export const CONNECT_TIMEOUT_MS = 3000;
+
+/** The pool's retry of a connection that failed to open. */
+export const CONNECT_RETRY = { attempts: 3, baseDelayMs: 200 } as const;
+
 export interface ConnectRetryOptions {
   /** Tries in all, the first included. */
   attempts: number;

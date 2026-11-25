@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { db } from "@/server/db";
+import { CONNECT_RETRY, CONNECT_TIMEOUT_MS } from "@/server/db/connect-retry";
 import { createMockDatabase, type MockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -252,6 +253,17 @@ describe("isStorefrontClosed", () => {
       SWITCH_TTL_MS,
       SWITCH_TIMEOUT_MS,
       SWITCH_STATEMENT_TIMEOUT_MS,
-    ]).toEqual([5000, 5000, 4000]);
+    ]).toEqual([5000, 7000, 4000]);
+  });
+
+  test("waits long enough for a connection that needed a second attempt", () => {
+    // A first attempt that hangs to its limit, the longest backoff before
+    // the second, and a second attempt as slow as an attempt may be.
+    const retried =
+      CONNECT_TIMEOUT_MS + CONNECT_RETRY.baseDelayMs + CONNECT_TIMEOUT_MS;
+
+    expect(CONNECT_TIMEOUT_MS).toBe(3000);
+    expect(CONNECT_RETRY).toEqual({ attempts: 3, baseDelayMs: 200 });
+    expect(SWITCH_TIMEOUT_MS).toBeGreaterThan(retried);
   });
 });

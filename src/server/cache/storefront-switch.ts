@@ -15,14 +15,18 @@ export const SWITCH_TTL_MS = 5000;
 
 /**
  * How long a page request waits for the switch before it gives up and
- * treats the store as closed. Long enough for a database waking from idle.
+ * treats the store as closed. It covers a first connection attempt that
+ * hangs to its limit, the pool's backoff, a second attempt and the read
+ * itself: with a wait as short as one attempt, the retry could never save a
+ * read, and a cold instance showed an open store as closed.
  */
-export const SWITCH_TIMEOUT_MS = 5000;
+export const SWITCH_TIMEOUT_MS = 7000;
 
 /**
  * How long Postgres runs the switch's query before it cancels it: under the
  * proxy's wait and the window, so a stalled read hands its connection back
  * before the next window starts another, and a stall cannot fill the pool.
+ * It times the statement alone, not the connection it waits for.
  */
 export const SWITCH_STATEMENT_TIMEOUT_MS = 4000;
 
