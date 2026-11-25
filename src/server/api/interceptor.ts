@@ -1,10 +1,8 @@
 import { ORPCError } from "@orpc/server";
-import { isAPIError } from "better-auth/api";
 
 import { classifyError } from "@/lib/errors";
 import { translatePostgresError } from "@/lib/errors/postgres";
 import { captureExceptionWithScope } from "@/lib/sentry";
-import { createORPCContext } from "@/server/api/orpc";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 
 const UNEXPECTED_MESSAGE = "Something went wrong.";
@@ -73,26 +71,5 @@ export async function interceptErrors<T>({
         procedure,
       },
     });
-  }
-}
-
-/**
- * `createORPCContext` for a handler: it runs before any interceptor, so its
- * failures are captured here. Better Auth's own `APIError` is not: Better Auth
- * logs the cause of its 500s first, and `betterAuthLogger` reports that.
- */
-export async function createObservedContext(
-  options: Parameters<typeof createORPCContext>[0]
-): ReturnType<typeof createORPCContext> {
-  try {
-    return await createORPCContext(options);
-  } catch (error) {
-    if (!isAPIError(error)) {
-      captureExceptionWithScope(error, {
-        action: "Api.create_context",
-        requestId: requestIdOf(options.headers),
-      });
-    }
-    throw error;
   }
 }
