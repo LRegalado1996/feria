@@ -10,6 +10,7 @@ import { StoreArticleMain } from "@/app/_components/molecules/store-article-main
 import { StoreArticlePurchase } from "@/app/_components/molecules/store-article-purchase";
 import type { StoreGalleryImage } from "@/app/_components/molecules/store-gallery";
 import { StoreRelatedRow } from "@/app/_components/molecules/store-related-row";
+import { StoreShareButton } from "@/app/_components/molecules/store-share-button";
 import type { Dictionary } from "@/content";
 import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
@@ -61,6 +62,8 @@ export interface StoreArticleProps {
     others: readonly StoreRelatedArticle[];
     same: readonly StoreRelatedArticle[];
   };
+  /** The article's whole address in the page's language, to share. */
+  shareUrl: string;
   /** The store's chat with the article pre-written, when it has WhatsApp. */
   whatsappHref: string | null;
 }
@@ -69,7 +72,8 @@ export interface StoreArticleProps {
  * An article's page (FER-024, FER-039). On a computer its name, price,
  * description, quantity and "Agregar al carrito" sit in a column on the
  * left while its photos scroll sideways on the right; on a phone the photos
- * come first. Then a question by WhatsApp, a festive moss band, and the
+ * come first; "Compartir" (FER-019) is a small circle on the photos, beside
+ * the magnifier. Then a question by WhatsApp, a festive moss band, and the
  * articles beside it in a row. All of it is in the server's HTML, so a
  * search engine or an assistant reads it without running the script.
  */
@@ -78,6 +82,7 @@ function StoreArticle({
   copy,
   locale,
   related,
+  shareUrl,
   whatsappHref,
 }: StoreArticleProps) {
   const catalog = localizePath(ALL_ARTICLES_PATH, locale);
@@ -113,7 +118,14 @@ function StoreArticle({
       data-slot="store-article"
       data-testid="store-article"
     >
-      <StoreArticleMain article={article} copy={copy} locale={locale}>
+      <StoreArticleMain
+        article={article}
+        copy={copy}
+        galleryActions={
+          <StoreShareButton title={article.title} url={shareUrl} />
+        }
+        locale={locale}
+      >
         {article.isAvailable ? (
           <StoreArticlePurchase
             className="mt-6"

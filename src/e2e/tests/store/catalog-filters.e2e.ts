@@ -3,6 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 import { type DbFixture, expect, test, uniqueTag } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectTitlesInAnyOrder } from "../../fixtures/titles-in-any-order";
 
 // FER-039. The catalog's filter panel: a drawer from the left on a computer,
 // a sheet from the bottom on a phone, worked by keyboard as well as by
@@ -87,7 +88,7 @@ test.describe("Catalog filter panel", () => {
   }) => {
     const { bracelets, tag } = await setup({ db });
     await page.goto(`/${bracelets.slug}?q=${tag}`);
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Pulsera dorada",
       "Pulsera plateada",
     ]);
@@ -123,7 +124,7 @@ test.describe("Catalog filter panel", () => {
     // articles' page, the search kept, and the panel closes with the page it
     // was on.
     await expect(page).toHaveURL(new RegExp(`/productos\\?q=${tag}$`, "u"));
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Collar dorado",
       "Pulsera dorada",
       "Pulsera plateada",

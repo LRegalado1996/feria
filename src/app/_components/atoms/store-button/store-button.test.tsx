@@ -81,12 +81,24 @@ describe("StoreButton", () => {
     ["lg", "min-h-13"],
     ["icon", "size-11"],
     ["icon-lg", "size-13"],
+    ["icon-sm", "size-9"],
   ] as const)("the %s size carries %s", (size, expected) => {
     const { button } = setup({ size });
 
     expect(button).toHaveAttribute("data-size", size);
     expect(button).toHaveClass(expected);
     expect(button).not.toHaveClass("min-h-11");
+  });
+
+  test("the small circle is 36 px to the eye with a 44 px target: a frame 4 px past each side", () => {
+    const { button } = setup({ size: "icon-sm" });
+
+    expect(button).toHaveClass(
+      "relative",
+      "size-9",
+      "before:absolute",
+      "before:-inset-1"
+    );
   });
 
   test("hands its action the click", async () => {

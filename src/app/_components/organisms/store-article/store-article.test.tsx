@@ -93,6 +93,7 @@ function setup({
   },
   whatsappHref = WHATSAPP,
 }: SetupOptions = {}) {
+  const shareUrl = "https://market.example.com/productos/collar-de-perlas";
   window.history.replaceState(null, "", "/elsewhere");
   stubReducedMotion(false);
   vi.mocked(useEmblaCarousel).mockReturnValue(
@@ -108,6 +109,7 @@ function setup({
         copy={DICTIONARIES[locale].storefront}
         locale={locale}
         related={related}
+        shareUrl={shareUrl}
         whatsappHref={whatsappHref}
       />
     </CartPanelContext>,
@@ -251,14 +253,29 @@ describe("StoreArticle", () => {
   });
 
   test.each([
-    ["es", "Compartir"],
-    ["en", "Share"],
+    ["es", "Compartir", WHATSAPP],
+    ["en", "Share", WHATSAPP],
+    ["es", "Compartir", null],
   ] as const)(
-    "in %s, offers no %j button: the article's page is not shared from itself (FER-045)",
-    (locale, name) => {
-      const { page } = setup({ locale });
+    "in %s, offers %j as a small circle on the photos, after the magnifier (FER-019), with or without WhatsApp",
+    (locale, name, whatsappHref) => {
+      const { page } = setup({ locale, whatsappHref });
 
-      expect(within(page).queryByRole("button", { name })).toBeNull();
+      const share = within(page).getByRole("button", { name });
+      const corner = share.closest('[data-slot="store-gallery-actions"]');
+      expect(corner).toBeInstanceOf(HTMLElement);
+      expect(corner?.closest('[data-slot="store-gallery"]')).toBeInstanceOf(
+        HTMLElement
+      );
+      expect(corner?.lastElementChild).toBe(
+        share.closest('[data-slot="store-share-button"]')
+      );
+      // Not among the actions under the purchase any more.
+      expect(
+        within(page)
+          .getAllByRole("button", { name })
+          .filter((button) => button !== share)
+      ).toEqual([]);
     }
   );
 

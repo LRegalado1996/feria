@@ -1,8 +1,10 @@
 import { screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, test } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
+import { required } from "@/test/required";
 
 import { type ProductListItem, ProductListRow } from "./product-list-row";
 
@@ -27,13 +29,19 @@ function makeItem(overrides: Partial<ProductListItem> = {}): ProductListItem {
 }
 
 function setup({
+  actions,
   item = makeItem(),
   locale = "en",
-}: { item?: ReturnType<typeof makeItem>; locale?: Locale } = {}) {
+}: {
+  actions?: ReactNode;
+  item?: ReturnType<typeof makeItem>;
+  locale?: Locale;
+} = {}) {
   renderWithI18n(
     <table>
       <tbody>
         <ProductListRow
+          actions={actions}
           copy={DICTIONARIES[locale].articles.list}
           currency="UYU"
           href="/en/admin/products/12"
@@ -162,5 +170,27 @@ describe("ProductListRow", () => {
       "BorradorNo disponible",
       "hace 2 horas",
     ]);
+  });
+
+  test("puts its menu in a last cell, above the stretched link, and keeps the title clear of it on a card", () => {
+    const { link, row } = setup({
+      actions: <button type="button">Menu</button>,
+    });
+
+    const cells = within(row).getAllByRole("cell");
+    const last = cells.at(-1);
+    expect(last).toHaveAttribute("data-testid", "product-row-actions");
+    expect(within(required(last)).getByRole("button")).toHaveTextContent(
+      "Menu"
+    );
+    expect(last).toHaveClass("absolute", "top-2", "right-2", "xl:static");
+    expect(link.parentElement).toHaveClass("pr-9", "xl:pr-0");
+  });
+
+  test("without a menu, has no cell for one and no room kept for it", () => {
+    const { link, row } = setup();
+
+    expect(within(row).queryByTestId("product-row-actions")).toBeNull();
+    expect(link.parentElement).not.toHaveClass("pr-9");
   });
 });

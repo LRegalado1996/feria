@@ -3,7 +3,7 @@
 import { ArrowLeft, ArrowRight, ImageOff, X, ZoomIn } from "lucide-react";
 import Image from "next/image";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { StoreButton } from "@/app/_components/atoms/store-button";
 import {
@@ -26,11 +26,24 @@ export interface StoreGalleryImage {
 }
 
 export interface StoreGalleryProps {
+  /**
+   * Controls laid on the photos beside the magnifier, in its small circle's
+   * size: the article's "Compartir" (FER-019).
+   */
+  actions?: ReactNode;
   className?: string;
   images: StoreGalleryImage[];
   /** The article's name, for the gallery's own name. */
   title: string;
 }
+
+/**
+ * The top-left corner's small circles: the magnifier, then the controls
+ * the page adds (FER-019). Apart by 8 px, so their 44 px targets never
+ * overlap.
+ */
+const ACTIONS_CLASS =
+  "absolute top-2.5 left-2.5 flex items-start gap-2 md:top-4.5 md:left-4.5";
 
 /**
  * The round arrow, the counter a screen reader hears, and the zoom of the
@@ -39,7 +52,13 @@ export interface StoreGalleryProps {
  * leads on; it leads back to the first photo only where Embla could not
  * loop. One photo has nothing to move: no arrow, no counter.
  */
-function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
+function GalleryControls({
+  actions,
+  images,
+}: {
+  actions: ReactNode;
+  images: StoreGalleryImage[];
+}) {
   const copy = useDictionary().storefront.article;
   const { canScrollNext, scrollNext, scrollTo, selectedIndex, snapCount } =
     useCarousel();
@@ -86,16 +105,18 @@ function GalleryControls({ images }: { images: StoreGalleryImage[] }) {
       ) : null}
       {current ? (
         <DialogPrimitive.Root onOpenChange={setZoomed} open={zoomed}>
-          <DialogPrimitive.Trigger asChild>
-            <StoreButton
-              aria-label={copy.zoom}
-              className="absolute top-2.5 left-2.5 md:top-4.5 md:left-4.5"
-              size="icon"
-              variant="outline"
-            >
-              <ZoomIn aria-hidden="true" />
-            </StoreButton>
-          </DialogPrimitive.Trigger>
+          <div className={ACTIONS_CLASS} data-slot="store-gallery-actions">
+            <DialogPrimitive.Trigger asChild>
+              <StoreButton
+                aria-label={copy.zoom}
+                size="icon-sm"
+                variant="outline"
+              >
+                <ZoomIn aria-hidden="true" />
+              </StoreButton>
+            </DialogPrimitive.Trigger>
+            {actions}
+          </div>
           {/* In place, not in a portal, like every storefront dialog. */}
           <DialogPrimitive.Overlay
             className="fixed inset-0 z-50 bg-store-contrast"
@@ -228,7 +249,12 @@ function GallerySlides({ images }: { images: StoreGalleryImage[] }) {
  * join once the page is idle or the visitor reaches them, each on its grey
  * tile until then.
  */
-function StoreGallery({ className, images, title }: StoreGalleryProps) {
+function StoreGallery({
+  actions,
+  className,
+  images,
+  title,
+}: StoreGalleryProps) {
   const { storefront } = useDictionary();
   const copy = storefront.article;
 
@@ -236,13 +262,19 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
     return (
       <div
         className={cn(
-          "flex aspect-square flex-col items-center justify-center gap-2 bg-store-surface text-sm text-store-muted",
+          "relative flex aspect-square flex-col items-center justify-center gap-2 bg-store-surface text-sm text-store-muted",
           className
         )}
         data-slot="store-gallery"
       >
         <ImageOff aria-hidden="true" className="size-12" />
         {storefront.articleCard.noImage}
+        {/* No photo to zoom, but the page's own controls stay. */}
+        {actions ? (
+          <div className={ACTIONS_CLASS} data-slot="store-gallery-actions">
+            {actions}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -260,7 +292,7 @@ function StoreGallery({ className, images, title }: StoreGalleryProps) {
       opts={{ align: "start", loop: true }}
     >
       <GallerySlides images={images} />
-      <GalleryControls images={images} />
+      <GalleryControls actions={actions} images={images} />
     </Carousel>
   );
 }

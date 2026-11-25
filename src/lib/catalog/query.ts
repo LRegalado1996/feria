@@ -93,8 +93,12 @@ export function readCatalogQuery(
   };
 }
 
-/** A cursor in a link: the sort's key, a dot and the id (`120.48`). */
-const CURSOR_PARAM_PATTERN = /^(\d{1,15})\.(\d{1,10})$/u;
+/**
+ * A cursor in a link: the sort's key, a dot and the id (`120.48`), and for
+ * the store's order the day it was dealt for (`120.48.20261125`).
+ */
+const CURSOR_PARAM_PATTERN =
+  /^(\d{1,15})\.(\d{1,10})(?:\.(\d{4})(\d{2})(\d{2}))?$/u;
 
 /**
  * A cursor as the "Cargar más" link carries it (`?cursor=`, FER-044): the
@@ -107,7 +111,10 @@ export function cursorParam(cursor: ProductCursor): string {
       ? Date.parse(cursor.publishedAt ?? "")
       : (cursor.position ?? cursor.priceAmount);
 
-  return `${key}.${cursor.id}`;
+  const day =
+    cursor.day === undefined ? "" : `.${cursor.day.replaceAll("-", "")}`;
+
+  return `${key}.${cursor.id}${day}`;
 }
 
 /**
@@ -125,9 +132,10 @@ export function readCatalogCursor(
     return null;
   }
 
-  const [, key = "", id = ""] = match;
+  const [, key = "", id = "", year, month, day] = match;
   const column = PRODUCT_SORT_KEYS[sort];
   const parsed = productCursorSchema.safeParse({
+    ...(year === undefined ? {} : { day: `${year}-${month}-${day}` }),
     id,
     sort,
     [column]:

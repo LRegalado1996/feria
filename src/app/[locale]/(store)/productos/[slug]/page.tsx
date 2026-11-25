@@ -186,6 +186,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
           copy={storefront}
           locale={locale}
           related={related}
+          shareUrl={url}
           whatsappHref={whatsappHref}
         />
       </main>

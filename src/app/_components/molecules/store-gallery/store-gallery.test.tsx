@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import useEmblaCarousel from "embla-carousel-react";
+import type { ReactNode } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { Locale } from "@/lib/i18n/config";
@@ -29,12 +30,14 @@ function makeImages(count: number): StoreGalleryImage[] {
 }
 
 function setup({
+  actions,
   count = 3,
   idle = true,
   locale = "es",
   loop = true,
   snaps = count,
 }: {
+  actions?: ReactNode;
   count?: number;
   /** Whether the page has had its idle moment. */
   idle?: boolean;
@@ -49,6 +52,7 @@ function setup({
   vi.mocked(useEmblaCarousel).mockReturnValue(embla.hook);
   renderWithI18n(
     <StoreGallery
+      actions={actions}
       className="custom"
       images={makeImages(count)}
       title="Anillo solitario"
@@ -254,6 +258,43 @@ describe("StoreGallery", () => {
     expect(status()).toBeNull();
   });
 
+  test("the magnifier is a small circle in the top-left corner, the page's own controls after it (FER-019)", () => {
+    setup({ actions: <button type="button">Compartir</button> });
+
+    const corner = required(
+      document.querySelector<HTMLElement>('[data-slot="store-gallery-actions"]')
+    );
+    expect(corner).toHaveClass("absolute", "top-2.5", "left-2.5", "gap-2");
+    expect(
+      within(corner)
+        .getAllByRole("button")
+        .map(
+          (button) => button.getAttribute("aria-label") ?? button.textContent
+        )
+    ).toEqual(["Ampliar la foto", "Compartir"]);
+    expect(
+      within(corner).getByRole("button", {
+        name: "Ampliar la foto",
+      })
+    ).toHaveAttribute("data-size", "icon-sm");
+  });
+
+  test("with no controls of the page's, the corner holds the magnifier alone", () => {
+    setup();
+
+    expect(
+      within(
+        required(
+          document.querySelector<HTMLElement>(
+            '[data-slot="store-gallery-actions"]'
+          )
+        )
+      )
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label"))
+    ).toEqual(["Ampliar la foto"]);
+  });
+
   test("zooms into the photo in view, full screen, and closes back to the gallery", async () => {
     const { arrow, user } = setup();
     await user.click(required(arrow()));
@@ -306,6 +347,31 @@ describe("StoreGallery", () => {
       expect(tile).toHaveClass("aspect-square", "bg-store-surface");
       expect(screen.queryByRole("region")).toBeNull();
       expect(screen.queryByRole("button")).toBeNull();
+      expect(
+        document.querySelector('[data-slot="store-gallery-actions"]')
+      ).toBeNull();
     }
   );
+
+  test("with no photo there is nothing to zoom, but the page's own controls stay in the corner (FER-019)", () => {
+    renderWithI18n(
+      <StoreGallery
+        actions={<button type="button">Compartir</button>}
+        images={[]}
+        title="Anillo"
+      />,
+      { locale: "es" }
+    );
+
+    const corner = required(
+      document.querySelector<HTMLElement>('[data-slot="store-gallery-actions"]')
+    );
+    expect(corner).toHaveClass("absolute", "top-2.5", "left-2.5");
+    expect(corner.parentElement).toHaveClass("relative");
+    expect(
+      within(corner)
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+    ).toEqual(["Compartir"]);
+  });
 });

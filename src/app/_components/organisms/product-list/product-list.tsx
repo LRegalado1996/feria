@@ -1,18 +1,25 @@
 "use client";
 
+import { ORPCError } from "@orpc/client";
 import { Plus, SearchX, Tag } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Skeleton } from "@/app/_components/atoms/skeleton";
 import { AdminPage } from "@/app/_components/molecules/admin-page";
+import { ConfirmDialog } from "@/app/_components/molecules/confirm-dialog";
 import { EmptyState } from "@/app/_components/molecules/empty-state";
 import { Pagination } from "@/app/_components/molecules/pagination";
 import { ProductActiveFilters } from "@/app/_components/molecules/product-active-filters";
 import { ProductFilterPanel } from "@/app/_components/molecules/product-filter-panel";
 import { ProductListHead } from "@/app/_components/molecules/product-list-head";
-import { ProductListRow } from "@/app/_components/molecules/product-list-row";
+import {
+  type ProductListItem,
+  ProductListRow,
+} from "@/app/_components/molecules/product-list-row";
+import { ProductRowMenu } from "@/app/_components/molecules/product-row-menu";
 import { ProductSearch } from "@/app/_components/molecules/product-search";
 import { ProductSortMenu } from "@/app/_components/molecules/product-sort-menu";
 import type { Dictionary } from "@/content";
@@ -27,10 +34,18 @@ import {
   productsPath,
   withoutFilters,
 } from "@/lib/admin/products";
+import { readPublishRefusal } from "@/lib/catalog/publish-gaps";
+import { reportError } from "@/lib/errors/client";
 import { useStoreAttributes } from "@/lib/hooks/attribute";
 import { useStoreCategories } from "@/lib/hooks/category";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
-import { type ProductsPage, useProducts } from "@/lib/hooks/product";
+import {
+  type ProductsPage,
+  useDeleteProduct,
+  useProducts,
+  usePublishProduct,
+  useUnpublishProduct,
+} from "@/lib/hooks/product";
 import { useNow } from "@/lib/hooks/ui";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -189,8 +204,10 @@ function ReadState({
  * a selection survives a reload, a bookmark and back and forward. The page
  * a step of the pages brings is focused (the table, named and described by
  * its range) once it shows. "Nuevo artículo" is the screen's main action
- * (under the thumb on a phone). Inline edits, bulk edits and the store's
- * own order come later in FER-019.
+ * (under the thumb on a phone). Each row's menu hides a published article
+ * from the store (a draft again) or publishes a draft, at once, or deletes
+ * the article after asking; each ends in a toast, and focus goes back to
+ * the menu, or to the table once the row is gone.
  */
 function ProductList({ query, renderedAt }: ProductListProps) {
   const copy = useDictionary().articles.list;
@@ -211,11 +228,129 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   // shows, and no other selection does.
   const paging = useRef<string | null>(null);
   const here = productsPath(locale, query);
+  const actions = useDictionary().articles.list.actions;
+  const publish = usePublishProduct();
+  const unpublish = useUnpublishProduct();
+  const remove = useDeleteProduct();
+  // Each question is its own object: a delete that ends after its question
+  // was closed, or another one opened, leaves the open one alone.
+  const [deleting, setDeleting] = useState<{ item: ProductListItem } | null>(
+    null
+  );
+  // The rows whose visibility is on its way, each on its own.
+  const [switching, setSwitching] = useState<ReadonlySet<number>>(
+    () => new Set()
+  );
+  const opener = useRef<HTMLButtonElement | null>(null);
+  // A menu whose row may leave the list once it is read again.
+  const leaving = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * Where focus goes after a row's action: its menu while the row is
+   * there, the table once it is gone, "Filtros" once the table is too (the
+   * last row deleted or hidden from a filtered list).
+   */
+  const settleFocus = (button: HTMLButtonElement | null) => {
+    if (button?.isConnected) {
+      button.focus();
+    } else if (table.current?.isConnected) {
+      table.current.focus();
+    } else {
+      filtersButton.current?.focus();
+    }
+  };
+
+  /** A menu whose row went with the list's new answer hands focus on. */
+  const settleLeaving = () => {
+    const button = leaving.current;
+
+    if (button === null || button.isConnected) {
+      return;
+    }
+
+    leaving.current = null;
+
+    // Only focus that was lost with the row: a person who moved on keeps it.
+    if (
+      document.activeElement === null ||
+      document.activeElement === document.body
+    ) {
+      settleFocus(null);
+    }
+  };
+
+  const titleOf = (item: ProductListItem) => item.title ?? copy.untitled;
+
+  const hideArticle = async (item: ProductListItem) => {
+    try {
+      await unpublish.mutateAsync({ id: item.id });
+      toast.success(actions.hidden);
+    } catch (error) {
+      reportError(error, { action: "Products.hide_product" });
+      toast.error(actions.errors.hide);
+    }
+  };
+
+  const showArticle = async (item: ProductListItem) => {
+    try {
+      await publish.mutateAsync({ id: item.id });
+      toast.success(actions.shown);
+    } catch (error) {
+      // A draft that still lacks something is refused on purpose: the
+      // wizard says what; here, to open it.
+      if (
+        error instanceof ORPCError &&
+        error.code === "BAD_REQUEST" &&
+        readPublishRefusal(error.message) !== null
+      ) {
+        toast.error(actions.errors.incomplete);
+      } else {
+        reportError(error, { action: "Products.show_product" });
+        toast.error(actions.errors.show);
+      }
+    }
+  };
+
+  const toggleVisibility = async (
+    item: ProductListItem,
+    button: HTMLButtonElement
+  ) => {
+    setSwitching((ids) => new Set([...ids, item.id]));
+    await (item.status === "published" ? hideArticle(item) : showArticle(item));
+    setSwitching((ids) => new Set([...ids].filter((id) => id !== item.id)));
+    // The list is read again by now; it shows on the next render, which
+    // may leave this row out (a status filter, another page).
+    leaving.current = button;
+    settleLeaving();
+  };
+
+  const deleteArticle = async (asked: { item: ProductListItem }) => {
+    try {
+      await remove.mutateAsync({ id: asked.item.id });
+      toast.success(actions.deleted);
+    } catch (error) {
+      reportError(error, { action: "Products.delete_product" });
+      toast.error(actions.errors.delete);
+    }
+
+    setDeleting((open) => (open === asked ? null : open));
+  };
+
+  const focusBack = (event: Event) => {
+    event.preventDefault();
+    settleFocus(opener.current);
+  };
   // An earlier selection's answer, shown while this one's is on its way
   // (`keepPreviousData`): its rows stay, marked busy, but its count, its
   // empty state and its pages are not this selection's to show.
   const settled = products.isPlaceholderData ? undefined : page;
   const shownPage = settled?.page ?? null;
+
+  // After each render, a row that left with the list's new answer took its
+  // menu: focus moves on (a ref read, nothing more, until one did).
+  useEffect(() => {
+    settleLeaving();
+  });
 
   useEffect(() => {
     if (shownPage === null || paging.current === null) {
@@ -329,6 +464,20 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               >
                 {page.items.map((item) => (
                   <ProductListRow
+                    actions={
+                      <ProductRowMenu
+                        onDelete={(button) => {
+                          opener.current = button;
+                          setDeleting({ item });
+                        }}
+                        onToggleVisibility={(button) => {
+                          void toggleVisibility(item, button);
+                        }}
+                        published={item.status === "published"}
+                        switching={switching.has(item.id)}
+                        title={titleOf(item)}
+                      />
+                    }
                     copy={copy}
                     currency={page.currencyCode}
                     href={productPath(item.id, locale)}
@@ -375,6 +524,27 @@ function ProductList({ query, renderedAt }: ProductListProps) {
           ) : null}
         </div>
       </AdminPage>
+      <ConfirmDialog
+        confirmLabel={actions.deleteConfirm}
+        description={interpolate(actions.deleteDescription, {
+          title: deleting ? titleOf(deleting.item) : "",
+        })}
+        isPending={remove.isPending}
+        onCloseAutoFocus={focusBack}
+        onConfirm={() => {
+          if (deleting) {
+            void deleteArticle(deleting);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleting(null);
+          }
+        }}
+        open={deleting !== null}
+        pendingLabel={actions.deletePending}
+        title={actions.deleteTitle}
+      />
     </section>
   );
 }

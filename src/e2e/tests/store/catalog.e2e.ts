@@ -11,6 +11,7 @@ import {
 } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectTitlesInAnyOrder } from "../../fixtures/titles-in-any-order";
 import { StorePage } from "../../page-objects/store.page";
 
 // FER-023. Each test seeds a catalog of its own in the one store every spec
@@ -162,7 +163,7 @@ test.describe("Catalog", () => {
   }) => {
     const { bracelets, color, necklaces, tag } = await setup({ db });
     await page.goto(`/${bracelets.slug}`);
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Pulsera dorada",
       "Pulsera violeta",
     ]);
@@ -170,7 +171,10 @@ test.describe("Catalog", () => {
 
     await panel.getByRole("link", { name: `Collares ${tag}` }).click();
     await expect(page).toHaveURL(new RegExp(`/${necklaces.slug}$`, "u"));
-    await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
+    await expectTitlesInAnyOrder(titles(page), [
+      "Collar dorado",
+      "Collar violeta",
+    ]);
     // A category is a page of its own (FER-043): its panel opens fresh, the
     // category marked in it, and stays open while a filter is chosen.
     const again = await openFilters(page);
@@ -222,7 +226,7 @@ test.describe("Catalog", () => {
       `/productos?q=${tag}&fbclid=IwAR_X&utm_source=wa&${color}=fucsia&talle=m`
     );
 
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Collar dorado",
       "Collar violeta",
       "Pulsera dorada",
@@ -240,7 +244,7 @@ test.describe("Catalog", () => {
   }) => {
     const { tag } = await setup({ db });
     await page.goto(`/productos?q=${tag}`);
-    await expect(titles(page)).toHaveText([
+    await expectTitlesInAnyOrder(titles(page), [
       "Collar dorado",
       "Collar violeta",
       "Pulsera dorada",
@@ -320,7 +324,7 @@ test.describe("Catalog", () => {
     ).toBeFocused();
   });
 
-  test("the default order is the store's own: nothing chosen, articles in the order they were added", async ({
+  test("the default order is the store's of the day (FER-019): nothing chosen, every article once, the same again after another sort", async ({
     db,
     page,
   }) => {
@@ -347,7 +351,13 @@ test.describe("Catalog", () => {
 
     await page.goto(`/${shelf.slug}`);
 
-    await expect(titles(page)).toHaveText(["Primero", "Segundo", "Tercero"]);
+    // Dealt for the day, not by when they were added or their price: only
+    // the set is known here (the order itself: catalog.integration.test.ts).
+    const dealt = await expectTitlesInAnyOrder(titles(page), [
+      "Primero",
+      "Segundo",
+      "Tercero",
+    ]);
     const menu = page.getByRole("menu");
     await clickUntilVisible(
       page.getByRole("button", { exact: true, name: "Ordenar por" }),
@@ -370,7 +380,7 @@ test.describe("Catalog", () => {
     // Back to the store's own order: its link is the bare address.
     await menu.getByRole("menuitem", { name: "Destacados" }).click();
     await expect(page).toHaveURL(new RegExp(`/${shelf.slug}$`, "u"));
-    await expect(titles(page)).toHaveText(["Primero", "Segundo", "Tercero"]);
+    await expect(titles(page)).toHaveText(dealt);
   });
 
   test("the filter button says how many filter values are chosen, and no pills list them", async ({
@@ -392,7 +402,10 @@ test.describe("Catalog", () => {
     await expect(
       page.getByRole("link", { name: new RegExp(`Dorado ${tag}`, "u") })
     ).toHaveCount(0);
-    await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
+    await expectTitlesInAnyOrder(titles(page), [
+      "Collar dorado",
+      "Collar violeta",
+    ]);
   });
 
   test("loads the next pages by itself near the end of the list, says so, and leaves the footer in reach once it ends", async ({
@@ -476,16 +489,22 @@ test.describe("Catalog", () => {
       // page's own rule.
       await page.goto(`/varios-${tag}`);
       await expect(titles(page)).toHaveCount(24);
-      await expect(titles(page).first()).toHaveText("Extra 0");
+      const firstPage = await titles(page).allTextContents();
       await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
 
       await page.getByRole("link", { name: "Cargar más" }).click();
 
-      // The page after the first: the last one, in the store's order.
+      // The page after the first: the one article it left, in the store's
+      // order of the day the list began on, which the link carries.
       await expect(page).toHaveURL(
-        new RegExp(`/varios-${tag}\\?cursor=\\d+\\.\\d+$`, "u")
+        new RegExp(`/varios-${tag}\\?cursor=\\d+\\.\\d+\\.\\d{8}$`, "u")
       );
-      await expect(titles(page)).toHaveText(["Extra 24"]);
+      await expect(titles(page)).toHaveCount(1);
+      const [last] = await titles(page).allTextContents();
+      // The two pages together: all 25, none twice.
+      expect(new Set([...firstPage, last])).toEqual(
+        new Set(Array.from({ length: 25 }, (_, at) => `Extra ${String(at)}`))
+      );
       await expect(page.getByRole("link", { name: "Cargar más" })).toHaveCount(
         0
       );
@@ -584,7 +603,10 @@ test.describe("Catalog", () => {
     const { necklaces, tag } = await setup({ db });
 
     await page.goto(`/${necklaces.slug}`);
-    await expect(titles(page)).toHaveText(["Collar dorado", "Collar violeta"]);
+    await expectTitlesInAnyOrder(titles(page), [
+      "Collar dorado",
+      "Collar violeta",
+    ]);
 
     const description = `Comprá Collares ${tag} en ${STORE_SETTINGS.name}. Mirá los precios y hacé tu pedido online.`;
     // Still the page's description for search engines and share cards.

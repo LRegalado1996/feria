@@ -10,6 +10,10 @@ export const storefront: Dictionary["storefront"] = {
       "Added {added}: with them you have {max}, the most an order takes.",
     addToCart: "Add to cart",
     askWhatsapp: "Ask on WhatsApp",
+    share: "Share",
+    shareCopied: "Link copied: paste it anywhere.",
+    shareFailed:
+      "We couldn't copy the link. Copy the address from the browser's bar.",
     askWhatsappText: "Hi! I'm writing about “{title}”: {url}",
     breadcrumb: "Breadcrumb",
     catalog: "Catalog",

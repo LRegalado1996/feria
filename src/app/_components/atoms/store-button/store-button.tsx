@@ -36,6 +36,10 @@ const storeButtonVariants = cva(
         lg: "min-h-13 px-7 text-sm [&_svg:not([class*='size-'])]:size-5",
         icon: "size-11 [&_svg:not([class*='size-'])]:size-5",
         "icon-lg": "size-13 [&_svg:not([class*='size-'])]:size-6",
+        // A 36 px circle for controls laid over a photo (FER-019), whose
+        // invisible frame keeps a 44 px target for a thumb.
+        "icon-sm":
+          "relative size-9 before:absolute before:-inset-1 before:content-[''] [&_svg:not([class*='size-'])]:size-4",
       },
     },
     defaultVariants: { size: "md", variant: "primary" },

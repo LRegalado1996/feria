@@ -37,6 +37,8 @@ export interface StoreArticleMainProps {
   children?: ReactNode;
   className?: string;
   copy: Dictionary["storefront"];
+  /** Controls laid on the photos beside the magnifier: "Compartir". */
+  galleryActions?: ReactNode;
   locale: Locale;
 }
 
@@ -72,6 +74,7 @@ function StoreArticleMain({
   children,
   className,
   copy,
+  galleryActions,
   locale,
 }: StoreArticleMainProps) {
   const catalog = localizePath(ALL_ARTICLES_PATH, locale);
@@ -90,6 +93,7 @@ function StoreArticleMain({
       data-slot="store-article-main"
     >
       <StoreGallery
+        actions={galleryActions}
         className="lg:order-last"
         images={article.images}
         title={article.title}

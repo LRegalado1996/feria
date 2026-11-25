@@ -30,9 +30,11 @@ import {
   type ProductCursor,
   type ProductSort,
 } from "@/lib/schemas/catalog";
+import { FEATURED_MAX } from "@/lib/schemas/page";
 import type { Currency } from "@/lib/utils/format";
 import type { DatabaseClient } from "@/server/db";
 import {
+  featuredProduct,
   category,
   product,
   productAttributeValue,
@@ -339,14 +341,38 @@ export function carriesOneOf(valueIds: number[]): SQL {
 }
 
 /**
+ * The store's own order (FER-019, Lucas's choice on 2026-11-25), the
+ * catalog's default and every category row's: the home's "Destacados"
+ * first, in their order, then every other article in an order shuffled once
+ * per business day (`day`, `businessDay()`), the same for every visitor
+ * that day; a cursor carries the day it was dealt for, so a list goes on in
+ * its own day's order past midnight and never repeats or skips one. A rank
+ * per article: a featured one's place (0 up to `FEATURED_MAX` - 1), any
+ * other `FEATURED_MAX` plus a hash of its id and the day (up to 2³⁰), so a
+ * cursor's key stays a non-negative int4. The id breaks a tie.
+ */
+export function storeOrderRank(day: string): SQL<number> {
+  // Its store's place for it: one row at most (`storeId`, `productId` is unique).
+  const featuredPlace = sql`(select ${featuredProduct.position} from ${featuredProduct} where ${featuredProduct.storeId} = ${product.storeId} and ${featuredProduct.productId} = ${product.id})`;
+  const shuffled = sql`${FEATURED_MAX}::int + (hashtext(${product.id}::text || ':' || ${day}::text) & 1073741823)`;
+
+  return sql<number>`coalesce(${featuredPlace}, ${shuffled})`;
+}
+
+/**
  * The rows after `cursor` in `sort`'s order. A cursor carries the sort that
  * made it and that sort's key; one from another sort is refused, not
  * misread (both price orders share a key, read the other way round).
  */
-function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
+function afterCursor(
+  cursor: ProductCursor,
+  sort: ProductSort,
+  day: string
+): SQL {
   if (cursor.sort === sort) {
+    // The store's order: the cursor's `position` carries the rank.
     if (sort === "position" && cursor.position !== undefined) {
-      return sql`(${product.position}, ${product.id}) > (${cursor.position}::int, ${cursor.id}::int)`;
+      return sql`(${storeOrderRank(day)}, ${product.id}) > (${cursor.position}::int, ${cursor.id}::int)`;
     }
 
     if (sort === "newest" && cursor.publishedAt !== undefined) {
@@ -369,9 +395,9 @@ function afterCursor(cursor: ProductCursor, sort: ProductSort): SQL {
 }
 
 /** `sort`'s order, ending in the id so a page never repeats or skips a row. */
-function orderOf(sort: ProductSort) {
+function orderOf(sort: ProductSort, day: string) {
   if (sort === "position") {
-    return [asc(product.position), asc(product.id)];
+    return [asc(storeOrderRank(day)), asc(product.id)];
   }
 
   if (sort === "price_asc") {
@@ -499,8 +525,8 @@ export async function listCartProducts(
 
 /**
  * One page of a store's published articles, in the store's own order (the
- * default, FER-044), newest first or by price, narrowed by category, search
- * and filters. Keyset pagination on the sort's key and the id: a row
+ * default: `storeOrderRank`, FER-019), newest first or by price, narrowed by
+ * category, search and filters. Keyset pagination on the sort's key and the id: a row
  * inserted while the visitor scrolls never shifts the next page.
  */
 export async function listPublishedProducts(
@@ -509,6 +535,7 @@ export async function listPublishedProducts(
     category: categorySlug,
     currencyCode,
     cursor,
+    day,
     limit,
     locale,
     q,
@@ -518,15 +545,22 @@ export async function listPublishedProducts(
   }: StoreScope &
     Omit<ListProductsValues, "filters" | "sort"> & {
       currencyCode: Currency;
+      /**
+       * Today's business day (`businessDay()`): the store's order is dealt
+       * for it, unless the cursor carries the day its list began on.
+       */
+      day: string;
       sort?: ProductSort;
       /** The filters' value ids, one group per filter (`resolveCatalogFilters`). */
       valueGroups?: number[][];
     }
 ) {
+  // A list goes on in the order of the day it began on.
+  const orderDay = cursor?.day ?? day;
   const page = await db
     .select({
       id: product.id,
-      position: product.position,
+      position: storeOrderRank(orderDay),
       priceAmount: product.priceAmount,
       publishedAt: product.publishedAt,
     })
@@ -542,10 +576,10 @@ export async function listPublishedProducts(
         categorySlug === undefined ? undefined : inCategory(categorySlug),
         q === undefined ? undefined : matchesSearch(q, locale),
         ...valueGroups.map((group) => carriesOneOf(group)),
-        cursor === undefined ? undefined : afterCursor(cursor, sort)
+        cursor === undefined ? undefined : afterCursor(cursor, sort, orderDay)
       )
     )
-    .orderBy(...orderOf(sort))
+    .orderBy(...orderOf(sort, orderDay))
     // One row past the page tells whether another page follows.
     .limit(limit + 1);
 
@@ -559,7 +593,7 @@ export async function listPublishedProducts(
 
   return {
     items,
-    nextCursor: page.length > limit ? cursorAt(last, sort) : null,
+    nextCursor: page.length > limit ? cursorAt(last, sort, orderDay) : null,
   };
 }
 
@@ -573,14 +607,15 @@ function cursorAt(
         publishedAt: Date | null;
       }
     | undefined,
-  sort: ProductSort
+  sort: ProductSort,
+  day: string
 ): ProductCursor | null {
   if (!row) {
     return null;
   }
 
   if (sort === "position") {
-    return { id: row.id, position: row.position, sort };
+    return { day, id: row.id, position: row.position, sort };
   }
 
   if (sort === "newest") {

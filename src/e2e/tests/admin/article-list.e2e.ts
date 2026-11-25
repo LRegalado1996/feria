@@ -1,4 +1,13 @@
-import { type DbFixture, expect, test, uniqueTag } from "../../fixtures";
+import {
+  type DbFixture,
+  expect,
+  IGNORE_HTTPS_ERRORS,
+  requireBaseURL,
+  test,
+  uniqueTag,
+} from "../../fixtures";
+import { clickUntilVisible } from "../../fixtures/click-until-visible";
+import { completeRpcAction } from "../../fixtures/complete-rpc-action";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
 import { AdminProductsPage } from "../../page-objects/admin-products.page";
 
@@ -379,5 +388,128 @@ test.describe("the article list on a phone", () => {
       () => document.documentElement.scrollWidth - window.innerWidth
     );
     expect(sideways).toBe(0);
+  });
+
+  // FER-019. A row's menu: hide an article from the store at once, show it
+  // again, or delete it after asking.
+  test("a row's menu hides a published article from the store at once and shows it again; a draft that lacks something is not shown; deleting asks first", async ({
+    baseURL,
+    browser,
+    db,
+    page,
+  }) => {
+    const tag = uniqueTag();
+    const shelf = await db.seed.createCategory({
+      nameEs: `Vidriera ${tag}`,
+      slug: `vidriera-${tag}`,
+    });
+    const shown = await db.seed.createArticle({
+      categoryId: shelf.id,
+      priceAmount: 120_000,
+      title: `Pulsera ${tag}`,
+    });
+    const unready = await db.seed.createArticle({
+      categoryId: shelf.id,
+      title: `Sin precio ${tag}`,
+    });
+    const list = new AdminProductsPage(page);
+    await list.goto(`?q=${tag}`);
+    await list.expectTitles([`Sin precio ${tag}`, `Pulsera ${tag}`]);
+    const rowOf = (title: string) =>
+      list
+        .list()
+        .getByRole("row")
+        .filter({
+          has: page.getByTestId("product-row-title").getByText(title),
+        });
+    const choose = async (title: string, item: string) => {
+      // A harmless open: retried until React owns the menu, never the item.
+      await clickUntilVisible(
+        rowOf(title).getByRole("button", { name: `Acciones de «${title}»` }),
+        page.getByRole("menu")
+      );
+      await page.getByRole("menuitem", { name: item }).click();
+    };
+    const visitor = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      storageState: { cookies: [], origins: [] },
+    });
+    const publicStatus = async () =>
+      (await visitor.request.get(`/productos/${shown.slug}`)).status();
+
+    try {
+      await expect.poll(publicStatus).toBe(200);
+
+      // Hidden at once, no question: the store no longer has it.
+      await completeRpcAction(
+        page,
+        "/api/orpc/product/unpublish",
+        async () => {
+          await choose(`Pulsera ${tag}`, "Ocultar de la web");
+        },
+        { input: { id: shown.id } }
+      );
+      await expect(
+        page.getByText("Artículo oculto: ya no se ve en la tienda.")
+      ).toBeVisible();
+      await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+      await expect(
+        rowOf(`Pulsera ${tag}`).getByTestId("product-row-status")
+      ).toHaveText("Borrador");
+      await expect.poll(publicStatus).toBe(404);
+
+      // Shown again from the same menu.
+      await completeRpcAction(
+        page,
+        "/api/orpc/product/publish",
+        async () => {
+          await choose(`Pulsera ${tag}`, "Mostrar en la web");
+        },
+        { input: { id: shown.id } }
+      );
+      await expect(
+        page.getByText("Artículo publicado: ya se ve en la tienda.")
+      ).toBeVisible();
+      await expect(
+        rowOf(`Pulsera ${tag}`).getByTestId("product-row-status")
+      ).toHaveText("Publicado");
+      await expect.poll(publicStatus).toBe(200);
+    } finally {
+      await visitor.close();
+    }
+
+    // A draft with no price is refused, and says to open it.
+    await completeRpcAction(
+      page,
+      "/api/orpc/product/publish",
+      async () => {
+        await choose(`Sin precio ${tag}`, "Mostrar en la web");
+      },
+      { input: { id: unready.id }, status: 400 }
+    );
+    await expect(
+      page.getByText("Le falta algo para publicarse: abrilo y completalo.")
+    ).toBeVisible();
+    await expect(
+      rowOf(`Sin precio ${tag}`).getByTestId("product-row-status")
+    ).toHaveText("Borrador");
+
+    // Deleting asks first, then the row goes.
+    await choose(`Pulsera ${tag}`, "Eliminar");
+    const dialog = page.getByTestId("confirm-dialog");
+    await expect(dialog).toContainText(
+      `Se borra «Pulsera ${tag}» con sus fotos. Los pedidos que ya lo incluyen no cambian.`
+    );
+    await completeRpcAction(
+      page,
+      "/api/orpc/product/delete",
+      async () => {
+        await dialog.getByRole("button", { name: "Eliminar" }).click();
+      },
+      { input: { id: shown.id } }
+    );
+    await expectDialogRemoved(page, dialog);
+    await list.expectTitles([`Sin precio ${tag}`]);
   });
 });
