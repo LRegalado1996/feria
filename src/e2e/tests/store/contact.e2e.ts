@@ -81,7 +81,7 @@ test.describe("The contact page", () => {
     ).toHaveText([
       "01ElegíMirá el catálogo en la web.",
       "02Agregá al carritoDejá tu nombre y tu celular.",
-      "03Coordinamos la entregaRetirás en el puesto o te lo mandamos.",
+      "03Te lo entregamosEn el puesto o te lo mandamos.",
     ]);
     await expect(
       how.getByRole("list", { name: "Pagás con" }).getByRole("listitem")

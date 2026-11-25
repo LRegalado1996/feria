@@ -8,7 +8,7 @@ import { StoreBanner } from "@/app/_components/molecules/store-banner";
 import { StoreHowToBuy } from "@/app/_components/molecules/store-how-to-buy";
 import { StoreSpotlight } from "@/app/_components/molecules/store-spotlight";
 import type { Dictionary } from "@/content";
-import { ALL_ARTICLES_PATH, articlePath } from "@/lib/catalog/paths";
+import { articlePath } from "@/lib/catalog/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { localizePath } from "@/lib/i18n/paths";
 import {
@@ -54,16 +54,14 @@ export interface StorePageSectionsProps {
 }
 
 /**
- * Whether a section is a block the width of the window (a banner, a
- * spotlight, "how to buy"): one right under another, or under the cover,
- * keeps the cards' gutter from it, so two of them never fuse.
+ * Whether a section is a picture the width of the window (a banner, a
+ * spotlight): one right under another, or under the cover, keeps the cards'
+ * gutter from it, so two pictures never fuse. "How to buy" is a light band,
+ * not a picture: it sits flush against a cover above or below it (FER-086),
+ * with no strip of the page's white between them.
  */
-function isFullBleed(section: PageContentSection<StorePageArticle>): boolean {
-  return (
-    section.kind === "banner" ||
-    section.kind === "spotlight" ||
-    section.kind === "how_to_buy"
-  );
+function isPicture(section: PageContentSection<StorePageArticle>): boolean {
+  return section.kind === "banner" || section.kind === "spotlight";
 }
 
 /** A row's heading: its category's name, or the curated row's own. */
@@ -187,13 +185,7 @@ function PageBlock({
   }
 
   if (section.kind === "how_to_buy") {
-    return (
-      <StoreHowToBuy
-        copy={copy}
-        headingLevel={headingLevel}
-        href={localizePath(ALL_ARTICLES_PATH, locale)}
-      />
-    );
+    return <StoreHowToBuy copy={copy} headingLevel={headingLevel} />;
   }
 
   return (
@@ -212,9 +204,10 @@ function PageBlock({
  * banners, article spotlights (FER-059) and the "how to buy" block
  * (FER-076) the width of the window. The
  * storefront's pages and the admin's preview all draw them here, so the
- * preview is the page: one renderer per block kind. A full-width block
+ * preview is the page: one renderer per block kind. A banner or spotlight
  * directly under another one (or under the cover) keeps a gutter from it,
- * the cards' own, so two never fuse; rows keep their own padding.
+ * the cards' own, so two pictures never fuse; "how to buy" touches them;
+ * rows keep their own padding.
  */
 function StorePageSections({
   afterBanner = false,
@@ -236,12 +229,12 @@ function StorePageSections({
       {sections.map((section, index) => {
         const previous = sections[index - 1];
         const underBlock =
-          previous === undefined ? afterBanner : isFullBleed(previous);
+          previous === undefined ? afterBanner : isPicture(previous);
 
         return (
           <Section
             className={cn(
-              isFullBleed(section) && underBlock && "mt-2.5 md:mt-3.5"
+              isPicture(section) && underBlock && "mt-2.5 md:mt-3.5"
             )}
             data-kind={section.kind}
             data-testid="store-page-section"

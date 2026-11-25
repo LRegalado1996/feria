@@ -89,9 +89,10 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-021](FER-021-storefront-shell.md)                        | Storefront shell                                                  | P0       | done        |
 | [FER-022](FER-022-home-view.md)                               | Home view                                                         | P0       | done        |
 | [FER-023](FER-023-catalog-view.md)                            | Catalog view                                                      | P0       | done        |
-| [FER-024](FER-024-article-view-and-seo.md)                    | Article view and SEO                                              | P0       | in progress |
+| [FER-024](FER-024-article-view-and-seo.md)                    | Article view and SEO                                              | P0       | done        |
+| [FER-085](FER-085-store-pages-at-95.md)                       | Store pages at 95 on Lighthouse mobile                            | P2       | todo        |
 | [FER-025](FER-025-order-domain.md)                            | Order domain                                                      | P0       | done        |
-| [FER-026](FER-026-cart-and-checkout.md)                       | Cart and checkout                                                 | P0       | in progress |
+| [FER-026](FER-026-cart-and-checkout.md)                       | Cart and checkout                                                 | P0       | done        |
 | [FER-027](FER-027-order-management.md)                        | Order management in the admin                                     | P0       | done        |
 | [FER-028](FER-028-whatsapp-phone-verification.md)             | Phone verification by WhatsApp code                               | P2       | todo        |
 | [FER-039](FER-039-storefront-redesign.md)                     | Storefront redesign                                               | P0       | done        |
@@ -101,7 +102,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-045](FER-045-cart-drawer.md)                             | Cart side panel and a gallery that goes round                     | P0       | done        |
 | [FER-050](FER-050-storefront-round.md)                        | Storefront round: menu, grid, footer, confirm                     | P0       | done        |
 | [FER-051](FER-051-order-stepper-and-admin-round.md)           | Order stepper, the order pages and an admin round                 | P0       | done        |
-| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | todo        |
+| [FER-049](FER-049-share-card-blob-photos.md)                  | An article's share card draws its uploaded photo                  | P1       | in progress |
 | [FER-058](FER-058-pages-built-from-sections.md)               | Pages built from sections: the home is the first                  | P0       | done        |
 | [FER-059](FER-059-home-article-spotlight.md)                  | An article in the spotlight on the home                           | P0       | done        |
 | [FER-060](FER-060-pages-from-the-admin.md)                    | Pages built from sections, from the admin                         | P0       | done        |
@@ -116,6 +117,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-080](FER-080-contact-page.md)                            | A contact page                                                    | P1       | done        |
 | [FER-081](FER-081-unlisted-parent-in-the-breadcrumb.md)       | An empty category's breadcrumb does not link to an unlisted group | P2       | todo        |
 | [FER-084](FER-084-shipping-and-returns-in-structured-data.md) | Shipping and returns in an article's structured data              | P2       | todo        |
+| [FER-086](FER-086-how-to-buy-lighter.md)                      | A lighter "how to buy" block and smaller cover controls           | P1       | done        |
 
 ### M5 Metrics
 

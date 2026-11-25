@@ -1,4 +1,5 @@
 import { call, ORPCError } from "@orpc/server";
+import { APIError } from "better-auth/api";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 
@@ -19,6 +20,12 @@ const { getSession } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/server/better-auth", () => ({ auth: { api: { getSession } } }));
+
+const { captureExceptionWithScope } = vi.hoisted(() => ({
+  captureExceptionWithScope: vi.fn(() => null),
+}));
+
+vi.mock("@/lib/sentry", () => ({ captureExceptionWithScope }));
 
 const { requestLog } = vi.hoisted(() => ({ requestLog: { set: vi.fn() } }));
 
@@ -53,7 +60,61 @@ describe("createORPCContext", () => {
       returnHeaders: true,
     });
     expect(context.session).toEqual(SESSION);
+    expect(context.sessionFailure).toBeNull();
     expect(context.headers).toBe(headers);
+  });
+
+  test("a session Better Auth could not read leaves the request without one, keeps why, and leaves the report to Better Auth", async () => {
+    const outage = new APIError("INTERNAL_SERVER_ERROR");
+    getSession.mockRejectedValueOnce(outage);
+    const resHeaders = new Headers();
+
+    const context = await createORPCContext({
+      headers: new Headers({ cookie: "session=abc" }),
+      resHeaders,
+    });
+
+    expect(context.session).toBeNull();
+    expect(context.sessionFailure).toEqual({ error: outage });
+    expect(resHeaders.getSetCookie()).toEqual([]);
+    expect(captureExceptionWithScope).not.toHaveBeenCalled();
+  });
+
+  test("a session read that failed outside Better Auth is reported once", async () => {
+    const failure = new Error("headers unavailable");
+    getSession.mockRejectedValueOnce(failure);
+
+    const context = await createORPCContext({
+      headers: new Headers({ "x-request-id": "req-1" }),
+    });
+
+    expect(context.sessionFailure).toEqual({ error: failure });
+    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(failure, {
+      action: "Api.read_session",
+      requestId: "req-1",
+    });
+  });
+
+  test("a failure report without a request id carries none", async () => {
+    const failure = new Error("headers unavailable");
+    getSession.mockRejectedValueOnce(failure);
+
+    await createORPCContext({ headers: new Headers() });
+
+    expect(captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(failure, {
+      action: "Api.read_session",
+      requestId: undefined,
+    });
+  });
+
+  test("a public procedure still answers when the session could not be read", async () => {
+    getSession.mockRejectedValueOnce(new Error("Failed to get session"));
+    const context = await createORPCContext({ headers: new Headers() });
+    const procedure = publicProcedure.handler(() => "the page");
+
+    await expect(
+      call(procedure, undefined, { context: context as never })
+    ).resolves.toBe("the page");
   });
 
   test("forwards every cookie Better Auth set to the response", async () => {
@@ -260,6 +321,21 @@ describe("adminProcedure", () => {
     const { callAdmin, db } = setupAdmin({ signedIn: false });
 
     await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("throws a session that could not be read as it was, before reading anything", async () => {
+    const { callAdmin, db } = setupAdmin({ signedIn: false });
+    const { mockCtx } = createUnauthenticatedMockContext();
+    const outage = new Error("Failed to get session");
+
+    await expect(
+      callAdmin(
+        { id: 7 },
+        { ...mockCtx, db, sessionFailure: { error: outage } }
+      )
+    ).rejects.toBe(outage);
     expect(db.query.user.findFirst).not.toHaveBeenCalled();
     expect(db.$.select).not.toHaveBeenCalled();
   });

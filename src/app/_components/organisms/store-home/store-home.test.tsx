@@ -255,7 +255,7 @@ describe("StoreHome", () => {
 
     expect(view).toHaveAttribute("data-kind", "sections");
     expect(screen.getByTestId("store-how-to-buy")).toHaveAccessibleName(
-      "Comprá en 3 pasos"
+      "Cómo comprar"
     );
   });
 

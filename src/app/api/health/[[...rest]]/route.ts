@@ -16,7 +16,12 @@ async function probe(request: NextRequest) {
     prefix: "/api/health",
     // No session lookup: the probe must report the database, not need it to
     // build its context.
-    context: { db, headers: request.headers, session: null },
+    context: {
+      db,
+      headers: request.headers,
+      session: null,
+      sessionFailure: null,
+    },
   });
 
   const result = response ?? new Response("Not found", { status: 404 });

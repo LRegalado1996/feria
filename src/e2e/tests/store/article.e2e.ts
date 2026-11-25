@@ -103,6 +103,34 @@ test.describe("Article page", () => {
     await expect.poll(async () => await leftEdge(3)).toBe(0);
   });
 
+  test("the server's page holds the photo in view and the one peeking in; the third joins once the page is idle", async ({
+    db,
+    page,
+  }) => {
+    const { article } = await setup({ db });
+    const address = `/productos/${article.slug}`;
+    // The image optimizer's address for a seeded photo, as an <img> asks it.
+    const optimized = (photo: number) =>
+      `url=${encodeURIComponent(`/seed/ring-${photo}.jpg`)}`;
+
+    const html = await (await page.request.get(address)).text();
+    expect([1, 2, 3].map((photo) => html.includes(optimized(photo)))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+
+    await page.goto(address);
+    const third = page
+      .getByTestId("store-gallery")
+      .getByRole("group", { name: "3 de 3" })
+      .getByRole("img");
+    await expect(third).toHaveAttribute(
+      "src",
+      new RegExp(optimized(3).replaceAll(".", String.raw`\.`))
+    );
+  });
+
   test("an article with one photo has nothing to move it", async ({
     db,
     page,

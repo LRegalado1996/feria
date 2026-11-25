@@ -13,6 +13,7 @@ import {
   useCarousel,
 } from "@/app/_components/molecules/carousel";
 import { useDictionary } from "@/lib/hooks/i18n";
+import { usePageIdle } from "@/lib/hooks/ui";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { cn } from "@/lib/utils";
 
@@ -169,11 +170,84 @@ const GALLERY_SIZES = {
 } as const;
 
 /**
+ * The photos in the server's HTML: the one in view and the next, which
+ * peeks in. The rest join once the page is idle (FER-024): fetched with the
+ * first, they competed with it on a phone.
+ */
+const PHOTOS_AT_ONCE = 2;
+
+/**
+ * The photos in their row. One is drawn once it is among the first two,
+ * once the page is idle, or once the visitor reached it or the one before
+ * it (which it peeks out beside): a visitor who swipes on before the page is
+ * idle never meets an empty tile.
+ */
+function GallerySlides({ images }: { images: StoreGalleryImage[] }) {
+  const { selectedIndex } = useCarousel();
+  const pageIdle = usePageIdle();
+  const [reached, setReached] = useState<ReadonlySet<number>>(
+    () => new Set([0])
+  );
+
+  // Kept while rendering, as React adjusts state from a value it reads.
+  if (!reached.has(selectedIndex)) {
+    setReached(new Set([...reached, selectedIndex]));
+  }
+
+  const drawn = (position: number) =>
+    position < PHOTOS_AT_ONCE ||
+    pageIdle ||
+    reached.has(position) ||
+    reached.has(position - 1);
+
+  return (
+    <CarouselContent className="-ml-1.5">
+      {images.map((image, position) => (
+        <CarouselItem
+          className={cn(
+            "pl-1.5",
+            // Most of a phone's width, so the next photo peeks in; about
+            // two thirds of the column on a computer. One photo fills it.
+            images.length > 1 && "basis-[88%] md:basis-[62%]"
+          )}
+          index={position}
+          key={image.id}
+          total={images.length}
+        >
+          {/* Square on a phone; on a computer as tall as most screens
+              hold beside the article's name and price. */}
+          <div className="relative aspect-square bg-store-surface md:aspect-auto md:h-160">
+            {drawn(position) ? (
+              <Image
+                alt={image.alt}
+                className="object-cover"
+                // The first photo is what the visitor came for: fetched at
+                // once and ahead of the rest (`priority` is deprecated since
+                // Next 16); the others wait until they near the view.
+                fetchPriority={position === 0 ? "high" : undefined}
+                fill
+                loading={position === 0 ? "eager" : "lazy"}
+                sizes={
+                  images.length > 1 ? GALLERY_SIZES.row : GALLERY_SIZES.one
+                }
+                src={image.url}
+              />
+            ) : null}
+          </div>
+        </CarouselItem>
+      ))}
+    </CarouselContent>
+  );
+}
+
+/**
  * An article's photos (FER-024, FER-039, FER-045): large, on the grey
  * tile, in a carousel that goes round, which a finger or a mouse drags, a
  * trackpad swipes, the arrow keys step through and the round arrow pages;
  * the photo in view opens full screen, where the phone's own pinch zooms. The first photo loads first;
- * every photo is in the server's HTML, so it is read without the script.
+ * the server's HTML holds the first two (`PHOTOS_AT_ONCE`), and the rest
+ * join once the page is idle or the visitor reaches them, each on its grey
+ * tile until then.
  */
 function StoreGallery({
   actions,
@@ -217,40 +291,7 @@ function StoreGallery({
       // and one photo never moves.
       opts={{ align: "start", loop: true }}
     >
-      <CarouselContent className="-ml-1.5">
-        {images.map((image, position) => (
-          <CarouselItem
-            className={cn(
-              "pl-1.5",
-              // Most of a phone's width, so the next photo peeks in; about
-              // two thirds of the column on a computer. One photo fills it.
-              images.length > 1 && "basis-[88%] md:basis-[62%]"
-            )}
-            index={position}
-            key={image.id}
-            total={images.length}
-          >
-            {/* Square on a phone; on a computer as tall as most screens
-                hold beside the article's name and price. */}
-            <div className="relative aspect-square bg-store-surface md:aspect-auto md:h-160">
-              <Image
-                alt={image.alt}
-                className="object-cover"
-                // The first photo is what the visitor came for: fetched at
-                // once and ahead of the rest (`priority` is deprecated since
-                // Next 16); the others wait until they near the view.
-                fetchPriority={position === 0 ? "high" : undefined}
-                fill
-                loading={position === 0 ? "eager" : "lazy"}
-                sizes={
-                  images.length > 1 ? GALLERY_SIZES.row : GALLERY_SIZES.one
-                }
-                src={image.url}
-              />
-            </div>
-          </CarouselItem>
-        ))}
-      </CarouselContent>
+      <GallerySlides images={images} />
       <GalleryControls actions={actions} images={images} />
     </Carousel>
   );

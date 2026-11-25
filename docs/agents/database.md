@@ -38,6 +38,14 @@ Binding on any service that writes based on what it read: a violation corrupts d
 - **Large tables.** `CONCURRENTLY` can't run in the migration's transaction, so an index on a populated table is `CREATE INDEX IF NOT EXISTS` in the migration plus `src/server/db/manual/concurrent-<slug>.sql` (same name, `CONCURRENTLY`, recovery for an `INVALID` build) run with `psql` on the direct URL before the release. A migration adding a column to a large table ends with `ANALYZE "<table>";`: the column has no statistics until 10% of the rows change.
 - **Migration credentials.** Production migrates with `MIGRATION_DATABASE_URL` (owner role, direct non-pooled endpoint); the app runs as a DML-only role on `DATABASE_URL`. Read it in `drizzle.config.ts` only, never `src/env.js`, so the app never sees it.
 
+## Connections (`src/server/db/index.ts`)
+
+The app reaches Neon's pooled endpoint from Vercel functions that are suspended between requests and reused afterwards.
+
+- **No idle connection survives a suspension.** `attachDatabasePool` keeps the instance up until the pool's idle timeout has closed its connections; a `min` above 0 would keep one open through the suspension, and Neon (its compute scaling to zero, its pooler) drops it meanwhile.
+- **Opening a connection is retried, a statement never is.** `ResilientPool` retries a checkout that failed transiently (the connect timeout, a socket closed mid-handshake, SQLSTATE class 08 such as Neon's "Authentication timed out", 57P01–57P03, socket resets) up to three tries with jittered backoff, each try bounded by `connectionTimeoutMillis`. Nothing was sent yet, so nothing runs twice. A query that fails on a connection it holds is not retried: it may have run. The health probe opts out (`withSingleConnectAttempt`): it reports the outage a retry would hide.
+- **SSL is `verify-full`, spelled out.** `withExplicitSslMode` rewrites `sslmode=require|prefer|verify-ca` (Neon's URLs say `require`) to the `verify-full` pg already applies, which also silences pg's deprecation warning and keeps the certificate check when pg 9 gives those aliases libpq's weaker meaning. `drizzle.config.ts` does the same for migrations.
+
 ## Preview databases
 
 An optional module for the opt-in previews (`docs/agents/ci.md` § Previews). Every preview build runs `pnpm db:migrate`, so a preview pointed at a shared database lands an unmerged PR's migration there.

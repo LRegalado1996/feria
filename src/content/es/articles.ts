@@ -191,8 +191,6 @@ export const articles = {
         heading: "Búsqueda y compartir",
         hint: "Se arma solo con el título, la descripción y la foto principal.",
         share: "Así se ve al compartir el enlace",
-        shareNoPhoto:
-          "Por ahora la tarjeta para compartir muestra la foto solo si está guardada en este sitio.",
       },
       spanish: "Español",
       title: "Título",
