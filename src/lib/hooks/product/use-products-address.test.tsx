@@ -111,14 +111,30 @@ function Screen({ query }: { query: ProductsQuery }) {
   );
 }
 
+/**
+ * The hook beside a later sibling that applies the drafts as each address
+ * with a search commits; `show` is the page handing another address.
+ */
+function setupScreen() {
+  const view = render(<Screen query={makeQuery()} />);
+
+  return {
+    /** Every navigation asked for, in order, as method and address. */
+    asked: () => navigated.mock.calls,
+    show: (shown: ProductsQuery) => {
+      view.rerender(<Screen query={shown} />);
+    },
+  };
+}
+
 describe("useProductsAddress", () => {
   test("an address from elsewhere is the base as soon as it commits, before an event can build on the one before", () => {
-    const view = render(<Screen query={makeQuery()} />);
+    const { asked, show } = setupScreen();
 
     // Back brings `?q=b`; "Aplicar" lands at once.
-    view.rerender(<Screen query={makeQuery({ q: "b" })} />);
+    show(makeQuery({ q: "b" }));
 
-    expect(navigated.mock.calls).toEqual([
+    expect(asked()).toEqual([
       ["push", "/en/admin/products?q=b&status=draft", { scroll: false }],
     ]);
   });
