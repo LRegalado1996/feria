@@ -305,7 +305,7 @@ export class StorePage extends BasePage {
   getNotFoundHeading(): Locator {
     return this.page.getByRole("heading", {
       level: 1,
-      name: "No encontramos esta página",
+      name: "Esta página no existe",
     });
   }
 }

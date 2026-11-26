@@ -16,7 +16,10 @@ vi.mock("next/navigation", () => ({
 function setup({ locale = "en" }: { locale?: Locale } = {}) {
   renderWithI18n(<StoreNotFound />, { locale });
 
-  return { home: screen.getByTestId("store-not-found-home") };
+  return {
+    catalog: screen.getByTestId("store-not-found-catalog"),
+    home: screen.getByTestId("store-not-found-home"),
+  };
 }
 
 describe("StoreNotFound", () => {
@@ -27,36 +30,39 @@ describe("StoreNotFound", () => {
     expect(screen.getByTestId("store-header")).toBeVisible();
     expect(
       within(frameMain).getByRole("heading", { level: 1 })
-    ).toHaveTextContent("No encontramos esta página");
+    ).toHaveTextContent("Esta página no existe");
     expect(screen.queryByTestId("store-announcement-bar")).toBeNull();
   });
 
   test.each([
     [
       "en",
-      "We could not find this page",
-      "The link may be old, or that article may be gone.",
+      "This page doesn't exist",
+      "See the catalog",
+      "/en/productos",
       "Back to the store's home",
       "/en",
     ],
     [
       "es",
-      "No encontramos esta página",
-      "Puede que el enlace sea viejo o que ese artículo ya no esté.",
+      "Esta página no existe",
+      "Ver el catálogo",
+      "/productos",
       "Volver a la home de la tienda",
       "/",
     ],
   ] as const)(
-    "in %s, says the page is missing and leads back to the store's home, the site's own",
-    (locale, title, body, back, href) => {
-      const { home } = setup({ locale });
+    "in %s, says the page does not exist and leads to the catalog and the home, the site's own",
+    (locale, title, catalogName, catalogHref, back, homeHref) => {
+      const { catalog, home } = setup({ locale });
 
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
         new RegExp(`^${title}$`, "u")
       );
-      expect(screen.getByText(body)).toBeVisible();
+      expect(catalog).toHaveAccessibleName(catalogName);
+      expect(catalog).toHaveAttribute("href", catalogHref);
       expect(home).toHaveAccessibleName(back);
-      expect(home).toHaveAttribute("href", href);
+      expect(home).toHaveAttribute("href", homeHref);
       expect(document.querySelector("title")).toHaveTextContent(
         new RegExp(`^${title}$`, "u")
       );
