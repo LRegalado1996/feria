@@ -67,7 +67,8 @@ export const storeVisitDaily = pgTable(
  * a keyed hash of the day, the client's address and what it counted (the
  * visit, or one article), so a row names neither the address nor the
  * article, and the same client's rows of two days or two articles cannot be
- * linked. Only today's rows are read; each write deletes the older ones.
+ * linked. Only today's rows are counted against; each write deletes those
+ * older than yesterday, kept for a count written just after midnight.
  */
 export const metricRateLimit = pgTable(
   "metric_rate_limit",
