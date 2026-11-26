@@ -22,6 +22,7 @@ When enabled, the shopper receives a code by WhatsApp after placing the order an
 - Table `phone_verification`. On order creation, when enabled, generate a six-digit code, store only its hash with a ten-minute expiry, and send it through a provider interface (one real implementation, one fake for tests and local work).
 - The confirmation page shows the code form, a resend button with a cooldown, and a clear result.
 - A correct code sets `customer_order.phoneVerifiedAt`. The admin's "phone confirmed" flag reads from it.
+- **On the metrics dashboard** (moved here from [FER-030](FER-030-metrics-dashboard.md) by Lucas on 2026-11-25: until codes exist it would always read 0%): the orders section of `/admin/metrics` adds the share of the range's orders with the phone confirmed, from `phoneVerifiedAt`, in `src/server/services/dashboard.ts`'s orders query and its seeded test.
 - Limits: attempts per code, resends per order, sends per phone per day, and a daily spend cap.
 - A failed send is logged and reported; the shopper still sees their order confirmed.
 
@@ -30,6 +31,7 @@ When enabled, the shopper receives a code by WhatsApp after placing the order an
 - With the flag off, no code is generated or sent and no form shows.
 - With it on, a wrong, expired or reused code is refused, each with its own test, and the fifth wrong attempt locks the code.
 - The order exists and is visible in the admin before any code is entered.
+- The metrics dashboard's share of orders with the phone confirmed matches the seeded dataset.
 - E2E with the fake provider covers the happy path and the resend.
 
 ## Notes

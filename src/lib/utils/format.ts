@@ -235,6 +235,25 @@ export function formatCalendarDay(day: string, locale: Locale): string {
   );
 }
 
+const dayMonthFormat = cached(
+  (tag: string) =>
+    new Intl.DateTimeFormat(tag, {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    })
+);
+
+/**
+ * A `YYYY-MM-DD` day as its day and month alone ("5 dic."), for a chart's
+ * axis, where the year is the range's: read at UTC midnight, never shifted.
+ */
+export function formatDayMonth(day: string, locale: Locale): string {
+  return dayMonthFormat(INTL_LOCALES[locale]).format(
+    new Date(`${day}T00:00:00Z`)
+  );
+}
+
 const businessClock = cached(
   () =>
     new Intl.DateTimeFormat("en-CA", {

@@ -41,7 +41,7 @@ async function makeParams(locale: string) {
 /** The placeholder of `section` in `locale`, with a session or without. */
 function setup({
   locale = "en",
-  section = "metrics",
+  section = "users",
   signedIn = true,
 }: {
   locale?: string;
@@ -99,8 +99,7 @@ describe("AdminSectionPlaceholder", () => {
 
 describe("AdminSectionPlaceholderResolver", () => {
   test.each([
-    ["en", "metrics", "/en/admin/metrics"],
-    ["es", "metrics", "/admin/metrics"],
+    ["en", "users", "/en/admin/users"],
     ["es", "users", "/admin/users"],
   ] as const satisfies [Locale, PlaceholderSection, string][])(
     "in %s, checks the session for %s, coming back to %s",
@@ -114,8 +113,7 @@ describe("AdminSectionPlaceholderResolver", () => {
   );
 
   test.each([
-    ["en", "metrics", "Metrics", "Coming soon"],
-    ["es", "metrics", "Métricas", "Próximamente"],
+    ["en", "users", "Users", "Coming soon"],
     ["es", "users", "Usuarios", "Próximamente"],
   ] as const satisfies [Locale, PlaceholderSection, string, string][])(
     "in %s, shows the %s section by name inside the shell, still to come",
@@ -145,13 +143,12 @@ describe("AdminSectionPlaceholderResolver", () => {
   test("sends a visitor without a session to the sign-in, with no shell", async () => {
     const { resolve } = setup({
       locale: "es",
-      section: "metrics",
+      section: "users",
       signedIn: false,
     });
 
     await expect(resolve()).rejects.toMatchObject({
-      digest:
-        "NEXT_REDIRECT;replace;/admin/sign-in?next=%2Fadmin%2Fmetrics;307;",
+      digest: "NEXT_REDIRECT;replace;/admin/sign-in?next=%2Fadmin%2Fusers;307;",
     });
     expect(shellProps).not.toHaveBeenCalled();
   });
