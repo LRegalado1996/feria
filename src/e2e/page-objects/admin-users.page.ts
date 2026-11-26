@@ -49,9 +49,13 @@ export class AdminUsersPage extends AdminPage {
 
   /** Gives `email`'s login a new temporary password through the sheet. */
   async resetPassword(email: string, name: string, password: string) {
-    await this.row(email)
-      .getByRole("button", { name: `Restablecer contraseña: ${name}` })
-      .click();
+    // The first harmless open after a load: re-clicked until React owns it.
+    await clickUntilVisible(
+      this.row(email).getByRole("button", {
+        name: `Restablecer contraseña: ${name}`,
+      }),
+      this.sheet()
+    );
     const sheet = this.sheet();
     await sheet.getByLabel(/^Contraseña temporal\*?$/u).fill(password);
     await completeRpcAction(
@@ -77,10 +81,11 @@ export class AdminUsersPage extends AdminPage {
 
   /** Disables `email`'s login, confirming, and waits for `user.disable`. */
   async disable(email: string, name: string): Promise<void> {
-    await this.row(email)
-      .getByRole("button", { name: `Deshabilitar: ${name}` })
-      .click();
     const dialog = this.getByTestId("confirm-dialog");
+    await clickUntilVisible(
+      this.row(email).getByRole("button", { name: `Deshabilitar: ${name}` }),
+      dialog
+    );
     await completeRpcAction(this.page, "/api/orpc/user/disable", async () => {
       await dialog.getByTestId("confirm-dialog-confirm").click();
     });

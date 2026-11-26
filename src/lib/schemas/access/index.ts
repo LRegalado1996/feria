@@ -85,9 +85,19 @@ export const LOGIN_REFUSALS = {
   ownLoginDisabled: "You cannot disable your own login",
   /** Nobody resets their own password: they change it, knowing the current one. */
   ownPasswordReset: "Change your own password instead of resetting it",
+  /** Too many wrong current passwords: wait `data.retryAfter` seconds. */
+  tooManyPasswordAttempts: "Too many wrong passwords: try again later",
   /** The current password typed to change it is not the login's. */
   wrongCurrentPassword: "The current password is not correct",
 } as const;
+
+/**
+ * How many wrong current passwords a login may type before it waits
+ * (docs/agents/security.md § Rate limits): changing the password is a
+ * second door to guess it through, for whoever holds a session. The wait
+ * runs from the last wrong try, so it never doubles across a window's edge.
+ */
+export const PASSWORD_ATTEMPTS = { max: 5, windowMs: 15 * 60 * 1000 } as const;
 
 /**
  * The code a disabled login's sign-in answers with (FER-015), which the

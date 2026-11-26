@@ -301,8 +301,8 @@ describe("adminProcedure", () => {
       columns: { id: true, mustChangePassword: true },
     });
     expect(renderQuery((config as { where: unknown }).where)).toEqual({
-      params: ["test-user-id"],
-      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+      params: ["test-user-id", "test-session-id"],
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
     });
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
     expect(db.query.user.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
@@ -434,8 +434,8 @@ describe("loginProcedure", () => {
       });
       const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
       expect(renderQuery((config as { where: unknown }).where)).toEqual({
-        params: ["test-user-id"],
-        sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+        params: ["test-user-id", "test-session-id"],
+        sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
       });
       // It needs no store.
       expect(db.$.select).not.toHaveBeenCalled();

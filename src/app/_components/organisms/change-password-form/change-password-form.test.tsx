@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import { reportError } from "@/lib/errors/client";
 import type { Locale } from "@/lib/i18n/config";
+import { LOGIN_REFUSALS } from "@/lib/schemas/access";
 import { renderWithI18n } from "@/test/i18n";
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
 import { createQueryWrapper } from "@/test/setup-helpers";
@@ -34,18 +35,41 @@ const LABELS = {
   },
 } as const;
 
+/** What the server answers for each way the change can fail. */
+const REFUSALS = {
+  failed: () => ({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Internal server error",
+    status: 500,
+  }),
+  limited: (retryAfter: number | null) => ({
+    code: "TOO_MANY_REQUESTS",
+    data: retryAfter === null ? undefined : { retryAfter },
+    message: LOGIN_REFUSALS.tooManyPasswordAttempts,
+    status: 429,
+  }),
+  wrong: () => ({
+    code: "BAD_REQUEST",
+    message: "The current password is not correct",
+    status: 400,
+  }),
+};
+
 /**
  * `answer`: how the server answers the change: saved, a wrong current
- * password, or another failure.
+ * password, too many wrong ones (waiting `retryAfter` seconds, or saying
+ * nothing of it), or another failure.
  */
 function setup({
   answer = "saved",
   forced = false,
   locale = "en",
+  retryAfter = 840,
 }: {
-  answer?: "failed" | "saved" | "wrong";
+  answer?: "failed" | "limited" | "saved" | "wrong";
   forced?: boolean;
   locale?: Locale;
+  retryAfter?: number | null;
 } = {}) {
   const labels = LABELS[locale];
   const change = vi.fn((_input: unknown) => ({
@@ -55,14 +79,10 @@ function setup({
   server.use(
     answer === "saved"
       ? createOrpcHandler("admin.changePassword", change)
-      : createOrpcErrorHandler("admin.changePassword", {
-          code: answer === "wrong" ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
-          message:
-            answer === "wrong"
-              ? "The current password is not correct"
-              : "Internal server error",
-          status: answer === "wrong" ? 400 : 500,
-        })
+      : createOrpcErrorHandler(
+          "admin.changePassword",
+          REFUSALS[answer](retryAfter)
+        )
   );
   const assign = vi
     .spyOn(window.location, "assign")
@@ -205,6 +225,35 @@ describe("ChangePasswordForm", () => {
       expect(
         screen.queryByText("We couldn't save the password. Please try again.")
       ).not.toBeInTheDocument();
+    }
+  );
+
+  test.each([
+    [840, "14"],
+    [60, "1"],
+    [61, "2"],
+    [30, "1"],
+    [null, "15"],
+  ] as const)(
+    "too many wrong passwords, waiting %j seconds, says to come back in %s min, unreported and keeping what was typed",
+    async (retryAfter, minutes) => {
+      const { assign, current, save } = setup({
+        answer: "limited",
+        retryAfter,
+      });
+
+      await save(VALUES);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            `Too many tries with a wrong password. Try again in ${minutes} min.`
+          )
+        ).toHaveAttribute("role", "alert");
+      });
+      expect(reportError).not.toHaveBeenCalled();
+      expect(current()).toHaveValue("temporal-123");
+      expect(assign).not.toHaveBeenCalled();
     }
   );
 

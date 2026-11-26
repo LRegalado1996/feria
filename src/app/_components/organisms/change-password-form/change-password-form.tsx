@@ -20,10 +20,12 @@ import { reportError } from "@/lib/errors/client";
 import { useDictionary } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { useChangePassword } from "@/lib/hooks/user";
+import { interpolate } from "@/lib/i18n/interpolate";
 import {
   type ChangePasswordFormValues,
   createChangePasswordFormSchema,
   LOGIN_REFUSALS,
+  PASSWORD_ATTEMPTS,
 } from "@/lib/schemas/access";
 
 export interface ChangePasswordFormProps {
@@ -47,7 +49,8 @@ export interface ChangePasswordFormProps {
 function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
   const copy = useDictionary().admin.password;
   const changePassword = useChangePassword();
-  const [failed, setFailed] = useState(false);
+  // Why the last save failed, said under the form; empty while none did.
+  const [failure, setFailure] = useState("");
   const form = useForm<ChangePasswordFormValues>({
     defaultValues: {
       confirmPassword: "",
@@ -62,7 +65,7 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
   const hydrated = useHydrated();
 
   const submit = async (values: ChangePasswordFormValues) => {
-    setFailed(false);
+    setFailure("");
 
     try {
       await changePassword.mutateAsync({
@@ -71,6 +74,27 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
       });
       window.location.assign(redirectTo);
     } catch (error) {
+      if (
+        error instanceof ORPCError &&
+        error.code === "TOO_MANY_REQUESTS" &&
+        error.message === LOGIN_REFUSALS.tooManyPasswordAttempts
+      ) {
+        const data: unknown = error.data;
+        const seconds =
+          typeof data === "object" &&
+          data !== null &&
+          "retryAfter" in data &&
+          typeof data.retryAfter === "number"
+            ? data.retryAfter
+            : PASSWORD_ATTEMPTS.windowMs / 1000;
+        setFailure(
+          interpolate(copy.errors.tooMany, {
+            minutes: String(Math.max(1, Math.ceil(seconds / 60))),
+          })
+        );
+        return;
+      }
+
       if (
         error instanceof ORPCError &&
         error.code === "BAD_REQUEST" &&
@@ -85,7 +109,7 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
       }
 
       reportError(error, { action: "Account.change_password" });
-      setFailed(true);
+      setFailure(copy.errors.save);
     }
   };
 
@@ -154,9 +178,9 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
             </FormItem>
           )}
         />
-        {failed ? (
+        {failure ? (
           <p className="text-center text-sm text-destructive" role="alert">
-            {copy.errors.save}
+            {failure}
           </p>
         ) : null}
         <Button

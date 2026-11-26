@@ -82,10 +82,10 @@ describe("upload.createToken", () => {
       token: "vercel_blob_client_Store9_signed",
     });
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      "test-user-id"
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: "test-user-id",
+    });
     expect(services.issueUploadToken).toHaveBeenCalledExactlyOnceWith(
       BLOB_STORE,
       makeRequest()

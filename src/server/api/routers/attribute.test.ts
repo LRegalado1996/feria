@@ -134,10 +134,10 @@ describe("attribute router", () => {
       },
     ]);
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      USER_ID
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: USER_ID,
+    });
     expect(services.listStoreAttributes).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });

@@ -70,11 +70,12 @@ export const auth = betterAuth({
     // `createORPCContext` forwards the renewed cookie, or the cache would only
     // cover the first minutes after sign-in.
     //
-    // The price is a stale-privilege window of `maxAge`: nothing invalidates
-    // this cookie when a session is revoked, or a user's role changes, from
-    // somewhere else, so those requests keep authorizing for up to 5 minutes.
-    // Reads that decide access on a page pass `disableCookieCache`
-    // (`./server.ts`). Shorten this if the window stops being acceptable.
+    // Nothing invalidates this cookie when a session is revoked from
+    // somewhere else, so the session it carries can outlive its row for up
+    // to 5 minutes. Access never rests on it alone: every admin procedure
+    // re-reads the login and checks the session's row in that same query
+    // (`findLogin`, FER-015), and reads that decide access on a page pass
+    // `disableCookieCache` (`./server.ts`).
     cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
   rateLimit: {

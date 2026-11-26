@@ -1,9 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 
+import { PASSWORD_ATTEMPTS } from "@/lib/schemas/access";
 import type { AccountAuth } from "@/server/better-auth/accounts";
-import { account, session, user } from "@/server/db/schema";
+import { account, rateLimit, session, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderOrderBy, renderQuery } from "@/server/test/render-sql";
+import { deferred } from "@/server/test/two-writers";
 
 import {
   changeOwnPassword,
@@ -38,10 +40,13 @@ function makeLocked(
  * rows its lock finds, and Better Auth's hasher and verifier.
  */
 function setup({
+  attempts = null,
   credential = { id: "account-b", password: "hashed:old-password" },
   locked = [makeLocked("admin-a"), makeLocked("admin-b")],
   updated = [{ id: "account-b" }],
 }: {
+  /** The login's wrong tries so far, when it has any (`changeOwnPassword`). */
+  attempts?: { count: number; lastRequest: number } | null;
   credential?: { id: string; password: string | null } | null;
   locked?: ReturnType<typeof makeLocked>[];
   updated?: { id: string }[];
@@ -52,10 +57,25 @@ function setup({
     async (callback: unknown) =>
       await (callback as (handle: unknown) => Promise<unknown>)(tx)
   );
-  // The first lock is always the logins'; the account's comes second.
-  tx.$["select.for"]
-    .mockResolvedValueOnce(locked)
-    .mockResolvedValueOnce(credential ? [credential] : []);
+  // Each locked read answers by the table it reads, never by its turn: a
+  // read of anything else is a query the service should not make.
+  tx.$["select.for"].mockImplementation(async () => {
+    const [table] = tx.$["select.from"].mock.lastCall ?? [];
+
+    if (table === user) {
+      return locked;
+    }
+
+    if (table === rateLimit) {
+      return attempts ? [attempts] : [];
+    }
+
+    if (table === account) {
+      return credential ? [credential] : [];
+    }
+
+    throw new Error("A locked read of a table the test does not expect");
+  });
   tx.$["update.returning"].mockResolvedValue(updated);
   const hash = vi.fn(async (password: string) => `hashed:${password}`);
   const verify = vi.fn(
@@ -422,32 +442,64 @@ describe("resetLoginPassword", () => {
 });
 
 describe("changeOwnPassword", () => {
+  const NOW = new Date("2026-11-25T12:00:00.000Z");
+  const WINDOW = PASSWORD_ATTEMPTS.windowMs;
+  const KEY = "change-password:admin-b";
   const VALUES = {
     currentPassword: "old-password",
     newPassword: "new-password-1",
     sessionId: "session-here",
     userId: "admin-b",
   };
+  const WRONG = { ...VALUES, currentPassword: "not-it" };
 
-  test("locks the login and its credential, checks the current password, saves the new one and ends the other sessions", async () => {
-    const { auth, db, hash, lock, tx, verify } = setup({
+  /** `setup()` for the login changing its own password, the clock frozen. */
+  function setupChange(options: Parameters<typeof setup>[0] = {}) {
+    vi.setSystemTime(NOW);
+    const context = setup({ locked: [makeLocked("admin-b")], ...options });
+
+    return {
+      ...context,
+      change: async (values = VALUES) =>
+        await changeOwnPassword(context.auth, context.db as never, values),
+    };
+  }
+
+  test("locks the login, its count and its credential, checks the current password, saves the new one, ends the other sessions and clears the count", async () => {
+    const { change, hash, lock, tx, verify } = setupChange({
       locked: [makeLocked("admin-b", { mustChangePassword: true })],
     });
 
-    await expect(changeOwnPassword(auth, db as never, VALUES)).resolves.toEqual(
-      { id: "admin-b", mustChangePassword: false }
-    );
+    await expect(change()).resolves.toEqual({
+      id: "admin-b",
+      mustChangePassword: false,
+    });
 
     expect(lock(0).where).toEqual({
       params: ["admin-b"],
       sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
     });
-    expect(tx.$["select.from"].mock.calls[1]).toEqual([account]);
-    expect(renderQuery(tx.$["select.where"].mock.calls[1]?.[0])).toEqual({
-      params: ["admin-b", "credential"],
-      sql: '("account"."userId" = $1 and "account"."providerId" = $2)',
-    });
-    expect(tx.$["select.for"].mock.calls).toEqual([["update"], ["update"]]);
+    expect(tx.$["select.from"].mock.calls).toEqual([
+      [user],
+      [rateLimit],
+      [account],
+    ]);
+    expect(
+      tx.$["select.where"].mock.calls
+        .slice(1)
+        .map(([where]) => renderQuery(where))
+    ).toEqual([
+      { params: [KEY], sql: '"rate_limit"."key" = $1' },
+      {
+        params: ["admin-b", "credential"],
+        sql: '("account"."userId" = $1 and "account"."providerId" = $2)',
+      },
+    ]);
+    expect(tx.$["select.for"].mock.calls).toEqual([
+      ["update"],
+      ["update"],
+      ["update"],
+    ]);
     expect(verify).toHaveBeenCalledExactlyOnceWith({
       hash: "hashed:old-password",
       password: "old-password",
@@ -463,10 +515,37 @@ describe("changeOwnPassword", () => {
       { params: ["account-b"], sql: '"account"."id" = $1' },
       { params: ["admin-b"], sql: '"user"."id" = $1' },
     ]);
-    expect(renderQuery(tx.$["delete.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["admin-b", "session-here"],
-      sql: '("session"."userId" = $1 and "session"."id" <> $2)',
+    expect(tx.$.delete.mock.calls).toEqual([[session], [rateLimit]]);
+    expect(
+      tx.$["delete.where"].mock.calls.map(([where]) => renderQuery(where))
+    ).toEqual([
+      {
+        params: ["admin-b", "session-here"],
+        sql: '("session"."userId" = $1 and "session"."id" <> $2)',
+      },
+      { params: [KEY], sql: '"rate_limit"."key" = $1' },
+    ]);
+  });
+
+  test("finishes the slow hash before it takes any lock", async () => {
+    const { change, db, hash } = setupChange();
+    const held = deferred<string>();
+    hash.mockImplementationOnce(async () => await held.promise);
+
+    const changing = change();
+    await vi.waitFor(() => {
+      expect(hash).toHaveBeenCalledExactlyOnceWith("new-password-1");
     });
+    expect(db.$.transaction).not.toHaveBeenCalled();
+
+    held.resolve("hashed:new-password-1");
+    await expect(changing).resolves.toEqual({
+      id: "admin-b",
+      mustChangePassword: false,
+    });
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function)
+    );
   });
 
   test.each([
@@ -474,31 +553,115 @@ describe("changeOwnPassword", () => {
     ["a login without a password", { id: "account-b", password: null }],
     ["a login without a credential", null],
   ])(
-    "refuses %s with BAD_REQUEST, saving nothing",
+    "refuses %s with BAD_REQUEST, saving nothing but the first wrong try",
     async (_case, credential) => {
-      const { auth, db, hash, tx } = setup({
-        credential,
-        locked: [makeLocked("admin-b")],
-      });
+      const { change, tx } = setupChange({ credential });
 
-      await expect(
-        changeOwnPassword(auth, db as never, VALUES)
-      ).rejects.toMatchObject({
+      await expect(change()).rejects.toMatchObject({
         code: "BAD_REQUEST",
         message: "The current password is not correct",
       });
-      expect(hash).not.toHaveBeenCalled();
       expect(tx.$.update).not.toHaveBeenCalled();
       expect(tx.$.delete).not.toHaveBeenCalled();
+      expect(tx.$.insert).toHaveBeenCalledExactlyOnceWith(rateLimit);
+      expect(tx.$["insert.values"]).toHaveBeenCalledExactlyOnceWith({
+        count: 1,
+        id: expect.any(String),
+        key: KEY,
+        lastRequest: NOW.getTime(),
+      });
+      expect(tx.$["insert.onConflictDoUpdate"]).toHaveBeenCalledExactlyOnceWith(
+        {
+          set: { count: 1, lastRequest: NOW.getTime() },
+          target: rateLimit.key,
+        }
+      );
     }
   );
 
-  test("answers UNAUTHORIZED to a login removed or disabled, checking no password", async () => {
-    const { auth, db, verify } = setup({ locked: [] });
+  test.each([
+    ["one millisecond inside the window", WINDOW - 1, 4],
+    ["at the window's end", WINDOW, 1],
+  ])(
+    "a wrong try %s after the last one counts %i",
+    async (_case, sinceLast, count) => {
+      const { change, tx } = setupChange({
+        attempts: { count: 3, lastRequest: NOW.getTime() - sinceLast },
+      });
 
-    await expect(
-      changeOwnPassword(auth, db as never, VALUES)
-    ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
+      await expect(change(WRONG)).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+      });
+      expect(tx.$["insert.onConflictDoUpdate"]).toHaveBeenCalledExactlyOnceWith(
+        {
+          set: { count, lastRequest: NOW.getTime() },
+          target: rateLimit.key,
+        }
+      );
+    }
+  );
+
+  test("refuses with TOO_MANY_REQUESTS once the login reached its wrong tries, checking no password and counting nothing", async () => {
+    const { change, tx, verify } = setupChange({
+      attempts: {
+        count: PASSWORD_ATTEMPTS.max,
+        lastRequest: NOW.getTime() - 60_000,
+      },
+    });
+
+    await expect(change()).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+      data: { retryAfter: (WINDOW - 60_000) / 1000 },
+      message: "Too many wrong passwords: try again later",
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(tx.$.insert).not.toHaveBeenCalled();
+    expect(tx.$.update).not.toHaveBeenCalled();
+  });
+
+  test("one wrong try short of the limit is still checked", async () => {
+    const { change, verify } = setupChange({
+      attempts: {
+        count: PASSWORD_ATTEMPTS.max - 1,
+        lastRequest: NOW.getTime() - 60_000,
+      },
+    });
+
+    await expect(change()).resolves.toEqual({
+      id: "admin-b",
+      mustChangePassword: false,
+    });
+    expect(verify).toHaveBeenCalledExactlyOnceWith({
+      hash: "hashed:old-password",
+      password: "old-password",
+    });
+  });
+
+  test("the wait ends a whole window after the last wrong try", async () => {
+    const { change, verify } = setupChange({
+      attempts: {
+        count: PASSWORD_ATTEMPTS.max,
+        lastRequest: NOW.getTime() - WINDOW,
+      },
+    });
+
+    await expect(change()).resolves.toEqual({
+      id: "admin-b",
+      mustChangePassword: false,
+    });
+    expect(verify).toHaveBeenCalledExactlyOnceWith({
+      hash: "hashed:old-password",
+      password: "old-password",
+    });
+  });
+
+  test("answers UNAUTHORIZED to a login removed or disabled, checking no password", async () => {
+    const { change, verify } = setupChange({ locked: [] });
+
+    await expect(change()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    });
     expect(verify).not.toHaveBeenCalled();
   });
 });

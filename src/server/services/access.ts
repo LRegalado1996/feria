@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { LOGIN_REFUSALS } from "@/lib/schemas/access";
 import type { DatabaseClient } from "@/server/db";
@@ -12,19 +12,34 @@ export interface ActiveLogin {
   mustChangePassword: boolean;
 }
 
+/** The caller as the session names it: its login and the session itself. */
+export interface SessionRef {
+  sessionId: string;
+  userId: string;
+}
+
 /**
- * `userId` if it is still a login and an enabled one (FER-015), else `null`.
- * The session can outlive its user, or the user's disabling, for a few
- * minutes (Better Auth caches it in a cookie), so access is re-read from the
- * database, never trusted from the session.
+ * `userId` if it is still a login, an enabled one (FER-015), and `sessionId`
+ * is still one of its live sessions, else `null`. Better Auth caches a
+ * session in a cookie for minutes, so the cached copy can outlive its user,
+ * the user's disabling, or the session itself (ended by a password change
+ * or a reset): access is re-read from the database, never trusted from the
+ * cookie. One query: the session is checked inside the user's read.
  */
 export async function findLogin(
   db: DatabaseClient,
-  userId: string
+  { sessionId, userId }: SessionRef
 ): Promise<ActiveLogin | null> {
   const found = await db.query.user.findFirst({
     columns: { id: true, mustChangePassword: true },
-    where: and(eq(user.id, userId), isNull(user.disabledAt)),
+    where: and(
+      eq(user.id, userId),
+      isNull(user.disabledAt),
+      // The session's columns are spelled out: a relational query qualifies
+      // every column it interpolates with its own table's alias, so
+      // `${session.userId}` would read `"user"."userId"`.
+      sql`exists (select 1 from "session" where "session"."id" = ${sessionId} and "session"."userId" = ${user.id} and "session"."expiresAt" > now())`
+    ),
   });
 
   return found ?? null;
@@ -46,14 +61,14 @@ async function findStore(db: DatabaseClient) {
 }
 
 /**
- * The store an admin works on, if `userId` is still an enabled login, else
- * `null`. Every login is an admin and reaches the whole admin (FER-038),
+ * The store an admin works on, if the caller is still an enabled login on a
+ * live session (`findLogin`), else `null`. Every login is an admin and reaches the whole admin (FER-038),
  * once it has chosen its own password: one still on the temporary password
  * an admin gave it (FER-015) is FORBIDDEN, and reaches only the page that
  * changes it.
  */
-export async function findAdminStore(db: DatabaseClient, userId: string) {
-  const login = await findLogin(db, userId);
+export async function findAdminStore(db: DatabaseClient, caller: SessionRef) {
+  const login = await findLogin(db, caller);
 
   if (!login) {
     return null;

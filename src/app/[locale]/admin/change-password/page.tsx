@@ -12,7 +12,7 @@ import { requireLogin } from "@/lib/admin/access";
 import {
   ADMIN_CHANGE_PASSWORD,
   ADMIN_SIGN_IN,
-  safeReturnPath,
+  afterPasswordChangePath,
 } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -30,7 +30,7 @@ interface ChangePasswordPageProps {
  * (every other admin page sends it here first), or whenever it wants, from
  * the shell's "Cambiar contraseña". Behind a session, like every admin
  * page; it lands where `?next=` points once saved, when that is an admin
- * page of this site. A login still on the temporary password can only sign
+ * page of this site other than this one. A login still on the temporary password can only sign
  * out from here; one that chose its own can go back.
  */
 export default async function ChangePasswordPage({
@@ -90,7 +90,7 @@ export async function ChangePasswordCard({
   const { admin } = getDictionary(locale);
   const copy = admin.password;
   const { next } = await searchParams;
-  const redirectTo = safeReturnPath(next, locale);
+  const redirectTo = afterPasswordChangePath(next, locale);
   const here =
     typeof next === "string"
       ? `${localizePath(ADMIN_CHANGE_PASSWORD, locale)}?next=${encodeURIComponent(next)}`

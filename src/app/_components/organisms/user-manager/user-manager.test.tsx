@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
@@ -205,7 +205,15 @@ function setup({
     return { button, sheet };
   };
 
-  return { disableBea, fillNewLogin, fillReset, rows, spies, user };
+  return {
+    disableBea,
+    fillNewLogin,
+    fillReset,
+    queryClient,
+    rows,
+    spies,
+    user,
+  };
 }
 
 describe("UserManager", () => {
@@ -420,7 +428,7 @@ describe("UserManager", () => {
     const held = new Promise((resolve) => {
       release = resolve;
     });
-    const { fillNewLogin, spies, user } = setup();
+    const { fillNewLogin, queryClient, user } = setup();
     server.use(
       createOrpcHandler("user.create", async () => {
         await held;
@@ -437,9 +445,18 @@ describe("UserManager", () => {
       });
       release(undefined);
 
-      // Once the list is read again for it, no summary reopened the sheet.
+      // Once the creation settled and the code after it ran, no summary
+      // reopened the sheet.
       await waitFor(() => {
-        expect(spies.list.mock.calls).toEqual([[undefined], [undefined]]);
+        expect(
+          queryClient
+            .getMutationCache()
+            .getAll()
+            .map((mutation) => mutation.state.status)
+        ).toEqual(["success"]);
+      });
+      await act(async () => {
+        await Promise.resolve();
       });
       expect(screen.queryByTestId("login-sheet")).toBeNull();
     } finally {

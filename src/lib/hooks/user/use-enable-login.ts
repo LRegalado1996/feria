@@ -5,8 +5,9 @@ import { orpc } from "@/lib/orpc/client";
 import { loginsKey } from "./use-logins";
 
 /**
- * Enables a disabled login again (FER-015). The list is read again either way: a refusal (the last
- * enabled login, a login gone) means the list on screen is out of date.
+ * Enables a disabled login again (FER-015). The list is read again either
+ * way: a refusal (the superadmin, a login gone) means the list on screen is
+ * out of date.
  */
 export function useEnableLogin() {
   const queryClient = useQueryClient();

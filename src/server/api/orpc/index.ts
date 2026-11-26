@@ -141,7 +141,10 @@ const signedInProcedure = os
  */
 export const loginProcedure = signedInProcedure.use(
   async ({ context, next }) => {
-    const login = await findLogin(context.db, context.session.user.id);
+    const login = await findLogin(context.db, {
+      sessionId: context.session.session.id,
+      userId: context.session.user.id,
+    });
 
     if (!login) {
       throw new ORPCError("UNAUTHORIZED");
@@ -164,7 +167,10 @@ export const loginProcedure = signedInProcedure.use(
  */
 export const adminProcedure = signedInProcedure.use(
   async ({ context, next }) => {
-    const store = await findAdminStore(context.db, context.session.user.id);
+    const store = await findAdminStore(context.db, {
+      sessionId: context.session.session.id,
+      userId: context.session.user.id,
+    });
 
     if (!store) {
       throw new ORPCError("UNAUTHORIZED");

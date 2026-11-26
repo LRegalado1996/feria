@@ -643,6 +643,8 @@ export const admin: Dictionary["admin"] = {
     back: "Back to the dashboard",
     errors: {
       save: "We couldn't save the password. Please try again.",
+      tooMany:
+        "Too many tries with a wrong password. Try again in {minutes} min.",
       wrongCurrent: "The current password is not correct.",
       wrongTemporary: "The temporary password is not correct.",
     },

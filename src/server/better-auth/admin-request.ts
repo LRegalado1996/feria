@@ -31,7 +31,10 @@ export async function isAdminRequest(headers: Headers): Promise<boolean> {
   }
 
   // A login still on a temporary password (FER-015) is no admin yet.
-  const login = await findLogin(db, session.user.id);
+  const login = await findLogin(db, {
+    sessionId: session.session.id,
+    userId: session.user.id,
+  });
 
   return login !== null && !login.mustChangePassword;
 }

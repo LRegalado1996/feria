@@ -82,10 +82,10 @@ describe("admin.me", () => {
         mustChangePassword,
         name: "Test User",
       });
-      expect(services.findLogin).toHaveBeenCalledExactlyOnceWith(
-        db,
-        "test-user-id"
-      );
+      expect(services.findLogin).toHaveBeenCalledExactlyOnceWith(db, {
+        sessionId: "test-session-id",
+        userId: "test-user-id",
+      });
     }
   );
 

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { ORPCError } from "@orpc/server";
 import {
   and,
@@ -11,10 +13,10 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { LOGIN_REFUSALS } from "@/lib/schemas/access";
+import { LOGIN_REFUSALS, PASSWORD_ATTEMPTS } from "@/lib/schemas/access";
 import type { AccountAuth } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
-import { account, session, user } from "@/server/db/schema";
+import { account, rateLimit, session, user } from "@/server/db/schema";
 
 // Better Auth's provider id for an email and password.
 const CREDENTIAL_PROVIDER = "credential";
@@ -239,13 +241,31 @@ export async function resetLoginPassword(
 }
 
 /**
+ * The login's wrong tries, kept in Better Auth's rate-limit table under a
+ * key of its own, which Better Auth's own keys (an address and a path)
+ * never take.
+ */
+function attemptsKey(userId: string): string {
+  return `change-password:${userId}`;
+}
+
+type ChangeOutcome =
+  | { kind: "changed" }
+  | { kind: "limited"; retryAfter: number }
+  | { kind: "wrong" };
+
+/**
  * The signed-in login choosing its own password (FER-015): after a
  * temporary one, or whenever it wants. It must know the current one. Its
  * other sessions end, the one it is using stays, and it is no longer sent
- * to change it.
+ * to change it. After `PASSWORD_ATTEMPTS.max` wrong current passwords it
+ * is refused with TOO_MANY_REQUESTS until `PASSWORD_ATTEMPTS.windowMs` has
+ * passed since the last one; a change clears the count.
  *
- * The user row and its password are locked before the current password is
- * checked, so a reset by an admin meanwhile is either seen here or waits.
+ * The user row, its password and its count are locked before the current
+ * password is checked, so a reset by an admin meanwhile is either seen here
+ * or waits, and two tries at once are counted one after the other. A wrong
+ * try commits its count before it is refused.
  */
 export async function changeOwnPassword(
   auth: AccountAuth,
@@ -264,8 +284,11 @@ export async function changeOwnPassword(
   }
 ) {
   const context = await auth.$context;
+  // Hashed before the locks: it is the slow part, and needs none.
+  const newHash = await context.password.hash(newPassword);
+  const key = attemptsKey(userId);
 
-  return await db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx): Promise<ChangeOutcome> => {
     const [login] = await lockLogins(
       tx,
       and(eq(user.id, userId), isNull(user.disabledAt))
@@ -273,6 +296,25 @@ export async function changeOwnPassword(
 
     if (!login) {
       throw new ORPCError("UNAUTHORIZED");
+    }
+
+    const now = Date.now();
+    const [attempts] = await tx
+      .select({ count: rateLimit.count, lastRequest: rateLimit.lastRequest })
+      .from(rateLimit)
+      .where(eq(rateLimit.key, key))
+      .for("update");
+    const sinceLast = attempts ? now - attempts.lastRequest : null;
+    const recent =
+      attempts !== undefined &&
+      sinceLast !== null &&
+      sinceLast < PASSWORD_ATTEMPTS.windowMs;
+
+    if (recent && attempts.count >= PASSWORD_ATTEMPTS.max) {
+      return {
+        kind: "limited",
+        retryAfter: Math.ceil((PASSWORD_ATTEMPTS.windowMs - sinceLast) / 1000),
+      };
     }
 
     const [credential] = await tx
@@ -294,14 +336,21 @@ export async function changeOwnPassword(
       }));
 
     if (!(credential && matches)) {
-      throw new ORPCError("BAD_REQUEST", {
-        message: LOGIN_REFUSALS.wrongCurrentPassword,
-      });
+      const count = recent ? attempts.count + 1 : 1;
+      await tx
+        .insert(rateLimit)
+        .values({ count, id: randomUUID(), key, lastRequest: now })
+        .onConflictDoUpdate({
+          set: { count, lastRequest: now },
+          target: rateLimit.key,
+        });
+
+      return { kind: "wrong" };
     }
 
     await tx
       .update(account)
-      .set({ password: await context.password.hash(newPassword) })
+      .set({ password: newHash })
       .where(eq(account.id, credential.id));
     await tx
       .update(user)
@@ -310,7 +359,23 @@ export async function changeOwnPassword(
     await tx
       .delete(session)
       .where(and(eq(session.userId, userId), ne(session.id, sessionId)));
+    await tx.delete(rateLimit).where(eq(rateLimit.key, key));
 
-    return { id: userId, mustChangePassword: false };
+    return { kind: "changed" };
   });
+
+  if (outcome.kind === "limited") {
+    throw new ORPCError("TOO_MANY_REQUESTS", {
+      data: { retryAfter: outcome.retryAfter },
+      message: LOGIN_REFUSALS.tooManyPasswordAttempts,
+    });
+  }
+
+  if (outcome.kind === "wrong") {
+    throw new ORPCError("BAD_REQUEST", {
+      message: LOGIN_REFUSALS.wrongCurrentPassword,
+    });
+  }
+
+  return { id: userId, mustChangePassword: false };
 }

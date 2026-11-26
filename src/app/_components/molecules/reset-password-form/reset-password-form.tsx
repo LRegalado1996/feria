@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
 import {
@@ -41,15 +41,16 @@ function ResetPasswordForm({
 }: ResetPasswordFormProps) {
   const copy = useDictionary().admin.users;
   const [failed, setFailed] = useState(false);
-  const [saving, setSaving] = useState(false);
   const form = useForm<ResetPasswordFormValues>({
     defaultValues: { password: "" },
     resolver: zodResolver(createResetPasswordFormSchema(copy.validation)),
   });
+  // A hook, not `form.formState`: the React Compiler memoizes a read off the
+  // stable `form` object, and the controls would never update.
+  const { isSubmitting: saving } = useFormState({ control: form.control });
 
   const submit = async (values: ResetPasswordFormValues) => {
     setFailed(false);
-    setSaving(true);
     let saved: boolean;
 
     try {
@@ -59,7 +60,6 @@ function ResetPasswordForm({
       saved = false;
     }
 
-    setSaving(false);
     setFailed(!saved);
   };
 

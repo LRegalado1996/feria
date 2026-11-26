@@ -61,14 +61,34 @@ function isPageOrUnder(pathname: string, page: string): boolean {
 const PROBE_ORIGIN = "https://admin.invalid";
 
 /**
- * Where to go after signing in or changing the password: the `next` the page
- * was given, if it is an admin page of this site, else the admin's landing
- * in `locale`. `next` comes from the URL, so it is attacker-controlled: an
- * absolute or protocol-relative URL (`//evil.example`), a backslash trick, a
- * page outside the admin, or the sign-in or change-password page itself all
- * fall back.
+ * Where to go after signing in: the `next` the sign-in page was given, if it
+ * is an admin page of this site, else the admin's landing in `locale`.
+ * `next` comes from the URL, so it is attacker-controlled: an absolute or
+ * protocol-relative URL (`//evil.example`), a backslash trick, a page
+ * outside the admin or the sign-in page itself all fall back. The
+ * change-password page is a fine place to come back to (FER-015).
  */
 export function safeReturnPath(next: unknown, locale: Locale): string {
+  return returnPathOutside(next, locale, [ADMIN_SIGN_IN]);
+}
+
+/**
+ * Where to go once the password is changed (FER-015): `safeReturnPath`'s
+ * rules, and never the change-password page again.
+ */
+export function afterPasswordChangePath(next: unknown, locale: Locale): string {
+  return returnPathOutside(next, locale, [
+    ADMIN_SIGN_IN,
+    ADMIN_CHANGE_PASSWORD,
+  ]);
+}
+
+/** `next` if it is an admin page of this site outside `excluded`. */
+function returnPathOutside(
+  next: unknown,
+  locale: Locale,
+  excluded: readonly string[]
+): string {
   const fallback = localizePath(ADMIN_HOME, locale);
 
   if (
@@ -88,13 +108,11 @@ export function safeReturnPath(next: unknown, locale: Locale): string {
   const url = new URL(next, PROBE_ORIGIN);
   const { pathname } = splitLocale(url.pathname);
   const inAdmin = isPageOrUnder(pathname, ADMIN_HOME);
-  const isAuthPage =
-    isPageOrUnder(pathname, ADMIN_SIGN_IN) ||
-    isPageOrUnder(pathname, ADMIN_CHANGE_PASSWORD);
+  const isExcluded = excluded.some((page) => isPageOrUnder(pathname, page));
 
   // In the page's own language, like the fallback: a link cannot switch the
   // admin's language by what it puts in `next`.
-  return url.origin === PROBE_ORIGIN && inAdmin && !isAuthPage
+  return url.origin === PROBE_ORIGIN && inAdmin && !isExcluded
     ? `${localizePath(pathname, locale)}${url.search}`
     : fallback;
 }

@@ -182,7 +182,10 @@ describe("user router", () => {
         name: "Ana",
       },
     ]);
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, ACTOR);
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: ACTOR,
+    });
     expect(services.listLogins).toHaveBeenCalledExactlyOnceWith(db);
     expect(services.withAdmin).not.toHaveBeenCalled();
   });

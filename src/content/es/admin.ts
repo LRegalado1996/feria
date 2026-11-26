@@ -661,6 +661,8 @@ export const admin = {
     back: "Volver al panel",
     errors: {
       save: "No pudimos guardar la contraseña. Probá de nuevo.",
+      tooMany:
+        "Demasiados intentos con una contraseña incorrecta. Probá de nuevo en {minutes} min.",
       wrongCurrent: "La contraseña actual no es correcta.",
       wrongTemporary: "La contraseña temporal no es correcta.",
     },

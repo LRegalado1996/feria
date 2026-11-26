@@ -6,6 +6,7 @@ import {
   ADMIN_LANDING_SECTION,
   ADMIN_SECTIONS,
   adminSectionPath,
+  afterPasswordChangePath,
   changePasswordPath,
   isAdminSection,
   readRowId,
@@ -73,7 +74,6 @@ describe("safeReturnPath", () => {
     ["/admin/products", "/admin/products"],
     ["/admin", "/admin"],
     ["/admin/orders?status=received", "/admin/orders?status=received"],
-    // Only the page itself is refused, not one that starts with its name.
     ["/admin/change-passwords", "/admin/change-passwords"],
     ["/admin/users", "/admin/users"],
   ])("goes back to the admin page %j", (next, expected) => {
@@ -102,9 +102,6 @@ describe("safeReturnPath", () => {
     ["/administrator"],
     ["/admin/sign-in"],
     ["/en/admin/sign-in?next=/admin"],
-    ["/admin/change-password"],
-    ["/en/admin/change-password?next=%2Fen%2Fadmin"],
-    ["/admin/change-password/again"],
     ["admin"],
     [""],
     [undefined],
@@ -113,6 +110,38 @@ describe("safeReturnPath", () => {
   ])("falls back to the landing for %j", (next) => {
     expect(safeReturnPath(next, "en")).toBe("/en/admin");
   });
+
+  test("comes back to the change-password page a signed-out visit was sent from (FER-015)", () => {
+    expect(
+      safeReturnPath("/admin/change-password?next=%2Fadmin%2Fusers", "es")
+    ).toBe("/admin/change-password?next=%2Fadmin%2Fusers");
+  });
+});
+
+describe("afterPasswordChangePath", () => {
+  test.each([
+    ["/admin/users", "/admin/users"],
+    ["/admin/orders?status=received", "/admin/orders?status=received"],
+    // Only the page itself is refused, not one that starts with its name.
+    ["/admin/change-passwords", "/admin/change-passwords"],
+  ])("goes on to the admin page %j", (next, expected) => {
+    expect(afterPasswordChangePath(next, "es")).toBe(expected);
+  });
+
+  test.each([
+    ["/admin/change-password"],
+    ["/en/admin/change-password?next=%2Fen%2Fadmin"],
+    ["/admin/change-password/again"],
+    ["/admin/sign-in"],
+    ["//evil.example/admin"],
+    ["/products"],
+    [undefined],
+  ])(
+    "falls back to the landing for %j, never the change-password page again",
+    (next) => {
+      expect(afterPasswordChangePath(next, "en")).toBe("/en/admin");
+    }
+  );
 });
 
 describe("readRowId", () => {

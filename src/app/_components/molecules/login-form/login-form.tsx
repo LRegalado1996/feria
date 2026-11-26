@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
 import { Input } from "@/app/_components/atoms/input";
@@ -43,15 +43,16 @@ function LoginForm({ className, onCancel, onSave }: LoginFormProps) {
   const { admin } = useDictionary();
   const copy = admin.users;
   const [failed, setFailed] = useState(false);
-  const [saving, setSaving] = useState(false);
   const form = useForm<LoginFormValues>({
     defaultValues: { email: "", name: "", password: "" },
     resolver: zodResolver(createLoginFormSchema(copy.validation)),
   });
+  // A hook, not `form.formState`: the React Compiler memoizes a read off the
+  // stable `form` object, and the controls would never update.
+  const { isSubmitting: saving } = useFormState({ control: form.control });
 
   const submit = async (values: LoginFormValues) => {
     setFailed(false);
-    setSaving(true);
     let outcome: LoginFormOutcome;
 
     try {
@@ -62,8 +63,6 @@ function LoginForm({ className, onCancel, onSave }: LoginFormProps) {
       reportError(error, { action: "Users.create_login" });
       outcome = "failed";
     }
-
-    setSaving(false);
 
     if (outcome === "taken") {
       form.setError("email", { message: copy.errors.emailTaken });

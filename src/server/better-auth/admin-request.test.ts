@@ -52,7 +52,10 @@ describe("isAdminRequest", () => {
       headers,
       query: { disableCookieCache: true },
     });
-    expect(findLogin).toHaveBeenCalledExactlyOnceWith(db, "user-1");
+    expect(findLogin).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "session-1",
+      userId: "user-1",
+    });
   });
 
   test.each([

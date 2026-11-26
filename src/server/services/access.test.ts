@@ -33,21 +33,25 @@ describe("findLogin", () => {
       mustChangePassword: true,
     });
 
-    await expect(findLogin(db as never, "user-1")).resolves.toEqual({
+    await expect(
+      findLogin(db as never, { sessionId: "session-1", userId: "user-1" })
+    ).resolves.toEqual({
       id: "user-1",
       mustChangePassword: true,
     });
     expect(userRead().columns).toEqual({ id: true, mustChangePassword: true });
     expect(renderQuery(userRead().where)).toEqual({
-      params: ["user-1"],
-      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+      params: ["user-1", "session-1"],
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
     });
   });
 
   test("answers null for a login the database no longer has, or has disabled", async () => {
     const { db } = setup();
 
-    await expect(findLogin(db as never, "gone")).resolves.toBeNull();
+    await expect(
+      findLogin(db as never, { sessionId: "session-1", userId: "gone" })
+    ).resolves.toBeNull();
   });
 });
 
@@ -60,12 +64,14 @@ describe("findAdminStore", () => {
     });
     db.$["select.limit"].mockResolvedValue([{ id: 3 }]);
 
-    await expect(findAdminStore(db as never, "user-1")).resolves.toEqual({
+    await expect(
+      findAdminStore(db as never, { sessionId: "session-1", userId: "user-1" })
+    ).resolves.toEqual({
       id: 3,
     });
     expect(renderQuery(userRead().where)).toEqual({
-      params: ["user-1"],
-      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+      params: ["user-1", "session-1"],
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
     });
     expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: store.id });
     expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
@@ -79,7 +85,9 @@ describe("findAdminStore", () => {
       mustChangePassword: true,
     });
 
-    await expect(findAdminStore(db as never, "user-1")).rejects.toMatchObject({
+    await expect(
+      findAdminStore(db as never, { sessionId: "session-1", userId: "user-1" })
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
       message: "Change the temporary password first",
     });
@@ -93,7 +101,9 @@ describe("findAdminStore", () => {
       mustChangePassword: false,
     });
 
-    await expect(findAdminStore(db as never, "user-1")).rejects.toMatchObject({
+    await expect(
+      findAdminStore(db as never, { sessionId: "session-1", userId: "user-1" })
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Store not found",
     });
@@ -102,7 +112,9 @@ describe("findAdminStore", () => {
   test("answers null for a login gone or disabled, without reading the store", async () => {
     const { db } = setup();
 
-    await expect(findAdminStore(db as never, "gone")).resolves.toBeNull();
+    await expect(
+      findAdminStore(db as never, { sessionId: "session-1", userId: "gone" })
+    ).resolves.toBeNull();
     expect(db.$.select).not.toHaveBeenCalled();
   });
 });
