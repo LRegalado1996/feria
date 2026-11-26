@@ -166,10 +166,10 @@ describe("category router", () => {
       },
     ]);
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      USER_ID
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: USER_ID,
+    });
     expect(services.listStoreCategories).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });

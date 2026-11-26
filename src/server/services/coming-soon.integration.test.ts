@@ -9,7 +9,12 @@ import { createAccount } from "@/server/better-auth/accounts";
 import { isAdminRequest } from "@/server/better-auth/admin-request";
 import { auth } from "@/server/better-auth/config";
 import { type DatabaseClient, db } from "@/server/db";
-import { comingSoon, comingSoonTranslation, user } from "@/server/db/schema";
+import {
+  comingSoon,
+  comingSoonTranslation,
+  session,
+  user,
+} from "@/server/db/schema";
 import { theStoreId } from "@/server/test/one-store";
 import {
   backendPid,
@@ -88,7 +93,7 @@ async function signIn() {
     password,
   });
   createdUserIds.push(account.id);
-  const { headers } = await auth.api.signInEmail({
+  const { headers, response } = await auth.api.signInEmail({
     body: { email, password },
     returnHeaders: true,
   });
@@ -96,8 +101,17 @@ async function signIn() {
     .getSetCookie()
     .map((line) => line.split(";")[0])
     .join("; ");
+  // The procedures re-read the session too, by its id (FER-015).
+  const opened = await db.query.session.findFirst({
+    columns: { id: true },
+    where: eq(session.token, response.token),
+  });
 
-  return { cookie, userId: account.id };
+  if (!opened) {
+    throw new Error("The sign-in opened no session");
+  }
+
+  return { cookie, sessionId: opened.id, userId: account.id };
 }
 
 describe("the coming-soon page in the database", () => {
@@ -385,9 +399,11 @@ describe("who may see and flip it", () => {
 
   test("the switch's procedure refuses a signed-out caller and a removed login, and flips it for a login", async () => {
     await setup();
-    const { userId } = await signIn();
-    const as = (session: { user: { id: string } } | null) => ({
-      context: { db, headers: new Headers(), session } as never,
+    const { sessionId, userId } = await signIn();
+    const as = (
+      signedIn: { session: { id: string }; user: { id: string } } | null
+    ) => ({
+      context: { db, headers: new Headers(), session: signedIn } as never,
     });
 
     await expect(
@@ -399,7 +415,7 @@ describe("who may see and flip it", () => {
       call(
         comingSoonRouter.setPublished,
         { published: false },
-        as({ user: { id: userId } })
+        as({ session: { id: sessionId }, user: { id: userId } })
       )
     ).resolves.toEqual({ published: false });
     await expect(isComingSoonPublished(db)).resolves.toBe(false);
@@ -409,7 +425,7 @@ describe("who may see and flip it", () => {
       call(
         comingSoonRouter.setPublished,
         { published: true },
-        as({ user: { id: userId } })
+        as({ session: { id: sessionId }, user: { id: userId } })
       )
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(isComingSoonPublished(db)).resolves.toBe(false);

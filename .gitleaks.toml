@@ -51,3 +51,13 @@ paths = [
   '''^docs/tickets/FER-0(32|82)-[a-z-]+\.md$''',
 ]
 regexes = ['''^239a2df8583d65e79cf2271b09b4c09c$''']
+
+[[allowlists]]
+description = "FER-015: made-up temporary passwords that the users tests wrote in these two commits before following the synthetic- rule. The branch tip replaced them; pushed history keeps them, so exactly these values, in these test files and commits, stay allowed"
+condition = "AND"
+commits = [
+  "6e7e154d2d326cf0bde8b9769f57ad0e688e7315",
+  "4a8c2a94bfaac627f85ca460038ef1b0e2720026",
+]
+paths = ['''\.test\.tsx?$''']
+regexes = ['''^temporal-123$''', '''^temporary-123$''', '''^temporary-456$''']

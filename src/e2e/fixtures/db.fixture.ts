@@ -133,9 +133,12 @@ export interface DbFixture {
       ) => Promise<{ id: number; valueIds: number[] }>;
       /**
        * A login that can sign in through the form (FER-009). Every login is
-       * an admin and reaches the whole admin (FER-038). Unique per call.
+       * an admin and reaches the whole admin (FER-038); a `superadmin` one
+       * no other login may disable or reset (FER-015). Unique per call.
        */
-      createLogin: () => Promise<SeededLogin>;
+      createLogin: (options?: {
+        role?: "member" | "superadmin";
+      }) => Promise<SeededLogin>;
     };
     /** The id of the store, the table's one row, which every spec shares. */
     storeId: number;
@@ -414,7 +417,7 @@ export const test = userTest.extend<DbFixture>({
             return { id: created.id, valueIds };
           },
 
-          createLogin: async () => {
+          createLogin: async ({ role = "member" } = {}) => {
             const id = crypto.randomUUID();
             const login = {
               email: `e2e-login-${id}@example.com`,
@@ -427,7 +430,7 @@ export const test = userTest.extend<DbFixture>({
 
             await db
               .insert(user)
-              .values({ email: login.email, id, name: login.name });
+              .values({ email: login.email, id, name: login.name, role });
             seeded.userIds.push(id);
             await db.insert(account).values({
               accountId: id,
@@ -453,6 +456,7 @@ export const test = userTest.extend<DbFixture>({
             filterIds: [...seeded.filterIds, ...createdRows.filterIds],
             filterValueIds: createdRows.filterValueIds,
             orderTokens: createdRows.orderTokens,
+            userIds: [...seeded.userIds, ...createdRows.userIds],
           });
         } finally {
           await pool.end();

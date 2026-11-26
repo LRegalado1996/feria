@@ -8,6 +8,7 @@ import { pageRouter } from "@/server/api/routers/page";
 import { productRouter } from "@/server/api/routers/product";
 import { storeRouter } from "@/server/api/routers/store";
 import { uploadRouter } from "@/server/api/routers/upload";
+import { userRouter } from "@/server/api/routers/user";
 
 export const appRouter = {
   admin: adminRouter,
@@ -20,6 +21,7 @@ export const appRouter = {
   product: productRouter,
   store: storeRouter,
   upload: uploadRouter,
+  user: userRouter,
 };
 
 export type AppRouter = typeof appRouter;
