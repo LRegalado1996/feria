@@ -15,6 +15,11 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/app/_components/atoms/button";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/app/_components/atoms/tooltip";
 import { AdminFrame } from "@/app/_components/molecules/admin-frame";
 import { AdminMenu } from "@/app/_components/molecules/admin-menu";
 import { AdminNav } from "@/app/_components/molecules/admin-nav";
@@ -149,18 +154,31 @@ function AdminSidebar({
         </div>
         <div className="flex items-center justify-between gap-2 pl-3">
           <LocaleToggle />
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {/* An icon beside the theme, not a row of its own: the phone's
+                menu keeps its height, so sign-out stays on a short screen.
+                Back to this section once the new password is saved
+                (FER-015). */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button asChild size="icon-sm" variant="ghost">
+                  <Link
+                    aria-label={dictionary.shell.changePassword}
+                    data-testid="admin-change-password-link"
+                    href={changePasswordPath(
+                      adminSectionPath(current, locale),
+                      locale
+                    )}
+                  >
+                    <KeyRound aria-hidden="true" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{dictionary.shell.changePassword}</TooltipContent>
+            </Tooltip>
+            <ThemeToggle />
+          </div>
         </div>
-        {/* Back to this section once the new password is saved (FER-015). */}
-        <Button asChild className="w-full justify-start" variant="outline">
-          <Link
-            data-testid="admin-change-password-link"
-            href={changePasswordPath(adminSectionPath(current, locale), locale)}
-          >
-            <KeyRound aria-hidden="true" />
-            {dictionary.shell.changePassword}
-          </Link>
-        </Button>
         <SignOutButton
           className="w-full justify-start"
           redirectTo={ADMIN_SIGN_IN}
