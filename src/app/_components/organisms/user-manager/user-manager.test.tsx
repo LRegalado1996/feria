@@ -174,7 +174,7 @@ function setup({
     );
     await enter(
       within(sheet).getByLabelText(/^Temporary password/u),
-      "temporary-123"
+      "synthetic-temporary-123"
     );
     return sheet;
   };
@@ -363,14 +363,14 @@ describe("UserManager", () => {
     expect(spies.create).toHaveBeenCalledExactlyOnceWith({
       email: "dani@example.com",
       name: "Dani",
-      password: "temporary-123",
+      password: "synthetic-temporary-123",
     });
     expect(
       within(sheet).getByTestId("login-credentials-email")
     ).toHaveTextContent("dani@example.com");
     expect(
       within(sheet).getByTestId("login-credentials-password")
-    ).toHaveTextContent("temporary-123");
+    ).toHaveTextContent("synthetic-temporary-123");
     // The list is read again for the new row.
     await waitFor(() => {
       expect(spies.list.mock.calls).toEqual([[undefined], [undefined]]);

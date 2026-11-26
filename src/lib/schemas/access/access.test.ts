@@ -104,11 +104,11 @@ describe("changePasswordSchema", () => {
   test("accepts a new password that differs from the current one", () => {
     expect(
       changePasswordSchema.parse({
-        currentPassword: "temporary-123",
+        currentPassword: "synthetic-temporary-123",
         newPassword: "my-own-password",
       })
     ).toEqual({
-      currentPassword: "temporary-123",
+      currentPassword: "synthetic-temporary-123",
       newPassword: "my-own-password",
     });
   });
@@ -116,7 +116,10 @@ describe("changePasswordSchema", () => {
   test.each([
     [
       "the same password",
-      { currentPassword: "temporary-123", newPassword: "temporary-123" },
+      {
+        currentPassword: "synthetic-temporary-123",
+        newPassword: "synthetic-temporary-123",
+      },
       {
         message: "The new password must differ from the current one",
         path: ["newPassword"],

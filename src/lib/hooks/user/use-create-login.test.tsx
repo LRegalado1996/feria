@@ -15,7 +15,7 @@ vi.mock("@/lib/orpc/client", async () => {
 const INPUT = {
   email: "ana@example.com",
   name: "Ana",
-  password: "temporal-123",
+  password: "synthetic-temporal-123",
 };
 
 function setup({ fails = false }: { fails?: boolean } = {}) {

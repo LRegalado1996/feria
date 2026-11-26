@@ -157,7 +157,7 @@ describe("a reset and a password change under two writers", () => {
       const pid = await backendPid(tx);
       await resetLoginPassword(auth, tx, {
         actorId: ana.id,
-        password: "temporary-456",
+        password: "synthetic-temporary-456",
         targetId: bea.id,
       });
       firstLocked.resolve(pid);
@@ -200,7 +200,9 @@ describe("a reset and a password change under two writers", () => {
       disabledAt: null,
       mustChangePassword: true,
     });
-    await expect(signIn(bea.email, "temporary-456")).resolves.toMatchObject({
+    await expect(
+      signIn(bea.email, "synthetic-temporary-456")
+    ).resolves.toMatchObject({
       user: { id: bea.id },
     });
   });
@@ -236,7 +238,7 @@ describe("temporary passwords against Better Auth", () => {
 
     await resetLoginPassword(auth, db, {
       actorId: ana.id,
-      password: "temporary-456",
+      password: "synthetic-temporary-456",
       targetId: bea.id,
     });
 
@@ -250,15 +252,15 @@ describe("temporary passwords against Better Auth", () => {
     });
     // Two sessions on the temporary password: the change keeps the one
     // making it and ends the other.
-    const here = await signIn(bea.email, "temporary-456");
-    await signIn(bea.email, "temporary-456");
+    const here = await signIn(bea.email, "synthetic-temporary-456");
+    await signIn(bea.email, "synthetic-temporary-456");
     const sessionHere = await db.query.session.findFirst({
       columns: { id: true },
       where: eq(session.token, here.token),
     });
 
     await changeOwnPassword(auth, db, {
-      currentPassword: "temporary-456",
+      currentPassword: "synthetic-temporary-456",
       newPassword: "bea-own-password",
       sessionId: sessionHere?.id ?? "",
       userId: bea.id,
@@ -277,7 +279,9 @@ describe("temporary passwords against Better Auth", () => {
     await expect(signIn(bea.email, "bea-own-password")).resolves.toMatchObject({
       user: { id: bea.id },
     });
-    await expect(signIn(bea.email, "temporary-456")).rejects.toMatchObject({
+    await expect(
+      signIn(bea.email, "synthetic-temporary-456")
+    ).rejects.toMatchObject({
       body: { code: "INVALID_EMAIL_OR_PASSWORD" },
     });
   });

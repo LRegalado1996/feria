@@ -38,7 +38,7 @@ vi.mock("@/env", () => ({
 vi.mock("@/server/better-auth", () => ({ auth: AUTH }));
 
 const PASSWORDS = {
-  currentPassword: "temporary-123",
+  currentPassword: "synthetic-temporary-123",
   newPassword: "my-own-password",
 };
 
@@ -143,7 +143,7 @@ describe("admin.changePassword", () => {
   test.each([
     [
       "a new password the same as the current one",
-      { newPassword: "temporary-123" },
+      { newPassword: "synthetic-temporary-123" },
     ],
     ["a new password one character short", { newPassword: "1234567" }],
     ["a new password past 128 characters", { newPassword: "x".repeat(129) }],

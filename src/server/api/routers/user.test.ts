@@ -82,12 +82,12 @@ const VALID_INPUTS = {
   create: {
     email: " Bea@Example.test ",
     name: " Bea ",
-    password: "temporary-123",
+    password: "synthetic-temporary-123",
   },
   disable: { id: "admin-b" },
   enable: { id: "admin-b" },
   list: undefined,
-  resetPassword: { id: "admin-b", password: "temporary-456" },
+  resetPassword: { id: "admin-b", password: "synthetic-temporary-456" },
 } as const;
 
 type Procedure = keyof typeof VALID_INPUTS;
@@ -206,7 +206,11 @@ describe("user router", () => {
     expect(services.createAccount).toHaveBeenCalledExactlyOnceWith(
       AUTH,
       TX,
-      { email: "bea@example.test", name: "Bea", password: "temporary-123" },
+      {
+        email: "bea@example.test",
+        name: "Bea",
+        password: "synthetic-temporary-123",
+      },
       { mustChangePassword: true }
     );
   });
@@ -219,7 +223,11 @@ describe("user router", () => {
     expect(services.createAccount).toHaveBeenCalledExactlyOnceWith(
       AUTH,
       TX,
-      { email: "bea@example.test", name: "Bea", password: "temporary-123" },
+      {
+        email: "bea@example.test",
+        name: "Bea",
+        password: "synthetic-temporary-123",
+      },
       { mustChangePassword: true }
     );
   });
@@ -251,7 +259,11 @@ describe("user router", () => {
     expect(services.resetLoginPassword).toHaveBeenCalledExactlyOnceWith(
       AUTH,
       db,
-      { actorId: ACTOR, password: "temporary-456", targetId: "admin-b" }
+      {
+        actorId: ACTOR,
+        password: "synthetic-temporary-456",
+        targetId: "admin-b",
+      }
     );
   });
 

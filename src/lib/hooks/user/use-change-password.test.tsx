@@ -11,7 +11,10 @@ vi.mock("@/lib/orpc/client", async () => {
   return orpcClientMock;
 });
 
-const INPUT = { currentPassword: "temporal-123", newPassword: "mi-propia-456" };
+const INPUT = {
+  currentPassword: "synthetic-temporal-123",
+  newPassword: "mi-propia-456",
+};
 
 function setup({ fails = false }: { fails?: boolean } = {}) {
   const change = vi.fn((_input: unknown) => ({

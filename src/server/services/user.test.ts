@@ -345,12 +345,12 @@ describe("resetLoginPassword", () => {
     await expect(
       resetLoginPassword(auth, db as never, {
         actorId: "admin-a",
-        password: "temporary-123",
+        password: "synthetic-temporary-123",
         targetId: "admin-b",
       })
     ).resolves.toEqual({ id: "admin-b", mustChangePassword: true });
 
-    expect(hash).toHaveBeenCalledExactlyOnceWith("temporary-123");
+    expect(hash).toHaveBeenCalledExactlyOnceWith("synthetic-temporary-123");
     expect(hash.mock.invocationCallOrder[0]).toBeLessThan(
       db.$.transaction.mock.invocationCallOrder[0] ?? 0
     );
@@ -360,7 +360,7 @@ describe("resetLoginPassword", () => {
     });
     expect(tx.$.update.mock.calls).toEqual([[account], [user]]);
     expect(tx.$["update.set"].mock.calls).toEqual([
-      [{ password: "hashed:temporary-123" }],
+      [{ password: "hashed:synthetic-temporary-123" }],
       [{ mustChangePassword: true }],
     ]);
     expect(
@@ -385,7 +385,7 @@ describe("resetLoginPassword", () => {
     await expect(
       resetLoginPassword(auth, db as never, {
         actorId: "admin-a",
-        password: "temporary-123",
+        password: "synthetic-temporary-123",
         targetId: "admin-a",
       })
     ).rejects.toMatchObject({
@@ -407,7 +407,7 @@ describe("resetLoginPassword", () => {
     await expect(
       resetLoginPassword(auth, db as never, {
         actorId: "admin-a",
-        password: "temporary-123",
+        password: "synthetic-temporary-123",
         targetId: "admin-b",
       })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
@@ -429,7 +429,7 @@ describe("resetLoginPassword", () => {
       await expect(
         resetLoginPassword(auth, db as never, {
           actorId: "admin-a",
-          password: "temporary-123",
+          password: "synthetic-temporary-123",
           targetId: "admin-b",
         })
       ).rejects.toMatchObject({
@@ -702,7 +702,7 @@ describe("the superadmin's protection", () => {
     await expect(
       resetLoginPassword(auth, db as never, {
         actorId: "admin-a",
-        password: "temporary-123",
+        password: "synthetic-temporary-123",
         targetId: "owner",
       })
     ).rejects.toMatchObject({

@@ -43,7 +43,7 @@ function setup({
     <LoginCredentials
       className="custom"
       email="ana@example.com"
-      password="temporal-123"
+      password="synthetic-temporal-123"
       signInPath={locale === "en" ? "/en/admin/sign-in" : "/admin/sign-in"}
     />,
     { locale }
@@ -62,7 +62,7 @@ function setup({
   };
 }
 
-const MESSAGE = `Dashboard: ${window.location.origin}/en/admin/sign-in\nEmail: ana@example.com\nTemporary password: temporal-123`;
+const MESSAGE = `Dashboard: ${window.location.origin}/en/admin/sign-in\nEmail: ana@example.com\nTemporary password: synthetic-temporal-123`;
 
 describe("LoginCredentials", () => {
   test("shows the email and the temporary password", () => {
@@ -72,7 +72,7 @@ describe("LoginCredentials", () => {
       "ana@example.com"
     );
     expect(screen.getByTestId("login-credentials-password")).toHaveTextContent(
-      "temporal-123"
+      "synthetic-temporal-123"
     );
     expect(screen.getByTestId("login-credentials")).toHaveClass("custom");
   });
@@ -137,7 +137,7 @@ describe("LoginCredentials", () => {
     await copy();
 
     expect(writeText).toHaveBeenCalledExactlyOnceWith(
-      `Panel: ${window.location.origin}/admin/sign-in\nEmail: ana@example.com\nContraseña temporal: temporal-123`
+      `Panel: ${window.location.origin}/admin/sign-in\nEmail: ana@example.com\nContraseña temporal: synthetic-temporal-123`
     );
     expect(status()).toHaveTextContent("Datos copiados.");
     expect(screen.getByText("Contraseña temporal")).toBeInTheDocument();

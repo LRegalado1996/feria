@@ -15,7 +15,7 @@ function makeValues(overrides: Partial<LoginFormValues> = {}): LoginFormValues {
   return {
     email: "ana@example.com",
     name: "Ana",
-    password: "temporal-123",
+    password: "synthetic-temporal-123",
     ...overrides,
   };
 }
@@ -151,7 +151,7 @@ describe("LoginForm", () => {
     );
     expect(field(/^Name/)).toHaveValue("Ana");
     expect(field(/^Email/)).toHaveValue("ana@example.com");
-    expect(field(/^Temporary password/)).toHaveValue("temporal-123");
+    expect(field(/^Temporary password/)).toHaveValue("synthetic-temporal-123");
     expect(screen.getByRole("button", { name: "Create user" })).toBeEnabled();
     expect(reportError).not.toHaveBeenCalled();
   });

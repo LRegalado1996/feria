@@ -121,7 +121,7 @@ function setup({
 
 const VALUES = {
   confirmPassword: "mi-propia-456",
-  currentPassword: "temporal-123",
+  currentPassword: "synthetic-temporal-123",
   newPassword: "mi-propia-456",
 };
 
@@ -135,7 +135,7 @@ describe("ChangePasswordForm", () => {
       expect(assign).toHaveBeenCalledExactlyOnceWith("/en/admin/users");
     });
     expect(change).toHaveBeenCalledExactlyOnceWith({
-      currentPassword: "temporal-123",
+      currentPassword: "synthetic-temporal-123",
       newPassword: "mi-propia-456",
     });
     expect(reportError).not.toHaveBeenCalled();
@@ -159,9 +159,9 @@ describe("ChangePasswordForm", () => {
     const { change, fresh, save } = setup();
 
     await save({
-      confirmPassword: "temporal-123",
-      currentPassword: "temporal-123",
-      newPassword: "temporal-123",
+      confirmPassword: "synthetic-temporal-123",
+      currentPassword: "synthetic-temporal-123",
+      newPassword: "synthetic-temporal-123",
     });
 
     await waitFor(() => {
@@ -183,7 +183,7 @@ describe("ChangePasswordForm", () => {
 
     await waitFor(() => {
       expect(change).toHaveBeenCalledExactlyOnceWith({
-        currentPassword: "temporal-123",
+        currentPassword: "synthetic-temporal-123",
         newPassword: "12345678",
       });
     });
@@ -252,7 +252,7 @@ describe("ChangePasswordForm", () => {
         ).toHaveAttribute("role", "alert");
       });
       expect(reportError).not.toHaveBeenCalled();
-      expect(current()).toHaveValue("temporal-123");
+      expect(current()).toHaveValue("synthetic-temporal-123");
       expect(assign).not.toHaveBeenCalled();
     }
   );
@@ -274,7 +274,7 @@ describe("ChangePasswordForm", () => {
       }),
       { action: "Account.change_password" }
     );
-    expect(current()).toHaveValue("temporal-123");
+    expect(current()).toHaveValue("synthetic-temporal-123");
     expect(fresh()).toHaveValue("mi-propia-456");
     expect(assign).not.toHaveBeenCalled();
   });
