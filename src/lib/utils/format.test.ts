@@ -4,6 +4,7 @@ import {
   APP_TIME_ZONE,
   businessDay,
   formatCalendarDay,
+  formatDayMonth,
   formatCurrencySign,
   formatDate,
   formatList,
@@ -369,6 +370,19 @@ describe("formatCalendarDay", () => {
     (day, spanish, english) => {
       expect(formatCalendarDay(day, "es")).toBe(spanish);
       expect(formatCalendarDay(day, "en")).toBe(english);
+    }
+  );
+});
+
+describe("formatDayMonth", () => {
+  test.each([
+    ["2026-12-05", "5 dic.", "Dec 5"],
+    ["2027-01-01", "1 ene.", "Jan 1"],
+  ])(
+    "%s is %j in Spanish and %j in English, no year, the day itself whatever the zone",
+    (day, spanish, english) => {
+      expect(formatDayMonth(day, "es")).toBe(spanish);
+      expect(formatDayMonth(day, "en")).toBe(english);
     }
   );
 });

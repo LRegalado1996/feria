@@ -107,10 +107,6 @@ export const admin = {
       renamed: "Categoría renombrada.",
     },
   },
-  comingSoon: {
-    body: "Esta sección todavía se está construyendo. Va a aparecer acá en una próxima versión.",
-    title: "Próximamente",
-  },
   filters: {
     add: {
       pending: "Agregando…",
@@ -214,6 +210,76 @@ export const admin = {
   },
   metadata: {
     title: "Panel",
+  },
+  metrics: {
+    adoption: {
+      created: "Artículos creados",
+      lastSignIn: "Último ingreso",
+      login: "Usuario",
+      logins: "Usuarios del panel",
+      never: "Nunca",
+      perWeek: "Artículos creados por semana",
+      title: "Uso del panel",
+      week: "Semana del {day}",
+      weekColumn: "Semana",
+    },
+    articles: {
+      article: "Artículo",
+      draft: "Borradores",
+      noViews: "Ningún artículo tuvo vistas en este período.",
+      published: "Publicados a la venta",
+      title: "Artículos",
+      topViewed: "Más vistos",
+      unavailable: "Publicados sin stock",
+      units: "Unidades pedidas",
+      untitled: "Sin título",
+      viewedNotOrdered: "Muy vistos y sin pedidos",
+      viewedNotOrderedHint:
+        "Los miran, pero ningún pedido del período los incluye.",
+      viewedNotOrderedNone:
+        "Todos los artículos vistos tienen al menos un pedido en este período.",
+      views: "Vistas",
+    },
+    day: "Día",
+    funnel: {
+      ofVisits: "{rate} de las visitas",
+      orders: "Pedidos",
+      title: "De la visita al pedido",
+      views: "Vistas de artículos",
+      visits: "Visitas a la tienda",
+    },
+    noData: "Sin datos en este período.",
+    orders: {
+      amountPerDay: "Monto por día en {currency}",
+      average: "Ticket promedio",
+      byCurrency: "Totales por moneda",
+      byStatus: "Por estado",
+      count: "Pedidos",
+      currency: "Moneda",
+      none: "No hubo pedidos en este período.",
+      perDay: "Pedidos por día",
+      share: "Del total",
+      status: "Estado",
+      title: "Pedidos",
+      topOrdered: "Más pedidos",
+      total: "Total",
+      undeliverable: "No se pudieron entregar: {rate}",
+      units: "Unidades",
+    },
+    range: {
+      label: "Período",
+      last: "{days} días",
+      lastYear: "1 año",
+      showing: "Del {from} al {to}",
+    },
+    showData: "Ver los datos",
+    title: "Métricas",
+    traffic: {
+      section: "Tráfico de la tienda",
+      title: "Visitas y vistas por día",
+      views: "Vistas",
+      visits: "Visitas",
+    },
   },
   orders: {
     actions: {

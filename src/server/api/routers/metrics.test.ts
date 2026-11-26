@@ -16,6 +16,10 @@ import { metricsRouter } from "./metrics";
 const services = vi.hoisted(() => ({
   countProductView: vi.fn(async () => "counted"),
   countStoreVisit: vi.fn(async () => "counted"),
+  findAdminStore: vi.fn(),
+  getDashboard: vi.fn(async () => ({
+    funnel: { orders: 4, views: 13, visits: 12 },
+  })),
   // The work handed past the response, kept for the test to start as the
   // platform would once the answer is sent.
   keepAlivePastResponse:
@@ -37,6 +41,16 @@ const services = vi.hoisted(() => ({
 vi.mock("@/server/services/metrics", () => ({
   countProductView: services.countProductView,
   countStoreVisit: services.countStoreVisit,
+}));
+
+vi.mock("@/server/services/dashboard", () => ({
+  getDashboard: services.getDashboard,
+}));
+
+// The admin's login and its store; the access rules are
+// `src/server/services/access.test.ts`'s.
+vi.mock("@/server/services/access", () => ({
+  findAdminStore: services.findAdminStore,
 }));
 
 vi.mock("@/server/api/utils/client-key", () => ({
@@ -281,5 +295,82 @@ describe("metrics.countVisit", () => {
 
     expect(services.keepAlivePastResponse).not.toHaveBeenCalled();
     expect(logged()).toEqual([{ metrics: { outcome } }]);
+  });
+});
+
+describe("metrics.dashboard", () => {
+  const RANGE = { from: "2026-11-01", locale: "es", to: "2026-11-30" };
+
+  /** The dashboard as a signed-in login of store 7 asks for it, or not. */
+  function setupDashboard({ signedIn = false } = {}) {
+    const { mockCtx } = signedIn
+      ? createMockContext()
+      : createUnauthenticatedMockContext();
+    services.findAdminStore.mockResolvedValue({ id: 7 });
+
+    return {
+      db: mockCtx.db,
+      read: async (input: unknown) =>
+        await call(metricsRouter.dashboard, input as never, {
+          context: mockCtx as never,
+        }),
+    };
+  }
+
+  test("refuses an anonymous caller before reading anything", async () => {
+    const { read } = setupDashboard();
+
+    await expect(read(RANGE)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    });
+    expect(services.findAdminStore).not.toHaveBeenCalled();
+    expect(services.getDashboard).not.toHaveBeenCalled();
+  });
+
+  test("reads the range for the login's store, never one from the input", async () => {
+    const { db, read } = setupDashboard({ signedIn: true });
+
+    await expect(read(RANGE)).resolves.toEqual({
+      funnel: { orders: 4, views: 13, visits: 12 },
+    });
+    expect(services.getDashboard).toHaveBeenCalledExactlyOnceWith(db, {
+      from: "2026-11-01",
+      locale: "es",
+      storeId: 7,
+      to: "2026-11-30",
+    });
+  });
+
+  test.each([
+    ["a range that ends before it starts", { ...RANGE, to: "2026-10-31" }],
+    ["a day that does not exist", { ...RANGE, from: "2026-02-30" }],
+    [
+      "a range of a year and a day",
+      { from: "2028-01-01", locale: "es", to: "2029-01-01" },
+    ],
+    ["a store of its own", { ...RANGE, storeId: 99 }],
+    ["a language the store does not speak", { ...RANGE, locale: "fr" }],
+  ])("refuses %s", async (_case, input) => {
+    const { read } = setupDashboard({ signedIn: true });
+
+    await expect(read(input)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
+    expect(services.getDashboard).not.toHaveBeenCalled();
+  });
+
+  test("takes a range of exactly a leap year", async () => {
+    const { db, read } = setupDashboard({ signedIn: true });
+
+    await read({ from: "2028-01-01", locale: "en", to: "2028-12-31" });
+
+    expect(services.getDashboard).toHaveBeenCalledExactlyOnceWith(db, {
+      from: "2028-01-01",
+      locale: "en",
+      storeId: 7,
+      to: "2028-12-31",
+    });
   });
 });

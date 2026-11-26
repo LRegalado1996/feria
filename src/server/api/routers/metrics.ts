@@ -1,10 +1,11 @@
-import { countViewSchema } from "@/lib/schemas/metrics";
+import { countViewSchema, dashboardSchema } from "@/lib/schemas/metrics";
 import { businessDay } from "@/lib/utils/format";
-import { publicProcedure } from "@/server/api/orpc";
+import { adminProcedure, publicProcedure } from "@/server/api/orpc";
 import { metricsBucket } from "@/server/api/utils/client-key";
 import { keepAlivePastResponse } from "@/server/api/utils/keep-alive-past-response";
 import { isKnownBot } from "@/server/api/utils/known-bot";
 import { safeRequestLogger } from "@/server/api/utils/logger";
+import { getDashboard } from "@/server/services/dashboard";
 import { countProductView, countStoreVisit } from "@/server/services/metrics";
 
 interface CountRequest {
@@ -65,9 +66,28 @@ function countAfterResponse(
  * page is shown, once per tab session: a visit to the store and a view
  * of an article. Public and cheap: the answer is always empty, whatever was
  * counted, and the day is the business day in Montevideo when the request
- * arrived.
+ * arrived. And the admin's dashboard (FER-030), which reads them with the
+ * store's orders and articles for a range of business days.
  */
 export const metricsRouter = {
+  dashboard: adminProcedure
+    .input(dashboardSchema)
+    .handler(
+      async ({ context, input }) =>
+        await getDashboard(context.db, {
+          from: input.from,
+          locale: input.locale,
+          storeId: context.store.id,
+          to: input.to,
+        })
+    )
+    .route({
+      method: "GET",
+      path: "/admin/metrics",
+      summary: "The store's metrics for a range of business days",
+      tags: ["metrics"],
+    }),
+
   countVisit: publicProcedure
     .handler(({ context }) => {
       const day = businessDay(new Date());
