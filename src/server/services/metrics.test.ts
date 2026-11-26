@@ -86,7 +86,10 @@ function setup({
   };
 }
 
-const DROP_OLD = { params: [DAY], sql: '"metric_rate_limit"."day" < $1' };
+const DROP_OLD = {
+  params: [DAY],
+  sql: '"metric_rate_limit"."day" < $1::date - 1',
+};
 
 function takeHitConflict(cap: number) {
   return {

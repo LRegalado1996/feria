@@ -27,12 +27,17 @@ interface CountScope {
 }
 
 /**
- * Deletes the buckets of the days before `day`: only today's are read, so
- * an older one is a client's trace kept for nothing. Its own statement,
- * outside the count's transaction, so the count's locks stay its own.
+ * Deletes the buckets of the days before yesterday: only today's are
+ * counted against, and yesterday's stay one more day for a count that took
+ * its day before midnight and is written after it, which must still find
+ * its bucket full rather than start a new one. An older one is a client's
+ * trace kept for nothing. Its own statement, outside the count's
+ * transaction, so the count's locks stay its own.
  */
 async function dropOldBuckets(db: DatabaseClient, day: string) {
-  await db.delete(metricRateLimit).where(lt(metricRateLimit.day, day));
+  await db
+    .delete(metricRateLimit)
+    .where(lt(metricRateLimit.day, sql`${day}::date - 1`));
 }
 
 /**

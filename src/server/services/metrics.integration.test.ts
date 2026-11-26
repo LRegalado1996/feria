@@ -38,6 +38,7 @@ vi.mock("@/env", () => ({
 // the days before it) are only this file's.
 const DAY = "2031-03-14";
 const NEXT_DAY = "2031-03-15";
+const DAY_AFTER_NEXT = "2031-03-16";
 // The store's one row of a day is shared: this day's is the visit test's.
 const VISIT_DAY = "2031-04-01";
 
@@ -242,21 +243,39 @@ describe("countProductView", () => {
     expect(await hitsOf(bucket, DAY)).toBeNull();
   });
 
-  test("a count on a new day deletes the buckets of the days before it", async () => {
+  test("a count keeps yesterday's buckets, so a late count of yesterday still meets its cap, and deletes the older ones", async () => {
     const article = await makeArticle();
+    // Yesterday's client, its bucket spent.
     const yesterday = makeBucket();
-    await countProductView(db, {
+    await db.insert(metricRateLimit).values({
       bucket: yesterday,
       day: DAY,
-      productId: article.id,
+      hits: PRODUCT_VIEWS_PER_CLIENT_PER_DAY,
     });
 
-    expect(await hitsOf(yesterday, DAY)).toBe(1);
-
+    // Midnight passes: today's first count cleans up.
     const today = makeBucket();
     await countProductView(db, {
       bucket: today,
       day: NEXT_DAY,
+      productId: article.id,
+    });
+
+    expect(await hitsOf(yesterday, DAY)).toBe(PRODUCT_VIEWS_PER_CLIENT_PER_DAY);
+
+    // A count that took its day before midnight, written after it.
+    await expect(
+      countProductView(db, {
+        bucket: yesterday,
+        day: DAY,
+        productId: article.id,
+      })
+    ).resolves.toBe("capped");
+
+    // The day after, yesterday's buckets go.
+    await countProductView(db, {
+      bucket: makeBucket(),
+      day: DAY_AFTER_NEXT,
       productId: article.id,
     });
 
