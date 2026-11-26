@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P2
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-060
 
 ## Goal
@@ -16,6 +16,10 @@ Found on 2026-11-20 on a local production build of FER-060: `/home` answers `200
 ## Scope
 
 - Answer the redirect before anything is sent: in `src/proxy.ts` from the cached home address, or in the route before any streamed boundary; keep it temporary (the home can change) and keep the canonical `/`.
+
+## Decision
+
+2026-11-25: done with [FER-069](FER-069-unknown-store-address-404.md), in `src/proxy.ts`, from the store's addresses the proxy keeps (which page is the home), not from a cached read: Next runs no `"use cache"` in the proxy. The redirect drops the query, as the route's did. A choice of the home made a moment ago is decided on a fresh read, so the new home's address leads to `/` at once; the old home can still be sent to `/` by its route for up to 5 seconds (the proxy lets a page through on addresses that old).
 
 ## Acceptance criteria
 

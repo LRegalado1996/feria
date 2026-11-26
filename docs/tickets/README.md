@@ -106,8 +106,9 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-058](FER-058-pages-built-from-sections.md)               | Pages built from sections: the home is the first                  | P0       | done       |
 | [FER-059](FER-059-home-article-spotlight.md)                  | An article in the spotlight on the home                           | P0       | done       |
 | [FER-060](FER-060-pages-from-the-admin.md)                    | Pages built from sections, from the admin                         | P0       | done       |
-| [FER-069](FER-069-unknown-store-address-404.md)               | An unknown store address answers 404                              | P1       | todo       |
-| [FER-070](FER-070-home-address-307.md)                        | The home's own address answers a 307                              | P2       | todo       |
+| [FER-069](FER-069-unknown-store-address-404.md)               | An unknown store address answers 404                              | P1       | done       |
+| [FER-070](FER-070-home-address-307.md)                        | The home's own address answers a 307                              | P2       | done       |
+| [FER-089](FER-089-category-outside-its-group-308.md)          | A category asked outside its group answers 308                    | P2       | done       |
 | [FER-074](FER-074-home-wording.md)                            | The store's home is called "Home" in every language               | P1       | done       |
 | [FER-075](FER-075-featured-row-and-cover-title.md)            | A longer "Destacados" row, a smaller cover title                  | P1       | done       |
 | [FER-076](FER-076-how-to-buy-block.md)                        | "Cómo comprar" as a block of the home                             | P1       | done       |
