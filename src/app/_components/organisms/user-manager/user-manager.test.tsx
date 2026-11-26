@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
@@ -767,9 +773,12 @@ describe("UserManager", () => {
       name: "Enable: Caro Gone",
     });
 
-    // Both in one go: React draws nothing in between.
-    fireEvent.click(button);
-    fireEvent.click(button);
+    // Both in one act: React commits nothing in between, so the second
+    // press sees what the first one left only through the ref.
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
 
     await waitFor(() => {
       expect(button).toHaveAttribute("aria-disabled", "true");
