@@ -11,7 +11,9 @@ const failedThisLoad = new Set<string>();
 
 /**
  * Sends a count once per tab session (FER-029: `sessionStorage`, which
- * each tab keeps apart, so a second tab counts again; no cookie): once the
+ * each tab keeps apart, so a second tab counts again, unless it was
+ * duplicated or opened from this one after the count, which copies the
+ * mark; no cookie): once the
  * page has loaded and the browser has an idle moment, so it never competes
  * with what the visitor came to see, unless `key` was counted this session.
  * The key is marked as the count is sent, so a reload or a return while
