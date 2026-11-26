@@ -3,14 +3,17 @@ import {
   Folder,
   Funnel,
   Files,
+  KeyRound,
   type LucideIcon,
   Settings,
   ShoppingBag,
   Tag,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { Button } from "@/app/_components/atoms/button";
 import { StoreLogo } from "@/app/_components/atoms/store-logo";
 import { AdminFrame } from "@/app/_components/molecules/admin-frame";
 import { AdminMenu } from "@/app/_components/molecules/admin-menu";
@@ -25,6 +28,7 @@ import {
   ADMIN_SIGN_IN,
   type AdminSection,
   adminSectionPath,
+  changePasswordPath,
 } from "@/lib/admin/paths";
 import type { Locale } from "@/lib/i18n/config";
 
@@ -53,10 +57,11 @@ export interface AdminShellProps {
 /**
  * The admin's chrome (FER-013, FER-040): the full logo, the sections with
  * their icons and the orders' count, and the signed-in login with the
- * language, the theme and sign-out. From `md` up it is a sidebar the height
- * of the window, beside the page on a grey canvas (`molecules/admin-frame`,
- * with the skip link and the main landmark); on a phone the same content
- * opens as a panel from the menu button in the page's top bar
+ * language, the theme, changing its password (FER-015) and sign-out. From
+ * `md` up it is a sidebar the height of the window, beside the page on a
+ * grey canvas (`molecules/admin-frame`, with the skip link and the main
+ * landmark); on a phone the same content opens as a panel from the menu
+ * button in the page's top bar
  * (`molecules/admin-page`). The same list for every login, since every
  * login is an admin (FER-038). Rendered by each page after it has checked
  * the session: the navigation is never the authorization, the page and the
@@ -146,6 +151,16 @@ function AdminSidebar({
           <LocaleToggle />
           <ThemeToggle />
         </div>
+        {/* Back to this section once the new password is saved (FER-015). */}
+        <Button asChild className="w-full justify-start" variant="outline">
+          <Link
+            data-testid="admin-change-password-link"
+            href={changePasswordPath(adminSectionPath(current, locale), locale)}
+          >
+            <KeyRound aria-hidden="true" />
+            {dictionary.shell.changePassword}
+          </Link>
+        </Button>
         <SignOutButton
           className="w-full justify-start"
           redirectTo={ADMIN_SIGN_IN}

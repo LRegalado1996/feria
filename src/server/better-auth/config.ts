@@ -6,6 +6,7 @@ import { USER_ROLES } from "@/lib/schemas/access";
 import { db } from "@/server/db";
 import * as schema from "@/server/db/schema";
 
+import { refuseDisabledLogin } from "./disabled-login";
 import { betterAuthLogger } from "./logger";
 import { getTrustedOrigins } from "./trusted-origins";
 
@@ -41,10 +42,15 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
-    // Closed sign-up (FER-009): logins are created by a superadmin or a store
-    // member through `createAccount`, never by a visitor. The HTTP route is
+    // Closed sign-up (FER-009): logins are created on the server through
+    // `createAccount` (the first-run script, the seed, the users screen of
+    // FER-015), never by a visitor. The HTTP route is
     // also answered 404 (`src/app/api/auth/[...all]/route.ts`).
     disableSignUp: true,
+  },
+  databaseHooks: {
+    // A login an admin disabled cannot sign in (FER-015).
+    session: { create: { before: refuseDisabledLogin(db) } },
   },
   user: {
     additionalFields: {

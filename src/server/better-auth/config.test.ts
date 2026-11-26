@@ -1,5 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 
+import { db } from "@/server/db";
+import type { MockDatabase } from "@/server/test/context";
+
 import { auth, isAuthRateLimitDisabled } from "./config";
 import { betterAuthLogger } from "./logger";
 import { getTrustedOrigins } from "./trusted-origins";
@@ -28,6 +31,27 @@ describe("auth config", () => {
       enabled: true,
       disableSignUp: true,
     });
+  });
+
+  test("refuses to open a session for a login an admin disabled (FER-015)", async () => {
+    const mockDb = db as unknown as MockDatabase;
+    mockDb.query.user.findFirst.mockResolvedValue({
+      disabledAt: new Date("2026-11-20T12:00:00.000Z"),
+    });
+    const before = auth.options.databaseHooks?.session?.create?.before;
+
+    await expect(before?.({ userId: "user-1" })).rejects.toMatchObject({
+      body: { code: "LOGIN_DISABLED", message: "This login is disabled" },
+      statusCode: 403,
+    });
+  });
+
+  test("opens a session for an enabled login", async () => {
+    const mockDb = db as unknown as MockDatabase;
+    mockDb.query.user.findFirst.mockResolvedValue({ disabledAt: null });
+    const before = auth.options.databaseHooks?.session?.create?.before;
+
+    await expect(before?.({ userId: "user-1" })).resolves.toBeUndefined();
   });
 
   test("declares the role as a field Better Auth never takes from a request", () => {

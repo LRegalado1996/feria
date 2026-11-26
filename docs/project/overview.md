@@ -67,6 +67,7 @@ Every signed-in login is an admin and reaches all of it.
 | Home curation        | `/admin/home`                          |
 | Company settings     | `/admin/settings`                      |
 | Users                | `/admin/users`                         |
+| Change password      | `/admin/change-password`               |
 | Metrics              | `/admin/metrics`                       |
 
 ## Template rules this project amends

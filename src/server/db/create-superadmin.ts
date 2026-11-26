@@ -47,9 +47,9 @@ interface CreateSuperadminOptions {
  * The first login of a fresh database (FER-009): sign-up is closed, so it
  * cannot be created any other way. Refused once any login exists, so running
  * it again, or against the wrong database, never adds a second one or
- * touches the first. Every later login is created by an admin (FER-015).
- * The script and its variables keep the name of the role it gave before
- * FER-038; every login is an admin now.
+ * touches the first. It is the superadmin: no other login may disable or
+ * reset it (Lucas, 2026-11-25). Every later login is created by an admin
+ * from the users screen (FER-015), as a `member`.
  */
 export async function createSuperadmin({
   auth,
@@ -77,10 +77,15 @@ export async function createSuperadmin({
       );
     }
 
-    return await createAccount(auth, tx, {
-      email: parsed.data.SUPERADMIN_EMAIL,
-      name: parsed.data.SUPERADMIN_NAME,
-      password: parsed.data.SUPERADMIN_PASSWORD,
-    });
+    return await createAccount(
+      auth,
+      tx,
+      {
+        email: parsed.data.SUPERADMIN_EMAIL,
+        name: parsed.data.SUPERADMIN_NAME,
+        password: parsed.data.SUPERADMIN_PASSWORD,
+      },
+      { role: "superadmin" }
+    );
   });
 }

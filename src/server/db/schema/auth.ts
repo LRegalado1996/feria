@@ -28,6 +28,13 @@ export const user = pgTable("user", {
   // multi-store model had. Declared to Better Auth as an additional field it
   // never takes from a request (`input: false`).
   role: userRoleEnum().notNull().default("member"),
+  // FER-015: when an admin disabled this login; null while it is enabled. A
+  // disabled login cannot sign in, and every procedure and page refuses it.
+  disabledAt: timestamp({ mode: "date", withTimezone: true, precision: 3 }),
+  // FER-015: the password is a temporary one an admin typed (a new login, a
+  // reset), so the admin sends it to the change-password page until it picks
+  // its own.
+  mustChangePassword: boolean().notNull().default(false),
   createdAt: timestamp({ mode: "date", withTimezone: true, precision: 3 })
     .notNull()
     .defaultNow(),

@@ -20,6 +20,7 @@ import { reportError } from "@/lib/errors/client";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
 import { useHydrated } from "@/lib/hooks/ui/use-hydrated";
 import { localizePath } from "@/lib/i18n/paths";
+import { LOGIN_DISABLED_CODE } from "@/lib/schemas/access";
 import { type AuthFormValues, createAuthSchema } from "@/lib/schemas/auth";
 import { authClient } from "@/server/better-auth/client";
 
@@ -29,6 +30,8 @@ import { authClient } from "@/server/better-auth/client";
 const ERROR_KEYS: Partial<Record<string, keyof Dictionary["auth"]["errors"]>> =
   {
     INVALID_EMAIL_OR_PASSWORD: "invalidCredentials",
+    // FER-015: the password matched, but an admin disabled the login.
+    [LOGIN_DISABLED_CODE]: "loginDisabled",
   };
 
 export interface AuthFormProps {

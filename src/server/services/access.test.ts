@@ -4,7 +4,13 @@ import { store, user } from "@/server/db/schema";
 import { createMockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { findAdminStore, hasLogin, withAdmin } from "./access";
+import {
+  findAdminStore,
+  findLogin,
+  hasLogin,
+  isLoginDisabled,
+  withAdmin,
+} from "./access";
 
 function setup() {
   const db = createMockDatabase();
@@ -19,40 +25,104 @@ function setup() {
   };
 }
 
-describe("findAdminStore", () => {
-  test("re-reads the login by its id, then answers the store's one row", async () => {
+describe("findLogin", () => {
+  test("re-reads the login by its id, enabled ones only, with whether it must change its password", async () => {
     const { db, userRead } = setup();
-    db.query.user.findFirst.mockResolvedValue({ id: "user-1" });
+    db.query.user.findFirst.mockResolvedValue({
+      id: "user-1",
+      mustChangePassword: true,
+    });
+
+    await expect(findLogin(db as never, "user-1")).resolves.toEqual({
+      id: "user-1",
+      mustChangePassword: true,
+    });
+    expect(userRead().columns).toEqual({ id: true, mustChangePassword: true });
+    expect(renderQuery(userRead().where)).toEqual({
+      params: ["user-1"],
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+    });
+  });
+
+  test("answers null for a login the database no longer has, or has disabled", async () => {
+    const { db } = setup();
+
+    await expect(findLogin(db as never, "gone")).resolves.toBeNull();
+  });
+});
+
+describe("findAdminStore", () => {
+  test("answers the store to an enabled login that chose its own password", async () => {
+    const { db, userRead } = setup();
+    db.query.user.findFirst.mockResolvedValue({
+      id: "user-1",
+      mustChangePassword: false,
+    });
     db.$["select.limit"].mockResolvedValue([{ id: 3 }]);
 
     await expect(findAdminStore(db as never, "user-1")).resolves.toEqual({
       id: 3,
     });
-
-    expect(userRead().columns).toEqual({ id: true });
     expect(renderQuery(userRead().where)).toEqual({
       params: ["user-1"],
-      sql: '"user"."id" = $1',
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
     });
     expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: store.id });
     expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
   });
 
-  test("answers null for a login the database no longer has, without reading the store", async () => {
+  test("refuses a login still on a temporary password with FORBIDDEN, without reading the store", async () => {
     const { db } = setup();
+    db.query.user.findFirst.mockResolvedValue({
+      id: "user-1",
+      mustChangePassword: true,
+    });
 
-    await expect(findAdminStore(db as never, "gone")).resolves.toBeNull();
+    await expect(findAdminStore(db as never, "user-1")).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Change the temporary password first",
+    });
     expect(db.$.select).not.toHaveBeenCalled();
   });
 
   test("answers NOT_FOUND when the store's row does not exist", async () => {
     const { db } = setup();
-    db.query.user.findFirst.mockResolvedValue({ id: "user-1" });
+    db.query.user.findFirst.mockResolvedValue({
+      id: "user-1",
+      mustChangePassword: false,
+    });
 
     await expect(findAdminStore(db as never, "user-1")).rejects.toMatchObject({
       code: "NOT_FOUND",
       message: "Store not found",
+    });
+  });
+
+  test("answers null for a login gone or disabled, without reading the store", async () => {
+    const { db } = setup();
+
+    await expect(findAdminStore(db as never, "gone")).resolves.toBeNull();
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+});
+
+describe("isLoginDisabled", () => {
+  test.each([
+    [true, { disabledAt: new Date("2026-11-20T12:00:00.000Z") }],
+    [false, { disabledAt: null }],
+    [false, undefined],
+  ])("is %s when the login's row is %j", async (expected, row) => {
+    const { db, userRead } = setup();
+    db.query.user.findFirst.mockResolvedValue(row);
+
+    await expect(isLoginDisabled(db as never, "user-1")).resolves.toBe(
+      expected
+    );
+    expect(userRead().columns).toEqual({ disabledAt: true });
+    expect(renderQuery(userRead().where)).toEqual({
+      params: ["user-1"],
+      sql: '"user"."id" = $1',
     });
   });
 });
@@ -66,7 +136,7 @@ describe("hasLogin", () => {
     db.query.user.findFirst.mockResolvedValue(row);
 
     await expect(hasLogin(db as never)).resolves.toBe(expected);
-    // Any login at all: no condition on who it is.
+    // Any login at all, disabled ones included: no condition on who it is.
     expect(userRead()).toEqual({ columns: { id: true } });
   });
 });
@@ -91,7 +161,7 @@ describe("withAdmin", () => {
     };
   }
 
-  test("writes after locking the caller's own user row FOR SHARE, all in one transaction", async () => {
+  test("writes after locking the caller's own row FOR SHARE, enabled and on its own password, all in one transaction", async () => {
     const { db, run, tx, write } = setupLocked({ isLogin: true });
 
     await expect(run()).resolves.toBe("written");
@@ -101,8 +171,8 @@ describe("withAdmin", () => {
     );
     expect(tx.$["select.from"]).toHaveBeenCalledExactlyOnceWith(user);
     expect(renderQuery(tx.$["select.where"].mock.calls[0]?.[0])).toEqual({
-      params: ["user-1"],
-      sql: '"user"."id" = $1',
+      params: ["user-1", false],
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and "user"."mustChangePassword" = $2)',
     });
     expect(tx.$["select.for"]).toHaveBeenCalledExactlyOnceWith("share");
     expect(write).toHaveBeenCalledExactlyOnceWith(tx);
@@ -111,7 +181,7 @@ describe("withAdmin", () => {
     );
   });
 
-  test("answers UNAUTHORIZED to a login that no longer exists, writing nothing", async () => {
+  test("answers UNAUTHORIZED when the lock finds no such login, writing nothing", async () => {
     const { run, write } = setupLocked({ isLogin: false });
 
     await expect(run()).rejects.toMatchObject({

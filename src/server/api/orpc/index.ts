@@ -7,7 +7,7 @@ import { captureExceptionWithScope } from "@/lib/sentry";
 import { safeRequestLogger } from "@/server/api/utils/logger";
 import { auth } from "@/server/better-auth";
 import { db } from "@/server/db";
-import { findAdminStore } from "@/server/services/access";
+import { findAdminStore, findLogin } from "@/server/services/access";
 
 /**
  * The request's session, or why it could not be read. A failed read (the
@@ -103,20 +103,13 @@ const timingMiddleware = o.middleware(async ({ next, path }) => {
 export const publicProcedure = o.use(timingMiddleware);
 
 /**
- * Every procedure of the admin (FER-038): any signed-in login, since every
- * login is an admin and reaches the whole admin. The login is re-read from
- * the database (a session can outlive its user for minutes) and the handler
- * gets the store, the table's one row, as `context.store`: it filters every
- * query by `context.store.id`, and no procedure takes a store from its input.
- * A missing session or login answers UNAUTHORIZED; a session that could not
- * be read is thrown as the failure it was.
- *
- * The order is session, input, then the database. A later `.input()` places
- * validation after every middleware added before it; the initial index of -1
- * moves it one earlier, before the last one, so a caller without a session
- * or with a malformed input is refused before anything is read.
+ * The session check every signed-in procedure starts with. The order is
+ * session, input, then the database: a later `.input()` places validation
+ * after every middleware added before it, and the initial index of -1 moves
+ * it one earlier, before the last one, so a caller without a session or with
+ * a malformed input is refused before anything is read.
  */
-export const adminProcedure = os
+const signedInProcedure = os
   .$context<ORPCContext>()
   .$config({ initialInputValidationIndex: -1 })
   .errors(ERRORS)
@@ -135,8 +128,42 @@ export const adminProcedure = os
         session: { ...context.session, user: context.session.user },
       },
     });
-  })
-  .use(async ({ context, next }) => {
+  });
+
+/**
+ * Any signed-in, enabled login (FER-015), even one still on a temporary
+ * password: who is signed in (`admin.me`) and choosing its own password are
+ * all it serves. The login is re-read from the database (a session can
+ * outlive its user, or its disabling, for minutes) and handed over as
+ * `context.login`. A missing session, or a login removed or disabled,
+ * answers UNAUTHORIZED; a session that could not be read is thrown as the
+ * failure it was.
+ */
+export const loginProcedure = signedInProcedure.use(
+  async ({ context, next }) => {
+    const login = await findLogin(context.db, context.session.user.id);
+
+    if (!login) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+
+    return await next({ context: { login } });
+  }
+);
+
+/**
+ * Every procedure of the admin (FER-038): any signed-in, enabled login that
+ * has chosen its own password, since every login is an admin and reaches
+ * the whole admin. A login still on the temporary password an admin gave it
+ * (FER-015) is FORBIDDEN until it changes it. The login is re-read from the
+ * database and the handler gets the store, the table's one row, as
+ * `context.store`: it filters every query by `context.store.id`, and no
+ * procedure takes a store from its input. A missing session, or a login
+ * removed or disabled, answers UNAUTHORIZED; a session that could not be
+ * read is thrown as the failure it was.
+ */
+export const adminProcedure = signedInProcedure.use(
+  async ({ context, next }) => {
     const store = await findAdminStore(context.db, context.session.user.id);
 
     if (!store) {
@@ -144,4 +171,5 @@ export const adminProcedure = os
     }
 
     return await next({ context: { store } });
-  });
+  }
+);

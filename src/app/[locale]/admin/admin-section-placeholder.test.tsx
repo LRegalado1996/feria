@@ -78,7 +78,7 @@ describe("AdminSectionPlaceholder", () => {
     const params = makeParams("es");
     const boundary = AdminSectionPlaceholder({
       params,
-      section: "users",
+      section: "metrics",
     }) as ReactElement<{
       children: ReactElement<{ params: unknown; section: string }>;
       fallback: ReactNode;
@@ -91,7 +91,7 @@ describe("AdminSectionPlaceholder", () => {
     );
     expect(boundary.props.children.props).toEqual({
       params,
-      section: "users",
+      section: "metrics",
     });
     expect(requireAdmin).not.toHaveBeenCalled();
   });
@@ -101,7 +101,6 @@ describe("AdminSectionPlaceholderResolver", () => {
   test.each([
     ["en", "metrics", "/en/admin/metrics"],
     ["es", "metrics", "/admin/metrics"],
-    ["es", "users", "/admin/users"],
   ] as const satisfies [Locale, PlaceholderSection, string][])(
     "in %s, checks the session for %s, coming back to %s",
     async (locale, section, returnTo) => {
@@ -116,7 +115,6 @@ describe("AdminSectionPlaceholderResolver", () => {
   test.each([
     ["en", "metrics", "Metrics", "Coming soon"],
     ["es", "metrics", "Métricas", "Próximamente"],
-    ["es", "users", "Usuarios", "Próximamente"],
   ] as const satisfies [Locale, PlaceholderSection, string, string][])(
     "in %s, shows the %s section by name inside the shell, still to come",
     async (locale, section, title, status) => {

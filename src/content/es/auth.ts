@@ -1,6 +1,8 @@
 export const auth = {
   errors: {
     invalidCredentials: "El email o la contraseña no son correctos.",
+    loginDisabled:
+      "Este usuario está deshabilitado. Pedile a alguien del equipo que lo habilite.",
     unreachable:
       "No pudimos conectar con el servidor. Revisá tu conexión y probá de nuevo.",
   },

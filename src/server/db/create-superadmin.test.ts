@@ -51,15 +51,20 @@ function setup({ loginExists = false } = {}) {
 }
 
 describe("createSuperadmin", () => {
-  test("creates the first login from the environment's email and password, with no role to give", async () => {
+  test("creates the first login from the environment's email and password, as the superadmin", async () => {
     const { auth, run, tx } = setup();
 
     await expect(run()).resolves.toMatchObject({ email: "admin@example.com" });
-    expect(createAccount).toHaveBeenCalledExactlyOnceWith(auth, tx, {
-      email: "admin@example.com",
-      name: "Superadmin",
-      password: "synthetic-pass-123",
-    });
+    expect(createAccount).toHaveBeenCalledExactlyOnceWith(
+      auth,
+      tx,
+      {
+        email: "admin@example.com",
+        name: "Superadmin",
+        password: "synthetic-pass-123",
+      },
+      { role: "superadmin" }
+    );
   });
 
   test("takes the name from SUPERADMIN_NAME when it is set", async () => {
@@ -70,7 +75,8 @@ describe("createSuperadmin", () => {
     expect(createAccount).toHaveBeenCalledExactlyOnceWith(
       auth,
       expect.anything(),
-      expect.objectContaining({ name: "Lucía" })
+      expect.objectContaining({ name: "Lucía" }),
+      { role: "superadmin" }
     );
   });
 

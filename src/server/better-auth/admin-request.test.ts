@@ -4,34 +4,39 @@ import { db } from "@/server/db";
 
 import { isAdminRequest } from "./admin-request";
 
-const { authGetSession, findAdminStore } = vi.hoisted(() => ({
+const { authGetSession, findLogin } = vi.hoisted(() => ({
   authGetSession: vi.fn<(options: unknown) => Promise<unknown>>(),
-  findAdminStore: vi.fn<(db: unknown, userId: string) => Promise<unknown>>(),
+  findLogin: vi.fn<(db: unknown, userId: string) => Promise<unknown>>(),
 }));
 
 vi.mock("@/server/better-auth", () => ({
   auth: { api: { getSession: authGetSession } },
 }));
 
-vi.mock("@/server/services/access", () => ({ findAdminStore }));
+vi.mock("@/server/services/access", () => ({ findLogin }));
 
 const SESSION_COOKIE = "better-auth.session_token=token-1.signature";
 
 /**
  * A request with or without Better Auth's session cookie, the session the
- * database finds for it and whether its login is still there.
+ * database finds for it, whether its login is still there and enabled, and
+ * whether it is on a temporary password.
  */
 function setup({
   cookie = SESSION_COOKIE,
   isLogin = true,
+  mustChangePassword = false,
   session = { session: { id: "session-1" }, user: { id: "user-1" } },
 }: {
   cookie?: string | null;
   isLogin?: boolean;
+  mustChangePassword?: boolean;
   session?: { session: { id: string }; user: { id: string } } | null;
 } = {}) {
   authGetSession.mockResolvedValue(session);
-  findAdminStore.mockResolvedValue(isLogin ? { id: 7 } : null);
+  findLogin.mockResolvedValue(
+    isLogin ? { id: "user-1", mustChangePassword } : null
+  );
 
   return {
     headers: new Headers(cookie === null ? {} : { cookie }),
@@ -47,7 +52,7 @@ describe("isAdminRequest", () => {
       headers,
       query: { disableCookieCache: true },
     });
-    expect(findAdminStore).toHaveBeenCalledExactlyOnceWith(db, "user-1");
+    expect(findLogin).toHaveBeenCalledExactlyOnceWith(db, "user-1");
   });
 
   test.each([
@@ -60,7 +65,7 @@ describe("isAdminRequest", () => {
 
       await expect(isAdminRequest(headers)).resolves.toBe(false);
       expect(authGetSession).not.toHaveBeenCalled();
-      expect(findAdminStore).not.toHaveBeenCalled();
+      expect(findLogin).not.toHaveBeenCalled();
     }
   );
 
@@ -68,10 +73,16 @@ describe("isAdminRequest", () => {
     const { headers } = setup({ session: null });
 
     await expect(isAdminRequest(headers)).resolves.toBe(false);
-    expect(findAdminStore).not.toHaveBeenCalled();
+    expect(findLogin).not.toHaveBeenCalled();
   });
 
-  test("a session whose login was removed is no admin", async () => {
+  test("a login still on a temporary password is no admin yet", async () => {
+    const { headers } = setup({ mustChangePassword: true });
+
+    await expect(isAdminRequest(headers)).resolves.toBe(false);
+  });
+
+  test("a session whose login was removed or disabled is no admin", async () => {
     const { headers } = setup({ isLogin: false });
 
     await expect(isAdminRequest(headers)).resolves.toBe(false);

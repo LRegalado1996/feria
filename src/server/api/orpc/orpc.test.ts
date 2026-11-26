@@ -10,7 +10,12 @@ import {
 } from "@/server/test";
 import { renderQuery } from "@/server/test/render-sql";
 
-import { adminProcedure, createORPCContext, publicProcedure } from ".";
+import {
+  adminProcedure,
+  loginProcedure,
+  createORPCContext,
+  publicProcedure,
+} from ".";
 
 const { getSession } = vi.hoisted(() => ({
   getSession: vi.fn(
@@ -242,10 +247,12 @@ describe("timing", () => {
  */
 function setupAdmin({
   login = true,
+  mustChangePassword = false,
   signedIn = true,
   store = { id: 4 },
 }: {
   login?: boolean;
+  mustChangePassword?: boolean;
   signedIn?: boolean;
   store?: { id: number } | null;
 } = {}) {
@@ -253,7 +260,7 @@ function setupAdmin({
     ? createMockContext()
     : createUnauthenticatedMockContext();
   mockCtx.db.query.user.findFirst.mockImplementation(async () =>
-    login ? { id: "test-user-id" } : undefined
+    login ? { id: "test-user-id", mustChangePassword } : undefined
   );
   mockCtx.db.$["select.limit"].mockImplementation(async () =>
     store ? [store] : []
@@ -284,16 +291,18 @@ describe("adminProcedure", () => {
     });
   });
 
-  test("re-reads the login by its id, then reads the store's one row", async () => {
+  test("re-reads the login by its id, enabled ones only, then reads the store's one row", async () => {
     const { callAdmin, db } = setupAdmin();
 
     await callAdmin({ id: 7 });
 
     const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
-    expect(config).toMatchObject({ columns: { id: true } });
+    expect(config).toMatchObject({
+      columns: { id: true, mustChangePassword: true },
+    });
     expect(renderQuery((config as { where: unknown }).where)).toEqual({
       params: ["test-user-id"],
-      sql: '"user"."id" = $1',
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
     });
     expect(db.$["select.limit"]).toHaveBeenCalledExactlyOnceWith(1);
     expect(db.query.user.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
@@ -305,6 +314,16 @@ describe("adminProcedure", () => {
     const { callAdmin, db } = setupAdmin({ login: false });
 
     await expect(callAdmin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+    expect(db.$.select).not.toHaveBeenCalled();
+  });
+
+  test("refuses a login still on a temporary password with FORBIDDEN, before reading the store", async () => {
+    const { callAdmin, db } = setupAdmin({ mustChangePassword: true });
+
+    await expect(callAdmin({ id: 7 })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Change the temporary password first",
+    });
     expect(db.$.select).not.toHaveBeenCalled();
   });
 
@@ -370,5 +389,81 @@ describe("adminProcedure", () => {
     await expect(callAdmin({ id: "seven" })).rejects.toMatchObject(
       UNAUTHORIZED
     );
+  });
+});
+
+/**
+ * A signed-in caller (or none) the database still has as an enabled login
+ * (or not), on a temporary password or its own: `loginProcedure` reads it.
+ */
+function setupLogin({
+  login = true,
+  mustChangePassword = true,
+  signedIn = true,
+}: {
+  login?: boolean;
+  mustChangePassword?: boolean;
+  signedIn?: boolean;
+} = {}) {
+  const { mockCtx } = signedIn
+    ? createMockContext()
+    : createUnauthenticatedMockContext();
+  mockCtx.db.query.user.findFirst.mockImplementation(async () =>
+    login ? { id: "test-user-id", mustChangePassword } : undefined
+  );
+  const procedure = loginProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .handler(({ context, input }) => ({ id: input.id, login: context.login }));
+
+  return {
+    db: mockCtx.db,
+    callLogin: async (input: unknown) =>
+      await call(procedure, input as never, { context: mockCtx as never }),
+  };
+}
+
+describe("loginProcedure", () => {
+  test.each([true, false])(
+    "hands the handler the login re-read from the database, on a temporary password or not (%s)",
+    async (mustChangePassword) => {
+      const { callLogin, db } = setupLogin({ mustChangePassword });
+
+      await expect(callLogin({ id: 7 })).resolves.toEqual({
+        id: 7,
+        login: { id: "test-user-id", mustChangePassword },
+      });
+      const [config] = db.query.user.findFirst.mock.calls[0] ?? [];
+      expect(renderQuery((config as { where: unknown }).where)).toEqual({
+        params: ["test-user-id"],
+        sql: '("user"."id" = $1 and "user"."disabledAt" is null)',
+      });
+      // It needs no store.
+      expect(db.$.select).not.toHaveBeenCalled();
+    }
+  );
+
+  test("refuses a login removed or disabled, whatever the session says", async () => {
+    const { callLogin } = setupLogin({ login: false });
+
+    await expect(callLogin({ id: 7 })).rejects.toMatchObject(UNAUTHORIZED);
+  });
+
+  test("refuses a caller without a session before reading anything", async () => {
+    const { callLogin, db } = setupLogin({ signedIn: false });
+
+    await expect(callLogin({ id: "seven" })).rejects.toMatchObject(
+      UNAUTHORIZED
+    );
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
+  });
+
+  test("refuses a malformed input before reading the login", async () => {
+    const { callLogin, db } = setupLogin();
+
+    await expect(callLogin({ id: "seven" })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Input validation failed",
+    });
+    expect(db.query.user.findFirst).not.toHaveBeenCalled();
   });
 });

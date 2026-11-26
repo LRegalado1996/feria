@@ -6,6 +6,7 @@ import {
   ADMIN_LANDING_SECTION,
   ADMIN_SECTIONS,
   adminSectionPath,
+  changePasswordPath,
   isAdminSection,
   readRowId,
   safeReturnPath,
@@ -41,6 +42,20 @@ describe("admin paths", () => {
   });
 
   test.each([
+    [
+      "en",
+      "/en/admin/orders?x=1",
+      "/en/admin/change-password?next=%2Fen%2Fadmin%2Forders%3Fx%3D1",
+    ],
+    ["es", "/admin/users", "/admin/change-password?next=%2Fadmin%2Fusers"],
+  ] as const)(
+    "the change-password page in %s carries where to come back, encoded",
+    (locale, returnTo, path) => {
+      expect(changePasswordPath(returnTo, locale)).toBe(path);
+    }
+  );
+
+  test.each([
     ["products", true],
     ["filters", true],
     ["users", true],
@@ -58,6 +73,9 @@ describe("safeReturnPath", () => {
     ["/admin/products", "/admin/products"],
     ["/admin", "/admin"],
     ["/admin/orders?status=received", "/admin/orders?status=received"],
+    // Only the page itself is refused, not one that starts with its name.
+    ["/admin/change-passwords", "/admin/change-passwords"],
+    ["/admin/users", "/admin/users"],
   ])("goes back to the admin page %j", (next, expected) => {
     expect(safeReturnPath(next, "es")).toBe(expected);
   });
@@ -84,6 +102,9 @@ describe("safeReturnPath", () => {
     ["/administrator"],
     ["/admin/sign-in"],
     ["/en/admin/sign-in?next=/admin"],
+    ["/admin/change-password"],
+    ["/en/admin/change-password?next=%2Fen%2Fadmin"],
+    ["/admin/change-password/again"],
     ["admin"],
     [""],
     [undefined],
