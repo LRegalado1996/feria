@@ -10,16 +10,10 @@ import { useCountOnce } from "./use-count-once";
  * does (`useCountView`).
  */
 export function useCountVisit() {
-  const { mutate } = useMutation({
+  const { mutateAsync } = useMutation({
     ...orpc.metrics.countVisit.mutationOptions(),
     meta: { suppressGlobalErrorReport: true },
   });
 
-  useCountOnce("lr-visited", (onCounted) => {
-    mutate(undefined, {
-      onSuccess: () => {
-        onCounted();
-      },
-    });
-  });
+  useCountOnce("lr-visited", async () => await mutateAsync(undefined));
 }

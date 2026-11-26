@@ -1,4 +1,4 @@
-import { getTableName, type Table } from "drizzle-orm";
+import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -24,6 +24,10 @@ interface Conflict {
  * finds (`null`: none published by that id), the store's row (`null`: none)
  * and whether the client's bucket still had a hit.
  */
+function isConflict(value: unknown): value is Conflict {
+  return typeof value === "object" && value !== null && "target" in value;
+}
+
 function setup({
   article = { id: 58, storeId: 3 },
   hit = true,
@@ -34,19 +38,30 @@ function setup({
   storeId?: number | null;
 } = {}) {
   const db = createMockDatabase();
-  db.$["select.for"].mockResolvedValue(article ? [article] : []);
+  // The count's transaction: a handle of its own, so a read or a write
+  // that went through the outer client instead would show.
+  const tx = createMockDatabase();
+  db.$.transaction.mockImplementation(async (callback: unknown) =>
+    typeof callback === "function" ? await callback(tx) : undefined
+  );
+  tx.$["select.for"].mockResolvedValue(article ? [article] : []);
   // The visit's read ends at `from`; the view's goes on to `.for()`.
-  db.$["select.from"].mockResolvedValue(
+  tx.$["select.from"].mockResolvedValue(
     storeId === null ? [] : [{ id: storeId }]
   );
-  db.$["insert.returning"].mockResolvedValue(hit ? [{ hits: 1 }] : []);
+  tx.$["insert.returning"].mockResolvedValue(hit ? [{ hits: 1 }] : []);
 
   return {
     db,
+    tx,
     /** Each upsert's conflict clause, its SQL rendered. */
     conflicts: () =>
-      db.$["insert.onConflictDoUpdate"].mock.calls.map(([arg]) => {
-        const { set, setWhere, target } = arg as Conflict;
+      tx.$["insert.onConflictDoUpdate"].mock.calls.map(([arg]) => {
+        if (!isConflict(arg)) {
+          throw new Error("An upsert without its conflict clause");
+        }
+
+        const { set, setWhere, target } = arg;
 
         return {
           set: Object.fromEntries(
@@ -61,8 +76,10 @@ function setup({
       }),
     /** The tables written, in order. */
     inserts: () =>
-      db.$.insert.mock.calls.map(([table]) => getTableName(table as Table)),
-    values: () => db.$["insert.values"].mock.calls.map(([values]) => values),
+      tx.$.insert.mock.calls.map(([table]) =>
+        is(table, Table) ? getTableName(table) : null
+      ),
+    values: () => tx.$["insert.values"].mock.calls.map(([values]) => values),
     /** What the old buckets' delete was given. */
     deleted: () =>
       db.$["delete.where"].mock.calls.map(([where]) => renderQuery(where)),
@@ -104,7 +121,7 @@ describe("countProductView", () => {
   });
 
   test("looks the article up among the published, held FOR KEY SHARE, inside the count's transaction", async () => {
-    const { db } = setup();
+    const { db, tx } = setup();
 
     await countProductView(db as never, {
       bucket: BUCKET,
@@ -113,14 +130,18 @@ describe("countProductView", () => {
     });
 
     expect(
-      db.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
+      tx.$["select.where"].mock.calls.map(([where]) => renderQuery(where))
     ).toEqual([
       {
         params: [58, "published"],
         sql: '("product"."id" = $1 and "product"."status" = $2)',
       },
     ]);
-    expect(db.$["select.for"]).toHaveBeenCalledExactlyOnceWith("key share");
+    expect(tx.$["select.for"]).toHaveBeenCalledExactlyOnceWith("key share");
+    // Nothing but the old buckets' delete goes through the outer client.
+    expect(db.$.select).not.toHaveBeenCalled();
+    expect(db.$.insert).not.toHaveBeenCalled();
+    expect(tx.$.delete).not.toHaveBeenCalled();
     // The old buckets go first, in a statement of their own.
     expect(db.$.delete.mock.invocationCallOrder[0]).toBeLessThan(
       db.$.transaction.mock.invocationCallOrder[0] ?? 0

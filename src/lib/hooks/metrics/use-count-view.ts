@@ -11,19 +11,13 @@ import { useCountOnce } from "./use-count-once";
  * connection is not a bug; the server reports a write that fails.
  */
 export function useCountView(productId: number) {
-  const { mutate } = useMutation({
+  const { mutateAsync } = useMutation({
     ...orpc.metrics.countView.mutationOptions(),
     meta: { suppressGlobalErrorReport: true },
   });
 
-  useCountOnce(`lr-viewed:${String(productId)}`, (onCounted) => {
-    mutate(
-      { productId },
-      {
-        onSuccess: () => {
-          onCounted();
-        },
-      }
-    );
-  });
+  useCountOnce(
+    `lr-viewed:${String(productId)}`,
+    async () => await mutateAsync({ productId })
+  );
 }

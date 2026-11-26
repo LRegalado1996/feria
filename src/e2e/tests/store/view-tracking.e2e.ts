@@ -11,6 +11,7 @@ import {
   uniqueTag,
 } from "../../fixtures";
 import { completeRpcAction } from "../../fixtures/complete-rpc-action";
+import { StorePage } from "../../page-objects/store.page";
 
 // FER-029. Each test counts views of an article of its own, read from its
 // rows of `product_view_daily` (deleted with the article). The store's
@@ -65,14 +66,17 @@ function recordCounts(page: Page) {
 }
 
 /**
- * Opens the article, and waits until its page has had the idle moment a
- * count waits for: whatever it was going to send, it sent.
+ * Opens the article and waits for what a count needs: the page hydrated
+ * (the cart button, which React makes a dialog's trigger), then an idle
+ * moment queued after the counter's own, so whatever it was going to send,
+ * it sent.
  */
 async function openArticle(page: Page, slug: string) {
   await page.goto(`/productos/${slug}`);
   await expect(
     page.getByRole("heading", { level: 1, name: "Anillo de plata" })
   ).toBeVisible();
+  await new StorePage(page).getLiveCartButton();
   await page.evaluate(
     async () =>
       await new Promise((resolve) => {

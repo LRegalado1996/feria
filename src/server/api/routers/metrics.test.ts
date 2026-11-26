@@ -152,13 +152,15 @@ describe("metrics.countView", () => {
     }
   );
 
-  test("answers without waiting for the count to be written", async () => {
-    const { afterResponse, countView } = setup();
+  test("answers while the count it started is still being written", async () => {
+    const { afterResponse, countView, db } = setup();
     let release: () => void = () => undefined;
+    let written = false;
     services.countProductView.mockImplementationOnce(
       async () =>
         await new Promise<string>((resolve) => {
           release = () => {
+            written = true;
             resolve("counted");
           };
         })
@@ -166,8 +168,22 @@ describe("metrics.countView", () => {
 
     await expect(countView({ productId: 58 })).resolves.toBeUndefined();
 
+    // Answered, the count started and handed past the response, unwritten.
+    expect(services.countProductView).toHaveBeenCalledExactlyOnceWith(db, {
+      bucket: "bucket:203.0.113.7:2026-12-05:view:58",
+      day: "2026-12-05",
+      productId: 58,
+    });
+    expect(services.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Promise),
+      { action: "Metrics.count_view" }
+    );
+    expect(written).toBe(false);
+
     release();
     await afterResponse();
+
+    expect(written).toBe(true);
   });
 
   test("without the client's address counts with no cap, and the log line says so", async () => {

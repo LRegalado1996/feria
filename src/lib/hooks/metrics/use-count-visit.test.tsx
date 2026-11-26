@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
 import { createOrpcErrorHandler, createOrpcHandler, server } from "@/test/msw";
@@ -14,8 +14,7 @@ vi.mock("@/lib/orpc/client", async () => {
 // When and how often it sends is `use-count-once.test.tsx`'s: here it hands
 // over the key and the send it was given.
 const { countOnce } = vi.hoisted(() => ({
-  countOnce:
-    vi.fn<(key: string, send: (onCounted: () => void) => void) => void>(),
+  countOnce: vi.fn<(key: string, send: () => Promise<unknown>) => void>(),
 }));
 
 vi.mock("./use-count-once", () => ({ useCountOnce: countOnce }));
@@ -38,18 +37,12 @@ function setup({ answer = "ok" }: { answer?: "fail" | "ok" } = {}) {
     },
     { wrapper }
   );
-  const onCounted = vi.fn<() => void>();
 
   return {
     count,
     key: () => countOnce.mock.calls[0]?.[0],
     mutations: () => wrapper.queryClient.getMutationCache().getAll(),
-    onCounted,
-    send: () => {
-      act(() => {
-        countOnce.mock.calls[0]?.[1](onCounted);
-      });
-    },
+    send: async () => await countOnce.mock.calls[0]?.[1](),
   };
 }
 
@@ -60,28 +53,20 @@ describe("useCountVisit", () => {
     expect(key()).toBe("lr-visited");
   });
 
-  test("sends no input, and marks the visit counted once the server answers", async () => {
-    const { count, onCounted, send } = setup();
+  test("sends no input, settling once the server answers", async () => {
+    const { count, send } = setup();
 
-    send();
-
-    await waitFor(() => {
-      expect(onCounted).toHaveBeenCalledExactlyOnceWith();
-    });
+    await expect(send()).resolves.toBeNull();
     expect(count).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
-  test("leaves a failure unmarked and unreported: a blocker is not a bug", async () => {
-    const { mutations, onCounted, send } = setup({ answer: "fail" });
+  test("fails the send so nothing is marked, without the global report: a blocker is not a bug", async () => {
+    const { mutations, send } = setup({ answer: "fail" });
 
-    send();
-
-    await waitFor(() => {
-      expect(mutations().map((mutation) => mutation.state.status)).toEqual([
-        "error",
-      ]);
+    await expect(send()).rejects.toMatchObject({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Internal server error",
     });
-    expect(onCounted).not.toHaveBeenCalled();
     expect(mutations().map((mutation) => mutation.meta)).toEqual([
       { suppressGlobalErrorReport: true },
     ]);
