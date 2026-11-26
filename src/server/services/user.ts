@@ -249,7 +249,8 @@ function attemptsKey(userId: string): string {
   return `change-password:${userId}`;
 }
 
-type ChangeOutcome =
+/** How a password change ended, a refusal a caller may still want to keep. */
+export type ChangeOutcome =
   | { kind: "changed" }
   | { kind: "limited"; retryAfter: number }
   | { kind: "wrong" };
@@ -262,39 +263,83 @@ type ChangeOutcome =
  * is refused with TOO_MANY_REQUESTS until `PASSWORD_ATTEMPTS.windowMs` has
  * passed since the last one; a change clears the count.
  *
- * The user row, its password and its count are locked before the current
- * password is checked, so a reset by an admin meanwhile is either seen here
- * or waits, and two tries at once are counted one after the other. A wrong
- * try commits its count before it is refused.
+ * Called with the app's database, never inside a caller's transaction: a
+ * wrong try's count commits before the refusal is thrown, and a caller's
+ * transaction would roll it back with the error. A caller that needs its
+ * own transaction uses `tryChangeOwnPassword` and refuses after it commits.
  */
 export async function changeOwnPassword(
   auth: AccountAuth,
   db: DatabaseClient,
-  {
-    currentPassword,
-    newPassword,
-    sessionId,
-    userId,
-  }: {
-    currentPassword: string;
-    newPassword: string;
-    /** The session making the change, the one that stays open. */
-    sessionId: string;
-    userId: string;
-  }
+  values: ChangeValues
 ) {
+  const outcome = await tryChangeOwnPassword(auth, db, values);
+
+  if (outcome.kind === "limited") {
+    throw new ORPCError("TOO_MANY_REQUESTS", {
+      data: { retryAfter: outcome.retryAfter },
+      message: LOGIN_REFUSALS.tooManyPasswordAttempts,
+    });
+  }
+
+  if (outcome.kind === "wrong") {
+    throw new ORPCError("BAD_REQUEST", {
+      message: LOGIN_REFUSALS.wrongCurrentPassword,
+    });
+  }
+
+  return { id: values.userId, mustChangePassword: false };
+}
+
+interface ChangeValues {
+  currentPassword: string;
+  newPassword: string;
+  /** The session making the change, the one that stays open. */
+  sessionId: string;
+  userId: string;
+}
+
+/**
+ * `changeOwnPassword`'s work, answering a wrong or a limited try instead of
+ * throwing it, so its count commits with whoever owns the transaction. A
+ * login gone or disabled, or a session another change, a reset or a sign-out
+ * ended meanwhile, is UNAUTHORIZED, and nothing is written.
+ *
+ * The user row, the session, its count and its password are locked before
+ * the current password is checked, so a reset by an admin meanwhile is
+ * either seen here or waits, and two tries at once are counted one after
+ * the other.
+ */
+export async function tryChangeOwnPassword(
+  auth: AccountAuth,
+  db: DatabaseClient,
+  { currentPassword, newPassword, sessionId, userId }: ChangeValues
+): Promise<ChangeOutcome> {
   const context = await auth.$context;
   // Hashed before the locks: it is the slow part, and needs none.
   const newHash = await context.password.hash(newPassword);
   const key = attemptsKey(userId);
 
-  const outcome = await db.transaction(async (tx): Promise<ChangeOutcome> => {
+  return await db.transaction(async (tx): Promise<ChangeOutcome> => {
     const [login] = await lockLogins(
       tx,
       and(eq(user.id, userId), isNull(user.disabledAt))
     );
 
     if (!login) {
+      throw new ORPCError("UNAUTHORIZED");
+    }
+
+    // The session making the change: one a change elsewhere, a reset or a
+    // disabling ended while this request waited on the lock is refused, and
+    // a sign-out waits for this change.
+    const [current] = await tx
+      .select({ id: session.id })
+      .from(session)
+      .where(and(eq(session.id, sessionId), eq(session.userId, userId)))
+      .for("key share");
+
+    if (!current) {
       throw new ORPCError("UNAUTHORIZED");
     }
 
@@ -363,19 +408,4 @@ export async function changeOwnPassword(
 
     return { kind: "changed" };
   });
-
-  if (outcome.kind === "limited") {
-    throw new ORPCError("TOO_MANY_REQUESTS", {
-      data: { retryAfter: outcome.retryAfter },
-      message: LOGIN_REFUSALS.tooManyPasswordAttempts,
-    });
-  }
-
-  if (outcome.kind === "wrong") {
-    throw new ORPCError("BAD_REQUEST", {
-      message: LOGIN_REFUSALS.wrongCurrentPassword,
-    });
-  }
-
-  return { id: userId, mustChangePassword: false };
 }

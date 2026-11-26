@@ -22,8 +22,13 @@ describe("auth config", () => {
     });
   });
 
-  test("takes the sign-up path out of Better Auth's router", () => {
-    expect(auth.options.disabledPaths).toEqual(["/sign-up/email"]);
+  test("takes sign-up, and the native password and email changes, out of Better Auth's router", () => {
+    expect(auth.options.disabledPaths).toEqual([
+      "/sign-up/email",
+      "/change-password",
+      "/set-password",
+      "/change-email",
+    ]);
   });
 
   test("closes sign-up: logins are created on the server only", () => {

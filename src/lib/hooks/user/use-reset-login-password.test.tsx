@@ -55,7 +55,7 @@ describe("useResetLoginPassword", () => {
     });
   });
 
-  test("rejects a refusal with its code, leaves the list and the report to the sheet", async () => {
+  test("rejects a refusal with its code and reads the list again, leaving the report to the sheet", async () => {
     const { invalidateQueries, metas, result } = setup({ fails: true });
 
     await expect(result.current.mutateAsync(INPUT)).rejects.toMatchObject({
@@ -63,7 +63,10 @@ describe("useResetLoginPassword", () => {
       message: "Login not found",
     });
 
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    // The login may be gone: the list on screen is out of date.
+    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({
+      queryKey: loginsKey(),
+    });
     expect(metas()).toEqual([{ suppressGlobalErrorReport: true }]);
   });
 });

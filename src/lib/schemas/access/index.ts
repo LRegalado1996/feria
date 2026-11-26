@@ -40,6 +40,15 @@ const passwordSchema = z
   .min(PASSWORD_MIN_LENGTH)
   .max(PASSWORD_MAX_LENGTH);
 
+/**
+ * Whether two passwords are one to Better Auth, which hashes a password's
+ * NFKC form: "ｐａｓｓ" and "pass" sign in alike, so a new password that only
+ * differs from the current one that way changes nothing.
+ */
+function isSamePassword(a: string, b: string): boolean {
+  return a.normalize("NFKC") === b.normalize("NFKC");
+}
+
 /** One login of the store, named by its id (FER-015). */
 export const loginRefSchema = z.object({ id: loginIdSchema });
 
@@ -59,10 +68,13 @@ export const changePasswordSchema = z
     currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH),
     newPassword: passwordSchema,
   })
-  .refine((values) => values.newPassword !== values.currentPassword, {
-    message: "The new password must differ from the current one",
-    path: ["newPassword"],
-  });
+  .refine(
+    (values) => !isSamePassword(values.newPassword, values.currentPassword),
+    {
+      message: "The new password must differ from the current one",
+      path: ["newPassword"],
+    }
+  );
 
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 
@@ -166,10 +178,13 @@ export function createChangePasswordFormSchema(
         .min(PASSWORD_MIN_LENGTH, messages.passwordTooShort)
         .max(PASSWORD_MAX_LENGTH, messages.passwordTooLong),
     })
-    .refine((values) => values.newPassword !== values.currentPassword, {
-      message: messages.sameAsCurrent,
-      path: ["newPassword"],
-    })
+    .refine(
+      (values) => !isSamePassword(values.newPassword, values.currentPassword),
+      {
+        message: messages.sameAsCurrent,
+        path: ["newPassword"],
+      }
+    )
     .refine((values) => values.confirmPassword === values.newPassword, {
       message: messages.mismatch,
       path: ["confirmPassword"],

@@ -136,6 +136,45 @@ describe("changePasswordSchema", () => {
   ])("refuses %s", (_case, values, issue) => {
     expect(firstIssue(changePasswordSchema, values)).toEqual(issue);
   });
+
+  test.each([
+    // Full-width letters: NFKC, which Better Auth hashes, makes them ASCII.
+    [
+      "the same password in full-width letters",
+      "ｓｙｎｔｈｅｔｉｃ-pass-1",
+      "synthetic-pass-1",
+      false,
+    ],
+    // A composed and a decomposed "é" are one character to NFKC.
+    [
+      "the same accent composed differently",
+      "synthetic-caf\u00E9-1",
+      "synthetic-cafe\u0301-1",
+      false,
+    ],
+    [
+      "a password that really differs",
+      "synthetic-pass-1",
+      "synthetic-pass-2",
+      true,
+    ],
+  ])(
+    "%s is %s a new password",
+    (_case, newPassword, currentPassword, accepted) => {
+      expect(
+        changePasswordSchema.safeParse({ currentPassword, newPassword }).success
+      ).toBe(accepted);
+      expect(
+        createChangePasswordFormSchema(
+          DICTIONARIES.es.admin.password.validation
+        ).safeParse({
+          confirmPassword: newPassword,
+          currentPassword,
+          newPassword,
+        }).success
+      ).toBe(accepted);
+    }
+  );
 });
 
 describe("the forms' schemas", () => {

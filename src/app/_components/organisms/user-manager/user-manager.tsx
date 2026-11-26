@@ -206,10 +206,9 @@ function LoginItem({
               aria-disabled={enabling || undefined}
               aria-label={interpolate(copy.enableNamed, { name })}
               onClick={() => {
-                // Pending, the press is dropped and the button keeps focus.
-                if (!enabling) {
-                  onEnable();
-                }
+                // Pending, `onEnable` drops the press; `aria-disabled`
+                // keeps the button focusable.
+                onEnable();
               }}
               size="sm"
               type="button"
@@ -266,6 +265,11 @@ function UserManager({ currentEmail }: UserManagerProps) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const openSheet = useRef<SheetState | null>(null);
   const [disabling, setDisabling] = useState<{ login: LoginRow } | null>(null);
+  // The logins whose enabling is on its way, each on its own.
+  const [enablingIds, setEnablingIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const enablingNow = useRef(new Set<string>());
   const opener = useRef<HTMLButtonElement | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const signInPath = localizePath(ADMIN_SIGN_IN, locale);
@@ -353,7 +357,7 @@ function UserManager({ currentEmail }: UserManagerProps) {
     setDisabling((open) => (open === asked ? null : open));
   };
 
-  const enable = async (login: LoginRow) => {
+  const sendEnable = async (login: LoginRow) => {
     try {
       await enableLogin.mutateAsync({ id: login.id });
       toast.success(interpolate(copy.toasts.enabled, { name: login.name }));
@@ -373,6 +377,25 @@ function UserManager({ currentEmail }: UserManagerProps) {
     }
   };
 
+  const enable = async (login: LoginRow) => {
+    // One request per login at a time, whichever others are on their way.
+    // Read from a ref: two presses before React draws the first one's busy
+    // button would both see the same state.
+    if (enablingNow.current.has(login.id)) {
+      return;
+    }
+
+    enablingNow.current.add(login.id);
+    setEnablingIds((ids) => new Set(ids).add(login.id));
+    await sendEnable(login);
+    enablingNow.current.delete(login.id);
+    setEnablingIds((ids) => {
+      const left = new Set(ids);
+      left.delete(login.id);
+      return left;
+    });
+  };
+
   const focusBack = (event: Event) => {
     event.preventDefault();
     const target = opener.current?.isConnected
@@ -380,8 +403,6 @@ function UserManager({ currentEmail }: UserManagerProps) {
       : addButton.current;
     target?.focus();
   };
-
-  const enablingId = enableLogin.isPending ? enableLogin.variables.id : null;
 
   return (
     <section data-slot="user-manager" data-testid="user-manager">
@@ -413,7 +434,7 @@ function UserManager({ currentEmail }: UserManagerProps) {
             >
               {logins.data.map((login) => (
                 <LoginItem
-                  enabling={enablingId === login.id}
+                  enabling={enablingIds.has(login.id)}
                   isSelf={login.email === currentEmail}
                   key={login.id}
                   locale={locale}
@@ -460,7 +481,9 @@ function UserManager({ currentEmail }: UserManagerProps) {
       </AdminPage>
       <Sheet
         onOpenChange={(open) => {
-          if (!open) {
+          // A login created or reset while its sheet was closed would lose
+          // the one view of what to send: the sheet stays while it saves.
+          if (!(open || createLogin.isPending || resetPassword.isPending)) {
             show(null);
           }
         }}

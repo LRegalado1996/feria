@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -42,17 +41,17 @@ export interface LoginFormProps {
 function LoginForm({ className, onCancel, onSave }: LoginFormProps) {
   const { admin } = useDictionary();
   const copy = admin.users;
-  const [failed, setFailed] = useState(false);
   const form = useForm<LoginFormValues>({
     defaultValues: { email: "", name: "", password: "" },
     resolver: zodResolver(createLoginFormSchema(copy.validation)),
   });
   // A hook, not `form.formState`: the React Compiler memoizes a read off the
   // stable `form` object, and the controls would never update.
-  const { isSubmitting: saving } = useFormState({ control: form.control });
+  const { errors, isSubmitting: saving } = useFormState({
+    control: form.control,
+  });
 
   const submit = async (values: LoginFormValues) => {
-    setFailed(false);
     let outcome: LoginFormOutcome;
 
     try {
@@ -68,7 +67,11 @@ function LoginForm({ className, onCancel, onSave }: LoginFormProps) {
       form.setError("email", { message: copy.errors.emailTaken });
     }
 
-    setFailed(outcome === "failed");
+    // A form error of its own, which the next submit clears, even one its
+    // validation stops before it reaches the server.
+    if (outcome === "failed") {
+      form.setError("root", { message: copy.errors.create });
+    }
   };
 
   return (
@@ -137,9 +140,9 @@ function LoginForm({ className, onCancel, onSave }: LoginFormProps) {
               </FormItem>
             )}
           />
-          {failed ? (
+          {errors.root?.message ? (
             <p className="text-sm text-destructive" role="alert">
-              {copy.errors.create}
+              {errors.root.message}
             </p>
           ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -40,17 +39,17 @@ function ResetPasswordForm({
   onSave,
 }: ResetPasswordFormProps) {
   const copy = useDictionary().admin.users;
-  const [failed, setFailed] = useState(false);
   const form = useForm<ResetPasswordFormValues>({
     defaultValues: { password: "" },
     resolver: zodResolver(createResetPasswordFormSchema(copy.validation)),
   });
   // A hook, not `form.formState`: the React Compiler memoizes a read off the
   // stable `form` object, and the controls would never update.
-  const { isSubmitting: saving } = useFormState({ control: form.control });
+  const { errors, isSubmitting: saving } = useFormState({
+    control: form.control,
+  });
 
   const submit = async (values: ResetPasswordFormValues) => {
-    setFailed(false);
     let saved: boolean;
 
     try {
@@ -60,7 +59,11 @@ function ResetPasswordForm({
       saved = false;
     }
 
-    setFailed(!saved);
+    // A form error of its own, which the next submit clears, even one its
+    // validation stops before it reaches the server.
+    if (!saved) {
+      form.setError("root", { message: copy.errors.reset });
+    }
   };
 
   return (
@@ -95,9 +98,9 @@ function ResetPasswordForm({
               </FormItem>
             )}
           />
-          {failed ? (
+          {errors.root?.message ? (
             <p className="text-sm text-destructive" role="alert">
-              {copy.errors.reset}
+              {errors.root.message}
             </p>
           ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

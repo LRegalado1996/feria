@@ -2,7 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ORPCError } from "@orpc/client";
-import { useState } from "react";
 import { useForm, useFormState } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -49,8 +48,6 @@ export interface ChangePasswordFormProps {
 function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
   const copy = useDictionary().admin.password;
   const changePassword = useChangePassword();
-  // Why the last save failed, said under the form; empty while none did.
-  const [failure, setFailure] = useState("");
   const form = useForm<ChangePasswordFormValues>({
     defaultValues: {
       confirmPassword: "",
@@ -61,12 +58,10 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
   });
   // A hook, not `form.formState`: the React Compiler memoizes a read off the
   // stable `form` object, and the button would never update.
-  const { isSubmitting } = useFormState({ control: form.control });
+  const { errors, isSubmitting } = useFormState({ control: form.control });
   const hydrated = useHydrated();
 
   const submit = async (values: ChangePasswordFormValues) => {
-    setFailure("");
-
     try {
       await changePassword.mutateAsync({
         currentPassword: values.currentPassword,
@@ -87,11 +82,12 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
           typeof data.retryAfter === "number"
             ? data.retryAfter
             : PASSWORD_ATTEMPTS.windowMs / 1000;
-        setFailure(
-          interpolate(copy.errors.tooMany, {
+        // Form errors of their own, which the next submit clears.
+        form.setError("root", {
+          message: interpolate(copy.errors.tooMany, {
             minutes: String(Math.max(1, Math.ceil(seconds / 60))),
-          })
-        );
+          }),
+        });
         return;
       }
 
@@ -109,7 +105,7 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
       }
 
       reportError(error, { action: "Account.change_password" });
-      setFailure(copy.errors.save);
+      form.setError("root", { message: copy.errors.save });
     }
   };
 
@@ -178,9 +174,9 @@ function ChangePasswordForm({ forced, redirectTo }: ChangePasswordFormProps) {
             </FormItem>
           )}
         />
-        {failure ? (
+        {errors.root?.message ? (
           <p className="text-center text-sm text-destructive" role="alert">
-            {failure}
+            {errors.root.message}
           </p>
         ) : null}
         <Button

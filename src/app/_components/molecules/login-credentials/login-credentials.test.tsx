@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
@@ -106,6 +106,26 @@ describe("LoginCredentials", () => {
       expect(status()).toHaveTextContent(/^$/u);
     }
   );
+
+  test("a second refusal takes focus back to the text and selects it whole again", async () => {
+    const { copy } = setup({ clipboard: "refused" });
+    await copy();
+    await screen.findByRole("textbox");
+
+    // The copy button takes focus as it is pressed again.
+    await copy();
+
+    const field = screen.getByRole("textbox");
+    await waitFor(() => {
+      expect(
+        field.isConnected ? field : screen.getByRole("textbox")
+      ).toHaveFocus();
+    });
+    const again = screen.getByRole("textbox");
+    expect(again).toHaveFocus();
+    expect((again as HTMLTextAreaElement).selectionStart).toBe(0);
+    expect((again as HTMLTextAreaElement).selectionEnd).toBe(MESSAGE.length);
+  });
 
   test.each([["refused"], ["missing"]] as const)(
     "a clipboard %s by the browser's policy is no defect: nothing is reported",

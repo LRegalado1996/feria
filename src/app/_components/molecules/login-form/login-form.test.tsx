@@ -61,6 +61,29 @@ function setup({
 }
 
 describe("LoginForm", () => {
+  test("a failed save's alert goes with the next submit, even one its validation stops", async () => {
+    const { field, fill, onSave, submit, user } = setup({ outcome: "failed" });
+    await fill(makeValues());
+    await submit();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "We couldn't create the user. What you typed is still here: please try again."
+    );
+
+    await user.clear(field(/^Email/));
+    await user.paste("ana@");
+    await submit();
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          "We couldn't create the user. What you typed is still here: please try again."
+        )
+      ).not.toBeInTheDocument();
+    });
+    expect(field(/^Email/)).toHaveAccessibleDescription("Enter a valid email.");
+    expect(onSave).toHaveBeenCalledExactlyOnceWith(makeValues());
+  });
+
   test("sends the name, the email and the temporary password, trimmed", async () => {
     const { fill, onSave, submit } = setup();
     await fill(makeValues({ email: " ana@example.com ", name: " Ana " }));

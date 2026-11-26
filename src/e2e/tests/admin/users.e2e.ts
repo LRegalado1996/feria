@@ -218,4 +218,18 @@ test.describe("User management", () => {
       });
     }
   });
+
+  test("Better Auth's own password change is closed: it changes only through the admin", async ({
+    identity,
+    page,
+  }) => {
+    const response = await page.request.post("/api/auth/change-password", {
+      data: {
+        currentPassword: identity.password,
+        newPassword: "synthetic-e2e-taken-over-123",
+      },
+    });
+
+    expect(response.status()).toBe(404);
+  });
 });

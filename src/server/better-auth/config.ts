@@ -35,7 +35,15 @@ export const auth = betterAuth({
   logger: betterAuthLogger,
   // Closed sign-up (FER-009): also out of Better Auth's own router and the
   // OpenAPI reference. The route answers 404 for every other spelling.
-  disabledPaths: ["/sign-up/email"],
+  // A login's password and email change only through the admin's own
+  // procedures (FER-015), which count wrong current passwords; Better Auth's
+  // native routes for them are out too.
+  disabledPaths: [
+    "/sign-up/email",
+    "/change-password",
+    "/set-password",
+    "/change-email",
+  ],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,

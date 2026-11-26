@@ -23,6 +23,7 @@ import {
   disableLogin,
   enableLogin,
   resetLoginPassword,
+  tryChangeOwnPassword,
 } from "./user";
 
 vi.mock("@/env", () => ({
@@ -70,6 +71,21 @@ async function makeLogin({
   createdUserIds.push(created.id);
 
   return created;
+}
+
+/** Signs `email` in and answers the id of the session it opened. */
+async function openSession(email: string) {
+  const { token } = await signIn(email);
+  const opened = await db.query.session.findFirst({
+    columns: { id: true },
+    where: eq(session.token, token),
+  });
+
+  if (!opened) {
+    throw new Error("The sign-in opened no session");
+  }
+
+  return opened.id;
 }
 
 async function signIn(email: string, password = PASSWORD) {
@@ -146,8 +162,9 @@ describe("disableLogin under two writers", () => {
 });
 
 describe("a reset and a password change under two writers", () => {
-  test("a change started while a reset holds the login waits for it, then refuses the superseded password", async () => {
+  test("a change started while a reset holds the login waits for it, then finds its session ended and writes nothing", async () => {
     const [ana, bea] = [await makeLogin(), await makeLogin()];
+    const beaSession = await openSession(bea.email);
     const held = deferred();
     const firstLocked = deferred<number>();
     const secondPid = deferred<number>();
@@ -173,10 +190,10 @@ describe("a reset and a password change under two writers", () => {
     // Bea, knowing only her old password, changes it meanwhile.
     const change = db.transaction(async (tx) => {
       secondPid.resolve(await backendPid(tx));
-      return await changeOwnPassword(auth, tx, {
+      return await tryChangeOwnPassword(auth, tx, {
         currentPassword: PASSWORD,
         newPassword: "bea-own-password",
-        sessionId: "none",
+        sessionId: beaSession,
         userId: bea.id,
       });
     });
@@ -191,10 +208,16 @@ describe("a reset and a password change under two writers", () => {
     held.resolve(undefined);
     await reset;
 
+    // The reset signed Bea out, the session making the change included.
     await expect(outcome).resolves.toMatchObject({
-      code: "BAD_REQUEST",
-      message: "The current password is not correct",
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
     });
+    await expect(
+      db.query.rateLimit.findFirst({
+        where: eq(rateLimit.key, `change-password:${bea.id}`),
+      })
+    ).resolves.toBeUndefined();
     // The reset stands: the temporary password, and the mark to change it.
     await expect(rowOf(bea.id)).resolves.toEqual({
       disabledAt: null,
@@ -288,12 +311,13 @@ describe("temporary passwords against Better Auth", () => {
 
   test("a wrong current password changes nothing", async () => {
     const bea = await makeLogin({ mustChangePassword: true });
+    const beaSession = await openSession(bea.email);
 
     await expect(
       changeOwnPassword(auth, db, {
         currentPassword: "not-the-password",
         newPassword: "bea-own-password",
-        sessionId: "none",
+        sessionId: beaSession,
         userId: bea.id,
       })
     ).rejects.toMatchObject({
@@ -385,11 +409,12 @@ describe("wrong current passwords against the database", () => {
     const now = new Date("2026-11-25T12:00:00.000Z");
     vi.setSystemTime(now);
     const bea = await makeLogin();
+    const beaSession = await openSession(bea.email);
     const change = async (currentPassword: string) =>
       await changeOwnPassword(auth, db, {
         currentPassword,
         newPassword: "bea-own-password",
-        sessionId: "none",
+        sessionId: beaSession,
         userId: bea.id,
       });
 
@@ -419,5 +444,47 @@ describe("wrong current passwords against the database", () => {
         where: eq(rateLimit.key, `change-password:${bea.id}`),
       })
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("a password change inside a caller's transaction", () => {
+  test("its inner form keeps a wrong try's count once the caller commits", async () => {
+    const bea = await makeLogin();
+    const beaSession = await openSession(bea.email);
+
+    const outcome = await db.transaction(
+      async (tx) =>
+        await tryChangeOwnPassword(auth, tx, {
+          currentPassword: "not-the-password",
+          newPassword: "bea-own-password",
+          sessionId: beaSession,
+          userId: bea.id,
+        })
+    );
+
+    expect(outcome).toEqual({ kind: "wrong" });
+    await expect(
+      db.query.rateLimit.findFirst({
+        columns: { count: true },
+        where: eq(rateLimit.key, `change-password:${bea.id}`),
+      })
+    ).resolves.toEqual({ count: 1 });
+  });
+
+  test("a session that is not the login's is refused, writing nothing", async () => {
+    const [ana, bea] = [await makeLogin(), await makeLogin()];
+    const anaSession = await openSession(ana.email);
+
+    await expect(
+      changeOwnPassword(auth, db, {
+        currentPassword: PASSWORD,
+        newPassword: "bea-own-password",
+        sessionId: anaSession,
+        userId: bea.id,
+      })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED", message: "Unauthorized" });
+    await expect(signIn(bea.email)).resolves.toMatchObject({
+      user: { id: bea.id },
+    });
   });
 });

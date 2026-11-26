@@ -13,6 +13,7 @@ import {
   enableLogin,
   listLogins,
   resetLoginPassword,
+  tryChangeOwnPassword,
 } from "./user";
 
 const DISABLED_AT = new Date("2026-11-20T12:00:00.000Z");
@@ -41,12 +42,15 @@ function makeLocked(
  */
 function setup({
   attempts = null,
+  currentSession = true,
   credential = { id: "account-b", password: "hashed:old-password" },
   locked = [makeLocked("admin-a"), makeLocked("admin-b")],
   updated = [{ id: "account-b" }],
 }: {
   /** The login's wrong tries so far, when it has any (`changeOwnPassword`). */
   attempts?: { count: number; lastRequest: number } | null;
+  /** Whether the session making a password change still exists. */
+  currentSession?: boolean;
   credential?: { id: string; password: string | null } | null;
   locked?: ReturnType<typeof makeLocked>[];
   updated?: { id: string }[];
@@ -68,6 +72,10 @@ function setup({
 
     if (table === rateLimit) {
       return attempts ? [attempts] : [];
+    }
+
+    if (table === session) {
+      return currentSession ? [{ id: "session-here" }] : [];
     }
 
     if (table === account) {
@@ -351,9 +359,6 @@ describe("resetLoginPassword", () => {
     ).resolves.toEqual({ id: "admin-b", mustChangePassword: true });
 
     expect(hash).toHaveBeenCalledExactlyOnceWith("synthetic-temporary-123");
-    expect(hash.mock.invocationCallOrder[0]).toBeLessThan(
-      db.$.transaction.mock.invocationCallOrder[0] ?? 0
-    );
     expect(lock().where).toEqual({
       params: ["admin-a", "admin-b"],
       sql: '"user"."id" in ($1, $2)',
@@ -377,6 +382,31 @@ describe("resetLoginPassword", () => {
       params: ["admin-b"],
       sql: '"session"."userId" = $1',
     });
+  });
+
+  test("finishes the slow hash before it takes any lock", async () => {
+    const { auth, db, hash } = setup();
+    const held = deferred<string>();
+    hash.mockImplementationOnce(async () => await held.promise);
+
+    const resetting = resetLoginPassword(auth, db as never, {
+      actorId: "admin-a",
+      password: "synthetic-temporary-123",
+      targetId: "admin-b",
+    });
+    await vi.waitFor(() => {
+      expect(hash).toHaveBeenCalledExactlyOnceWith("synthetic-temporary-123");
+    });
+    expect(db.$.transaction).not.toHaveBeenCalled();
+
+    held.resolve("hashed:synthetic-temporary-123");
+    await expect(resetting).resolves.toEqual({
+      id: "admin-b",
+      mustChangePassword: true,
+    });
+    expect(db.$.transaction).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function)
+    );
   });
 
   test("refuses to reset the caller's own password with FORBIDDEN, hashing nothing", async () => {
@@ -481,6 +511,7 @@ describe("changeOwnPassword", () => {
     });
     expect(tx.$["select.from"].mock.calls).toEqual([
       [user],
+      [session],
       [rateLimit],
       [account],
     ]);
@@ -489,6 +520,10 @@ describe("changeOwnPassword", () => {
         .slice(1)
         .map(([where]) => renderQuery(where))
     ).toEqual([
+      {
+        params: ["session-here", "admin-b"],
+        sql: '("session"."id" = $1 and "session"."userId" = $2)',
+      },
       { params: [KEY], sql: '"rate_limit"."key" = $1' },
       {
         params: ["admin-b", "credential"],
@@ -497,6 +532,7 @@ describe("changeOwnPassword", () => {
     ]);
     expect(tx.$["select.for"].mock.calls).toEqual([
       ["update"],
+      ["key share"],
       ["update"],
       ["update"],
     ]);
@@ -653,6 +689,39 @@ describe("changeOwnPassword", () => {
       hash: "hashed:old-password",
       password: "old-password",
     });
+  });
+
+  test("answers UNAUTHORIZED to a session ended while it waited, checking no password and counting nothing", async () => {
+    const { change, tx, verify } = setupChange({ currentSession: false });
+
+    await expect(change(WRONG)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(tx.$.insert).not.toHaveBeenCalled();
+    expect(tx.$.update).not.toHaveBeenCalled();
+    expect(tx.$.delete).not.toHaveBeenCalled();
+  });
+
+  test("its inner form answers a wrong or a limited try instead of throwing it, for a caller's own transaction", async () => {
+    const { auth, db } = setupChange({
+      attempts: {
+        count: PASSWORD_ATTEMPTS.max,
+        lastRequest: NOW.getTime() - 60_000,
+      },
+    });
+    const wrong = setupChange();
+
+    await expect(
+      tryChangeOwnPassword(auth, db as never, VALUES)
+    ).resolves.toEqual({
+      kind: "limited",
+      retryAfter: (WINDOW - 60_000) / 1000,
+    });
+    await expect(
+      tryChangeOwnPassword(wrong.auth, wrong.db as never, WRONG)
+    ).resolves.toEqual({ kind: "wrong" });
   });
 
   test("answers UNAUTHORIZED to a login removed or disabled, checking no password", async () => {

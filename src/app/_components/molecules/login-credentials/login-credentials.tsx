@@ -18,7 +18,15 @@ export interface LoginCredentialsProps {
   signInPath: string;
 }
 
-type Outcome = { kind: "copied" } | { kind: "idle" } | { kind: "manual" };
+/**
+ * How the last copy ended. Each refusal is its own `attempt`, which remounts
+ * the text to copy by hand, so it takes focus and selects itself again even
+ * when an earlier refusal already showed it.
+ */
+type Outcome =
+  | { kind: "copied" }
+  | { kind: "idle" }
+  | { attempt: number; kind: "manual" };
 
 /**
  * What the admin sends a login with a temporary password (FER-015): the
@@ -38,6 +46,13 @@ function LoginCredentials({
   const [message, setMessage] = useState("");
   const fieldId = useId();
 
+  const showManual = () => {
+    setOutcome((last) => ({
+      attempt: last.kind === "manual" ? last.attempt + 1 : 0,
+      kind: "manual",
+    }));
+  };
+
   const copyDetails = async () => {
     const text = interpolate(copy.created.message, {
       email,
@@ -49,7 +64,7 @@ function LoginCredentials({
     const clipboard = navigator.clipboard as Clipboard | undefined;
 
     if (!clipboard) {
-      setOutcome({ kind: "manual" });
+      showManual();
       return;
     }
 
@@ -63,7 +78,7 @@ function LoginCredentials({
         reportError(error, { action: "Users.copy_credentials" });
       }
 
-      setOutcome({ kind: "manual" });
+      showManual();
     }
   };
 
@@ -118,6 +133,7 @@ function LoginCredentials({
             className="min-h-24 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 font-mono text-sm dark:bg-input/30"
             data-testid="login-credentials-field"
             id={fieldId}
+            key={outcome.attempt}
             onFocus={(event) => {
               event.currentTarget.select();
             }}

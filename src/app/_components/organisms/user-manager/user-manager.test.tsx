@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type RequestHandler } from "msw";
 import type { ReactNode } from "react";
@@ -423,12 +423,12 @@ describe("UserManager", () => {
     });
   });
 
-  test("a creation that ends after its sheet was closed leaves the list as it is", async () => {
+  test("the sheet stays while a creation travels, so what to send is never lost", async () => {
     let release: (value: unknown) => void = () => undefined;
     const held = new Promise((resolve) => {
       release = resolve;
     });
-    const { fillNewLogin, queryClient, user } = setup();
+    const { fillNewLogin, user } = setup();
     server.use(
       createOrpcHandler("user.create", async () => {
         await held;
@@ -440,29 +440,53 @@ describe("UserManager", () => {
       const sheet = await fillNewLogin();
       await user.click(within(sheet).getByTestId("login-form-submit"));
       await user.click(within(sheet).getByRole("button", { name: "Close" }));
-      await waitFor(() => {
-        expect(screen.queryByTestId("login-sheet")).toBeNull();
-      });
+      await user.keyboard("{Escape}");
+
+      expect(screen.getByTestId("login-sheet")).toBeInTheDocument();
       release(undefined);
 
-      // Once the creation settled and the code after it ran, no summary
-      // reopened the sheet.
-      await waitFor(() => {
-        expect(
-          queryClient
-            .getMutationCache()
-            .getAll()
-            .map((mutation) => mutation.state.status)
-        ).toEqual(["success"]);
-      });
-      await act(async () => {
-        await Promise.resolve();
-      });
-      expect(screen.queryByTestId("login-sheet")).toBeNull();
+      expect(
+        await within(sheet).findByTestId("login-credentials-password")
+      ).toHaveTextContent("synthetic-temporary-123");
     } finally {
       release(undefined);
     }
   });
+
+  test.each([
+    ["disabling", "disable"],
+    ["resetting", "resetPassword"],
+  ] as const)(
+    "%s a login gone reads the list again, and its row goes",
+    async (_case, write) => {
+      const { disableBea, fillReset, user } = setup({
+        list: [ROWS, ROWS.filter((row) => row.id !== "user-bea")],
+        writes: {
+          [write]: {
+            code: "NOT_FOUND",
+            message: "Login not found",
+            status: 404,
+          },
+        },
+      });
+
+      if (write === "disable") {
+        await disableBea();
+      } else {
+        const { sheet } = await fillReset();
+        await user.click(within(sheet).getByTestId("reset-password-submit"));
+      }
+
+      expect(
+        await screen.findByText(
+          "That user no longer exists. We reloaded the list."
+        )
+      ).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByText("bea@example.com")).toBeNull();
+      });
+    }
+  );
 
   test("resets another login's password, then shows once what to send", async () => {
     const { fillReset, spies, user } = setup();
@@ -701,6 +725,91 @@ describe("UserManager", () => {
       await screen.findByText("Caro Gone can sign in again.")
     ).toBeInTheDocument();
     expect(spies.enable).toHaveBeenCalledExactlyOnceWith({ id: "user-caro" });
+  });
+
+  test("each login's enabling is its own: pressing another does not free the first one's button", async () => {
+    const dora = makeLogin({
+      disabledAt: new Date("2026-11-21T15:00:00.000Z"),
+      email: "dora@example.com",
+      id: "user-dora",
+      name: "Dora Gone",
+    });
+    const { rows, spies, user } = setup({
+      list: [[...ROWS, dora]],
+      writes: { enable: "hang" },
+    });
+    const listed = await rows();
+    const enableCaro = within(required(listed[2])).getByRole("button", {
+      name: "Enable: Caro Gone",
+    });
+    const enableDora = within(required(listed[3])).getByRole("button", {
+      name: "Enable: Dora Gone",
+    });
+
+    await user.click(enableCaro);
+    await user.click(enableDora);
+    await waitFor(() => {
+      expect(enableDora).toHaveAttribute("aria-disabled", "true");
+    });
+    await user.click(enableCaro);
+
+    expect(enableCaro).toHaveAttribute("aria-disabled", "true");
+    expect(spies.enable.mock.calls).toEqual([
+      [{ id: "user-caro" }],
+      [{ id: "user-dora" }],
+    ]);
+  });
+
+  test("two presses before the first one shows send one request", async () => {
+    const { rows, spies } = setup({ writes: { enable: "hang" } });
+    const caro = (await rows())[2];
+    const button = within(required(caro)).getByRole("button", {
+      name: "Enable: Caro Gone",
+    });
+
+    // Both in one go: React draws nothing in between.
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(button).toHaveAttribute("aria-disabled", "true");
+    });
+    await waitFor(() => {
+      expect(spies.enable).toHaveBeenCalledExactlyOnceWith({ id: "user-caro" });
+    });
+  });
+
+  test("the sheet's close button closes it while nothing is saving, focus back on “New user”", async () => {
+    const { rows, user } = setup();
+    await rows();
+    const add = screen.getByTestId("login-add");
+
+    await user.click(add);
+    const sheet = await screen.findByTestId("login-sheet");
+    await user.click(within(sheet).getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("login-sheet")).toBeNull();
+    });
+    expect(add).toHaveFocus();
+  });
+
+  test("enabling a login gone reads the list again, and its row goes", async () => {
+    const { rows, user } = setup({
+      list: [ROWS, ROWS.filter((row) => row.id !== "user-caro")],
+      writes: {
+        enable: { code: "NOT_FOUND", message: "Login not found", status: 404 },
+      },
+    });
+    const caro = (await rows())[2];
+
+    await user.click(
+      within(required(caro)).getByRole("button", { name: "Enable: Caro Gone" })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("caro@example.com")).toBeNull();
+    });
   });
 
   test("a second press while enabling is dropped, the button marked busy", async () => {
