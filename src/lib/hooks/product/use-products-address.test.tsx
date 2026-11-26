@@ -199,6 +199,29 @@ describe("useProductsAddress", () => {
     ]);
   });
 
+  test("the newest address asked for arriving retires the ones before it, even the same address asked earlier", () => {
+    const { address, asked, show } = setup();
+
+    act(() => {
+      address().replace(SEARCH("a"));
+      address().replace(SEARCH("b"));
+      address().replace(SEARCH("a"));
+    });
+    // The router keeps the last: only `?q=a` arrives.
+    show(makeQuery({ q: "a" }));
+    // Later, `?q=b` from elsewhere (back, a link) is the selection.
+    show(makeQuery({ q: "b" }));
+    act(() => {
+      address().push(DRAFTS);
+    });
+
+    expect(asked().at(-1)).toEqual([
+      "push",
+      "/en/admin/products?q=b&status=draft",
+      { scroll: false },
+    ]);
+  });
+
   test("builds the address in the page's language", () => {
     const { address, asked } = setup(makeQuery(), "es");
 

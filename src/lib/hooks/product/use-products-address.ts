@@ -46,6 +46,15 @@ export function useProductsAddress(
     }
 
     seen.current = here;
+
+    // The newest address asked for arriving: every one asked for before it
+    // is superseded (the router keeps the last navigation), even one with
+    // the same address, so none stays to pass for this list's own later.
+    if (here === asked.current.at(-1)) {
+      asked.current = [];
+      return;
+    }
+
     const own = asked.current.indexOf(here);
 
     if (own === -1) {
