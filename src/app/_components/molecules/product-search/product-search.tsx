@@ -1,17 +1,19 @@
 "use client";
 
 import { Search, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useRef } from "react";
 
 import { Input } from "@/app/_components/atoms/input";
 import { type ProductsQuery, productsPath } from "@/lib/admin/products";
 import { useDictionary, useLocale } from "@/lib/hooks/i18n";
+import type { ProductsAddress } from "@/lib/hooks/product";
 import { useSearchField } from "@/lib/hooks/ui";
 import { SEARCH_MAX_LENGTH } from "@/lib/schemas/catalog";
 import { cn } from "@/lib/utils";
 
 export interface ProductSearchProps {
+  /** The list's address, which the search asks for its change. */
+  address: ProductsAddress;
   className?: string;
   /** The list's selection in the address, already read. */
   query: ProductsQuery;
@@ -22,18 +24,16 @@ export interface ProductSearchProps {
  * field with a magnifier and, once it holds text, a button that clears it.
  * The address follows what is typed once typing pauses, replacing the
  * history entry (`useSearchField`), from the first page and keeping the
- * filters and the order the address holds by then. Before the script loads
- * it is a plain GET form carrying them.
+ * filters and the order asked for by then, even those still on their way
+ * (`useProductsAddress`). Before the script loads it is a plain GET form
+ * carrying them.
  */
-function ProductSearch({ className, query }: ProductSearchProps) {
+function ProductSearch({ address, className, query }: ProductSearchProps) {
   const copy = useDictionary().articles.list.search;
   const locale = useLocale();
-  const router = useRouter();
   const field = useRef<HTMLInputElement>(null);
   const search = useSearchField(query.q ?? undefined, (q) => {
-    router.replace(productsPath(locale, { ...query, page: 1, q: q ?? null }), {
-      scroll: false,
-    });
+    address.replace((base) => ({ ...base, page: 1, q: q ?? null }));
   });
   // The rest of the selection, for the form a browser without the script
   // sends.

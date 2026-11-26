@@ -1,9 +1,12 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import type { ListAttribute } from "@/lib/admin/product-filters";
 import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
+import { useLocale } from "@/lib/hooks/i18n";
+import { type ProductsAddress, useProductsAddress } from "@/lib/hooks/product";
 import type { Locale } from "@/lib/i18n/config";
 import { makeStoreCategory } from "@/test/factories/store-category";
 import { renderWithI18n } from "@/test/i18n";
@@ -94,6 +97,17 @@ function makeQuery(overrides: Partial<ProductsQuery> = {}): ProductsQuery {
   return { ...EMPTY_PRODUCTS_QUERY, ...overrides };
 }
 
+/** Hands the panel the list's own address over `query`. */
+function OverAddress({
+  children,
+  query,
+}: {
+  children: (address: ProductsAddress) => ReactElement;
+  query: ProductsQuery;
+}) {
+  return children(useProductsAddress(query, useLocale()));
+}
+
 /** A count that never comes. */
 const HANG = () => undefined;
 
@@ -151,17 +165,22 @@ function setup({
   const retryAttributes = vi.fn<() => void>();
   server.use(createOrpcHandler("product.list", list));
   const panel = (shown: ProductsQuery) => (
-    <ProductFilterPanel
-      activeCount={activeCount}
-      attributes={listsRead && !attributesFailed ? attributes : undefined}
-      attributesFailed={attributesFailed}
-      categories={listsRead && !categoriesFailed ? categories : undefined}
-      categoriesFailed={categoriesFailed}
-      className="custom"
-      onRetryAttributes={retryAttributes}
-      onRetryCategories={retry}
-      query={shown}
-    />
+    <OverAddress query={shown}>
+      {(address) => (
+        <ProductFilterPanel
+          activeCount={activeCount}
+          address={address}
+          attributes={listsRead && !attributesFailed ? attributes : undefined}
+          attributesFailed={attributesFailed}
+          categories={listsRead && !categoriesFailed ? categories : undefined}
+          categoriesFailed={categoriesFailed}
+          className="custom"
+          onRetryAttributes={retryAttributes}
+          onRetryCategories={retry}
+          query={shown}
+        />
+      )}
+    </OverAddress>
   );
   const view = renderWithI18n(panel(query), {
     locale,
@@ -726,9 +745,44 @@ describe("ProductFilterPanel", () => {
     expect(
       within(sheet).getByRole("checkbox", { name: "Gold" })
     ).not.toBeChecked();
+    await user.click(within(sheet).getByRole("checkbox", { name: "Purple" }));
     await user.click(within(sheet).getByRole("button", { name: "Apply" }));
     expect(push).toHaveBeenCalledExactlyOnceWith(
-      "/en/admin/products?status=published",
+      "/en/admin/products?status=published&f.color=violeta",
+      { scroll: false }
+    );
+  });
+
+  test("Apply with the choice the address already holds closes the sheet and adds no history entry", async () => {
+    const { open, user } = setup({ query: makeQuery({ status: "draft" }) });
+    const sheet = await open();
+
+    await user.click(within(sheet).getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("product-filters-sheet")).toBeNull();
+    });
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  test("a search landing under the open sheet keeps the choice, and Apply keeps the search", async () => {
+    const { open, rerender, user } = setup({
+      query: makeQuery({ status: "draft" }),
+    });
+    const sheet = await open();
+    await user.click(within(sheet).getByRole("checkbox", { name: "Gold" }));
+
+    // A search typed before opening the sheet lands: the filters are the
+    // same, only the search changed.
+    rerender(makeQuery({ q: "aro", status: "draft" }));
+
+    await waitFor(() => {
+      expect(within(sheet).getByRole("radio", { name: "Draft" })).toBeChecked();
+    });
+    expect(within(sheet).getByRole("checkbox", { name: "Gold" })).toBeChecked();
+    await user.click(within(sheet).getByRole("button", { name: "Apply" }));
+    expect(push).toHaveBeenCalledExactlyOnceWith(
+      "/en/admin/products?q=aro&status=draft&f.color=dorado",
       { scroll: false }
     );
   });
