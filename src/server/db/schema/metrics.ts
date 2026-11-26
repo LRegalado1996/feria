@@ -15,7 +15,7 @@ import { store } from "./store";
 // The day is each row's time: none of these tables carries timestamps.
 
 /**
- * How many browser sessions saw an article on a business day in
+ * How many tab sessions saw an article on a business day in
  * Montevideo (FER-029): one row per article per day, made by its first view
  * and incremented by upsert. Deleted with the article.
  */
@@ -42,7 +42,7 @@ export const productViewDaily = pgTable(
 );
 
 /**
- * How many browser sessions visited the store on a business day in
+ * How many tab sessions visited the store on a business day in
  * Montevideo (FER-029): one row per day, incremented by upsert.
  */
 export const storeVisitDaily = pgTable(

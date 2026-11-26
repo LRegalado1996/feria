@@ -7,7 +7,7 @@ export interface ArticleViewCountProps {
 }
 
 /**
- * Counts the browser session's view of the article once its page is shown
+ * Counts the tab session's view of the article once its page is shown
  * (FER-029), from the browser, so the page's cached output counts too.
  * Draws nothing.
  */
