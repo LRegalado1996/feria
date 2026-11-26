@@ -16,8 +16,7 @@ export function useCountView(productId: number) {
     meta: { suppressGlobalErrorReport: true },
   });
 
-  useCountOnce(
-    `lr-viewed:${String(productId)}`,
-    async () => await mutateAsync({ productId })
-  );
+  useCountOnce(`lr-viewed:${String(productId)}`, async () => {
+    await mutateAsync({ productId });
+  });
 }

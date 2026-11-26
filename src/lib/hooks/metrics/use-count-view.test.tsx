@@ -56,7 +56,7 @@ describe("useCountView", () => {
   test("sends the article's id, settling once the server answers", async () => {
     const { count, send } = setup();
 
-    await expect(send()).resolves.toBeNull();
+    await expect(send()).resolves.toBeUndefined();
     expect(count).toHaveBeenCalledExactlyOnceWith({ productId: 58 });
   });
 

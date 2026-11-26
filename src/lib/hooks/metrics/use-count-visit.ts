@@ -15,5 +15,7 @@ export function useCountVisit() {
     meta: { suppressGlobalErrorReport: true },
   });
 
-  useCountOnce("lr-visited", async () => await mutateAsync(undefined));
+  useCountOnce("lr-visited", async () => {
+    await mutateAsync(undefined);
+  });
 }

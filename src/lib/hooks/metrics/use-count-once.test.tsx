@@ -48,17 +48,16 @@ function setup({ counted = false }: { counted?: boolean } = {}) {
   }
 
   const answers: { reject: () => void; resolve: () => void }[] = [];
-  const send = vi.fn(
-    async () =>
-      await new Promise<void>((resolve, reject) => {
-        answers.push({
-          reject: () => {
-            reject(new Error("offline"));
-          },
-          resolve,
-        });
-      })
-  );
+  const send = vi.fn(async () => {
+    await new Promise<void>((resolve, reject) => {
+      answers.push({
+        reject: () => {
+          reject(new Error("offline"));
+        },
+        resolve,
+      });
+    });
+  });
   const mount = (countKey = key) =>
     renderHook(
       ({ current }: { current: string }) => {

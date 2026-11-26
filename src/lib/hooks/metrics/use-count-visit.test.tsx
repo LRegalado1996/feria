@@ -56,7 +56,7 @@ describe("useCountVisit", () => {
   test("sends no input, settling once the server answers", async () => {
     const { count, send } = setup();
 
-    await expect(send()).resolves.toBeNull();
+    await expect(send()).resolves.toBeUndefined();
     expect(count).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
