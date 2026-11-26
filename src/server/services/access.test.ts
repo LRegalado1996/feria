@@ -42,7 +42,7 @@ describe("findLogin", () => {
     expect(userRead().columns).toEqual({ id: true, mustChangePassword: true });
     expect(renderQuery(userRead().where)).toEqual({
       params: ["user-1", "session-1"],
-      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id"))',
     });
   });
 
@@ -71,7 +71,7 @@ describe("findAdminStore", () => {
     });
     expect(renderQuery(userRead().where)).toEqual({
       params: ["user-1", "session-1"],
-      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id" and "session"."expiresAt" > now()))',
+      sql: '("user"."id" = $1 and "user"."disabledAt" is null and exists (select 1 from "session" where "session"."id" = $2 and "session"."userId" = "user"."id"))',
     });
     expect(db.$.select).toHaveBeenCalledExactlyOnceWith({ id: store.id });
     expect(db.$["select.from"]).toHaveBeenCalledExactlyOnceWith(store);

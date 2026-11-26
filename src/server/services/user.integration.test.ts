@@ -39,6 +39,7 @@ const PASSWORD = "synthetic-pass-123";
 const createdUserIds: string[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   // A held writer still holds its locks on the logins: let it finish first.
   await releaseHeldWriters();
   const ids = createdUserIds.splice(0);
@@ -377,6 +378,8 @@ describe("sessions a password change ends", () => {
 
 describe("wrong current passwords against the database", () => {
   test("after the last allowed wrong try even the right password waits; a change clears the count", async () => {
+    const now = new Date("2026-11-25T12:00:00.000Z");
+    vi.setSystemTime(now);
     const bea = await makeLogin();
     const change = async (currentPassword: string) =>
       await changeOwnPassword(auth, db, {
@@ -393,23 +396,16 @@ describe("wrong current passwords against the database", () => {
       });
     }
 
-    const limited: unknown = await change(PASSWORD).catch(
-      (error: unknown) => error
-    );
-    expect(limited).toMatchObject({ code: "TOO_MANY_REQUESTS" });
-    // The whole window, less the seconds the tries above took.
-    const { retryAfter } = (limited as { data: { retryAfter: number } }).data;
-    expect(retryAfter).toBeLessThanOrEqual(PASSWORD_ATTEMPTS.windowMs / 1000);
-    expect(retryAfter).toBeGreaterThan(PASSWORD_ATTEMPTS.windowMs / 1000 - 60);
+    await expect(change(PASSWORD)).rejects.toMatchObject({
+      code: "TOO_MANY_REQUESTS",
+      data: { retryAfter: PASSWORD_ATTEMPTS.windowMs / 1000 },
+    });
     await expect(signIn(bea.email)).resolves.toMatchObject({
       user: { id: bea.id },
     });
 
     // A whole window later the right password goes through and clears it.
-    await db
-      .update(rateLimit)
-      .set({ lastRequest: Date.now() - PASSWORD_ATTEMPTS.windowMs })
-      .where(eq(rateLimit.key, `change-password:${bea.id}`));
+    vi.setSystemTime(now.getTime() + PASSWORD_ATTEMPTS.windowMs);
     await expect(change(PASSWORD)).resolves.toEqual({
       id: bea.id,
       mustChangePassword: false,

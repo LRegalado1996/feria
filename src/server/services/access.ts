@@ -20,7 +20,8 @@ export interface SessionRef {
 
 /**
  * `userId` if it is still a login, an enabled one (FER-015), and `sessionId`
- * is still one of its live sessions, else `null`. Better Auth caches a
+ * is still one of its sessions, else `null`. Its expiry is Better Auth's to
+ * check, on its own clock. Better Auth caches a
  * session in a cookie for minutes, so the cached copy can outlive its user,
  * the user's disabling, or the session itself (ended by a password change
  * or a reset): access is re-read from the database, never trusted from the
@@ -38,7 +39,7 @@ export async function findLogin(
       // The session's columns are spelled out: a relational query qualifies
       // every column it interpolates with its own table's alias, so
       // `${session.userId}` would read `"user"."userId"`.
-      sql`exists (select 1 from "session" where "session"."id" = ${sessionId} and "session"."userId" = ${user.id} and "session"."expiresAt" > now())`
+      sql`exists (select 1 from "session" where "session"."id" = ${sessionId} and "session"."userId" = ${user.id})`
     ),
   });
 
