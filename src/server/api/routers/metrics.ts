@@ -32,8 +32,8 @@ function ignoredBecause(request: CountRequest) {
 }
 
 /**
- * Hands a count to the time after the response, so the call answers at
- * once and a failed write is reported, never the caller's. The request's
+ * Hands a count to the time after the response: it starts only once the
+ * answer is sent, and a failed write is reported, never the caller's. The request's
  * log line says what was done with it, and when the cap was skipped for
  * want of the client's address.
  */
@@ -57,7 +57,8 @@ function countAfterResponse(
       outcome: "queued",
     },
   });
-  keepAlivePastResponse(count(), { action });
+  // Started only once the response is sent.
+  keepAlivePastResponse(count, { action });
 }
 
 /**

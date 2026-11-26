@@ -20,9 +20,12 @@ const services = vi.hoisted(() => ({
   getDashboard: vi.fn(async () => ({
     funnel: { orders: 4, views: 13, visits: 12 },
   })),
-  // The work handed past the response, kept to be awaited by the test.
+  // The work handed past the response, kept for the test to start as the
+  // platform would once the answer is sent.
   keepAlivePastResponse:
-    vi.fn<(work: Promise<unknown>, options: { action: string }) => void>(),
+    vi.fn<
+      (work: () => Promise<unknown>, options: { action: string }) => void
+    >(),
   logSet: vi.fn<(fields: unknown) => void>(),
   // A stand-in for the keyed hash, made of what the router handed it, so a
   // bucket of the wrong day, subject or headers would show.
@@ -114,11 +117,11 @@ function setup({
       services.logSet.mock.calls
         .map(([fields]) => fields)
         .filter((fields) => Object.hasOwn(fields as object, "metrics")),
-    /** Awaits the work handed past the response, as the platform would. */
+    /** Runs the work handed past the response, as the platform would. */
     afterResponse: async () => {
       await Promise.all(
         services.keepAlivePastResponse.mock.calls.map(
-          async ([work]) => await work
+          async ([work]) => await work()
         )
       );
     },
@@ -157,7 +160,7 @@ describe("metrics.countView", () => {
         productId: 58,
       });
       expect(services.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
-        expect.any(Promise),
+        expect.any(Function),
         { action: "Metrics.count_view" }
       );
       expect(logged()).toEqual([
@@ -166,38 +169,25 @@ describe("metrics.countView", () => {
     }
   );
 
-  test("answers while the count it started is still being written", async () => {
+  test("answers before the count starts, which waits for the response to be sent", async () => {
     const { afterResponse, countView, db } = setup();
-    let release: () => void = () => undefined;
-    let written = false;
-    services.countProductView.mockImplementationOnce(
-      async () =>
-        await new Promise<string>((resolve) => {
-          release = () => {
-            written = true;
-            resolve("counted");
-          };
-        })
-    );
 
     await expect(countView({ productId: 58 })).resolves.toBeUndefined();
 
-    // Answered, the count started and handed past the response, unwritten.
+    // Answered with the count handed past the response, not started.
+    expect(services.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Function),
+      { action: "Metrics.count_view" }
+    );
+    expect(services.countProductView).not.toHaveBeenCalled();
+
+    await afterResponse();
+
     expect(services.countProductView).toHaveBeenCalledExactlyOnceWith(db, {
       bucket: "bucket:203.0.113.7:2026-12-05:view:58",
       day: "2026-12-05",
       productId: 58,
     });
-    expect(services.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
-      expect.any(Promise),
-      { action: "Metrics.count_view" }
-    );
-    expect(written).toBe(false);
-
-    release();
-    await afterResponse();
-
-    expect(written).toBe(true);
   });
 
   test("without the client's address counts with no cap, and the log line says so", async () => {
@@ -289,7 +279,7 @@ describe("metrics.countVisit", () => {
         day,
       });
       expect(services.keepAlivePastResponse).toHaveBeenCalledExactlyOnceWith(
-        expect.any(Promise),
+        expect.any(Function),
         { action: "Metrics.count_visit" }
       );
     }

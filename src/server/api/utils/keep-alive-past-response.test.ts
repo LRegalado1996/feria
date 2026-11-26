@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { keepAlivePastResponse } from "./keep-alive-past-response";
 
 const mocks = vi.hoisted(() => ({
-  after: vi.fn((_task: Promise<unknown>) => undefined),
+  after: vi.fn((_task: Promise<unknown> | (() => Promise<void>)) => undefined),
   captureExceptionWithScope: vi.fn(),
   waitUntil: vi.fn((_task: Promise<unknown>) => undefined),
 }));
@@ -20,7 +20,20 @@ const OUTSIDE_SCOPE = new Error(
 
 /** The promise `after()` was offered, whether it accepted it or not. */
 function offeredToAfter(): Promise<unknown> | undefined {
-  return mocks.after.mock.calls[0]?.[0];
+  const task = mocks.after.mock.calls[0]?.[0];
+
+  return typeof task === "function" ? undefined : task;
+}
+
+/** The callback `after()` was handed, to run as Next would once sent. */
+function callbackAfter(): () => Promise<void> {
+  const task = mocks.after.mock.calls[0]?.[0];
+
+  if (typeof task !== "function") {
+    throw new TypeError("after() was handed no callback");
+  }
+
+  return task;
 }
 
 describe("keepAlivePastResponse", () => {
@@ -85,5 +98,69 @@ describe("keepAlivePastResponse", () => {
       new Error("Order.notify was still running after 5 ms"),
       { action: "Order.notify" }
     );
+  });
+
+  test("starts work handed as a function only once the response is sent", async () => {
+    const work = vi.fn(async () => await Promise.resolve("written"));
+
+    keepAlivePastResponse(work, { action: "Metrics.count_view" });
+
+    expect(work).not.toHaveBeenCalled();
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
+
+    await callbackAfter()();
+
+    expect(work).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+  });
+
+  test("starts a function at once under waitUntil outside a request scope", async () => {
+    mocks.after.mockImplementationOnce(() => {
+      throw OUTSIDE_SCOPE;
+    });
+    const work = vi.fn(async () => await Promise.resolve("written"));
+
+    keepAlivePastResponse(work, { action: "Metrics.count_view" });
+
+    expect(work).toHaveBeenCalledExactlyOnceWith();
+    expect(mocks.waitUntil).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Promise)
+    );
+    await mocks.waitUntil.mock.calls[0]?.[0];
+    expect(mocks.captureExceptionWithScope).not.toHaveBeenCalled();
+  });
+
+  test("reports a function that throws as it starts, under its action", async () => {
+    const failure = new Error("pool exhausted");
+
+    keepAlivePastResponse(
+      () => {
+        throw failure;
+      },
+      { action: "Metrics.count_view" }
+    );
+    await callbackAfter()();
+
+    expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      failure,
+      { action: "Metrics.count_view" }
+    );
+  });
+
+  test("rethrows any other refusal from after() for a function too", () => {
+    const refusal = new Error("after() cannot be called inside a cache scope");
+    mocks.after.mockImplementationOnce(() => {
+      throw refusal;
+    });
+
+    expect(() => {
+      keepAlivePastResponse(
+        async () => {
+          await Promise.resolve();
+        },
+        { action: "Metrics.count_view" }
+      );
+    }).toThrow(refusal);
+    expect(mocks.waitUntil).not.toHaveBeenCalled();
   });
 });

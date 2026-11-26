@@ -38,15 +38,17 @@ vi.mock("@/env", () => ({
 // the days before it) are only this file's.
 const DAY = "2031-03-14";
 const NEXT_DAY = "2031-03-15";
+// The store's one row of a day is shared: this day's is the visit test's.
+const VISIT_DAY = "2031-04-01";
 
 // The store is shared (`theStoreId`): what this file created is deleted by
 // id after each test. Deleting an article takes its daily views; the
-// buckets and the store's visits go by the buckets and days used here.
+// buckets go by the buckets used here, the store's visits by their ids.
 const created = {
   buckets: [] as string[],
   categoryIds: [] as number[],
-  days: new Set<string>(),
   productIds: [] as number[],
+  visitIds: [] as number[],
 };
 
 afterEach(async () => {
@@ -62,8 +64,7 @@ afterEach(async () => {
     .where(inArray(metricRateLimit.bucket, created.buckets.splice(0)));
   await db
     .delete(storeVisitDaily)
-    .where(inArray(storeVisitDaily.day, [...created.days]));
-  created.days.clear();
+    .where(inArray(storeVisitDaily.id, created.visitIds.splice(0)));
 });
 
 /** A bucket no other test holds, deleted after the test. */
@@ -123,18 +124,17 @@ async function viewsOf(productId: number) {
     .orderBy(productViewDaily.day);
 }
 
-/** The store's visits on `day`; `null` while it has no row. */
+/** The store's row of visits on `day`, or `null` while it has none. */
 async function visitsOn(day: string) {
-  created.days.add(day);
   const storeId = await theStoreId(db);
   const [row] = await db
-    .select({ visitCount: storeVisitDaily.visitCount })
+    .select({ id: storeVisitDaily.id, visitCount: storeVisitDaily.visitCount })
     .from(storeVisitDaily)
     .where(
       and(eq(storeVisitDaily.storeId, storeId), eq(storeVisitDaily.day, day))
     );
 
-  return row?.visitCount ?? null;
+  return row ?? null;
 }
 
 /** The hits `bucket` holds on `day`; `null` while it has no row. */
@@ -267,25 +267,30 @@ describe("countProductView", () => {
 
 describe("countStoreVisit", () => {
   test("adds each visit to the store's day, and stops one client at its cap", async () => {
-    const before = (await visitsOn(DAY)) ?? 0;
+    // The day's row is this test's to make: none may be there before.
+    expect(await visitsOn(VISIT_DAY)).toBeNull();
     // One hit short of the cap, as a hundred visits before would leave it.
     const burst = makeBucket();
     await db.insert(metricRateLimit).values({
       bucket: burst,
-      day: DAY,
+      day: VISIT_DAY,
       hits: STORE_VISITS_PER_CLIENT_PER_DAY - 1,
     });
 
     const outcomes = await repeat(
       2,
-      async () => await countStoreVisit(db, { bucket: burst, day: DAY })
+      async () => await countStoreVisit(db, { bucket: burst, day: VISIT_DAY })
     );
-    await countStoreVisit(db, { bucket: makeBucket(), day: DAY });
-    await countStoreVisit(db, { bucket: null, day: DAY });
+    await countStoreVisit(db, { bucket: makeBucket(), day: VISIT_DAY });
+    await countStoreVisit(db, { bucket: null, day: VISIT_DAY });
+    const visits = await visitsOn(VISIT_DAY);
+    created.visitIds.push(...(visits ? [visits.id] : []));
 
     expect(outcomes).toEqual(["counted", "capped"]);
-    expect(await hitsOf(burst, DAY)).toBe(STORE_VISITS_PER_CLIENT_PER_DAY);
-    expect(await visitsOn(DAY)).toBe(before + 3);
+    expect(await hitsOf(burst, VISIT_DAY)).toBe(
+      STORE_VISITS_PER_CLIENT_PER_DAY
+    );
+    expect(visits?.visitCount).toBe(3);
   });
 });
 

@@ -26,36 +26,64 @@ async function settle(
   }
 }
 
+/** `after()` throws this way outside a request scope: `waitUntil` takes over. */
+function rethrowUnlessOutsideScope(error: unknown) {
+  if (
+    !(
+      error instanceof Error &&
+      error.message.includes("outside a request scope")
+    )
+  ) {
+    throw error;
+  }
+}
+
+/** Starts `start`, a thrown error becoming a rejection `settle` reports. */
+async function begin(start: () => Promise<unknown>): Promise<unknown> {
+  return await start();
+}
+
 /**
  * Keep side work (a webhook, an email, a log drain) alive after the response
  * is sent, without the caller awaiting it. An unregistered promise is not
  * enough: Vercel may freeze the instance once the response ships.
  *
- * `after()` registers it inside a request scope. Outside one (a streamed
- * body completing, a script, a test) `after()` throws, and `waitUntil` takes
- * over, a no-op off Vercel where the work simply runs on. Either way the wait
- * is bounded, and a failure or an overrun is reported under `action`
- * (`Domain.snake_action`).
+ * `work` is a promise already running, or a function that starts it: the
+ * function is called only once the response is sent (`after(callback)`), so
+ * work that must not run before the answer (a count's writes, FER-029) waits
+ * for it. Outside a request scope (a streamed body completing, a script, a
+ * test) `after()` throws, and `waitUntil` takes over, a no-op off Vercel
+ * where the work simply runs on (a function is started at once there).
+ * Either way the wait is bounded, and a failure or an overrun is reported
+ * under `action` (`Domain.snake_action`).
  */
 export function keepAlivePastResponse(
-  work: Promise<unknown>,
+  work: Promise<unknown> | (() => Promise<unknown>),
   {
     action,
     timeoutMs = DEFAULT_TIMEOUT_MS,
   }: { action: string; timeoutMs?: number }
 ): void {
+  if (typeof work === "function") {
+    const run = async () => {
+      await settle(begin(work), action, timeoutMs);
+    };
+
+    try {
+      after(run);
+    } catch (error) {
+      rethrowUnlessOutsideScope(error);
+      waitUntil(run());
+    }
+
+    return;
+  }
+
   const settled = settle(work, action, timeoutMs);
   try {
     after(settled);
   } catch (error) {
-    if (
-      !(
-        error instanceof Error &&
-        error.message.includes("outside a request scope")
-      )
-    ) {
-      throw error;
-    }
+    rethrowUnlessOutsideScope(error);
     waitUntil(settled);
   }
 }
