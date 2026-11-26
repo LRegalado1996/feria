@@ -284,8 +284,10 @@ export const storefront: Dictionary["storefront"] = {
     newTab: "(opens in a new tab)",
     notFound: {
       back: "Back to the store's home",
-      body: "The link may be old, or that article may be gone.",
-      title: "We could not find this page",
+      body: "The link may be old, or that article may no longer be for sale. Everything we have is still in the catalog.",
+      catalog: "See the catalog",
+      eyebrow: "Error 404",
+      title: "This page doesn't exist",
     },
     search: "Search the store",
     searchClose: "Close the search",

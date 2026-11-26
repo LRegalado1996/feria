@@ -2,7 +2,7 @@
 
 - **Milestone:** M4 Storefront and orders
 - **Priority:** P2
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-060
 
 ## Goal
@@ -16,6 +16,10 @@ Found on 2026-11-20 on a local production build of FER-060: `/home` answers `200
 ## Scope
 
 - Answer the redirect before anything is sent: in `src/proxy.ts` from the cached home address, or in the route before any streamed boundary; keep it temporary (the home can change) and keep the canonical `/`.
+
+## Decision
+
+2026-11-25: done with [FER-069](FER-069-unknown-store-address-404.md), in `src/proxy.ts`, from the store's addresses the proxy keeps (which page is the home), not from a cached read: Next runs no `"use cache"` in the proxy. The redirect drops the query, as the route's did. The old home's address is a page again at once: the addresses the proxy keeps say it leads to `/`, and any answer but "on" is decided again on a read that started after the request. The new home's address can still be let through as an ordinary page for up to 5 seconds (the proxy trusts addresses that old to let a page through, so a page request needs no read), and its route then sends it to `/` from the stream, with a 200; after that window it is a 307. A fresh read on every page request would close the window at the cost of a database read per catalog and page request; that choice is left for another ticket if the window matters.
 
 ## Acceptance criteria
 

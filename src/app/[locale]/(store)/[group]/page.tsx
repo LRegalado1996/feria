@@ -11,9 +11,12 @@ import {
   storePageMetadata,
 } from "../store-page-view";
 
-// Read before anything is sent, like every catalog page: an unknown address
-// is a real 404 and a category in a group a permanent redirect to its page
-// under the group (docs/agents/nextjs.md § Store pages).
+// Read before anything is sent, like every catalog page. Its shell still
+// goes out first, so the statuses (an unknown address's 404, a draft's for
+// the public, the home's 307, a category's 308 to its page under its group)
+// come from the proxy, which knows the store's addresses (FER-069); the
+// checks below stay for the seconds it can be behind (docs/agents/nextjs.md
+// § Store pages).
 export const instant = false;
 
 type GroupPageProps = CatalogPageProps & {

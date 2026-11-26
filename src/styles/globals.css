@@ -309,6 +309,16 @@
   font-size: clamp(1.25rem, var(--spotlight-column, 100cqi) / 10, 4rem);
 }
 
+/*
+ * The store's not-found page's "404" (FER-069), the page's one large
+ * figure: three letters of the display face are about 2.9em wide, so 7rem
+ * (112 px) fits a 390 px phone inside its gutters, and the figure grows
+ * with the window beside the words from 1024 px up, to 204 px.
+ */
+@utility store-display-not-found {
+  font-size: clamp(7rem, 1rem + 12vw, 12.75rem);
+}
+
 @utility store-display-page {
   font-size: clamp(1.75rem, 1.15rem + 2.6vw, 2.875rem);
 }
