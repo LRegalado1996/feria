@@ -119,6 +119,11 @@ test.describe("View tracking", () => {
       );
     });
     await expect.poll(views).toBe(1);
+    // And their marks kept in the tab, which the reloads below read.
+    await page.waitForFunction(
+      (keys) => keys.every((key) => sessionStorage.getItem(key) === "1"),
+      [`lr-viewed:${String(article.id)}`, "lr-visited"]
+    );
 
     for (let load = 2; load <= 10; load += 1) {
       await openArticle(page, article.slug);

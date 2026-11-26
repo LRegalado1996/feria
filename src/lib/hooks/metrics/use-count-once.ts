@@ -4,43 +4,41 @@ import { useSessionFlag } from "@/lib/hooks/ui";
 import { whenPageIdle } from "@/lib/utils/page-idle";
 
 /**
- * The keys sent from this page and not answered yet, whichever component
- * sent them: a page that mounts the counter again (a soft navigation back)
- * while the first call is out sends nothing more.
+ * The keys whose count failed on this page load: tried again on the next
+ * load, never in a loop on this one (a blocker would fail it every time).
  */
-const inFlight = new Set<string>();
+const failedThisLoad = new Set<string>();
 
 /**
- * Sends a count once per browser session (FER-029): once the page has
- * loaded and the browser has an idle moment, so it never competes with what
- * the visitor came to see, unless `key` was counted this session
- * (`sessionStorage`, no cookie). The key is marked when the server answers,
- * even after the component that sent it unmounted, so a reload or a return
- * counts nothing more. One try per key and mount: a call that fails
- * (offline, a blocker) is tried again only on the next page load.
+ * Sends a count once per tab session (FER-029: `sessionStorage`, which
+ * each tab keeps apart, so a second tab counts again; no cookie): once the
+ * page has loaded and the browser has an idle moment, so it never competes
+ * with what the visitor came to see, unless `key` was counted this session.
+ * The key is marked as the count is sent, so a reload or a return while
+ * the call is out counts nothing more, and cleared if the call fails, so
+ * the next page load tries again.
  */
 export function useCountOnce(key: string, send: () => Promise<unknown>) {
   const [counted, setCounted] = useSessionFlag(key);
   // The latest `send`, without making the wait start over on every render.
   const sendOnce = useEffectEvent(async (countKey: string) => {
-    if (inFlight.has(countKey)) {
+    if (failedThisLoad.has(countKey)) {
       return;
     }
 
     // The setter of the key being sent, whatever the page shows by the
     // time the answer comes.
     const markCounted = setCounted;
-    inFlight.add(countKey);
+    markCounted(true);
 
     try {
       await send();
-      markCounted(true);
     } catch {
       // heartbeat: offline-tolerant
       // A lost count is no bug to report; the server reports a failed write.
+      failedThisLoad.add(countKey);
+      markCounted(false);
     }
-
-    inFlight.delete(countKey);
   });
 
   useEffect(() => {

@@ -62,7 +62,7 @@ function countAfterResponse(
 
 /**
  * The storefront's own counts (FER-029), called by the browser once the
- * page is shown, once per browser session: a visit to the store and a view
+ * page is shown, once per tab session: a visit to the store and a view
  * of an article. Public and cheap: the answer is always empty, whatever was
  * counted, and the day is the business day in Montevideo when the request
  * arrived.
@@ -83,7 +83,7 @@ export const metricsRouter = {
     .route({
       method: "POST",
       path: "/metrics/visits",
-      summary: "Count a browser session's visit to the store",
+      summary: "Count a tab session's visit to the store",
       tags: ["metrics"],
     }),
 
@@ -111,7 +111,7 @@ export const metricsRouter = {
     .route({
       method: "POST",
       path: "/metrics/views",
-      summary: "Count a browser session's view of an article",
+      summary: "Count a tab session's view of an article",
       tags: ["metrics"],
     }),
 };

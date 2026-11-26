@@ -95,16 +95,17 @@ function setup({ counted = false }: { counted?: boolean } = {}) {
 }
 
 describe("useCountOnce", () => {
-  test("waits for the page to be idle, sends once, and remembers the key only once the server answers", async () => {
+  test("waits for the page to be idle, sends once, and marks the key as it sends, kept once the server answers", async () => {
     const { answer, idle, key, mount, send } = setup();
     mount();
 
     expect(send).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(key)).toBeNull();
 
     idle();
 
     expect(send).toHaveBeenCalledExactlyOnceWith();
-    expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(window.sessionStorage.getItem(key)).toBe("1");
 
     await answer("counted");
 
@@ -159,19 +160,35 @@ describe("useCountOnce", () => {
     expect(window.sessionStorage.getItem(key)).toBe("1");
   });
 
-  test("a send that fails is not retried while mounted, and is on the next load", async () => {
+  test("a send that fails clears its key, and is not tried again on this page load", async () => {
     const { answer, idle, key, mount, send } = setup();
     const first = mount();
     idle();
     await answer("failed");
-    first.rerender({ current: key });
+
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+
+    // The cleared flag renders again, and a later mount waits again too:
+    // neither sends it a second time.
+    idle();
+    first.unmount();
+    mount();
     idle();
 
     expect(send).toHaveBeenCalledExactlyOnceWith();
-    expect(window.sessionStorage.getItem(key)).toBeNull();
+  });
 
-    first.unmount();
+  test("the next page load tries a failed key again", async () => {
+    const { answer, idle, key, mount, send } = setup();
     mount();
+    idle();
+    await answer("failed");
+
+    vi.resetModules();
+    const { useCountOnce: afterReload } = await import("./use-count-once");
+    renderHook(() => {
+      afterReload(key, send);
+    });
     idle();
 
     expect(send.mock.calls).toEqual([[], []]);
