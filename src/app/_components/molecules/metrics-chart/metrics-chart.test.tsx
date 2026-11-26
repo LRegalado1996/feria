@@ -51,8 +51,8 @@ function makeProps(
     column: "Day",
     kind: "bar",
     rows: [
-      { label: "Dec 1", values: { orders: 2 } },
-      { label: "Dec 2", values: { orders: 1234 } },
+      { key: "2026-12-01", label: "Dec 1", values: { orders: 2 } },
+      { key: "2026-12-02", label: "Dec 2", values: { orders: 1234 } },
     ],
     series: [{ color: 1, key: "orders", label: "Orders" }],
     showData: "Show the data",
@@ -88,6 +88,8 @@ describe("MetricsChart", () => {
 
     expect(propsOf("BarChart")).toEqual([
       expect.objectContaining({
+        // Hidden from assistive technology, it takes no keyboard stop.
+        accessibilityLayer: false,
         data: [
           { label: "Dec 1", orders: 2 },
           { label: "Dec 2", orders: 1234 },
@@ -109,7 +111,9 @@ describe("MetricsChart", () => {
   test("draws lines for a line chart, each 2 px in its color, and a legend for two series", () => {
     const { figure } = setup({
       kind: "line",
-      rows: [{ label: "Dec 1", values: { views: 5, visits: 3 } }],
+      rows: [
+        { key: "2026-12-01", label: "Dec 1", values: { views: 5, visits: 3 } },
+      ],
       series: [
         { color: 1, key: "visits", label: "Visits" },
         { color: 2, key: "views", label: "Views" },
@@ -181,9 +185,29 @@ describe("MetricsChart", () => {
     ).toEqual(["DayOrders", "Dec 12", "Dec 21.234"]);
   });
 
+  test("keeps two days that read alike as two rows, each keyed by its day", () => {
+    // React says so when two rows share a key, and may then drop one.
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { table } = setup({
+      rows: [
+        { key: "2025-11-25", label: "Nov 25", values: { orders: 1 } },
+        { key: "2026-11-25", label: "Nov 25", values: { orders: 2 } },
+      ],
+    });
+
+    expect(
+      within(table())
+        .getAllByRole("row", { hidden: true })
+        .map((row) => row.textContent)
+    ).toEqual(["DayOrders", "Nov 251", "Nov 252"]);
+    expect(error).not.toHaveBeenCalled();
+  });
+
   test("reads a missing value as zero in the table", () => {
     const { table } = setup({
-      rows: [{ label: "Dec 1", values: {} }],
+      rows: [{ key: "2026-12-01", label: "Dec 1", values: {} }],
     });
 
     expect(

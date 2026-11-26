@@ -25,8 +25,12 @@ export interface MetricsChartSeries {
   label: string;
 }
 
-/** One point along the axis: its label as shown, and each series' value. */
+/**
+ * One point along the axis: a key unique in the chart (the day), its label
+ * as shown, and each series' value.
+ */
 export interface MetricsChartRow {
+  key: string;
   label: string;
   values: Record<string, number>;
 }
@@ -158,7 +162,13 @@ function MetricsChart({
           initialDimension={INITIAL_SIZE}
           width="100%"
         >
-          <Chart data={data} margin={{ bottom: 0, left: 0, right: 8, top: 8 }}>
+          <Chart
+            // The picture is hidden from assistive technology, so it must
+            // not take a keyboard stop either: the table is the way in.
+            accessibilityLayer={false}
+            data={data}
+            margin={{ bottom: 0, left: 0, right: 8, top: 8 }}
+          >
             <CartesianGrid stroke="var(--border)" vertical={false} />
             <XAxis
               axisLine={false}
@@ -237,7 +247,7 @@ function MetricsChart({
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr className="border-b last:border-0" key={row.label}>
+                <tr className="border-b last:border-0" key={row.key}>
                   <th className="py-2 pr-4 text-left font-normal" scope="row">
                     {row.label}
                   </th>

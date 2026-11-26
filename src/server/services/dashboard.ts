@@ -296,7 +296,11 @@ async function readArticlesPerWeek(tx: DatabaseClient, scope: DashboardScope) {
     .orderBy(asc(week));
 }
 
-/** Every login and when it last signed in (its newest session). */
+/**
+ * Every login and when it last signed in: its newest session still kept.
+ * Better Auth deletes a session at sign-out (and an expired one in time), so
+ * a login that signed out reads an older date or none (Lucas, FER-030).
+ */
 async function readLogins(tx: DatabaseClient) {
   const lastSignInAt = max(session.createdAt);
 

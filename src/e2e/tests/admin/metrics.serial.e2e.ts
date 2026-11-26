@@ -1,11 +1,14 @@
+import { daySpan } from "../../../lib/metrics/days";
+import { formatCalendarDay } from "../../../lib/utils/format";
 import { productViewDaily } from "../../../server/db/schema";
 import { type DbFixture, expect, test, uniqueTag } from "../../fixtures";
 import { AdminPage } from "../../page-objects/admin.page";
 
-// FER-030. A day no other test touches holds this file's views, so the
-// dashboard's numbers for it are known; the article is the test's own, and
-// its views go with it. Visits are the store's, which teardown never
-// deletes: the integration test counts them.
+// FER-030. The dashboard's numbers are the store's, not one test's: this
+// spec runs alone (`serial`), on a day no other test touches, so they are
+// known. The article is the test's own, and its views go with it. Visits
+// are the store's, which teardown never deletes: the integration test
+// counts them.
 const DAY = "2031-01-15";
 const RANGE_PATH = `/admin/metrics?from=${DAY}&to=${DAY}`;
 
@@ -80,14 +83,27 @@ test.describe("Metrics dashboard", () => {
     );
 
     const range = page.getByRole("navigation", { name: "Período" });
-    await range.getByRole("link", { name: "7 días" }).click();
+    const lastWeek = range.getByRole("link", { name: "7 días" });
+    const href = new URL(
+      (await lastWeek.getAttribute("href")) ?? "",
+      "http://localhost"
+    );
+    const from = href.searchParams.get("from") ?? "";
+    const to = href.searchParams.get("to") ?? "";
 
-    await expect(range.getByRole("link", { name: "7 días" })).toHaveAttribute(
-      "aria-current",
-      "page"
+    // Seven days, both ends included; that they end today is the unit
+    // tests', on a frozen clock.
+    expect(daySpan(from, to)).toBe(7);
+
+    await lastWeek.click();
+
+    await expect(lastWeek).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("metrics-range-days")).toHaveText(
+      `Del ${formatCalendarDay(from, "es")} al ${formatCalendarDay(to, "es")}`
     );
     const url = new URL(page.url());
-    expect(url.pathname).toBe("/admin/metrics");
-    expect(url.searchParams.get("to")).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+    expect(`${url.pathname}${url.search}`).toBe(
+      `${href.pathname}${href.search}`
+    );
   });
 });

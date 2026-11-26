@@ -168,6 +168,59 @@ describe("MetricsDashboard", () => {
     );
   });
 
+  test("names each day with its year when the range crosses one", () => {
+    const { chart } = setup({
+      dashboard: makeDashboard({
+        traffic: [{ day: "2027-01-01", views: 4, visits: 2 }],
+      }),
+      range: { from: "2026-12-31", to: "2027-01-01" },
+    });
+
+    expect(chart("Visits and views per day")?.rows).toEqual([
+      {
+        key: "2026-12-31",
+        label: "Dec 31, 2026",
+        values: { views: 0, visits: 0 },
+      },
+      {
+        key: "2027-01-01",
+        label: "Jan 1, 2027",
+        values: { views: 4, visits: 2 },
+      },
+    ]);
+  });
+
+  test("names a week that starts inside the range by its own Monday", () => {
+    const { chart } = setup({
+      dashboard: makeDashboard({
+        articlesPerWeek: [{ created: 2, week: "2026-12-07" }],
+      }),
+      range: { from: "2026-12-01", to: "2026-12-10" },
+    });
+
+    expect(chart("Articles created per week")?.rows).toEqual([
+      { key: "2026-12-07", label: "Week of Dec 7", values: { created: 2 } },
+    ]);
+  });
+
+  test.each([
+    ["more orders than visits", { orders: 5, views: 9, visits: 3 }, "Orders5"],
+    [
+      "as many orders as visits",
+      { orders: 3, views: 9, visits: 3 },
+      "Orders3100% of the visits",
+    ],
+  ])(
+    "with %s, says the share only up to all of them",
+    (_case, funnel, text) => {
+      const { section } = setup({ dashboard: makeDashboard({ funnel }) });
+
+      expect(section("metrics-funnel-orders")).toHaveTextContent(
+        new RegExp(`^${text}$`, "u")
+      );
+    }
+  );
+
   test("gives no share of no visits", () => {
     const { section } = setup({
       dashboard: makeDashboard({ funnel: { orders: 1, views: 0, visits: 0 } }),
@@ -183,9 +236,13 @@ describe("MetricsDashboard", () => {
       column: "Day",
       kind: "line",
       rows: [
-        { label: "Dec 1", values: { views: 18, visits: 12 } },
-        { label: "Dec 2", values: { views: 0, visits: 0 } },
-        { label: "Dec 3", values: { views: 12, visits: 8 } },
+        {
+          key: "2026-12-01",
+          label: "Dec 1",
+          values: { views: 18, visits: 12 },
+        },
+        { key: "2026-12-02", label: "Dec 2", values: { views: 0, visits: 0 } },
+        { key: "2026-12-03", label: "Dec 3", values: { views: 12, visits: 8 } },
       ],
       series: [
         { color: 1, key: "visits", label: "Visits" },
@@ -254,23 +311,23 @@ describe("MetricsDashboard", () => {
     const { chart } = setup();
 
     expect(chart("Orders per day")?.rows).toEqual([
-      { label: "Dec 1", values: { orders: 3 } },
-      { label: "Dec 2", values: { orders: 0 } },
-      { label: "Dec 3", values: { orders: 1 } },
+      { key: "2026-12-01", label: "Dec 1", values: { orders: 3 } },
+      { key: "2026-12-02", label: "Dec 2", values: { orders: 0 } },
+      { key: "2026-12-03", label: "Dec 3", values: { orders: 1 } },
     ]);
     expect(chart("Amount per day in UYU")).toMatchObject({
       rows: [
-        { label: "Dec 1", values: { amount: 400_000 } },
-        { label: "Dec 2", values: { amount: 0 } },
-        { label: "Dec 3", values: { amount: 200_000 } },
+        { key: "2026-12-01", label: "Dec 1", values: { amount: 400_000 } },
+        { key: "2026-12-02", label: "Dec 2", values: { amount: 0 } },
+        { key: "2026-12-03", label: "Dec 3", values: { amount: 200_000 } },
       ],
       value: { currency: "UYU", kind: "price" },
     });
     expect(chart("Amount per day in USD")).toMatchObject({
       rows: [
-        { label: "Dec 1", values: { amount: 1500 } },
-        { label: "Dec 2", values: { amount: 0 } },
-        { label: "Dec 3", values: { amount: 0 } },
+        { key: "2026-12-01", label: "Dec 1", values: { amount: 1500 } },
+        { key: "2026-12-02", label: "Dec 2", values: { amount: 0 } },
+        { key: "2026-12-03", label: "Dec 3", values: { amount: 0 } },
       ],
       value: { currency: "USD", kind: "price" },
     });
@@ -310,9 +367,17 @@ describe("MetricsDashboard", () => {
   test("draws the articles created per week, and dates each login's last sign-in", () => {
     const { chart, rows } = setup();
 
+    // The range opens on Tuesday, Dec 1: its first week is named by it.
     expect(chart("Articles created per week")).toMatchObject({
+      column: "Week",
       kind: "bar",
-      rows: [{ label: "Week of Nov 30", values: { created: 3 } }],
+      rows: [
+        {
+          key: "2026-11-30",
+          label: "Week of Dec 1",
+          values: { created: 3 },
+        },
+      ],
     });
     expect(rows("metrics-logins")).toEqual([
       "UserLast sign-in",

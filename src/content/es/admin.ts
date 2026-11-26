@@ -225,6 +225,7 @@ export const admin = {
       perWeek: "Artículos creados por semana",
       title: "Uso del panel",
       week: "Semana del {day}",
+      weekColumn: "Semana",
     },
     articles: {
       article: "Artículo",

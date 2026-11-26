@@ -30,7 +30,6 @@ vi.mock("@/env", () => ({
 // A week no real row holds: every count, view and order of these days is
 // this file's, so the store-wide numbers of the range are known answers.
 const RANGE = { from: "2032-06-01", to: "2032-06-07" };
-const SEEDED_DAYS = ["2032-05-31", "2032-06-01", "2032-06-02", "2032-06-03"];
 
 // The store is shared (`theStoreId`): what this file created is deleted by
 // id after each test. An article takes its texts and views with it, an
@@ -40,6 +39,7 @@ const created = {
   orderIds: [] as number[],
   productIds: [] as number[],
   userIds: [] as string[],
+  visitIds: [] as number[],
 };
 
 afterEach(async () => {
@@ -55,7 +55,7 @@ afterEach(async () => {
   await db.delete(user).where(inArray(user.id, created.userIds.splice(0)));
   await db
     .delete(storeVisitDaily)
-    .where(inArray(storeVisitDaily.day, SEEDED_DAYS));
+    .where(inArray(storeVisitDaily.id, created.visitIds.splice(0)));
 });
 
 /** An article of the store, created at `createdAt`, titled per language. */
@@ -236,11 +236,15 @@ async function setup() {
     // The day before the range.
     { day: "2032-05-31", productId: draft, storeId, viewCount: 50 },
   ]);
-  await db.insert(storeVisitDaily).values([
-    { day: "2032-05-31", storeId, visitCount: 99 },
-    { day: "2032-06-01", storeId, visitCount: 10 },
-    { day: "2032-06-03", storeId, visitCount: 2 },
-  ]);
+  const visits = await db
+    .insert(storeVisitDaily)
+    .values([
+      { day: "2032-05-31", storeId, visitCount: 99 },
+      { day: "2032-06-01", storeId, visitCount: 10 },
+      { day: "2032-06-03", storeId, visitCount: 2 },
+    ])
+    .returning({ id: storeVisitDaily.id });
+  created.visitIds.push(...visits.map((visit) => visit.id));
 
   // Midnight in Montevideo opens the range...
   await makeOrder(storeId, {

@@ -1,4 +1,4 @@
-import { getTableName, type Table } from "drizzle-orm";
+import { getTableName, is, Table } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 
 import { createMockDatabase } from "@/server/test/context";
@@ -34,7 +34,7 @@ function setup(answers: Answers = {}) {
   let currentTable = "";
   const filters: { table: string; where: unknown }[] = [];
   db.$["select.from"].mockImplementation((table: unknown) => {
-    currentTable = getTableName(table as Table);
+    currentTable = is(table, Table) ? getTableName(table) : "";
     current = queues.get(currentTable)?.shift() ?? [];
 
     return current;

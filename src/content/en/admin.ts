@@ -220,6 +220,7 @@ export const admin: Dictionary["admin"] = {
       perWeek: "Articles created per week",
       title: "Panel use",
       week: "Week of {day}",
+      weekColumn: "Week",
     },
     articles: {
       article: "Article",

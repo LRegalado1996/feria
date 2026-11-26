@@ -151,9 +151,14 @@ function DataTable({
   );
 }
 
-/** "x of the visits", or nothing when there was none. */
+/**
+ * "x of the visits", or nothing when there was none, or when the part
+ * outgrows them: orders count every shopper, visits only the browsers the
+ * count reached (no bots, no blockers), so past 100% the figure says
+ * nothing true.
+ */
 function shareOf(part: number, whole: number, copy: string, locale: Locale) {
-  return whole === 0
+  return whole === 0 || part > whole
     ? undefined
     : interpolate(copy, {
         rate: formatPercent((part / whole) * 100, locale),
@@ -179,16 +184,24 @@ function MetricsDashboard({
 }: MetricsDashboardProps) {
   const { funnel } = dashboard;
   const days = eachDay(range.from, range.to);
+  // A range within one year names a day by its day and month; one across
+  // two years by its year too, so no two days read alike.
+  const dayLabel =
+    range.from.slice(0, 4) === range.to.slice(0, 4)
+      ? (day: string) => formatDayMonth(day, locale)
+      : (day: string) => formatCalendarDay(day, locale);
   const dayRows = <T,>(
     rows: readonly (T & { day: string })[],
     values: (row: T | undefined) => Record<string, number>
   ): MetricsChartRow[] =>
     days.map((day) => ({
-      label: formatDayMonth(day, locale),
+      key: day,
+      label: dayLabel(day),
       values: values(rows.find((row) => row.day === day)),
     }));
   const ordersPerDay = days.map((day) => ({
-    label: formatDayMonth(day, locale),
+    key: day,
+    label: dayLabel(day),
     values: {
       orders: dashboard.orders.byDay
         .filter((row) => row.day === day)
@@ -477,11 +490,14 @@ function MetricsDashboard({
           <Empty>{copy.noData}</Empty>
         ) : (
           <MetricsChart
-            column={copy.day}
+            column={copy.adoption.weekColumn}
             kind="bar"
             rows={dashboard.articlesPerWeek.map((row) => ({
+              key: row.week,
+              // The range's first week is named by the range's first day:
+              // its Monday may come before it, and counts nothing before.
               label: interpolate(copy.adoption.week, {
-                day: formatDayMonth(row.week, locale),
+                day: dayLabel(row.week < range.from ? range.from : row.week),
               }),
               values: { created: row.created },
             }))}

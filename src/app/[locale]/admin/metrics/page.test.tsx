@@ -6,6 +6,7 @@ import { describe, expect, test, vi } from "vitest";
 import type { AdminShellProps } from "@/app/_components/organisms/admin-shell";
 import type { MetricsDashboardProps } from "@/app/_components/organisms/metrics-dashboard";
 import type { requireAdmin as RequireAdmin } from "@/lib/admin/access";
+import { holdRequest, settle } from "@/test/connection";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 
 import MetricsPage from "./page";
@@ -191,15 +192,23 @@ describe("MetricsPage", () => {
     }
   );
 
-  test("reads the clock only once the request arrived", async () => {
+  test("reads the clock and the dashboard only once the request arrived", async () => {
+    const request = holdRequest(connection);
     const { resolve } = setup();
 
-    await resolve();
+    const page = resolve();
+    await settle();
 
-    expect(connection).toHaveBeenCalledExactlyOnceWith();
-    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(
-      dashboard.mock.invocationCallOrder[0] ?? 0
-    );
+    expect(dashboard).not.toHaveBeenCalled();
+
+    request.arrive();
+    await page;
+
+    expect(dashboard).toHaveBeenCalledExactlyOnceWith({
+      from: "2026-11-06",
+      locale: "en",
+      to: "2026-12-05",
+    });
   });
 
   test("sends a visitor without a session to the sign-in, reading nothing", async () => {

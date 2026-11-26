@@ -41,10 +41,7 @@ export default function MetricsPage({
   );
 }
 
-export async function MetricsResolver({
-  params,
-  searchParams,
-}: MetricsPageProps) {
+async function MetricsResolver({ params, searchParams }: MetricsPageProps) {
   const locale = await readLocale(params);
   const today = await readToday();
   const search = await searchParams;
