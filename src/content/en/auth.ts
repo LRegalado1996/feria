@@ -3,6 +3,8 @@ import type { Dictionary } from "@/content/es";
 export const auth: Dictionary["auth"] = {
   errors: {
     invalidCredentials: "Invalid email or password.",
+    loginDisabled:
+      "This user is disabled. Ask someone on the team to enable it.",
     unreachable:
       "We could not reach the server. Check your connection and try again.",
   },

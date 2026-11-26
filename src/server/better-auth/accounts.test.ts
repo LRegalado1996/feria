@@ -58,8 +58,10 @@ function setup({
     db,
     tx,
     hash,
-    create: async (overrides: Record<string, unknown> = {}) =>
-      await createAccount(auth, db as never, makeValues(overrides)),
+    create: async (
+      overrides: Record<string, unknown> = {},
+      options?: { mustChangePassword?: boolean; role?: "member" | "superadmin" }
+    ) => await createAccount(auth, db as never, makeValues(overrides), options),
   };
 }
 
@@ -84,7 +86,9 @@ describe("createAccount", () => {
           email: "owner@example.com",
           emailVerified: false,
           id: "generated-user",
+          mustChangePassword: false,
           name: "Store Owner",
+          role: "member",
         },
       ],
       [
@@ -99,7 +103,7 @@ describe("createAccount", () => {
     ]);
   });
 
-  test("never writes a role, even when the values carry one: every login is an admin", async () => {
+  test("takes the role from the server's option only, never from the values: a member by default", async () => {
     const { create, tx } = setup();
 
     await create({ role: "superadmin" });
@@ -109,7 +113,43 @@ describe("createAccount", () => {
         email: "owner@example.com",
         emailVerified: false,
         id: "generated-user",
+        mustChangePassword: false,
         name: "Store Owner",
+        role: "member",
+      },
+    ]);
+  });
+
+  test("writes the superadmin when the server asks for it", async () => {
+    const { create, tx } = setup();
+
+    await create({ role: "member" }, { role: "superadmin" });
+
+    expect(tx.$["insert.values"].mock.calls[0]).toEqual([
+      {
+        email: "owner@example.com",
+        emailVerified: false,
+        id: "generated-user",
+        mustChangePassword: false,
+        name: "Store Owner",
+        role: "superadmin",
+      },
+    ]);
+  });
+
+  test("marks a login whose password is a temporary one an admin typed (FER-015)", async () => {
+    const { create, tx } = setup();
+
+    await create({}, { mustChangePassword: true });
+
+    expect(tx.$["insert.values"].mock.calls[0]).toEqual([
+      {
+        email: "owner@example.com",
+        emailVerified: false,
+        id: "generated-user",
+        mustChangePassword: true,
+        name: "Store Owner",
+        role: "member",
       },
     ]);
   });

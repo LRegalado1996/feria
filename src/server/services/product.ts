@@ -993,6 +993,7 @@ export async function listStoreProducts(
       // `ceil(cap / limit)`, which the foot cannot name, reads nothing, even
       // with more matches beyond the cap.
       const offset = (page - 1) * limit;
+      const direction = dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort];
       const leftUnderCap = STORE_PRODUCTS_COUNT_CAP - offset;
       const ids =
         leftUnderCap <= 0
@@ -1002,13 +1003,7 @@ export async function listStoreProducts(
                 .select({ id: product.id })
                 .from(product)
                 .where(where)
-                .orderBy(
-                  ...listOrder(
-                    sort,
-                    dir ?? STORE_PRODUCT_SORT_DIRECTIONS[sort],
-                    locale
-                  )
-                )
+                .orderBy(...listOrder(sort, direction, locale))
                 .limit(Math.min(limit, leftUnderCap))
                 .offset(offset)
             ).map((row) => row.id);
@@ -1048,6 +1043,9 @@ export async function listStoreProducts(
 
       return {
         currencyCode,
+        // The order the rows are in: the screen keeps naming it over them
+        // while another order's page is on its way.
+        dir: direction,
         items: ids.flatMap((id) => {
           const found = byId.get(id);
 
@@ -1080,6 +1078,7 @@ export async function listStoreProducts(
         limit,
         page,
         pageCount: Math.ceil(total / limit),
+        sort,
         total,
         totalCapped: counting > STORE_PRODUCTS_COUNT_CAP,
       };

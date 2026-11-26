@@ -43,6 +43,7 @@ import {
   type ProductsPage,
   useDeleteProduct,
   useProducts,
+  useProductsAddress,
   usePublishProduct,
   useUnpublishProduct,
 } from "@/lib/hooks/product";
@@ -138,6 +139,33 @@ function NoRows({ page, query }: { page: ProductsPage; query: ProductsQuery }) {
 }
 
 /**
+ * Whether a read failed with nothing read before it to show: a list the
+ * filter panel must say failed, with a retry, rather than show as empty.
+ */
+function failedUnread(read: { data: unknown; isError: boolean }): boolean {
+  return read.isError && read.data === undefined;
+}
+
+/**
+ * Whether focus is where a person waiting on the pages leaves it: on the
+ * body (which the foot's link left while the page came), in the table or in
+ * the foot.
+ */
+function waitsOnPages(
+  table: HTMLElement | null,
+  foot: HTMLElement | null
+): boolean {
+  const active = document.activeElement;
+
+  return (
+    active === null ||
+    active === document.body ||
+    (table?.contains(active) ?? false) ||
+    (foot?.contains(active) ?? false)
+  );
+}
+
+/**
  * The four states a read can be in before it has rows to show. An earlier
  * selection's answer kept on screen while this one's comes holds its rows,
  * marked busy; one without rows (a search that matched nothing, cleared)
@@ -214,11 +242,13 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   const locale = useLocale();
   const now = useNow(renderedAt);
   const products = useProducts(productsListInput(query, locale));
+  const address = useProductsAddress(query, locale);
   // `undefined` until read: the filter panel keeps the address's selection
   // rather than drop it as unknown to a list it has not got.
   const categoriesRead = useStoreCategories();
   const categories = categoriesRead.data;
-  const attributes = useStoreAttributes().data;
+  const attributesRead = useStoreAttributes();
+  const attributes = attributesRead.data;
   const page = products.data;
   const filtersButton = useRef<HTMLButtonElement>(null);
   const table = useRef<HTMLTableElement>(null);
@@ -353,23 +383,26 @@ function ProductList({ query, renderedAt }: ProductListProps) {
   });
 
   useEffect(() => {
-    if (shownPage === null || paging.current === null) {
+    if (paging.current === null) {
       return;
     }
 
-    // Disarmed even when the page has no table (past the end), and when
-    // another selection replaced the step's before it showed. Focus moves
-    // only while the person still waits on the pages (on the body, which
-    // the foot's link left while the page came, the table or the foot):
-    // one who went on to the search keeps typing there.
-    const active = document.activeElement;
-    const waiting =
-      active === null ||
-      active === document.body ||
-      (table.current?.contains(active) ?? false) ||
-      (foot.current?.contains(active) ?? false);
+    // Another selection replaced the step's before it showed: disarmed at
+    // once, even while that one's answer is still on its way or never
+    // comes, so the step's page reached later another way takes no focus.
+    if (paging.current !== here) {
+      paging.current = null;
+      return;
+    }
 
-    if (paging.current === here && waiting) {
+    if (shownPage === null) {
+      return;
+    }
+
+    // Disarmed even when the page has no table (past the end). Focus moves
+    // only while the person still waits on the pages: one who went on to
+    // the search keeps typing there.
+    if (waitsOnPages(table.current, foot.current)) {
       table.current?.focus();
     }
 
@@ -403,13 +436,22 @@ function ProductList({ query, renderedAt }: ProductListProps) {
             className="flex flex-wrap items-center gap-2"
             data-testid="product-list-toolbar"
           >
-            <ProductSearch className="flex-[1_1_16rem]" query={query} />
+            <ProductSearch
+              address={address}
+              className="flex-[1_1_16rem]"
+              query={query}
+            />
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
               <ProductFilterPanel
                 activeCount={chips.length}
+                address={address}
                 attributes={attributes}
+                attributesFailed={failedUnread(attributesRead)}
                 categories={categories}
-                categoriesFailed={categoriesRead.isError && !categories}
+                categoriesFailed={failedUnread(categoriesRead)}
+                onRetryAttributes={() => {
+                  void attributesRead.refetch();
+                }}
                 onRetryCategories={() => {
                   void categoriesRead.refetch();
                 }}
@@ -455,7 +497,11 @@ function ProductList({ query, renderedAt }: ProductListProps) {
               role="table"
               tabIndex={-1}
             >
-              <ProductListHead query={query} />
+              {/* The rows' own order: while another order's page comes,
+                  the header still names the one on screen. */}
+              <ProductListHead
+                query={{ ...query, dir: page.dir, sort: page.sort }}
+              />
               <tbody
                 className="block space-y-2 xl:space-y-0 xl:divide-y"
                 data-testid="product-list-rows"

@@ -125,7 +125,7 @@ describe("seed", () => {
     }
   );
 
-  test("creates the one documented login through Better Auth, and no other", async () => {
+  test("creates the one documented login through Better Auth, as the superadmin, and no other", async () => {
     const { auth, db, run } = setup();
 
     await run("development");
@@ -139,6 +139,7 @@ describe("seed", () => {
           name: "Test User",
           password: "password123",
         },
+        { role: "superadmin" },
       ],
     ]);
   });
@@ -264,6 +265,7 @@ describe("seed", () => {
       email: "test@example.com",
       name: "Test User",
       password: "password123",
+      role: "superadmin",
     });
   });
 

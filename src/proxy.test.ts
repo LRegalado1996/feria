@@ -2,8 +2,9 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 
 import { NextRequest } from "next/server";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
+import type { StoreAddresses } from "@/lib/catalog/store-address";
 import { LOCALES } from "@/lib/i18n/config";
 import type * as StorefrontSwitch from "@/server/cache/storefront-switch";
 import { SWITCH_TIMEOUT_MS } from "@/server/cache/storefront-switch";
@@ -22,6 +23,20 @@ const mocks = vi.hoisted(() => ({
   isStorefrontClosed: vi.fn<() => Promise<boolean>>(
     async () => await Promise.resolve(false)
   ),
+  // Unread unless a test gives the store addresses: every request goes on.
+  currentStoreAddresses: vi.fn<() => Promise<StoreAddresses | null>>(
+    async () => await Promise.resolve(null)
+  ),
+  storeAddressesSince: vi.fn<(time: number) => Promise<StoreAddresses | null>>(
+    async () => await Promise.resolve(null)
+  ),
+}));
+
+// The book's windows and shared reads are `store-addresses.test.ts`'s; the
+// rule each address follows is `store-address.test.ts`'s.
+vi.mock("@/server/cache/store-addresses", () => ({
+  currentStoreAddresses: mocks.currentStoreAddresses,
+  storeAddressesSince: mocks.storeAddressesSince,
 }));
 
 // The switch's own read and its fail-safe are `storefront-switch.test.ts`'s;
@@ -166,6 +181,305 @@ describe("proxy: page requests", () => {
       });
     }
   );
+});
+
+describe("proxy: the store's addresses", () => {
+  const ARRIVED = new Date("2026-11-25T12:00:00.000Z");
+  const UNKNOWN = "/__unknown__/__unknown__/__unknown__";
+
+  /** A store with a group and its category, the home and a draft. */
+  function makeAddresses(
+    overrides: Partial<StoreAddresses> = {}
+  ): StoreAddresses {
+    return {
+      categories: [
+        { path: "/bijouterie", slug: "bijouterie" },
+        { path: "/bijouterie/anillos", slug: "anillos" },
+      ],
+      pages: [
+        { isHome: true, isPublished: true, slug: "home" },
+        { isHome: false, isPublished: false, slug: "ofertas" },
+      ],
+      ...overrides,
+    };
+  }
+
+  /**
+   * The store open, the public asking (or an admin, or a check that
+   * fails), the addresses the proxy kept and those a new read finds, at a
+   * fixed time.
+   */
+  function setup({
+    admin = false,
+    closed = false,
+    fresh = makeAddresses(),
+    kept = makeAddresses(),
+  }: {
+    admin?: boolean | Error;
+    closed?: boolean;
+    fresh?: StoreAddresses | null;
+    kept?: StoreAddresses | null;
+  } = {}) {
+    vi.setSystemTime(ARRIVED);
+    mocks.isStorefrontClosed.mockResolvedValue(closed);
+    mocks.currentStoreAddresses.mockResolvedValue(kept);
+    mocks.storeAddressesSince.mockResolvedValue(fresh);
+    if (admin instanceof Error) {
+      mocks.isAdminRequest.mockRejectedValue(admin);
+    } else {
+      mocks.isAdminRequest.mockResolvedValue(admin);
+    }
+  }
+
+  /** What the proxy did, with the cache rule it set. */
+  async function answer(path: string, headers: Record<string, string> = {}) {
+    const response = await proxy(
+      new NextRequest(`${ORIGIN}${path}`, { headers })
+    );
+
+    return {
+      cacheControl: response.headers.get("cache-control"),
+      redirectedTo: response.headers.get("location"),
+      rewrittenTo: response.headers.get("x-middleware-rewrite"),
+      status: "status" in response ? response.status : null,
+    };
+  }
+
+  // The other blocks' requests go on, as with addresses never read.
+  afterEach(() => {
+    mocks.currentStoreAddresses.mockResolvedValue(null);
+    mocks.storeAddressesSince.mockResolvedValue(null);
+  });
+
+  const notFound = (locale: string) => ({
+    cacheControl: "private, no-store",
+    redirectedTo: null,
+    rewrittenTo: `${ORIGIN}/${locale}${UNKNOWN}`,
+    status: 200,
+  });
+
+  test.each([
+    ["/no-such-page", "es"],
+    ["/no-such-page?color=dorado", "es"],
+    ["/bijouterie/no-such", "es"],
+    ["/en/no-such-page", "en"],
+    ["/en/bijouterie/no-such", "en"],
+  ])(
+    "sends %s, which names nothing, to the not-found page in its language, which no cache keeps",
+    async (path, locale) => {
+      setup();
+
+      expect(await answer(path)).toEqual(notFound(locale));
+    }
+  );
+
+  test("decides an unknown address on a read that started once the request arrived, never on the kept one", async () => {
+    setup();
+
+    await answer("/no-such-page");
+
+    expect(mocks.storeAddressesSince).toHaveBeenCalledExactlyOnceWith(
+      ARRIVED.getTime()
+    );
+  });
+
+  test("lets a page or a category the kept addresses know go on to its route, reading nothing new", async () => {
+    setup({ fresh: null });
+
+    for (const [path, rewritten] of [
+      ["/bijouterie", "/es/bijouterie"],
+      [
+        "/bijouterie/anillos?color=dorado",
+        "/es/bijouterie/anillos?color=dorado",
+      ],
+    ] as const) {
+      expect(await answer(path)).toEqual({
+        cacheControl: null,
+        redirectedTo: null,
+        rewrittenTo: `${ORIGIN}${rewritten}`,
+        status: 200,
+      });
+    }
+
+    expect(await answer("/en/bijouterie")).toMatchObject({
+      rewrittenTo: null,
+      status: 200,
+    });
+    expect(mocks.storeAddressesSince).not.toHaveBeenCalled();
+  });
+
+  test("lets through a category made after the kept read, which the new read finds", async () => {
+    setup({
+      fresh: makeAddresses({
+        categories: [{ path: "/nueva", slug: "nueva" }],
+      }),
+    });
+
+    expect(await answer("/nueva")).toEqual({
+      cacheControl: null,
+      redirectedTo: null,
+      rewrittenTo: `${ORIGIN}/es/nueva`,
+      status: 200,
+    });
+  });
+
+  test("lets through a page the kept read thought was the home, once the new read says it no longer is", async () => {
+    setup({
+      fresh: makeAddresses({
+        pages: [{ isHome: false, isPublished: true, slug: "home" }],
+      }),
+    });
+
+    expect(await answer("/home")).toMatchObject({
+      redirectedTo: null,
+      rewrittenTo: `${ORIGIN}/es/home`,
+    });
+  });
+
+  test.each([
+    ["/home", "/"],
+    ["/home?ref=ig", "/"],
+    ["/en/home", "/en"],
+  ])(
+    "sends %s, the home's own address, to %s for now (307), its query dropped",
+    async (path, target) => {
+      setup();
+
+      expect(await answer(path)).toEqual({
+        cacheControl: "private, no-store",
+        redirectedTo: `${ORIGIN}${target}`,
+        rewrittenTo: null,
+        status: 307,
+      });
+    }
+  );
+
+  test.each([
+    ["/anillos", "/bijouterie/anillos"],
+    ["/anillos?sort=price_asc", "/bijouterie/anillos?sort=price_asc"],
+    ["/otro/anillos", "/bijouterie/anillos"],
+    ["/en/anillos?sort=price_asc", "/en/bijouterie/anillos?sort=price_asc"],
+  ])(
+    "sends %s, a category outside its group, to %s for good (308), its query kept",
+    async (path, target) => {
+      setup();
+
+      expect(await answer(path)).toEqual({
+        cacheControl: "private, no-store",
+        redirectedTo: `${ORIGIN}${target}`,
+        rewrittenTo: null,
+        status: 308,
+      });
+    }
+  );
+
+  test("a draft is the not-found page for the public, asking the server who they are", async () => {
+    setup();
+
+    expect(
+      await answer("/ofertas", { cookie: "better-auth.session_token=x" })
+    ).toEqual(notFound("es"));
+    expect(mocks.isAdminRequest).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Headers)
+    );
+    expect(mocks.isAdminRequest.mock.calls[0]?.[0].get("cookie")).toBe(
+      "better-auth.session_token=x"
+    );
+  });
+
+  test("a draft goes on to its route for a signed-in admin, who previews it", async () => {
+    setup({ admin: true });
+
+    expect(await answer("/ofertas")).toEqual({
+      cacheControl: null,
+      redirectedTo: null,
+      rewrittenTo: `${ORIGIN}/es/ofertas`,
+      status: 200,
+    });
+  });
+
+  test("a draft is the not-found page when the admin check fails, which is reported", async () => {
+    const outage = new Error("connection refused");
+    setup({ admin: outage });
+
+    expect(await answer("/ofertas")).toEqual(notFound("es"));
+    expect(mocks.captureExceptionWithScope).toHaveBeenCalledExactlyOnceWith(
+      outage,
+      { action: "ComingSoon.check_admin" }
+    );
+  });
+
+  test.each([
+    ["the addresses were never read", null, null],
+    ["the new read failed", makeAddresses(), null],
+  ])(
+    "lets an address through to its route when %s",
+    async (_case, kept, fresh) => {
+      setup({ fresh, kept });
+
+      expect(await answer("/no-such-page")).toEqual({
+        cacheControl: null,
+        redirectedTo: null,
+        rewrittenTo: `${ORIGIN}/es/no-such-page`,
+        status: 200,
+      });
+    }
+  );
+
+  test.each([
+    "/",
+    "/en",
+    "/productos",
+    "/productos/anillo-sello",
+    "/contacto",
+    "/cart",
+    "/orders/abc",
+    "/a/b/c",
+    "/admin",
+    "/admin/orders",
+  ])(
+    "never reads the addresses for %s, which a route of its own answers",
+    async (path) => {
+      setup();
+
+      await answer(path);
+
+      expect(mocks.currentStoreAddresses).not.toHaveBeenCalled();
+    }
+  );
+
+  test("sends `/es/...` to its one address first, without reading the addresses", async () => {
+    setup();
+
+    expect(await answer("/es/no-such-page")).toMatchObject({
+      redirectedTo: `${ORIGIN}/no-such-page`,
+      status: 308,
+    });
+    expect(mocks.currentStoreAddresses).not.toHaveBeenCalled();
+  });
+
+  test("closed, the public goes to the coming-soon page before any address is read", async () => {
+    setup({ closed: true });
+
+    expect(await answer("/no-such-page")).toMatchObject({
+      redirectedTo: `${ORIGIN}/coming-soon`,
+      status: 307,
+    });
+    expect(mocks.currentStoreAddresses).not.toHaveBeenCalled();
+  });
+
+  test("closed, an admin's unknown address is the not-found page with the notice's cookie", async () => {
+    setup({ admin: true, closed: true });
+
+    const response = await proxy(new NextRequest(`${ORIGIN}/no-such-page`));
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      `${ORIGIN}/es${UNKNOWN}`
+    );
+    expect(response.headers.get("set-cookie")).toBe(
+      "lr-store-preview=1; Path=/; SameSite=lax"
+    );
+  });
 });
 
 describe("proxy: the launch switch", () => {

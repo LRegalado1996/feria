@@ -106,6 +106,76 @@ test.describe("the article list", () => {
     await expect(list.searchField()).toBeFocused();
   });
 
+  test("an address whose search holds U+0000 lists that search without it, never an error", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    const list = new AdminProductsPage(page);
+
+    // Postgres refuses the character in text: read as is, the list failed.
+    await list.goto(`?q=${encodeURIComponent(`Anillo oro\u0000 ${tag}`)}`);
+
+    await list.expectTitles([`Anillo oro ${tag}`]);
+    await expect(list.count()).toHaveText("1 artículo");
+    await expect(list.searchField()).toHaveValue(`Anillo oro ${tag}`);
+  });
+
+  test("a search typed and the filters applied while it is on its way both stay in the address (FER-056)", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+    const search = `Anillo plata ${tag}`;
+    const list = new AdminProductsPage(page);
+    await list.goto(`?q=${tag}`);
+    // Once React owns the screen (the sheet opens), the race is the next
+    // steps'.
+    await list.openFilters();
+    await page.keyboard.press("Escape");
+    await expectDialogRemoved(page, list.sheet());
+    // The search's navigation is held until "Aplicar" is pressed, so Apply
+    // always lands while the search is still on its way: built from the
+    // address on screen, it would drop the search.
+    let searchSent = (): void => undefined;
+    const sent = new Promise<void>((resolve) => {
+      searchSent = resolve;
+    });
+    let release = (): void => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(
+      (url) =>
+        url.pathname === "/admin/products" &&
+        url.searchParams.get("q") === search &&
+        !url.searchParams.has("status"),
+      async (route) => {
+        searchSent();
+        await released;
+        // Superseded by Apply's navigation, the browser may have dropped it.
+        await route.continue().catch(() => undefined);
+      }
+    );
+
+    await list.searchField().fill(search);
+    await sent;
+    await list.filtersButton().click();
+    await list.statusChoice("Publicado").click();
+    await list.sheet().getByRole("button", { name: "Aplicar" }).click();
+    release();
+
+    await expect
+      .poll(() => {
+        const params = new URL(page.url()).searchParams;
+
+        return [params.get("q"), params.get("status")];
+      })
+      .toEqual([search, "published"]);
+    await list.expectTitles([`Anillo plata ${tag}`]);
+    await expect(list.searchField()).toHaveValue(search);
+  });
+
   test("filters by category, status, availability and a store filter from the sheet, by keyboard", async ({
     db,
     page,

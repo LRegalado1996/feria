@@ -1746,6 +1746,7 @@ describe("listStoreProducts", () => {
 
     await expect(list()).resolves.toEqual({
       currencyCode: "USD",
+      dir: "desc",
       items: [
         {
           category: { id: 9, nameEn: "Necklaces", nameEs: "Collares" },
@@ -1763,10 +1764,29 @@ describe("listStoreProducts", () => {
       limit: 2,
       page: 1,
       pageCount: 1,
+      sort: "updated",
       total: 1,
       totalCapped: false,
     });
   });
+
+  test.each([
+    ["updated", undefined, "desc"],
+    ["updated", "asc", "asc"],
+    ["title", undefined, "asc"],
+    ["title", "desc", "desc"],
+    ["price", undefined, "asc"],
+  ] as const)(
+    "answers the order its rows are in: %s, asked %j, is %s",
+    async (sort, dir, answered) => {
+      const { list } = setupList({ total: 1 });
+
+      await expect(list({ dir, sort })).resolves.toMatchObject({
+        dir: answered,
+        sort,
+      });
+    }
+  );
 
   test.each([
     ["es", "its Spanish title", "Artículo 5", "es"],

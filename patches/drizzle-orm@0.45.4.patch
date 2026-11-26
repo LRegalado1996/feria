@@ -1,0 +1,106 @@
+diff --git a/node-postgres/session.cjs b/node-postgres/session.cjs
+index 8ef1fbdb684c7b9a8fb0e832f9470659707905f9..2ca9495c00b583943f2811d5dd8d79b68dcfd0c2 100644
+--- a/node-postgres/session.cjs
++++ b/node-postgres/session.cjs
+@@ -213,19 +213,44 @@ class NodePgSession extends import_session.PgSession {
+     );
+   }
+   async transaction(transaction, config) {
++    // Patched (Feria, FER-057): drizzle-orm 1.0.0-rc.6's release, backported.
++    // 0.45.4 ran `begin` before the `try` whose `finally` releases the pool
++    // client, so a `begin` that failed (a dropped connection) kept it checked
++    // out for good. Now every path releases it, a dead one with its error so
++    // the pool discards it, and a failed rollback never hides the error that
++    // caused it.
+     const isPool = this.client instanceof Pool || Object.getPrototypeOf(this.client).constructor.name.includes("Pool");
+-    const session = isPool ? new NodePgSession(await this.client.connect(), this.dialect, this.schema, this.options) : this;
++    const poolClient = isPool ? await this.client.connect() : void 0;
++    let connectionError;
++    let rollbackError;
++    const onConnectionError = (e) => {
++      connectionError ??= e;
++    };
++    poolClient?.on("error", onConnectionError);
++    const release = (failure) => {
++      if (!poolClient) return;
++      if (!connectionError) poolClient.off("error", onConnectionError);
++      poolClient.release(connectionError ?? rollbackError ?? failure);
++    };
++    const session = poolClient ? new NodePgSession(poolClient, this.dialect, this.schema, this.options) : this;
+     const tx = new NodePgTransaction(this.dialect, session, this.schema);
+-    await tx.execute(import_sql.sql`begin${config ? import_sql.sql` ${tx.getTransactionConfigSQL(config)}` : void 0}`);
++    try {
++      await tx.execute(import_sql.sql`begin${config ? import_sql.sql` ${tx.getTransactionConfigSQL(config)}` : void 0}`);
++    } catch (e) {
++      release(e);
++      throw e;
++    }
+     try {
+       const result = await transaction(tx);
+       await tx.execute(import_sql.sql`commit`);
+       return result;
+     } catch (error) {
+-      await tx.execute(import_sql.sql`rollback`);
++      if (!connectionError) await tx.execute(import_sql.sql`rollback`).catch((e) => {
++        rollbackError = e;
++      });
+       throw error;
+     } finally {
+-      if (isPool) session.client.release();
++      release();
+     }
+   }
+   async count(sql2) {
+diff --git a/node-postgres/session.js b/node-postgres/session.js
+index f60d9ed16ff6e29a6b34b3600f93e2d6e2e09585..b1bfc6f70044309ed37a2158c5444317f8b3f4b4 100644
+--- a/node-postgres/session.js
++++ b/node-postgres/session.js
+@@ -178,19 +178,44 @@ class NodePgSession extends PgSession {
+     );
+   }
+   async transaction(transaction, config) {
++    // Patched (Feria, FER-057): drizzle-orm 1.0.0-rc.6's release, backported.
++    // 0.45.4 ran `begin` before the `try` whose `finally` releases the pool
++    // client, so a `begin` that failed (a dropped connection) kept it checked
++    // out for good. Now every path releases it, a dead one with its error so
++    // the pool discards it, and a failed rollback never hides the error that
++    // caused it.
+     const isPool = this.client instanceof Pool || Object.getPrototypeOf(this.client).constructor.name.includes("Pool");
+-    const session = isPool ? new NodePgSession(await this.client.connect(), this.dialect, this.schema, this.options) : this;
++    const poolClient = isPool ? await this.client.connect() : void 0;
++    let connectionError;
++    let rollbackError;
++    const onConnectionError = (e) => {
++      connectionError ??= e;
++    };
++    poolClient?.on("error", onConnectionError);
++    const release = (failure) => {
++      if (!poolClient) return;
++      if (!connectionError) poolClient.off("error", onConnectionError);
++      poolClient.release(connectionError ?? rollbackError ?? failure);
++    };
++    const session = poolClient ? new NodePgSession(poolClient, this.dialect, this.schema, this.options) : this;
+     const tx = new NodePgTransaction(this.dialect, session, this.schema);
+-    await tx.execute(sql`begin${config ? sql` ${tx.getTransactionConfigSQL(config)}` : void 0}`);
++    try {
++      await tx.execute(sql`begin${config ? sql` ${tx.getTransactionConfigSQL(config)}` : void 0}`);
++    } catch (e) {
++      release(e);
++      throw e;
++    }
+     try {
+       const result = await transaction(tx);
+       await tx.execute(sql`commit`);
+       return result;
+     } catch (error) {
+-      await tx.execute(sql`rollback`);
++      if (!connectionError) await tx.execute(sql`rollback`).catch((e) => {
++        rollbackError = e;
++      });
+       throw error;
+     } finally {
+-      if (isPool) session.client.release();
++      release();
+     }
+   }
+   async count(sql2) {

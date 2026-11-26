@@ -1828,7 +1828,12 @@ describe("ProductWizard: a published article", () => {
     );
     await user.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => {
-      expect(created).toHaveBeenCalledOnce();
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        attributeId: 1,
+        nameEn: null,
+        nameEs: "Lila",
+        swatchColor: null,
+      });
     });
 
     await chooseFromMenu(user, "Discard changes");

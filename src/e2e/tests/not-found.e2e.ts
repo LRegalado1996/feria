@@ -4,51 +4,29 @@ import { expect, test } from "../fixtures";
 import { StorePage } from "../page-objects/store.page";
 
 // Every address no page answers renders the store's not-found page, under
-// the store's header. One of three segments or more reaches the store's
-// catch-all (`(store)/[...rest]`), and any under `/admin` its own
-// (`(store)/admin/[...rest]`), a real 404 for everyone. One of one or
-// two segments has the shape of a catalog page (`/burbujeros`,
-// `/bijouterie/anillos`, FER-043): a crawler that runs no script gets a real
-// 404, while a browser gets the page's shell first and the not-found page,
-// marked `noindex`, streamed after it with a 200 (docs/agents/nextjs.md §
-// Store pages).
+// the store's header, with a real 404 for a browser and a crawler alike.
+// One of three segments or more reaches the store's catch-all
+// (`(store)/[...rest]`), and any under `/admin` its own
+// (`(store)/admin/[...rest]`). One of one or two segments has the shape of
+// a catalog page (`/burbujeros`, `/bijouterie/anillos`, FER-043), whose
+// route streams: the proxy, which knows the store's pages and categories,
+// sends it to the catch-all before the route starts (FER-069,
+// docs/agents/nextjs.md § Store pages).
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const BINGBOT =
   "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)";
 
 /**
- * Whether an address has a catalog page's shape: one or two segments, never
- * under `/admin`, whose own catch-all answers a real 404.
- */
-function couldBeCatalogPage(path: string) {
-  const segments = path
-    .replace(/^\/en(?=\/|$)/u, "")
-    .split("/")
-    .filter(Boolean);
-
-  return (
-    segments[0] !== "admin" && segments.length >= 1 && segments.length <= 2
-  );
-}
-
-/**
- * What a browser is told about an address no page answers: a real 404, or
- * for a catalog-shaped one the not-found page marked `noindex`, which a
- * crawler that runs no script gets as a real 404.
+ * What a browser and a crawler that runs no script are told about an
+ * address no page answers: a real 404, the page marked `noindex`.
  */
 async function expectNotFound(
   page: Page,
   path: string,
   status: number | undefined
 ) {
-  if (!couldBeCatalogPage(path)) {
-    expect(status).toBe(404);
-    return;
-  }
-
-  // The shell went out first, so the browser's status is a 200.
-  expect(status).toBe(200);
+  expect(status).toBe(404);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
     "content",
     "noindex"
@@ -87,7 +65,7 @@ const OLD_ENGLISH_ADDRESSES = [
 ] as const;
 
 test.describe("Not found", () => {
-  test("an unknown address answers the store's not-found page, a real 404 where its shape allows, whose link leads home", async ({
+  test("an unknown address answers the store's not-found page with a real 404, whose link leads home", async ({
     page,
   }) => {
     const store = new StorePage(page);
@@ -96,7 +74,7 @@ test.describe("Not found", () => {
 
     await expectNotFound(page, "/this-page-does-not-exist", response?.status());
     await expect(store.getNotFoundHeading()).toBeVisible();
-    await expect(page).toHaveTitle("No encontramos esta página");
+    await expect(page).toHaveTitle("Esta página no existe");
     await expect(store.getSiteHeader()).toBeVisible();
     const home = page.getByRole("link", {
       name: "Volver a la home de la tienda",
@@ -107,6 +85,36 @@ test.describe("Not found", () => {
 
     await store.waitForLoad();
     await expect(page).toHaveURL("/");
+  });
+
+  test("the not-found page's main action leads to the catalog, in the address's language", async ({
+    page,
+  }) => {
+    for (const [path, name, catalog, heading] of [
+      [
+        "/this-page-does-not-exist",
+        "Ver el catálogo",
+        "/productos",
+        "Catálogo",
+      ],
+      [
+        "/en/this-page-does-not-exist",
+        "See the catalog",
+        "/en/productos",
+        "Catalog",
+      ],
+    ] as const) {
+      await page.goto(path);
+      const action = page.getByRole("link", { name });
+      await expect(action).toHaveAttribute("href", catalog);
+
+      await action.click();
+
+      await expect(page).toHaveURL(catalog);
+      await expect(
+        page.getByRole("heading", { exact: true, level: 1, name: heading })
+      ).toBeVisible();
+    }
   });
 
   test("an unknown English address answers 404 in English, whose link leads to the English home", async ({
@@ -124,10 +132,10 @@ test.describe("Not found", () => {
     await expect(
       page.getByRole("heading", {
         level: 1,
-        name: "We could not find this page",
+        name: "This page doesn't exist",
       })
     ).toBeVisible();
-    await expect(page).toHaveTitle("We could not find this page");
+    await expect(page).toHaveTitle("This page doesn't exist");
     await store.expectDocumentLanguage("en");
     const home = page.getByRole("link", { name: "Back to the store's home" });
     await expect(home).toHaveAttribute("href", "/en");
@@ -140,7 +148,7 @@ test.describe("Not found", () => {
   });
 
   for (const path of OLD_ADDRESSES) {
-    test(`the multi-store site's ${path} answers the store's not-found page, a real 404 where its shape allows`, async ({
+    test(`the multi-store site's ${path} answers the store's not-found page with a real 404`, async ({
       page,
     }) => {
       const store = new StorePage(page);
@@ -156,7 +164,7 @@ test.describe("Not found", () => {
   }
 
   for (const path of OLD_ENGLISH_ADDRESSES) {
-    test(`the multi-store site's ${path} answers the store's not-found page, a real 404 where its shape allows in English`, async ({
+    test(`the multi-store site's ${path} answers the store's not-found page with a real 404 in English`, async ({
       page,
     }) => {
       const store = new StorePage(page);
@@ -167,7 +175,7 @@ test.describe("Not found", () => {
       await expect(
         page.getByRole("heading", {
           level: 1,
-          name: "We could not find this page",
+          name: "This page doesn't exist",
         })
       ).toBeVisible();
       await store.expectDocumentLanguage("en");

@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P1
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-038, FER-040
 
 ## Goal
@@ -22,8 +22,15 @@ Rescoped on 2026-11-16: there is one role, `admin` ([FER-038](FER-038-single-sto
 ## Acceptance criteria
 
 - An anonymous call to any of these procedures is refused.
-- Each safeguard has a test that fails when the rule is removed.
+- Each safeguard has a test that fails when the rule is removed: nobody disables themselves, the last enabled login is never disabled, nobody resets their own password, and no other login changes the superadmin.
 - E2E: an admin creates a login, which signs in, changes the password and reaches the orders.
+
+## Decisions (Lucas, 2026-11-25)
+
+- A disabled login can be enabled again from the same screen; logins are never deleted.
+- The admin types the temporary password (not generated), at least 8 characters.
+- Any login can change its own password whenever it wants, from "Cambiar contraseña" at the foot of the admin's menu; its other sessions end.
+- The superadmin is protected (Lucas, after trying it locally): no other login can disable, enable or reset it, on the server and on the screen, where its row offers nothing and says why. It changes its own password like anyone. The first-run script (`pnpm db:create-superadmin`) and the seed create it with the `superadmin` role; logins created from the users screen are always `member`. Who may manage the others does not change. A production login created after FER-038 holds `member` and is not protected until its row is set to `superadmin` by hand (see the PR).
 
 ## Notes
 

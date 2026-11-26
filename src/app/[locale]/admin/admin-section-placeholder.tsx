@@ -9,7 +9,7 @@ import { type AdminSection, adminSectionPath } from "@/lib/admin/paths";
 import { readLocale } from "@/lib/i18n/read-locale";
 
 /** The sections whose screen is still to come. */
-export type PlaceholderSection = Extract<AdminSection, "metrics" | "users">;
+export type PlaceholderSection = Extract<AdminSection, "metrics">;
 
 interface AdminSectionPlaceholderProps {
   params: Promise<{ locale: string }>;

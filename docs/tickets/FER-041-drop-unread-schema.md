@@ -13,7 +13,7 @@ The database holds only what the code reads. A change that stops reading a table
 
 - Drop the `post` table. [FER-012](FER-012-remove-post-demo.md) took the posts demo out of the code and the Drizzle schema; its migration `0011` only marks the table unused. Its rows are the demo's and go with it.
 - Drop what [FER-038](FER-038-single-store.md) stopped reading: the `store_member` table, and `store`'s `slug`, `isActive`, `isDefault`, `logoUrl`, `colorBackground`, `colorSurface`, `colorForeground`, `colorContrast` and `colorAccent`, which its migration `0012` only made nullable.
-- Make `admin` the one value of `user.role` (Lucas, 2026-11-16): every row becomes `admin`, the default too, and the type keeps no other value. FER-038 stopped reading the role, but the build it replaced still told `superadmin` from `member`, so the values could not change in the same release. `USER_ROLES` (`src/lib/schemas/access`) and Better Auth's `role` field follow.
+- ~~Make `admin` the one value of `user.role`~~ (Lucas, 2026-11-16). Dropped on 2026-11-25: [FER-015](FER-015-user-management.md) reads the role again, `superadmin` marking the one login no other may disable or reset, so `user.role` keeps both values.
 
 ## Acceptance criteria
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { LOCALES } from "@/lib/i18n/config";
 import { INT4_MAX } from "@/lib/schemas/catalog";
+import { searchTextSchema } from "@/lib/schemas/search";
 import { normalizePhone } from "@/lib/utils/phone";
 
 /** An order's states, in the order it moves through them (FER-025). */
@@ -149,13 +150,8 @@ export const listOrdersSchema = z.object({
       id: idSchema,
     })
     .optional(),
-  // By code, name or phone (FER-027); blank is no search.
-  q: z
-    .string()
-    .trim()
-    .max(ORDER_SEARCH_MAX_LENGTH)
-    .transform((value) => (value === "" ? undefined : value))
-    .optional(),
+  // By code, name or phone (FER-027).
+  q: searchTextSchema(ORDER_SEARCH_MAX_LENGTH),
   status: z.enum(ORDER_STATUSES).optional(),
 });
 

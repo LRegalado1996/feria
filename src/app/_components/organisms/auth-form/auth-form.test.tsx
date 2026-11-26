@@ -228,6 +228,11 @@ describe("AuthForm submission", () => {
 
   test.each([
     [401, "INVALID_EMAIL_OR_PASSWORD", "Invalid email or password."],
+    [
+      403,
+      "LOGIN_DISABLED",
+      "This user is disabled. Ask someone on the team to enable it.",
+    ],
     [500, "INTERNAL_SERVER_ERROR", "Sign in failed. Try again."],
     [400, "PASSWORD_TOO_SHORT", "Sign in failed. Try again."],
   ] as const)(
@@ -335,6 +340,11 @@ describe("AuthForm in Spanish", () => {
       401,
       "INVALID_EMAIL_OR_PASSWORD",
       "El email o la contraseña no son correctos.",
+    ],
+    [
+      403,
+      "LOGIN_DISABLED",
+      "Este usuario está deshabilitado. Pedile a alguien del equipo que lo habilite.",
     ],
     [
       500,
