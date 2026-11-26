@@ -2,7 +2,7 @@
 
 - **Milestone:** M5 Metrics
 - **Priority:** P1
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-024
 
 ## Goal

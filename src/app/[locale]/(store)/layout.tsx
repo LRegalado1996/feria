@@ -1,6 +1,7 @@
 import type { Viewport } from "next";
 import type { ReactNode } from "react";
 
+import { StoreVisitCount } from "@/app/_components/atoms/store-visit-count";
 import { StorePreviewNotice } from "@/app/_components/molecules/store-preview-notice";
 import { StoreTheme } from "@/app/_components/organisms/store-theme";
 import { STORE_THEME } from "@/styles/theme";
@@ -26,6 +27,8 @@ export default function StoreLayout({ children }: StoreLayoutProps) {
       {/* Only an admin's view of the closed store shows it (FER-034), drawn
           in the browser: this layout's output stays the same for all. */}
       <StorePreviewNotice />
+      {/* The session's visit, counted from the browser (FER-029). */}
+      <StoreVisitCount />
       {children}
     </StoreTheme>
   );

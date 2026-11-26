@@ -106,10 +106,6 @@ export const admin: Dictionary["admin"] = {
       renamed: "Category renamed.",
     },
   },
-  comingSoon: {
-    body: "This section is still being built. It will show up here in a coming version.",
-    title: "Coming soon",
-  },
   filters: {
     add: {
       pending: "Adding…",
@@ -209,6 +205,76 @@ export const admin: Dictionary["admin"] = {
   },
   metadata: {
     title: "Admin",
+  },
+  metrics: {
+    adoption: {
+      created: "Articles created",
+      lastSignIn: "Last sign-in",
+      login: "User",
+      logins: "Panel users",
+      never: "Never",
+      perWeek: "Articles created per week",
+      title: "Panel use",
+      week: "Week of {day}",
+      weekColumn: "Week",
+    },
+    articles: {
+      article: "Article",
+      draft: "Drafts",
+      noViews: "No article was viewed in this period.",
+      published: "Published and for sale",
+      title: "Articles",
+      topViewed: "Most viewed",
+      unavailable: "Published, out of stock",
+      units: "Units ordered",
+      untitled: "Untitled",
+      viewedNotOrdered: "Viewed a lot, never ordered",
+      viewedNotOrderedHint:
+        "People look at them, but no order of the period holds them.",
+      viewedNotOrderedNone:
+        "Every viewed article has at least one order in this period.",
+      views: "Views",
+    },
+    day: "Day",
+    funnel: {
+      ofVisits: "{rate} of the visits",
+      orders: "Orders",
+      title: "From visit to order",
+      views: "Article views",
+      visits: "Store visits",
+    },
+    noData: "No data in this period.",
+    orders: {
+      amountPerDay: "Amount per day in {currency}",
+      average: "Average order",
+      byCurrency: "Totals by currency",
+      byStatus: "By status",
+      count: "Orders",
+      currency: "Currency",
+      none: "There were no orders in this period.",
+      perDay: "Orders per day",
+      share: "Of all",
+      status: "Status",
+      title: "Orders",
+      topOrdered: "Most ordered",
+      total: "Total",
+      undeliverable: "Could not be delivered: {rate}",
+      units: "Units",
+    },
+    range: {
+      label: "Period",
+      last: "{days} days",
+      lastYear: "1 year",
+      showing: "From {from} to {to}",
+    },
+    showData: "Show the data",
+    title: "Metrics",
+    traffic: {
+      section: "Store traffic",
+      title: "Visits and views per day",
+      views: "Views",
+      visits: "Visits",
+    },
   },
   orders: {
     actions: {

@@ -19,12 +19,14 @@ One button turns the uploaded photos into a complete article in both languages. 
 - Fields the person already typed are kept unless they choose to overwrite.
 - Every call writes an `ai_generation` row: store, user, article, model, tokens, cost, duration, outcome, and later whether the result was kept.
 - Limits: a per-user rate limit and a daily cap for the store, with a clear message when reached. Failures and refusals degrade to the manual form.
+- **AI usage on the metrics dashboard** (moved here from [FER-030](FER-030-metrics-dashboard.md) by Lucas on 2026-11-25, since it needs this ticket's `ai_generation` rows): a section of `/admin/metrics` for the range in its address, built like the dashboard's others (an aggregate query in `src/server/services/dashboard.ts`, tested against a seeded dataset, a chart with its table, "no data" for an empty range): generations per user, tokens and cost over time, success rate, the share of generated articles that were published, and the average cost per published article.
 
 ## Acceptance criteria
 
 - From three photos of a bracelet, the form is filled in both languages in a few seconds and can be published after typing only the price.
 - The model's output is treated as untrusted: validated, length-limited and escaped; a malformed answer never reaches the form.
 - An anonymous caller cannot trigger a generation.
+- The metrics dashboard shows the AI usage section, every number from the seeded dataset's known answers.
 - Unit tests cover parsing, limits and logging without calling the model; one manual check against the real model is recorded in the PR.
 
 ## Notes

@@ -138,14 +138,18 @@ test.describe("Admin sign-in and landing", () => {
           "page"
         );
         // One list of sections: no store switcher, no platform area. The
-        // orders add their own tabs.
+        // orders add their own tabs, the metrics their ranges.
         const navigations = page.getByRole("navigation").filter({
           visible: true,
         });
-        const names =
-          section === "orders"
-            ? ["Secciones del panel", "Filtrar por estado"]
-            : ["Secciones del panel"];
+        const OWN_NAVIGATION: Partial<Record<string, string>> = {
+          metrics: "Período",
+          orders: "Filtrar por estado",
+        };
+        const own = OWN_NAVIGATION[section];
+        const names = own
+          ? ["Secciones del panel", own]
+          : ["Secciones del panel"];
         await expect(navigations).toHaveCount(names.length);
 
         for (const [index, name] of names.entries()) {

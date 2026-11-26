@@ -27,6 +27,11 @@ vi.mock("@/app/_components/molecules/store-preview-notice", () => ({
   StorePreviewNotice: () => <div data-testid="store-preview-notice" />,
 }));
 
+// The count has its own tests; here it only marks where the layout puts it.
+vi.mock("@/app/_components/atoms/store-visit-count", () => ({
+  StoreVisitCount: () => <div data-testid="store-visit-count" />,
+}));
+
 const { default: StoreLayout, viewport } = layoutModule;
 
 function setup() {
@@ -40,11 +45,12 @@ function setup() {
 }
 
 describe("StoreLayout", () => {
-  test("puts the page, frame and all, straight on the store's canvas, under the admin's notice of a closed store", () => {
+  test("puts the page, frame and all, straight on the store's canvas, under the admin's notice of a closed store and the visit's count", () => {
     const { theme } = setup();
 
     expect([...theme.children]).toEqual([
       screen.getByTestId("store-preview-notice"),
+      screen.getByTestId("store-visit-count"),
       screen.getByText("Page content"),
     ]);
   });
