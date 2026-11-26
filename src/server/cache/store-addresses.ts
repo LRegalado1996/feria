@@ -41,8 +41,10 @@ interface StoreAddressBookOptions {
 interface Snapshot {
   /** `null` when the read failed or the store has no row yet. */
   addresses: StoreAddresses | null;
-  /** When the read that made it started. */
+  /** When the read that made it started: which of two reads is newer. */
   askedAt: number;
+  /** Until when `current()` trusts it. */
+  until: number;
 }
 
 /**
@@ -72,12 +74,13 @@ export function createStoreAddressBook({
         "The store's addresses"
       );
 
-      return { addresses, askedAt };
+      return { addresses, askedAt, until: askedAt + ttlMs };
     } catch (error) {
       report(error);
 
-      // A failure counts from when it was known, like the launch switch's.
-      return { addresses: null, askedAt: now() };
+      // A failure is trusted for a window from when it was known, like the
+      // launch switch's; it stays as old as its read for which is newer.
+      return { addresses: null, askedAt, until: now() + ttlMs };
     }
   }
 
@@ -103,7 +106,7 @@ export function createStoreAddressBook({
   return {
     /** The last read while it is under `ttlMs` old, else a new one. */
     async current(): Promise<StoreAddresses | null> {
-      if (known && now() < known.askedAt + ttlMs) {
+      if (known && now() < known.until) {
         return known.addresses;
       }
 

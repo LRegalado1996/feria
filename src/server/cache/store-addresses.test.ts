@@ -33,14 +33,19 @@ function makeAddresses(slug: string): StoreAddresses {
 const FIRST = makeAddresses("primera");
 const SECOND = makeAddresses("segunda");
 
-/** A read that answers `addresses` once the test calls `settle`. */
+/**
+ * A read that answers `addresses` once the test calls `settle`, or throws
+ * once it calls `fail`.
+ */
 function deferredRead() {
   let settle: (addresses: StoreAddresses) => void = () => {};
-  const answer = new Promise<StoreAddresses>((resolve) => {
+  let fail: (error: Error) => void = () => {};
+  const answer = new Promise<StoreAddresses>((resolve, reject) => {
     settle = resolve;
+    fail = reject;
   });
 
-  return { answer, settle };
+  return { answer, fail, settle };
 }
 
 /**
@@ -213,6 +218,27 @@ describe("createStoreAddressBook: since", () => {
     await expect(stale).resolves.toBe(FIRST);
     expect(read.mock.calls).toEqual([[], []]);
     await expect(book.current()).resolves.toBe(SECOND);
+  });
+
+  test("an older read failing after a newer one succeeded leaves the newer one kept", async () => {
+    const older = deferredRead();
+    const outage = new Error("connection reset");
+    const { advance, book, clock, read, report } = setup([
+      older.answer,
+      SECOND,
+    ]);
+
+    const stale = book.current();
+    advance(1);
+    await expect(book.since(clock.now)).resolves.toBe(SECOND);
+    advance(1);
+    older.fail(outage);
+
+    await expect(stale).resolves.toBeNull();
+    expect(report).toHaveBeenCalledExactlyOnceWith(outage);
+    // The newer read is still trusted for its window: no read, no null.
+    await expect(book.current()).resolves.toBe(SECOND);
+    expect(read.mock.calls).toEqual([[], []]);
   });
 
   test("a request after the newer read ended starts its own, while the older one still runs", async () => {
