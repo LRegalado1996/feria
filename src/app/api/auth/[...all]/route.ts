@@ -10,14 +10,25 @@ const betterAuth = toNextJsHandler(auth.handler);
  * exact path), but a 400 still says the route exists and its own match is
  * exact; this answers 404 for any spelling of the prefix, so
  * `/sign-up/email` and any other sign-up method are covered.
+ *
+ * A login's password and email are changed through the admin's own
+ * procedures (FER-015: `admin.changePassword`, which counts wrong current
+ * passwords and keeps the change's rules), never through Better Auth's
+ * native routes, which know none of that: those are closed the same way.
  */
-const CLOSED_PREFIXES = ["/api/auth/sign-up"];
+const CLOSED_PREFIXES = [
+  "/api/auth/sign-up",
+  "/api/auth/change-password",
+  "/api/auth/set-password",
+  "/api/auth/change-email",
+];
 
 /**
  * The pathname compared loosely: lowercased, repeated slashes collapsed and an
  * encoded dash decoded, so `//sign-up` or `sign%2Dup` cannot slip past. Any
  * other spelling that reaches Better Auth is still refused there
- * (`disableSignUp`): it creates no account, it only answers 400.
+ * (`disableSignUp` and `disabledPaths`): it changes nothing, it only answers
+ * an error.
  */
 function isClosed(request: Request): boolean {
   const pathname = new URL(request.url).pathname

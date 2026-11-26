@@ -246,6 +246,7 @@ describe("listOrdersSchema", () => {
     [{ cursor: { createdAt: "2026-11-15T10:00:00.000Z", id: 0 } }, false],
     [{ cursor: { createdAt: "2026-11-15T10:00:00.000Z" } }, false],
     [{ status: "undeliverable" }, true],
+    [{ q: "an\u0000a" }, false],
   ])("%j is accepted: %s", (overrides, accepted) => {
     expect(listOrdersSchema.safeParse(overrides).success).toBe(accepted);
   });

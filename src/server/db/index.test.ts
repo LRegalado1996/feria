@@ -6,6 +6,15 @@ vi.unmock("@/server/db");
 
 type Listener = (error: Error) => void;
 
+/** As much of a pg client as the pool's `connect` listener touches. */
+interface FakeClient {
+  on: (event: string, listener: Listener) => void;
+}
+
+type PoolListener =
+  | [event: "connect", listener: (client: FakeClient) => void]
+  | [event: "error", listener: Listener];
+
 interface RetryOptions {
   attempts: number;
   baseDelayMs: number;
@@ -26,13 +35,20 @@ const { addBreadcrumb, attachDatabasePool, env, ResilientPool } = vi.hoisted(
     ResilientPool: vi.fn(
       // oxlint-disable-next-line prefer-arrow-callback -- called with `new`, which an arrow function cannot be
       function ResilientPool(options: unknown, retry: RetryOptions) {
-        const listeners = new Map<string, Listener>();
+        const listeners: {
+          connect?: (client: FakeClient) => void;
+          error?: Listener;
+        } = {};
         return {
           options,
           retry,
           listeners,
-          on: vi.fn((event: string, listener: Listener) => {
-            listeners.set(event, listener);
+          on: vi.fn((...args: PoolListener) => {
+            if (args[0] === "connect") {
+              listeners.connect = args[1];
+            } else {
+              listeners.error = args[1];
+            }
           }),
         };
       }
@@ -69,6 +85,21 @@ function createdPool(): ReturnType<typeof ResilientPool> {
   return result.value;
 }
 
+/** A loaded module, its pool and the listeners it gave one new connection. */
+async function setup() {
+  await loadDatabase("test");
+  const pool = createdPool();
+  const clientListeners = new Map<string, Listener>();
+
+  pool.listeners.connect?.({
+    on: (event: string, listener: Listener) => {
+      clientListeners.set(event, listener);
+    },
+  });
+
+  return { clientListeners, pool };
+}
+
 describe("database client", () => {
   test("opens one pool on DATABASE_URL with serverless-safe settings", async () => {
     await loadDatabase("test");
@@ -80,7 +111,7 @@ describe("database client", () => {
         connectionString: LOCAL_URL,
         keepAlive: true,
         idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 5000,
+        connectionTimeoutMillis: 3000,
       },
       { attempts: 3, baseDelayMs: 200, onRetry: expect.any(Function) }
     );
@@ -151,6 +182,7 @@ describe("database client", () => {
         "customerOrder",
         "featuredProduct",
         "homeSection",
+        "metricRateLimit",
         "orderItem",
         "orderStatusEvent",
         "page",
@@ -162,6 +194,7 @@ describe("database client", () => {
         "productImage",
         "productImageTranslation",
         "productTranslation",
+        "productViewDaily",
         "rankingEntry",
         "rateLimit",
         "session",
@@ -169,31 +202,33 @@ describe("database client", () => {
         "spotlightTranslation",
         "store",
         "storeTranslation",
+        "storeVisitDaily",
         "user",
         "verification",
       ])
     );
   });
 
-  test("turns an idle client's error into a sanitized warning and a breadcrumb", async () => {
+  test("gives every connection a listener that turns its error into a sanitized warning and a breadcrumb", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    await loadDatabase("test");
-    const pool = createdPool();
+    const { clientListeners } = await setup();
 
-    // Without a listener, pg rethrows the error and kills the function.
-    expect(pool.on).toHaveBeenCalledExactlyOnceWith(
-      "error",
-      expect.any(Function)
-    );
-    pool.listeners.get("error")?.(
-      new Error("Failed query: select 1\nparams: secret-session-token")
+    // Without a listener, a client that dies while a request holds it throws
+    // its error as an uncaught exception and kills the function.
+    expect([...clientListeners.keys()]).toEqual(["error"]);
+    clientListeners.get("error")?.(
+      Object.assign(
+        new Error("Failed query: select 1\nparams: secret-session-token"),
+        { code: "08P01" }
+      )
     );
 
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       JSON.stringify({
         level: "warn",
-        action: "Db.pool_client_error",
+        action: "Db.client_error",
         name: "Error",
+        code: "08P01",
         message: "Failed query: select 1\nparams: [REDACTED]",
       })
     );
@@ -201,7 +236,63 @@ describe("database client", () => {
       category: "db.pool",
       level: "warning",
       message:
-        "Db.pool_client_error Error: Failed query: select 1\nparams: [REDACTED]",
+        "Db.client_error Error: Failed query: select 1\nparams: [REDACTED]",
+    });
+  });
+
+  test("listens to the pool's own error without reporting a client's twice", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { clientListeners, pool } = await setup();
+    const died = new Error("server conn crashed?");
+
+    // Without a listener, pg-pool throws an idle client's error.
+    expect(pool.on.mock.calls.map(([event]) => event)).toEqual([
+      "connect",
+      "error",
+    ]);
+    const line = JSON.stringify({
+      level: "warn",
+      action: "Db.client_error",
+      name: "Error",
+      message: "server conn crashed?",
+    });
+    const breadcrumb = {
+      category: "db.pool",
+      level: "warning",
+      message: "Db.client_error Error: server conn crashed?",
+    };
+
+    // An idle client's error reaches its own listener, which reports it,
+    clientListeners.get("error")?.(died);
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(line);
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith(breadcrumb);
+
+    // then the pool's, which adds nothing: still that one report.
+    pool.listeners.error?.(died);
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(line);
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith(breadcrumb);
+  });
+
+  test("reports the error of a client that never finished connecting, which has no listener of its own", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { pool } = await setup();
+
+    pool.listeners.error?.(new Error("Connection terminated unexpectedly"));
+
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      JSON.stringify({
+        level: "warn",
+        action: "Db.client_error",
+        name: "Error",
+        message: "Connection terminated unexpectedly",
+      })
+    );
+    expect(addBreadcrumb).toHaveBeenCalledExactlyOnceWith({
+      category: "db.pool",
+      level: "warning",
+      message: "Db.client_error Error: Connection terminated unexpectedly",
     });
   });
 

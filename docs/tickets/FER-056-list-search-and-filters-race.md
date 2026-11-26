@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P2
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-019
 
 ## Goal
@@ -18,6 +18,13 @@ On the admin's article list ([FER-019](FER-019-article-list.md)), the search and
 ## Acceptance criteria
 
 - Typing a search and pressing "Aplicar" at once, in either order, leaves an address with both the search and the filters, and the list shows that selection.
+
+## Outcome
+
+- One place merges both into the address: `useProductsAddress` (`src/lib/hooks/product`). The search and "Aplicar" ask it for a change instead of building the address from what they rendered; it makes each change on the newest selection asked for, so whichever navigation commits last holds both. An address the list did not ask for (back, forward, a link) is the selection from then on.
+- The open sheet starts its choice again only when the address's filters change, not when a search typed before opening it lands ([FER-057](FER-057-article-list-review-follow-ups.md)'s fourth item).
+- "Aplicar" with the choice the address already holds adds no history entry.
+- Tests: the hook in both orders (Apply within the wait, the wait ending after Apply's push, and a newer change after its own address arrives), the sheet keeping its choice under a search, and an e2e that types and applies at once.
 
 ## Reporting
 

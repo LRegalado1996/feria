@@ -95,21 +95,41 @@ export function formatRelativeTime(
 const MINOR_UNITS = 100;
 
 /**
- * One per tag, currency and number of decimals. Spanish uses the symbol a
- * Uruguayan reads every day (`$` for pesos, `US$` for dollars). English shows
- * the ISO code instead: a bare `$` in front of a visitor from abroad does not
- * say whether it means pesos or dollars.
+ * How Spanish writes each currency: the sign a Uruguayan reads every day.
+ * Spelled here, never asked of `Intl`: Chrome for Android ships no symbol
+ * for the peso (its ICU keeps the largest economies' currencies only), so
+ * `currencyDisplay: "symbol"` wrote `UYU 1.290` there and `$ 1.290` on the
+ * server, and every list of prices failed to hydrate on an Android phone.
+ */
+const SPANISH_SIGNS = { USD: "US$", UYU: "$" } as const satisfies Record<
+  Currency,
+  string
+>;
+
+/**
+ * One per tag, currency and number of decimals. Always the ISO code, the one
+ * currency display every runtime writes alike; Spanish swaps it for its sign
+ * (`writtenCurrency`).
  */
 const priceFormat = cached(
   (tag: string, currency: Currency, fractionDigits: "0" | "2") =>
     new Intl.NumberFormat(tag, {
       style: "currency",
       currency,
-      currencyDisplay: tag === INTL_LOCALES.es ? "symbol" : "code",
+      currencyDisplay: "code",
       minimumFractionDigits: Number(fractionDigits),
       maximumFractionDigits: Number(fractionDigits),
     })
 );
+
+/**
+ * A currency as the language writes it. English keeps the ISO code: a bare
+ * `$` in front of a visitor from abroad does not say whether it means pesos
+ * or dollars.
+ */
+function writtenCurrency(currency: Currency, locale: Locale): string {
+  return locale === "es" ? SPANISH_SIGNS[currency] : currency;
+}
 
 /**
  * A price, from its amount in minor units (cents) and the store's currency:
@@ -123,10 +143,12 @@ export function formatPrice(
   locale: Locale
 ): string {
   const fractionDigits = amountInMinorUnits % MINOR_UNITS === 0 ? "0" : "2";
+  const written = writtenCurrency(currency, locale);
 
-  return priceFormat(INTL_LOCALES[locale], currency, fractionDigits).format(
-    amountInMinorUnits / MINOR_UNITS
-  );
+  return priceFormat(INTL_LOCALES[locale], currency, fractionDigits)
+    .formatToParts(amountInMinorUnits / MINOR_UNITS)
+    .map((part) => (part.type === "currency" ? written : part.value))
+    .join("");
 }
 
 /**
@@ -135,11 +157,7 @@ export function formatPrice(
  * field that takes an amount and shows its currency inside it.
  */
 export function formatCurrencySign(currency: Currency, locale: Locale): string {
-  return (
-    priceFormat(INTL_LOCALES[locale], currency, "0")
-      .formatToParts(0)
-      .find((part) => part.type === "currency")?.value ?? currency
-  );
+  return writtenCurrency(currency, locale);
 }
 
 const integerFormat = cached(
@@ -213,6 +231,25 @@ const calendarDayFormat = cached(
  */
 export function formatCalendarDay(day: string, locale: Locale): string {
   return calendarDayFormat(INTL_LOCALES[locale]).format(
+    new Date(`${day}T00:00:00Z`)
+  );
+}
+
+const dayMonthFormat = cached(
+  (tag: string) =>
+    new Intl.DateTimeFormat(tag, {
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    })
+);
+
+/**
+ * A `YYYY-MM-DD` day as its day and month alone ("5 dic."), for a chart's
+ * axis, where the year is the range's: read at UTC midnight, never shifted.
+ */
+export function formatDayMonth(day: string, locale: Locale): string {
+  return dayMonthFormat(INTL_LOCALES[locale]).format(
     new Date(`${day}T00:00:00Z`)
   );
 }

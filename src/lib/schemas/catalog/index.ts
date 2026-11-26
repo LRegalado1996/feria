@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { LOCALES } from "@/lib/i18n/config";
+import { searchTextSchema } from "@/lib/schemas/search";
 import { uploadedImageSchema } from "@/lib/schemas/upload";
 
 /** A category's or an article's address segment: what `slugify` produces. */
@@ -156,13 +157,7 @@ export const listProductsSchema = publicCatalogSchema.extend({
     .min(1)
     .max(PRODUCTS_PAGE_SIZE_MAX)
     .default(PRODUCTS_PAGE_SIZE),
-  // Blank is no search, not a search for nothing.
-  q: z
-    .string()
-    .trim()
-    .max(SEARCH_MAX_LENGTH)
-    .transform((value) => (value === "" ? undefined : value))
-    .optional(),
+  q: searchTextSchema(SEARCH_MAX_LENGTH),
 });
 
 export const getProductSchema = publicCatalogSchema.extend({
@@ -438,13 +433,7 @@ export const listStoreProductsSchema = z.object({
     .default(PRODUCTS_PAGE_SIZE),
   locale: localeSchema,
   page: z.coerce.number().int().min(1).max(STORE_PRODUCTS_COUNT_CAP).default(1),
-  // Blank is no search, not a search for nothing.
-  q: z
-    .string()
-    .trim()
-    .max(SEARCH_MAX_LENGTH)
-    .transform((value) => (value === "" ? undefined : value))
-    .optional(),
+  q: searchTextSchema(SEARCH_MAX_LENGTH),
   sort: z.enum(STORE_PRODUCT_SORTS).default(DEFAULT_STORE_PRODUCT_SORT),
   status: z.enum(PRODUCT_STATUSES).optional(),
 });

@@ -218,6 +218,20 @@
       "when": 1795527808519,
       "tag": "0030_reserve_contact_address",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795632567462,
+      "tag": "0031_login_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795661492778,
+      "tag": "0032_view_tracking",
+      "breakpoints": true
     }
   ]
 }

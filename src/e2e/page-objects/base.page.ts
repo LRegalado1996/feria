@@ -24,6 +24,14 @@ export abstract class BasePage {
     await expect(this.loaded()).toBeVisible();
   }
 
+  /** How many elements in the document carry `id`: one, in valid HTML. */
+  async countId(id: string): Promise<number> {
+    return await this.page.evaluate(
+      (value) => document.querySelectorAll(`#${CSS.escape(value)}`).length,
+      id
+    );
+  }
+
   /** See {@link clickUntilVisible}: the first harmless open after a load. */
   protected async clickUntilVisible(
     trigger: Locator,

@@ -309,10 +309,14 @@ export const storefront = {
     menuLogo: "{brand}, home",
     navigation: "Secciones de la tienda",
     newTab: "(se abre en otra pestaña)",
+    // An address the site does not answer: what happened, then the way on
+    // to the catalog (FER-069).
     notFound: {
       back: "Volver a la home de la tienda",
-      body: "Puede que el enlace sea viejo o que ese artículo ya no esté.",
-      title: "No encontramos esta página",
+      body: "Puede que el enlace sea viejo o que ese artículo ya no esté a la venta. Todo lo que tenemos sigue en el catálogo.",
+      catalog: "Ver el catálogo",
+      eyebrow: "Error 404",
+      title: "Esta página no existe",
     },
     search: "Buscar en la tienda",
     searchClose: "Cerrar la búsqueda",

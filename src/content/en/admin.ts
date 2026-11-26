@@ -106,10 +106,6 @@ export const admin: Dictionary["admin"] = {
       renamed: "Category renamed.",
     },
   },
-  comingSoon: {
-    body: "This section is still being built. It will show up here in a coming version.",
-    title: "Coming soon",
-  },
   filters: {
     add: {
       pending: "Adding…",
@@ -209,6 +205,76 @@ export const admin: Dictionary["admin"] = {
   },
   metadata: {
     title: "Admin",
+  },
+  metrics: {
+    adoption: {
+      created: "Articles created",
+      lastSignIn: "Last sign-in",
+      login: "User",
+      logins: "Panel users",
+      never: "Never",
+      perWeek: "Articles created per week",
+      title: "Panel use",
+      week: "Week of {day}",
+      weekColumn: "Week",
+    },
+    articles: {
+      article: "Article",
+      draft: "Drafts",
+      noViews: "No article was viewed in this period.",
+      published: "Published and for sale",
+      title: "Articles",
+      topViewed: "Most viewed",
+      unavailable: "Published, out of stock",
+      units: "Units ordered",
+      untitled: "Untitled",
+      viewedNotOrdered: "Viewed a lot, never ordered",
+      viewedNotOrderedHint:
+        "People look at them, but no order of the period holds them.",
+      viewedNotOrderedNone:
+        "Every viewed article has at least one order in this period.",
+      views: "Views",
+    },
+    day: "Day",
+    funnel: {
+      ofVisits: "{rate} of the visits",
+      orders: "Orders",
+      title: "From visit to order",
+      views: "Article views",
+      visits: "Store visits",
+    },
+    noData: "No data in this period.",
+    orders: {
+      amountPerDay: "Amount per day in {currency}",
+      average: "Average order",
+      byCurrency: "Totals by currency",
+      byStatus: "By status",
+      count: "Orders",
+      currency: "Currency",
+      none: "There were no orders in this period.",
+      perDay: "Orders per day",
+      share: "Of all",
+      status: "Status",
+      title: "Orders",
+      topOrdered: "Most ordered",
+      total: "Total",
+      undeliverable: "Could not be delivered: {rate}",
+      units: "Units",
+    },
+    range: {
+      label: "Period",
+      last: "{days} days",
+      lastYear: "1 year",
+      showing: "From {from} to {to}",
+    },
+    showData: "Show the data",
+    title: "Metrics",
+    traffic: {
+      section: "Store traffic",
+      title: "Visits and views per day",
+      views: "Views",
+      visits: "Visits",
+    },
   },
   orders: {
     actions: {
@@ -639,6 +705,38 @@ export const admin: Dictionary["admin"] = {
     useAsHomeTitle: "Use “{name}” as the home?",
     view: "See on the store: {name}",
   },
+  password: {
+    back: "Back to the dashboard",
+    errors: {
+      save: "We couldn't save the password. Please try again.",
+      tooMany:
+        "Too many tries with a wrong password. Try again in {minutes} min.",
+      wrongCurrent: "The current password is not correct.",
+      wrongTemporary: "The temporary password is not correct.",
+    },
+    fields: {
+      confirm: "Repeat the new password",
+      current: "Current password",
+      new: "New password",
+      newHint: "At least 8 characters, different from the current one.",
+      temporary: "Temporary password",
+    },
+    forcedSubtitle:
+      "You signed in with a temporary password. Choose your own to continue.",
+    pending: "Saving…",
+    signedInAs: "Signed in as {email}",
+    submit: "Save password",
+    subtitle:
+      "Choose a new password. Sessions on other devices are signed out.",
+    title: "Change your password",
+    validation: {
+      currentRequired: "Enter the current password.",
+      mismatch: "The two passwords don't match.",
+      passwordTooLong: "Use up to 128 characters.",
+      passwordTooShort: "Use at least 8 characters.",
+      sameAsCurrent: "It must be different from the current one.",
+    },
+  },
   settings: {
     contact: "Contact and socials",
     currencies: {
@@ -695,6 +793,7 @@ export const admin: Dictionary["admin"] = {
     title: "Settings",
   },
   shell: {
+    changePassword: "Change password",
     closeMenu: "Close the menu",
     menu: "Menu",
     navigation: "Admin sections",
@@ -714,5 +813,101 @@ export const admin: Dictionary["admin"] = {
     products: "Articles",
     settings: "Settings",
     users: "Users",
+  },
+  users: {
+    actions: "Actions for {name}",
+    add: "New user",
+    created: {
+      copied: "Details copied.",
+      copy: "Copy the details",
+      copyFailed:
+        "We couldn't copy. Select the text above and copy it by hand.",
+      description:
+        "Send these details to {name}. On their first sign-in they will choose their own password.",
+      done: "Done",
+      message:
+        "Dashboard: {url}\nEmail: {email}\nTemporary password: {password}",
+      title: "User created",
+    },
+    createdOn: "Since {date}",
+    description:
+      "The people who sign in to this dashboard. Everyone can do everything, managing users included.",
+    disableNamed: "Disable: {name}",
+    disable: "Disable",
+    disableDialog: {
+      confirm: "Disable",
+      description:
+        "Their sessions are signed out and they can't sign in until someone enables them. Nothing is deleted.",
+      pending: "Disabling…",
+      title: "Disable {name}?",
+    },
+    disabledOn: "Disabled on {date}",
+    enableNamed: "Enable: {name}",
+    enable: "Enable",
+    errors: {
+      create:
+        "We couldn't create the user. What you typed is still here: please try again.",
+      disable: "We couldn't disable the user. Please try again.",
+      emailTaken: "There is already a user with that email.",
+      enable: "We couldn't enable the user. Please try again.",
+      lastEnabled:
+        "This is the only active user: the store would be left with nobody who can sign in.",
+      load: "We couldn't load the users.",
+      notFound: "That user no longer exists. We reloaded the list.",
+      protected: "The superadmin can't be changed from another user.",
+      ownDisabled: "You can't disable your own user.",
+      reset:
+        "We couldn't save the password. What you typed is still here: please try again.",
+    },
+    form: {
+      cancel: "Cancel",
+      close: "Close",
+      createDescription:
+        "Choose a temporary password to send them. On their first sign-in they will have to choose their own.",
+      createTitle: "New user",
+      email: "Email",
+      name: "Name",
+      password: "Temporary password",
+      passwordHint: "At least 8 characters.",
+      pending: "Creating…",
+      submit: "Create user",
+    },
+    list: "Dashboard users",
+    protectedLogin:
+      "This is the superadmin: nobody else can disable it or change its password.",
+    ownLogin:
+      "This is your user: you can't disable it, and you change your password from “Change password”.",
+    reset: {
+      description:
+        "Type a new temporary password for {name}. Their open sessions are signed out and, when they sign in, they will choose their own.",
+      done: "Done",
+      pending: "Saving…",
+      resultDescription:
+        "Send these details to {name}. When they sign in they will choose their own password.",
+      resultTitle: "Password reset",
+      submit: "Save password",
+      title: "Reset password",
+    },
+    resetNamed: "Reset password: {name}",
+    resetPassword: "Reset password",
+    status: {
+      active: "Active",
+      disabled: "Disabled",
+      superadmin: "Superadmin",
+      temporary: "Temporary password",
+    },
+    title: "Users",
+    toasts: {
+      disabled: "{name} is disabled.",
+      enabled: "{name} can sign in again.",
+    },
+    validation: {
+      emailInvalid: "Enter a valid email.",
+      nameRequired: "Enter the name.",
+      nameTooLong: "Use up to 120 characters.",
+      passwordTooLong: "Use up to 128 characters.",
+      passwordTooShort: "Use at least 8 characters.",
+    },
+    you: "You",
   },
 };

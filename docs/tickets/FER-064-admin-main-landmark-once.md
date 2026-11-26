@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P1
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-013, FER-040
 
 Refs: FER-013, FER-040
@@ -33,3 +33,13 @@ Pick one of the two, measured against what the shell needs:
 ## Reporting
 
 Report this ticket in Slack as the `slack-reporting` skill describes. The skill is the only place that says which event goes to which channel and who posts it.
+
+## Outcome
+
+Option 2. Option 1 would set the sidebar, with the signed-in login, inside the main landmark, or read the session in the layout. `molecules/admin-frame` (a client component) draws the skip link, the sidebar and `<main>`, and the landmark's id is `useId()`'s. A screen kept hidden keeps its own landmark and id, `display: none`, out of the accessibility tree.
+
+Found along the way: on a phone, choosing a section in the menu loaded the whole document again. The menu closed on the click's way down (`onClickCapture`), a real click commits between the phases, and the link was gone before its handler could navigate in place. The menu now closes on the way up (`onClick`). The store's phone menu (`molecules/store-mobile-menu`) and the cart panel (`organisms/store-cart-panel`, a link to another page) had the same fault and close the same way; the panel still holds a link to the page already open on the way down, so it navigates nowhere.
+
+The store had the same repeated id (`store-main`, on every kept page's frame): `atoms/store-skip-link` now has a scope (`StoreSkipScope`, in `organisms/store-frame` and the design gallery) that gives the skip link and its target (`StoreSkipTarget`) an id of their own.
+
+Tests: `src/e2e/tests/store/store-main-once.e2e.ts` covers the store's content and skip link after three pages and back, at both widths. `src/e2e/tests/admin/admin-landmark.e2e.ts` covers the landmark and the skip link at a phone's and a computer's width. `fixtures/expect-in-place.ts` asserts that following a link loads no new document, for the admin's sections, the store menu's home link (`store-shell.e2e.ts`) and "Hacer el pedido" (`cart-panel.e2e.ts`). A unit test cannot see the fault with a dispatched click, which runs no microtasks between the phases; `src/test/browser-click.ts` commits there, as a browser does.

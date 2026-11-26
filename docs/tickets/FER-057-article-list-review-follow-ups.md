@@ -2,7 +2,7 @@
 
 - **Milestone:** M3 Admin
 - **Priority:** P1
-- **Status:** todo
+- **Status:** done
 - **Depends on:** FER-019
 
 ## Goal
@@ -22,6 +22,16 @@ CodeRabbit's last round on PRs #64 and #65 arrived after the review loop was clo
 ## Acceptance criteria
 
 - Each item above is fixed with a test that fails without the fix, or closed here with the evidence that it needs none.
+
+## Outcome
+
+- **A failed `BEGIN`:** confirmed against a real pool: pg's pool never evicts a checked-out client, so 0.45.4 kept the slot for good (the pool's `totalCount` stayed 1 and the next checkout timed out). drizzle-orm 1.0.0-rc.6 fixes it; 1.0 is still a release candidate, so Lucas chose (2026-11-25) to backport its release as `patches/drizzle-orm@0.45.4.patch` (`patchedDependencies` in `pnpm-workspace.yaml`). Every path releases, a dead client with its error, and a failed rollback no longer hides the body's error. Proof: `src/server/db/transaction-release.integration.test.ts` (red without the patch); `docs/agents/database.md` § Connections.
+- **U+0000 in a search:** `searchTextSchema` (`src/lib/schemas/search`) refuses it for the storefront's search, the admin's articles and the admin's orders (whose search had the same fault), and `readSearchText` drops it when each address is read.
+- **The store's filters failing to load:** the sheet says so with "Reintentar" in their place, as for the categories.
+- **A pending search resetting the sheet:** settled with [FER-056](FER-056-list-search-and-filters-race.md), in its own pull request stacked on this one (Lucas, 2026-11-25: one pull request per ticket, both done now).
+- **A superseded page's focus request:** dropped as soon as another address takes over, whether or not its answer ever comes.
+- **The header over the old rows:** `product.list` answers the order its rows are in (`sort`, `dir`), and the header names that order and starts its links from it.
+- **Tests:** the article's age is compared whole, and the wizard's test pins the value it creates.
 
 ## Reporting
 

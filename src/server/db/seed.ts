@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import type { UserRole } from "@/lib/schemas/access";
 import { type AccountAuth, createAccount } from "@/server/better-auth/accounts";
 import type { DatabaseClient } from "@/server/db";
 import { user } from "@/server/db/schema";
@@ -14,16 +15,19 @@ interface SeedAccount {
   email: string;
   name: string;
   password: string;
+  role: UserRole;
 }
 
 /**
  * The documented login of a seeded database. Every login is an admin
- * (FER-038), so one is enough for local work and e2e.
+ * (FER-038), so one is enough for local work and e2e. It is the superadmin,
+ * as the first-run script's login is in production (FER-015).
  */
 export const SEED_USER: SeedAccount = {
   email: "test@example.com",
   name: "Test User",
   password: "password123",
+  role: "superadmin",
 };
 
 /**
@@ -96,11 +100,16 @@ async function ensureAccount(
 
   // Through Better Auth's adapter and hasher, so the credential account
   // exists: a user inserted by hand cannot sign in.
-  await createAccount(auth, db, {
-    email: account.email,
-    name: account.name,
-    password: account.password,
-  });
+  await createAccount(
+    auth,
+    db,
+    {
+      email: account.email,
+      name: account.name,
+      password: account.password,
+    },
+    { role: account.role }
+  );
 
   return true;
 }

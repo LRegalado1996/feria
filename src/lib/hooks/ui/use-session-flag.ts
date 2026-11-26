@@ -24,8 +24,10 @@ function read(key: string): boolean {
   try {
     return window.sessionStorage.getItem(key) === "1";
   } catch (error) {
-    // Storage refused (a private window, blocked site data): off.
+    // Storage refused (a private window, blocked site data): off, and
+    // remembered, so a page that reads it on every render reports it once.
     reportError(error, { action: "Storage.read_session_flag" });
+    memory.set(key, false);
     return false;
   }
 }

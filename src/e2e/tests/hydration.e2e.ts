@@ -8,6 +8,7 @@ import {
   uniquePhone,
   uniqueTag,
 } from "../fixtures";
+import { clickUntilVisible } from "../fixtures/click-until-visible";
 import { placeOrder } from "../fixtures/place-order";
 import { AdminSignInPage } from "../page-objects/admin-sign-in.page";
 
@@ -35,6 +36,24 @@ function collectHydrationErrors(page: Page): string[] {
   });
 
   return errors;
+}
+
+/**
+ * Makes the page's `Intl` write a currency as Chrome for Android does: its
+ * ICU has no symbol for the peso, so asked for one it writes the ISO code.
+ * Runs before the page's own scripts.
+ */
+function withoutCurrencySymbols() {
+  class WithoutSymbols extends Intl.NumberFormat {
+    constructor(
+      tag?: Intl.LocalesArgument,
+      options?: Intl.NumberFormatOptions
+    ) {
+      super(tag, { ...options, currencyDisplay: "code" });
+    }
+  }
+
+  Object.defineProperty(Intl, "NumberFormat", { value: WithoutSymbols });
 }
 
 // Hydration happens only on a full document load, never on a client-side
@@ -102,5 +121,54 @@ test.describe("Hydration", () => {
 
     expect(errors).toEqual([]);
     await context.close();
+  });
+
+  // FER-083. The article grid formats its prices again in the browser, and
+  // a phone's Chrome wrote "UYU 1.200" where the server had sent "$ 1.200".
+  test("a category's prices hydrate on a browser without the peso's symbol", async ({
+    baseURL,
+    browser,
+    db,
+  }) => {
+    const tag = uniqueTag();
+    const chains = await db.seed.createCategory({
+      nameEs: `Cadenas ${tag}`,
+      slug: `cadenas-${tag}`,
+    });
+    await db.seed.createArticle({
+      categoryId: chains.id,
+      priceAmount: 120_000,
+      title: "Cadena",
+    });
+    // A hand-made context gets none of the config's `use` options.
+    const context = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      storageState: { cookies: [], origins: [] },
+      timezoneId: "UTC",
+    });
+
+    try {
+      await context.addInitScript(withoutCurrencySymbols);
+      const page = await context.newPage();
+      const errors = collectHydrationErrors(page);
+
+      await page.goto(`/${chains.slug}`, { waitUntil: "domcontentloaded" });
+
+      // The filter panel opens only once React owns the page.
+      await clickUntilVisible(
+        page.getByRole("button", { name: /^Filtrar/u }),
+        page.getByRole("dialog", { name: "Filtrar" })
+      );
+      await expect(
+        page
+          .getByTestId("store-catalog-grid")
+          .getByText("$\u00A01.200", { exact: true })
+      ).toHaveCount(1);
+
+      expect(errors).toEqual([]);
+    } finally {
+      await context.close();
+    }
   });
 });

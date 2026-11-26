@@ -222,10 +222,10 @@ describe("page router", () => {
       today: "2026-12-04",
     });
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      USER_ID
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: USER_ID,
+    });
     expect(services.getPageCuration).toHaveBeenCalledExactlyOnceWith(db, {
       pageId: 3,
       storeId: 7,

@@ -28,6 +28,7 @@ export {
   spotlightTranslation,
 } from "./page";
 export { localeEnum } from "./locale";
+export { metricRateLimit, productViewDaily, storeVisitDaily } from "./metrics";
 export {
   customerOrder,
   orderItem,

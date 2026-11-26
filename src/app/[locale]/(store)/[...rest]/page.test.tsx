@@ -15,10 +15,15 @@ describe("UnknownPage", () => {
     );
   });
 
-  test("is static output made on first visit, so the 404 is the response's status", () => {
+  test("is static output, so the 404 is the response's status", () => {
     expect(ensureStatic).toBe("navigation");
-    // A sample no page can be: no address of the site has an underscore.
-    expect(generateStaticParams()).toEqual([{ rest: ["__sample__"] }]);
+  });
+
+  test("prerenders the address the proxy sends every unknown one to, in three segments", () => {
+    // No address of the site has an underscore, so no page can be it.
+    expect(generateStaticParams()).toEqual([
+      { rest: ["__unknown__", "__unknown__", "__unknown__"] },
+    ]);
   });
 
   test("opts out of instant-navigation validation: it never renders", () => {

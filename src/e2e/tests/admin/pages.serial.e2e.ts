@@ -106,9 +106,19 @@ test.describe("Pages from the admin", () => {
     await pages.createPage({ isPublished: false, nameEs: name, slug });
     await expect(pages.heading()).toHaveText(name);
 
-    // A draft: the public and crawlers find nothing; the admin previews it.
+    // A draft: the public and crawlers find nothing, a real 404 for both
+    // (FER-069); the admin previews it.
     const draft = await request.get(`/${slug}`, {});
     expect(draft.status()).toBe(404);
+    const outsider = await visitor(browser, baseURL);
+
+    try {
+      const response = await (await outsider.newPage()).goto(`/${slug}`);
+      expect(response?.status()).toBe(404);
+    } finally {
+      await outsider.close();
+    }
+
     const preview = await page.context().newPage();
     await preview.goto(`/${slug}`);
     await expect(preview.getByRole("note")).toHaveText(
@@ -253,7 +263,17 @@ test.describe("Pages from the admin", () => {
       await context.close();
     }
 
-    // The home's own address leads to `/`, in each language.
+    // The home's own address leads to `/`, in each language, as the
+    // response itself (FER-070): for a crawler, a browser's request, and a
+    // browser without script. The proxy may trust addresses it read a few
+    // seconds before the choice to let a page through, so the browser's
+    // request is polled.
+    const browserRequest = await playwright.request.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      storageState: { cookies: [], origins: [] },
+    });
+
     for (const [path, home] of [
       [`/${slug}`, "/"],
       [`/en/${slug}`, "/en"],
@@ -263,8 +283,43 @@ test.describe("Pages from the admin", () => {
       });
       expect(moved.status()).toBe(307);
       expect(moved.headers().location).toBe(home);
+
+      await expect
+        .poll(async () => {
+          const response = await browserRequest.get(path, {
+            maxRedirects: 0,
+          });
+
+          return [response.status(), response.headers().location];
+        })
+        .toEqual([307, home]);
     }
 
+    // The old home answers at its address, without a redirect.
+    const oldAddress = await browserRequest.get(`/${own.slug}`, {
+      maxRedirects: 0,
+    });
+    expect(oldAddress.status()).toBe(200);
+
+    const noScript = await browser.newContext({
+      baseURL: requireBaseURL(baseURL),
+      ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
+      javaScriptEnabled: false,
+      storageState: { cookies: [], origins: [] },
+    });
+
+    try {
+      const shopper = await noScript.newPage();
+      await shopper.goto(`/en/${slug}`);
+      await expect(shopper).toHaveURL("/en");
+      await expect(
+        shopper.getByRole("link", { name: new RegExp(`Taza ${tag}`, "u") })
+      ).toBeVisible();
+    } finally {
+      await noScript.close();
+    }
+
+    await browserRequest.dispose();
     await request.dispose();
   });
 });

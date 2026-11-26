@@ -2,10 +2,12 @@ import { expect, test, vi } from "vitest";
 
 import { appRouter } from "./root";
 import { comingSoonRouter } from "./routers/coming-soon";
+import { metricsRouter } from "./routers/metrics";
 import { orderRouter } from "./routers/order";
 import { pageRouter } from "./routers/page";
 import { storeRouter } from "./routers/store";
 import { uploadRouter } from "./routers/upload";
+import { userRouter } from "./routers/user";
 
 vi.mock("@/env", () => ({
   env: {
@@ -23,15 +25,19 @@ test("mounts each domain router at its own key, and nothing else", () => {
     "catalog",
     "category",
     "comingSoon",
+    "metrics",
     "order",
     "page",
     "product",
     "store",
     "upload",
+    "user",
   ]);
   expect(appRouter.comingSoon).toBe(comingSoonRouter);
+  expect(appRouter.metrics).toBe(metricsRouter);
   expect(appRouter.page).toBe(pageRouter);
   expect(appRouter.order).toBe(orderRouter);
   expect(appRouter.store).toBe(storeRouter);
   expect(appRouter.upload).toBe(uploadRouter);
+  expect(appRouter.user).toBe(userRouter);
 });

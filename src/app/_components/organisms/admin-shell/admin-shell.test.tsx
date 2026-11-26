@@ -99,13 +99,14 @@ describe("AdminShell", () => {
     setup();
 
     const main = screen.getByRole("main");
-    expect(main).toHaveAttribute("id", "admin-main");
     expect(within(main).getByText("Section content")).toBeInTheDocument();
+    // The frame's own id (FER-064), never a fixed one.
+    expect(main.id).not.toBe("");
     expect(
       screen.getByRole("link", { name: "Skip to content" })
-    ).toHaveAttribute("href", "#admin-main");
+    ).toHaveAttribute("href", `#${main.id}`);
     const shell = screen.getByTestId("admin-shell");
-    expect(shell).toHaveAttribute("data-slot", "admin-shell");
+    expect(shell).toHaveAttribute("data-slot", "admin-frame");
     expect(shell).toHaveClass("bg-sidebar");
   });
 
@@ -224,12 +225,38 @@ describe("AdminShell", () => {
     ).toBeInTheDocument();
   });
 
+  test.each([
+    [
+      "en",
+      "users",
+      "Change password",
+      "/en/admin/change-password?next=%2Fen%2Fadmin%2Fusers",
+    ],
+    [
+      "es",
+      "orders",
+      "Cambiar contraseña",
+      "/admin/change-password?next=%2Fadmin%2Forders",
+    ],
+  ] as const)(
+    "in %s, on %s, leads to changing the password and back to that section",
+    (locale, section, name, href) => {
+      const { banner } = setup({ locale, section });
+
+      const account = within(banner()).getByTestId("admin-account");
+      expect(within(account).getByRole("link", { name })).toHaveAttribute(
+        "href",
+        href
+      );
+    }
+  );
+
   test("speaks Spanish in its own chrome", () => {
     const { banner } = setup({ locale: "es" });
 
     expect(
       screen.getByRole("link", { name: "Saltar al contenido" })
-    ).toHaveAttribute("href", "#admin-main");
+    ).toHaveAttribute("href", `#${screen.getByRole("main").id}`);
     expect(
       within(banner()).getByRole("button", { name: "Cerrar sesión" })
     ).toBeInTheDocument();

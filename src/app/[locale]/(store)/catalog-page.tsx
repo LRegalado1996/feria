@@ -211,8 +211,10 @@ function alternatesOf(locale: Locale, query: CatalogQuery) {
 }
 
 /**
- * The address's page, read before anything is sent: an unknown one is a
- * real 404, a moved one a permanent redirect (308) with its query string.
+ * The address's page, read before anything is sent: an unknown one is the
+ * not-found page, a moved one a permanent redirect (308) with its query
+ * string. The proxy gives both their status first (FER-069); these answer
+ * the requests it let through on addresses a few seconds old.
  */
 async function resolve({ params, searchParams }: CatalogPageProps) {
   const locale = await readLocale(params);

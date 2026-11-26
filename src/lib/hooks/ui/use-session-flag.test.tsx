@@ -67,6 +67,25 @@ describe("useSessionFlag", () => {
     expect(second()[0]).toBe(false);
   });
 
+  test("reports storage refusing a read once, however often the flag is read", () => {
+    const getItem = vi
+      .spyOn(window.sessionStorage, "getItem")
+      .mockImplementation(() => {
+        throw new Error("SecurityError");
+      });
+    const { first } = setup("flag:refused-once");
+
+    // Two readers, each read on mount and on every render after.
+    first();
+    first();
+
+    expect(getItem).toHaveBeenCalledExactlyOnceWith("flag:refused-once");
+    expect(reportError).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ message: "SecurityError" }),
+      { action: "Storage.read_session_flag" }
+    );
+  });
+
   test("where the browser refuses storage, is off and keeps a choice for the page", () => {
     vi.spyOn(window.sessionStorage, "getItem").mockImplementation(() => {
       throw new Error("SecurityError");

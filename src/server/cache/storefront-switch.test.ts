@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { db } from "@/server/db";
+import { CONNECT_RETRY, CONNECT_TIMEOUT_MS } from "@/server/db/connect-retry";
 import { createMockDatabase, type MockDatabase } from "@/server/test/context";
 import { renderQuery } from "@/server/test/render-sql";
 
@@ -252,6 +253,17 @@ describe("isStorefrontClosed", () => {
       SWITCH_TTL_MS,
       SWITCH_TIMEOUT_MS,
       SWITCH_STATEMENT_TIMEOUT_MS,
-    ]).toEqual([5000, 5000, 4000]);
+    ]).toEqual([5000, 7000, 4000]);
+  });
+
+  test("past one hung connection attempt, leaves the retry and the read their time", () => {
+    // What a second attempt and the read's four round trips may take from
+    // the proxy's region, the farthest from the database, with room to spare.
+    const RETRY_AND_READ_MS = 3500;
+    // A first attempt that hangs to its limit, and the longest backoff
+    // before the second (`backoffMs`: at most the base delay).
+    const lost = CONNECT_TIMEOUT_MS + CONNECT_RETRY.baseDelayMs;
+
+    expect(SWITCH_TIMEOUT_MS - lost).toBeGreaterThanOrEqual(RETRY_AND_READ_MS);
   });
 });

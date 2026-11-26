@@ -67,6 +67,7 @@ describe("API docs route", () => {
       ])
     ).toEqual([
       ["/admin/me", ["get"]],
+      ["/admin/me/password", ["put"]],
       ["/admin/filters", ["get", "post"]],
       ["/admin/filters/{id}", ["put", "delete"]],
       ["/admin/filters/order", ["put"]],
@@ -85,6 +86,9 @@ describe("API docs route", () => {
       ["/admin/categories/order", ["put"]],
       ["/admin/coming-soon", ["get", "put"]],
       ["/admin/coming-soon/published", ["put"]],
+      ["/admin/metrics", ["get"]],
+      ["/metrics/visits", ["post"]],
+      ["/metrics/views", ["post"]],
       ["/orders", ["post"]],
       ["/orders/{token}", ["get"]],
       ["/admin/orders", ["get"]],
@@ -108,6 +112,10 @@ describe("API docs route", () => {
       ["/admin/products/{id}/availability", ["put"]],
       ["/store", ["get", "put"]],
       ["/admin/uploads/token", ["post"]],
+      ["/admin/users", ["get", "post"]],
+      ["/admin/users/{id}/disable", ["post"]],
+      ["/admin/users/{id}/enable", ["post"]],
+      ["/admin/users/{id}/password", ["put"]],
     ]);
   });
 

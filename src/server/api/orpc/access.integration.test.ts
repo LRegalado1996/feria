@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { createAccount } from "@/server/better-auth/accounts";
 import { auth } from "@/server/better-auth/config";
 import { db } from "@/server/db";
-import { user } from "@/server/db/schema";
+import { session, user } from "@/server/db/schema";
 import { withAdmin } from "@/server/services/access";
 import { theStoreId } from "@/server/test/one-store";
 import {
@@ -38,15 +38,27 @@ afterEach(async () => {
   await db.delete(user).where(inArray(user.id, createdUserIds.splice(0)));
 });
 
+/** A login signed in once: its id and the id of the session it opened. */
 async function makeLogin() {
+  const email = `access-${randomUUID()}@example.test`;
+  const password = "synthetic-pass-123";
   const account = await createAccount(auth, db, {
-    email: `access-${randomUUID()}@example.test`,
+    email,
     name: "Access Test",
-    password: "synthetic-pass-123",
+    password,
   });
   createdUserIds.push(account.id);
+  const { token } = await auth.api.signInEmail({ body: { email, password } });
+  const opened = await db.query.session.findFirst({
+    columns: { id: true },
+    where: eq(session.token, token),
+  });
 
-  return account;
+  if (!opened) {
+    throw new Error("The sign-in opened no session");
+  }
+
+  return { ...account, sessionId: opened.id };
 }
 
 async function removeLogin(userId: string) {
@@ -54,10 +66,17 @@ async function removeLogin(userId: string) {
 }
 
 /**
- * A procedure built on `adminProcedure`, called as `userId`. The session
- * claims a superadmin: the builder must read the database, never this.
+ * A procedure built on `adminProcedure`, called as `login` on its session,
+ * as a cached session cookie would name them. The session claims a
+ * superadmin: the builder must read the database, never this.
  */
-async function callAs(userId: string) {
+async function callAs({
+  id: userId,
+  sessionId,
+}: {
+  id: string;
+  sessionId: string;
+}) {
   const procedure = adminProcedure.handler(({ context }) => ({
     storeId: context.store.id,
     userId: context.session.user.id,
@@ -67,7 +86,10 @@ async function callAs(userId: string) {
     context: {
       db,
       headers: new Headers(),
-      session: { user: { id: userId, role: "superadmin" } },
+      session: {
+        session: { id: sessionId },
+        user: { id: userId, role: "superadmin" },
+      },
     } as never,
   });
 }
@@ -81,11 +103,11 @@ describe("adminProcedure against the database", () => {
       .set({ role: "superadmin" })
       .where(eq(user.id, promoted.id));
 
-    await expect(callAs(plain.id)).resolves.toEqual({
+    await expect(callAs(plain)).resolves.toEqual({
       storeId,
       userId: plain.id,
     });
-    await expect(callAs(promoted.id)).resolves.toEqual({
+    await expect(callAs(promoted)).resolves.toEqual({
       storeId,
       userId: promoted.id,
     });
@@ -95,7 +117,20 @@ describe("adminProcedure against the database", () => {
     const login = await makeLogin();
     await removeLogin(login.id);
 
-    await expect(callAs(login.id)).rejects.toMatchObject({
+    await expect(callAs(login)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+      message: "Unauthorized",
+    });
+  });
+});
+
+describe("adminProcedure and ended sessions", () => {
+  test("a session ended in the database is refused at once, though its cached copy still names it (FER-015)", async () => {
+    const login = await makeLogin();
+    // What a password change or a reset does to the other sessions.
+    await db.delete(session).where(eq(session.id, login.sessionId));
+
+    await expect(callAs(login)).rejects.toMatchObject({
       code: "UNAUTHORIZED",
       message: "Unauthorized",
     });

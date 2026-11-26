@@ -374,6 +374,7 @@ describe("listProductsSchema", () => {
     [{ limit: 0 }, false],
     [{ q: "x".repeat(100) }, true],
     [{ q: "x".repeat(101) }, false],
+    [{ q: "ar\u0000o" }, false],
     [{ category: "Cadenas Doradas" }, false],
     [{ category: "cadenas-doradas" }, true],
     [
@@ -533,6 +534,7 @@ describe("listStoreProductsSchema", () => {
     ["   ", undefined, true],
     ["a".repeat(SEARCH_MAX_LENGTH), "a".repeat(SEARCH_MAX_LENGTH), true],
     ["a".repeat(SEARCH_MAX_LENGTH + 1), undefined, false],
+    ["an\u0000illo", undefined, false],
   ])("a search of %j reads as %j", (q, parsed, accepted) => {
     const result = listStoreProductsSchema.safeParse({ locale: "es", q });
 

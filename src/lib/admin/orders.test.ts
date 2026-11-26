@@ -31,6 +31,11 @@ describe("readOrdersQuery", () => {
     expect(readOrdersQuery({ q: atLimit })).toEqual({ q: atLimit });
     expect(readOrdersQuery({ q: `${atLimit}b` })).toEqual({ q: atLimit });
   });
+
+  test("reads a search without the U+0000 the API refuses, and one of it only as none", () => {
+    expect(readOrdersQuery({ q: "an\u0000a" })).toEqual({ q: "ana" });
+    expect(readOrdersQuery({ q: "\u0000" })).toEqual({});
+  });
 });
 
 describe("ordersPath", () => {
