@@ -225,6 +225,32 @@ describe("AdminShell", () => {
     ).toBeInTheDocument();
   });
 
+  test.each([
+    [
+      "en",
+      "users",
+      "Change password",
+      "/en/admin/change-password?next=%2Fen%2Fadmin%2Fusers",
+    ],
+    [
+      "es",
+      "orders",
+      "Cambiar contraseña",
+      "/admin/change-password?next=%2Fadmin%2Forders",
+    ],
+  ] as const)(
+    "in %s, on %s, leads to changing the password and back to that section",
+    (locale, section, name, href) => {
+      const { banner } = setup({ locale, section });
+
+      const account = within(banner()).getByTestId("admin-account");
+      expect(within(account).getByRole("link", { name })).toHaveAttribute(
+        "href",
+        href
+      );
+    }
+  );
+
   test("speaks Spanish in its own chrome", () => {
     const { banner } = setup({ locale: "es" });
 

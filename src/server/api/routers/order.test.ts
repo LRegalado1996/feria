@@ -383,10 +383,10 @@ describe("order router: the admin's side", () => {
       })
     ).resolves.toEqual({ items: [{ id: 70 }], nextCursor: null });
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      USER_ID
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: USER_ID,
+    });
     expect(services.listOrders).toHaveBeenCalledExactlyOnceWith(db, {
       cursor: { createdAt: new Date("2026-11-15T10:00:00.000Z"), id: 40 },
       status: "packed",
@@ -421,10 +421,10 @@ describe("order router: the admin's side", () => {
       undeliverable: 1,
     });
 
-    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(
-      db,
-      USER_ID
-    );
+    expect(services.findAdminStore).toHaveBeenCalledExactlyOnceWith(db, {
+      sessionId: "test-session-id",
+      userId: USER_ID,
+    });
     expect(services.countOrders).toHaveBeenCalledExactlyOnceWith(db, {
       storeId: 7,
     });

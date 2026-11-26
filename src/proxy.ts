@@ -2,6 +2,11 @@ import { evlogMiddleware } from "evlog/next";
 import { type NextRequest, NextResponse } from "next/server";
 
 import {
+  answerAddress,
+  decidesAddress,
+  UNKNOWN_ADDRESS_PATH,
+} from "@/lib/catalog/store-address";
+import {
   COMING_SOON_PATH,
   STORE_PREVIEW_COOKIE,
 } from "@/lib/coming-soon/paths";
@@ -10,6 +15,10 @@ import { localizePath, splitLocale } from "@/lib/i18n/paths";
 import { captureExceptionWithScope } from "@/lib/sentry";
 import { within } from "@/lib/utils/within";
 import { isAdminRequest } from "@/server/better-auth/admin-request";
+import {
+  currentStoreAddresses,
+  storeAddressesSince,
+} from "@/server/cache/store-addresses";
 import {
   isStorefrontClosed,
   SWITCH_TIMEOUT_MS,
@@ -97,6 +106,71 @@ async function decideLaunch(
   return { preview: false };
 }
 
+/**
+ * What the store's addresses say of a page request, before its route
+ * starts a response it could no longer change (FER-069): a page or a
+ * category the address names goes on to its route; an address that names
+ * nothing is the store's not-found page with a real 404; the home's own
+ * address (FER-070) and a category asked for outside its group lead where
+ * they are. Only a page let through is answered from the addresses the
+ * proxy keeps: anything else asks a read that started after the request
+ * arrived, so a page or category made a moment ago is never a 404. When
+ * the addresses cannot be read the request goes on, and its route answers
+ * it as it always could. `null` lets the request through.
+ */
+async function answerByAddress(
+  request: NextRequest,
+  { locale, pathname }: ReturnType<typeof splitLocale>,
+  arrivedAt: number
+): Promise<NextResponse | null> {
+  if (!decidesAddress(pathname)) {
+    return null;
+  }
+
+  const kept = await currentStoreAddresses();
+  let answer = kept && answerAddress(kept, pathname);
+
+  if (answer && answer.kind !== "page") {
+    const fresh = await storeAddressesSince(arrivedAt);
+    answer = fresh && answerAddress(fresh, pathname);
+  }
+
+  if (!answer || answer.kind === "page") {
+    return null;
+  }
+
+  // A draft is there only for a signed-in admin, who previews it.
+  if (answer.kind === "draft" && (await fromAdmin(request))) {
+    return null;
+  }
+
+  const language = locale ?? DEFAULT_LOCALE;
+  const url = request.nextUrl.clone();
+  let response: NextResponse;
+
+  if (answer.kind === "redirect") {
+    url.pathname = localizePath(answer.path, language);
+
+    if (!answer.keepQuery) {
+      url.search = "";
+    }
+
+    response = NextResponse.redirect(url, answer.status);
+  } else {
+    // The address bar keeps the address that was asked for.
+    url.pathname = `/${language}${UNKNOWN_ADDRESS_PATH}`;
+    url.search = "";
+    response = NextResponse.rewrite(url);
+  }
+
+  // The answer holds while the store's addresses do, and an admin changes
+  // them at any time: no cache may keep it, not even a browser's 308, which
+  // would loop once the category moves back.
+  response.headers.set("cache-control", "private, no-store");
+
+  return response;
+}
+
 /** Where the language rules send a page request the switch let through. */
 function routeByLanguage(
   request: NextRequest,
@@ -122,14 +196,17 @@ function routeByLanguage(
 }
 
 /**
- * Three jobs. `/api` requests are stamped for logging. Every page request
+ * Four jobs. `/api` requests are stamped for logging. Every page request
  * passes the coming-soon switch first (`decideLaunch`), the one access
- * decision made here, on a session the proxy validates itself. Then it gets
- * its language from the URL: pages live under `app/[locale]`, Spanish is
- * served without a prefix and English under `/en`. So an unprefixed path is
- * rewritten to its Spanish route (the address bar keeps the short URL),
- * `/en/...` passes through, and `/es/...` redirects to the unprefixed URL so
- * each Spanish page has exactly one address. Everything else (who may use
+ * decision made here, on a session the proxy validates itself. An address
+ * of the store's own pages, groups and categories is then checked against
+ * them (`answerByAddress`), since their routes stream and cannot change
+ * the status once they find out. Then it gets its language from the URL:
+ * pages live under `app/[locale]`, Spanish is served without a prefix and
+ * English under `/en`. So an unprefixed path is rewritten to its Spanish
+ * route (the address bar keeps the short URL), `/en/...` passes through,
+ * and `/es/...` redirects to the unprefixed URL so each Spanish page has
+ * exactly one address. Everything else (who may use
  * the admin and the API) is decided per page and per procedure.
  *
  * What an admin sees of the closed store is the same server output the
@@ -139,6 +216,7 @@ function routeByLanguage(
  * cached pages never reach the public.
  */
 export async function proxy(request: NextRequest) {
+  const arrivedAt = Date.now();
   const { pathname } = request.nextUrl;
 
   if (pathname === "/api" || pathname.startsWith("/api/")) {
@@ -157,13 +235,21 @@ export async function proxy(request: NextRequest) {
   }
 
   // The admin's pages leave the notice as it was: they show none.
-  return isAdminPath(split.pathname)
-    ? routeByLanguage(request, split)
-    : withPreviewCookie(
-        request,
-        routeByLanguage(request, split),
-        decision.preview
-      );
+  if (isAdminPath(split.pathname)) {
+    return routeByLanguage(request, split);
+  }
+
+  // `/es/...` first leads to its one address, which is answered there.
+  const answered =
+    split.locale === DEFAULT_LOCALE
+      ? null
+      : await answerByAddress(request, split, arrivedAt);
+
+  return withPreviewCookie(
+    request,
+    answered ?? routeByLanguage(request, split),
+    decision.preview
+  );
 }
 
 /** The switch's temporary redirect, which no cache may keep. */

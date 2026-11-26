@@ -6,6 +6,7 @@ import { USER_ROLES } from "@/lib/schemas/access";
 import { db } from "@/server/db";
 import * as schema from "@/server/db/schema";
 
+import { refuseDisabledLogin } from "./disabled-login";
 import { betterAuthLogger } from "./logger";
 import { getTrustedOrigins } from "./trusted-origins";
 
@@ -34,17 +35,30 @@ export const auth = betterAuth({
   logger: betterAuthLogger,
   // Closed sign-up (FER-009): also out of Better Auth's own router and the
   // OpenAPI reference. The route answers 404 for every other spelling.
-  disabledPaths: ["/sign-up/email"],
+  // A login's password and email change only through the admin's own
+  // procedures (FER-015), which count wrong current passwords; Better Auth's
+  // native routes for them are out too.
+  disabledPaths: [
+    "/sign-up/email",
+    "/change-password",
+    "/set-password",
+    "/change-email",
+  ],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
   }),
   emailAndPassword: {
     enabled: true,
-    // Closed sign-up (FER-009): logins are created by a superadmin or a store
-    // member through `createAccount`, never by a visitor. The HTTP route is
+    // Closed sign-up (FER-009): logins are created on the server through
+    // `createAccount` (the first-run script, the seed, the users screen of
+    // FER-015), never by a visitor. The HTTP route is
     // also answered 404 (`src/app/api/auth/[...all]/route.ts`).
     disableSignUp: true,
+  },
+  databaseHooks: {
+    // A login an admin disabled cannot sign in (FER-015).
+    session: { create: { before: refuseDisabledLogin(db) } },
   },
   user: {
     additionalFields: {
@@ -64,11 +78,12 @@ export const auth = betterAuth({
     // `createORPCContext` forwards the renewed cookie, or the cache would only
     // cover the first minutes after sign-in.
     //
-    // The price is a stale-privilege window of `maxAge`: nothing invalidates
-    // this cookie when a session is revoked, or a user's role changes, from
-    // somewhere else, so those requests keep authorizing for up to 5 minutes.
-    // Reads that decide access on a page pass `disableCookieCache`
-    // (`./server.ts`). Shorten this if the window stops being acceptable.
+    // Nothing invalidates this cookie when a session is revoked from
+    // somewhere else, so the session it carries can outlive its row for up
+    // to 5 minutes. Access never rests on it alone: every admin procedure
+    // re-reads the login and checks the session's row in that same query
+    // (`findLogin`, FER-015), and reads that decide access on a page pass
+    // `disableCookieCache` (`./server.ts`).
     cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
   rateLimit: {

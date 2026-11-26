@@ -51,6 +51,8 @@ export interface CreatedRows {
   pending: Promise<void>[];
   /** Why a created row's id could not be read: that row leaks. */
   unreadable: string[];
+  /** Logins the users screen created (FER-015), by Better Auth's text id. */
+  userIds: string[];
 }
 
 export interface UserFixtures {
@@ -179,6 +181,7 @@ const CREATING = {
   "/api/orpc/category/create": "categoryIds",
   "/api/orpc/order/create": "orderTokens",
   "/api/orpc/product/create": "articleIds",
+  "/api/orpc/user/create": "userIds",
 } as const;
 
 function isCreating(pathname: string): pathname is keyof typeof CREATING {
@@ -206,6 +209,17 @@ async function recordCreated(
       return;
     }
 
+    if (target === "userIds") {
+      const id = readCreated(body, "id");
+
+      if (typeof id !== "string") {
+        throw new TypeError("no id in the answer");
+      }
+
+      rows.userIds.push(id);
+      return;
+    }
+
     const id = readCreated(body, "id");
 
     if (typeof id !== "number") {
@@ -221,7 +235,8 @@ async function recordCreated(
 
 /**
  * Records the rows any page of `context` creates through the UI (a category,
- * a filter or a value from the admin's forms, an order from the checkout)
+ * a filter or a value from the admin's forms, a login from the users screen,
+ * an order from the checkout)
  * from the responses that created them, so teardown deletes exactly those.
  * A request sent with `page.request` is not a page's and is not seen here:
  * the orders it places hold the test's own articles, which teardown follows.
@@ -291,6 +306,7 @@ export const test = base.extend<UserFixtures, WorkerFixtures>({
       orderTokens: [],
       pending: [],
       unreadable: [],
+      userIds: [],
     });
   },
 

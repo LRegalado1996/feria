@@ -6,9 +6,11 @@ import {
   catalogMetadata,
 } from "../../catalog-page";
 
-// Read before anything is sent, like every catalog page: an unknown address
-// is a real 404, and a category under a group it is not in a permanent
-// redirect to its page (docs/agents/nextjs.md § Store pages).
+// Read before anything is sent, like every catalog page. Its shell still
+// goes out first, so an unknown address's 404 and the 308 of a category
+// under a group it is not in come from the proxy (FER-069); the checks in
+// `catalog-page.tsx` stay for the seconds it can be behind
+// (docs/agents/nextjs.md § Store pages).
 export const instant = false;
 
 /** A category's page under its group: its title, texts and share card. */

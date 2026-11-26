@@ -26,6 +26,8 @@ export function isAdminSection(value: string): value is AdminSection {
 
 export const ADMIN_HOME = "/admin";
 export const ADMIN_SIGN_IN = "/admin/sign-in";
+/** Where a login chooses its own password (FER-015). */
+export const ADMIN_CHANGE_PASSWORD = "/admin/change-password";
 
 /** The section `/admin` opens on, as Lucas chose (FER-038). */
 export const ADMIN_LANDING_SECTION: AdminSection = "orders";
@@ -42,17 +44,51 @@ export function signInPath(returnTo: string, locale: Locale): string {
   return `${localizePath(ADMIN_SIGN_IN, locale)}?next=${encodeURIComponent(returnTo)}`;
 }
 
+/**
+ * The change-password page in `locale`, coming back to `returnTo`
+ * afterwards (FER-015).
+ */
+export function changePasswordPath(returnTo: string, locale: Locale): string {
+  return `${localizePath(ADMIN_CHANGE_PASSWORD, locale)}?next=${encodeURIComponent(returnTo)}`;
+}
+
+/** Whether `pathname` is `page` or under it. */
+function isPageOrUnder(pathname: string, page: string): boolean {
+  return pathname === page || pathname.startsWith(`${page}/`);
+}
+
 // Any origin works: it only tells a relative path from one that leaves.
 const PROBE_ORIGIN = "https://admin.invalid";
 
 /**
  * Where to go after signing in: the `next` the sign-in page was given, if it
- * is an admin page of this site, else the admin's landing in `locale`. `next`
- * comes from the URL, so it is attacker-controlled: an absolute or
+ * is an admin page of this site, else the admin's landing in `locale`.
+ * `next` comes from the URL, so it is attacker-controlled: an absolute or
  * protocol-relative URL (`//evil.example`), a backslash trick, a page
- * outside the admin or the sign-in page itself all fall back.
+ * outside the admin or the sign-in page itself all fall back. The
+ * change-password page is a fine place to come back to (FER-015).
  */
 export function safeReturnPath(next: unknown, locale: Locale): string {
+  return returnPathOutside(next, locale, [ADMIN_SIGN_IN]);
+}
+
+/**
+ * Where to go once the password is changed (FER-015): `safeReturnPath`'s
+ * rules, and never the change-password page again.
+ */
+export function afterPasswordChangePath(next: unknown, locale: Locale): string {
+  return returnPathOutside(next, locale, [
+    ADMIN_SIGN_IN,
+    ADMIN_CHANGE_PASSWORD,
+  ]);
+}
+
+/** `next` if it is an admin page of this site outside `excluded`. */
+function returnPathOutside(
+  next: unknown,
+  locale: Locale,
+  excluded: readonly string[]
+): string {
   const fallback = localizePath(ADMIN_HOME, locale);
 
   if (
@@ -71,14 +107,12 @@ export function safeReturnPath(next: unknown, locale: Locale): string {
 
   const url = new URL(next, PROBE_ORIGIN);
   const { pathname } = splitLocale(url.pathname);
-  const inAdmin =
-    pathname === ADMIN_HOME || pathname.startsWith(`${ADMIN_HOME}/`);
-  const isSignIn =
-    pathname === ADMIN_SIGN_IN || pathname.startsWith(`${ADMIN_SIGN_IN}/`);
+  const inAdmin = isPageOrUnder(pathname, ADMIN_HOME);
+  const isExcluded = excluded.some((page) => isPageOrUnder(pathname, page));
 
-  // In the sign-in page's language, like the fallback: a link cannot switch
-  // the admin's language by what it puts in `next`.
-  return url.origin === PROBE_ORIGIN && inAdmin && !isSignIn
+  // In the page's own language, like the fallback: a link cannot switch the
+  // admin's language by what it puts in `next`.
+  return url.origin === PROBE_ORIGIN && inAdmin && !isExcluded
     ? `${localizePath(pathname, locale)}${url.search}`
     : fallback;
 }

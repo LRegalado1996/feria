@@ -107,10 +107,6 @@ export const admin = {
       renamed: "Categoría renombrada.",
     },
   },
-  comingSoon: {
-    body: "Esta sección todavía se está construyendo. Va a aparecer acá en una próxima versión.",
-    title: "Próximamente",
-  },
   filters: {
     add: {
       pending: "Agregando…",
@@ -727,6 +723,38 @@ export const admin = {
     useAsHomeTitle: "¿Usar «{name}» como home?",
     view: "Ver en la tienda: {name}",
   },
+  password: {
+    back: "Volver al panel",
+    errors: {
+      save: "No pudimos guardar la contraseña. Probá de nuevo.",
+      tooMany:
+        "Demasiados intentos con una contraseña incorrecta. Probá de nuevo en {minutes} min.",
+      wrongCurrent: "La contraseña actual no es correcta.",
+      wrongTemporary: "La contraseña temporal no es correcta.",
+    },
+    fields: {
+      confirm: "Repetí la contraseña nueva",
+      current: "Contraseña actual",
+      new: "Contraseña nueva",
+      newHint: "Al menos 8 caracteres, distinta de la actual.",
+      temporary: "Contraseña temporal",
+    },
+    forcedSubtitle:
+      "Entraste con una contraseña temporal. Elegí la tuya para seguir.",
+    pending: "Guardando…",
+    signedInAs: "Sesión iniciada como {email}",
+    submit: "Guardar contraseña",
+    subtitle:
+      "Elegí una contraseña nueva. Las sesiones en otros dispositivos se cierran.",
+    title: "Cambiá tu contraseña",
+    validation: {
+      currentRequired: "Escribí la contraseña actual.",
+      mismatch: "Las dos contraseñas no coinciden.",
+      passwordTooLong: "Usá hasta 128 caracteres.",
+      passwordTooShort: "Usá al menos 8 caracteres.",
+      sameAsCurrent: "Tiene que ser distinta de la actual.",
+    },
+  },
   settings: {
     contact: "Contacto y redes",
     currencies: {
@@ -784,6 +812,7 @@ export const admin = {
     title: "Ajustes",
   },
   shell: {
+    changePassword: "Cambiar contraseña",
     closeMenu: "Cerrar el menú",
     menu: "Menú",
     navigation: "Secciones del panel",
@@ -803,5 +832,100 @@ export const admin = {
     products: "Artículos",
     settings: "Ajustes",
     users: "Usuarios",
+  },
+  users: {
+    actions: "Acciones de {name}",
+    add: "Nuevo usuario",
+    created: {
+      copied: "Datos copiados.",
+      copy: "Copiar los datos",
+      copyFailed:
+        "No pudimos copiar. Seleccioná el texto de arriba y copialo a mano.",
+      description:
+        "Pasale estos datos a {name}. Al entrar por primera vez va a elegir su propia contraseña.",
+      done: "Listo",
+      message: "Panel: {url}\nEmail: {email}\nContraseña temporal: {password}",
+      title: "Usuario creado",
+    },
+    createdOn: "Desde el {date}",
+    description:
+      "Las personas que entran a este panel. Todas pueden hacer todo, también administrar usuarios.",
+    disableNamed: "Deshabilitar: {name}",
+    disable: "Deshabilitar",
+    disableDialog: {
+      confirm: "Deshabilitar",
+      description:
+        "Se cierran sus sesiones y no va a poder entrar hasta que alguien lo habilite. No se borra nada.",
+      pending: "Deshabilitando…",
+      title: "¿Deshabilitar a {name}?",
+    },
+    disabledOn: "Deshabilitado el {date}",
+    enableNamed: "Habilitar: {name}",
+    enable: "Habilitar",
+    errors: {
+      create:
+        "No pudimos crear el usuario. Lo que escribiste sigue acá: probá de nuevo.",
+      disable: "No pudimos deshabilitar el usuario. Probá de nuevo.",
+      emailTaken: "Ya hay un usuario con ese email.",
+      enable: "No pudimos habilitar el usuario. Probá de nuevo.",
+      lastEnabled:
+        "Es el único usuario activo: la tienda se quedaría sin nadie que pueda entrar.",
+      load: "No pudimos cargar los usuarios.",
+      notFound: "Ese usuario ya no existe. Recargamos la lista.",
+      protected: "El superadmin no se puede cambiar desde otro usuario.",
+      ownDisabled: "No podés deshabilitar tu propio usuario.",
+      reset:
+        "No pudimos guardar la contraseña. Lo que escribiste sigue acá: probá de nuevo.",
+    },
+    form: {
+      cancel: "Cancelar",
+      close: "Cerrar",
+      createDescription:
+        "Elegí una contraseña temporal para pasársela. Al entrar por primera vez va a tener que elegir la suya.",
+      createTitle: "Nuevo usuario",
+      email: "Email",
+      name: "Nombre",
+      password: "Contraseña temporal",
+      passwordHint: "Al menos 8 caracteres.",
+      pending: "Creando…",
+      submit: "Crear usuario",
+    },
+    list: "Usuarios del panel",
+    protectedLogin:
+      "Es el superadmin: nadie más lo puede deshabilitar ni cambiarle la contraseña.",
+    ownLogin:
+      "Es tu usuario: no lo podés deshabilitar, y tu contraseña la cambiás desde «Cambiar contraseña».",
+    reset: {
+      description:
+        "Escribí una contraseña temporal nueva para {name}. Sus sesiones abiertas se cierran y, al entrar, va a elegir la suya.",
+      done: "Listo",
+      pending: "Guardando…",
+      resultDescription:
+        "Pasale estos datos a {name}. Al entrar va a elegir su propia contraseña.",
+      resultTitle: "Contraseña restablecida",
+      submit: "Guardar contraseña",
+      title: "Restablecer contraseña",
+    },
+    resetNamed: "Restablecer contraseña: {name}",
+    resetPassword: "Restablecer contraseña",
+    status: {
+      active: "Activo",
+      disabled: "Deshabilitado",
+      superadmin: "Superadmin",
+      temporary: "Contraseña temporal",
+    },
+    title: "Usuarios",
+    toasts: {
+      disabled: "{name} quedó deshabilitado.",
+      enabled: "{name} puede volver a entrar.",
+    },
+    validation: {
+      emailInvalid: "Escribí un email válido.",
+      nameRequired: "Escribí el nombre.",
+      nameTooLong: "Usá hasta 120 caracteres.",
+      passwordTooLong: "Usá hasta 128 caracteres.",
+      passwordTooShort: "Usá al menos 8 caracteres.",
+    },
+    you: "Vos",
   },
 };

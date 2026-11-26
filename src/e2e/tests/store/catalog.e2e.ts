@@ -238,6 +238,25 @@ test.describe("Catalog", () => {
     );
   });
 
+  test("a search holding U+0000 in its link lists that search without it, never an error", async ({
+    db,
+    page,
+  }) => {
+    const { tag } = await setup({ db });
+
+    await page.goto(`/productos?q=${encodeURIComponent(`${tag}\u0000`)}`);
+
+    await expectTitlesInAnyOrder(titles(page), [
+      "Collar dorado",
+      "Collar violeta",
+      "Pulsera dorada",
+      "Pulsera violeta",
+    ]);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      `«${tag}»`
+    );
+  });
+
   test("sorts from its menu of links, keeping the selection in the address", async ({
     db,
     page,

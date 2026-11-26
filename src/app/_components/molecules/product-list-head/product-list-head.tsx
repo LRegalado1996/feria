@@ -20,7 +20,11 @@ import type { StoreProductSort } from "@/lib/schemas/catalog";
 import { cn } from "@/lib/utils";
 
 export interface ProductListHeadProps {
-  /** The list's selection in the address, already read. */
+  /**
+   * The list's selection in the address, already read, in the order of the
+   * rows the header is over: the header names it and its links start from
+   * it.
+   */
   query: ProductsQuery;
 }
 

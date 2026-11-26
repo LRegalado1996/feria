@@ -45,6 +45,24 @@ describe("auth route", () => {
     }
   );
 
+  test.each([
+    ["POST", POST, "/api/auth/change-password"],
+    ["POST", POST, "/api/auth//Change%2Dpassword"],
+    ["POST", POST, "/api/auth/set-password"],
+    ["POST", POST, "/api/auth/change-email"],
+    ["GET", GET, "/api/auth/change-password"],
+  ])(
+    "%s %s answers 404 without reaching Better Auth: a password or an email changes only through the admin (FER-015)",
+    async (method, route, path) => {
+      const response = await route(
+        new Request(`http://localhost:3000${path}`, { method })
+      );
+
+      expect(response.status).toBe(404);
+      expect(handler).not.toHaveBeenCalled();
+    }
+  );
+
   test("a path that only starts with the same letters still reaches Better Auth", async () => {
     const request = new Request("http://localhost:3000/api/auth/sign-up-x", {
       method: "POST",

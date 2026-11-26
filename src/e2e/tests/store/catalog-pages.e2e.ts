@@ -277,7 +277,7 @@ test.describe("Catalog pages", () => {
     });
   }
 
-  test("a category in no group has its own page; a group's category asked without its group is sent to its page", async ({
+  test("a category in no group has its own page; a group's category asked without its group is sent to its page by the response itself", async ({
     db,
     page,
     request,
@@ -288,17 +288,31 @@ test.describe("Catalog pages", () => {
     await expect(titles(page)).toHaveText(["Burbujero cristal"]);
     await expect(trail(page)).toHaveText(["Home", `Burbujas ${tag}`]);
 
-    const moved = await request.get(`/${rings.slug}?sort=price_asc`, {
-      headers: { "User-Agent": BINGBOT },
-      maxRedirects: 0,
-    });
-    expect(moved.status()).toBe(308);
-    expect(moved.headers().location).toBe(`${ringsPath}?sort=price_asc`);
+    // Decided before the page starts (FER-069), so a browser and a crawler
+    // that runs no script are told the same: the redirect is the response,
+    // its query kept, and an address that names nothing is a real 404.
+    const asked: Record<string, string>[] = [{}, { "User-Agent": BINGBOT }];
 
-    const unknown = await request.get(`/bijou-${tag}/relojes-${tag}`, {
-      headers: { "User-Agent": BINGBOT },
-    });
-    expect(unknown.status()).toBe(404);
+    for (const headers of asked) {
+      const moved = await request.get(`/${rings.slug}?sort=price_asc`, {
+        headers,
+        maxRedirects: 0,
+      });
+      expect(moved.status()).toBe(308);
+      expect(moved.headers().location).toBe(`${ringsPath}?sort=price_asc`);
+
+      const unknown = await request.get(`/bijou-${tag}/relojes-${tag}`, {
+        headers,
+      });
+      expect(unknown.status()).toBe(404);
+    }
+
+    const browsed = await page.goto(`/${rings.slug}?sort=price_asc`);
+    expect(browsed?.status()).toBe(200);
+    await expect(page).toHaveURL(`${ringsPath}?sort=price_asc`);
+    expect(browsed?.request().redirectedFrom()?.url()).toMatch(
+      new RegExp(`/${rings.slug}\\?sort=price_asc$`, "u")
+    );
   });
 
   test("on a phone, the menu's group unfolds to its categories, folds on Escape, and each leads to its page", async ({

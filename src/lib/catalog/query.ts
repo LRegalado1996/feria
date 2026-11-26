@@ -14,6 +14,7 @@ import {
   RESERVED_ATTRIBUTE_SLUGS,
   SEARCH_MAX_LENGTH,
 } from "@/lib/schemas/catalog";
+import { readSearchText } from "@/lib/schemas/search";
 
 import { ALL_ARTICLES_PATH } from "./paths";
 
@@ -72,7 +73,7 @@ export function readCatalogQuery(
   raw: RawSearchParams,
   category: CatalogPlace | null
 ): CatalogQuery {
-  const q = single(raw.q)?.trim().slice(0, SEARCH_MAX_LENGTH) ?? "";
+  const q = readSearchText(single(raw.q), SEARCH_MAX_LENGTH);
   const sort = single(raw.sort);
   const reserved = new Set<string>(RESERVED_ATTRIBUTE_SLUGS);
   const filters = Object.entries(raw)
@@ -88,7 +89,7 @@ export function readCatalogQuery(
   return {
     category,
     filters,
-    q: q === "" ? null : q,
+    q,
     sort: PRODUCT_SORTS.find((known) => known === sort) ?? DEFAULT_PRODUCT_SORT,
   };
 }

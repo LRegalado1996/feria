@@ -1,5 +1,5 @@
 {
-  "id": "f3cfd16e-ceeb-42bd-88f8-c19574901e77",
+  "id": "08fe8719-763d-432a-bec3-93ce9617bfa2",
   "prevId": "88726867-1b4f-47f2-a97c-d373438c4763",
   "version": "7",
   "dialect": "postgresql",
@@ -2074,68 +2074,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.metric_rate_limit": {
-      "name": "metric_rate_limit",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "metric_rate_limit_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "bucket": {
-          "name": "bucket",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "hits": {
-          "name": "hits",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "metric_rate_limit_day_bucket_unique": {
-          "name": "metric_rate_limit_day_bucket_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "day",
-            "bucket"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "metric_rate_limit_hits": {
-          "name": "metric_rate_limit_hits",
-          "value": "\"metric_rate_limit\".\"hits\" >= 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.order_item": {
       "name": "order_item",
       "schema": "",
@@ -3623,123 +3561,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.product_view_daily": {
-      "name": "product_view_daily",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "product_view_daily_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "storeId": {
-          "name": "storeId",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "productId": {
-          "name": "productId",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "viewCount": {
-          "name": "viewCount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "product_view_daily_storeId_day_index": {
-          "name": "product_view_daily_storeId_day_index",
-          "columns": [
-            {
-              "expression": "storeId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "product_view_daily_storeId_store_id_fk": {
-          "name": "product_view_daily_storeId_store_id_fk",
-          "tableFrom": "product_view_daily",
-          "tableTo": "store",
-          "columnsFrom": [
-            "storeId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "product_view_daily_productId_product_id_fk": {
-          "name": "product_view_daily_productId_product_id_fk",
-          "tableFrom": "product_view_daily",
-          "tableTo": "product",
-          "columnsFrom": [
-            "productId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "product_view_daily_productId_day_unique": {
-          "name": "product_view_daily_productId_day_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "productId",
-            "day"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "product_view_daily_count": {
-          "name": "product_view_daily_count",
-          "value": "\"product_view_daily\".\"viewCount\" >= 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.ranking_entry": {
       "name": "ranking_entry",
       "schema": "",
@@ -4508,82 +4329,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.store_visit_daily": {
-      "name": "store_visit_daily",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "byDefault",
-            "name": "store_visit_daily_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "storeId": {
-          "name": "storeId",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "day": {
-          "name": "day",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "visitCount": {
-          "name": "visitCount",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "store_visit_daily_storeId_store_id_fk": {
-          "name": "store_visit_daily_storeId_store_id_fk",
-          "tableFrom": "store_visit_daily",
-          "tableTo": "store",
-          "columnsFrom": [
-            "storeId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "store_visit_daily_storeId_day_unique": {
-          "name": "store_visit_daily_storeId_day_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "storeId",
-            "day"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "store_visit_daily_count": {
-          "name": "store_visit_daily_count",
-          "value": "\"store_visit_daily\".\"visitCount\" >= 1"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.user": {
       "name": "user",
       "schema": "",
@@ -4626,6 +4371,19 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'member'"
+        },
+        "disabledAt": {
+          "name": "disabledAt",
+          "type": "timestamp (3) with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mustChangePassword": {
+          "name": "mustChangePassword",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "createdAt": {
           "name": "createdAt",
