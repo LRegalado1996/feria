@@ -2,7 +2,14 @@
 
 import { SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactNode, type Ref, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/app/_components/atoms/button";
@@ -54,6 +61,11 @@ export interface ProductFilterPanelProps {
    * failed): the address's own selection then stays as it is on "Aplicar".
    */
   attributes: readonly ListAttribute[] | undefined;
+  /**
+   * Whether the store's filters' read failed (`attributes` is then
+   * `undefined`): the panel says so with a retry instead of showing none.
+   */
+  attributesFailed: boolean;
   categories: readonly ListCategory[] | undefined;
   /**
    * Whether the categories' read failed (`categories` is then
@@ -61,6 +73,8 @@ export interface ProductFilterPanelProps {
    */
   categoriesFailed: boolean;
   className?: string;
+  /** Reads the store's filters again after a failure. */
+  onRetryAttributes: () => void;
   /** Reads the categories again after a failure. */
   onRetryCategories: () => void;
   /** The list's selection in the address, already read. */
@@ -137,6 +151,45 @@ function LimitNote({ children }: { children: string }) {
   );
 }
 
+/** A read that failed, said where its choices would be, with a retry. */
+function ReadFailed({
+  children,
+  onRetry,
+  testId,
+}: {
+  children: string;
+  onRetry: () => void;
+  testId: string;
+}) {
+  const { common } = useDictionary();
+  const messageId = useId();
+
+  return (
+    <div
+      className="grid justify-items-start gap-2"
+      data-testid={testId}
+      role="alert"
+    >
+      <p className="text-sm" id={messageId}>
+        {children}
+      </p>
+      {/* Described by its message: the categories' retry and the filters'
+          can both be on the sheet, with the same name. */}
+      <Button
+        aria-describedby={messageId}
+        onClick={() => {
+          onRetry();
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {common.tryAgain}
+      </Button>
+    </div>
+  );
+}
+
 /** `list` with `item` in it or out of it. */
 function toggled(list: readonly string[], item: string): string[] {
   return list.includes(item)
@@ -147,16 +200,20 @@ function toggled(list: readonly string[], item: string): string[] {
 /** The open panel: its fields from the address, its count, its actions. */
 function PanelForm({
   attributes,
+  attributesFailed,
   categories,
   categoriesFailed,
   onApplied,
+  onRetryAttributes,
   onRetryCategories,
   query,
 }: Pick<
   ProductFilterPanelProps,
   | "attributes"
+  | "attributesFailed"
   | "categories"
   | "categoriesFailed"
+  | "onRetryAttributes"
   | "onRetryCategories"
   | "query"
 > & {
@@ -322,19 +379,12 @@ function PanelForm({
 
               if (categoriesFailed) {
                 unlisted = (
-                  <div className="grid justify-items-start gap-2" role="alert">
-                    <p className="text-sm">{copy.filters.categoriesFailed}</p>
-                    <Button
-                      onClick={() => {
-                        onRetryCategories();
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {common.tryAgain}
-                    </Button>
-                  </div>
+                  <ReadFailed
+                    onRetry={onRetryCategories}
+                    testId="filter-categories-failed"
+                  >
+                    {copy.filters.categoriesFailed}
+                  </ReadFailed>
                 );
               } else if (categories === undefined) {
                 unlisted = (
@@ -436,6 +486,17 @@ function PanelForm({
             control={form.control}
             name="values"
             render={({ field }) => {
+              if (attributesFailed) {
+                return (
+                  <ReadFailed
+                    onRetry={onRetryAttributes}
+                    testId="filter-attributes-failed"
+                  >
+                    {copy.filters.attributesFailed}
+                  </ReadFailed>
+                );
+              }
+
               const listed = (attributes ?? []).filter(
                 (attribute) => attribute.values.length > 0
               );
@@ -578,9 +639,11 @@ function PanelForm({
 function ProductFilterPanel({
   activeCount,
   attributes,
+  attributesFailed,
   categories,
   categoriesFailed,
   className,
+  onRetryAttributes,
   onRetryCategories,
   query,
   ref,
@@ -631,11 +694,13 @@ function ProductFilterPanel({
         </SheetHeader>
         <PanelForm
           attributes={attributes}
+          attributesFailed={attributesFailed}
           categories={categories}
           categoriesFailed={categoriesFailed}
           onApplied={() => {
             setOpen(false);
           }}
+          onRetryAttributes={onRetryAttributes}
           onRetryCategories={onRetryCategories}
           query={query}
         />

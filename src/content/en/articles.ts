@@ -62,6 +62,7 @@ export const articles: Dictionary["articles"] = {
       button: "Filters",
       buttonActive: "Filters, {count} active",
       buttonActiveOne: "Filters, 1 active",
+      attributesFailed: "We couldn't load the store's filters.",
       categoriesFailed: "We couldn't load the categories.",
       category: "Category",
       clear: "Clear",

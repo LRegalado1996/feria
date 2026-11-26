@@ -6,6 +6,7 @@ import {
   ORDER_STATUSES,
   type OrderStatus,
 } from "@/lib/schemas/order";
+import { readSearchText } from "@/lib/schemas/search";
 
 /** What the orders screen shows: one status or all, and a search. */
 export interface OrdersQuery {
@@ -26,15 +27,17 @@ function isOrderStatus(value: string): value is OrderStatus {
 /**
  * The orders screen's selection from its query string, which anyone can
  * edit: an unknown status is all of them, a blank search is none, and a
- * search longer than the API takes is cut to what it takes.
+ * search longer than the API takes is cut to what it takes, without the
+ * U+0000 it refuses (`readSearchText`).
  */
 export function readOrdersQuery(
   searchParams: Record<string, SearchParamValue>
 ): OrdersQuery {
   const status = firstValue(searchParams.status);
-  const q = firstValue(searchParams.q)
-    ?.trim()
-    .slice(0, ORDER_SEARCH_MAX_LENGTH);
+  const q = readSearchText(
+    firstValue(searchParams.q) ?? null,
+    ORDER_SEARCH_MAX_LENGTH
+  );
 
   return {
     ...(q ? { q } : {}),

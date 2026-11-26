@@ -176,6 +176,8 @@ describe("readProductsQuery", () => {
   test.each([
     ["   ", null],
     [`${"a".repeat(SEARCH_MAX_LENGTH)}b`, "a".repeat(SEARCH_MAX_LENGTH)],
+    ["co\u0000llar", "collar"],
+    ["\u0000", null],
   ])("reads the search %j as %j", (q, expected) => {
     expect(readProductsQuery({ q }).q).toBe(expected);
   });

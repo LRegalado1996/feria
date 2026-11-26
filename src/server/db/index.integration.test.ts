@@ -39,9 +39,10 @@ describe("database client", () => {
       await tx.execute(sql`select 1`);
     });
 
-    // The next statement is refused, and so is the rollback Drizzle then
-    // tries on the dead connection, which is the failure the caller gets.
-    await expect(held).rejects.toThrow("Failed query: rollback");
+    // The next statement is refused, and that is the failure the caller
+    // gets: the patched transaction (FER-057) tries no rollback on a
+    // connection it heard die, so the rollback's own failure hides nothing.
+    await expect(held).rejects.toThrow("Failed query: select 1");
     expect(warnings(warn)).toEqual([
       {
         action: "Db.client_error",

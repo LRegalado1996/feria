@@ -145,10 +145,19 @@ function makeItem(id: number, overrides: Partial<ListedItem> = {}): ListedItem {
   };
 }
 
+/** The order a page is in when nothing names one: newest change first. */
+const DEFAULT_ORDER: Pick<ProductsPage, "dir" | "sort"> = {
+  dir: "desc",
+  sort: "updated",
+};
+
 function makePage(
   items: ListedItem[],
   overrides: Partial<
-    Pick<ProductsPage, "page" | "pageCount" | "total" | "totalCapped">
+    Pick<
+      ProductsPage,
+      "dir" | "page" | "pageCount" | "sort" | "total" | "totalCapped"
+    >
   > = {}
 ) {
   return {
@@ -157,6 +166,7 @@ function makePage(
     limit: 24,
     page: 1,
     pageCount: 1,
+    ...DEFAULT_ORDER,
     total: items.length,
     totalCapped: false,
     ...overrides,
@@ -222,7 +232,8 @@ afterEach(() => {
  */
 function setup({
   answer = () => makePage([makeItem(9), makeItem(8)]),
-  listsFail = false,
+  attributesFail = false,
+  categoriesFail = false,
   locale = "en",
   query = makeQuery(),
   refuses = false,
@@ -230,8 +241,10 @@ function setup({
   answer?: (
     input: unknown
   ) => ReturnType<typeof makePage> | Promise<ReturnType<typeof makePage>>;
-  /** Whether the store's categories and filters fail to load. */
-  listsFail?: boolean;
+  /** Whether the store's filters fail to load. */
+  attributesFail?: boolean;
+  /** Whether the store's categories fail to load. */
+  categoriesFail?: boolean;
   locale?: Locale;
   query?: ProductsQuery;
   refuses?: boolean;
@@ -243,10 +256,10 @@ function setup({
     refuses
       ? createOrpcErrorHandler("product.list", REFUSAL)
       : createOrpcHandler("product.list", list),
-    listsFail
+    categoriesFail
       ? createOrpcErrorHandler("category.list", REFUSAL)
       : createOrpcHandler("category.list", () => CATEGORIES),
-    listsFail
+    attributesFail
       ? createOrpcErrorHandler("attribute.list", REFUSAL)
       : createOrpcHandler("attribute.list", () => ATTRIBUTES)
   );
@@ -312,8 +325,9 @@ describe("ProductList", () => {
       q: "aro",
       sort: "title",
     });
+    // Whole: "12 hours ago" holds "2 hours ago" too.
     expect(screen.getByTestId("product-row-updated")).toHaveTextContent(
-      "2 hours ago"
+      /^2 hours ago$/u
     );
     expect(screen.getByTestId("product-list-table")).toHaveAccessibleName(
       "Store articles"
@@ -491,7 +505,8 @@ describe("ProductList", () => {
 
   test("with the store's categories and filters unread, applying the filters keeps the address's own", async () => {
     const { push, user } = setup({
-      listsFail: true,
+      attributesFail: true,
+      categoriesFail: true,
       query: makeQuery({
         categories: ["anillos"],
         filters: [{ attribute: "color", values: ["dorado"] }],
@@ -669,6 +684,53 @@ describe("ProductList", () => {
     expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
   });
 
+  test.each([
+    ["stays on its way", async () => await new Promise<never>(HANG)],
+    [
+      "fails",
+      () => {
+        throw new Error("refused");
+      },
+    ],
+  ])(
+    "a step of the pages replaced by a selection whose answer %s is dropped at once: its page reached later takes no focus",
+    async (_case, replaced) => {
+      const { list, navigate, user } = setup({
+        answer: async (input) => {
+          const asked =
+            typeof input === "object" && input !== null ? input : {};
+
+          if ("sort" in asked) {
+            return await replaced();
+          }
+
+          return "page" in asked
+            ? makePage([makeItem(30)], { page: 2, pageCount: 2, total: 25 })
+            : makePage([makeItem(9)], { pageCount: 2, total: 25 });
+        },
+      });
+      await screen.findByTestId("product-row-9");
+
+      // Page 2 is followed, but another order takes over before it shows,
+      // and that order's page never settles.
+      await user.click(screen.getByRole("link", { name: "Page 2" }));
+      navigate(makeQuery({ sort: "price" }));
+      await waitFor(() => {
+        expect(list).toHaveBeenLastCalledWith({
+          dir: "desc",
+          locale: "en",
+          sort: "price",
+        });
+      });
+
+      // Back on page 2 another way (back, a bookmark).
+      navigate(makeQuery({ page: 2 }));
+
+      expect(await screen.findByTestId("product-row-30")).toBeVisible();
+      expect(screen.getByTestId("product-list-table")).not.toHaveFocus();
+    }
+  );
+
   test("a step of the pages leaves focus where the person moved it while the page came", async () => {
     const { navigate, user } = setup({
       answer: (input) =>
@@ -769,7 +831,7 @@ describe("ProductList", () => {
   );
 
   test("says the categories failed in the filters, and reads them again on retry", async () => {
-    const { healLists, user } = setup({ listsFail: true });
+    const { healLists, user } = setup({ categoriesFail: true });
     await screen.findByTestId("product-row-9");
 
     await user.click(screen.getByTestId("product-filters-button"));
@@ -786,6 +848,82 @@ describe("ProductList", () => {
       await within(sheet).findByRole("checkbox", { name: /Rings/u })
     ).toBeVisible();
     expect(within(sheet).queryByRole("alert")).toBeNull();
+  });
+
+  test("says the store's filters failed in the filters, and reads them again on retry", async () => {
+    const { healLists, user } = setup({ attributesFail: true });
+    await screen.findByTestId("product-row-9");
+
+    await user.click(screen.getByTestId("product-filters-button"));
+    const sheet = screen.getByTestId("product-filters-sheet");
+    const failed = await within(sheet).findByTestId("filter-attributes-failed");
+    expect(failed).toHaveTextContent("We couldn't load the store's filters.");
+    healLists();
+    await user.click(within(failed).getByRole("button", { name: "Try again" }));
+
+    expect(
+      await within(sheet).findByRole("checkbox", { name: "Gold" })
+    ).toBeVisible();
+    expect(within(sheet).queryByRole("alert")).toBeNull();
+  });
+
+  test("while another order's page loads, the header keeps naming the order of the rows on screen", async () => {
+    const { navigate } = setup({
+      answer: async (input) => {
+        if (typeof input === "object" && input !== null && "sort" in input) {
+          return await new Promise<ReturnType<typeof makePage>>(HANG);
+        }
+
+        return makePage([makeItem(9)]);
+      },
+    });
+    await screen.findByTestId("product-row-9");
+    const sorting = () =>
+      within(screen.getByTestId("product-list-columns"))
+        .getAllByRole("columnheader")
+        .filter((header) => header.getAttribute("aria-sort") !== "none")
+        .map((header) => [
+          header.textContent,
+          header.getAttribute("aria-sort"),
+        ]);
+
+    navigate(makeQuery({ dir: "asc", sort: "price" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("product-list-table")).toHaveAttribute(
+        "aria-busy",
+        "true"
+      );
+    });
+    expect(sorting()).toEqual([
+      ["Photo", null],
+      ["Updated", "descending"],
+      ["Actions", null],
+    ]);
+    // Its links act on the order shown, with the rest of the new address.
+    expect(screen.getByTestId("sort-updated")).toHaveAttribute(
+      "href",
+      "/en/admin/products?dir=asc"
+    );
+  });
+
+  test("the header names the new order once its page arrives", async () => {
+    const { navigate } = setup({
+      answer: (input) =>
+        typeof input === "object" && input !== null && "sort" in input
+          ? makePage([makeItem(12)], { dir: "asc", sort: "price" })
+          : makePage([makeItem(9)]),
+    });
+    await screen.findByTestId("product-row-9");
+
+    navigate(makeQuery({ dir: "asc", sort: "price" }));
+
+    expect(await screen.findByTestId("product-row-12")).toBeVisible();
+    expect(
+      within(screen.getByTestId("product-list-columns"))
+        .getAllByRole("columnheader")
+        .map((header) => header.getAttribute("aria-sort"))
+    ).toEqual([null, "none", "none", "ascending", "none", "none", null]);
   });
 
   test("speaks Spanish", async () => {
