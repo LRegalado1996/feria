@@ -16,13 +16,14 @@ import { StorePage } from "../../page-objects/store.page";
 // FER-029. Each test counts views of an article of its own, read from its
 // rows of `product_view_daily` (deleted with the article). The store's
 // visits are shared by every worker, so they are checked by the requests a
-// browser sends, never by the store's count.
+// browser sends, never by the store's count. That a bot or an admin counts
+// nothing is the router's tests' (`metrics.test.ts`): a write happens after
+// its answer, and nothing a browser sees says it is done, so here an
+// absent count could not be told from a late one.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 const COUNT_VIEW = "/api/orpc/metrics/countView";
 const COUNT_VISIT = "/api/orpc/metrics/countVisit";
-const BINGBOT =
-  "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)";
 
 /** A published article in a category of the test's own. */
 async function setup({ db }: { db: DbFixture["db"] }) {
@@ -86,15 +87,10 @@ async function openArticle(page: Page, slug: string) {
 }
 
 /** A shopper's browser of its own: another browser session. */
-async function newShopper(
-  browser: Browser,
-  baseURL: string | undefined,
-  options: { userAgent?: string } = {}
-) {
+async function newShopper(browser: Browser, baseURL: string | undefined) {
   const context = await browser.newContext({
     baseURL: requireBaseURL(baseURL),
     ignoreHTTPSErrors: IGNORE_HTTPS_ERRORS,
-    ...options,
   });
 
   return { context, page: await context.newPage() };
@@ -110,14 +106,18 @@ test.describe("View tracking", () => {
     const { article, views } = await setup({ db });
     const sent = recordCounts(page);
 
-    await completeRpcAction(
-      page,
-      COUNT_VIEW,
-      async () => {
-        await openArticle(page, article.slug);
-      },
-      { input: { productId: article.id } }
-    );
+    // Both counts of the first load answered, so their marks are kept
+    // before the page is loaded again.
+    await completeRpcAction(page, COUNT_VISIT, async () => {
+      await completeRpcAction(
+        page,
+        COUNT_VIEW,
+        async () => {
+          await openArticle(page, article.slug);
+        },
+        { input: { productId: article.id } }
+      );
+    });
     await expect.poll(views).toBe(1);
 
     for (let load = 2; load <= 10; load += 1) {
@@ -144,43 +144,5 @@ test.describe("View tracking", () => {
     } finally {
       await other.context.close();
     }
-  });
-
-  test("a known bot and a signed-in admin count nothing; a shopper after them counts one", async ({
-    authenticatedPage,
-    baseURL,
-    browser,
-    db,
-    page,
-  }) => {
-    const { article, views } = await setup({ db });
-    const bot = await newShopper(browser, baseURL, { userAgent: BINGBOT });
-
-    try {
-      // Each one's browser asks; the server leaves the count alone.
-      for (const visitor of [bot.page, authenticatedPage]) {
-        await completeRpcAction(
-          visitor,
-          COUNT_VIEW,
-          async () => {
-            await openArticle(visitor, article.slug);
-          },
-          { input: { productId: article.id } }
-        );
-      }
-    } finally {
-      await bot.context.close();
-    }
-
-    await completeRpcAction(
-      page,
-      COUNT_VIEW,
-      async () => {
-        await openArticle(page, article.slug);
-      },
-      { input: { productId: article.id } }
-    );
-
-    await expect.poll(views).toBe(1);
   });
 });
