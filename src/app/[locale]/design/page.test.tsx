@@ -513,7 +513,12 @@ describe("DesignPage", () => {
       ).getByRole("button", { name: "Bijouterie" })
     ).toHaveAttribute("aria-expanded", "false");
     // Its skip link leads to the gallery's own content.
-    expect(page).toHaveAttribute("id", "store-main");
+    expect(page.id).not.toBe("");
+    expect(
+      within(shell.getByTestId("store-header")).getByRole("link", {
+        name: "Saltar al contenido",
+      })
+    ).toHaveAttribute("href", `#${page.id}`);
     expect(page).toHaveAttribute("tabindex", "-1");
     expect(
       within(shell.getByTestId("store-footer"))

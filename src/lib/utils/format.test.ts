@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   APP_TIME_ZONE,
@@ -113,6 +113,45 @@ describe("formatPrice", () => {
     (amount, currency, spanish, english) => {
       expect(formatPrice(amount, currency, "es")).toBe(spanish);
       expect(formatPrice(amount, currency, "en")).toBe(english);
+    }
+  );
+});
+
+describe("a runtime without the peso's symbol", () => {
+  // Chrome for Android: its ICU keeps the symbols of the largest economies'
+  // currencies only, so asked for a symbol it writes the code instead.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function setup() {
+    // Read before the spy takes its place.
+    const NumberFormat = Intl.NumberFormat;
+    vi.spyOn(Intl, "NumberFormat").mockImplementation(
+      class WithoutSymbols extends NumberFormat {
+        constructor(
+          tag?: Intl.LocalesArgument,
+          options?: Intl.NumberFormatOptions
+        ) {
+          super(tag, { ...options, currencyDisplay: "code" });
+        }
+      }
+    );
+    vi.resetModules();
+
+    return await import("./format");
+  }
+
+  test.each([
+    ["UYU", `$${NBSP}1.290`, "$"],
+    ["USD", `US$${NBSP}1.290`, "US$"],
+  ] as const)(
+    "still writes %s in Spanish as %j, with the sign %j",
+    async (currency, price, sign) => {
+      const format = await setup();
+
+      expect(format.formatPrice(129_000, currency, "es")).toBe(price);
+      expect(format.formatCurrencySign(currency, "es")).toBe(sign);
     }
   );
 });

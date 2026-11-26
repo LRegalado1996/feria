@@ -75,7 +75,7 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 | [FER-055](FER-055-photo-grid-swipe.md)                 | Swiping over the wizard's photos scrolls                     | P2       | todo   |
 | [FER-056](FER-056-list-search-and-filters-race.md)     | A pending search and "Aplicar" can lose each other           | P2       | todo   |
 | [FER-057](FER-057-article-list-review-follow-ups.md)   | Follow-ups from the article list's last review               | P1       | done   |
-| [FER-064](FER-064-admin-main-landmark-once.md)         | The admin has one main landmark after navigating             | P1       | todo   |
+| [FER-064](FER-064-admin-main-landmark-once.md)         | The admin has one main landmark after navigating             | P1       | done   |
 | [FER-065](FER-065-place-blocks-by-section-key.md)      | A block's place between rows follows the row, not a number   | P2       | todo   |
 | [FER-066](FER-066-page-sequence-limit.md)              | One limit on a page's blocks, on every path that adds one    | P2       | todo   |
 | [FER-067](FER-067-banner-photo-cleanup-race.md)        | A banner photo is never deleted while a save starts using it | P2       | todo   |
@@ -128,12 +128,13 @@ One markdown file per ticket, key `FER`. Read [the project overview](../project/
 
 ### M6 Launch
 
-| ID                                                | Title                                                 | Priority | Status |
-| ------------------------------------------------- | ----------------------------------------------------- | -------- | ------ |
-| [FER-031](FER-031-launch-content.md)              | Launch content for the fair                           | P0       | todo   |
-| [FER-032](FER-032-domain-and-launch-checklist.md) | Custom domain and launch checklist                    | P0       | done   |
-| [FER-082](FER-082-indexnow-on-publish.md)         | Tell Bing at once when the catalog changes (IndexNow) | P2       | todo   |
-| [FER-083](FER-083-production-errors-in-sentry.md) | The production errors Sentry holds                    | P1       | todo   |
+| ID                                                          | Title                                                 | Priority | Status |
+| ----------------------------------------------------------- | ----------------------------------------------------- | -------- | ------ |
+| [FER-031](FER-031-launch-content.md)                        | Launch content for the fair                           | P0       | todo   |
+| [FER-032](FER-032-domain-and-launch-checklist.md)           | Custom domain and launch checklist                    | P0       | done   |
+| [FER-082](FER-082-indexnow-on-publish.md)                   | Tell Bing at once when the catalog changes (IndexNow) | P2       | todo   |
+| [FER-083](FER-083-production-errors-in-sentry.md)           | The production errors Sentry holds                    | P1       | done   |
+| [FER-087](FER-087-article-share-card-without-a-redirect.md) | An article's share card answers without a redirect    | P2       | todo   |
 
 ## Dependency sketch
 

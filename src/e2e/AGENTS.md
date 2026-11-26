@@ -33,10 +33,11 @@ Visible is not ready. A server-rendered control shows before React owns it, and 
 - **A form React must own before you type:** wait for the control only React enables (the auth form's submit button, `AdminSignInPage.waitForForm()`), or fill inside `toPass` until it is.
 - **An absent result** is meaningful only after the operation that would have produced it completed and rendered.
 
-## Three interaction races this suite is built around
+## Four interaction races this suite is built around
 
 - **Landed before ready.** The first interaction after a navigation hits a visible, not yet hydrated control and is silently lost; the test then waits out its whole timeout. Guard it as above.
 - **Closed is not removed.** A dismissed dialog's overlay animates out separately and, while transparent, still intercepts clicks; its close autofocus fires late and steals focus. After closing the last dialog, `expectDialogRemoved(page, dialog)` (`fixtures/expect-dialog-removed.ts`) waits for the content and the `dialog-overlay` to be gone before the next interaction.
+- **Followed is not in place.** A link whose own handler never ran (its panel closed under it first) still reaches its address, by loading the whole document again, and drops what the app keeps mounted. A spec that follows a link out of a panel wraps the click and the wait for the next page in `expectInPlace(page, action)` (`fixtures/expect-in-place.ts`), which fails on any request that loaded a document into the tab.
 - **Controlled inputs drop fast keystrokes.** A character typed while React commits the previous one is lost: `type("15")` can yield `"1"`. `fill()` the whole value, or press one key at a time with an assertion between.
 
 ## Diagnosing a failure: find the mechanism, never re-roll

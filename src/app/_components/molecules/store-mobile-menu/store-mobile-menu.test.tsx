@@ -1,20 +1,30 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { StoreNavGroup } from "@/app/_components/molecules/store-nav-group";
+import { browserClick } from "@/test/browser-click";
 
 import { StoreMobileMenu } from "./store-mobile-menu";
 
 function setup() {
   const user = userEvent.setup();
+  // What a link's own handler saw: next/link's starts the navigation there.
+  const followed = vi.fn<(href: string | null) => void>();
   render(
     <StoreMobileMenu
       className="custom"
       closeLabel="Close the menu"
       label="Menu"
     >
-      <a href="#catalog">Catalog</a>
+      <a
+        href="#catalog"
+        onClick={(event) => {
+          followed(event.currentTarget.getAttribute("href"));
+        }}
+      >
+        Catalog
+      </a>
       <p>Pick a section</p>
       <a href="#home">
         <span>Home</span>
@@ -46,6 +56,7 @@ function setup() {
   const panel = () => screen.queryByTestId("store-mobile-menu");
 
   return {
+    followed,
     open: async () => {
       await user.click(trigger());
       return within(screen.getByRole("dialog", { name: "Menu" }));
@@ -157,6 +168,29 @@ describe("StoreMobileMenu", () => {
     await waitFor(() => {
       expect(panel()).toBeNull();
     });
+  });
+
+  test("closes only after the followed link's own handler has run, so it navigates in place", async () => {
+    const { followed, open, panel, user } = setup();
+    const dialog = await open();
+
+    await browserClick(user, dialog.getByRole("link", { name: "Catalog" }));
+
+    expect(followed).toHaveBeenCalledExactlyOnceWith("#catalog");
+    await waitFor(() => {
+      expect(panel()).toBeNull();
+    });
+  });
+
+  test("stays open for a link opened in another tab", async () => {
+    const { open, panel, user } = setup();
+    const dialog = await open();
+
+    await user.keyboard("{Control>}");
+    await user.click(dialog.getByRole("link", { name: "Catalog" }));
+    await user.keyboard("{/Control}");
+
+    expect(panel()).toBeVisible();
   });
 
   test("stays open when something that is not a link is clicked", async () => {

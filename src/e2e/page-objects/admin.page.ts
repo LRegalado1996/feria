@@ -19,6 +19,24 @@ export class AdminPage extends BasePage {
     return this.getByTestId("admin-shell").filter({ visible: true }).first();
   }
 
+  /**
+   * The screen's main landmark, as assistive technology finds it: the
+   * screens Next keeps mounted after a navigation are hidden, and out of it.
+   */
+  main(): Locator {
+    return this.page.getByRole("main");
+  }
+
+  /** Every main landmark in the document, the hidden kept screens' too. */
+  everyMain(): Locator {
+    return this.page.getByRole("main", { includeHidden: true });
+  }
+
+  /** The skip link of the screen on show, "Saltar al contenido". */
+  skipLink(): Locator {
+    return this.page.getByRole("link", { name: "Saltar al contenido" });
+  }
+
   heading(): Locator {
     return this.page
       .getByRole("heading", { level: 1 })

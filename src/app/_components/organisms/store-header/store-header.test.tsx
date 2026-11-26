@@ -2,13 +2,16 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
+import {
+  StoreSkipScope,
+  StoreSkipTarget,
+} from "@/app/_components/atoms/store-skip-link";
 import type { Locale } from "@/lib/i18n/config";
 import { DICTIONARIES, renderWithI18n } from "@/test/i18n";
 import { required } from "@/test/required";
 
 import {
   BAR_CATEGORIES_MAX,
-  STORE_MAIN_ID,
   StoreHeader,
   type StoreHeaderCategory,
 } from "./store-header";
@@ -65,15 +68,19 @@ async function setup({
   // Resolved inside act, as a stream would deliver them.
   await act(async () => {
     renderWithI18n(
-      <StoreHeader
-        categories={
-          categories && streamed ? Promise.resolve(categories) : categories
-        }
-        className="custom"
-        copy={DICTIONARIES[locale].storefront.shell}
-        currentPath={currentPath}
-        locale={locale}
-      />,
+      // Inside a skip scope, as the store's frame renders it.
+      <StoreSkipScope>
+        <StoreHeader
+          categories={
+            categories && streamed ? Promise.resolve(categories) : categories
+          }
+          className="custom"
+          copy={DICTIONARIES[locale].storefront.shell}
+          currentPath={currentPath}
+          locale={locale}
+        />
+        <StoreSkipTarget data-testid="content" />
+      </StoreSkipScope>,
       { locale }
     );
     await Promise.resolve();
@@ -130,10 +137,12 @@ describe("StoreHeader", () => {
   test("starts with a skip link to the page's main content", async () => {
     const { header } = await setup();
 
-    expect(STORE_MAIN_ID).toBe("store-main");
     const skip = within(header).getAllByRole("link")[0];
     expect(skip).toHaveAccessibleName("Skip to content");
-    expect(skip).toHaveAttribute("href", "#store-main");
+    // The scope's own content (FER-064).
+    const { id } = screen.getByTestId("content");
+    expect(id).not.toBe("");
+    expect(skip).toHaveAttribute("href", `#${id}`);
   });
 
   test("is dark, sticky, and takes a className", async () => {

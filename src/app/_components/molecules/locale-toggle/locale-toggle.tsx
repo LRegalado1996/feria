@@ -155,9 +155,15 @@ function LocaleLink({
       // pronounces it in that language.
       lang={target}
       onClick={(event) => {
-        if (reducedMotion || opensElsewhere(event)) {
-          // Left to the link: no slide to wait for, or a new tab or window
-          // the browser opens, while this page stays as it is.
+        if (
+          reducedMotion ||
+          opensElsewhere(event) ||
+          event.currentTarget.closest('[role="dialog"]')
+        ) {
+          // Left to the link: no slide to wait for, a new tab or window the
+          // browser opens while this page stays as it is, or a panel (a
+          // phone's menu) that closes as a link in it is followed, so the
+          // slide would never be seen (FER-064).
           return;
         }
 

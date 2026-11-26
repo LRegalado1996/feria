@@ -10,6 +10,7 @@ import {
 } from "../../fixtures";
 import { clickUntilVisible } from "../../fixtures/click-until-visible";
 import { expectDialogRemoved } from "../../fixtures/expect-dialog-removed";
+import { expectInPlace } from "../../fixtures/expect-in-place";
 import { StorePage } from "../../page-objects/store.page";
 
 /**
@@ -264,10 +265,14 @@ test.describe("Storefront shell", () => {
         panel.y + panel.height - (pill.y + pill.height)
       ).toBeLessThanOrEqual(24);
 
-      await home.click();
+      // In place: the menu closes only once the link has started its
+      // navigation (FER-064).
+      await expectInPlace(page, async () => {
+        await home.click();
 
-      await expect(page).toHaveURL("/");
-      await storePage.waitForLoad();
+        await expect(page).toHaveURL("/");
+        await storePage.waitForLoad();
+      });
       await expectDialogRemoved(page, menu);
     });
 

@@ -21,9 +21,6 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { localizePath } from "@/lib/i18n/paths";
 import { cn } from "@/lib/utils";
 
-/** Where the page's main content starts, for the skip link. */
-export const STORE_MAIN_ID = "store-main";
-
 /** A category as the header links to it: its group and its page. */
 export type StoreHeaderCategory = NavigationCategory;
 
@@ -184,7 +181,9 @@ function StoreHeader({
       data-slot="store-header"
       data-testid="store-header"
     >
-      <StoreSkipLink target={STORE_MAIN_ID}>{copy.skipToContent}</StoreSkipLink>
+      {/* To its page's content: the header renders inside a skip scope
+          (`organisms/store-frame`). */}
+      <StoreSkipLink>{copy.skipToContent}</StoreSkipLink>
       <div className="grid h-15.5 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1 px-1.5 xl:h-19 xl:gap-4 xl:px-7">
         <div className="flex min-w-0 items-center">
           <StoreMobileMenu
