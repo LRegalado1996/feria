@@ -49,11 +49,31 @@ export type AddressAnswer =
   | { kind: "unknown" }
   | { keepQuery: boolean; kind: "redirect"; path: string; status: 307 | 308 };
 
-/** `/a/b` → `["a", "b"]`; `null` with an empty segment (`/`, `//a`, `/a//b`). */
+/** A percent-escaped ASCII character (`%62` is `b`). */
+const ASCII_ESCAPE = /%([0-7][\da-f])/giu;
+
+/**
+ * A segment as its route reads it, `%62ijouterie` as `bijouterie`. A slug
+ * is ASCII letters, digits and hyphens only, so only ASCII escapes can
+ * spell one; any other escape stays as written and matches no slug, as the
+ * route finds no page for it either. Nothing here can throw.
+ */
+function decoded(segment: string): string {
+  return segment.replaceAll(ASCII_ESCAPE, (_escape, hex: string) =>
+    String.fromCodePoint(Number.parseInt(hex, 16))
+  );
+}
+
+/**
+ * `/a/b` → `["a", "b"]`, each segment decoded as above; `null` with an
+ * empty segment (`/`, `//a`, `/a//b`).
+ */
 function segmentsOf(pathname: string): [string, ...string[]] | null {
   const [first, ...rest] = pathname.slice(1).split("/");
 
-  return first && !rest.includes("") ? [first, ...rest] : null;
+  return first && !rest.includes("")
+    ? [decoded(first), ...rest.map(decoded)]
+    : null;
 }
 
 function ownRoute(segments: readonly string[]): boolean {
@@ -113,9 +133,11 @@ export function answerAddress(
   }
 
   const [first, second] = segments;
+  // The address as the route reads it, escapes decoded.
+  const asked = `/${segments.join("/")}`;
 
   if (second !== undefined) {
-    return categoryAnswer(addresses, second, pathname) ?? { kind: "unknown" };
+    return categoryAnswer(addresses, second, asked) ?? { kind: "unknown" };
   }
 
   const page = addresses.pages.find((entry) => entry.slug === first);
@@ -128,5 +150,5 @@ export function answerAddress(
     return page.isPublished ? { kind: "page" } : { kind: "draft" };
   }
 
-  return categoryAnswer(addresses, first, pathname) ?? { kind: "unknown" };
+  return categoryAnswer(addresses, first, asked) ?? { kind: "unknown" };
 }

@@ -38,6 +38,7 @@ describe("StoreNotFound", () => {
     [
       "en",
       "This page doesn't exist",
+      "The link may be old, or that article may no longer be for sale. Everything we have is still in the catalog.",
       "See the catalog",
       "/en/productos",
       "Back to the store's home",
@@ -46,6 +47,7 @@ describe("StoreNotFound", () => {
     [
       "es",
       "Esta página no existe",
+      "Puede que el enlace sea viejo o que ese artículo ya no esté a la venta. Todo lo que tenemos sigue en el catálogo.",
       "Ver el catálogo",
       "/productos",
       "Volver a la home de la tienda",
@@ -53,12 +55,13 @@ describe("StoreNotFound", () => {
     ],
   ] as const)(
     "in %s, says the page does not exist and leads to the catalog and the home, the site's own",
-    (locale, title, catalogName, catalogHref, back, homeHref) => {
+    (locale, title, body, catalogName, catalogHref, back, homeHref) => {
       const { catalog, home } = setup({ locale });
 
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
         new RegExp(`^${title}$`, "u")
       );
+      expect(screen.getByText(body)).toBeVisible();
       expect(catalog).toHaveAccessibleName(catalogName);
       expect(catalog).toHaveAttribute("href", catalogHref);
       expect(home).toHaveAccessibleName(back);

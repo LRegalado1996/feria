@@ -90,9 +90,19 @@ test.describe("Not found", () => {
   test("the not-found page's main action leads to the catalog, in the address's language", async ({
     page,
   }) => {
-    for (const [path, name, catalog] of [
-      ["/this-page-does-not-exist", "Ver el catálogo", "/productos"],
-      ["/en/this-page-does-not-exist", "See the catalog", "/en/productos"],
+    for (const [path, name, catalog, heading] of [
+      [
+        "/this-page-does-not-exist",
+        "Ver el catálogo",
+        "/productos",
+        "Catálogo",
+      ],
+      [
+        "/en/this-page-does-not-exist",
+        "See the catalog",
+        "/en/productos",
+        "Catalog",
+      ],
     ] as const) {
       await page.goto(path);
       const action = page.getByRole("link", { name });
@@ -102,7 +112,7 @@ test.describe("Not found", () => {
 
       await expect(page).toHaveURL(catalog);
       await expect(
-        page.getByRole("heading", { level: 1, name: /^(Catálogo|Catalog)$/u })
+        page.getByRole("heading", { exact: true, level: 1, name: heading })
       ).toBeVisible();
     }
   });

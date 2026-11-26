@@ -110,6 +110,8 @@ describe("decidesAddress", () => {
     ["/no-such", true],
     // `/orders` has no page; its token's page is `/orders/{token}`.
     ["/orders", true],
+    // An own route asked with an escape is still its own.
+    ["/%63ontacto", false],
     // A route of its own answers one segment only: under it, the catalog's.
     ["/contacto/x", true],
     ["/cart/x", true],
@@ -147,6 +149,15 @@ describe("answerAddress", () => {
     ["/bijouterie/regalos", { kind: "unknown" }],
     // Slugs are exact: the route's own check refuses anything else.
     ["/Bijouterie", { kind: "unknown" }],
+    // Escaped as the route decodes its params, case-insensitive hex.
+    ["/%62ijouterie", { kind: "page" }],
+    ["/bijouterie/%61nillos", { kind: "page" }],
+    ["/%72%65galos", { kind: "page" }],
+    ["/bijouterie%2Danillos", { kind: "unknown" }],
+    // An escape outside ASCII, or malformed, spells no slug.
+    ["/bijouter%C3%ADe", { kind: "unknown" }],
+    ["/%zzbijouterie", { kind: "unknown" }],
+    ["/%E0%A4%A", { kind: "unknown" }],
   ] as const)("%s is %j", (pathname, answer) => {
     expect(answerAddress(makeAddresses(), pathname)).toEqual(answer);
   });
