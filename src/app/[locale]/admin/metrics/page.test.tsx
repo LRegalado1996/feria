@@ -201,13 +201,16 @@ describe("MetricsPage", () => {
 
     expect(dashboard).not.toHaveBeenCalled();
 
+    // Midnight in Montevideo passes while the request is on its way: a
+    // clock read before it would still say December 5.
+    vi.setSystemTime(new Date("2026-12-06T03:00:00.000Z"));
     request.arrive();
     await page;
 
     expect(dashboard).toHaveBeenCalledExactlyOnceWith({
-      from: "2026-11-06",
+      from: "2026-11-07",
       locale: "en",
-      to: "2026-12-05",
+      to: "2026-12-06",
     });
   });
 

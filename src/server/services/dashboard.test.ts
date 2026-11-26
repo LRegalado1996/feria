@@ -20,6 +20,26 @@ const SCOPE = {
 type Answers = Partial<Record<string, unknown[][]>>;
 
 /**
+ * What every dashboard reads, in order: the traffic (views, visits), the
+ * viewed articles (the "no order holds it" subquery, the most viewed, those
+ * never ordered), the orders (by day, by status, the most ordered), the
+ * catalog, the weeks and the logins.
+ */
+const SNAPSHOT_READS = [
+  "product_view_daily",
+  "store_visit_daily",
+  "order_item",
+  "product_view_daily",
+  "product_view_daily",
+  "customer_order",
+  "customer_order",
+  "order_item",
+  "product",
+  "product",
+  "user",
+];
+
+/**
  * The mock database answering each query by the table it reads, in the
  * order the service reads them: `answers[table]` is a queue of row sets.
  * Every step of a chain answers its query's rows, so whichever step comes
@@ -27,19 +47,25 @@ type Answers = Partial<Record<string, unknown[][]>>;
  */
 function setup(answers: Answers = {}) {
   const db = createMockDatabase();
+  // The snapshot's own handle: a read through the outer client instead
+  // would get none of the answers, and show in `db.$.select`.
+  const tx = createMockDatabase();
+  db.$.transaction.mockImplementation(async (callback: unknown) =>
+    typeof callback === "function" ? await callback(tx) : undefined
+  );
   const queues = new Map(
     Object.entries(answers).map(([table, rows]) => [table, [...(rows ?? [])]])
   );
   let current: unknown[] = [];
   let currentTable = "";
   const filters: { table: string; where: unknown }[] = [];
-  db.$["select.from"].mockImplementation((table: unknown) => {
+  tx.$["select.from"].mockImplementation((table: unknown) => {
     currentTable = is(table, Table) ? getTableName(table) : "";
     current = queues.get(currentTable)?.shift() ?? [];
 
     return current;
   });
-  db.$["select.where"].mockImplementation((where: unknown) => {
+  tx.$["select.where"].mockImplementation((where: unknown) => {
     filters.push({ table: currentTable, where });
 
     return current;
@@ -48,17 +74,23 @@ function setup(answers: Answers = {}) {
   const answer = () => current;
 
   for (const step of [
-    db.$["select.groupBy"],
-    db.$["select.innerJoin"],
-    db.$["select.leftJoin"],
-    db.$["select.limit"],
-    db.$["select.orderBy"],
+    tx.$["select.groupBy"],
+    tx.$["select.innerJoin"],
+    tx.$["select.leftJoin"],
+    tx.$["select.limit"],
+    tx.$["select.orderBy"],
   ]) {
     step.mockImplementation(answer);
   }
 
   return {
     db,
+    /** The tables the snapshot's selects read, in order. */
+    tables: () =>
+      tx.$["select.from"].mock.calls.map(([table]) =>
+        is(table, Table) ? getTableName(table) : null
+      ),
+    tx,
     /** The `where` of each select of `table`, as SQL and parameters. */
     wheres: (table: string) =>
       filters
@@ -68,8 +100,8 @@ function setup(answers: Answers = {}) {
 }
 
 describe("getDashboard", () => {
-  test("reads in one read-only, repeatable-read snapshot", async () => {
-    const { db } = setup();
+  test("reads in one read-only, repeatable-read snapshot, every query through it", async () => {
+    const { db, tables } = setup();
 
     await getDashboard(db as never, SCOPE);
 
@@ -77,6 +109,8 @@ describe("getDashboard", () => {
       expect.any(Function),
       { accessMode: "read only", isolationLevel: "repeatable read" }
     );
+    expect(db.$.select).not.toHaveBeenCalled();
+    expect(tables()).toEqual(SNAPSHOT_READS);
   });
 
   test("bounds the orders by the range's first and last midnights in Montevideo, the column bare", async () => {
@@ -97,7 +131,7 @@ describe("getDashboard", () => {
   });
 
   test("an empty store has nothing to show and asks for no title or units", async () => {
-    const { db } = setup();
+    const { db, tables } = setup();
 
     await expect(getDashboard(db as never, SCOPE)).resolves.toEqual({
       articlesPerWeek: [],
@@ -115,12 +149,13 @@ describe("getDashboard", () => {
       traffic: [],
       viewedNotOrdered: [],
     });
-    expect(db.query.productTranslation.findMany).not.toHaveBeenCalled();
+    // Titles and units ask nothing of a store with nothing ranked.
+    expect(tables()).toEqual(SNAPSHOT_READS);
   });
 
   test("merges, ranks, titles and totals what each query answers", async () => {
     const lastSignInAt = new Date("2026-12-05T12:00:00.000Z");
-    const { db } = setup({
+    const { db, tables } = setup({
       customer_order: [
         // By day and currency, then by status.
         [
@@ -192,6 +227,12 @@ describe("getDashboard", () => {
 
     const dashboard = await getDashboard(db as never, SCOPE);
 
+    // Then the ranked articles' titles and the most viewed's units.
+    expect(tables()).toEqual([
+      ...SNAPSHOT_READS,
+      "product_translation",
+      "order_item",
+    ]);
     expect(dashboard).toEqual({
       articlesPerWeek: [{ created: 3, week: "2026-11-30" }],
       catalog: { draft: 3, published: 5, unavailable: 2 },

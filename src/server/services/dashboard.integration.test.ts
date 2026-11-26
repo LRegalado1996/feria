@@ -208,8 +208,23 @@ async function makeLogin(name: string, signIns: string[]): Promise<string> {
  *   nothing;
  * - visits of 10 and 2 on two days.
  */
-async function setup() {
+async function setup({
+  logins = [],
+}: {
+  /** Logins to seed, each with the instants it signed in at. */
+  logins?: { name: string; signIns: string[] }[];
+} = {}) {
   const storeId = await theStoreId(db);
+  const read = async (range: { from: string; to: string } = RANGE) =>
+    await getDashboard(db, { ...range, locale: "es", storeId });
+  // The store's catalog as it was, before this test's articles.
+  const catalogBefore = (await read()).catalog;
+  const loginIds: string[] = [];
+
+  for (const login of logins) {
+    loginIds.push(await makeLogin(login.name, login.signIns));
+  }
+
   const ring = await makeArticle(storeId, {
     titles: { en: "Ring", es: "Anillo" },
   });
@@ -283,7 +298,16 @@ async function setup() {
     totalAmount: 9000,
   });
 
-  return { chain, draft, earring, ring, storeId };
+  return {
+    catalogBefore,
+    chain,
+    draft,
+    earring,
+    loginIds,
+    read,
+    ring,
+    storeId,
+  };
 }
 
 describe("getDashboard", () => {
@@ -373,32 +397,32 @@ describe("getDashboard", () => {
   });
 
   test("counts the store's articles as they are now, whatever the range", async () => {
-    const storeId = await theStoreId(db);
-    const before = await getDashboard(db, { ...RANGE, locale: "es", storeId });
+    const { catalogBefore, read } = await setup();
 
-    await setup();
-    const after = await getDashboard(db, { ...RANGE, locale: "es", storeId });
+    const { catalog } = await read();
 
     expect({
-      draft: after.catalog.draft - before.catalog.draft,
-      published: after.catalog.published - before.catalog.published,
-      unavailable: after.catalog.unavailable - before.catalog.unavailable,
+      draft: catalog.draft - catalogBefore.draft,
+      published: catalog.published - catalogBefore.published,
+      unavailable: catalog.unavailable - catalogBefore.unavailable,
     }).toEqual({ draft: 1, published: 2, unavailable: 1 });
   });
 
   test("dates each login's last sign-in by its newest session, and says never for one with none", async () => {
-    const storeId = await theStoreId(db);
-    const ana = await makeLogin("Ana", [
-      "2032-06-01T12:00:00.000Z",
-      "2032-06-05T12:00:00.000Z",
-    ]);
-    const beto = await makeLogin("Beto", []);
-
-    const { logins } = await getDashboard(db, {
-      ...RANGE,
-      locale: "es",
-      storeId,
+    const {
+      loginIds: [ana, beto],
+      read,
+    } = await setup({
+      logins: [
+        {
+          name: "Ana",
+          signIns: ["2032-06-01T12:00:00.000Z", "2032-06-05T12:00:00.000Z"],
+        },
+        { name: "Beto", signIns: [] },
+      ],
     });
+
+    const { logins } = await read();
     const own = logins.filter((login) => [ana, beto].includes(login.id));
 
     expect(own).toEqual([
@@ -418,15 +442,9 @@ describe("getDashboard", () => {
   });
 
   test("an empty range has nothing to show: no traffic, no orders, no rate", async () => {
-    const storeId = await theStoreId(db);
-    await setup();
+    const { read } = await setup();
 
-    const dashboard = await getDashboard(db, {
-      from: "2032-07-01",
-      locale: "es",
-      storeId,
-      to: "2032-07-31",
-    });
+    const dashboard = await read({ from: "2032-07-01", to: "2032-07-31" });
 
     expect(dashboard.funnel).toEqual({ orders: 0, views: 0, visits: 0 });
     expect(dashboard.traffic).toEqual([]);
