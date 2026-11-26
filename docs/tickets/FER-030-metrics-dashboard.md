@@ -31,6 +31,7 @@ One page tells Lucas how the store is doing and whether the AI feature earns its
 - **The share of orders with the phone confirmed moves to [FER-028](FER-028-whatsapp-phone-verification.md):** until codes exist it would always read 0%.
 - **Charts with Recharts** (3.8.0, pinned), drawn by the project's own `molecules/metrics-chart` rather than shadcn's chart file.
 - Defaulted: the range opens on the last 30 days, with 7, 30, 90 days and a year as one tap, and any range up to a year by its address; the rankings list ten articles; a week starts on Monday.
+- **Only enabled logins are listed** (after FER-015, which disables a login and ends its sessions): a disabled login cannot sign in, and would only ever read "Nunca".
 - **A login's last sign-in is its newest session still kept**, kept as is by Lucas after review: Better Auth deletes a session when its login signs out, and expired ones in time, so a login that signed out reads an older sign-in or "Nunca". Exact dates would need a column on the login set at each sign-in (a schema and auth change), left for later.
 
 ## Notes

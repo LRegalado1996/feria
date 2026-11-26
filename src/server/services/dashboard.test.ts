@@ -130,6 +130,16 @@ describe("getDashboard", () => {
     );
   });
 
+  test("lists only the logins still enabled", async () => {
+    const { db, wheres } = setup();
+
+    await getDashboard(db as never, SCOPE);
+
+    expect(wheres("user")).toEqual([
+      { params: [], sql: '"user"."disabledAt" is null' },
+    ]);
+  });
+
   test("an empty store has nothing to show and asks for no title or units", async () => {
     const { db, tables } = setup();
 

@@ -175,9 +175,14 @@ async function makeOrder(
 }
 
 /** A login, signed in at each of `signIns`. */
-async function makeLogin(name: string, signIns: string[]): Promise<string> {
+async function makeLogin(
+  name: string,
+  signIns: string[],
+  disabledAt: Date | null = null
+): Promise<string> {
   const id: string = randomUUID();
   await db.insert(user).values({
+    disabledAt,
     email: `${id}@example.com`,
     emailVerified: true,
     id,
@@ -212,7 +217,7 @@ async function setup({
   logins = [],
 }: {
   /** Logins to seed, each with the instants it signed in at. */
-  logins?: { name: string; signIns: string[] }[];
+  logins?: { disabledAt?: Date; name: string; signIns: string[] }[];
 } = {}) {
   const storeId = await theStoreId(db);
   const read = async (range: { from: string; to: string } = RANGE) =>
@@ -222,7 +227,9 @@ async function setup({
   const loginIds: string[] = [];
 
   for (const login of logins) {
-    loginIds.push(await makeLogin(login.name, login.signIns));
+    loginIds.push(
+      await makeLogin(login.name, login.signIns, login.disabledAt ?? null)
+    );
   }
 
   const ring = await makeArticle(storeId, {
@@ -408,9 +415,9 @@ describe("getDashboard", () => {
     }).toEqual({ draft: 1, published: 2, unavailable: 1 });
   });
 
-  test("dates each login's last sign-in by its newest session, and says never for one with none", async () => {
+  test("dates each enabled login's last sign-in by its newest session, says never for one with none, and leaves a disabled one out", async () => {
     const {
-      loginIds: [ana, beto],
+      loginIds: [ana, beto, carla],
       read,
     } = await setup({
       logins: [
@@ -419,11 +426,17 @@ describe("getDashboard", () => {
           signIns: ["2032-06-01T12:00:00.000Z", "2032-06-05T12:00:00.000Z"],
         },
         { name: "Beto", signIns: [] },
+        // Disabled (FER-015): left out, whatever its sessions say.
+        {
+          disabledAt: new Date("2032-06-06T12:00:00.000Z"),
+          name: "Carla",
+          signIns: ["2032-06-06T10:00:00.000Z"],
+        },
       ],
     });
 
     const { logins } = await read();
-    const own = logins.filter((login) => [ana, beto].includes(login.id));
+    const own = logins.filter((login) => [ana, beto, carla].includes(login.id));
 
     expect(own).toEqual([
       {

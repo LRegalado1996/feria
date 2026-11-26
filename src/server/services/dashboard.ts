@@ -7,6 +7,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   lt,
   lte,
   max,
@@ -297,9 +298,11 @@ async function readArticlesPerWeek(tx: DatabaseClient, scope: DashboardScope) {
 }
 
 /**
- * Every login and when it last signed in: its newest session still kept.
- * Better Auth deletes a session at sign-out (and an expired one in time), so
- * a login that signed out reads an older date or none (Lucas, FER-030).
+ * Every enabled login and when it last signed in: its newest session still
+ * kept. Better Auth deletes a session at sign-out (and an expired one in
+ * time), so a login that signed out reads an older date or none (Lucas,
+ * FER-030). A disabled login (FER-015) is left out: it cannot sign in, and
+ * disabling it ended its sessions.
  */
 async function readLogins(tx: DatabaseClient) {
   const lastSignInAt = max(session.createdAt);
@@ -313,6 +316,7 @@ async function readLogins(tx: DatabaseClient) {
     })
     .from(user)
     .leftJoin(session, eq(session.userId, user.id))
+    .where(isNull(user.disabledAt))
     .groupBy(user.id)
     .orderBy(sql`${lastSignInAt} desc nulls last`, asc(user.id));
 }
