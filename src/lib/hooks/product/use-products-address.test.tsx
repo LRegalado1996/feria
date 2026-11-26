@@ -1,10 +1,14 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
+import { type RefObject, useLayoutEffect, useRef } from "react";
 import { describe, expect, test, vi } from "vitest";
 
 import { EMPTY_PRODUCTS_QUERY, type ProductsQuery } from "@/lib/admin/products";
 import type { Locale } from "@/lib/i18n/config";
 
-import { useProductsAddress } from "./use-products-address";
+import {
+  type ProductsAddress,
+  useProductsAddress,
+} from "./use-products-address";
 
 // One spy for both, so the order of the navigations is its calls' order.
 const { navigated } = vi.hoisted(() => ({
@@ -54,7 +58,71 @@ function setup(query = makeQuery(), locale: Locale = "en") {
   };
 }
 
+/** The hook over `query`, handing on what it returns once it commits. */
+function Host({
+  hand,
+  query,
+}: {
+  hand: (address: ProductsAddress) => void;
+  query: ProductsQuery;
+}) {
+  const address = useProductsAddress(query, "en");
+
+  useLayoutEffect(() => {
+    hand(address);
+  });
+
+  return null;
+}
+
+/**
+ * Applies the drafts as soon as an address with a search commits, before
+ * the browser could paint: an event handled right after back or forward.
+ */
+function ApplyOnCommit({
+  address,
+  query,
+}: {
+  address: RefObject<ProductsAddress | null>;
+  query: ProductsQuery;
+}) {
+  useLayoutEffect(() => {
+    if (query.q !== null) {
+      address.current?.push(DRAFTS);
+    }
+  }, [address, query]);
+
+  return null;
+}
+
+function Screen({ query }: { query: ProductsQuery }) {
+  const address = useRef<ProductsAddress | null>(null);
+
+  return (
+    <>
+      <Host
+        hand={(given) => {
+          address.current = given;
+        }}
+        query={query}
+      />
+      <ApplyOnCommit address={address} query={query} />
+    </>
+  );
+}
+
 describe("useProductsAddress", () => {
+  test("an address from elsewhere is the base as soon as it commits, before an event can build on the one before", () => {
+    const view = render(<Screen query={makeQuery()} />);
+
+    // Back brings `?q=b`; "Aplicar" lands at once.
+    view.rerender(<Screen query={makeQuery({ q: "b" })} />);
+
+    expect(navigated.mock.calls).toEqual([
+      ["push", "/en/admin/products?q=b&status=draft", { scroll: false }],
+    ]);
+  });
+
   test("asks for a change on the address it renders, keeping the rest of the selection", () => {
     const { address, asked } = setup(makeQuery({ page: 3, sort: "price" }));
 

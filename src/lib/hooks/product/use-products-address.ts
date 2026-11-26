@@ -1,5 +1,5 @@
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { type ProductsQuery, productsPath } from "@/lib/admin/products";
 import type { Locale } from "@/lib/i18n/config";
@@ -40,7 +40,9 @@ export function useProductsAddress(
   const asked = useRef<string[]>([]);
   const seen = useRef(here);
 
-  useEffect(() => {
+  // During the commit, before any event is handled: an "Aplicar" pressed
+  // right after back or forward builds on the address they brought.
+  useLayoutEffect(() => {
     if (seen.current === here) {
       return;
     }
